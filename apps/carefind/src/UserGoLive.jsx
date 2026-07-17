@@ -1,8 +1,8 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 
 // Full user Go Live: go live now, invite co-hosts, or schedule an upcoming
 // show with an optional trailer. Mirrors the admin's Go Live features.
@@ -101,8 +101,8 @@ function UserGoLive({ onClose }) {
 
         {/* Mode toggle */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button onClick={() => setMode('now')} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, background: mode === 'now' ? '#dc2626' : theme.bg, color: mode === 'now' ? '#fff' : theme.textMid }}>🔴 Go Live Now</button>
-          <button onClick={() => setMode('schedule')} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, background: mode === 'schedule' ? theme.navy : theme.bg, color: mode === 'schedule' ? '#fff' : theme.textMid }}>📅 Schedule</button>
+          <button onClick={() => setMode('now')} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, background: mode === 'now' ? '#dc2626' : theme.bg, color: mode === 'now' ? '#fff' : theme.textMid }}>ðŸ”´ Go Live Now</button>
+          <button onClick={() => setMode('schedule')} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, background: mode === 'schedule' ? theme.navy : theme.bg, color: mode === 'schedule' ? '#fff' : theme.textMid }}>ðŸ“… Schedule</button>
         </div>
 
         {error && <p style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{error}</p>}
@@ -117,7 +117,7 @@ function UserGoLive({ onClose }) {
             <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date & time</label>
             <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
             <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
-              🎬 {trailerFile ? trailerFile.name.slice(0, 26) : 'Add trailer video (optional)'}
+              ðŸŽ¬ {trailerFile ? trailerFile.name.slice(0, 26) : 'Add trailer video (optional)'}
               <input type="file" accept="video/*" onChange={(e) => setTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
           </div>
@@ -125,12 +125,12 @@ function UserGoLive({ onClose }) {
 
         {/* Invite co-hosts */}
         <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invite co-hosts (optional)</label>
-        <input value={guestSearch} onChange={(e) => searchGuests(e.target.value)} placeholder="Search people by name…" style={{ ...inputStyle, marginBottom: 8 }} />
+        <input value={guestSearch} onChange={(e) => searchGuests(e.target.value)} placeholder="Search people by nameâ€¦" style={{ ...inputStyle, marginBottom: 8 }} />
         {guests.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
             {guests.map(g => (
               <span key={g.id} onClick={() => toggleGuest(g)} style={{ fontSize: 12, fontWeight: 700, background: theme.tealGradient, color: '#fff', padding: '4px 10px', borderRadius: 14, cursor: 'pointer' }}>
-                {g.full_name || g.display_name} ✕
+                {g.full_name || g.display_name} âœ•
               </span>
             ))}
           </div>
@@ -141,8 +141,8 @@ function UserGoLive({ onClose }) {
               const picked = guests.some(g => g.id === p.id)
               return (
                 <button key={p.id} onClick={() => toggleGuest(p)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: picked ? theme.bg : '#fff', border: 'none', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{p.full_name || p.display_name}{p.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: picked ? theme.tealDeep : theme.textLight }}>{picked ? '✓ Added' : '+ Add'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{p.full_name || p.display_name}{p.is_verified && <span style={{ color: theme.tealDeep }}> âœ“</span>}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: picked ? theme.tealDeep : theme.textLight }}>{picked ? 'âœ“ Added' : '+ Add'}</span>
                 </button>
               )
             })}
@@ -152,11 +152,11 @@ function UserGoLive({ onClose }) {
         {/* Action */}
         {mode === 'now' ? (
           <button onClick={goLiveNow} disabled={creating} style={{ width: '100%', padding: 14, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 15 }}>
-            {creating ? 'Starting…' : '🔴 Go Live Now'}
+            {creating ? 'Startingâ€¦' : 'ðŸ”´ Go Live Now'}
           </button>
         ) : (
           <button onClick={scheduleShow} disabled={creating} style={{ width: '100%', padding: 14, background: theme.navy, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 15 }}>
-            {creating ? 'Scheduling…' : '📅 Schedule Show'}
+            {creating ? 'Schedulingâ€¦' : 'ðŸ“… Schedule Show'}
           </button>
         )}
         <button onClick={onClose} style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: theme.textLight, fontSize: 13, fontWeight: 600 }}>Cancel</button>

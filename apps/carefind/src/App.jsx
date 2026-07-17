@@ -1,6 +1,6 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
 
 function App() {
@@ -163,7 +163,7 @@ function App() {
               <h3 style={{ margin: '0 0 4px 0' }}>{biz.name}</h3>
             </Link>
             <p style={{ margin: '0 0 4px 0', color: '#666', fontSize: 14 }}>
-              {biz.business_type} · {biz.city}, {biz.state}
+              {biz.business_type} Â· {biz.city}, {biz.state}
             </p>
             <p style={{ margin: '0 0 8px 0', fontSize: 14 }}>{biz.address}</p>
             {biz.whatsapp && (
@@ -189,7 +189,7 @@ function App() {
               <p style={{ margin: '0 0 4px 0', color: '#666', fontSize: 13 }}>Generic: {p.generic_name}</p>
             )}
             <p style={{ margin: '0 0 4px 0', fontSize: 14 }}>
-              ₦{p.price} · In stock: {p.stock}
+              â‚¦{p.price} Â· In stock: {p.stock}
             </p>
             {p.businesses && (
               <>

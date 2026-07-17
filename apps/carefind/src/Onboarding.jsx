@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 
 // Username rule: lowercase letters, numbers, underscores. 3-20 chars.
 function normalizeUsername(raw) {
@@ -149,7 +149,7 @@ function Onboarding() {
               </div>
               {username.length >= 3 && (
                 <p style={{ margin: '5px 0 0 0', fontSize: 12, fontWeight: 600, color: checking ? theme.textLight : available ? theme.success : theme.alert }}>
-                  {checking ? 'Checking availability…' : available ? '✓ Available' : '✕ Taken — try another'}
+                  {checking ? 'Checking availabilityâ€¦' : available ? 'âœ“ Available' : 'âœ• Taken â€” try another'}
                 </p>
               )}
               <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
@@ -178,7 +178,7 @@ function Onboarding() {
                 opacity: (saving || available === false) ? 0.7 : 1,
               }}
             >
-              {saving ? 'Saving…' : 'Save & Continue'}
+              {saving ? 'Savingâ€¦' : 'Save & Continue'}
             </button>
 
             <Link to="/" style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, textDecoration: 'none', fontWeight: 600 }}>

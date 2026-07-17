@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
-import { theme } from './lib/theme'
+import { supabase } from './config/supabaseClient'
+import { theme } from './styles/theme'
 import { callAdminAuth } from './lib/adminApi'
 import VoiceRecorder from './VoiceRecorder.jsx'
 import SlideUploader from './SlideUploader.jsx'
@@ -175,12 +175,12 @@ export default function AdminPanel() {
 
     // Build notification feed
     const allNotifs = [
-      ...(verifRes.data || []).filter(v => v.status === 'pending').map(v => ({ id: v.id, type: 'verification', icon: '🩺', title: `Verification request from ${v.full_name}`, subtitle: v.profession, time: v.created_at, severity: 'warning', tab: 'verifications', role: 'verification_officer' })),
-      ...(claimsRes.data || []).filter(c => c.status === 'pending').map(c => ({ id: c.id, type: 'claim', icon: '🏥', title: `Business claim: ${c.businesses?.name}`, subtitle: 'Pending approval', time: c.created_at, severity: 'warning', tab: 'claims', role: 'business_manager' })),
-      ...(reportsRes.data || []).filter(r => r.status === 'pending').map(r => ({ id: r.id, type: 'report', icon: '🚩', title: `Post reported: ${r.reason}`, subtitle: r.posts?.content?.slice(0, 60), time: r.created_at, severity: 'urgent', tab: 'reports', role: 'moderator' })),
-      ...(withdrawRes.data || []).filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', icon: '💰', title: `Withdrawal request: ₦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, severity: 'warning', tab: 'withdrawals', role: 'super_admin' })),
-      ...(taskSubRes.data || []).filter(s => s.status === 'pending').map(s => ({ id: s.id, type: 'task', icon: '📋', title: `Task submission: ${s.tasks?.title}`, subtitle: s.profiles?.full_name || 'Professional', time: s.created_at, severity: 'info', tab: 'tasks', role: 'super_admin' })),
-      ...(consultRes.data || []).map(c => ({ id: c.id, type: 'consultation', icon: '📅', title: 'New consultation booking', subtitle: c.profiles?.full_name || 'Patient', time: c.created_at, severity: 'info', tab: 'overview', role: 'verification_officer' })),
+      ...(verifRes.data || []).filter(v => v.status === 'pending').map(v => ({ id: v.id, type: 'verification', icon: 'ðŸ©º', title: `Verification request from ${v.full_name}`, subtitle: v.profession, time: v.created_at, severity: 'warning', tab: 'verifications', role: 'verification_officer' })),
+      ...(claimsRes.data || []).filter(c => c.status === 'pending').map(c => ({ id: c.id, type: 'claim', icon: 'ðŸ¥', title: `Business claim: ${c.businesses?.name}`, subtitle: 'Pending approval', time: c.created_at, severity: 'warning', tab: 'claims', role: 'business_manager' })),
+      ...(reportsRes.data || []).filter(r => r.status === 'pending').map(r => ({ id: r.id, type: 'report', icon: 'ðŸš©', title: `Post reported: ${r.reason}`, subtitle: r.posts?.content?.slice(0, 60), time: r.created_at, severity: 'urgent', tab: 'reports', role: 'moderator' })),
+      ...(withdrawRes.data || []).filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', icon: 'ðŸ’°', title: `Withdrawal request: â‚¦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, severity: 'warning', tab: 'withdrawals', role: 'super_admin' })),
+      ...(taskSubRes.data || []).filter(s => s.status === 'pending').map(s => ({ id: s.id, type: 'task', icon: 'ðŸ“‹', title: `Task submission: ${s.tasks?.title}`, subtitle: s.profiles?.full_name || 'Professional', time: s.created_at, severity: 'info', tab: 'tasks', role: 'super_admin' })),
+      ...(consultRes.data || []).map(c => ({ id: c.id, type: 'consultation', icon: 'ðŸ“…', title: 'New consultation booking', subtitle: c.profiles?.full_name || 'Patient', time: c.created_at, severity: 'info', tab: 'overview', role: 'verification_officer' })),
     ].sort((a, b) => new Date(b.time) - new Date(a.time))
 
     setNotifications(allNotifs)
@@ -662,24 +662,24 @@ export default function AdminPanel() {
   )
 
   const TABS = [
-    { key: 'overview', label: '📊 Overview' },
-    { key: 'verifications', label: `🩺 Verify (${stats.pendingVerifs || 0})` },
-    { key: 'claims', label: `🏥 Claims (${stats.pendingClaims || 0})` },
-    { key: 'reports', label: `🚩 Reports (${stats.reports || 0})` },
-    { key: 'users', label: '👥 Users' },
-    { key: 'posts', label: '📝 Posts' },
-    { key: 'revenue', label: '💰 Revenue' },
-    { key: 'drugs', label: '💊 Drug Intel' },
-    { key: 'tasks', label: '📋 Tasks' },
-    { key: 'teams', label: '👨‍💼 Teams' },
-    { key: 'withdrawals', label: `💰 Withdrawals (${withdrawals.filter(w => w.status === 'pending').length})` },
-    { key: 'businesses', label: `🏢 Companies (${businesses.length})` },
-    { key: 'stories', label: `📸 Stories (${stories.length})` },
-    { key: 'news', label: `📰 News (${newsItems.filter(n => n.status === 'pending').length})` },
-    { key: 'promotions', label: `🎯 Promos (${promotions.filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).length})` },
-    { key: 'searches', label: `🔎 Searches (${searchLogs.filter(s => !s.found).length})` },
-    { key: 'golive', label: `📡 Go Live (${activeShows.length})` },
-    { key: 'notifications', label: `🔔 All Alerts (${notifCount})` },
+    { key: 'overview', label: 'ðŸ“Š Overview' },
+    { key: 'verifications', label: `ðŸ©º Verify (${stats.pendingVerifs || 0})` },
+    { key: 'claims', label: `ðŸ¥ Claims (${stats.pendingClaims || 0})` },
+    { key: 'reports', label: `ðŸš© Reports (${stats.reports || 0})` },
+    { key: 'users', label: 'ðŸ‘¥ Users' },
+    { key: 'posts', label: 'ðŸ“ Posts' },
+    { key: 'revenue', label: 'ðŸ’° Revenue' },
+    { key: 'drugs', label: 'ðŸ’Š Drug Intel' },
+    { key: 'tasks', label: 'ðŸ“‹ Tasks' },
+    { key: 'teams', label: 'ðŸ‘¨â€ðŸ’¼ Teams' },
+    { key: 'withdrawals', label: `ðŸ’° Withdrawals (${withdrawals.filter(w => w.status === 'pending').length})` },
+    { key: 'businesses', label: `ðŸ¢ Companies (${businesses.length})` },
+    { key: 'stories', label: `ðŸ“¸ Stories (${stories.length})` },
+    { key: 'news', label: `ðŸ“° News (${newsItems.filter(n => n.status === 'pending').length})` },
+    { key: 'promotions', label: `ðŸŽ¯ Promos (${promotions.filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).length})` },
+    { key: 'searches', label: `ðŸ”Ž Searches (${searchLogs.filter(s => !s.found).length})` },
+    { key: 'golive', label: `ðŸ“¡ Go Live (${activeShows.length})` },
+    { key: 'notifications', label: `ðŸ”” All Alerts (${notifCount})` },
   ]
 
   const btnStyle = (active) => ({
@@ -698,13 +698,13 @@ export default function AdminPanel() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ margin: '0 0 2px 0', fontSize: 19, fontWeight: 900 }}>CareFind Admin</h1>
-            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adminUser?.full_name} · {adminUser?.role?.replace('_', ' ')}</p>
+            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adminUser?.full_name} Â· {adminUser?.role?.replace('_', ' ')}</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {roleNotifCount > 0 && (
               <div style={{ position: 'relative' }}>
                 <button onClick={() => setTab('overview')} style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  🔔
+                  ðŸ””
                 </button>
                 <div style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #0f766e' }}>
                   {roleNotifCount > 99 ? '99+' : roleNotifCount}
@@ -729,12 +729,12 @@ export default function AdminPanel() {
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               {[
-                { label: 'Total Users', value: stats.users, icon: '👥', tab: 'users' },
-                { label: 'Total Posts', value: stats.posts, icon: '📝', tab: 'posts' },
-                { label: 'Pending Verifs', value: stats.pendingVerifs, icon: '🩺', alert: stats.pendingVerifs > 0, tab: 'verifications' },
-                { label: 'Open Reports', value: stats.reports, icon: '🚩', alert: stats.reports > 0, tab: 'reports' },
-                { label: 'Transactions', value: stats.transactions, icon: '💳', tab: 'revenue' },
-                { label: 'Revenue', value: `₦${(stats.revenue || 0).toLocaleString()}`, icon: '💰', tab: 'revenue' },
+                { label: 'Total Users', value: stats.users, icon: 'ðŸ‘¥', tab: 'users' },
+                { label: 'Total Posts', value: stats.posts, icon: 'ðŸ“', tab: 'posts' },
+                { label: 'Pending Verifs', value: stats.pendingVerifs, icon: 'ðŸ©º', alert: stats.pendingVerifs > 0, tab: 'verifications' },
+                { label: 'Open Reports', value: stats.reports, icon: 'ðŸš©', alert: stats.reports > 0, tab: 'reports' },
+                { label: 'Transactions', value: stats.transactions, icon: 'ðŸ’³', tab: 'revenue' },
+                { label: 'Revenue', value: `â‚¦${(stats.revenue || 0).toLocaleString()}`, icon: 'ðŸ’°', tab: 'revenue' },
               ].map(s => (
                 <div key={s.label} onClick={() => setTab(s.tab)} style={{ border: `1px solid ${s.alert ? '#fca5a5' : theme.border}`, borderRadius: 14, padding: 14, background: s.alert ? '#fef2f2' : theme.cardBg, textAlign: 'center', cursor: 'pointer' }}>
                   <p style={{ margin: '0 0 4px 0', fontSize: 20 }}>{s.icon}</p>
@@ -744,7 +744,7 @@ export default function AdminPanel() {
               ))}
             </div>
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 14, background: theme.cardBg, marginTop: 4 }}>
-              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>📅 Filter by Date</p>
+              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>ðŸ“… Filter by Date</p>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 10, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 3 }}>From</label>
@@ -786,16 +786,16 @@ export default function AdminPanel() {
                   <div>
                     <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{v.full_name}</p>
                     <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>{v.profession}</p>
-                    {v.phone && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textLight }}>{v.phone} · {v.workplace}</p>}
+                    {v.phone && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textLight }}>{v.phone} Â· {v.workplace}</p>}
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(v.created_at)}</p>
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: v.status === 'approved' ? '#ecfdf5' : v.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: v.status === 'approved' ? theme.success : v.status === 'rejected' ? theme.alert : '#92400e' }}>{v.status}</span>
                 </div>
-                {v.credential_url && <a href={v.credential_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: 10, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>📎 View Credential</a>}
+                {v.credential_url && <a href={v.credential_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: 10, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>ðŸ“Ž View Credential</a>}
                 {v.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => approveVerif(v.id, v.user_id, v.profession)} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={() => rejectVerif(v.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={() => approveVerif(v.id, v.user_id, v.profession)} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ“ Approve</button>
+                    <button onClick={() => rejectVerif(v.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ• Reject</button>
                   </div>
                 )}
               </div>
@@ -817,8 +817,8 @@ export default function AdminPanel() {
                 </div>
                 {c.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => approveClaim(c.id, c.business_id)} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={() => rejectClaim(c.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={() => approveClaim(c.id, c.business_id)} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ“ Approve</button>
+                    <button onClick={() => rejectClaim(c.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ• Reject</button>
                   </div>
                 )}
               </div>
@@ -831,13 +831,13 @@ export default function AdminPanel() {
             {reports.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reports yet.</p>}
             {reports.map(r => (
               <div key={r.id} style={{ ...card, border: `1px solid ${r.status === 'pending' ? '#fca5a5' : theme.border}` }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: 11, color: theme.alert, fontWeight: 800 }}>🚩 {r.reason}</p>
+                <p style={{ margin: '0 0 4px 0', fontSize: 11, color: theme.alert, fontWeight: 800 }}>ðŸš© {r.reason}</p>
                 <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textMid }}>{r.posts?.content?.slice(0, 120)}</p>
                 <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>{timeAgo(r.created_at)}</p>
                 {r.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => deletePost(r.post_id)} style={{ flex: 1, padding: 8, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 12 }}>🗑️ Delete Post</button>
-                    <button onClick={() => resolveReport(r.id)} style={{ flex: 1, padding: 8, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 12 }}>✓ Dismiss</button>
+                    <button onClick={() => deletePost(r.post_id)} style={{ flex: 1, padding: 8, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 12 }}>ðŸ—‘ï¸ Delete Post</button>
+                    <button onClick={() => resolveReport(r.id)} style={{ flex: 1, padding: 8, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 12 }}>âœ“ Dismiss</button>
                   </div>
                 )}
               </div>
@@ -851,8 +851,8 @@ export default function AdminPanel() {
             {selectedUser && (
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: '#ecfdf5', marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>👤 User Details</h3>
-                  <button onClick={() => setSelectedUser(null)} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>✕</button>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>ðŸ‘¤ User Details</h3>
+                  <button onClick={() => setSelectedUser(null)} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>âœ•</button>
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
                   <div style={{ width: 50, height: 50, borderRadius: '50%', background: selectedUser.cover_url ? `url(${selectedUser.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
@@ -869,7 +869,7 @@ export default function AdminPanel() {
                     { label: 'Title', value: selectedUser.verification_label || 'Not set' },
                     { label: 'Specialty', value: selectedUser.specialty || 'Not set' },
                     { label: 'Location', value: selectedUser.location || 'Not set' },
-                    { label: 'Verified', value: selectedUser.is_verified ? '✓ Yes' : 'No' },
+                    { label: 'Verified', value: selectedUser.is_verified ? 'âœ“ Yes' : 'No' },
                     { label: 'Joined', value: new Date(selectedUser.created_at).toLocaleDateString() },
                     { label: 'Posts', value: userPosts.length },
                   ].map(f => (
@@ -885,18 +885,18 @@ export default function AdminPanel() {
                   <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                     {phoneMap[selectedUser.id] && (
                       <a href={`tel:${phoneMap[selectedUser.id]}`} style={{ flex: 1, textAlign: 'center', padding: 10, background: theme.tealGradient, color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
-                        📞 Call
+                        ðŸ“ž Call
                       </a>
                     )}
                     {selectedUser.website && (
                       <a href={selectedUser.website.startsWith('http') ? selectedUser.website : `https://${selectedUser.website}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', padding: 10, background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`, borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
-                        🌐 Website
+                        ðŸŒ Website
                       </a>
                     )}
                   </div>
                 )}
                 {phoneMap[selectedUser.id] && (
-                  <p style={{ margin: '0 0 10px 0', fontSize: 12, color: theme.textLight, textAlign: 'center' }}>📱 {phoneMap[selectedUser.id]}</p>
+                  <p style={{ margin: '0 0 10px 0', fontSize: 12, color: theme.textLight, textAlign: 'center' }}>ðŸ“± {phoneMap[selectedUser.id]}</p>
                 )}
 
                 {/* Verify */}
@@ -904,11 +904,11 @@ export default function AdminPanel() {
                   verifyingUser === selectedUser.id ? (
                     <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                       <input value={verifySpecialty} onChange={(e) => setVerifySpecialty(e.target.value)} placeholder="Specialty (e.g. Pharmacist)" style={{ flex: 1, padding: '8px 10px', fontSize: 13, border: `1px solid ${theme.tealDeep}`, borderRadius: 10 }} />
-                      <button onClick={() => manualVerify(selectedUser.id, verifySpecialty)} style={{ padding: '8px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700 }}>✓ Verify</button>
+                      <button onClick={() => manualVerify(selectedUser.id, verifySpecialty)} style={{ padding: '8px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontSize: 12, fontWeight: 700 }}>âœ“ Verify</button>
                     </div>
                   ) : (
                     <button onClick={() => setVerifyingUser(selectedUser.id)} style={{ width: '100%', padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
-                      ✓ Verify This User
+                      âœ“ Verify This User
                     </button>
                   )
                 )}
@@ -924,14 +924,14 @@ export default function AdminPanel() {
                     <option value="365">Suspend 1 year</option>
                   </select>
                   <button onClick={() => suspendUser(selectedUser.id, suspendDays)} style={{ flex: 1, padding: 9, background: '#fef3c7', color: '#92400e', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>
-                    ⏸ Suspend
+                    â¸ Suspend
                   </button>
                 </div>
 
                 {/* Delete */}
                 {selectedUser.id !== adminUser?.id && (
                   <button onClick={() => deleteUser(selectedUser.id)} disabled={deletingUser} style={{ width: '100%', padding: 10, background: '#fef2f2', color: theme.alert, border: `1px solid #fca5a5`, borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
-                    {deletingUser ? 'Deleting...' : '🗑️ Permanently Delete Account'}
+                    {deletingUser ? 'Deleting...' : 'ðŸ—‘ï¸ Permanently Delete Account'}
                   </button>
                 )}
 
@@ -952,7 +952,7 @@ export default function AdminPanel() {
 
             {/* Filter bar */}
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, marginBottom: 12 }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>🔍 Filter Users</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>ðŸ” Filter Users</p>
               <input type="text" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search by name or username..." style={{ ...input, marginBottom: 8 }} />
               <input type="text" value={userSpecialtyFilter} onChange={(e) => setUserSpecialtyFilter(e.target.value)} placeholder="Filter by title..." style={{ ...input, marginBottom: 8 }} />
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -985,21 +985,21 @@ export default function AdminPanel() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <p style={{ margin: '0 0 1px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{u.full_name || u.display_name || 'No name'}</p>
-                      {u.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>✓</span>}
+                      {u.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>âœ“</span>}
                     </div>
                     {u.display_name && u.full_name && <p style={{ margin: '0 0 1px 0', fontSize: 11, color: theme.textLight }}>@{u.display_name}</p>}
                     {u.verification_label && <p style={{ margin: '0 0 1px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{u.verification_label}</p>}
-                    {u.location && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>📍 {u.location}</p>}
-                    {phoneMap[u.id] && <p style={{ margin: '2px 0 0 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>📱 {phoneMap[u.id]}</p>}
+                    {u.location && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>ðŸ“ {u.location}</p>}
+                    {phoneMap[u.id] && <p style={{ margin: '2px 0 0 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>ðŸ“± {phoneMap[u.id]}</p>}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <span style={{ fontSize: 10, color: theme.textLight }}>{timeAgo(u.created_at)}</span>
                     {phoneMap[u.id] && (
                       <a href={`tel:${phoneMap[u.id]}`} onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: theme.tealDeep, padding: '3px 10px', borderRadius: 20, textDecoration: 'none' }}>
-                        📞 Call
+                        ðŸ“ž Call
                       </a>
                     )}
-                    <span style={{ fontSize: 10, color: theme.tealDeep, fontWeight: 700 }}>Tap to manage →</span>
+                    <span style={{ fontSize: 10, color: theme.tealDeep, fontWeight: 700 }}>Tap to manage â†’</span>
                   </div>
                 </div>
               </div>
@@ -1013,8 +1013,8 @@ export default function AdminPanel() {
             {selectedPost && (
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: '#ecfdf5', marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>📝 Post Detail</h3>
-                  <button onClick={() => { setSelectedPost(null); setPostAuthor(null) }} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>✕</button>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>ðŸ“ Post Detail</h3>
+                  <button onClick={() => { setSelectedPost(null); setPostAuthor(null) }} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>âœ•</button>
                 </div>
 
                 {/* Author */}
@@ -1025,7 +1025,7 @@ export default function AdminPanel() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.navy }}>{postAuthor?.full_name || postAuthor?.display_name || 'Unknown user'}</p>
-                      {postAuthor?.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>✓</span>}
+                      {postAuthor?.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>âœ“</span>}
                     </div>
                     {postAuthor?.display_name && postAuthor?.full_name && <p style={{ margin: '1px 0 0 0', fontSize: 11, color: theme.textLight }}>@{postAuthor.display_name}</p>}
                     {postAuthor?.verification_label && <p style={{ margin: '1px 0 0 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{postAuthor.verification_label}</p>}
@@ -1045,13 +1045,13 @@ export default function AdminPanel() {
 
                 {/* Delete */}
                 <button onClick={() => { deletePost(selectedPost.id); setSelectedPost(null); setPostAuthor(null) }} style={{ width: '100%', padding: 10, background: '#fef2f2', color: theme.alert, border: `1px solid #fca5a5`, borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
-                  🗑️ Delete This Post
+                  ðŸ—‘ï¸ Delete This Post
                 </button>
               </div>
             )}
 
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, marginBottom: 12 }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>🔍 Filter Posts</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>ðŸ” Filter Posts</p>
               <input type="text" value={postSearch} onChange={(e) => setPostSearch(e.target.value)} placeholder="Search by keyword..." style={{ ...input, marginBottom: 8 }} />
               <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                 {['all','text','question','review','article','visual','premium'].map(t => (
@@ -1102,10 +1102,10 @@ export default function AdminPanel() {
                           <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: '#ecfdf5', padding: '2px 7px', borderRadius: 20 }}>{p.post_type}</span>
                           <span style={{ fontSize: 11, color: theme.textLight }}>{timeAgo(p.created_at)}</span>
                         </div>
-                        <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '…' : ''}</p>
-                        <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>Tap to read full post →</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? 'â€¦' : ''}</p>
+                        <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>Tap to read full post â†’</p>
                       </div>
-                      <button onClick={() => deletePost(p.id)} style={{ padding: '6px 12px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>🗑️ Delete</button>
+                      <button onClick={() => deletePost(p.id)} style={{ padding: '6px 12px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>ðŸ—‘ï¸ Delete</button>
                     </div>
                   ))}
                 </div>
@@ -1126,8 +1126,8 @@ export default function AdminPanel() {
                   <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(t.created_at)}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 14, color: theme.success }}>{t.amount} 🪙</p>
-                  {t.naira_amount && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>₦{(t.naira_amount / 100).toLocaleString()}</p>}
+                  <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 14, color: theme.success }}>{t.amount} ðŸª™</p>
+                  {t.naira_amount && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>â‚¦{(t.naira_amount / 100).toLocaleString()}</p>}
                 </div>
               </div>
             ))}
@@ -1138,7 +1138,7 @@ export default function AdminPanel() {
         {tab === 'drugs' && (
           <div>
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, marginBottom: 12 }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>🔍 Drug Intelligence Search</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>ðŸ” Drug Intelligence Search</p>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <input type="text" value={drugSearch} onChange={(e) => setDrugSearch(e.target.value)} placeholder="Medication name..." style={{ ...input, flex: 1 }} />
                 <button onClick={searchDrugs} style={{ padding: '0 14px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Search</button>
@@ -1147,7 +1147,7 @@ export default function AdminPanel() {
                 <span style={{ fontSize: 11, color: theme.textLight, fontWeight: 700 }}>Rating:</span>
                 {['all','1','2','3','4','5'].map(r => (
                   <button key={r} onClick={() => setDrugRatingFilter(r)} style={{ padding: '4px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: 'none', background: drugRatingFilter === r ? theme.tealDeep : theme.bg, color: drugRatingFilter === r ? '#fff' : theme.textMid }}>
-                    {r === 'all' ? 'All' : '★'.repeat(parseInt(r))}
+                    {r === 'all' ? 'All' : 'â˜…'.repeat(parseInt(r))}
                   </button>
                 ))}
               </div>
@@ -1178,7 +1178,7 @@ export default function AdminPanel() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <div>
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{drugName}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{filtered.length} reviews · Avg: ★{avgRating}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{filtered.length} reviews Â· Avg: â˜…{avgRating}</p>
                     </div>
                     <button onClick={() => exportCSV(filtered, `${drugName}_filtered_reviews.csv`)} style={{ padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>Export CSV</button>
                   </div>
@@ -1197,7 +1197,7 @@ export default function AdminPanel() {
                   {filtered.map(r => (
                     <div key={r.id} style={card}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <p style={{ margin: 0, color: '#f59e0b', fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</p>
+                        <p style={{ margin: 0, color: '#f59e0b', fontSize: 13 }}>{'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}</p>
                         <span style={{ fontSize: 11, color: theme.textLight }}>{timeAgo(r.created_at)}</span>
                       </div>
                       {r.comment && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{r.comment}</p>}
@@ -1215,7 +1215,7 @@ export default function AdminPanel() {
               <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Create Sponsored Task</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Task Title" style={input} />
-                <input type="number" value={taskComp} onChange={(e) => setTaskComp(e.target.value)} placeholder="Compensation (₦)" style={input} />
+                <input type="number" value={taskComp} onChange={(e) => setTaskComp(e.target.value)} placeholder="Compensation (â‚¦)" style={input} />
                 <input value={taskSpec} onChange={(e) => setTaskSpec(e.target.value)} placeholder="Target Specialty (optional)" style={input} />
                 <textarea value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Task description..." rows={3} style={{ ...input, resize: 'none', fontFamily: 'inherit' }} />
                 <button onClick={createTask} disabled={savingTask} style={{ padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
@@ -1227,7 +1227,7 @@ export default function AdminPanel() {
               <div key={t.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{t.title}</p>
-                  <p style={{ margin: 0, fontWeight: 900, fontSize: 13, color: theme.success }}>₦{t.compensation?.toLocaleString()}</p>
+                  <p style={{ margin: 0, fontWeight: 900, fontSize: 13, color: theme.success }}>â‚¦{t.compensation?.toLocaleString()}</p>
                 </div>
                 <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textMid }}>{t.description?.slice(0, 100)}</p>
                 {t.specialty && <p style={{ margin: 0, fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{t.specialty}</p>}
@@ -1254,11 +1254,11 @@ export default function AdminPanel() {
                 <input type="email" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} placeholder="Email" required style={input} />
                 <input type="password" value={staffPass} onChange={(e) => setStaffPass(e.target.value)} placeholder="Password" required style={input} />
                 <select value={staffRole} onChange={(e) => setStaffRole(e.target.value)} style={{ ...input, background: '#fff' }}>
-                  <option value="moderator">🛡️ Content Moderator</option>
-                  <option value="verification_officer">🩺 Verification Officer</option>
-                  <option value="business_manager">🏥 Business Manager</option>
-                  <option value="support_agent">💬 Support Agent</option>
-                  <option value="analytics_manager">📊 Analytics Manager</option>
+                  <option value="moderator">ðŸ›¡ï¸ Content Moderator</option>
+                  <option value="verification_officer">ðŸ©º Verification Officer</option>
+                  <option value="business_manager">ðŸ¥ Business Manager</option>
+                  <option value="support_agent">ðŸ’¬ Support Agent</option>
+                  <option value="analytics_manager">ðŸ“Š Analytics Manager</option>
                 </select>
                 <select value={staffTeam} onChange={(e) => setStaffTeam(e.target.value)} style={{ ...input, background: '#fff' }}>
                   <option value="">No team</option>
@@ -1290,8 +1290,8 @@ export default function AdminPanel() {
 
             {staff.filter(s => s.role === 'super_admin').map(m => (
               <div key={m.id} style={{ border: '1px solid #e9d5ff', borderRadius: 12, padding: 12, background: '#faf5ff', marginTop: 12 }}>
-                <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: '#7c3aed' }}>👑 {m.full_name}</p>
-                <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{m.email} · Super Admin · Last login: {timeAgo(m.last_login)}</p>
+                <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: '#7c3aed' }}>ðŸ‘‘ {m.full_name}</p>
+                <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{m.email} Â· Super Admin Â· Last login: {timeAgo(m.last_login)}</p>
               </div>
             ))}
           </div>
@@ -1306,8 +1306,8 @@ export default function AdminPanel() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
                     <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{w.profiles?.full_name || 'User'}</p>
-                    <p style={{ margin: '0 0 2px 0', fontSize: 13, color: theme.tealDeep, fontWeight: 700 }}>₦{(w.amount * 200).toLocaleString()}</p>
-                    {w.bank_name && <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.textLight }}>{w.bank_name} · {w.account_number}</p>}
+                    <p style={{ margin: '0 0 2px 0', fontSize: 13, color: theme.tealDeep, fontWeight: 700 }}>â‚¦{(w.amount * 200).toLocaleString()}</p>
+                    {w.bank_name && <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.textLight }}>{w.bank_name} Â· {w.account_number}</p>}
                     {w.account_name && <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.textLight }}>{w.account_name}</p>}
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(w.created_at)}</p>
                   </div>
@@ -1315,8 +1315,8 @@ export default function AdminPanel() {
                 </div>
                 {w.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'approved' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'rejected' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'approved' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ“ Approve</button>
+                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'rejected' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ• Reject</button>
                   </div>
                 )}
               </div>
@@ -1327,7 +1327,7 @@ export default function AdminPanel() {
         {tab === 'businesses' && (
           <div>
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, marginBottom: 12 }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>🔍 Filter Companies</p>
+              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>ðŸ” Filter Companies</p>
               <input type="text" value={bizSearch} onChange={(e) => setBizSearch(e.target.value)} placeholder="Search company name..." style={{ ...input, marginBottom: 8 }} />
               <input type="text" value={bizStateFilter} onChange={(e) => setBizStateFilter(e.target.value)} placeholder="Filter by state/city..." style={{ ...input, marginBottom: 8 }} />
               <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -1356,9 +1356,9 @@ export default function AdminPanel() {
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 14, padding: 14, background: '#ecfdf5', marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: theme.navy }}>{selectedBiz.name}</p>
-                  <button onClick={() => { setSelectedBiz(null); setBizReviews([]); setBizProducts([]) }} style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 18 }}>✕</button>
+                  <button onClick={() => { setSelectedBiz(null); setBizReviews([]); setBizProducts([]) }} style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 18 }}>âœ•</button>
                 </div>
-                <p style={{ margin: '0 0 8px 0', fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{selectedBiz.business_type} · {selectedBiz.city}, {selectedBiz.state}</p>
+                <p style={{ margin: '0 0 8px 0', fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{selectedBiz.business_type} Â· {selectedBiz.city}, {selectedBiz.state}</p>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                   <div style={{ flex: 1, background: '#fff', borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 18, fontWeight: 900, color: theme.navy }}>{bizReviews.length}</p>
@@ -1378,7 +1378,7 @@ export default function AdminPanel() {
                 <button onClick={() => exportCSV([...bizReviews, ...bizProducts], `${selectedBiz.name}_data.csv`)} style={{ width: '100%', padding: 8, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 12 }}>Export Company Data CSV</button>
                 {bizReviews.map(r => (
                   <div key={r.id} style={{ marginTop: 8, padding: '8px 0', borderTop: `1px solid ${theme.border}` }}>
-                    <p style={{ margin: '0 0 2px 0', color: '#f59e0b', fontSize: 12 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</p>
+                    <p style={{ margin: '0 0 2px 0', color: '#f59e0b', fontSize: 12 }}>{'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}</p>
                     {r.comment && <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>{r.comment}</p>}
                   </div>
                 ))}
@@ -1409,7 +1409,7 @@ export default function AdminPanel() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
                           <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{b.name}</p>
-                          <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}, {b.state}</p>
+                          <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} Â· {b.city}, {b.state}</p>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                           <span style={{ fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: b.visible_on_carefind ? '#ecfdf5' : '#fef3c7', color: b.visible_on_carefind ? theme.success : '#92400e' }}>
@@ -1429,7 +1429,7 @@ export default function AdminPanel() {
         {tab === 'stories' && (
           <div>
             <div style={card}>
-              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📸 Post a Story</p>
+              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸ“¸ Post a Story</p>
               <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Stories appear at the top of the feed for all users and auto-expire after 24 hours.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} placeholder="Story title (e.g. New Feature!)" style={input} />
@@ -1448,7 +1448,7 @@ export default function AdminPanel() {
                 </div>
 
                 <label style={{ fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
-                  📷 {storyImageFile ? storyImageFile.name : 'Add an image (optional)'}
+                  ðŸ“· {storyImageFile ? storyImageFile.name : 'Add an image (optional)'}
                   <input type="file" accept="image/*" onChange={(e) => setStoryImageFile(e.target.files[0] || null)} style={{ display: 'none' }} />
                 </label>
 
@@ -1458,7 +1458,7 @@ export default function AdminPanel() {
                   background: storyImageFile ? '#e5e7eb' : storyBg, textAlign: 'center',
                 }}>
                   {storyImageFile ? (
-                    <span style={{ fontSize: 12, color: theme.textMid }}>🖼️ Image selected — text shows over it</span>
+                    <span style={{ fontSize: 12, color: theme.textMid }}>ðŸ–¼ï¸ Image selected â€” text shows over it</span>
                   ) : (
                     <div>
                       {storyTitle && <p style={{ margin: '0 0 6px 0', color: '#fff', fontWeight: 900, fontSize: 16 }}>{storyTitle}</p>}
@@ -1487,16 +1487,16 @@ export default function AdminPanel() {
                       backgroundSize: 'cover', backgroundPosition: 'center',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900,
                     }}>
-                      {!s.image_url && (s.title?.[0]?.toUpperCase() || '★')}
+                      {!s.image_url && (s.title?.[0]?.toUpperCase() || 'â˜…')}
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>{s.title || '(no title)'}</p>
                       {s.body && <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.textMid }}>{s.body.slice(0, 60)}</p>}
                       <p style={{ margin: 0, fontSize: 11, color: expired ? theme.alert : theme.textLight }}>
-                        {expired ? '⏰ Expired' : `Expires ${timeAgo(s.expires_at).replace(' ago', '')} from now`} · {timeAgo(s.created_at)}
+                        {expired ? 'â° Expired' : `Expires ${timeAgo(s.expires_at).replace(' ago', '')} from now`} Â· {timeAgo(s.created_at)}
                       </p>
                     </div>
-                    <button onClick={() => deleteStory(s.id)} style={{ padding: '6px 10px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>🗑️</button>
+                    <button onClick={() => deleteStory(s.id)} style={{ padding: '6px 10px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>ðŸ—‘ï¸</button>
                   </div>
                 </div>
               )
@@ -1517,7 +1517,7 @@ export default function AdminPanel() {
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: n.status === 'approved' ? '#ecfdf5' : n.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: n.status === 'approved' ? theme.success : n.status === 'rejected' ? theme.alert : '#92400e' }}>{n.status}</span>
                       <p style={{ margin: '6px 0 0 0', fontSize: 11.5, color: theme.textLight }}>
-                        Submitted by <strong style={{ color: theme.navy }}>{n.profiles?.full_name || n.profiles?.display_name || 'User'}</strong> · {timeAgo(n.created_at)}
+                        Submitted by <strong style={{ color: theme.navy }}>{n.profiles?.full_name || n.profiles?.display_name || 'User'}</strong> Â· {timeAgo(n.created_at)}
                       </p>
                     </div>
                   </div>
@@ -1528,13 +1528,13 @@ export default function AdminPanel() {
                       <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>Contact submitter</p>
                       {(n.contact_phone || phone) && (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-                          <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600, flex: 1 }}>📱 {n.contact_phone || phone}</span>
-                          <a href={`tel:${n.contact_phone || phone}`} style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: theme.tealDeep, padding: '5px 12px', borderRadius: 16, textDecoration: 'none' }}>📞 Call</a>
+                          <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600, flex: 1 }}>ðŸ“± {n.contact_phone || phone}</span>
+                          <a href={`tel:${n.contact_phone || phone}`} style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: theme.tealDeep, padding: '5px 12px', borderRadius: 16, textDecoration: 'none' }}>ðŸ“ž Call</a>
                         </div>
                       )}
                       {n.contact_email && (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600, flex: 1 }}>✉️ {n.contact_email}</span>
+                          <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600, flex: 1 }}>âœ‰ï¸ {n.contact_email}</span>
                           <a href={`mailto:${n.contact_email}`} style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: theme.tealDeep, padding: '5px 12px', borderRadius: 16, textDecoration: 'none' }}>Email</a>
                         </div>
                       )}
@@ -1556,25 +1556,25 @@ export default function AdminPanel() {
                     <div style={{ marginBottom: 10 }}>
                       <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>{n.headline}</p>
                       {n.subtitle && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid, fontStyle: 'italic' }}>{n.subtitle}</p>}
-                      <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{(n.body || '').replace(/[{}\[\]"]/g, ' ').slice(0, 180)}…</p>
+                      <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{(n.body || '').replace(/[{}\[\]"]/g, ' ').slice(0, 180)}â€¦</p>
                     </div>
                   )}
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {!isEditing && n.status === 'pending' && (
-                      <button onClick={() => setEditingNews({ id: n.id, headline: n.headline, subtitle: n.subtitle, body: n.body })} style={{ flex: 1, padding: 9, background: theme.bg, color: theme.navy, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✏️ Edit</button>
+                      <button onClick={() => setEditingNews({ id: n.id, headline: n.headline, subtitle: n.subtitle, body: n.body })} style={{ flex: 1, padding: 9, background: theme.bg, color: theme.navy, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœï¸ Edit</button>
                     )}
                     {isEditing && (
                       <button onClick={() => setEditingNews(null)} style={{ padding: '9px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Cancel edit</button>
                     )}
                     {n.status !== 'approved' && (
-                      <button onClick={() => approveNews(n)} disabled={savingNews} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ {isEditing ? 'Save & Publish' : 'Approve & Publish'}</button>
+                      <button onClick={() => approveNews(n)} disabled={savingNews} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ“ {isEditing ? 'Save & Publish' : 'Approve & Publish'}</button>
                     )}
                     {n.status === 'pending' && (
-                      <button onClick={() => rejectNews(n.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                      <button onClick={() => rejectNews(n.id)} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœ• Reject</button>
                     )}
-                    <button onClick={() => deleteNews(n.id)} style={{ padding: '9px 12px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>🗑️</button>
+                    <button onClick={() => deleteNews(n.id)} style={{ padding: '9px 12px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>ðŸ—‘ï¸</button>
                   </div>
                 </div>
               )
@@ -1585,7 +1585,7 @@ export default function AdminPanel() {
         {tab === 'promotions' && (
           <div>
             <div style={card}>
-              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>🎯 Add a Promotion</p>
+              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸŽ¯ Add a Promotion</p>
               <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Promotions appear in the moving featured strip on MedMarket. They auto-expire on the date you set.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={promoTitle} onChange={(e) => setPromoTitle(e.target.value)} placeholder="Promotion title (e.g. 50% off Vitamin C)" style={input} />
@@ -1601,7 +1601,7 @@ export default function AdminPanel() {
                   </select>
                 </div>
                 <label style={{ fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
-                  📷 {promoImage ? promoImage.name : 'Upload promotion image'}
+                  ðŸ“· {promoImage ? promoImage.name : 'Upload promotion image'}
                   <input type="file" accept="image/*" onChange={(e) => setPromoImage(e.target.files[0] || null)} style={{ display: 'none' }} />
                 </label>
                 <button onClick={createPromotion} disabled={savingPromo} style={{ padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
@@ -1617,16 +1617,16 @@ export default function AdminPanel() {
                 <div key={p.id} style={{ ...card, opacity: expired ? 0.5 : 1 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <div style={{ width: 60, height: 60, borderRadius: 10, flexShrink: 0, background: p.image_url ? `url(${p.image_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800 }}>
-                      {!p.image_url && '🎯'}
+                      {!p.image_url && 'ðŸŽ¯'}
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>{p.title}</p>
                       {p.link_url && <p style={{ margin: '0 0 2px 0', fontSize: 11, color: theme.tealDeep }}>{p.link_url}</p>}
                       <p style={{ margin: 0, fontSize: 11, color: expired ? theme.alert : theme.textLight }}>
-                        {expired ? '⏰ Expired' : p.expires_at ? `Expires ${new Date(p.expires_at).toLocaleDateString()}` : 'No expiry'}
+                        {expired ? 'â° Expired' : p.expires_at ? `Expires ${new Date(p.expires_at).toLocaleDateString()}` : 'No expiry'}
                       </p>
                     </div>
-                    <button onClick={() => deletePromotion(p.id)} style={{ padding: '6px 10px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>🗑️</button>
+                    <button onClick={() => deletePromotion(p.id)} style={{ padding: '6px 10px', background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>ðŸ—‘ï¸</button>
                   </div>
                 </div>
               )
@@ -1660,22 +1660,22 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  {/* Demand gaps — the gold */}
+                  {/* Demand gaps â€” the gold */}
                   <div style={card}>
-                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>🎯 Demand gaps — searched but NOT found</p>
+                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>ðŸŽ¯ Demand gaps â€” searched but NOT found</p>
                     <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>These are products/services people want that you don't have yet. Consider stocking or adding them.</p>
                     {gaps.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No unmet searches yet.</p>}
                     {gaps.map(([term, count]) => (
                       <div key={term} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#fef2f2', borderRadius: 10, marginBottom: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 700, color: theme.navy, textTransform: 'capitalize' }}>{term}</span>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: theme.alert, background: '#fff', padding: '3px 9px', borderRadius: 12 }}>{count}× wanted</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: theme.alert, background: '#fff', padding: '3px 9px', borderRadius: 12 }}>{count}Ã— wanted</span>
                       </div>
                     ))}
                   </div>
 
                   {/* Most searched overall */}
                   <div style={card}>
-                    <p style={{ margin: '0 0 12px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>🔥 Most searched terms</p>
+                    <p style={{ margin: '0 0 12px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸ”¥ Most searched terms</p>
                     {topTerms.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No searches yet.</p>}
                     {topTerms.map(([term, count]) => (
                       <div key={term} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${theme.border}` }}>
@@ -1687,12 +1687,12 @@ export default function AdminPanel() {
 
                   {/* Recent searches with user */}
                   <div style={card}>
-                    <p style={{ margin: '0 0 12px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>🕐 Recent searches</p>
+                    <p style={{ margin: '0 0 12px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸ• Recent searches</p>
                     {typed.slice(0, 40).map(s => (
                       <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${theme.border}` }}>
                         <div style={{ flex: 1 }}>
                           <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{s.query}</span>
-                          <span style={{ fontSize: 10.5, color: theme.textLight, marginLeft: 8 }}>{s.category} · {s.profiles?.full_name || s.profiles?.display_name || 'Guest'}</span>
+                          <span style={{ fontSize: 10.5, color: theme.textLight, marginLeft: 8 }}>{s.category} Â· {s.profiles?.full_name || s.profiles?.display_name || 'Guest'}</span>
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: s.found ? '#ecfdf5' : '#fef2f2', color: s.found ? theme.success : theme.alert }}>{s.found ? `${s.results_count} found` : 'none'}</span>
                       </div>
@@ -1709,7 +1709,7 @@ export default function AdminPanel() {
             {/* Active shows */}
             {activeShows.length > 0 && (
               <div style={card}>
-                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: '#dc2626' }}>🔴 Currently Live</p>
+                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: '#dc2626' }}>ðŸ”´ Currently Live</p>
                 {activeShows.map(s => (
                   <div key={s.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${theme.border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -1717,35 +1717,35 @@ export default function AdminPanel() {
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: theme.navy }}>{s.title}</p>
                         <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Started {new Date(s.started_at).toLocaleTimeString()}</p>
                       </div>
-                      <a href={`/live-show/${s.id}`} style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '6px 10px', borderRadius: 16, textDecoration: 'none' }}>👁 Audience</a>
+                      <a href={`/live-show/${s.id}`} style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '6px 10px', borderRadius: 16, textDecoration: 'none' }}>ðŸ‘ Audience</a>
                       <button onClick={() => endLiveShow(s.id)} style={{ fontSize: 11, fontWeight: 700, color: theme.alert, background: '#fef2f2', border: 'none', padding: '6px 10px', borderRadius: 16 }}>End</button>
                     </div>
 
                     {/* Control room: post to this show */}
                     <button onClick={() => loadLiveControl(s.id)} style={{ width: '100%', padding: 8, background: theme.bg, color: theme.navy, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 12, marginBottom: 8 }}>
-                      🎛 Load Control Room
+                      ðŸŽ› Load Control Room
                     </button>
 
                     {/* Live engagement stats (host sees their numbers) */}
                     <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: '8px 0', marginBottom: 8, background: theme.navy, borderRadius: 10 }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>❤️ {liveStats.likes}</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>👁 {liveStats.views}</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>🔗 {liveStats.shares}</span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}>🎁 {liveStats.gifts}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>â¤ï¸ {liveStats.likes}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>ðŸ‘ {liveStats.views}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>ðŸ”— {liveStats.shares}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}>ðŸŽ {liveStats.gifts}</span>
                     </div>
 
-                    <textarea value={liveDraft} onChange={(e) => setLiveDraft(e.target.value)} placeholder="Type something to broadcast live…" rows={2} style={{ ...input, resize: 'none', fontFamily: 'inherit', marginBottom: 6 }} />
+                    <textarea value={liveDraft} onChange={(e) => setLiveDraft(e.target.value)} placeholder="Type something to broadcast liveâ€¦" rows={2} style={{ ...input, resize: 'none', fontFamily: 'inherit', marginBottom: 6 }} />
                     <VoiceRecorder showId={s.id} onRecorded={(url) => postLiveVoice(s.id, url)} />
                     <SlideUploader showId={s.id} onPostSlide={(url, num, total) => postLiveSlide(s.id, url, num, total)} />
                     <VideoRecorder showId={s.id} onRecorded={(url) => postLiveVideo(s.id, url)} />
                     <VideoUploader showId={s.id} onUploaded={(url) => postLiveVideo(s.id, url)} />
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
                       <label style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', flex: 1 }}>
-                        📷 {liveImage ? liveImage.name.slice(0, 16) : 'Add image'}
+                        ðŸ“· {liveImage ? liveImage.name.slice(0, 16) : 'Add image'}
                         <input type="file" accept="image/*" onChange={(e) => setLiveImage(e.target.files[0] || null)} style={{ display: 'none' }} />
                       </label>
                       <button onClick={() => postLiveItem(s.id)} disabled={postingLive} style={{ padding: '8px 18px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-                        {postingLive ? 'Posting…' : '📡 Post Live'}
+                        {postingLive ? 'Postingâ€¦' : 'ðŸ“¡ Post Live'}
                       </button>
                     </div>
 
@@ -1759,7 +1759,7 @@ export default function AdminPanel() {
                             {it.kind === 'image' && <img src={it.content} alt="" style={{ maxWidth: 120, borderRadius: 6, display: 'block' }} />}
                             {it.kind === 'voice' && <audio controls src={it.content} style={{ height: 32, maxWidth: 180 }} />}
                             {it.kind === 'video' && <video controls playsInline src={it.content} style={{ maxWidth: 160, borderRadius: 6, display: 'block' }} />}
-                            {it.kind === 'slide' && <div><span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>📑 Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: 120, borderRadius: 6, display: 'block', marginTop: 2 }} /></div>}
+                            {it.kind === 'slide' && <div><span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>ðŸ“‘ Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: 120, borderRadius: 6, display: 'block', marginTop: 2 }} /></div>}
                           </div>
                         ))}
                       </div>
@@ -1768,7 +1768,7 @@ export default function AdminPanel() {
                     {/* Audience comments to moderate */}
                     {liveComments.length > 0 && (
                       <div>
-                        <p style={{ margin: '0 0 6px 0', fontSize: 10.5, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>💬 Audience comments</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: 10.5, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>ðŸ’¬ Audience comments</p>
                         {liveComments.map(c => (
                           <div key={c.id} style={{ display: 'flex', gap: 6, marginBottom: 5, opacity: c.hidden ? 0.4 : 1 }}>
                             <span style={{ flex: 1, fontSize: 12, color: theme.textMid }}>
@@ -1787,15 +1787,15 @@ export default function AdminPanel() {
             {/* Scheduled / upcoming shows */}
             {scheduledShows.length > 0 && (
               <div style={card}>
-                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📅 Scheduled Shows</p>
+                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸ“… Scheduled Shows</p>
                 {scheduledShows.map(s => (
                   <div key={s.id} style={{ padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: theme.navy }}>{s.title}</p>
-                    <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>🕐 {new Date(s.scheduled_at).toLocaleString()}</p>
+                    <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>ðŸ• {new Date(s.scheduled_at).toLocaleString()}</p>
                     {s.trailer_url && <video src={s.trailer_url} controls playsInline style={{ maxWidth: 160, borderRadius: 8, display: 'block', marginBottom: 8 }} />}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => startScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#dc2626', border: 'none', padding: '8px 14px', borderRadius: 16 }}>📡 Start Now</button>
-                      <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: '#ecfdf5', padding: '8px 12px', borderRadius: 16, textDecoration: 'none' }}>👁 Preview</a>
+                      <button onClick={() => startScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#dc2626', border: 'none', padding: '8px 14px', borderRadius: 16 }}>ðŸ“¡ Start Now</button>
+                      <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: '#ecfdf5', padding: '8px 12px', borderRadius: 16, textDecoration: 'none' }}>ðŸ‘ Preview</a>
                       <button onClick={() => cancelScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 700, color: theme.alert, background: '#fef2f2', border: 'none', padding: '8px 12px', borderRadius: 16 }}>Cancel</button>
                     </div>
                   </div>
@@ -1804,12 +1804,12 @@ export default function AdminPanel() {
             )}
 
             <div style={card}>
-              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📡 Start a Live Show</p>
-              <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Go live on CareFind. A red LIVE indicator shows in everyone's stories row. Invite guests to co-host — they'll get a notification.</p>
+              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>ðŸ“¡ Start a Live Show</p>
+              <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Go live on CareFind. A red LIVE indicator shows in everyone's stories row. Invite guests to co-host â€” they'll get a notification.</p>
               <input value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} placeholder="Show title (e.g. Malaria Awareness Live)" style={{ ...input, marginBottom: 12 }} />
 
               <p style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 700, color: theme.navy }}>Invite guests to co-host ({liveGuests.length} selected)</p>
-              <input value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} placeholder="Search users by name…" style={{ ...input, marginBottom: 8 }} />
+              <input value={guestSearch} onChange={(e) => setGuestSearch(e.target.value)} placeholder="Search users by nameâ€¦" style={{ ...input, marginBottom: 8 }} />
               <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 12 }}>
                 {users.filter(u => {
                   const n = (u.full_name || u.display_name || '').toLowerCase()
@@ -1822,27 +1822,27 @@ export default function AdminPanel() {
                         {(u.full_name?.[0] || u.display_name?.[0] || '?').toUpperCase()}
                       </div>
                       <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: theme.navy }}>{u.full_name || u.display_name || 'User'}</span>
-                      {selected && <span style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>✓</span>}
+                      {selected && <span style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>âœ“</span>}
                     </div>
                   )
                 })}
               </div>
 
               <button onClick={startLiveShow} disabled={creatingShow} style={{ width: '100%', padding: 13, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 14 }}>
-                {creatingShow ? 'Starting…' : '📡 Go Live Now'}
+                {creatingShow ? 'Startingâ€¦' : 'ðŸ“¡ Go Live Now'}
               </button>
 
               {/* Schedule for later */}
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
-                <p style={{ margin: '0 0 6px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>📅 Or schedule for later</p>
+                <p style={{ margin: '0 0 6px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>ðŸ“… Or schedule for later</p>
                 <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.textLight }}>Set a time and an optional trailer. A countdown shows in the stories row so your audience knows a live is coming.</p>
                 <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ ...input, marginBottom: 8 }} />
                 <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
-                  🎬 {trailerFile ? trailerFile.name.slice(0, 24) : 'Add trailer video (optional)'}
+                  ðŸŽ¬ {trailerFile ? trailerFile.name.slice(0, 24) : 'Add trailer video (optional)'}
                   <input type="file" accept="video/*" onChange={(e) => setTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
                 </label>
                 <button onClick={scheduleShow} disabled={creatingShow} style={{ width: '100%', padding: 12, background: theme.navy, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
-                  {creatingShow ? 'Scheduling…' : '📅 Schedule Show'}
+                  {creatingShow ? 'Schedulingâ€¦' : 'ðŸ“… Schedule Show'}
                 </button>
               </div>
             </div>
@@ -1853,8 +1853,8 @@ export default function AdminPanel() {
           <div>
             {notifications.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <p style={{ fontSize: 30, margin: '0 0 10px 0' }}>🔔</p>
-                <p style={{ color: theme.textLight, fontSize: 13 }}>All clear — no pending issues</p>
+                <p style={{ fontSize: 30, margin: '0 0 10px 0' }}>ðŸ””</p>
+                <p style={{ color: theme.textLight, fontSize: 13 }}>All clear â€” no pending issues</p>
               </div>
             )}
             {notifications.map((n, i) => (
@@ -1869,7 +1869,7 @@ export default function AdminPanel() {
                       <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: n.severity === 'urgent' ? '#fef2f2' : n.severity === 'warning' ? '#fef3c7' : '#ecfdf5', color: n.severity === 'urgent' ? theme.alert : n.severity === 'warning' ? '#92400e' : theme.tealDeep, textTransform: 'uppercase' }}>{n.severity}</span>
                     </div>
                   </div>
-                  <span style={{ color: theme.textLight, fontSize: 14 }}>›</span>
+                  <span style={{ color: theme.textLight, fontSize: 14 }}>â€º</span>
                 </div>
               </div>
             ))}

@@ -1,5 +1,5 @@
-import { useRef } from 'react'
-import { theme } from './lib/theme'
+﻿import { useRef } from 'react'
+import { theme } from './styles/theme'
 
 // Marker format stored in text:
 //   {h:yellow}highlighted text{/h}  -> highlighter background
@@ -120,9 +120,9 @@ export function previewText(content) {
           .filter((b) => b && typeof b === 'object')
           .map((b) => {
             if (b.type === 'text' || b.type === 'heading' || b.type === 'quote') return b.content || ''
-            if (b.type === 'drawing') return '✏️ drawing'
-            if (b.type === 'image') return '🖼 image'
-            if (b.type === 'voice') return '🎙 voice note'
+            if (b.type === 'drawing') return 'âœï¸ drawing'
+            if (b.type === 'image') return 'ðŸ–¼ image'
+            if (b.type === 'voice') return 'ðŸŽ™ voice note'
             return ''
           })
           .filter(Boolean)
@@ -130,7 +130,7 @@ export function previewText(content) {
         return stripMarkers(words)
       }
     } catch (e) {
-      // not valid JSON — fall through and treat it as plain text
+      // not valid JSON â€” fall through and treat it as plain text
     }
   }
 

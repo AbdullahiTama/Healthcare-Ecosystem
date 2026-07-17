@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 import DrawingBoard from './DrawingBoard.jsx'
 import { RichTextInput } from './richText.jsx'
@@ -66,9 +66,9 @@ function PlaylistCreate() {
   }, [existingId, editPartId])
 
   const KINDS = [
-    ['text', '📝 Text'], ['visual', '🎨 Visual'], ['question', '❓ Question'],
-    ['review', '⭐ Review'], ['article', '📄 Article'], ['image', '🖼 Image'],
-    ['video', '🎥 Video'], ['drawing', '✏️ Drawing'],
+    ['text', 'ðŸ“ Text'], ['visual', 'ðŸŽ¨ Visual'], ['question', 'â“ Question'],
+    ['review', 'â­ Review'], ['article', 'ðŸ“„ Article'], ['image', 'ðŸ–¼ Image'],
+    ['video', 'ðŸŽ¥ Video'], ['drawing', 'âœï¸ Drawing'],
   ]
 
   async function createPlaylist() {
@@ -135,8 +135,8 @@ function PlaylistCreate() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }}>
       <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>
-        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>🎬 Create Playlist</h1>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>â† Back</button>
+        <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>ðŸŽ¬ Create Playlist</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>Build a series part by part.</p>
       </div>
 
@@ -150,7 +150,7 @@ function PlaylistCreate() {
             <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase' }}>Description (optional)</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this series about?" rows={3} style={{ ...inputStyle, marginBottom: 18, resize: 'none' }} />
             <button onClick={createPlaylist} disabled={saving} style={{ width: '100%', padding: 14, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 15 }}>
-              {saving ? 'Creating…' : 'Create & Add Parts →'}
+              {saving ? 'Creatingâ€¦' : 'Create & Add Parts â†’'}
             </button>
           </div>
         )}
@@ -171,7 +171,7 @@ function PlaylistCreate() {
             )}
 
             <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 14, padding: 14, marginBottom: 18 }}>
-              <p style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{editingId ? '✏️ Edit Part' : `➕ Add Part ${parts.length + 1}`}</p>
+              <p style={{ margin: '0 0 10px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{editingId ? 'âœï¸ Edit Part' : `âž• Add Part ${parts.length + 1}`}</p>
               <input value={pTitle} onChange={(e) => setPTitle(e.target.value)} placeholder="Part title (e.g. What is insulin?)" style={{ ...inputStyle, marginBottom: 10 }} />
 
               {/* Kind picker */}
@@ -185,7 +185,7 @@ function PlaylistCreate() {
               {pKind === 'visual' && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ background: VISUAL_THEMES[pTheme], borderRadius: 12, padding: 20, marginBottom: 8 }}>
-                    <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{pText || 'Your visual text…'}</p>
+                    <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{pText || 'Your visual textâ€¦'}</p>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {Object.keys(VISUAL_THEMES).map(t => (
@@ -198,14 +198,14 @@ function PlaylistCreate() {
               {pKind === 'review' && (
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                   {[1, 2, 3, 4, 5].map(n => (
-                    <button key={n} onClick={() => setPRating(n)} style={{ background: 'none', border: 'none', fontSize: 26, cursor: 'pointer' }}>{n <= pRating ? '⭐' : '☆'}</button>
+                    <button key={n} onClick={() => setPRating(n)} style={{ background: 'none', border: 'none', fontSize: 26, cursor: 'pointer' }}>{n <= pRating ? 'â­' : 'â˜†'}</button>
                   ))}
                 </div>
               )}
 
               {(pKind === 'image' || pKind === 'video') && (
                 <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
-                  📎 {pFile ? pFile.name.slice(0, 26) : `Choose ${pKind} file`}
+                  ðŸ“Ž {pFile ? pFile.name.slice(0, 26) : `Choose ${pKind} file`}
                   <input type="file" accept={pKind === 'image' ? 'image/*' : 'video/*'} onChange={(e) => setPFile(e.target.files[0] || null)} style={{ display: 'none' }} />
                 </label>
               )}
@@ -218,26 +218,26 @@ function PlaylistCreate() {
                       <button onClick={() => setShowDraw(true)} style={{ fontSize: 12, color: theme.tealDeep, background: 'none', border: 'none', fontWeight: 700 }}>Redraw</button>
                     </div>
                   ) : (
-                    <button onClick={() => setShowDraw(true)} style={{ padding: '10px 16px', background: theme.bg, color: theme.navy, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✏️ Open drawing board</button>
+                    <button onClick={() => setShowDraw(true)} style={{ padding: '10px 16px', background: theme.bg, color: theme.navy, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>âœï¸ Open drawing board</button>
                   )}
                 </div>
               )}
 
-              {/* Text / caption — shown for all except pure media without caption need */}
+              {/* Text / caption â€” shown for all except pure media without caption need */}
               {pKind !== 'drawing' && (
                 (pKind === 'text' || pKind === 'article')
-                  ? <div style={{ marginBottom: 10 }}><RichTextInput value={pText} onChange={setPText} placeholder="Write this part… (select text to highlight)" rows={pKind === 'article' ? 6 : 3} /></div>
-                  : <textarea value={pText} onChange={(e) => setPText(e.target.value)} placeholder={pKind === 'visual' ? 'Text for the visual card…' : 'Caption (optional)'} rows={3} style={{ ...inputStyle, marginBottom: 10, resize: 'none' }} />
+                  ? <div style={{ marginBottom: 10 }}><RichTextInput value={pText} onChange={setPText} placeholder="Write this partâ€¦ (select text to highlight)" rows={pKind === 'article' ? 6 : 3} /></div>
+                  : <textarea value={pText} onChange={(e) => setPText(e.target.value)} placeholder={pKind === 'visual' ? 'Text for the visual cardâ€¦' : 'Caption (optional)'} rows={3} style={{ ...inputStyle, marginBottom: 10, resize: 'none' }} />
               )}
 
               <button onClick={addPart} disabled={addingPart} style={{ width: '100%', padding: 11, background: theme.navy, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-                {addingPart ? (editingId ? 'Saving…' : 'Adding…') : (editingId ? '✓ Save Changes' : '+ Add this part')}
+                {addingPart ? (editingId ? 'Savingâ€¦' : 'Addingâ€¦') : (editingId ? 'âœ“ Save Changes' : '+ Add this part')}
               </button>
             </div>
 
             {!editingId && (
               <button onClick={() => navigate(`/playlist/${playlistId}`)} disabled={parts.length === 0} style={{ width: '100%', padding: 14, background: parts.length === 0 ? theme.border : theme.tealGradient, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 15 }}>
-                {parts.length === 0 ? 'Add at least one part' : '✓ Done — View Playlist'}
+                {parts.length === 0 ? 'Add at least one part' : 'âœ“ Done â€” View Playlist'}
               </button>
             )}
           </div>

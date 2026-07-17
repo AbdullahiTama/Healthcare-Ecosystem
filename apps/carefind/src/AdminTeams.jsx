@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
-import { supabase } from './lib/supabaseClient'
-import { theme } from './lib/theme'
+﻿import { useState, useEffect } from 'react'
+import { supabase } from './config/supabaseClient'
+import { theme } from './styles/theme'
 
 const ROLES = [
-  { key: 'moderator', label: '🛡️ Content Moderator', desc: 'Reviews reports, deletes content' },
-  { key: 'verification_officer', label: '🩺 Verification Officer', desc: 'Approves professional verifications' },
-  { key: 'business_manager', label: '🏥 Business Manager', desc: 'Approves business claims' },
-  { key: 'support_agent', label: '💬 Support Agent', desc: 'Manages users and complaints' },
-  { key: 'analytics_manager', label: '📊 Analytics Manager', desc: 'Views revenue and drug intelligence' },
+  { key: 'moderator', label: 'ðŸ›¡ï¸ Content Moderator', desc: 'Reviews reports, deletes content' },
+  { key: 'verification_officer', label: 'ðŸ©º Verification Officer', desc: 'Approves professional verifications' },
+  { key: 'business_manager', label: 'ðŸ¥ Business Manager', desc: 'Approves business claims' },
+  { key: 'support_agent', label: 'ðŸ’¬ Support Agent', desc: 'Manages users and complaints' },
+  { key: 'analytics_manager', label: 'ðŸ“Š Analytics Manager', desc: 'Views revenue and drug intelligence' },
 ]
 
 function hashPassword(password) {
@@ -98,12 +98,12 @@ function AdminTeams({ adminUser }) {
   }
 
   const ROLE_LABELS = {
-    super_admin: '👑 Super Admin',
-    moderator: '🛡️ Content Moderator',
-    verification_officer: '🩺 Verification Officer',
-    business_manager: '🏥 Business Manager',
-    support_agent: '💬 Support Agent',
-    analytics_manager: '📊 Analytics Manager',
+    super_admin: 'ðŸ‘‘ Super Admin',
+    moderator: 'ðŸ›¡ï¸ Content Moderator',
+    verification_officer: 'ðŸ©º Verification Officer',
+    business_manager: 'ðŸ¥ Business Manager',
+    support_agent: 'ðŸ’¬ Support Agent',
+    analytics_manager: 'ðŸ“Š Analytics Manager',
   }
 
   if (loading) return <p style={{ color: theme.textLight, fontSize: 13 }}>Loading...</p>
@@ -123,8 +123,8 @@ function AdminTeams({ adminUser }) {
         </button>
       </div>
 
-      {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>⚠️ {error}</p>}
-      {success && <p style={{ color: theme.success, fontSize: 13, margin: 0 }}>✓ {success}</p>}
+      {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>âš ï¸ {error}</p>}
+      {success && <p style={{ color: theme.success, fontSize: 13, margin: 0 }}>âœ“ {success}</p>}
 
       {/* Create Team Form */}
       {creatingTeam && (
@@ -204,11 +204,11 @@ function AdminTeams({ adminUser }) {
                     <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 8px', borderRadius: 20 }}>
                       {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
                     </span>
-                    <button onClick={() => deleteTeam(t.id)} style={{ background: 'none', border: 'none', color: theme.alert, fontSize: 14, cursor: 'pointer' }}>🗑️</button>
+                    <button onClick={() => deleteTeam(t.id)} style={{ background: 'none', border: 'none', color: theme.alert, fontSize: 14, cursor: 'pointer' }}>ðŸ—‘ï¸</button>
                   </div>
                 </div>
                 <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {teamMembers.length === 0 && <p style={{ color: theme.textLight, fontSize: 12, margin: 0 }}>No members yet — add staff and assign to this team</p>}
+                  {teamMembers.length === 0 && <p style={{ color: theme.textLight, fontSize: 12, margin: 0 }}>No members yet â€” add staff and assign to this team</p>}
                   {teamMembers.map(m => (
                     <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
                       <div>
@@ -262,9 +262,9 @@ function AdminTeams({ adminUser }) {
       <p style={{ fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 0 0' }}>Super Admin</p>
       {staff.filter(s => s.role === 'super_admin').map(m => (
         <div key={m.id} style={{ border: `1px solid #e9d5ff`, borderRadius: 14, padding: 12, background: '#faf5ff' }}>
-          <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: '#7c3aed' }}>👑 {m.full_name}</p>
+          <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: '#7c3aed' }}>ðŸ‘‘ {m.full_name}</p>
           <p style={{ margin: '0 0 2px 0', fontSize: 11, color: theme.textLight }}>{m.email}</p>
-          <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Full platform access · Last login: {timeAgo(m.last_login)}</p>
+          <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Full platform access Â· Last login: {timeAgo(m.last_login)}</p>
         </div>
       ))}
     </div>

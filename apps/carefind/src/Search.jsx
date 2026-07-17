@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react'
+﻿import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 
 const NG_STATES = [
@@ -26,7 +26,7 @@ function Search() {
   const [featuredType, setFeaturedType] = useState('promo') // 'promo' or 'product'
   const trackRef = useRef(null)
 
-  // JS-driven marquee — works even in iOS Low Power Mode (CSS animations get paused, JS doesn't)
+  // JS-driven marquee â€” works even in iOS Low Power Mode (CSS animations get paused, JS doesn't)
   useEffect(() => {
     if (featured.length === 0) return
     let raf
@@ -135,15 +135,15 @@ function Search() {
 
       <div style={{ background: theme.heroGradient, padding: '24px 18px 22px', borderRadius: '0 0 26px 26px', color: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 24 }}>🛒</span>
+          <span style={{ fontSize: 24 }}>ðŸ›’</span>
           <h1 style={{ margin: 0, fontSize: 25, fontWeight: 900, letterSpacing: '-0.02em' }}>MedMarket</h1>
         </div>
         <p style={{ margin: '0 0 16px 0', fontSize: 13.5, color: 'rgba(255,255,255,0.72)', lineHeight: 1.45 }}>
-          Your health marketplace — find medications, trusted health facilities, hospitals, clinics, skincare brands, wellness products, laboratories and verified health professionals near you, all in one place.
+          Your health marketplace â€” find medications, trusted health facilities, hospitals, clinics, skincare brands, wellness products, laboratories and verified health professionals near you, all in one place.
         </p>
         <form onSubmit={runSearch}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctor…" style={{ flex: 1, padding: 13, fontSize: 14, border: 'none', borderRadius: 13, boxSizing: 'border-box' }} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctorâ€¦" style={{ flex: 1, padding: 13, fontSize: 14, border: 'none', borderRadius: 13, boxSizing: 'border-box' }} />
             <button type="submit" style={{ padding: '0 18px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>Go</button>
           </div>
         </form>
@@ -151,9 +151,9 @@ function Search() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '14px 16px 6px' }}>
         {[
-          { key: 'products', label: 'Products', icon: '💊' },
-          { key: 'businesses', label: 'Health Facilities', icon: '🏥' },
-          { key: 'professionals', label: 'Professionals', icon: '🩺' },
+          { key: 'products', label: 'Products', icon: 'ðŸ’Š' },
+          { key: 'businesses', label: 'Health Facilities', icon: 'ðŸ¥' },
+          { key: 'professionals', label: 'Professionals', icon: 'ðŸ©º' },
         ].map((c) => (
           <button key={c.key} onClick={() => setTab(c.key)} style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px',
@@ -169,7 +169,7 @@ function Search() {
       <div style={{ padding: '4px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={{ flex: 1, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, background: '#fff', color: stateFilter ? theme.navy : theme.textLight }}>
-            <option value="">📍 All states</option>
+            <option value="">ðŸ“ All states</option>
             {NG_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           {tab === 'professionals' && (
@@ -183,7 +183,7 @@ function Search() {
 
       {showingFeatured && featured.length > 0 && (
         <div style={{ padding: '14px 0 4px' }}>
-          <p style={{ margin: '0 0 10px 16px', fontSize: 12, fontWeight: 900, color: theme.navy }}>{featuredType === 'promo' ? '✨ Featured Promotions' : '✨ Featured on MedMarket'}</p>
+          <p style={{ margin: '0 0 10px 16px', fontSize: 12, fontWeight: 900, color: theme.navy }}>{featuredType === 'promo' ? 'âœ¨ Featured Promotions' : 'âœ¨ Featured on MedMarket'}</p>
           <div style={{ overflow: 'hidden', width: '100%' }}>
             <div className="mm-track" ref={trackRef}>
               {[...featured, ...featured].map((p, i) => (
@@ -201,9 +201,9 @@ function Search() {
                 ) : (
                   <Link key={i} className="mm-card" to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 130 }}>
                     <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, textAlign: 'center' }}>
-                      <div style={{ fontSize: 30, marginBottom: 6 }}>{p.emoji || '💊'}</div>
+                      <div style={{ fontSize: 30, marginBottom: 6 }}>{p.emoji || 'ðŸ’Š'}</div>
                       <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
-                      {p.price != null && <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                      {p.price != null && <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>}
                       <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
                     </div>
                   </Link>
@@ -215,7 +215,7 @@ function Search() {
       )}
 
       <div style={{ padding: '14px 16px 0' }}>
-        {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loading…</p>}
+        {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loadingâ€¦</p>}
 
         {!loading && tab === 'products' && products.length === 0 && (query.trim() || stateFilter) && (
           <EmptyState label="No products found" hint="Try another name or state." />
@@ -242,34 +242,34 @@ function Search() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {p.image_url
                   ? <div style={{ width: 46, height: 46, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                  : <div style={{ fontSize: 26 }}>{p.emoji || '💊'}</div>}
+                  : <div style={{ fontSize: 26 }}>{p.emoji || 'ðŸ’Š'}</div>}
                 <div style={{ flex: 1 }}>
                   <Link to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{p.name}{p.category && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 10, marginLeft: 6 }}>{p.category}</span>}</p>
                     {p.generic_name && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textMid, fontStyle: 'italic' }}>{p.generic_name}</p>}
-                    <p style={{ margin: '0 0 3px 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See reviews ›</p>
+                    <p style={{ margin: '0 0 3px 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>â­ See reviews â€º</p>
                   </Link>
                   {p.business_id ? (
                     <Link to={`/business/${p.business_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
                       {p.businesses?.name || 'View business'}
                       {(() => {
                         const loc = p.seller_location || p.businesses?.state || p.businesses?.city
-                        return loc ? <span style={{ color: theme.textLight, fontWeight: 400 }}> · 📍 {loc}</span> : null
+                        return loc ? <span style={{ color: theme.textLight, fontWeight: 400 }}> Â· ðŸ“ {loc}</span> : null
                       })()}
-                      {' ›'}
+                      {' â€º'}
                     </Link>
                   ) : (
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
                       {(() => {
                         const loc = p.seller_location
-                        return loc ? <span>📍 {loc}</span> : null
+                        return loc ? <span>ðŸ“ {loc}</span> : null
                       })()}
                     </p>
                   )}
                 </div>
                 {p.price != null && (
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>
                     {p.price_unit && <p style={{ margin: 0, fontSize: 9.5, color: theme.textLight }}>per {p.price_unit}</p>}
                   </div>
                 )}
@@ -282,7 +282,7 @@ function Search() {
               )}
               {waLink && (
                 <a href={waLink} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
-                  💬 Message on WhatsApp
+                  ðŸ’¬ Message on WhatsApp
                 </a>
               )}
             </div>
@@ -292,12 +292,12 @@ function Search() {
         {businesses.map((b, idx) => (
           <Link key={b.id} className="mm-card" to={`/business/${b.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg }}>
             <div style={{ width: 46, height: 46, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
-              {!b.cover_url && (b.name?.[0]?.toUpperCase() || '🏥')}
+              {!b.cover_url && (b.name?.[0]?.toUpperCase() || 'ðŸ¥')}
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
-              <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
-              <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See profile & reviews ›</p>
+              <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} Â· {b.city}{b.state ? `, ${b.state}` : ''}</p>
+              <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>â­ See profile & reviews â€º</p>
             </div>
           </Link>
         ))}
@@ -308,8 +308,8 @@ function Search() {
               {(pr.full_name?.[0] || pr.display_name?.[0] || '?').toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name} <span style={{ color: theme.tealDeep }}>✓</span></p>
-              <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
+              <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name} <span style={{ color: theme.tealDeep }}>âœ“</span></p>
+              <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` Â· ${pr.location}` : ''}</p>
             </div>
           </Link>
         ))}
@@ -323,7 +323,7 @@ function Search() {
 function EmptyState({ label, hint }) {
   return (
     <div style={{ textAlign: 'center', padding: '30px 20px' }}>
-      <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>ðŸ”</div>
       <p style={{ fontSize: 14, fontWeight: 700, color: theme.navy, margin: '0 0 4px 0' }}>{label}</p>
       <p style={{ fontSize: 12.5, color: theme.textLight, margin: 0 }}>{hint}</p>
     </div>

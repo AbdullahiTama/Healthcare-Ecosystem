@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react'
-import { supabase } from './lib/supabaseClient'
-import { theme } from './lib/theme'
+﻿import { useState, useEffect } from 'react'
+import { supabase } from './config/supabaseClient'
+import { theme } from './styles/theme'
 
 const ROLES = ['moderator', 'verification_officer', 'support', 'content_manager']
 const ROLE_LABELS = {
-  super_admin: '👑 Super Admin',
-  moderator: '🛡️ Moderator',
-  verification_officer: '🩺 Verification Officer',
-  support: '💬 Support',
-  content_manager: '📝 Content Manager',
+  super_admin: 'ðŸ‘‘ Super Admin',
+  moderator: 'ðŸ›¡ï¸ Moderator',
+  verification_officer: 'ðŸ©º Verification Officer',
+  support: 'ðŸ’¬ Support',
+  content_manager: 'ðŸ“ Content Manager',
 }
 
 function hashPassword(password) {
@@ -100,14 +100,14 @@ function AdminStaff({ adminUser }) {
             </select>
           </div>
           {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
-          {success && <p style={{ color: theme.success, fontSize: 13, margin: 0 }}>✓ {success}</p>}
+          {success && <p style={{ color: theme.success, fontSize: 13, margin: 0 }}>âœ“ {success}</p>}
           <button type="submit" disabled={saving} style={{ padding: 12, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
             {saving ? 'Creating...' : 'Create Staff Account'}
           </button>
         </form>
       )}
 
-      {success && !creating && <p style={{ color: theme.success, fontSize: 13 }}>✓ {success}</p>}
+      {success && !creating && <p style={{ color: theme.success, fontSize: 13 }}>âœ“ {success}</p>}
 
       {loading ? <p style={{ color: theme.textLight, fontSize: 13 }}>Loading staff...</p> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

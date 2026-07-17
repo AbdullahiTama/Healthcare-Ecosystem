@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
-import { supabase } from './lib/supabaseClient'
-import { theme } from './lib/theme'
+﻿import { useState, useRef } from 'react'
+import { supabase } from './config/supabaseClient'
+import { theme } from './styles/theme'
 
 const MAX_MB = 50
 
@@ -18,7 +18,7 @@ function VideoUploader({ showId, onUploaded }) {
     if (!f) return
     const sizeMb = f.size / (1024 * 1024)
     if (sizeMb > MAX_MB) {
-      setError(`That video is ${sizeMb.toFixed(0)}MB — too large. Please use one under ${MAX_MB}MB (a shorter or lower-quality clip).`)
+      setError(`That video is ${sizeMb.toFixed(0)}MB â€” too large. Please use one under ${MAX_MB}MB (a shorter or lower-quality clip).`)
       if (inputRef.current) inputRef.current.value = ''
       return
     }
@@ -56,7 +56,7 @@ function VideoUploader({ showId, onUploaded }) {
 
       {!previewUrl && (
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed8', borderRadius: 20, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-          📹 Upload video
+          ðŸ“¹ Upload video
           <input ref={inputRef} type="file" accept="video/*" onChange={pickFile} style={{ display: 'none' }} />
         </label>
       )}
@@ -66,7 +66,7 @@ function VideoUploader({ showId, onUploaded }) {
           <video src={previewUrl} controls playsInline style={{ width: '100%', maxWidth: 260, borderRadius: 10, display: 'block', marginBottom: 6 }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={upload} disabled={uploading} type="button" style={{ padding: '7px 16px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-              {uploading ? 'Uploading… please wait' : '📡 Post video'}
+              {uploading ? 'Uploadingâ€¦ please wait' : 'ðŸ“¡ Post video'}
             </button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '7px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>
               Discard

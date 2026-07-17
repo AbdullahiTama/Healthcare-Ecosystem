@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 
 function BusinessDashboard() {
@@ -101,9 +101,9 @@ function BusinessDashboard() {
   function downloadTemplate() {
     const template = [
       'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
+      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,ðŸ’Š',
+      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,ðŸ’Š',
+      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,ðŸŠ',
     ].join('\n')
     const blob = new Blob([template], { type: 'text/csv' })
     const a = document.createElement('a')
@@ -162,7 +162,7 @@ function BusinessDashboard() {
           list_on_carefind: true,
           generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
           category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
+          emoji: emojiIdx >= 0 ? cols[emojiIdx] : 'ðŸ’Š',
         }
 
         if (existing) {
@@ -208,9 +208,9 @@ function BusinessDashboard() {
   function downloadTemplate() {
     const template = [
       'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
+      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,ðŸ’Š',
+      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,ðŸ’Š',
+      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,ðŸŠ',
     ].join('\n')
     const blob = new Blob([template], { type: 'text/csv' })
     const a = document.createElement('a')
@@ -269,7 +269,7 @@ function BusinessDashboard() {
           list_on_carefind: true,
           generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
           category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
+          emoji: emojiIdx >= 0 ? cols[emojiIdx] : 'ðŸ’Š',
         }
 
         if (existing) {
@@ -290,7 +290,7 @@ function BusinessDashboard() {
   return (
       <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Business Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -298,7 +298,7 @@ function BusinessDashboard() {
             width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
-            🏥
+            ðŸ¥
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No approved business yet</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>
@@ -335,9 +335,9 @@ function BusinessDashboard() {
   function downloadTemplate() {
     const template = [
       'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
+      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,ðŸ’Š',
+      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,ðŸ’Š',
+      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,ðŸŠ',
     ].join('\n')
     const blob = new Blob([template], { type: 'text/csv' })
     const a = document.createElement('a')
@@ -396,7 +396,7 @@ function BusinessDashboard() {
           list_on_carefind: true,
           generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
           category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
+          emoji: emojiIdx >= 0 ? cols[emojiIdx] : 'ðŸ’Š',
         }
 
         if (existing) {
@@ -417,7 +417,7 @@ function BusinessDashboard() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Business Dashboard</h1>
 
         {businesses.length > 1 && (
@@ -441,7 +441,7 @@ function BusinessDashboard() {
             <div>
               <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>{selectedBiz.name}</p>
               <p style={{ margin: 0, fontSize: 12.5, color: theme.textLight }}>
-                {avgRating ? `⭐ ${avgRating} · ${reviews.length} reviews` : 'No reviews yet'}
+                {avgRating ? `â­ ${avgRating} Â· ${reviews.length} reviews` : 'No reviews yet'}
               </p>
             </div>
             <button
@@ -452,7 +452,7 @@ function BusinessDashboard() {
                 color: selectedBiz.visible_on_carefind ? theme.success : theme.alert,
               }}
             >
-              {selectedBiz.visible_on_carefind ? '● Visible' : '○ Hidden'}
+              {selectedBiz.visible_on_carefind ? 'â— Visible' : 'â—‹ Hidden'}
             </button>
           </div>
 
@@ -460,7 +460,7 @@ function BusinessDashboard() {
             Products ({products.length})
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-            {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products yet — add them in CareHub.</p>}
+            {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products yet â€” add them in CareHub.</p>}
             {products.map((p) => (
               <div key={p.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -469,7 +469,7 @@ function BusinessDashboard() {
               }}>
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{p.name}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>₦{p.price} · Stock: {p.stock}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>â‚¦{p.price} Â· Stock: {p.stock}</p>
                 </div>
                 <button
                   onClick={() => toggleProductVisibility(p)}
@@ -492,7 +492,7 @@ function BusinessDashboard() {
             {reviews.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reviews yet.</p>}
             {reviews.map((r) => (
               <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                <p style={{ margin: '0 0 4px 0', color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</p>
+                <p style={{ margin: '0 0 4px 0', color: theme.warning, fontSize: 13 }}>{'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}</p>
                 {r.comment && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{r.comment}</p>}
               </div>
             ))}
@@ -503,7 +503,7 @@ function BusinessDashboard() {
             background: theme.bg, textAlign: 'center',
           }}>
             <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-              📈 Detailed analytics, review replies, and staff invites are coming soon
+              ðŸ“ˆ Detailed analytics, review replies, and staff invites are coming soon
             </p>
           </div>
         </div>

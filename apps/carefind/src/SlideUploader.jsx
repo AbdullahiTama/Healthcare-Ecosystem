@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
-import { supabase } from './lib/supabaseClient'
-import { theme } from './lib/theme'
+﻿import { useState, useRef } from 'react'
+import { supabase } from './config/supabaseClient'
+import { theme } from './styles/theme'
 
 // Host uploads a PDF -> we render each page to an image via PDF.js (from CDN)
 // -> host posts each page as a numbered "slide" to the live show.
@@ -31,16 +31,16 @@ function SlideUploader({ showId, onPostSlide }) {
     if (!file) return
     setError(''); setSlides([]); setPostedIndexes([])
     setProcessing(true)
-    setProgress('Loading PDF engine…')
+    setProgress('Loading PDF engineâ€¦')
     try {
       const pdfjsLib = await loadPdfJs()
       const buf = await file.arrayBuffer()
-      setProgress('Reading PDF…')
+      setProgress('Reading PDFâ€¦')
       const pdf = await pdfjsLib.getDocument({ data: buf }).promise
       const pageCount = pdf.numPages
       const out = []
       for (let i = 1; i <= pageCount; i++) {
-        setProgress(`Rendering slide ${i} of ${pageCount}…`)
+        setProgress(`Rendering slide ${i} of ${pageCount}â€¦`)
         const page = await pdf.getPage(i)
         const viewport = page.getViewport({ scale: 1.4 })
         const canvas = document.createElement('canvas')
@@ -79,14 +79,14 @@ function SlideUploader({ showId, onPostSlide }) {
 
   return (
     <div style={{ marginBottom: 10, padding: 10, background: theme.bg, borderRadius: 12, border: `1px dashed ${theme.border}` }}>
-      <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>📑 Present slides (PDF)</p>
+      <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>ðŸ“‘ Present slides (PDF)</p>
 
       {error && <p style={{ margin: '0 0 6px 0', fontSize: 11, color: theme.alert }}>{error}</p>}
 
       {slides.length === 0 && (
         <>
           <label style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
-            {processing ? (progress || 'Processing…') : '📎 Upload a PDF to present'}
+            {processing ? (progress || 'Processingâ€¦') : 'ðŸ“Ž Upload a PDF to present'}
             <input ref={fileRef} type="file" accept="application/pdf" onChange={handleFile} disabled={processing} style={{ display: 'none' }} />
           </label>
           <p style={{ margin: '6px 0 0 0', fontSize: 10, color: theme.textLight }}>Each page becomes a slide you post one at a time. Large PDFs may be slow on weak networks.</p>
@@ -102,10 +102,10 @@ function SlideUploader({ showId, onPostSlide }) {
                 <div style={{ position: 'relative', border: `2px solid ${postedIndexes.includes(i) ? theme.tealDeep : theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
                   <img src={s.url} alt={`Slide ${i + 1}`} style={{ width: '100%', display: 'block' }} />
                   <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>#{i + 1}</span>
-                  {postedIndexes.includes(i) && <span style={{ position: 'absolute', bottom: 4, right: 4, background: theme.tealDeep, color: '#fff', fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>✓ posted</span>}
+                  {postedIndexes.includes(i) && <span style={{ position: 'absolute', bottom: 4, right: 4, background: theme.tealDeep, color: '#fff', fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>âœ“ posted</span>}
                 </div>
                 <button onClick={() => postSlide(i)} disabled={postingIndex === i} style={{ width: '100%', marginTop: 4, padding: 6, background: postedIndexes.includes(i) ? theme.bg : theme.tealGradient, color: postedIndexes.includes(i) ? theme.textMid : '#fff', border: postedIndexes.includes(i) ? `1px solid ${theme.border}` : 'none', borderRadius: 8, fontWeight: 800, fontSize: 11 }}>
-                  {postingIndex === i ? 'Posting…' : postedIndexes.includes(i) ? 'Post again' : 'Post slide'}
+                  {postingIndex === i ? 'Postingâ€¦' : postedIndexes.includes(i) ? 'Post again' : 'Post slide'}
                 </button>
               </div>
             ))}

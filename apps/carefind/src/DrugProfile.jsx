@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import { getSentimentSummary } from './lib/sentiment'
 import { analyzeReviews } from './lib/reviewAI'
 import BottomNav from './BottomNav.jsx'
@@ -144,11 +144,11 @@ function DrugProfile() {
     return (
       <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>
+          <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Search</Link>
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>{decodeURIComponent(name)}</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto' }}>💊</div>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto' }}>ðŸ’Š</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No listings found</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>This medication isn't listed by any seller yet</p>
         </div>
@@ -163,9 +163,9 @@ function DrugProfile() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>
+        <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Search</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
-          <span style={{ fontSize: 28 }}>{products[0]?.emoji || '💊'}</span>
+          <span style={{ fontSize: 28 }}>{products[0]?.emoji || 'ðŸ’Š'}</span>
           <div>
             <h1 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 2px 0' }}>{drugName}</h1>
             {genericName && <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)' }}>Generic: {genericName}</p>}
@@ -178,11 +178,11 @@ function DrugProfile() {
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Sellers</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `₦${lowestPrice.toLocaleString()}` : '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `â‚¦${lowestPrice.toLocaleString()}` : 'â€”'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Lowest Price</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || 'â€”'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
           </div>
         </div>
@@ -200,7 +200,7 @@ function DrugProfile() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                   <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avgRating}</span>
                   <div>
-                    <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(Number(avgRating)))}{'☆'.repeat(5 - Math.round(Number(avgRating)))}</p>
+                    <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'â˜…'.repeat(Math.round(Number(avgRating)))}{'â˜†'.repeat(5 - Math.round(Number(avgRating)))}</p>
                     <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{reviews.length} review{reviews.length !== 1 ? 's' : ''} from users</p>
                   </div>
                 </div>
@@ -208,7 +208,7 @@ function DrugProfile() {
                 {ratingBreakdown.map((r) => (
                   <div key={r.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                     <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{r.star}</span>
-                    <span style={{ fontSize: 11, color: theme.warning }}>★</span>
+                    <span style={{ fontSize: 11, color: theme.warning }}>â˜…</span>
                     <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                       <div style={{ width: `${r.pct}%`, height: '100%', background: r.star >= 4 ? theme.success : r.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
                     </div>
@@ -251,7 +251,7 @@ function DrugProfile() {
         {(analyzingAI || aiInsights) && (
           <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 20 }}>
             <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
-              🤖 AI Intelligence
+              ðŸ¤– AI Intelligence
             </p>
 
             {analyzingAI && (
@@ -268,7 +268,7 @@ function DrugProfile() {
 
                 {aiInsights.sideEffects?.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>⚠️ Side Effects Reported</p>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>âš ï¸ Side Effects Reported</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                       {aiInsights.sideEffects.map((s) => (
                         <span key={s} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
@@ -281,10 +281,10 @@ function DrugProfile() {
 
                 {aiInsights.efficacyReports?.positive?.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>✅ Efficacy — Positive</p>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>âœ… Efficacy â€” Positive</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {aiInsights.efficacyReports.positive.map((e) => (
-                        <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
+                        <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>â€¢ {e}</p>
                       ))}
                     </div>
                   </div>
@@ -292,10 +292,10 @@ function DrugProfile() {
 
                 {aiInsights.efficacyReports?.negative?.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.warning }}>⚠️ Efficacy — Concerns</p>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.warning }}>âš ï¸ Efficacy â€” Concerns</p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {aiInsights.efficacyReports.negative.map((e) => (
-                        <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
+                        <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>â€¢ {e}</p>
                       ))}
                     </div>
                   </div>
@@ -303,7 +303,7 @@ function DrugProfile() {
 
                 {aiInsights.positiveThemes?.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
-                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>👍 People Also Praise</p>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>ðŸ‘ People Also Praise</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                       {aiInsights.positiveThemes.map((t) => (
                         <span key={t} style={{ padding: '3px 10px', background: '#ecfdf5', border: `1px solid #bbf7d0`, borderRadius: 20, fontSize: 12, color: theme.success, fontWeight: 600 }}>
@@ -316,7 +316,7 @@ function DrugProfile() {
 
                 {aiInsights.negativeThemes?.length > 0 && (
                   <div>
-                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>👎 People Also Complain</p>
+                    <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>ðŸ‘Ž People Also Complain</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                       {aiInsights.negativeThemes.map((t) => (
                         <span key={t} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
@@ -346,19 +346,19 @@ function DrugProfile() {
                   <div style={{ flex: 1 }}>
                     {p.business_id ? (
                       <Link to={`/business/${p.business_id}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} ›</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} â€º</p>
                       </Link>
                     ) : p.owner_id ? (
                       <Link to={`/u/${p.owner_id}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} ›</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} â€º</p>
                       </Link>
                     ) : (
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName}</p>
                     )}
-                    {loc && <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>📍 {loc}</p>}
+                    {loc && <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>ðŸ“ {loc}</p>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    {p.price != null && <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>₦{p.price?.toLocaleString()}</p>}
+                    {p.price != null && <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>â‚¦{p.price?.toLocaleString()}</p>}
                     {p.price_unit && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>per {p.price_unit}</p>}
                     {p.business_id && p.stock != null && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Stock: {p.stock}</p>}
                   </div>
@@ -384,7 +384,7 @@ function DrugProfile() {
                     rel="noreferrer"
                     style={{ display: 'inline-block', padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                   >
-                    💬 WhatsApp
+                    ðŸ’¬ WhatsApp
                   </a>
                 )}
               </div>
@@ -408,7 +408,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {(p.businesses?.name || 'CareFind seller')}{p.price != null ? ` — ₦${p.price}` : ''}
+                      {(p.businesses?.name || 'CareFind seller')}{p.price != null ? ` â€” â‚¦${p.price}` : ''}
                     </option>
                   ))}
                 </select>
@@ -427,7 +427,7 @@ function DrugProfile() {
                       onClick={() => setRating(n)}
                       style={{ background: 'none', border: 'none', fontSize: 22, color: n <= rating ? theme.warning : '#ddd' }}
                     >
-                      ★
+                      â˜…
                     </button>
                   ))}
                 </div>
@@ -469,12 +469,12 @@ function DrugProfile() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       {r.user_id ? (
                         <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                          {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
+                          {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> âœ“</span>}
                         </Link>
                       ) : (
                         <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{whoName}</span>
                       )}
-                      <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                      <span style={{ color: theme.warning, fontSize: 13 }}>{'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}</span>
                     </div>
                     {productForReview?.businesses?.name && (
                       <p style={{ margin: '0 0 4px 0', fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>

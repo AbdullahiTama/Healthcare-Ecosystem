@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import { getSentimentSummary } from './lib/sentiment'
 
 function BusinessProfile() {
@@ -112,31 +112,31 @@ function BusinessProfile() {
     waLink = `https://wa.me/${num}?text=${encodeURIComponent(`Hi ${biz.name}, I found you on CareFind.`)}`
   }
 
-  const typeIcons = { pharmacy: '💊', hospital: '🏥', dental: '🦷', optical: '👁️', wellness: '🌿', skincare: '✨' }
+  const typeIcons = { pharmacy: 'ðŸ’Š', hospital: 'ðŸ¥', dental: 'ðŸ¦·', optical: 'ðŸ‘ï¸', wellness: 'ðŸŒ¿', skincare: 'âœ¨' }
 
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 40 }}>
       <div style={{ background: theme.heroGradient, padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Back to search</Link>
+        <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Back to search</Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
           <span style={{
             width: 46, height: 46, borderRadius: 14, background: 'rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
           }}>
-            {typeIcons[biz.business_type] || '🏪'}
+            {typeIcons[biz.business_type] || 'ðŸª'}
           </span>
           <div>
             <h1 style={{ fontSize: 19, fontWeight: 900, margin: '0 0 2px 0', letterSpacing: '-0.01em' }}>{biz.name}</h1>
             <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', textTransform: 'capitalize' }}>
-              {biz.business_type} · {biz.city}, {biz.state}
+              {biz.business_type} Â· {biz.city}, {biz.state}
             </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || 'â€”'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
@@ -162,7 +162,7 @@ function BusinessProfile() {
               rel="noreferrer"
               style={{ flex: 1, textAlign: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700 }}
             >
-              💬 WhatsApp
+              ðŸ’¬ WhatsApp
             </a>
           )}
           {biz.maps_link && (
@@ -191,7 +191,7 @@ function BusinessProfile() {
             >
               {p.image_url
                 ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                : <div style={{ fontSize: 24, flexShrink: 0 }}>{p.emoji || '💊'}</div>}
+                : <div style={{ fontSize: 24, flexShrink: 0 }}>{p.emoji || 'ðŸ’Š'}</div>}
               <div style={{ flex: 1 }}>
                 <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
                 {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
@@ -205,10 +205,10 @@ function BusinessProfile() {
                     </span>
                   )}
                 </div>
-                <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See reviews ›</p>
+                <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>â­ See reviews â€º</p>
               </div>
               <div style={{ textAlign: 'right' }}>
-                {p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                {p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>}
                 {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
                 {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
               </div>
@@ -225,7 +225,7 @@ function BusinessProfile() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avgRating}</span>
               <div>
-                <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(Number(avgRating)))}{'☆'.repeat(5 - Math.round(Number(avgRating)))}</p>
+                <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'â˜…'.repeat(Math.round(Number(avgRating)))}{'â˜†'.repeat(5 - Math.round(Number(avgRating)))}</p>
                 <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{reviews.length} review{reviews.length !== 1 ? 's' : ''} from users</p>
               </div>
             </div>
@@ -233,7 +233,7 @@ function BusinessProfile() {
             {ratingBreakdown.map((r) => (
               <div key={r.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                 <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{r.star}</span>
-                <span style={{ fontSize: 11, color: theme.warning }}>★</span>
+                <span style={{ fontSize: 11, color: theme.warning }}>â˜…</span>
                 <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ width: `${r.pct}%`, height: '100%', background: r.star >= 4 ? theme.success : r.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
                 </div>
@@ -288,7 +288,7 @@ function BusinessProfile() {
                   onClick={() => setRating(n)}
                   style={{ background: 'none', border: 'none', fontSize: 22, color: n <= rating ? theme.warning : '#ddd' }}
                 >
-                  ★
+                  â˜…
                 </button>
               ))}
             </div>
@@ -324,12 +324,12 @@ function BusinessProfile() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   {r.user_id ? (
                     <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                      {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
+                      {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> âœ“</span>}
                     </Link>
                   ) : (
                     <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{whoName}</span>
                   )}
-                  <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                  <span style={{ color: theme.warning, fontSize: 13 }}>{'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}</span>
                 </div>
                 {r.comment && <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.5 }}>{r.comment}</p>}
                 <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>

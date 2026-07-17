@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 
 function Notifications() {
@@ -34,15 +34,15 @@ function Notifications() {
 
   function iconFor(type) {
     switch (type) {
-      case 'like': return '❤️'
-      case 'comment': return '💬'
-      case 'reply': return '↩️'
-      case 'gift': return '🎁'
-      case 'follow': return '👤'
-      case 'news_like': return '❤️'
-      case 'news_comment': return '💬'
-      case 'product_available': return '💊'
-      default: return '🔔'
+      case 'like': return 'â¤ï¸'
+      case 'comment': return 'ðŸ’¬'
+      case 'reply': return 'â†©ï¸'
+      case 'gift': return 'ðŸŽ'
+      case 'follow': return 'ðŸ‘¤'
+      case 'news_like': return 'â¤ï¸'
+      case 'news_comment': return 'ðŸ’¬'
+      case 'product_available': return 'ðŸ’Š'
+      default: return 'ðŸ””'
     }
   }
 
@@ -62,17 +62,17 @@ function Notifications() {
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '20px 18px 22px', borderRadius: '0 0 24px 24px', color: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Feed</Link>
         </div>
-        <h1 style={{ fontSize: 22, fontWeight: 900, margin: '12px 0 0 0' }}>🔔 Notifications</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 900, margin: '12px 0 0 0' }}>ðŸ”” Notifications</h1>
       </div>
 
       <div style={{ padding: '12px 16px 0' }}>
-        {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loading…</p>}
+        {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loadingâ€¦</p>}
 
         {!loading && items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '50px 20px' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>ðŸ””</div>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No notifications yet</h3>
             <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>When people interact with you, it'll show up here.</p>
           </div>
@@ -88,7 +88,7 @@ function Notifications() {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: '0 0 2px 0', fontSize: 13.5, color: theme.textDark, lineHeight: 1.4 }}>
                   <strong style={{ color: theme.navy }}>{actorName(n)}</strong>
-                  {n.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
+                  {n.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>âœ“</span>}
                   {' '}{n.message}
                 </p>
                 <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(n.created_at)}</p>

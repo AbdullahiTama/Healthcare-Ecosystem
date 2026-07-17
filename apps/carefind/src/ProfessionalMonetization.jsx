@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 
 function ProfessionalMonetization() {
@@ -102,11 +102,11 @@ function ProfessionalMonetization() {
     return (
       <div style={{ fontFamily: 'system-ui', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ background: theme.heroGradient, padding: '22px 20px 26px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Earn on CareFind</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 40, marginBottom: 14 }}>🩺</div>
+          <div style={{ fontSize: 40, marginBottom: 14 }}>ðŸ©º</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Verification required</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>Get verified as a healthcare professional to unlock all earning features</p>
           <Link to="/verify" style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>
@@ -125,13 +125,13 @@ function ProfessionalMonetization() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Dashboard</Link>
+        <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Dashboard</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Earn on CareFind</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>✓ {profile.specialty || profile.verification_label}</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>âœ“ {profile.specialty || profile.verification_label}</p>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>🪙 {wallet?.balance || 0}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>ðŸª™ {wallet?.balance || 0}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>CareCoins</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
@@ -148,10 +148,10 @@ function ProfessionalMonetization() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, padding: '14px 20px 4px', overflowX: 'auto' }}>
         {[
-          { key: 'overview', label: '📊 Overview' },
-          { key: 'subscription', label: '🔒 Subscription' },
-          { key: 'consultation', label: '📅 Consults' },
-          { key: 'tasks', label: '📋 Tasks' },
+          { key: 'overview', label: 'ðŸ“Š Overview' },
+          { key: 'subscription', label: 'ðŸ”’ Subscription' },
+          { key: 'consultation', label: 'ðŸ“… Consults' },
+          { key: 'tasks', label: 'ðŸ“‹ Tasks' },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flexShrink: 0, padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
@@ -170,11 +170,11 @@ function ProfessionalMonetization() {
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { icon: '🔒', title: 'Premium Content', desc: subscription ? `₦${subscription.price}/month · ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
-              { icon: '📅', title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
-              { icon: '📋', title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
-              { icon: '💰', title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins ≈ ₦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
-              { icon: '🔴', title: 'Live Session Earnings', desc: 'Gifts from your live sessions — permanently recorded', action: () => {} },
+              { icon: 'ðŸ”’', title: 'Premium Content', desc: subscription ? `â‚¦${subscription.price}/month Â· ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
+              { icon: 'ðŸ“…', title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
+              { icon: 'ðŸ“‹', title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
+              { icon: 'ðŸ’°', title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins â‰ˆ â‚¦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
+              { icon: 'ðŸ”´', title: 'Live Session Earnings', desc: 'Gifts from your live sessions â€” permanently recorded', action: () => {} },
             ].map((item) => (
               <button key={item.title} onClick={item.action} style={{
                 border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg,
@@ -185,18 +185,18 @@ function ProfessionalMonetization() {
                   <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{item.title}</p>
                   <p style={{ margin: 0, fontSize: 12.5, color: theme.textLight }}>{item.desc}</p>
                 </div>
-                <span style={{ color: theme.textLight, fontSize: 16 }}>›</span>
+                <span style={{ color: theme.textLight, fontSize: 16 }}>â€º</span>
               </button>
             ))}
 
             <Link to="/wallet" style={{ textDecoration: 'none' }}>
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, background: '#ecfdf5', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 22 }}>🏦</span>
+                <span style={{ fontSize: 22 }}>ðŸ¦</span>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.tealDeep }}>Withdraw Earnings</p>
-                  <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep }}>Balance: 🪙 {wallet?.balance || 0} CareCoins</p>
+                  <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep }}>Balance: ðŸª™ {wallet?.balance || 0} CareCoins</p>
                 </div>
-                <span style={{ color: theme.tealDeep, fontSize: 16 }}>›</span>
+                <span style={{ color: theme.tealDeep, fontSize: 16 }}>â€º</span>
               </div>
             </Link>
           </div>
@@ -214,10 +214,10 @@ function ProfessionalMonetization() {
               {editingPrice || !subscription ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Monthly Price (₦)</label>
+                    <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Monthly Price (â‚¦)</label>
                     <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="e.g. 500" min="100"
                       style={{ width: '100%', padding: 11, fontSize: 15, fontWeight: 700, border: `1px solid ${theme.border}`, borderRadius: 12 }} />
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>Minimum ₦100 · You earn 90% = ₦{Math.floor((parseInt(newPrice) || 0) * 0.9)}/subscriber/month</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>Minimum â‚¦100 Â· You earn 90% = â‚¦{Math.floor((parseInt(newPrice) || 0) * 0.9)}/subscriber/month</p>
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>What subscribers get (optional)</label>
@@ -234,11 +234,11 @@ function ProfessionalMonetization() {
               ) : (
                 <div>
                   <div style={{ background: '#ecfdf5', borderRadius: 14, padding: 14, marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: theme.tealDeep }}>₦{subscription.price}<span style={{ fontSize: 13, fontWeight: 600 }}>/month</span></p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: theme.tealDeep }}>â‚¦{subscription.price}<span style={{ fontSize: 13, fontWeight: 600 }}>/month</span></p>
                     {subscription.description && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{subscription.description}</p>}
                   </div>
                   <p style={{ margin: '0 0 10px 0', fontSize: 13, color: theme.textLight }}>
-                    {subscribers.length} active subscriber{subscribers.length !== 1 ? 's' : ''} · You earn ₦{Math.floor(subscription.price * 0.9 * subscribers.length).toLocaleString()}/month
+                    {subscribers.length} active subscriber{subscribers.length !== 1 ? 's' : ''} Â· You earn â‚¦{Math.floor(subscription.price * 0.9 * subscribers.length).toLocaleString()}/month
                   </p>
                   <button onClick={() => setEditingPrice(true)} style={{ padding: '8px 16px', background: 'none', border: `1px solid ${theme.tealDeep}`, color: theme.tealDeep, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>
                     Edit Plan
@@ -281,15 +281,15 @@ function ProfessionalMonetization() {
                       <button key={t} onClick={() => setConsultType(t)} style={{
                         flex: 1, padding: '8px 6px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, border: 'none',
                         background: consultType === t ? theme.tealDeep : theme.bg, color: consultType === t ? '#fff' : theme.textMid, textTransform: 'capitalize',
-                      }}>{t === 'text' ? '💬 Text' : t === 'video' ? '📹 Video' : '📄 Document'}</button>
+                      }}>{t === 'text' ? 'ðŸ’¬ Text' : t === 'video' ? 'ðŸ“¹ Video' : 'ðŸ“„ Document'}</button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Your Fee (₦)</label>
+                  <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Your Fee (â‚¦)</label>
                   <input type="number" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} placeholder="e.g. 2000" min="500"
                     style={{ width: '100%', padding: 11, fontSize: 15, fontWeight: 700, border: `1px solid ${theme.border}`, borderRadius: 12 }} />
-                  {consultFee && <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>You earn ₦{Math.floor((parseInt(consultFee) || 0) * 0.85).toLocaleString()} per consultation</p>}
+                  {consultFee && <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>You earn â‚¦{Math.floor((parseInt(consultFee) || 0) * 0.85).toLocaleString()} per consultation</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Notes for patients (optional)</label>
@@ -308,7 +308,7 @@ function ProfessionalMonetization() {
                 {consultations.filter(c => c.status === 'paid').map((c) => (
                   <div key={c.id} style={{ padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 700, color: theme.navy, textTransform: 'capitalize' }}>{c.type} Consultation</p>
-                    <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight }}>Fee: ₦{c.fee?.toLocaleString()}</p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight }}>Fee: â‚¦{c.fee?.toLocaleString()}</p>
                     {c.notes && <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>{c.notes}</p>}
                   </div>
                 ))}
@@ -322,13 +322,13 @@ function ProfessionalMonetization() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ border: `1px solid #fef3c7`, borderRadius: 14, padding: 12, background: '#fffbeb' }}>
               <p style={{ margin: 0, fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
-                💼 <strong>Sponsored Tasks</strong> are paid assignments from companies and health brands. Complete a task to earn the listed compensation directly to your wallet.
+                ðŸ’¼ <strong>Sponsored Tasks</strong> are paid assignments from companies and health brands. Complete a task to earn the listed compensation directly to your wallet.
               </p>
             </div>
 
             {tasks.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <div style={{ fontSize: 30, marginBottom: 10 }}>📋</div>
+                <div style={{ fontSize: 30, marginBottom: 10 }}>ðŸ“‹</div>
                 <p style={{ color: theme.textLight, fontSize: 13 }}>No open tasks right now. Check back soon.</p>
               </div>
             )}
@@ -339,11 +339,11 @@ function ProfessionalMonetization() {
                 <div key={task.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                     <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy, flex: 1 }}>{task.title}</h3>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: theme.success, marginLeft: 10 }}>₦{task.compensation?.toLocaleString()}</span>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: theme.success, marginLeft: 10 }}>â‚¦{task.compensation?.toLocaleString()}</span>
                   </div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}>{task.description}</p>
-                  {task.specialty && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>🩺 For: {task.specialty}</p>}
-                  {task.deadline && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>⏰ Deadline: {new Date(task.deadline).toLocaleDateString()}</p>}
+                  {task.specialty && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>ðŸ©º For: {task.specialty}</p>}
+                  {task.deadline && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>â° Deadline: {new Date(task.deadline).toLocaleDateString()}</p>}
                   <button
                     onClick={() => !submitted && acceptTask(task.id)}
                     disabled={submitted}
@@ -353,7 +353,7 @@ function ProfessionalMonetization() {
                       color: submitted ? theme.textLight : '#fff',
                     }}
                   >
-                    {submitted ? '✓ Accepted' : 'Accept Task'}
+                    {submitted ? 'âœ“ Accepted' : 'Accept Task'}
                   </button>
                 </div>
               )
@@ -366,7 +366,7 @@ function ProfessionalMonetization() {
                   <div key={s.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg }}>
                     <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13, color: theme.navy }}>{s.tasks?.title}</p>
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-                      ₦{s.tasks?.compensation?.toLocaleString()} · Status: <span style={{ textTransform: 'capitalize', color: s.status === 'approved' ? theme.success : theme.warning }}>{s.status}</span>
+                      â‚¦{s.tasks?.compensation?.toLocaleString()} Â· Status: <span style={{ textTransform: 'capitalize', color: s.status === 'approved' ? theme.success : theme.warning }}>{s.status}</span>
                     </p>
                   </div>
                 ))}

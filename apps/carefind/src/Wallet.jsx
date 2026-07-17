@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient.js'
+import { supabase } from './config/supabaseClient.js'
 import { useAuth } from './lib/AuthContext.jsx'
-import { theme } from './lib/theme.js'
+import { theme } from './styles/theme.js'
 import BottomNav from './BottomNav.jsx'
 
 const COIN_VALUE_NAIRA = 200
@@ -65,9 +65,9 @@ function Wallet() {
 
           setTab('history')
           window.history.replaceState({}, '', '/wallet')
-          alert(`✅ ${newCoins} CareCoin${newCoins > 1 ? 's' : ''} added! New balance: ${newBalance} coins`)
+          alert(`âœ… ${newCoins} CareCoin${newCoins > 1 ? 's' : ''} added! New balance: ${newBalance} coins`)
         } else {
-          // Already processed — just clean the URL
+          // Already processed â€” just clean the URL
           window.history.replaceState({}, '', '/wallet')
         }
       }
@@ -136,7 +136,7 @@ function Wallet() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  const txIcon = (type) => ({ topup: '🪙', gift_sent: '🎁', gift_received: '💰', withdrawal: '🏦' }[type] || '💳')
+  const txIcon = (type) => ({ topup: 'ðŸª™', gift_sent: 'ðŸŽ', gift_received: 'ðŸ’°', withdrawal: 'ðŸ¦' }[type] || 'ðŸ’³')
 
   if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
 
@@ -152,14 +152,14 @@ function Wallet() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 30px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>My Wallet</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins — 1 coin = ₦{COIN_VALUE_NAIRA}</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins â€” 1 coin = â‚¦{COIN_VALUE_NAIRA}</p>
         <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 20, textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BALANCE</p>
-          <p style={{ margin: '0 0 4px 0', fontSize: 42, fontWeight: 900 }}>🪙 {wallet?.balance || 0}</p>
+          <p style={{ margin: '0 0 4px 0', fontSize: 42, fontWeight: 900 }}>ðŸª™ {wallet?.balance || 0}</p>
           <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-            ≈ ₦{((wallet?.balance || 0) * COIN_VALUE_NAIRA).toLocaleString()}
+            â‰ˆ â‚¦{((wallet?.balance || 0) * COIN_VALUE_NAIRA).toLocaleString()}
           </p>
         </div>
       </div>
@@ -195,14 +195,14 @@ function Wallet() {
               >
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>
-                    🪙 {pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} — {pkg.label}
+                    ðŸª™ {pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} â€” {pkg.label}
                   </p>
                   {pkg.savings && (
-                    <p style={{ margin: 0, fontSize: 11, color: theme.success, fontWeight: 700 }}>Save ₦{pkg.savings.toLocaleString()}</p>
+                    <p style={{ margin: 0, fontSize: 11, color: theme.success, fontWeight: 700 }}>Save â‚¦{pkg.savings.toLocaleString()}</p>
                   )}
                 </div>
                 <p style={{ margin: 0, fontWeight: 900, fontSize: 17, color: theme.tealDeep }}>
-                  ₦{pkg.naira.toLocaleString()}
+                  â‚¦{pkg.naira.toLocaleString()}
                 </p>
               </button>
             ))}
@@ -216,7 +216,7 @@ function Wallet() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {transactions.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <div style={{ fontSize: 26, marginBottom: 10 }}>🪙</div>
+                <div style={{ fontSize: 26, marginBottom: 10 }}>ðŸª™</div>
                 <p style={{ color: theme.textLight, fontSize: 13 }}>No transactions yet</p>
               </div>
             )}
@@ -235,7 +235,7 @@ function Wallet() {
                   </div>
                 </div>
                 <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: tx.type === 'topup' || tx.type === 'gift_received' ? theme.success : theme.alert }}>
-                  {tx.type === 'topup' || tx.type === 'gift_received' ? '+' : '-'}{tx.amount} 🪙
+                  {tx.type === 'topup' || tx.type === 'gift_received' ? '+' : '-'}{tx.amount} ðŸª™
                 </p>
               </div>
             ))}
@@ -246,10 +246,10 @@ function Wallet() {
           <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 16, background: theme.cardBg }}>
             <p style={{ fontSize: 13, color: theme.textMid, lineHeight: 1.6, margin: '0 0 12px 0' }}>
               Withdraw your earned CareCoins as naira to your bank account.
-              Minimum: <strong>5 CareCoins (₦800 after 20% platform fee)</strong>.
+              Minimum: <strong>5 CareCoins (â‚¦800 after 20% platform fee)</strong>.
             </p>
             <p style={{ fontSize: 13, color: theme.textMid, margin: '0 0 16px 0' }}>
-              Your balance: <strong>🪙 {wallet?.balance || 0} CareCoins</strong>
+              Your balance: <strong>ðŸª™ {wallet?.balance || 0} CareCoins</strong>
             </p>
             {(wallet?.balance || 0) >= 5 ? (
               <button style={{

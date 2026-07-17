@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 
 function ProfessionalDashboard() {
@@ -52,7 +52,7 @@ function ProfessionalDashboard() {
     return (
       <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Professional Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -60,7 +60,7 @@ function ProfessionalDashboard() {
             width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
-            🩺
+            ðŸ©º
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>Verification required</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>
@@ -81,14 +81,14 @@ function ProfessionalDashboard() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 16 }}>
           <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>{profile.display_name || 'Professional'}</h1>
           <span style={{
             width: 16, height: 16, borderRadius: '50%', background: theme.tealBright, color: theme.navy,
             fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900,
           }}>
-            ✓
+            âœ“
           </span>
         </div>
         <p style={{ margin: '-12px 0 16px 0', fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>
@@ -114,17 +114,17 @@ function ProfessionalDashboard() {
       <div style={{ padding: '20px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Link to="/earn" style={{ textDecoration: 'none' }}>
           <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#ecfdf5', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>💰</span>
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>ðŸ’°</span>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontSize: 13.5, color: theme.tealDeep, fontWeight: 800 }}>Earn on CareFind</p>
               <p style={{ margin: 0, fontSize: 11, color: theme.tealDeep }}>Subscriptions, consultations & tasks</p>
             </div>
-            <span style={{ color: theme.tealDeep, fontSize: 16 }}>›</span>
+            <span style={{ color: theme.tealDeep, fontSize: 16 }}>â€º</span>
           </div>
         </Link>
 
         {[
-          { icon: '👥', label: 'Invite Staff/Assistant', desc: 'Coming in a future update' },
+          { icon: 'ðŸ‘¥', label: 'Invite Staff/Assistant', desc: 'Coming in a future update' },
         ].map((item) => (
           <div key={item.label} style={{
             border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, display: 'flex',

@@ -1,8 +1,8 @@
-import { supabase } from './lib/supabaseClient'
+﻿import { supabase } from './config/supabaseClient'
 
-// 1 CareCoin = ₦200
+// 1 CareCoin = â‚¦200
 export const NAIRA_PER_COIN = 200
-// Cap: 12 coins = ₦2,400/month (just under the ₦2,500 ceiling)
+// Cap: 12 coins = â‚¦2,400/month (just under the â‚¦2,500 ceiling)
 export const MAX_PRICE_COINS = 12
 
 export function coinsToNaira(coins) {
@@ -11,7 +11,7 @@ export function coinsToNaira(coins) {
 
 // Does `viewerId` currently have access to `creatorId`'s locked content?
 // If their subscription lapsed but auto-renew is on, this quietly charges
-// the next month from their wallet — that's what makes it feel automatic.
+// the next month from their wallet â€” that's what makes it feel automatic.
 // Returns { active, sub, renewed, insufficient }
 export async function checkAccess(viewerId, creatorId) {
   if (!viewerId || !creatorId) return { active: false }
@@ -39,7 +39,7 @@ export async function checkAccess(viewerId, creatorId) {
   return { active: false, sub }
 }
 
-// Charge the wallet and grant/extend 30 days. Atomic — handled in the DB.
+// Charge the wallet and grant/extend 30 days. Atomic â€” handled in the DB.
 // Returns { ok, insufficient, error }
 export async function subscribe(subscriberId, creatorId, priceCoins) {
   if (!subscriberId || !creatorId) return { error: 'Missing user' }
@@ -67,7 +67,7 @@ export async function cancelAutoRenew(subscriberId, creatorId) {
   return { ok: !error, error: error?.message }
 }
 
-// Every creator this viewer currently has access to — used by the feed
+// Every creator this viewer currently has access to â€” used by the feed
 // so it doesn't have to check each post one at a time.
 export async function loadActiveCreatorIds(viewerId) {
   if (!viewerId) return []

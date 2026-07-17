@@ -1,4 +1,4 @@
-import { supabase } from './lib/supabaseClient'
+import { supabase } from '../config/supabaseClient'
 
 // Central helper to create a notification for any platform activity.
 // recipientId: who receives it. actorId: who did the action. type: activity kind.

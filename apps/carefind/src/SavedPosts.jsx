@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import { renderArticleHtml } from './lib/articleFormat'
 import BottomNav from './BottomNav.jsx'
 
@@ -80,7 +80,7 @@ function SavedPosts() {
         background: theme.heroGradient, padding: '22px 20px 26px 20px',
         borderRadius: '0 0 28px 28px', color: '#fff',
       }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
         <h1 style={{ fontSize: 22, fontWeight: 900, margin: '14px 0 4px 0' }}>Saved Posts</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
           {posts.length} post{posts.length !== 1 ? 's' : ''} saved
@@ -94,7 +94,7 @@ function SavedPosts() {
               width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', display: 'flex',
               alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
             }}>
-              🔖
+              ðŸ”–
             </div>
             <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No saved posts yet</h3>
             <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>Tap Save on any post in the feed to keep it here</p>

@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react'
+﻿import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
-import { notify } from './notify.js'
+import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './subscriptions.js'
 
@@ -218,10 +218,10 @@ function PublicProfile() {
     return (
       <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Feed</Link>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 40, marginBottom: 14 }}>👤</div>
+          <div style={{ fontSize: 40, marginBottom: 14 }}>ðŸ‘¤</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Profile not found</h3>
           <p style={{ fontSize: 13, color: theme.textLight }}>This user may have deleted their account.</p>
           <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>
@@ -241,7 +241,7 @@ function PublicProfile() {
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ position: 'relative', marginBottom: 55 }}>
         <div style={{ height: 110, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.heroGradient, position: 'relative' }}>
-          <Link to="/" style={{ position: 'absolute', top: 16, left: 16, color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          <Link to="/" style={{ position: 'absolute', top: 16, left: 16, color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Feed</Link>
         </div>
         <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
           {/* Avatar with optional story ring */}
@@ -298,7 +298,7 @@ function PublicProfile() {
                     cursor: 'not-allowed', opacity: 0.75,
                   }}
                 >
-                  🔒 Not accepting subscriptions
+                  ðŸ”’ Not accepting subscriptions
                 </span>
               )}
 
@@ -311,7 +311,7 @@ function PublicProfile() {
                       borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
                     }}
                   >
-                    ✓ Subscribed
+                    âœ“ Subscribed
                   </button>
                 ) : (
                   <button
@@ -322,7 +322,7 @@ function PublicProfile() {
                       borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
                     }}
                   >
-                    {subscribing ? '…' : `🔒 Subscribe · ${profile.subscription_price} 🪙/mo`}
+                    {subscribing ? 'â€¦' : `ðŸ”’ Subscribe Â· ${profile.subscription_price} ðŸª™/mo`}
                   </button>
                 )
               )}
@@ -343,7 +343,7 @@ function PublicProfile() {
         {profile.display_name && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textLight }}>@{profile.display_name}</p>}
         {profile.is_verified && (
           <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 10px', borderRadius: 20, border: `1px solid ${theme.tealBright}`, display: 'inline-block', marginBottom: 8 }}>
-            ✓ Verified {profile.verification_label}
+            âœ“ Verified {profile.verification_label}
           </span>
         )}
         {profile.bio && (
@@ -352,8 +352,8 @@ function PublicProfile() {
           </p>
         )}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, marginTop: 8 }}>
-          {profile.location && <span style={{ fontSize: 12.5, color: theme.textLight }}>📍 {profile.location}</span>}
-          {profile.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>🔗 {profile.website}</a>}
+          {profile.location && <span style={{ fontSize: 12.5, color: theme.textLight }}>ðŸ“ {profile.location}</span>}
+          {profile.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>ðŸ”— {profile.website}</a>}
         </div>
 
         <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
@@ -367,8 +367,8 @@ function PublicProfile() {
           </div>
           <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
             <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>
-              {userReviews.length ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / userReviews.length).toFixed(1) : '—'}
-              <span style={{ color: theme.warning, fontSize: 13 }}> ★</span>
+              {userReviews.length ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / userReviews.length).toFixed(1) : 'â€”'}
+              <span style={{ color: theme.warning, fontSize: 13 }}> â˜…</span>
             </p>
             <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
           </button>
@@ -376,7 +376,7 @@ function PublicProfile() {
 
         {/* Content tabs */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, marginBottom: 12, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {[['posts', '📝 Posts'], ['reposts', '🔁 Reposts'], ['playlists', '🎬 Playlists'], ['reviews', '⭐ Reviews']].map(([key, label]) => (
+          {[['posts', 'ðŸ“ Posts'], ['reposts', 'ðŸ” Reposts'], ['playlists', 'ðŸŽ¬ Playlists'], ['reviews', 'â­ Reviews']].map(([key, label]) => (
             <button key={key} onClick={() => setActiveTab(key)} style={{ flexShrink: 0, whiteSpace: 'nowrap', padding: '10px 12px', background: 'none', border: 'none', borderBottom: activeTab === key ? `2px solid ${theme.tealDeep}` : '2px solid transparent', color: activeTab === key ? theme.navy : theme.textLight, fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
               {label}
             </button>
@@ -389,17 +389,17 @@ function PublicProfile() {
             ? <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '20px 0' }}>No playlists yet.</p>
             : playlists.map(pl => (
                 <Link key={pl.id} to={`/playlist/${pl.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 12, marginBottom: 8, textDecoration: 'none' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎬</div>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>ðŸŽ¬</div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pl.title}</p>
                     {pl.description && <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.description}</p>}
                   </div>
-                  <span style={{ color: theme.textLight }}>›</span>
+                  <span style={{ color: theme.textLight }}>â€º</span>
                 </Link>
               ))
         )}
 
-        {/* Reviews tab — this person's aggregated review profile */}
+        {/* Reviews tab â€” this person's aggregated review profile */}
         {activeTab === 'reviews' && (() => {
           const total = userReviews.length
           const avg = total ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / total) : 0
@@ -415,14 +415,14 @@ function PublicProfile() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avg.toFixed(1)}</span>
                     <div>
-                      <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(avg))}{'☆'.repeat(5 - Math.round(avg))}</p>
+                      <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'â˜…'.repeat(Math.round(avg))}{'â˜†'.repeat(5 - Math.round(avg))}</p>
                       <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{total} review{total !== 1 ? 's' : ''}</p>
                     </div>
                   </div>
                   {breakdown.map((b) => (
                     <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                       <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{b.star}</span>
-                      <span style={{ fontSize: 11, color: theme.warning }}>★</span>
+                      <span style={{ fontSize: 11, color: theme.warning }}>â˜…</span>
                       <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ width: `${b.pct}%`, height: '100%', background: b.star >= 4 ? theme.success : b.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
                       </div>
@@ -437,18 +437,18 @@ function PublicProfile() {
                   <p style={{ margin: '0 0 8px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Leave a review</p>
                   <div style={{ marginBottom: 8 }}>
                     {[1, 2, 3, 4, 5].map((n) => (
-                      <button type="button" key={n} onClick={() => setMyRating(n)} style={{ background: 'none', border: 'none', fontSize: 22, color: n <= myRating ? theme.warning : '#ddd', padding: 0 }}>★</button>
+                      <button type="button" key={n} onClick={() => setMyRating(n)} style={{ background: 'none', border: 'none', fontSize: 22, color: n <= myRating ? theme.warning : '#ddd', padding: 0 }}>â˜…</button>
                     ))}
                   </div>
                   <textarea
                     value={myComment}
                     onChange={(e) => setMyComment(e.target.value)}
-                    placeholder="Share your experience with this person…"
+                    placeholder="Share your experience with this personâ€¦"
                     rows={3}
                     style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'none' }}
                   />
                   <button type="submit" disabled={postingReview} style={{ marginTop: 10, width: '100%', padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
-                    {postingReview ? 'Posting…' : 'Post Review'}
+                    {postingReview ? 'Postingâ€¦' : 'Post Review'}
                   </button>
                 </form>
               )}
@@ -462,9 +462,9 @@ function PublicProfile() {
                   <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                        {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
+                        {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> âœ“</span>}
                       </Link>
-                      <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating || 0)}{'☆'.repeat(5 - (r.rating || 0))}</span>
+                      <span style={{ color: theme.warning, fontSize: 13 }}>{'â˜…'.repeat(r.rating || 0)}{'â˜†'.repeat(5 - (r.rating || 0))}</span>
                     </div>
                     {r.comment && <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.5 }}>{r.comment}</p>}
                     <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>{new Date(r.created_at).toLocaleDateString()}</p>
@@ -478,10 +478,10 @@ function PublicProfile() {
         {/* Posts / Reposts grid */}
         {activeTab !== 'playlists' && activeTab !== 'reviews' && (() => {
           const list = activeTab === 'reposts'
-            ? posts.filter(p => (p.content || '').startsWith('🔁'))
-            : posts.filter(p => !(p.content || '').startsWith('🔁'))
+            ? posts.filter(p => (p.content || '').startsWith('ðŸ”'))
+            : posts.filter(p => !(p.content || '').startsWith('ðŸ”'))
           if (list.length === 0) return <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '24px 0' }}>Nothing here yet.</p>
-          const typeIcon = { question: '❓', review: '⭐', article: '📄', premium: '💎', visual: '🎨' }
+          const typeIcon = { question: 'â“', review: 'â­', article: 'ðŸ“„', premium: 'ðŸ’Ž', visual: 'ðŸŽ¨' }
           return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {list.map(post => (
@@ -490,11 +490,11 @@ function PublicProfile() {
                     {post.image_url ? (
                       <div style={{ height: 80, background: `url(${post.image_url}) center/cover` }} />
                     ) : (
-                      <div style={{ height: 80, background: post.post_type === 'visual' ? (visualThemes[post.theme] || visualThemes.teal) : theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{typeIcon[post.post_type] || '💬'}</div>
+                      <div style={{ height: 80, background: post.post_type === 'visual' ? (visualThemes[post.theme] || visualThemes.teal) : theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{typeIcon[post.post_type] || 'ðŸ’¬'}</div>
                     )}
                     <div style={{ padding: '8px 10px', flex: 1, overflow: 'hidden' }}>
                       {post.post_type && post.post_type !== 'text' && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{typeIcon[post.post_type]} {post.post_type}</span>}
-                      <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{previewText((post.content || '').replace(/^🔁\s*/, ''))}</p>
+                      <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{previewText((post.content || '').replace(/^ðŸ”\s*/, ''))}</p>
                     </div>
                   </div>
                 </button>
@@ -509,7 +509,7 @@ function PublicProfile() {
         <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
+              <button onClick={() => setOpenPost(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>âœ•</button>
             </div>
             {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
             {openPost.post_type === 'visual' && !openPost.image_url && (
@@ -517,7 +517,7 @@ function PublicProfile() {
                 <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
               </div>
             )}
-            {openPost.post_type !== 'visual' && <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText((openPost.content || '').replace(/^🔁\s*/, '')))}</p>}
+            {openPost.post_type !== 'visual' && <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText((openPost.content || '').replace(/^ðŸ”\s*/, '')))}</p>}
             <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
           </div>
         </div>
@@ -542,7 +542,7 @@ function PublicProfile() {
               <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{displayName}</p>
               <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(userStories[viewerIndex].created_at)}</p>
             </div>
-            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>✕</button>
+            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>âœ•</button>
           </div>
 
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

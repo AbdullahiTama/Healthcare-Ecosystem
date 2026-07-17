@@ -1,18 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
+import { supabase } from './config/supabaseClient'
 import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { theme } from './styles/theme'
 
 const GIFTS = [
-  { emoji: '💊', name: 'Pill', coins: 1 },
-  { emoji: '⭐', name: 'Star', coins: 5 },
-  { emoji: '❤️', name: 'Heart', coins: 10 },
-  { emoji: '🏆', name: 'Trophy', coins: 20 },
-  { emoji: '🦁', name: 'Lion', coins: 100 },
-  { emoji: '💎', name: 'Diamond', coins: 200 },
-  { emoji: '🚀', name: 'Rocket', coins: 500 },
-  { emoji: '👑', name: 'Crown', coins: 1000 },
+  { emoji: 'ðŸ’Š', name: 'Pill', coins: 1 },
+  { emoji: 'â­', name: 'Star', coins: 5 },
+  { emoji: 'â¤ï¸', name: 'Heart', coins: 10 },
+  { emoji: 'ðŸ†', name: 'Trophy', coins: 20 },
+  { emoji: 'ðŸ¦', name: 'Lion', coins: 100 },
+  { emoji: 'ðŸ’Ž', name: 'Diamond', coins: 200 },
+  { emoji: 'ðŸš€', name: 'Rocket', coins: 500 },
+  { emoji: 'ðŸ‘‘', name: 'Crown', coins: 1000 },
 ]
 
 function GiftAnimation({ gift, onDone }) {
@@ -41,7 +41,7 @@ function GiftAnimation({ gift, onDone }) {
         borderRadius: 20, padding: '8px 18px', fontSize: 14, fontWeight: 800,
         whiteSpace: 'nowrap', animation: 'labelPop 2.2s ease-out forwards',
       }}>
-        {gift.emoji} {gift.name} sent! 🎉
+        {gift.emoji} {gift.name} sent! ðŸŽ‰
       </div>
       <style>{`
         @keyframes giftBurst {
@@ -141,13 +141,13 @@ function GiftPanel({ postId, recipientId, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ width: 36, height: 4, background: '#475569', borderRadius: 2, margin: '0 auto 16px auto' }} />
-        <p style={{ color: '#fff', fontWeight: 800, fontSize: 15, textAlign: 'center', margin: '0 0 4px 0' }}>Send a Gift 🎁</p>
+        <p style={{ color: '#fff', fontWeight: 800, fontSize: 15, textAlign: 'center', margin: '0 0 4px 0' }}>Send a Gift ðŸŽ</p>
         <p style={{ color: '#64748b', fontSize: 12, textAlign: 'center', margin: '0 0 16px 0' }}>Gifts convert to real naira earnings</p>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
           <div>
             <p style={{ margin: 0, fontSize: 10.5, color: '#64748b', fontWeight: 700 }}>YOUR CARECOINS</p>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.tealBright }}>🪙 {wallet?.balance || 0}</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.tealBright }}>ðŸª™ {wallet?.balance || 0}</p>
           </div>
           <Link to="/wallet" onClick={onClose} style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}>
             + Top Up
@@ -168,7 +168,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
             >
               <span style={{ fontSize: 26 }}>{g.emoji}</span>
               <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700 }}>{g.name}</span>
-              <span style={{ color: theme.tealBright, fontSize: 11, fontWeight: 900 }}>{g.coins} 🪙</span>
+              <span style={{ color: theme.tealBright, fontSize: 11, fontWeight: 900 }}>{g.coins} ðŸª™</span>
             </button>
           ))}
         </div>
@@ -183,7 +183,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
             boxShadow: (wallet?.balance || 0) >= selected.coins ? '0 4px 16px rgba(219,39,119,0.4)' : 'none',
           }}
         >
-          {sending ? 'Sending...' : (wallet?.balance || 0) < selected.coins ? 'Not enough CareCoins' : `Send ${selected.emoji} ${selected.name} — ${selected.coins} 🪙`}
+          {sending ? 'Sending...' : (wallet?.balance || 0) < selected.coins ? 'Not enough CareCoins' : `Send ${selected.emoji} ${selected.name} â€” ${selected.coins} ðŸª™`}
         </button>
 
         <button onClick={onClose} style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: '#64748b', fontSize: 13, fontWeight: 600 }}>
