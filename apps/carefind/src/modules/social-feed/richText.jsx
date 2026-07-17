@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { theme } from './styles/theme'
+import { theme } from '../../styles/theme'
 
 // Marker format stored in text:
 //   {h:yellow}highlighted text{/h}  -> highlighter background

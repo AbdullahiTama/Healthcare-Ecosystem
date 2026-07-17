@@ -1,4 +1,4 @@
-import { theme } from './styles/theme'
+import { theme } from '../../styles/theme'
 
 // The CareFind logo: a teal rounded tile with a white "C", next to the wordmark.
 // One component so the logo is identical everywhere it appears.

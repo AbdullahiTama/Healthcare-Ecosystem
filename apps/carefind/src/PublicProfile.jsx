@@ -5,7 +5,7 @@ import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 import { notify } from './services/notify.js'
-import { previewText, renderRichText } from './richText.jsx'
+import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 
 function PublicProfile() {
