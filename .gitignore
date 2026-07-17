@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# apps/carehub is its own independent git repository (real history,
+# remote at github.com/AbdullahiTama/skincarepro) — tracked there, not here.
+apps/carehub/

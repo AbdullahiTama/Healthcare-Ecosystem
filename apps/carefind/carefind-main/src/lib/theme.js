@@ -1,0 +1,17 @@
+export const theme = {
+  tealDeep: '#0f766e',
+  tealBright: '#14b8a6',
+  navy: '#0f172a',
+  navySoft: '#1e293b',
+  bg: '#f9fafb',
+  cardBg: '#ffffff',
+  border: '#f0f0f0',
+  textDark: '#0f172a',
+  textMid: '#475569',
+  textLight: '#94a3b8',
+  success: '#16a34a',
+  warning: '#d97706',
+  alert: '#dc2626',
+  heroGradient: 'linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0f766e 130%)',
+  tealGradient: 'linear-gradient(135deg, #14b8a6, #0f766e)',
+}
