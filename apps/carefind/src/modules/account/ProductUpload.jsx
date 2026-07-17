@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
 
 const FREE_LIMIT = 15
 

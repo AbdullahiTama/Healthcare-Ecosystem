@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
-import BottomNav from './BottomNav.jsx'
-import { renderRichText, stripMarkers, previewText } from './modules/social-feed/richText.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
+import BottomNav from '../../BottomNav.jsx'
+import { renderRichText, stripMarkers, previewText } from '../social-feed/richText.jsx'
 import ProductUpload from './ProductUpload.jsx'
-import { resizeImage } from './utils/imageResize.js'
-import { MAX_PRICE_COINS, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
-import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from './lib/activeIdentity'
+import { resizeImage } from '../../utils/imageResize.js'
+import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
+import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
 
 function Profile() {
   const { user, signOut } = useAuth()

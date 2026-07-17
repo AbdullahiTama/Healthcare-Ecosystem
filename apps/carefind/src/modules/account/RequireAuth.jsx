@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from './providers/AuthContext'
+import { useAuth } from '../../providers/AuthContext'
 
 // Route-level guard for CareFind's consumer routes. Most pages already
 // redirect/block internally when logged out (see Dashboard.jsx, Profile.jsx,

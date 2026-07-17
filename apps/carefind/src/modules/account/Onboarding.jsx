@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
 
 // Username rule: lowercase letters, numbers, underscores. 3-20 chars.
 function normalizeUsername(raw) {
