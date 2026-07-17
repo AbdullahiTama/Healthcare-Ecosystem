@@ -1,4 +1,4 @@
-import { supabase } from './config/supabaseClient'
+import { supabase } from '../../config/supabaseClient'
 
 // 1 CareCoin = ₦200
 export const NAIRA_PER_COIN = 200

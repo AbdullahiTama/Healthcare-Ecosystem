@@ -5,7 +5,7 @@ import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
-import GiftPanel from './GiftPanel.jsx'
+import GiftPanel from './modules/subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from './SupportPrompt.jsx'
 
 function NewsArticle() {

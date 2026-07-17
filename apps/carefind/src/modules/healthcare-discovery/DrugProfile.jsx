@@ -3,8 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
-import { getSentimentSummary } from '../../lib/sentiment'
-import { analyzeReviews } from '../../lib/reviewAI'
+import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
+import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../BottomNav.jsx'
 
 function DrugProfile() {

@@ -7,7 +7,7 @@ import BottomNav from './BottomNav.jsx'
 import { renderRichText, stripMarkers, previewText } from './richText.jsx'
 import ProductUpload from './ProductUpload.jsx'
 import { resizeImage } from './utils/imageResize.js'
-import { MAX_PRICE_COINS, coinsToNaira } from './subscriptions.js'
+import { MAX_PRICE_COINS, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from './lib/activeIdentity'
 
 function Profile() {

@@ -6,7 +6,7 @@ import { theme } from './styles/theme'
 import BottomNav from './BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './richText.jsx'
-import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './subscriptions.js'
+import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 
 function PublicProfile() {
   const { id } = useParams()
