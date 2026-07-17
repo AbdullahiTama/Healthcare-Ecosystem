@@ -15,7 +15,7 @@ HealthCare-Ecosystem/                    (not itself a git repository)
 ├── architecture/                        this document set (was empty at the start of this engagement)
 ├── decisions/                           empty — no ADRs
 └── apps/
-    ├── carehub/                         own nested .git, remote: github.com/AbdullahiTama/skincarepro
+    ├── carehub/                         own nested .git, remote: 
     │   └── src/
     │       ├── pages/
     │       │   ├── auth/                Login.jsx, Register.jsx

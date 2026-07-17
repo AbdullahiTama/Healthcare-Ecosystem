@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { supabase } from './lib/supabaseClient'
-import { useAuth } from './lib/AuthContext'
-import { theme } from './lib/theme'
+import { supabase } from './lib/supabaseClient.js'
+import { useAuth } from './lib/AuthContext.jsx'
+import { theme } from './lib/theme.js'
 import BottomNav from './BottomNav.jsx'
 
 const COIN_VALUE_NAIRA = 200
