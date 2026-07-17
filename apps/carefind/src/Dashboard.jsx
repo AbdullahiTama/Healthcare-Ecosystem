@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -63,7 +63,7 @@ function Dashboard() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 16px 0' }}>My Activity</h1>
 
         <div style={{ display: 'flex', gap: 10 }}>
@@ -91,7 +91,7 @@ function Dashboard() {
             borderRadius: 14, padding: 12, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
           }}>
             <span style={{ fontSize: 18 }}>
-              {verification.status === 'approved' ? 'âœ…' : verification.status === 'rejected' ? 'âŒ' : 'â³'}
+              {verification.status === 'approved' ? '✅' : verification.status === 'rejected' ? '❌' : '⏳'}
             </span>
             <span style={{ fontSize: 13, color: theme.textMid, fontWeight: 600 }}>
               Verification: <span style={{ textTransform: 'capitalize', fontWeight: 800, color: theme.navy }}>{verification.status}</span>
@@ -150,7 +150,7 @@ function Dashboard() {
               <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                 <p style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{r.businesses?.name}</p>
                 <p style={{ margin: '0 0 4px 0', color: theme.warning, fontSize: 13 }}>
-                  {'â˜…'.repeat(r.rating)}{'â˜†'.repeat(5 - r.rating)}
+                  {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
                 </p>
                 {r.comment && <p style={{ margin: '0 0 4px 0', fontSize: 13, color: theme.textMid }}>{r.comment}</p>}
                 <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(r.created_at)}</p>

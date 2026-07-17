@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -105,7 +105,7 @@ function News() {
     if (error) {
       setSubmitMsg('Error: ' + error.message)
     } else {
-      setSubmitMsg('âœ“ Submitted! Your news is under review and will publish once approved.')
+      setSubmitMsg('✓ Submitted! Your news is under review and will publish once approved.')
       setHeadline(''); setSubtitle(''); setBody(''); setHeroFile(null); setHeroPreview(null)
       setContactPhone(''); setContactEmail(''); setPreviewing(false)
       setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews() }, 1800)
@@ -137,7 +137,7 @@ function News() {
           <p style={{ margin: 0, fontFamily: 'system-ui', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: theme.tealDeep, textTransform: 'uppercase' }}>CareFind</p>
           <h1 style={{ margin: '2px 0 0 0', fontSize: 30, fontWeight: 900, color: theme.navy, letterSpacing: '-0.02em' }}>Health News</h1>
         </div>
-        <Link to="/" style={{ fontFamily: 'system-ui', fontSize: 12, fontWeight: 700, color: theme.textLight, textDecoration: 'none' }}>â† Feed</Link>
+        <Link to="/" style={{ fontFamily: 'system-ui', fontSize: 12, fontWeight: 700, color: theme.textLight, textDecoration: 'none' }}>← Feed</Link>
       </div>
 
       {/* Submit button */}
@@ -147,7 +147,7 @@ function News() {
             onClick={() => setComposerOpen(true)}
             style={{ width: '100%', padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13, fontFamily: 'system-ui' }}
           >
-            âœŽ Submit a news story
+            ✎ Submit a news story
           </button>
         </div>
       )}
@@ -167,10 +167,10 @@ function News() {
         </div>
       )}
 
-      {loading && <p style={{ fontFamily: 'system-ui', color: theme.textLight, fontSize: 13, padding: 16 }}>Loading newsâ€¦</p>}
+      {loading && <p style={{ fontFamily: 'system-ui', color: theme.textLight, fontSize: 13, padding: 16 }}>Loading news…</p>}
       {!loading && articles.length === 0 && (
         <div style={{ textAlign: 'center', padding: '50px 20px', fontFamily: 'system-ui' }}>
-          <div style={{ fontSize: 34, marginBottom: 12 }}>ðŸ“°</div>
+          <div style={{ fontSize: 34, marginBottom: 12 }}>📰</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No news yet</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>Approved stories will appear here.</p>
         </div>
@@ -186,7 +186,7 @@ function News() {
           <h2 style={{ margin: '0 0 8px 0', fontSize: 25, fontWeight: 900, color: theme.navy, lineHeight: 1.15, letterSpacing: '-0.01em' }}>{lead.headline}</h2>
           {lead.subtitle && <p style={{ margin: '0 0 10px 0', fontSize: 15.5, color: theme.textMid, lineHeight: 1.4, fontStyle: 'italic' }}>{lead.subtitle}</p>}
           <p style={{ margin: 0, fontFamily: 'system-ui', fontSize: 12, color: theme.textLight }}>
-            By <strong style={{ color: theme.navy }}>{authorName(lead)}</strong> Â· {timeAgo(lead.published_at || lead.created_at)}
+            By <strong style={{ color: theme.navy }}>{authorName(lead)}</strong> · {timeAgo(lead.published_at || lead.created_at)}
           </p>
         </Link>
       )}
@@ -200,9 +200,9 @@ function News() {
           <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ flex: 1 }}>
               <h3 style={{ margin: '0 0 5px 0', fontSize: 16.5, fontWeight: 800, color: theme.navy, lineHeight: 1.25 }}>{a.headline}</h3>
-              {a.subtitle && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{a.subtitle.slice(0, 90)}{a.subtitle.length > 90 ? 'â€¦' : ''}</p>}
+              {a.subtitle && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{a.subtitle.slice(0, 90)}{a.subtitle.length > 90 ? '…' : ''}</p>}
               <p style={{ margin: 0, fontFamily: 'system-ui', fontSize: 11, color: theme.textLight }}>
-                By {authorName(a)} Â· {timeAgo(a.published_at || a.created_at)}
+                By {authorName(a)} · {timeAgo(a.published_at || a.created_at)}
               </p>
             </div>
             {a.hero_image_url && (
@@ -220,14 +220,14 @@ function News() {
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{previewing ? 'Preview' : 'Submit News'}</h2>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button onClick={() => setPreviewing(!previewing)} style={{ padding: '6px 12px', background: previewing ? theme.navy : '#ecfdf5', color: previewing ? '#fff' : theme.tealDeep, border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-                  {previewing ? 'âœï¸ Back to editing' : 'ðŸ‘ï¸ Preview'}
+                  {previewing ? '✏️ Back to editing' : '👁️ Preview'}
                 </button>
-                <button onClick={() => setComposerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>âœ•</button>
+                <button onClick={() => setComposerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
               </div>
             </div>
 
             {submitMsg && (
-              <p style={{ fontSize: 13, margin: '0 0 12px 0', padding: '10px 12px', borderRadius: 10, background: submitMsg.startsWith('âœ“') ? '#ecfdf5' : '#fef2f2', color: submitMsg.startsWith('âœ“') ? theme.success : theme.alert, fontWeight: 600 }}>{submitMsg}</p>
+              <p style={{ fontSize: 13, margin: '0 0 12px 0', padding: '10px 12px', borderRadius: 10, background: submitMsg.startsWith('✓') ? '#ecfdf5' : '#fef2f2', color: submitMsg.startsWith('✓') ? theme.success : theme.alert, fontWeight: 600 }}>{submitMsg}</p>
             )}
 
             {previewing ? (
@@ -248,10 +248,10 @@ function News() {
                   <ArticleEditor value={body} readOnly />
                 </div>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>â– </span>
+                  <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>
                 </div>
                 <button onClick={submitNews} disabled={submitting} style={{ width: '100%', padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, fontFamily: 'system-ui' }}>
-                  {submitting ? 'Submittingâ€¦' : 'Looks good â€” Submit for review'}
+                  {submitting ? 'Submitting…' : 'Looks good — Submit for review'}
                 </button>
               </div>
             ) : (
@@ -267,11 +267,11 @@ function News() {
                 {heroPreview ? (
                   <div style={{ position: 'relative', marginBottom: 12 }}>
                     <img src={heroPreview} alt="hero" style={{ width: '100%', borderRadius: 10, maxHeight: 180, objectFit: 'cover' }} />
-                    <button onClick={() => { setHeroFile(null); setHeroPreview(null) }} style={{ position: 'absolute', top: 8, right: 8, background: '#000', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, fontSize: 13 }}>âœ•</button>
+                    <button onClick={() => { setHeroFile(null); setHeroPreview(null) }} style={{ position: 'absolute', top: 8, right: 8, background: '#000', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, fontSize: 13 }}>✕</button>
                   </div>
                 ) : (
                   <label style={{ display: 'block', padding: 14, border: `1.5px dashed ${theme.border}`, borderRadius: 10, textAlign: 'center', color: theme.tealDeep, fontWeight: 700, fontSize: 13, marginBottom: 12, cursor: 'pointer' }}>
-                    ðŸ“· Add a hero image
+                    📷 Add a hero image
                     <input type="file" accept="image/*" onChange={handleHeroSelect} style={{ display: 'none' }} />
                   </label>
                 )}
@@ -283,8 +283,8 @@ function News() {
 
                 {/* Contact details (required) */}
                 <div style={{ background: theme.bg, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <p style={{ margin: '0 0 8px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy }}>ðŸ“ž Your contact details</p>
-                  <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>Required â€” our team may contact you to verify the story before publishing. Not shown publicly.</p>
+                  <p style={{ margin: '0 0 8px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy }}>📞 Your contact details</p>
+                  <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>Required — our team may contact you to verify the story before publishing. Not shown publicly.</p>
                   <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Phone number *</label>
                   <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} type="tel" placeholder="e.g. 08012345678" style={{ width: '100%', padding: 12, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 10 }} />
                   <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Email address *</label>
@@ -293,10 +293,10 @@ function News() {
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={() => setPreviewing(true)} style={{ flex: 1, padding: 13, background: '#ecfdf5', color: theme.tealDeep, border: `1px solid ${theme.tealBright}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                    ðŸ‘ï¸ Preview
+                    👁️ Preview
                   </button>
                   <button onClick={submitNews} disabled={submitting} style={{ flex: 1, padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                    {submitting ? 'Submittingâ€¦' : 'Submit'}
+                    {submitting ? 'Submitting…' : 'Submit'}
                   </button>
                 </div>
                 <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>Your story will be reviewed by our team before publishing.</p>

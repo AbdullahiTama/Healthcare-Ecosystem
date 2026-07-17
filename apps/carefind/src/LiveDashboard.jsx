@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -147,7 +147,7 @@ function LiveDashboard() {
     return `${Math.floor(diff / 3600)}h`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading dashboardâ€¦</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading dashboard…</div>
 
   if (!show) return (
     <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
@@ -158,7 +158,7 @@ function LiveDashboard() {
 
   if (!isParticipant) return (
     <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
-      <div style={{ fontSize: 34, marginBottom: 10 }}>ðŸ”’</div>
+      <div style={{ fontSize: 34, marginBottom: 10 }}>🔒</div>
       <p style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>Not a participant</p>
       <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>You weren't invited to host this show. You can watch it live instead.</p>
       <Link to={`/live-show/${id}`} style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Watch the show</Link>
@@ -180,28 +180,28 @@ function LiveDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: ended ? '#94a3b8' : '#dc2626' }} />
-            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE â€” CONTROL ROOM'}</span>
+            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE — CONTROL ROOM'}</span>
           </span>
-          <Link to={`/live-show/${id}`} style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontWeight: 700 }}>View audience â†’</Link>
+          <Link to={`/live-show/${id}`} style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontWeight: 700 }}>View audience →</Link>
         </div>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{show.title || 'CareFind Live'}</p>
         <p style={{ margin: '2px 0 0 0', fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
           {participants.length} participant{participants.length !== 1 ? 's' : ''}
-          {' Â· '}{participants.filter(p => p.joined).length} joined
+          {' · '}{participants.filter(p => p.joined).length} joined
         </p>
         <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>â¤ï¸ {fmtCount(stats.likes)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>ðŸ‘ {fmtCount(stats.views)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>ðŸ”— {fmtCount(stats.shares)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}>ðŸŽ {fmtCount(stats.gifts)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>❤️ {fmtCount(stats.likes)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>👁 {fmtCount(stats.views)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>🔗 {fmtCount(stats.shares)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}>🎁 {fmtCount(stats.gifts)}</span>
         </div>
       </div>
 
       {scheduled && (
         <div style={{ margin: 14, padding: 16, background: theme.navy, borderRadius: 14, color: '#fff', textAlign: 'center' }}>
-          <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>â³ This show is scheduled</p>
+          <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>⏳ This show is scheduled</p>
           <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Your audience sees a countdown. When you're ready, start it live.</p>
-          <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>ðŸ“¡ Start Live Now</button>
+          <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>📡 Start Live Now</button>
         </div>
       )}
 
@@ -212,24 +212,24 @@ function LiveDashboard() {
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Type something to post liveâ€¦"
+              placeholder="Type something to post live…"
               rows={2}
               style={{ width: '100%', padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 8 }}
             />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <label style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', flex: 1 }}>
-                ðŸ“· {image ? image.name.slice(0, 20) : 'Add image'}
+                📷 {image ? image.name.slice(0, 20) : 'Add image'}
                 <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
               </label>
               <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                {sending ? 'Sendingâ€¦' : 'ðŸ“¡ Post Live'}
+                {sending ? 'Sending…' : '📡 Post Live'}
               </button>
             </div>
             <VoiceRecorder showId={id} onRecorded={sendVoice} />
             <SlideUploader showId={id} onPostSlide={sendSlide} />
             <VideoRecorder showId={id} onRecorded={sendVideo} />
             <VideoUploader showId={id} onUploaded={sendVideo} />
-            <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes â€” they go live instantly.</p>
+            <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes — they go live instantly.</p>
           </div>
         </>
       )}
@@ -248,7 +248,7 @@ function LiveDashboard() {
               {it.kind === 'image' && <img src={it.content} alt="posted" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />}
               {it.kind === 'voice' && <audio controls src={it.content} style={{ height: 36, maxWidth: 220 }} />}
               {it.kind === 'video' && <video controls playsInline src={it.content} style={{ maxWidth: 200, borderRadius: 8, display: 'block' }} />}
-              {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}>ðŸ“‘ Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
+              {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}>📑 Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
             </div>
           </div>
         ))}
@@ -256,7 +256,7 @@ function LiveDashboard() {
 
       {/* Audience comments (moderation) */}
       <div style={{ borderTop: `8px solid ${theme.bg}`, padding: '12px 14px' }}>
-        <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>ðŸ’¬ Audience comments â€” respond or moderate</p>
+        <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>💬 Audience comments — respond or moderate</p>
         {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>No comments yet.</p>}
         {comments.map((c) => (
           <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, opacity: c.hidden ? 0.4 : 1 }}>
@@ -279,7 +279,7 @@ function LiveDashboard() {
       {isHost && !ended && (
         <div style={{ padding: 16 }}>
           <button onClick={endShow} style={{ width: '100%', padding: 13, background: '#fef2f2', color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-            â¹ End Live Show
+            ⏹ End Live Show
           </button>
         </div>
       )}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -122,10 +122,10 @@ function VerifyProfessional() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Professional Verification</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
-          Get your verified badge â€” your specialty will be publicly displayed on all your posts and profile
+          Get your verified badge — your specialty will be publicly displayed on all your posts and profile
         </p>
       </div>
 
@@ -139,7 +139,7 @@ function VerifyProfessional() {
                 background: existingRequest.status === 'approved' ? '#ecfdf5' : existingRequest.status === 'rejected' ? '#fef2f2' : '#fef3c7',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
               }}>
-                {existingRequest.status === 'approved' ? 'âœ…' : existingRequest.status === 'rejected' ? 'âŒ' : 'â³'}
+                {existingRequest.status === 'approved' ? '✅' : existingRequest.status === 'rejected' ? '❌' : '⏳'}
               </div>
               <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>
                 {existingRequest.status === 'approved' ? 'You are verified!' :
@@ -150,7 +150,7 @@ function VerifyProfessional() {
               {existingRequest.status === 'approved' && (
                 <div style={{ marginTop: 12, background: '#ecfdf5', borderRadius: 12, padding: '8px 14px', display: 'inline-block' }}>
                   <p style={{ margin: 0, fontSize: 12, color: theme.success, fontWeight: 700 }}>
-                    âœ“ {existingRequest.profession} badge is live on your profile and posts
+                    ✓ {existingRequest.profession} badge is live on your profile and posts
                   </p>
                 </div>
               )}
@@ -201,7 +201,7 @@ function VerifyProfessional() {
                   <div>
                     <label style={{ fontSize: 11.5, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>
                       Specialty / Designation
-                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>â€” publicly shown on your posts</span>
+                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>— publicly shown on your posts</span>
                     </label>
                     <select
                       value={form.profession}
@@ -211,7 +211,7 @@ function VerifyProfessional() {
                       {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <p style={{ margin: '6px 0 0 0', fontSize: 11, color: theme.textLight }}>
-                      This will appear as "âœ“ {form.profession}" on all your posts and profile
+                      This will appear as "✓ {form.profession}" on all your posts and profile
                     </p>
                   </div>
 
@@ -239,7 +239,7 @@ function VerifyProfessional() {
                       borderRadius: 13, fontWeight: 800, fontSize: 14, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
                     }}
                   >
-                    Continue â†’
+                    Continue →
                   </button>
                 </div>
               )}
@@ -248,8 +248,8 @@ function VerifyProfessional() {
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 4 }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{form.full_name}</p>
-                    <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>âœ“ {form.profession}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} Â· {form.years_experience}</p>
+                    <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>✓ {form.profession}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} · {form.years_experience}</p>
                   </div>
 
                   <div>
@@ -263,11 +263,11 @@ function VerifyProfessional() {
                       display: 'block', border: `2px dashed ${theme.border}`, borderRadius: 14, padding: '20px 16px',
                       textAlign: 'center', cursor: 'pointer', background: theme.bg,
                     }}>
-                      <p style={{ margin: '0 0 4px 0', fontSize: 22 }}>ðŸ“Ž</p>
+                      <p style={{ margin: '0 0 4px 0', fontSize: 22 }}>📎</p>
                       <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>
                         {fileName || 'Tap to choose a file'}
                       </p>
-                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG â€” max 5MB</p>
+                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG — max 5MB</p>
                       <input
                         type="file"
                         accept="image/*"
@@ -288,7 +288,7 @@ function VerifyProfessional() {
                       onClick={() => setStep(1)}
                       style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 13, fontWeight: 700, fontSize: 13 }}
                     >
-                      â† Back
+                      ← Back
                     </button>
                     <button
                       type="submit"

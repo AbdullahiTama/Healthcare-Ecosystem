@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -149,7 +149,7 @@ function Onboarding() {
               </div>
               {username.length >= 3 && (
                 <p style={{ margin: '5px 0 0 0', fontSize: 12, fontWeight: 600, color: checking ? theme.textLight : available ? theme.success : theme.alert }}>
-                  {checking ? 'Checking availabilityâ€¦' : available ? 'âœ“ Available' : 'âœ• Taken â€” try another'}
+                  {checking ? 'Checking availability…' : available ? '✓ Available' : '✕ Taken — try another'}
                 </p>
               )}
               <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
@@ -178,7 +178,7 @@ function Onboarding() {
                 opacity: (saving || available === false) ? 0.7 : 1,
               }}
             >
-              {saving ? 'Savingâ€¦' : 'Save & Continue'}
+              {saving ? 'Saving…' : 'Save & Continue'}
             </button>
 
             <Link to="/" style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, textDecoration: 'none', fontWeight: 600 }}>

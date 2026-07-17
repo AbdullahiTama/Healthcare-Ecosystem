@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -98,17 +98,17 @@ function Feed() {
   ]
 
   const themeLabels = {
-    'teal-depth': 'ðŸŒŠ Ocean',
-    'navy-clinical': 'âœ¨ Sky',
-    'midnight-teal': 'ðŸŒƒ Night',
-    'forest-wellness': 'ðŸŒ¿ Forest',
-    'slate-pulse': 'â¤ï¸ Pulse',
+    'teal-depth': '🌊 Ocean',
+    'navy-clinical': '✨ Sky',
+    'midnight-teal': '🌃 Night',
+    'forest-wellness': '🌿 Forest',
+    'slate-pulse': '❤️ Pulse',
   }
   const themeKeys = Object.keys(themeLabels)
 
   const postTypeLabels = {
     text: 'Text Post',
-    visual: 'ðŸŽ¤ Voice Card',
+    visual: '🎤 Voice Card',
     question: 'Question',
     review: 'Review',
     article: 'Article',
@@ -130,10 +130,10 @@ function Feed() {
     ])
     const results = [
       ...(bizRes.data || []).map((b) => ({ type: 'business', id: b.id, name: b.name, sub: b.business_type })),
-      ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: `${p.emoji || 'ðŸ’Š'} ${p.name}`, sub: 'Medication' })),
+      ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: `${p.emoji || '💊'} ${p.name}`, sub: 'Medication' })),
     ]
     if (results.length === 0) {
-      results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed â€” review anyway' })
+      results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed — review anyway' })
     }
     setReviewSearchResults(results)
     setReviewSearching(false)
@@ -297,7 +297,7 @@ function Feed() {
     return !unlockedCreators.includes(post.user_id)
   }
 
-  // Short clip as the card backdrop. Kept small on purpose â€” data is expensive.
+  // Short clip as the card backdrop. Kept small on purpose — data is expensive.
   async function handleCardVideo(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -352,10 +352,10 @@ function Feed() {
           })
           const result = await shareOrDownload(blob, `carefind-card.${ext}`)
           setSharingId(null)
-          if (result === 'downloaded') alert('Saved with your voice â€” post it to your WhatsApp Status.')
+          if (result === 'downloaded') alert('Saved with your voice — post it to your WhatsApp Status.')
           return
         } catch (e) {
-          // Video failed on this device â€” fall through to the image so the user still gets something
+          // Video failed on this device — fall through to the image so the user still gets something
           console.warn('Video export failed, falling back to image:', e)
         }
       }
@@ -365,8 +365,8 @@ function Feed() {
       setSharingId(null)
       if (result === 'downloaded') {
         alert(post.audio_url
-          ? "Saved as an image. This phone can't build the video â€” the voice still plays inside CareFind."
-          : 'Saved â€” post it to your WhatsApp Status.')
+          ? "Saved as an image. This phone can't build the video — the voice still plays inside CareFind."
+          : 'Saved — post it to your WhatsApp Status.')
       }
     } catch (e) {
       setSharingId(null)
@@ -435,7 +435,7 @@ function Feed() {
     if (imageFile) {
       setUploadingImage(true)
 
-      // Shrink first â€” a full-size phone photo is often 5-8MB and the upload dies on it.
+      // Shrink first — a full-size phone photo is often 5-8MB and the upload dies on it.
       const resized = await resizeImage(imageFile, 1400, 0.85)
       const filePath = `${user.id}-${Date.now()}.jpg`
 
@@ -520,7 +520,7 @@ function Feed() {
       loadFeed()
     } else {
       console.error('Post error:', error)
-      // Surface it â€” a silent failure just looks like a broken button on a phone.
+      // Surface it — a silent failure just looks like a broken button on a phone.
       alert('Could not post: ' + (error.message || 'unknown error'))
     }
     setPosting(false)
@@ -536,18 +536,18 @@ function Feed() {
   }
 
   const CREATE_OPTIONS = [
-    { key: 'text',     icon: 'ðŸ’¬', label: 'Post',          run: () => startPost('text') },
-    { key: 'question', icon: 'â“', label: 'Question',      run: () => startPost('question') },
-    { key: 'review',   icon: 'â­', label: 'Review',        run: () => startPost('review') },
-    { key: 'visual',   icon: 'ðŸŽ¤', label: 'Voice card',    run: () => startPost('visual') },
-    { key: 'article',  icon: 'ðŸ“„', label: 'Article',       run: () => startPost('article') },
-    { key: 'story',    icon: 'ðŸ“–', label: 'Story',         run: () => navigate('/profile') },
-    { key: 'series',   icon: 'ðŸŽ¬', label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
-    { key: 'product',  icon: 'ðŸ›’', label: 'Sell a product', run: () => navigate('/profile'), pro: true },
-    { key: 'live',     icon: 'ðŸ“¡', label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
+    { key: 'text',     icon: '💬', label: 'Post',          run: () => startPost('text') },
+    { key: 'question', icon: '❓', label: 'Question',      run: () => startPost('question') },
+    { key: 'review',   icon: '⭐', label: 'Review',        run: () => startPost('review') },
+    { key: 'visual',   icon: '🎤', label: 'Voice card',    run: () => startPost('visual') },
+    { key: 'article',  icon: '📄', label: 'Article',       run: () => startPost('article') },
+    { key: 'story',    icon: '📖', label: 'Story',         run: () => navigate('/profile') },
+    { key: 'series',   icon: '🎬', label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
+    { key: 'product',  icon: '🛒', label: 'Sell a product', run: () => navigate('/profile'), pro: true },
+    { key: 'live',     icon: '📡', label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
   ]
 
-  // The tabs answer "what do you want to read?" â€” they slice the same feed.
+  // The tabs answer "what do you want to read?" — they slice the same feed.
   const visiblePosts = posts.filter((p) => {
     if (feedTab === 'foryou') return true
     if (feedTab === 'following') {
@@ -602,7 +602,7 @@ function Feed() {
     if (!user) return
     const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
 
-    // Optimistic update â€” instant UI response
+    // Optimistic update — instant UI response
     if (existing) {
       setReactions((prev) => prev.filter((r) => r.id !== existing.id))
       supabase.from('post_reactions').delete().eq('id', existing.id)
@@ -766,14 +766,14 @@ function Feed() {
           <Link to="/search" style={{
             width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
             justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15, textDecoration: 'none',
-          }}>ðŸ”</Link>
+          }}>🔍</Link>
 
           <Link to="/notifications" style={{
             width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
             justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
             textDecoration: 'none', position: 'relative',
           }}>
-            ðŸ””
+            🔔
             {unreadNotifs > 0 && (
               <span style={{
                 position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
@@ -826,7 +826,7 @@ function Feed() {
           <div style={{
             width: 38, height: 38, borderRadius: 11, flexShrink: 0, fontSize: 17,
             background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>ðŸ“¡</div>
+          }}>📡</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: '0 0 1px', fontSize: 12.5, fontWeight: 900, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', boxShadow: '0 0 0 3px rgba(255,255,255,0.3)' }} />
@@ -850,8 +850,8 @@ function Feed() {
       {latestNews.length > 0 && (
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
-            <span style={{ fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}>ðŸ“° Latest News</span>
-            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all â†’</Link>
+            <span style={{ fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}>📰 Latest News</span>
+            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all →</Link>
           </div>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
             {latestNews.map((n) => (
@@ -883,17 +883,17 @@ function Feed() {
             marginTop: 16, background: '#ecfdf5', border: `1px solid ${theme.tealBright}`, borderRadius: 14,
             padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <span style={{ fontSize: 20 }}>ðŸ‘‹</span>
+            <span style={{ fontSize: 20 }}>👋</span>
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 1px 0', fontSize: 13, fontWeight: 800, color: theme.tealDeep }}>Complete your profile</p>
               <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Add your name, username and phone to get the most out of CareFind</p>
             </div>
-            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>â€º</span>
+            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>›</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBannerDismissed(true) }}
               style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 16, padding: '0 2px' }}
             >
-              âœ•
+              ✕
             </button>
           </div>
         </Link>
@@ -901,7 +901,7 @@ function Feed() {
 
       {liveSessions.length > 0 && (
         <div style={{ padding: '10px 16px 0' }}>
-          <p style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}>ðŸ”´ Live Now</p>
+          <p style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}>🔴 Live Now</p>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
             {liveSessions.map(s => (
               <a key={s.id} href={`/live/${s.id}`} style={{ textDecoration: 'none', flexShrink: 0, width: 140 }}>
@@ -929,9 +929,9 @@ function Feed() {
             if (!idn) return null
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12, background: theme.navy, marginBottom: 12 }}>
-                <span style={{ fontSize: 16 }}>{idn.type === 'staff' ? 'ðŸŽ–ï¸' : 'ðŸ¢'}</span>
+                <span style={{ fontSize: 16 }}>{idn.type === 'staff' ? '🎖️' : '🏢'}</span>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff' }}>
-                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' Â· ' + idn.businessName : idn.name}
+                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' · ' + idn.businessName : idn.name}
                 </p>
               </div>
             )
@@ -968,7 +968,7 @@ function Feed() {
               }}
             >
               <span style={{ fontSize: 12.5, fontWeight: 800 }}>
-                {subscriberOnly ? 'ðŸ”’ Subscribers only' : 'ðŸ”“ Free for everyone'}
+                {subscriberOnly ? '🔒 Subscribers only' : '🔓 Free for everyone'}
               </span>
               <span style={{
                 fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 10,
@@ -983,7 +983,7 @@ function Feed() {
 
           {canGoLive && (
             <Link to="/playlist/create" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 13px', borderRadius: 12, background: theme.navy, color: '#fff', fontSize: 12.5, fontWeight: 800, textDecoration: 'none', marginBottom: 12 }}>
-              ðŸŽ¬ Create a Playlist (series)
+              🎬 Create a Playlist (series)
             </Link>
           )}
 
@@ -1007,7 +1007,7 @@ function Feed() {
             </div>
           )}
 
-          {/* Voice Card â€” background: photo or drawing */}
+          {/* Voice Card — background: photo or drawing */}
           {postType === 'visual' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               <label
@@ -1017,7 +1017,7 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                ðŸ–¼ {imagePreview ? 'Change photo' : 'Add photo'}
+                🖼 {imagePreview ? 'Change photo' : 'Add photo'}
                 <input
                   type="file"
                   accept="image/*"
@@ -1040,7 +1040,7 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                âœï¸ Draw
+                ✏️ Draw
               </button>
 
               <label
@@ -1050,7 +1050,7 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                {uploadingVideo ? 'â³ â€¦' : cardVideoPreview ? 'ðŸŽ¬ Change clip' : 'ðŸŽ¬ Clip'}
+                {uploadingVideo ? '⏳ …' : cardVideoPreview ? '🎬 Change clip' : '🎬 Clip'}
                 <input type="file" accept="video/*" onChange={handleCardVideo} style={{ display: 'none' }} />
               </label>
 
@@ -1066,19 +1066,19 @@ function Feed() {
                     background: '#fef2f2', color: theme.alert, fontSize: 12, fontWeight: 800,
                   }}
                 >
-                  âœ•
+                  ✕
                 </button>
               )}
             </div>
           )}
 
-          {/* Voice Card â€” attach a recorded voice */}
+          {/* Voice Card — attach a recorded voice */}
           {postType === 'visual' && (
             <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
               {cardAudio ? (
                 <div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>
-                    ðŸŽ¤ Voice attached
+                    🎤 Voice attached
                   </p>
                   <audio src={cardAudio} controls style={{ width: '100%', height: 36 }} />
                   <button
@@ -1092,10 +1092,10 @@ function Feed() {
               ) : (
                 <>
                   <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>
-                    ðŸŽ¤ Add your voice <span style={{ fontWeight: 600, color: theme.textLight }}>(optional)</span>
+                    🎤 Add your voice <span style={{ fontWeight: 600, color: theme.textLight }}>(optional)</span>
                   </p>
                   <p style={{ margin: '0 0 10px 0', fontSize: 10.5, color: theme.textLight }}>
-                    People can download this card with your voice and share it to WhatsApp Status â€” with your CareFind logo on it.
+                    People can download this card with your voice and share it to WhatsApp Status — with your CareFind logo on it.
                   </p>
                   <VoiceRecorder hq showId={`card-${user?.id || 'anon'}`} onRecorded={(url) => setCardAudio(url)} />
                 </>
@@ -1108,7 +1108,7 @@ function Feed() {
               {reviewTarget ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? '#fef9c3' : '#ecfdf5', borderRadius: 12, padding: '8px 12px' }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: reviewTarget.type === 'unclaimed' ? '#a16207' : theme.tealDeep, flex: 1 }}>
-                    {reviewTarget.type === 'business' ? 'ðŸ¥' : reviewTarget.type === 'product' ? 'ðŸ’Š' : reviewTarget.entityType === 'business' ? 'ðŸ¥' : 'ðŸ’Š'} {reviewTarget.name}
+                    {reviewTarget.type === 'business' ? '🏥' : reviewTarget.type === 'product' ? '💊' : reviewTarget.entityType === 'business' ? '🏥' : '💊'} {reviewTarget.name}
                     {reviewTarget.type === 'unclaimed' && <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4 }}>(unlisted)</span>}
                   </span>
                   <button
@@ -1116,7 +1116,7 @@ function Feed() {
                     onClick={() => { setReviewTarget(null); setReviewSearch(''); setReviewSearchResults([]) }}
                     style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 16 }}
                   >
-                    âœ•
+                    ✕
                   </button>
                 </div>
               ) : (
@@ -1143,7 +1143,7 @@ function Feed() {
                         r.type === 'unclaimed' ? (
                           <div key="unclaimed" style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, background: '#fef9c3' }}>
                             <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: '#a16207', fontWeight: 700 }}>
-                              "{r.name}" not found on CareFind â€” review anyway?
+                              "{r.name}" not found on CareFind — review anyway?
                             </p>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button
@@ -1151,14 +1151,14 @@ function Feed() {
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'business' }); setReviewSearchResults([]) }}
                                 style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
                               >
-                                ðŸ¥ It's a business
+                                🏥 It's a business
                               </button>
                               <button
                                 type="button"
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'product' }); setReviewSearchResults([]) }}
                                 style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
                               >
-                                ðŸ’Š It's a medication
+                                💊 It's a medication
                               </button>
                             </div>
                           </div>
@@ -1190,7 +1190,7 @@ function Feed() {
                   onClick={() => setPostRating(n)}
                   style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: n <= postRating ? '#f5b301' : '#ccc' }}
                 >
-                  â˜…
+                  ★
                 </button>
               ))}
             </div>
@@ -1214,7 +1214,7 @@ function Feed() {
                 />
               </div>
               <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, textAlign: 'center' }}>
-                Tap the card and type â€” your text appears live on the card
+                Tap the card and type — your text appears live on the card
               </p>
             </div>
           ) : (
@@ -1251,12 +1251,12 @@ function Feed() {
                     onClick={clearImage}
                     style={{ position: 'absolute', top: 4, right: 4, background: '#000', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, fontSize: 12 }}
                   >
-                    âœ•
+                    ✕
                   </button>
                 </div>
               ) : (
                 <label style={{ fontSize: 13, color: '#0f766e', fontWeight: 600, cursor: 'pointer' }}>
-                  ðŸ“· Add a photo
+                  📷 Add a photo
                   <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
                 </label>
               )}
@@ -1287,7 +1287,7 @@ function Feed() {
             width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
-            ðŸŒ±
+            🌱
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>
             {feedTab === 'following' ? 'Nothing from people you follow' : 'Nothing here yet'}
@@ -1316,7 +1316,7 @@ function Feed() {
               <div style={{
                 width: 46, height: 46, borderRadius: 12, flexShrink: 0, fontSize: 21,
                 background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>ðŸŽ¬</div>
+              }}>🎬</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pl.title}</p>
                 {pl.description && (
@@ -1325,7 +1325,7 @@ function Feed() {
                   </p>
                 )}
               </div>
-              <span style={{ color: theme.textLight }}>â€º</span>
+              <span style={{ color: theme.textLight }}>›</span>
             </Link>
           ))}
         </div>
@@ -1353,7 +1353,7 @@ function Feed() {
                     }}
                   >
                     {post.posted_as_type
-                      ? (post.posted_as_type === 'staff' ? 'ðŸŽ–ï¸' : 'ðŸ¢')
+                      ? (post.posted_as_type === 'staff' ? '🎖️' : '🏢')
                       : (!profiles[post.user_id]?.avatar_url &&
                           (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
                   </div>
@@ -1376,7 +1376,7 @@ function Feed() {
                         boxShadow: isFollowing(post.user_id) ? 'none' : '0 2px 7px rgba(15,23,42,0.5)',
                       }}
                     >
-                      {isFollowing(post.user_id) ? 'âœ“' : '+'}
+                      {isFollowing(post.user_id) ? '✓' : '+'}
                     </button>
                   )}
                 </div>
@@ -1389,13 +1389,13 @@ function Feed() {
                       <span style={{
                         width: 14, height: 14, borderRadius: '50%', background: theme.tealDeep, color: '#fff',
                         fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900,
-                      }}>âœ“</span>
+                      }}>✓</span>
                     )}
                   </div>
                   {post.posted_as_type ? (
                     <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700, display: 'block' }}>
                       {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
-                      {' Â· posted by '}
+                      {' · posted by '}
                       {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
                     </span>
                   ) : (
@@ -1407,7 +1407,7 @@ function Feed() {
                       )}
                       {profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
                         <span style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>
-                          âœ“ {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
+                          ✓ {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
                         </span>
                       )}
                     </>
@@ -1441,14 +1441,14 @@ function Feed() {
                       onClick={() => setEditingPost({ id: post.id, content: post.content })}
                       style={{ background: 'none', border: 'none', fontSize: 12, color: theme.textLight, cursor: 'pointer', padding: '2px 6px' }}
                     >
-                      âœï¸
+                      ✏️
                     </button>
                     <button
                       onClick={() => handleDeletePost(post.id)}
                       disabled={deletingId === post.id}
                       style={{ background: 'none', border: 'none', fontSize: 12, color: theme.alert, cursor: 'pointer', padding: '2px 6px' }}
                     >
-                      ðŸ—‘ï¸
+                      🗑️
                     </button>
                   </div>
                 )}
@@ -1489,7 +1489,7 @@ function Feed() {
                   border: `1px solid ${theme.border}`, borderRadius: 14,
                   padding: 16, textAlign: 'center', background: theme.bg, marginTop: 4,
                 }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: 20 }}>ðŸ”’</p>
+                  <p style={{ margin: '0 0 4px 0', fontSize: 20 }}>🔒</p>
                   <p style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>
                     Subscriber-only content
                   </p>
@@ -1531,17 +1531,17 @@ function Feed() {
                   }}
                 >
                   {sharingId === post.id
-                    ? 'Preparingâ€¦'
+                    ? 'Preparing…'
                     : post.audio_url && canExportVideo()
-                      ? 'â¬‡ï¸ Download with voice Â· share to status'
-                      : 'â¬‡ï¸ Download card Â· share to status'}
+                      ? '⬇️ Download with voice · share to status'
+                      : '⬇️ Download card · share to status'}
                 </button>
               </div>
             ) : (
               <>
                 {post.post_type === 'review' && post.rating && (
                   <p style={{ margin: '8px 0 6px 0', color: theme.warning, fontSize: 14 }}>
-                    {'â˜…'.repeat(post.rating)}{'â˜†'.repeat(5 - post.rating)}
+                    {'★'.repeat(post.rating)}{'☆'.repeat(5 - post.rating)}
                   </p>
                 )}
                 {post.post_type === 'article' || post.post_type === 'premium' ? (
@@ -1563,12 +1563,12 @@ function Feed() {
             }}>
               {likeCount(post.id) > 0 && (
                 <span style={{ fontSize: 12, color: theme.textLight, fontWeight: 600 }}>
-                  â¤ï¸ {formatCount(likeCount(post.id))} {likeCount(post.id) === 1 ? 'like' : 'likes'}
+                  ❤️ {formatCount(likeCount(post.id))} {likeCount(post.id) === 1 ? 'like' : 'likes'}
                 </span>
               )}
               {comments[post.id] && comments[post.id].length > 0 && (
                 <span style={{ fontSize: 12, color: theme.textLight, fontWeight: 600 }}>
-                  ðŸ’¬ {comments[post.id].length}
+                  💬 {comments[post.id].length}
                 </span>
               )}
             </div>
@@ -1666,14 +1666,14 @@ function Feed() {
                           </Link>
                           {c.profiles?.is_verified && (
                             <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>
-                              âœ“ {c.profiles?.specialty || ''}
+                              ✓ {c.profiles?.specialty || ''}
                             </span>
                           )}
                         </div>
                         {user && c.user_id === user.id && (
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => setEditingComment({ id: c.id, content: c.content, post_id: post.id })} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.textLight }}>âœï¸</button>
-                            <button onClick={() => handleDeleteComment(c.id, post.id)} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.alert }}>ðŸ—‘ï¸</button>
+                            <button onClick={() => setEditingComment({ id: c.id, content: c.content, post_id: post.id })} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.textLight }}>✏️</button>
+                            <button onClick={() => handleDeleteComment(c.id, post.id)} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.alert }}>🗑️</button>
                           </div>
                         )}
                       </div>
@@ -1685,7 +1685,7 @@ function Feed() {
                             style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: `1px solid ${theme.tealDeep}`, borderRadius: 8 }}
                           />
                           <button onClick={() => handleEditComment(c.id, post.id, editingComment.content)} style={{ padding: '5px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>Save</button>
-                          <button onClick={() => setEditingComment(null)} style={{ padding: '5px 8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 11 }}>âœ•</button>
+                          <button onClick={() => setEditingComment(null)} style={{ padding: '5px 8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 11 }}>✕</button>
                         </div>
                       ) : (
                         <p style={{ margin: 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>
@@ -1772,7 +1772,7 @@ function Feed() {
                       <span style={{
                         position: 'absolute', top: 7, right: 8, fontSize: 9,
                         fontWeight: 900, color: theme.tealDeep,
-                      }}>âœ“</span>
+                      }}>✓</span>
                     )}
                   </button>
                 )
@@ -1781,7 +1781,7 @@ function Feed() {
 
             {!canGoLive && (
               <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
-                âœ“ Verified only Â·{' '}
+                ✓ Verified only ·{' '}
                 <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
                   Get verified
                 </Link>
@@ -1796,7 +1796,7 @@ function Feed() {
           onCancel={() => setShowDraw(false)}
           onSave={(blob) => {
             if (blob) {
-              // A drawing is just an image â€” same pipeline as a photo
+              // A drawing is just an image — same pipeline as a photo
               const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' })
               setImageFile(file)
               setImagePreview(URL.createObjectURL(blob))

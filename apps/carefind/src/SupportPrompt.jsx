@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { theme } from './styles/theme'
 
 // A gentle, once-per-session bottom banner encouraging support/gifting.
@@ -40,15 +40,15 @@ function SupportPrompt({ onGift, creatorName, delay = 12000 }) {
       transform: leaving ? 'translateY(120%)' : 'translateY(0)', opacity: leaving ? 0 : 1,
       transition: 'transform 0.3s ease, opacity 0.3s ease',
     }}>
-      <div style={{ fontSize: 26, flexShrink: 0 }}>ðŸ’š</div>
+      <div style={{ fontSize: 26, flexShrink: 0 }}>💚</div>
       <div style={{ flex: 1 }}>
         <p style={{ margin: '0 0 2px 0', fontSize: 13.5, fontWeight: 800 }}>Enjoying {creatorName || 'CareFind'}?</p>
         <p style={{ margin: 0, fontSize: 11.5, color: 'rgba(255,255,255,0.8)' }}>A small gift keeps great health content coming.</p>
       </div>
       <button onClick={handleGift} style={{ flexShrink: 0, background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: 20, padding: '8px 16px', fontWeight: 800, fontSize: 13 }}>
-        ðŸŽ Support
+        🎁 Support
       </button>
-      <button onClick={dismiss} aria-label="Dismiss" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, fontSize: 14, lineHeight: 1 }}>âœ•</button>
+      <button onClick={dismiss} aria-label="Dismiss" style={{ flexShrink: 0, background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, fontSize: 14, lineHeight: 1 }}>✕</button>
     </div>
   )
 }

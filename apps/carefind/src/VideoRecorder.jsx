@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from './config/supabaseClient'
 import { theme } from './styles/theme'
 
@@ -120,7 +120,7 @@ function VideoRecorder({ showId, onRecorded }) {
       {/* Not started: show the record-video entry button */}
       {!live && !previewUrl && (
         <button onClick={() => openCamera(facing)} type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#fdf2f8', color: '#be185d', border: '1px solid #be185d', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>
-          ðŸŽ¥ Record video
+          🎥 Record video
         </button>
       )}
 
@@ -138,13 +138,13 @@ function VideoRecorder({ showId, onRecorded }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {!recording && (
               <>
-                <button onClick={startRecording} type="button" style={{ padding: '8px 16px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 13 }}>â— Start recording</button>
-                <button onClick={switchCamera} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>ðŸ”„ Flip camera</button>
+                <button onClick={startRecording} type="button" style={{ padding: '8px 16px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 13 }}>● Start recording</button>
+                <button onClick={switchCamera} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>🔄 Flip camera</button>
                 <button onClick={closeAll} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Cancel</button>
               </>
             )}
             {recording && (
-              <button onClick={stopRecording} type="button" style={{ padding: '8px 18px', background: theme.navy, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 13 }}>â–  Stop</button>
+              <button onClick={stopRecording} type="button" style={{ padding: '8px 18px', background: theme.navy, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 13 }}>■ Stop</button>
             )}
           </div>
         </div>
@@ -156,12 +156,12 @@ function VideoRecorder({ showId, onRecorded }) {
           <video src={previewUrl} controls playsInline style={{ width: '100%', maxWidth: 300, borderRadius: 12, display: 'block', marginBottom: 8 }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={sendVideo} disabled={uploading} type="button" style={{ padding: '8px 16px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-              {uploading ? 'Uploadingâ€¦ please wait' : 'ðŸ“¡ Post video'}
+              {uploading ? 'Uploading… please wait' : '📡 Post video'}
             </button>
             <button onClick={() => { discard(); openCamera(facing) }} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Re-record</button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Discard</button>
           </div>
-          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Keep clips short on weak networks â€” video uploads are large.</p>
+          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Keep clips short on weak networks — video uploads are large.</p>
         </div>
       )}
     </div>

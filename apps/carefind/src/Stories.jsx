@@ -1,9 +1,9 @@
-﻿import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 
-// CareFind Stories â€” platform story first, then verified users, then by views.
+// CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
 function Stories() {
   const { user } = useAuth()
@@ -165,7 +165,7 @@ function Stories() {
         {liveShow && (
           <a href={`/live-show/${liveShow.id}`} style={{ flexShrink: 0, textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 70 }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', padding: 3, background: '#dc2626', position: 'relative', animation: 'cf-pulse 1.5s infinite' }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 900 }}>ðŸ“¡</div>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 900 }}>📡</div>
               <span style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', background: '#dc2626', color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em' }}>LIVE</span>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 800, color: '#dc2626', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Live now</span>
@@ -176,14 +176,14 @@ function Stories() {
         {upcomingShow && (
           <a href={`/live-show/${upcomingShow.id}`} style={{ flexShrink: 0, textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 70 }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', padding: 3, background: theme.navy, position: 'relative' }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 900 }}>â³</div>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 900 }}>⏳</div>
               <span style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', background: theme.navy, color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{countdownLabel(upcomingShow.scheduled_at)}</span>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Upcoming</span>
           </a>
         )}
 
-        {/* Add-to-story button removed from feed â€” users post stories from their profile now */}
+        {/* Add-to-story button removed from feed — users post stories from their profile now */}
         {false && canPost && (
           <button
             onClick={() => setComposerOpen(true)}
@@ -220,7 +220,7 @@ function Stories() {
               </div>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.is_platform ? 'â­ CareFind' : storyLabel(s)}
+              {s.is_platform ? '⭐ CareFind' : storyLabel(s)}
             </span>
           </button>
         ))}
@@ -243,11 +243,11 @@ function Stories() {
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>
-                {stories[viewerIndex].is_platform ? 'â­ CareFind' : storyLabel(stories[viewerIndex])}
+                {stories[viewerIndex].is_platform ? '⭐ CareFind' : storyLabel(stories[viewerIndex])}
               </p>
               <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(stories[viewerIndex].created_at)}</p>
             </div>
-            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>âœ•</button>
+            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>✕</button>
           </div>
 
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -281,7 +281,7 @@ function Stories() {
           <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 18, boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Add to your story</h3>
-              <button onClick={() => setComposerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>âœ•</button>
+              <button onClick={() => setComposerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
             </div>
 
             <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Title (optional)" style={{ width: '100%', padding: 12, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', marginBottom: 8 }} />
@@ -295,12 +295,12 @@ function Stories() {
             </div>
 
             <label style={{ fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', display: 'block', marginBottom: 12 }}>
-              ðŸ“· {sImage ? sImage.name : 'Add an image (optional)'}
+              📷 {sImage ? sImage.name : 'Add an image (optional)'}
               <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
 
             <button onClick={postStory} disabled={posting} style={{ width: '100%', padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>
-              {posting ? 'Postingâ€¦' : 'Share to story'}
+              {posting ? 'Posting…' : 'Share to story'}
             </button>
             <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>Your story disappears after 24 hours.</p>
           </div>

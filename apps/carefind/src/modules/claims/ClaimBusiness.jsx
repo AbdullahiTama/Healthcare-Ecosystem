@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -77,7 +77,7 @@ function ClaimBusiness() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
       <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>
+        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Claim Your Business</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>
           Search and claim your business listing
@@ -87,7 +87,7 @@ function ClaimBusiness() {
             flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.12)',
             border: '1px solid rgba(255,255,255,0.18)', borderRadius: 16, padding: '11px 14px',
           }}>
-            <span>ðŸ”</span>
+            <span>🔍</span>
             <input
               type="text"
               value={query}
@@ -132,7 +132,7 @@ function ClaimBusiness() {
             <div key={biz.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{biz.name}</h3>
               <p style={{ margin: '0 0 10px 0', color: theme.textLight, fontSize: 12.5, textTransform: 'capitalize' }}>
-                {biz.business_type} Â· {biz.city}, {biz.state}
+                {biz.business_type} · {biz.city}, {biz.state}
               </p>
               <button
                 onClick={() => handleClaim(biz.id)}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -59,11 +59,11 @@ function BottomNav({ onCompose }) {
       boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
     }}>
       <Link to="/" style={itemStyle(isActive('/'))}>
-        <span style={{ fontSize: 19 }}>ðŸ </span>
+        <span style={{ fontSize: 19 }}>🏠</span>
         Home
       </Link>
       <Link to="/search" style={itemStyle(isActive('/search'))}>
-        <span style={{ fontSize: 19 }}>ðŸ›’</span>
+        <span style={{ fontSize: 19 }}>🛒</span>
         MedMarket
       </Link>
       <button
@@ -78,7 +78,7 @@ function BottomNav({ onCompose }) {
         +
       </button>
       <Link to="/news" style={{ ...itemStyle(isActive('/news')), position: 'relative' }}>
-        <span style={{ fontSize: 19 }}>ðŸ“°</span>
+        <span style={{ fontSize: 19 }}>📰</span>
         News
         {unreadNews > 0 && (
           <span style={{
@@ -91,7 +91,7 @@ function BottomNav({ onCompose }) {
         )}
       </Link>
       <Link to="/profile" style={itemStyle(isActive('/profile'))}>
-        <span style={{ fontSize: 19 }}>ðŸ‘¤</span>
+        <span style={{ fontSize: 19 }}>👤</span>
         Profile
       </Link>
     </div>

@@ -1,4 +1,4 @@
-﻿import React, { Suspense, lazy } from 'react'
+import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './providers/AuthContext.jsx'
@@ -43,7 +43,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public â€” no login required */}
+          {/* Public — no login required */}
           <Route path="/" element={<Feed />} />
           <Route path="/search" element={<Search />} />
           <Route path="/business/:id" element={<BusinessProfile />} />
@@ -74,7 +74,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/playlist/:id/edit/:partId" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
           <Route path="/live-dashboard/:id" element={<RequireAuth><LiveDashboard /></RequireAuth>} />
 
-          {/* Admin â€” separate session mechanism (admin_token), not the consumer `user` RequireAuth checks */}
+          {/* Admin — separate session mechanism (admin_token), not the consumer `user` RequireAuth checks */}
           <Route path="/admin" element={<AdminLogin />} />
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />

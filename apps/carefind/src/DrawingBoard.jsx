@@ -1,4 +1,4 @@
-﻿import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { theme } from './styles/theme'
 
 // A finger/touch drawing canvas. Draw, pick colors, erase, clear.
@@ -82,8 +82,8 @@ function DrawingBoard({ onSave, onCancel }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
       <div style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 460, padding: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>âœï¸ Draw</p>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>âœ•</button>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>✏️ Draw</p>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
         </div>
 
         <canvas
@@ -111,7 +111,7 @@ function DrawingBoard({ onSave, onCancel }) {
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
           <button onClick={clearCanvas} style={{ flex: 1, padding: 11, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Clear</button>
-          <button onClick={save} disabled={saving} style={{ flex: 2, padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Savingâ€¦' : 'âœ“ Use this drawing'}</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Saving…' : '✓ Use this drawing'}</button>
         </div>
       </div>
     </div>

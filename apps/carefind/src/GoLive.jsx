@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -29,7 +29,7 @@ export default function GoLive({ onClose }) {
     // Post to feed so followers see it
     await supabase.from('posts').insert({
       user_id: user.id,
-      content: `ðŸ”´ LIVE NOW: ${topic.trim()}${description ? '\n' + description.trim() : ''}\n\nJoin here ðŸ‘‡`,
+      content: `🔴 LIVE NOW: ${topic.trim()}${description ? '\n' + description.trim() : ''}\n\nJoin here 👇`,
       post_type: 'text',
       live_session_id: data.id,
     })
@@ -42,8 +42,8 @@ export default function GoLive({ onClose }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', fontFamily: 'system-ui' }}>
       <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: '24px 24px 0 0', padding: '20px 20px 40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>ðŸ”´ Go Live</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>âœ•</button>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>🔴 Go Live</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
@@ -61,16 +61,16 @@ export default function GoLive({ onClose }) {
 
         <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 16 }}>
           <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep, lineHeight: 1.5 }}>
-            ðŸŽ¨ <strong>Shared drawing board</strong> â€” viewers see you draw in real time<br/>
-            ðŸŽ™ï¸ <strong>Voice notes</strong> â€” record and send audio messages<br/>
-            ðŸŽ <strong>Gifts</strong> â€” viewers can send CareCoins during your session<br/>
-            ðŸ’¬ <strong>Live chat</strong> â€” questions and answers in real time
+            🎨 <strong>Shared drawing board</strong> — viewers see you draw in real time<br/>
+            🎙️ <strong>Voice notes</strong> — record and send audio messages<br/>
+            🎁 <strong>Gifts</strong> — viewers can send CareCoins during your session<br/>
+            💬 <strong>Live chat</strong> — questions and answers in real time
           </p>
         </div>
 
         <button onClick={startLive} disabled={!topic.trim() || starting}
           style={{ width: '100%', padding: 15, background: theme.alert, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 900, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          {starting ? 'Starting...' : 'ðŸ”´ Start Live Session'}
+          {starting ? 'Starting...' : '🔴 Start Live Session'}
         </button>
       </div>
     </div>

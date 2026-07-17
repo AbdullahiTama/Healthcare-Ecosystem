@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -257,7 +257,7 @@ function Profile() {
     const file = e.target.files[0]
     if (!file) return
     setUploadingCover(true)
-    // Shrink before upload â€” covers are wide, so allow a bigger max
+    // Shrink before upload — covers are wide, so allow a bigger max
     const resized = await resizeImage(file, 1400, 0.82)
     const path = `cover-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -281,7 +281,7 @@ function Profile() {
     if (error) { alert('Could not save price: ' + error.message); return }
     loadProfile()
     alert(price > 0
-      ? `Subscriptions on â€” ${price} ðŸª™ (â‚¦${coinsToNaira(price).toLocaleString()}) per month.`
+      ? `Subscriptions on — ${price} 🪙 (₦${coinsToNaira(price).toLocaleString()}) per month.`
       : 'Subscriptions turned off.')
   }
 
@@ -289,7 +289,7 @@ function Profile() {
     const file = e.target.files[0]
     if (!file) return
     setUploadingAvatar(true)
-    // Avatars display small â€” 600px is plenty and keeps the upload tiny
+    // Avatars display small — 600px is plenty and keeps the upload tiny
     const resized = await resizeImage(file, 600, 0.85)
     const path = `avatar-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -348,10 +348,10 @@ function Profile() {
       {/* Posting-as banner */}
       {(activeBiz || activeStaff) && (
         <div style={{ background: theme.navy, color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 16 }}>{activeStaff ? 'ðŸŽ–ï¸' : 'ðŸ¢'}</span>
+          <span style={{ fontSize: 16 }}>{activeStaff ? '🎖️' : '🏢'}</span>
           <div style={{ flex: 1 }}>
             <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800 }}>
-              Posting as {activeStaff ? (activeStaff.publicTitle || 'Rep') + ' Â· ' + activeStaff.businessName : activeBiz.name}
+              Posting as {activeStaff ? (activeStaff.publicTitle || 'Rep') + ' · ' + activeStaff.businessName : activeBiz.name}
             </p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.6)' }}>Your posts, comments & news use this identity</p>
           </div>
@@ -365,7 +365,7 @@ function Profile() {
       <div style={{ position: 'relative', marginBottom: 55 }}>
         <div style={{ height: 120, background: profile?.cover_url ? `url(${profile.cover_url})` : theme.heroGradient, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
           <label style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.4)', color: '#fff', borderRadius: 16, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-            {uploadingCover ? 'Uploadingâ€¦' : 'ðŸ“· Cover'}
+            {uploadingCover ? 'Uploading…' : '📷 Cover'}
             <input type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: 'none' }} />
           </label>
         </div>
@@ -389,7 +389,7 @@ function Profile() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
             }}>
-              {uploadingAvatar ? 'â€¦' : 'ðŸ“·'}
+              {uploadingAvatar ? '…' : '📷'}
               <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </label>
           </div>
@@ -406,14 +406,14 @@ function Profile() {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, 160))}
-              placeholder="Bio â€” tell people who you are"
+              placeholder="Bio — tell people who you are"
               rows={3}
               style={{ padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, fontFamily: 'inherit', resize: 'none' }}
             />
             <p style={{ margin: '-4px 0 0 0', fontSize: 10.5, color: theme.textLight, textAlign: 'right' }}>{bio.length}/160</p>
             <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Website" style={{ padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10 }} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={saveProfile} disabled={saving} style={{ flex: 1, padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Savingâ€¦' : 'Save'}</button>
+              <button onClick={saveProfile} disabled={saving} style={{ flex: 1, padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Saving…' : 'Save'}</button>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: 11, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Cancel</button>
             </div>
           </div>
@@ -425,7 +425,7 @@ function Profile() {
                 {profile?.display_name && <p style={{ margin: '0 0 4px 0', fontSize: 13, color: theme.textLight }}>@{profile.display_name}</p>}
                 {profile?.is_verified && (
                   <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 10px', borderRadius: 20, border: `1px solid ${theme.tealBright}` }}>
-                    âœ“ Verified {profile.verification_label}
+                    ✓ Verified {profile.verification_label}
                   </span>
                 )}
               </div>
@@ -437,8 +437,8 @@ function Profile() {
               </p>
             )}
             <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-              {profile?.location && <span style={{ fontSize: 12.5, color: theme.textLight }}>ðŸ“ {profile.location}</span>}
-              {profile?.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>ðŸ”— {profile.website}</a>}
+              {profile?.location && <span style={{ fontSize: 12.5, color: theme.textLight }}>📍 {profile.location}</span>}
+              {profile?.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>🔗 {profile.website}</a>}
             </div>
           </div>
         )}
@@ -450,8 +450,8 @@ function Profile() {
           <div><p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followingCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Following</p></div>
           <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
             <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>
-              {myReviews.length ? (myReviews.reduce((s, r) => s + (r.rating || 0), 0) / myReviews.length).toFixed(1) : 'â€”'}
-              <span style={{ color: theme.warning, fontSize: 13 }}> â˜…</span>
+              {myReviews.length ? (myReviews.reduce((s, r) => s + (r.rating || 0), 0) / myReviews.length).toFixed(1) : '—'}
+              <span style={{ color: theme.warning, fontSize: 13 }}> ★</span>
             </p>
             <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>{myReviews.length} review{myReviews.length !== 1 ? 's' : ''}</p>
           </button>
@@ -470,9 +470,9 @@ function Profile() {
               return (
                 <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
                   <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20 }}>ðŸ“¡</div>
+                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20 }}>📡</div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>â— LIVE</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
                 </Link>
               )
             }
@@ -485,7 +485,7 @@ function Profile() {
             return (
               <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
                 <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: theme.navy, position: 'relative' }}>
-                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20 }}>â³</div>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 20 }}>⏳</div>
                   <span style={{ position: 'absolute', bottom: -3, left: '50%', transform: 'translateX(-50%)', background: theme.navy, color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{label}</span>
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 800, color: theme.navy }}>Upcoming</span>
@@ -496,7 +496,7 @@ function Profile() {
           {myStories.map((s) => (
             <button key={s.id} onClick={() => setViewStory(s)} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
               <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: 'linear-gradient(135deg, #0d9488, #f59e0b)' }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>{!s.image_url && (s.title?.[0] || 'ðŸ“–')}</div>
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>{!s.image_url && (s.title?.[0] || '📖')}</div>
               </div>
               <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Story'}</span>
             </button>
@@ -505,8 +505,8 @@ function Profile() {
 
         {/* Account menu toggle */}
         <button onClick={() => setMenuOpen(m => !m)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 12, marginBottom: 14, cursor: 'pointer' }}>
-          <span style={{ fontSize: 13.5, fontWeight: 800, color: theme.navy }}>â˜° Account, Wallet & Businesses</span>
-          <span style={{ fontSize: 13, color: theme.textLight }}>{menuOpen ? 'â–²' : 'â–¼'}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 800, color: theme.navy }}>☰ Account, Wallet & Businesses</span>
+          <span style={{ fontSize: 13, color: theme.textLight }}>{menuOpen ? '▲' : '▼'}</span>
         </button>
 
         {menuOpen && (<>
@@ -515,16 +515,16 @@ function Profile() {
           <div style={{ background: theme.heroGradient, borderRadius: 16, padding: 16, marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ margin: '0 0 2px 0', fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>CareCoins Balance</p>
-              <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#fff' }}>{walletBalance} ðŸª™</p>
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#fff' }}>{walletBalance} 🪙</p>
             </div>
-            <span style={{ color: '#fff', fontSize: 20 }}>â€º</span>
+            <span style={{ color: '#fff', fontSize: 20 }}>›</span>
           </div>
         </Link>
 
         {/* Paid subscriptions (verified only) */}
         {profile?.is_verified && (
           <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
-            <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>ðŸ”’ Paid subscriptions</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>🔒 Paid subscriptions</p>
             <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>
               Set a monthly price and people can subscribe to unlock your subscriber-only posts. Set 0 to turn it off.
             </p>
@@ -539,13 +539,13 @@ function Profile() {
                     color: subPrice === c ? '#fff' : theme.textMid,
                   }}
                 >
-                  {c === 0 ? 'Off' : `${c} ðŸª™`}
+                  {c === 0 ? 'Off' : `${c} 🪙`}
                 </button>
               ))}
             </div>
             <p style={{ margin: '0 0 10px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>
               {subPrice > 0
-                ? `Subscribers pay ${subPrice} ðŸª™ (â‚¦${coinsToNaira(subPrice).toLocaleString()}) per month`
+                ? `Subscribers pay ${subPrice} 🪙 (₦${coinsToNaira(subPrice).toLocaleString()}) per month`
                 : 'Subscriptions are off'}
             </p>
             <button
@@ -553,7 +553,7 @@ function Profile() {
               disabled={savingPrice}
               style={{ width: '100%', padding: 11, background: theme.navy, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}
             >
-              {savingPrice ? 'Savingâ€¦' : 'Save subscription price'}
+              {savingPrice ? 'Saving…' : 'Save subscription price'}
             </button>
           </div>
         )}
@@ -561,8 +561,8 @@ function Profile() {
         {/* Sell on MedMarket (verified only) */}
         {profile?.is_verified && (
           <button onClick={() => setProductUpload(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 14px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, marginBottom: 16, cursor: 'pointer' }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800 }}>ðŸ›’ Add a product to MedMarket</span>
-            <span>â€º</span>
+            <span style={{ fontSize: 13.5, fontWeight: 800 }}>🛒 Add a product to MedMarket</span>
+            <span>›</span>
           </button>
         )}
 
@@ -570,14 +570,14 @@ function Profile() {
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>My Businesses & Positions</p>
-            <Link to="/business-dashboard" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Manage â†’</Link>
+            <Link to="/business-dashboard" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Manage →</Link>
           </div>
 
           {!hasAnyIdentity && (
             <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 14, padding: 16, textAlign: 'center' }}>
               <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textLight }}>You don't manage any businesses or positions yet.</p>
-              <Link to="/claim-business" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block', marginBottom: 6 }}>Claim a business â†’</Link>
-              <Link to="/claim-staff-position" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Claim your position at a company â†’</Link>
+              <Link to="/claim-business" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block', marginBottom: 6 }}>Claim a business →</Link>
+              <Link to="/claim-staff-position" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Claim your position at a company →</Link>
             </div>
           )}
 
@@ -594,7 +594,7 @@ function Profile() {
                 <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: theme.navy }}>{displayLabel} <span style={{ fontSize: 11, color: theme.textLight, fontWeight: 600 }}>(you)</span></p>
                 <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Personal account</p>
               </div>
-              {!activeBiz && !activeStaff && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>âœ“ Active</span>}
+              {!activeBiz && !activeStaff && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>✓ Active</span>}
             </div>
           )}
 
@@ -604,14 +604,14 @@ function Profile() {
             return (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? '#ecfdf5' : theme.cardBg, marginBottom: 8 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
-                  {!b.cover_url && (b.name?.[0]?.toUpperCase() || 'ðŸ¢')}
+                  {!b.cover_url && (b.name?.[0]?.toUpperCase() || '🏢')}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</p>
                   <p style={{ margin: 0, fontSize: 11, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type}</p>
                 </div>
                 {isActive ? (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>âœ“ Active</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>✓ Active</span>
                 ) : (
                   <button onClick={() => switchToBusiness(b)} style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, padding: '6px 12px', fontSize: 11, fontWeight: 800 }}>
                     Post as
@@ -628,14 +628,14 @@ function Profile() {
             return (
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? '#ecfdf5' : theme.cardBg, marginBottom: 8 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: theme.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 17, flexShrink: 0 }}>
-                  ðŸŽ–ï¸
+                  🎖️
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</p>
                   <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{c.businessName}</p>
                 </div>
                 {isActive ? (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>âœ“ Active</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep }}>✓ Active</span>
                 ) : (
                   <button onClick={() => switchToStaff(c)} style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, padding: '6px 12px', fontSize: 11, fontWeight: 800 }}>
                     Post as
@@ -649,7 +649,7 @@ function Profile() {
 
         {/* Content tabs */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, marginBottom: 12, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {[['posts', 'ðŸ“ Posts'], ['reposts', 'ðŸ” Reposts'], ['saved', 'ðŸ”– Saved'], ['playlists', 'ðŸŽ¬ Playlists'], ['reviews', 'â­ Reviews']].map(([key, label]) => (
+          {[['posts', '📝 Posts'], ['reposts', '🔁 Reposts'], ['saved', '🔖 Saved'], ['playlists', '🎬 Playlists'], ['reviews', '⭐ Reviews']].map(([key, label]) => (
             <button key={key} onClick={() => setActiveTab(key)} style={{ flexShrink: 0, whiteSpace: 'nowrap', padding: '10px 12px', background: 'none', border: 'none', borderBottom: activeTab === key ? `2px solid ${theme.tealDeep}` : '2px solid transparent', color: activeTab === key ? theme.navy : theme.textLight, fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
               {label}
             </button>
@@ -661,7 +661,7 @@ function Profile() {
           <div style={{ marginBottom: 16 }}>
             {profile?.is_verified && (
               <Link to="/playlist/create" style={{ display: 'block', textAlign: 'center', padding: 12, background: theme.tealGradient, color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: 'none', marginBottom: 12 }}>
-                ðŸŽ¬ Create a Playlist
+                🎬 Create a Playlist
               </Link>
             )}
             {myPlaylists.length === 0 ? (
@@ -669,19 +669,19 @@ function Profile() {
             ) : (
               myPlaylists.map(pl => (
                 <Link key={pl.id} to={`/playlist/${pl.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 12, marginBottom: 8, textDecoration: 'none' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>ðŸŽ¬</div>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎬</div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pl.title}</p>
                     {pl.description && <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.description}</p>}
                   </div>
-                  <span style={{ color: theme.textLight }}>â€º</span>
+                  <span style={{ color: theme.textLight }}>›</span>
                 </Link>
               ))
             )}
           </div>
         )}
 
-        {/* Reviews tab â€” what people say about you (read-only) */}
+        {/* Reviews tab — what people say about you (read-only) */}
         {activeTab === 'reviews' && (() => {
           const total = myReviews.length
           const avg = total ? (myReviews.reduce((s, r) => s + (r.rating || 0), 0) / total) : 0
@@ -697,14 +697,14 @@ function Profile() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avg.toFixed(1)}</span>
                     <div>
-                      <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'â˜…'.repeat(Math.round(avg))}{'â˜†'.repeat(5 - Math.round(avg))}</p>
+                      <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(avg))}{'☆'.repeat(5 - Math.round(avg))}</p>
                       <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{total} review{total !== 1 ? 's' : ''} about you</p>
                     </div>
                   </div>
                   {breakdown.map((b) => (
                     <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                       <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{b.star}</span>
-                      <span style={{ fontSize: 11, color: theme.warning }}>â˜…</span>
+                      <span style={{ fontSize: 11, color: theme.warning }}>★</span>
                       <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ width: `${b.pct}%`, height: '100%', background: b.star >= 4 ? theme.success : b.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
                       </div>
@@ -723,9 +723,9 @@ function Profile() {
                   <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                        {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> âœ“</span>}
+                        {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
                       </Link>
-                      <span style={{ color: theme.warning, fontSize: 13 }}>{'â˜…'.repeat(r.rating || 0)}{'â˜†'.repeat(5 - (r.rating || 0))}</span>
+                      <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating || 0)}{'☆'.repeat(5 - (r.rating || 0))}</span>
                     </div>
                     {r.comment && <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.5 }}>{r.comment}</p>}
                     <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>{new Date(r.created_at).toLocaleDateString()}</p>
@@ -738,11 +738,11 @@ function Profile() {
 
         {/* Content grid */}
         {activeTab !== 'playlists' && activeTab !== 'reviews' && (() => {
-          const list = activeTab === 'saved' ? savedPosts : activeTab === 'reposts' ? myPosts.filter(p => (p.content || '').startsWith('ðŸ”')) : myPosts.filter(p => !(p.content || '').startsWith('ðŸ”'))
+          const list = activeTab === 'saved' ? savedPosts : activeTab === 'reposts' ? myPosts.filter(p => (p.content || '').startsWith('🔁')) : myPosts.filter(p => !(p.content || '').startsWith('🔁'))
           if (list.length === 0) {
             return <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '24px 0' }}>Nothing here yet.</p>
           }
-          const typeIcon = { question: 'â“', review: 'â­', article: 'ðŸ“„', premium: 'ðŸ’Ž' }
+          const typeIcon = { question: '❓', review: '⭐', article: '📄', premium: '💎' }
           return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
               {list.map(p => (
@@ -751,11 +751,11 @@ function Profile() {
                     {p.image_url ? (
                       <div style={{ height: 80, background: `url(${p.image_url}) center/cover` }} />
                     ) : (
-                      <div style={{ height: 80, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{typeIcon[p.post_type] || 'ðŸ’¬'}</div>
+                      <div style={{ height: 80, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{typeIcon[p.post_type] || '💬'}</div>
                     )}
                     <div style={{ padding: '8px 10px', flex: 1, overflow: 'hidden' }}>
                       {p.post_type && p.post_type !== 'text' && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{typeIcon[p.post_type]} {p.post_type}</span>}
-                      <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{previewText((p.content || '').replace(/^ðŸ”\s*/, ''))}</p>
+                      <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{previewText((p.content || '').replace(/^🔁\s*/, ''))}</p>
                     </div>
                   </div>
                 </button>
@@ -768,18 +768,18 @@ function Profile() {
         {/* Links */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 16 }}>
           <Link to="/saved" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>ðŸ”– Saved posts</span>
-            <span style={{ color: theme.textLight }}>â€º</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>🔖 Saved posts</span>
+            <span style={{ color: theme.textLight }}>›</span>
           </Link>
           {!profile?.is_verified && (
             <Link to="/verify" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
-              <span style={{ fontSize: 14, fontWeight: 600 }}>ðŸ©º Get verified</span>
-              <span style={{ color: theme.textLight }}>â€º</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>🩺 Get verified</span>
+              <span style={{ color: theme.textLight }}>›</span>
             </Link>
           )}
           <Link to="/earn" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>ðŸ’° Earn on CareFind</span>
-            <span style={{ color: theme.textLight }}>â€º</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>💰 Earn on CareFind</span>
+            <span style={{ color: theme.textLight }}>›</span>
           </Link>
         </div>
 
@@ -793,11 +793,11 @@ function Profile() {
         <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>âœ•</button>
+              <button onClick={() => setOpenPost(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
             </div>
             {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
             {openPost.post_type && openPost.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{openPost.post_type}</span>}
-            <p style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText((openPost.content || '').replace(/^ðŸ”\s*/, '')))}</p>
+            <p style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText((openPost.content || '').replace(/^🔁\s*/, '')))}</p>
             <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? new Date(openPost.created_at).toLocaleDateString() : ''}</p>
           </div>
         </div>
@@ -809,11 +809,11 @@ function Profile() {
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 20, boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Add to your story</h3>
-              <button onClick={() => setStoryComposer(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>âœ•</button>
+              <button onClick={() => setStoryComposer(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
             </div>
             <div style={{ background: sBg, borderRadius: 14, padding: 20, marginBottom: 12, minHeight: 90 }}>
-              <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Story titleâ€¦" style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 17, fontWeight: 800, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
-              <textarea value={sBody} onChange={(e) => setSBody(e.target.value)} placeholder="Say somethingâ€¦" rows={2} style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+              <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Story title…" style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 17, fontWeight: 800, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
+              <textarea value={sBody} onChange={(e) => setSBody(e.target.value)} placeholder="Say something…" rows={2} style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               {['#0f766e', '#1e293b', '#be185d', '#0369a1', '#166534', '#b45309'].map(c => (
@@ -821,11 +821,11 @@ function Profile() {
               ))}
             </div>
             <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
-              ðŸ“· {sImage ? sImage.name.slice(0, 24) : 'Add a photo (optional)'}
+              📷 {sImage ? sImage.name.slice(0, 24) : 'Add a photo (optional)'}
               <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
             <button onClick={postStory} disabled={postingStory} style={{ width: '100%', padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-              {postingStory ? 'Postingâ€¦' : 'Post story'}
+              {postingStory ? 'Posting…' : 'Post story'}
             </button>
           </div>
         </div>
@@ -837,7 +837,7 @@ function Profile() {
           {viewStory.image_url && <img src={viewStory.image_url} alt="" style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: 12, marginBottom: 16 }} />}
           {viewStory.title && <h2 style={{ color: '#fff', fontSize: 24, fontWeight: 900, textAlign: 'center', margin: '0 0 10px 0' }}>{viewStory.title}</h2>}
           {viewStory.body && <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 16, textAlign: 'center', margin: 0, lineHeight: 1.5 }}>{viewStory.body}</p>}
-          <button onClick={() => setViewStory(null)} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18 }}>âœ•</button>
+          <button onClick={() => setViewStory(null)} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', borderRadius: '50%', width: 34, height: 34, fontSize: 18 }}>✕</button>
         </div>
       )}
 

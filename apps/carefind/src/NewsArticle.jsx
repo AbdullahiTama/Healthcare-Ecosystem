@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -129,13 +129,13 @@ function NewsArticle() {
     return a?.profiles?.full_name || a?.profiles?.display_name || 'CareFind Contributor'
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loadingâ€¦</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading…</div>
 
   if (!article || article.status !== 'approved') {
     return (
       <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 38, marginBottom: 12 }}>ðŸ“°</div>
+          <div style={{ fontSize: 38, marginBottom: 12 }}>📰</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Article not available</h3>
           <p style={{ fontSize: 13, color: theme.textLight }}>This story may have been removed or is still under review.</p>
           <Link to="/news" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to News</Link>
@@ -149,12 +149,12 @@ function NewsArticle() {
     <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }}>
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontFamily: 'system-ui' }}>
-        <Link to="/news" style={{ fontSize: 13, fontWeight: 700, color: theme.textMid, textDecoration: 'none' }}>â† News</Link>
+        <Link to="/news" style={{ fontSize: 13, fontWeight: 700, color: theme.textMid, textDecoration: 'none' }}>← News</Link>
         <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: theme.tealDeep, textTransform: 'uppercase' }}>CareFind Health News</span>
         <button
           onClick={() => { if (navigator.share) navigator.share({ title: article.headline, url: window.location.href }) }}
           style={{ background: 'none', border: 'none', fontSize: 16, color: theme.textMid }}
-        >â†—</button>
+        >↗</button>
       </div>
 
       <div style={{ padding: '20px 18px 0' }}>
@@ -181,10 +181,10 @@ function NewsArticle() {
           <div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: theme.navy }}>
               By {authorName(article)}
-              {article.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 4 }}>âœ“</span>}
+              {article.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 4 }}>✓</span>}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-              {article.profiles?.verification_label ? `${article.profiles.verification_label} Â· ` : ''}{formatDate(article.published_at || article.created_at)} Â· ðŸ‘ {formatCount(article.view_count)}
+              {article.profiles?.verification_label ? `${article.profiles.verification_label} · ` : ''}{formatDate(article.published_at || article.created_at)} · 👁 {formatCount(article.view_count)}
             </p>
           </div>
         </div>
@@ -206,7 +206,7 @@ function NewsArticle() {
 
       {/* End mark */}
       <div style={{ textAlign: 'center', padding: '24px 0 8px' }}>
-        <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>â– </span>
+        <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>
       </div>
 
       {/* Engagement bar (X-style inline) */}
@@ -251,7 +251,7 @@ function NewsArticle() {
         <div style={{ padding: '4px 18px 8px', fontFamily: 'system-ui' }}>
           <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Comments ({comments.length})</p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder={user ? 'Add a commentâ€¦' : 'Log in to comment'} disabled={!user} style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
+            <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder={user ? 'Add a comment…' : 'Log in to comment'} disabled={!user} style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
             <button onClick={addComment} style={{ padding: '0 16px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>Post</button>
           </div>
           {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Be the first to comment.</p>}
@@ -263,13 +263,13 @@ function NewsArticle() {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: '0 0 2px 0', fontSize: 12.5 }}>
                   <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                  {c.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>âœ“</span>}
+                  {c.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
                   <span style={{ color: theme.textLight, marginLeft: 6, fontWeight: 500 }}>{timeAgoShort(c.created_at)}</span>
                 </p>
                 <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>
               </div>
               {user && c.user_id === user.id && (
-                <button onClick={() => deleteComment(c.id)} style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 15 }}>âœ•</button>
+                <button onClick={() => deleteComment(c.id)} style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 15 }}>✕</button>
               )}
             </div>
           ))}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -120,7 +120,7 @@ function LiveShow() {
 
   function spawnHeart(xPercent) {
     const baseLeft = xPercent != null ? xPercent : (20 + Math.random() * 55)
-    const emojis = ['â¤ï¸', 'ðŸ’š', 'ðŸ’›', 'ðŸ§¡', 'ðŸ’œ', 'ðŸ’–', 'ðŸ’—']
+    const emojis = ['❤️', '💚', '💛', '🧡', '💜', '💖', '💗']
     const burst = 3 + Math.floor(Math.random() * 3)
     for (let k = 0; k < burst; k++) {
       const hid = heartId.current++
@@ -172,7 +172,7 @@ function LiveShow() {
     supabase.from('live_shares').insert({ show_id: id, user_id: user.id })
     await supabase.from('posts').insert({
       user_id: user.id,
-      content: `ðŸ” Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
+      content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
       post_type: 'text',
     })
   }
@@ -249,13 +249,13 @@ function LiveShow() {
     return `${Math.floor(diff / 86400)}d`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading live showâ€¦</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading live show…</div>
 
   if (!show) {
     return (
       <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 38, marginBottom: 12 }}>ðŸ“¡</div>
+          <div style={{ fontSize: 38, marginBottom: 12 }}>📡</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Live show not found</h3>
           <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to Feed</Link>
         </div>
@@ -267,7 +267,7 @@ function LiveShow() {
   const isLive = show.status === 'live'
   const visibleComments = comments.filter(c => !c.hidden || isHost)
 
-  // Scheduled/upcoming show â€” show countdown + trailer
+  // Scheduled/upcoming show — show countdown + trailer
   if (show.status === 'scheduled') {
     const target = show.scheduled_at ? new Date(show.scheduled_at) : null
     const diff = target ? target - now : 0
@@ -278,10 +278,10 @@ function LiveShow() {
     return (
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
         <div style={{ padding: '18px 16px' }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Feed</Link>
+          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
         <div style={{ textAlign: 'center', padding: '20px 20px 30px' }}>
-          <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>â³ UPCOMING LIVE</div>
+          <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>⏳ UPCOMING LIVE</div>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: '0 0 8px 0' }}>{show.title}</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', margin: '0 0 24px 0' }}>
             {target ? target.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
@@ -300,12 +300,12 @@ function LiveShow() {
           {/* Trailer */}
           {show.trailer_url && (
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>ðŸŽ¬ WATCH THE TRAILER</p>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>🎬 WATCH THE TRAILER</p>
               <video src={show.trailer_url} controls playsInline style={{ width: '100%', borderRadius: 14, display: 'block' }} />
             </div>
           )}
 
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime â€” a red LIVE badge will appear when we go live. ðŸ’š</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime — a red LIVE badge will appear when we go live. 💚</p>
         </div>
         <BottomNav />
       </div>
@@ -317,27 +317,27 @@ function LiveShow() {
       {/* Header */}
       <div style={{ background: theme.heroGradient, padding: '18px 16px 20px', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Feed</Link>
+          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
           {isLive ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#dc2626', padding: '4px 12px', borderRadius: 20 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />
               <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.05em' }}>LIVE</span>
             </div>
           ) : (
-            <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: 20 }}>â–¶ï¸ REPLAY</span>
+            <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: 20 }}>▶️ REPLAY</span>
           )}
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 4px 0', lineHeight: 1.2 }}>{show.title || 'CareFind Live'}</h1>
         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-          Hosted by {hostName()}{show.host?.is_verified && ' âœ“'}
-          {show.guest && ` Â· with ${show.guest.full_name || show.guest.display_name}`}
+          Hosted by {hostName()}{show.host?.is_verified && ' ✓'}
+          {show.guest && ` · with ${show.guest.full_name || show.guest.display_name}`}
         </p>
         {isLive && (
           <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-            <button onClick={() => openWho('likes')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>â¤ï¸ {statsLoaded ? formatCount(likeCount) : 'Â·'}</button>
-            <button onClick={() => openWho('views')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>ðŸ‘ {statsLoaded ? formatCount(viewCount) : 'Â·'}</button>
-            <button onClick={() => openWho('shares')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>ðŸ”— {statsLoaded ? formatCount(shareCount) : 'Â·'}</button>
-            <button onClick={() => openWho('gifts')} style={{ background: 'none', border: 'none', color: '#fde68a', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>ðŸŽ {statsLoaded ? formatCount(giftTotal) : 'Â·'}</button>
+            <button onClick={() => openWho('likes')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>❤️ {statsLoaded ? formatCount(likeCount) : '·'}</button>
+            <button onClick={() => openWho('views')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>👁 {statsLoaded ? formatCount(viewCount) : '·'}</button>
+            <button onClick={() => openWho('shares')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>🔗 {statsLoaded ? formatCount(shareCount) : '·'}</button>
+            <button onClick={() => openWho('gifts')} style={{ background: 'none', border: 'none', color: '#fde68a', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>🎁 {statsLoaded ? formatCount(giftTotal) : '·'}</button>
           </div>
         )}
       </div>
@@ -347,7 +347,7 @@ function LiveShow() {
         <div style={{ padding: '8px 16px', background: '#ecfdf5', borderBottom: `1px solid ${theme.border}`, overflowX: 'auto', whiteSpace: 'nowrap' }}>
           {activity.map((a, i) => (
             <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: theme.navy, marginRight: 14 }}>
-              {a.type === 'gift' ? 'ðŸŽ' : 'â¤ï¸'} <strong>{a.name}</strong> {a.type === 'gift' ? `gifted${a.amount ? ' ' + a.amount : ''}` : 'liked'}
+              {a.type === 'gift' ? '🎁' : '❤️'} <strong>{a.name}</strong> {a.type === 'gift' ? `gifted${a.amount ? ' ' + a.amount : ''}` : 'liked'}
             </span>
           ))}
         </div>
@@ -357,8 +357,8 @@ function LiveShow() {
       <div onClick={isLive ? tapAnywhere : undefined} style={{ padding: '16px 16px 8px', cursor: isLive ? 'pointer' : 'default' }}>
         {items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '30px 20px', color: theme.textLight }}>
-            <div style={{ fontSize: 30, marginBottom: 8 }}>ðŸ“¡</div>
-            <p style={{ fontSize: 13, margin: 0 }}>{isLive ? 'The show is startingâ€¦ stay tuned.' : 'This show has ended.'}</p>
+            <div style={{ fontSize: 30, marginBottom: 8 }}>📡</div>
+            <p style={{ fontSize: 13, margin: 0 }}>{isLive ? 'The show is starting… stay tuned.' : 'This show has ended.'}</p>
           </div>
         )}
         {items.map((it) => (
@@ -378,7 +378,7 @@ function LiveShow() {
                     return (
                       <div style={{ border: `2px solid ${theme.tealDeep}`, borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
                         <div style={{ background: theme.tealDeep, color: '#fff', padding: '5px 12px', fontSize: 11, fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
-                          <span>ðŸ“‘ SLIDE {num || '?'}{total ? ` / ${total}` : ''}</span>
+                          <span>📑 SLIDE {num || '?'}{total ? ` / ${total}` : ''}</span>
                         </div>
                         <img src={surl} alt={`Slide ${num}`} style={{ width: '100%', display: 'block' }} />
                       </div>
@@ -430,7 +430,7 @@ function LiveShow() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '8px 8px 4px', flexWrap: 'wrap' }}>
               {topGifters.map((g, i) => (
                 <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, background: '#fef9c3', padding: '2px 8px', borderRadius: 12 }}>
-                  {['ðŸ¥‡', 'ðŸ¥ˆ', 'ðŸ¥‰'][i]} {g.name} Â· {formatCount(g.total)}
+                  {['🥇', '🥈', '🥉'][i]} {g.name} · {formatCount(g.total)}
                 </span>
               ))}
             </div>
@@ -439,31 +439,31 @@ function LiveShow() {
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '4px 8px 10px' }}>
             <button onClick={tapLike} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>â¤ï¸</span>
+              <span style={{ fontSize: 22 }}>❤️</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Like</span>
             </button>
             {(show.host_id || show.guest_id) && (
               <button onClick={() => user ? setGifting(true) : (window.location.href = '/login')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                <span style={{ fontSize: 22 }}>ðŸŽ</span>
+                <span style={{ fontSize: 22 }}>🎁</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Gift</span>
               </button>
             )}
             <button onClick={shareLive} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>ðŸ”—</span>
+              <span style={{ fontSize: 22 }}>🔗</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Share</span>
             </button>
             <button onClick={repostLive} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>ðŸ”</span>
+              <span style={{ fontSize: 22 }}>🔁</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: reposted ? theme.tealDeep : theme.textMid }}>{reposted ? 'Reposted' : 'Repost'}</span>
             </button>
           </div>
-          <p style={{ margin: 0, textAlign: 'center', fontSize: 10, color: theme.textLight, paddingBottom: 8 }}>ðŸ’¡ Tap anywhere on the show above to send hearts</p>
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 10, color: theme.textLight, paddingBottom: 8 }}>💡 Tap anywhere on the show above to send hearts</p>
         </div>
       )}
 
       {/* Comments section */}
       <div style={{ borderTop: `8px solid ${theme.bg}`, marginTop: 12, padding: '14px 16px' }}>
-        <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>ðŸ’¬ Live comments ({visibleComments.length})</p>
+        <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>💬 Live comments ({visibleComments.length})</p>
 
         {isLive && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -471,7 +471,7 @@ function LiveShow() {
               value={commentDraft}
               onChange={(e) => setCommentDraft(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') postComment() }}
-              placeholder={user ? 'Add a live commentâ€¦' : 'Log in to comment'}
+              placeholder={user ? 'Add a live comment…' : 'Log in to comment'}
               disabled={!user}
               style={{ flex: 1, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }}
             />
@@ -488,7 +488,7 @@ function LiveShow() {
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 1px 0', fontSize: 12 }}>
                 <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                {c.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>âœ“</span>}
+                {c.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
                 <span style={{ color: theme.textLight, marginLeft: 6 }}>{timeAgo(c.created_at)}</span>
                 {c.hidden && <span style={{ color: theme.alert, marginLeft: 6, fontWeight: 700 }}>(hidden)</span>}
               </p>
@@ -509,9 +509,9 @@ function LiveShow() {
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '70vh', overflowY: 'auto', padding: 18, boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy, textTransform: 'capitalize' }}>
-                {whoOpen === 'likes' ? 'â¤ï¸ Likes' : whoOpen === 'gifts' ? 'ðŸŽ Gifters' : whoOpen === 'shares' ? 'ðŸ”— Shares' : 'ðŸ‘ Viewers'}
+                {whoOpen === 'likes' ? '❤️ Likes' : whoOpen === 'gifts' ? '🎁 Gifters' : whoOpen === 'shares' ? '🔗 Shares' : '👁 Viewers'}
               </h3>
-              <button onClick={() => setWhoOpen(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>âœ•</button>
+              <button onClick={() => setWhoOpen(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
             </div>
             {whoList.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No named {whoOpen} yet. (Guests who aren't logged in aren't listed.)</p>}
             {whoList.map((p, i) => (
@@ -520,9 +520,9 @@ function LiveShow() {
                   {(p.full_name?.[0] || p.display_name?.[0] || '?').toUpperCase()}
                 </div>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: theme.navy }}>
-                  {p.full_name || p.display_name || 'User'}{p.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>âœ“</span>}
+                  {p.full_name || p.display_name || 'User'}{p.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
                 </span>
-                {whoOpen === 'gifts' && p.amount != null && <span style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>ðŸŽ {p.amount}</span>}
+                {whoOpen === 'gifts' && p.amount != null && <span style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>🎁 {p.amount}</span>}
               </Link>
             ))}
           </div>
