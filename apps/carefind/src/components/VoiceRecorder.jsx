@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { supabase } from './config/supabaseClient'
-import { theme } from './styles/theme'
+import { supabase } from '../config/supabaseClient'
+import { theme } from '../styles/theme'
 
 // Tap to record, tap to stop, preview, then it hands the uploaded URL back via onRecorded.
 function VoiceRecorder({ showId, onRecorded, disabled, hq = false }) {

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { theme } from './styles/theme'
+import { theme } from '../styles/theme'
 
 // A finger/touch drawing canvas. Draw, pick colors, erase, clear.
 // Calls onSave with a PNG blob when the user saves.

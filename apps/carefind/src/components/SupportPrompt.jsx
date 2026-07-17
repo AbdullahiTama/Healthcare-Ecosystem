@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { theme } from './styles/theme'
+import { theme } from '../styles/theme'
 
 // A gentle, once-per-session bottom banner encouraging support/gifting.
 // Respectful: waits a bit before showing, easy to dismiss, never blocks content.

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { supabase } from './config/supabaseClient'
-import { theme } from './styles/theme'
+import { supabase } from '../config/supabaseClient'
+import { theme } from '../styles/theme'
 
 // Tap to record video from the camera, tap stop, preview, then post.
 // Uses MediaRecorder with camera + mic. Prefers mp4 for iOS playback.

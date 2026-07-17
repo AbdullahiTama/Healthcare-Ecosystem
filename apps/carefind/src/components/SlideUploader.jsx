@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { supabase } from './config/supabaseClient'
-import { theme } from './styles/theme'
+import { supabase } from '../config/supabaseClient'
+import { theme } from '../styles/theme'
 
 // Host uploads a PDF -> we render each page to an image via PDF.js (from CDN)
 // -> host posts each page as a numbered "slide" to the live show.

@@ -5,7 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
-import BottomNav from '../../BottomNav.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
 
 function DrugProfile() {
   const { name } = useParams()

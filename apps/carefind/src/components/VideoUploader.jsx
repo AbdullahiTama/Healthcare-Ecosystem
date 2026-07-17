@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { supabase } from './config/supabaseClient'
-import { theme } from './styles/theme'
+import { supabase } from '../config/supabaseClient'
+import { theme } from '../styles/theme'
 
 const MAX_MB = 50
 

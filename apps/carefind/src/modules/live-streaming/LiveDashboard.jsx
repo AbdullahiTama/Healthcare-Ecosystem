@@ -3,10 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
-import VoiceRecorder from '../../VoiceRecorder.jsx'
-import SlideUploader from '../../SlideUploader.jsx'
-import VideoUploader from '../../VideoUploader.jsx'
-import VideoRecorder from '../../VideoRecorder.jsx'
+import VoiceRecorder from '../../components/VoiceRecorder.jsx'
+import SlideUploader from '../../components/SlideUploader.jsx'
+import VideoUploader from '../../components/VideoUploader.jsx'
+import VideoRecorder from '../../components/VideoRecorder.jsx'
 
 function LiveDashboard() {
   const { id } = useParams()

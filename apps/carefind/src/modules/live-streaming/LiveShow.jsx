@@ -3,9 +3,9 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
-import BottomNav from '../../BottomNav.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
-import SupportPrompt from '../../SupportPrompt.jsx'
+import SupportPrompt from '../../components/SupportPrompt.jsx'
 
 function LiveShow() {
   const { id } = useParams()

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
-import BottomNav from '../../BottomNav.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',

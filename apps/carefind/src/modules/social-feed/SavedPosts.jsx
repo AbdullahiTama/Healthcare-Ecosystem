@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { renderArticleHtml } from '../news-publishing/articleFormat'
-import BottomNav from '../../BottomNav.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
 
 function SavedPosts() {
   const { user, loading: authLoading } = useAuth()
