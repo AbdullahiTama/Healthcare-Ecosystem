@@ -20,9 +20,9 @@ import ProfessionalDashboard from './ProfessionalDashboard.jsx'
 import DrugProfile from './modules/healthcare-discovery/DrugProfile.jsx'
 import Wallet from './modules/wallet-payments/Wallet.jsx'
 import ProfessionalMonetization from './modules/subscriptions-monetization/ProfessionalMonetization.jsx'
-import AdminLogin from './AdminLogin.jsx'
-import News from './News.jsx'
-import NewsArticle from './NewsArticle.jsx'
+import AdminLogin from './modules/admin/AdminLogin.jsx'
+import News from './modules/news-publishing/News.jsx'
+import NewsArticle from './modules/news-publishing/NewsArticle.jsx'
 import LiveSession from './modules/live-streaming/LiveSession.jsx'
 import Notifications from './Notifications.jsx'
 import LiveShow from './modules/live-streaming/LiveShow.jsx'
@@ -30,7 +30,7 @@ import PlaylistCreate from './modules/playlists/PlaylistCreate.jsx'
 import PlaylistView from './modules/playlists/PlaylistView.jsx'
 import LiveDashboard from './modules/live-streaming/LiveDashboard.jsx'
 
-const AdminPanel = lazy(() => import('./AdminPanel.jsx'))
+const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
 const Loading = () => (
   <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>

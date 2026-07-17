@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { theme } from './styles/theme'
-import { renderArticleHtml } from './lib/articleFormat'
+import { theme } from '../../styles/theme'
+import { renderArticleHtml } from './articleFormat'
 
 // ─────────────────────────────────────────────
 //  Drawing Canvas Block
