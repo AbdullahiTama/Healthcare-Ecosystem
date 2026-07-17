@@ -1,11 +1,11 @@
 ﻿import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
-import BottomNav from './BottomNav.jsx'
-import DrawingBoard from './DrawingBoard.jsx'
-import { RichTextInput } from './richText.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
+import BottomNav from '../../BottomNav.jsx'
+import DrawingBoard from '../../DrawingBoard.jsx'
+import { RichTextInput } from '../../richText.jsx'
 
 const VISUAL_THEMES = {
   teal: 'linear-gradient(135deg, #0d9488, #14b8a6)',

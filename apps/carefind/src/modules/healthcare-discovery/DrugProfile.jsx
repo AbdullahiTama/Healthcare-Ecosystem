@@ -1,11 +1,11 @@
 ﻿import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
-import { getSentimentSummary } from './lib/sentiment'
-import { analyzeReviews } from './lib/reviewAI'
-import BottomNav from './BottomNav.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
+import { getSentimentSummary } from '../../lib/sentiment'
+import { analyzeReviews } from '../../lib/reviewAI'
+import BottomNav from '../../BottomNav.jsx'
 
 function DrugProfile() {
   const { name } = useParams()

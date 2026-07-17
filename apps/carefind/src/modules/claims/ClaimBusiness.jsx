@@ -1,9 +1,9 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
-import BottomNav from './BottomNav.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
+import BottomNav from '../../BottomNav.jsx'
 
 function ClaimBusiness() {
   const { user, loading: authLoading } = useAuth()

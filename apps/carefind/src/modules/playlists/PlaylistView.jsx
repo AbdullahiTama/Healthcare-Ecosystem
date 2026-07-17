@@ -1,10 +1,10 @@
 ﻿import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { supabase } from './config/supabaseClient'
-import { useAuth } from './providers/AuthContext'
-import { theme } from './styles/theme'
-import BottomNav from './BottomNav.jsx'
-import { renderRichText } from './richText.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { theme } from '../../styles/theme'
+import BottomNav from '../../BottomNav.jsx'
+import { renderRichText } from '../../richText.jsx'
 
 // Watch a playlist: a list of parts, tap to view; an "Up next" prompt to continue.
 function PlaylistView() {
