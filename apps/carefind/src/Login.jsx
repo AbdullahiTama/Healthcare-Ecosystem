@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useAuth } from './lib/AuthContext'
+import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 
 function Login() {

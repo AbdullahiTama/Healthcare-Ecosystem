@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useRef } from 'react'
 import { supabase } from './config/supabaseClient'
-import { useAuth } from './lib/AuthContext'
+import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 
 // CareFind Stories â€” platform story first, then verified users, then by views.

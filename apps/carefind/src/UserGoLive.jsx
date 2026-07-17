@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
-import { useAuth } from './lib/AuthContext'
+import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 
 // Full user Go Live: go live now, invite co-hosts, or schedule an upcoming

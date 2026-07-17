@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from './config/supabaseClient.js'
-import { useAuth } from './lib/AuthContext.jsx'
+import { useAuth } from './providers/AuthContext.jsx'
 import { theme } from './styles/theme.js'
 import BottomNav from './BottomNav.jsx'
 

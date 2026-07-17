@@ -1,7 +1,7 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
-import { useAuth } from './lib/AuthContext'
+import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
 
 const GIFTS = [
