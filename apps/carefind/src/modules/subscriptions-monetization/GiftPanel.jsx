@@ -89,34 +89,21 @@ function GiftPanel({ postId, recipientId, onClose }) {
     }
     setSending(true)
 
-    const newBalance = (wallet?.balance || 0) - selected.coins
-    const recipientGain = Math.floor(selected.coins * 0.8) // 80% to recipient
-
-    await supabase.from('wallets').update({ balance: newBalance }).eq('user_id', user.id)
-
-    // Credit recipient
-    const { data: recipientWallet } = await supabase.from('wallets').select('balance').eq('user_id', recipientId).maybeSingle()
-    if (recipientWallet) {
-      await supabase.from('wallets').update({ balance: recipientWallet.balance + recipientGain }).eq('user_id', recipientId)
-    } else {
-      await supabase.from('wallets').insert({ user_id: recipientId, balance: recipientGain })
-    }
-
-    // Log gift
-    await supabase.from('gifts').insert({
-      sender_id: user.id,
-      recipient_id: recipientId,
-      post_id: postId,
-      gift_type: selected.name,
-      gift_emoji: selected.emoji,
-      coins: selected.coins,
+    const { data: result, error } = await supabase.rpc('send_gift', {
+      p_recipient: recipientId,
+      p_coins: selected.coins,
+      p_gift_type: selected.name,
+      p_gift_emoji: selected.emoji,
+      p_post_id: postId,
     })
 
-    // Log transactions
-    await supabase.from('transactions').insert({ user_id: user.id, type: 'gift_sent', amount: selected.coins, status: 'success' })
-    await supabase.from('transactions').insert({ user_id: recipientId, type: 'gift_received', amount: recipientGain, status: 'success' })
+    if (error || result !== 'ok') {
+      alert(result === 'insufficient' ? 'Not enough CareCoins! Top up your wallet first.' : 'Could not send gift: ' + (error?.message || result))
+      setSending(false)
+      return
+    }
 
-    setWallet((prev) => ({ ...prev, balance: newBalance }))
+    setWallet((prev) => ({ ...prev, balance: (prev?.balance || 0) - selected.coins }))
     setAnimation(selected)
     setSending(false)
   }

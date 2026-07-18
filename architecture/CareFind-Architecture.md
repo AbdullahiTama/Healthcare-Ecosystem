@@ -1,6 +1,6 @@
 # CareFind Architecture
 
-`apps/carefind/carefind-main` — Vite + React 18 + `react-router-dom` + Vercel serverless functions (`api/*.js`). No git repository of its own found within this workspace.
+`apps/carefind` — Vite + React 18 + `react-router-dom` + Vercel serverless functions (`api/*.js`). No git repository of its own found within this workspace.
 
 ## The central finding: implementation scope does not match documentation
 

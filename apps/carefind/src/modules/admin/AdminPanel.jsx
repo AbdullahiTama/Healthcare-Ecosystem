@@ -147,16 +147,16 @@ export default function AdminPanel() {
     const adminToken = localStorage.getItem('admin_token')
     const [usersRes, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('verification_requests').select('*').order('created_at', { ascending: false }),
-      supabase.from('business_claims').select('*, businesses(name)').order('created_at', { ascending: false }),
-      supabase.from('reports').select('*, posts(content)').order('created_at', { ascending: false }).limit(30),
-      supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50),
+      callAdminAuth('list_verification_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+      callAdminAuth('list_business_claims', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+      callAdminAuth('list_reports', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+      callAdminAuth('list_transactions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       supabase.from('tasks').select('*').order('created_at', { ascending: false }),
       callAdminAuth('list_teams', { token: adminToken }).then(r => ({ data: r.teams })).catch(() => ({ data: [] })),
       supabase.from('businesses').select('id, name, business_type, city, state, whatsapp, visible_on_carefind, created_at').order('created_at', { ascending: false }).limit(100),
       callAdminAuth('list_staff', { token: adminToken }).then(r => ({ data: r.staff })).catch(() => ({ data: [] })),
-      supabase.from('withdrawal_requests').select('*, profiles(full_name, display_name)').order('created_at', { ascending: false }),
-      supabase.from('task_submissions').select('*, tasks(title), profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(20),
+      callAdminAuth('list_withdrawal_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+      callAdminAuth('list_task_submissions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       supabase.from('consultations').select('*, profiles!consultations_patient_id_fkey(full_name, display_name)').eq('status', 'paid').order('created_at', { ascending: false }).limit(20),
     ])
     setVerifications(verifRes.data || [])
@@ -251,23 +251,18 @@ export default function AdminPanel() {
         trailerUrl = urlData.publicUrl
       }
     }
-    const { data: show, error } = await supabase.from('live_shows').insert({
-      title: liveTitle.trim(),
-      status: 'scheduled',
-      host_id: null,
-      is_platform: true,
-      scheduled_at: new Date(scheduledAt).toISOString(),
-      trailer_url: trailerUrl,
-    }).select().maybeSingle()
-    if (error || !show) { alert('Could not schedule: ' + (error?.message || 'unknown')); setCreatingShow(false); return }
-    // Invite guests as participants + notify
-    for (const g of liveGuests) {
-      await supabase.from('live_participants').insert({ show_id: show.id, user_id: g.id, role: 'guest' })
-      await supabase.from('notifications').insert({
-        recipient_id: g.id, type: 'live_invite',
-        message: `invited you to co-host an upcoming live: "${liveTitle.trim()}"`,
-        link: `/live-dashboard/${show.id}`,
+    try {
+      await callAdminAuth('schedule_show', {
+        token: localStorage.getItem('admin_token'),
+        title: liveTitle.trim(),
+        scheduledAt,
+        trailerUrl,
+        guestIds: liveGuests.map(g => g.id),
       })
+    } catch (err) {
+      alert('Could not schedule: ' + err.message)
+      setCreatingShow(false)
+      return
     }
     setLiveTitle(''); setScheduledAt(''); setTrailerFile(null); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
@@ -276,15 +271,23 @@ export default function AdminPanel() {
   }
 
   async function startScheduledShow(showId) {
-    await supabase.from('live_shows').update({ status: 'live', started_at: new Date().toISOString() }).eq('id', showId)
-    loadActiveShows()
-    alert('You are now LIVE!')
+    try {
+      await callAdminAuth('start_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
+      loadActiveShows()
+      alert('You are now LIVE!')
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function cancelScheduledShow(showId) {
     if (!window.confirm('Cancel this scheduled show?')) return
-    await supabase.from('live_shows').update({ status: 'ended' }).eq('id', showId)
-    loadActiveShows()
+    try {
+      await callAdminAuth('cancel_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
+      loadActiveShows()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   function toggleGuest(u) {
@@ -295,23 +298,16 @@ export default function AdminPanel() {
     if (!liveTitle.trim()) { alert('Add a show title'); return }
     setCreatingShow(true)
     // Admin login isn't a profile row, so host_id stays null and we mark it a platform show.
-    const { data: show, error } = await supabase.from('live_shows').insert({
-      title: liveTitle.trim(),
-      status: 'live',
-      host_id: null,
-      is_platform: true,
-    }).select().maybeSingle()
-    if (error || !show) { alert('Could not start show: ' + (error?.message || 'unknown')); setCreatingShow(false); return }
-
-    // Add guests as participants + notify them (they ARE real profiles)
-    for (const g of liveGuests) {
-      await supabase.from('live_participants').insert({ show_id: show.id, user_id: g.id, role: 'guest' })
-      await supabase.from('notifications').insert({
-        recipient_id: g.id,
-        type: 'live_invite',
-        message: `invited you to co-host a live show: "${liveTitle.trim()}"`,
-        link: `/live-dashboard/${show.id}`,
+    try {
+      await callAdminAuth('start_live_show', {
+        token: localStorage.getItem('admin_token'),
+        title: liveTitle.trim(),
+        guestIds: liveGuests.map(g => g.id),
       })
+    } catch (err) {
+      alert('Could not start show: ' + err.message)
+      setCreatingShow(false)
+      return
     }
     setLiveTitle(''); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
@@ -321,8 +317,12 @@ export default function AdminPanel() {
 
   async function endLiveShow(showId) {
     if (!window.confirm('End this live show?')) return
-    await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', showId)
-    loadActiveShows()
+    try {
+      await callAdminAuth('end_live_show', { token: localStorage.getItem('admin_token'), showId })
+      loadActiveShows()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function loadLiveControl(showId) {
@@ -347,18 +347,19 @@ export default function AdminPanel() {
   async function postLiveItem(showId) {
     if (!liveDraft.trim() && !liveImage) return
     setPostingLive(true)
+    const token = localStorage.getItem('admin_token')
     if (liveImage) {
       const ext = liveImage.name.split('.').pop()
       const path = `live-${showId}-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage.from('live-media').upload(path, liveImage)
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
-        await supabase.from('live_items').insert({ show_id: showId, sender_id: null, kind: 'image', content: urlData.publicUrl })
+        await callAdminAuth('post_live_item', { token, showId, kind: 'image', content: urlData.publicUrl }).catch(err => alert('Error: ' + err.message))
       }
       setLiveImage(null)
     }
     if (liveDraft.trim()) {
-      await supabase.from('live_items').insert({ show_id: showId, sender_id: null, kind: 'text', content: liveDraft.trim() })
+      await callAdminAuth('post_live_item', { token, showId, kind: 'text', content: liveDraft.trim() }).catch(err => alert('Error: ' + err.message))
       setLiveDraft('')
     }
     setPostingLive(false)
@@ -366,28 +367,36 @@ export default function AdminPanel() {
   }
 
   async function hideLiveComment(cid, showId) {
-    await supabase.from('live_comments').update({ hidden: true }).eq('id', cid)
-    loadLiveControl(showId)
+    try {
+      await callAdminAuth('hide_live_comment', { token: localStorage.getItem('admin_token'), id: cid })
+      loadLiveControl(showId)
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function postLiveVoice(showId, url) {
-    await supabase.from('live_items').insert({ show_id: showId, sender_id: null, kind: 'voice', content: url })
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => alert('Error: ' + err.message))
     loadLiveControl(showId)
   }
 
   async function postLiveSlide(showId, url, num, total) {
-    await supabase.from('live_items').insert({ show_id: showId, sender_id: null, kind: 'slide', content: `${url}|||${num}|||${total}` })
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => alert('Error: ' + err.message))
     loadLiveControl(showId)
   }
 
   async function postLiveVideo(showId, url) {
-    await supabase.from('live_items').insert({ show_id: showId, sender_id: null, kind: 'video', content: url })
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => alert('Error: ' + err.message))
     loadLiveControl(showId)
   }
 
   async function loadSearchLogs() {
-    const { data } = await supabase.from('search_logs').select('id, query, category, results_count, found, user_id, created_at, profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(300)
-    setSearchLogs(data || [])
+    try {
+      const { data } = await callAdminAuth('list_search_logs', { token: localStorage.getItem('admin_token') })
+      setSearchLogs(data || [])
+    } catch {
+      setSearchLogs([])
+    }
   }
 
   async function loadPromotions() {
@@ -408,26 +417,30 @@ export default function AdminPanel() {
         imageUrl = urlData.publicUrl
       }
     }
-    const expiresAt = new Date(Date.now() + parseInt(promoDays) * 86400000).toISOString()
-    const { error } = await supabase.from('promotions').insert({
-      title: promoTitle.trim(),
-      link_url: promoLink.trim() || null,
-      image_url: imageUrl,
-      expires_at: expiresAt,
-    })
-    if (!error) {
+    try {
+      await callAdminAuth('create_promotion', {
+        token: localStorage.getItem('admin_token'),
+        title: promoTitle.trim(),
+        linkUrl: promoLink.trim() || null,
+        imageUrl,
+        days: promoDays,
+      })
       setPromoTitle(''); setPromoLink(''); setPromoDays('7'); setPromoImage(null)
       loadPromotions()
-    } else {
-      alert('Error: ' + error.message)
+    } catch (err) {
+      alert('Error: ' + err.message)
     }
     setSavingPromo(false)
   }
 
   async function deletePromotion(id) {
     if (!window.confirm('Delete this promotion?')) return
-    await supabase.from('promotions').delete().eq('id', id)
-    loadPromotions()
+    try {
+      await callAdminAuth('delete_promotion', { token: localStorage.getItem('admin_token'), id })
+      loadPromotions()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function viewUserDetails(u) {
@@ -442,47 +455,48 @@ export default function AdminPanel() {
   }
 
   async function loadNews() {
-    const { data } = await supabase
-      .from('news')
-      .select('*, profiles(full_name, display_name)')
-      .order('created_at', { ascending: false })
-      .limit(60)
-    setNewsItems(data || [])
-    // Build phone lookup for submitters from verification_requests
-    const authorIds = [...new Set((data || []).map(n => n.author_id).filter(Boolean))]
-    if (authorIds.length) {
-      const { data: verifs } = await supabase.from('verification_requests').select('user_id, phone').in('user_id', authorIds)
-      const pm = {}
-      ;(verifs || []).forEach(v => { if (v.user_id && v.phone) pm[v.user_id] = v.phone })
-      setNewsPhones(pm)
+    try {
+      const { data, phones } = await callAdminAuth('list_news', { token: localStorage.getItem('admin_token') })
+      setNewsItems(data || [])
+      setNewsPhones(phones || {})
+    } catch {
+      setNewsItems([])
     }
   }
 
   async function approveNews(item) {
     setSavingNews(true)
-    const payload = editingNews && editingNews.id === item.id
+    const edits = editingNews && editingNews.id === item.id
       ? { headline: editingNews.headline, subtitle: editingNews.subtitle, body: editingNews.body }
       : {}
-    await supabase.from('news').update({
-      ...payload,
-      status: 'approved',
-      published_at: new Date().toISOString(),
-    }).eq('id', item.id)
+    try {
+      await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
     setEditingNews(null)
     setSavingNews(false)
     loadNews()
   }
 
   async function rejectNews(id) {
-    await supabase.from('news').update({ status: 'rejected' }).eq('id', id)
+    try {
+      await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
     setEditingNews(null)
     loadNews()
   }
 
   async function deleteNews(id) {
     if (!window.confirm('Permanently delete this news item?')) return
-    await supabase.from('news').delete().eq('id', id)
-    loadNews()
+    try {
+      await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
+      loadNews()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function createStory() {
@@ -498,28 +512,30 @@ export default function AdminPanel() {
         imageUrl = urlData.publicUrl
       }
     }
-    const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
-    const { error } = await supabase.from('stories').insert({
-      title: storyTitle.trim() || null,
-      body: storyBody.trim() || null,
-      image_url: imageUrl,
-      bg_color: storyBg,
-      is_platform: true,
-      expires_at: expiresAt,
-    })
-    if (!error) {
+    try {
+      await callAdminAuth('create_story', {
+        token: localStorage.getItem('admin_token'),
+        title: storyTitle.trim() || null,
+        body: storyBody.trim() || null,
+        imageUrl,
+        bgColor: storyBg,
+      })
       setStoryTitle(''); setStoryBody(''); setStoryBg('#0f766e'); setStoryImageFile(null)
       loadStories()
-    } else {
-      alert('Error: ' + error.message)
+    } catch (err) {
+      alert('Error: ' + err.message)
     }
     setSavingStory(false)
   }
 
   async function deleteStory(id) {
     if (!window.confirm('Delete this story?')) return
-    await supabase.from('stories').delete().eq('id', id)
-    loadStories()
+    try {
+      await callAdminAuth('delete_story', { token: localStorage.getItem('admin_token'), id })
+      loadStories()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function viewPostDetails(p) {
@@ -532,38 +548,45 @@ export default function AdminPanel() {
   }
 
   async function suspendUser(userId, days) {
-    const suspendedUntil = new Date(Date.now() + parseInt(days) * 86400000).toISOString()
-    await supabase.from('profiles').update({ suspended_until: suspendedUntil, is_verified: false }).eq('id', userId)
-    setSelectedUser(null)
-    loadAll()
-    alert(`User suspended for ${days} days`)
+    try {
+      await callAdminAuth('suspend_user', { token: localStorage.getItem('admin_token'), userId, days })
+      setSelectedUser(null)
+      loadAll()
+      alert(`User suspended for ${days} days`)
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function deleteUser(userId) {
     if (!window.confirm('Permanently delete this user and all their content? This CANNOT be undone.')) return
     setDeletingUser(true)
-    // Delete user's posts, comments, reactions
-    await supabase.from('post_reactions').delete().eq('user_id', userId)
-    await supabase.from('post_comments').delete().eq('user_id', userId)
-    await supabase.from('saved_posts').delete().eq('user_id', userId)
-    await supabase.from('follows').delete().eq('follower_id', userId)
-    await supabase.from('follows').delete().eq('following_id', userId)
-    await supabase.from('posts').delete().eq('user_id', userId)
-    await supabase.from('profiles').delete().eq('id', userId)
+    try {
+      await callAdminAuth('delete_user', { token: localStorage.getItem('admin_token'), userId })
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
     setSelectedUser(null)
     setDeletingUser(false)
     loadAll()
   }
 
   async function approveVerif(id, userId, profession) {
-    await supabase.from('verification_requests').update({ status: 'approved' }).eq('id', id)
-    await supabase.from('profiles').update({ is_verified: true, verification_label: profession, specialty: profession }).eq('id', userId)
-    loadAll()
+    try {
+      await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
+      loadAll()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function rejectVerif(id) {
-    await supabase.from('verification_requests').update({ status: 'rejected' }).eq('id', id)
-    loadAll()
+    try {
+      await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
+      loadAll()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function approveClaim(id, businessId) {
@@ -586,21 +609,33 @@ export default function AdminPanel() {
 
   async function deletePost(id) {
     if (!window.confirm('Delete this post?')) return
-    await supabase.from('posts').delete().eq('id', id)
-    loadAll()
+    try {
+      await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
+      loadAll()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function resolveReport(id) {
-    await supabase.from('reports').update({ status: 'resolved' }).eq('id', id)
-    loadAll()
+    try {
+      await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
+      loadAll()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function manualVerify(userId, specialty) {
     if (!specialty) return
-    await supabase.from('profiles').update({ is_verified: true, verification_label: specialty, specialty }).eq('id', userId)
-    setVerifyingUser(null)
-    setVerifySpecialty('')
-    loadAll()
+    try {
+      await callAdminAuth('manual_verify', { token: localStorage.getItem('admin_token'), userId, specialty })
+      setVerifyingUser(null)
+      setVerifySpecialty('')
+      loadAll()
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
   }
 
   async function searchDrugs() {
@@ -615,8 +650,12 @@ export default function AdminPanel() {
   async function createTask() {
     if (!taskTitle || !taskDesc || !taskComp) return
     setSavingTask(true)
-    await supabase.from('tasks').insert({ title: taskTitle, description: taskDesc, compensation: parseInt(taskComp), specialty: taskSpec || null })
-    setTaskTitle(''); setTaskDesc(''); setTaskComp(''); setTaskSpec('')
+    try {
+      await callAdminAuth('create_task', { token: localStorage.getItem('admin_token'), title: taskTitle, description: taskDesc, compensation: taskComp, specialty: taskSpec || null })
+      setTaskTitle(''); setTaskDesc(''); setTaskComp(''); setTaskSpec('')
+    } catch (err) {
+      alert('Error: ' + err.message)
+    }
     setSavingTask(false); loadAll()
   }
 
@@ -1315,8 +1354,8 @@ export default function AdminPanel() {
                 </div>
                 {w.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'approved' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={async () => { await supabase.from('withdrawal_requests').update({ status: 'rejected' }).eq('id', w.id); loadAll() }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={async () => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll() } catch (err) { alert('Error: ' + err.message) } }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
+                    <button onClick={async () => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll() } catch (err) { alert('Error: ' + err.message) } }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
                   </div>
                 )}
               </div>

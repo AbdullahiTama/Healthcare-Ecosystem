@@ -298,50 +298,18 @@ export default function LiveSession() {
   async function sendGift(gift) {
     if (!user || wallet < gift.coins) { alert('Not enough CareCoins'); return }
 
-    const earned = Math.floor(gift.coins * 0.8) // host gets 80%
-    const platform = gift.coins - earned         // platform keeps 20%
+    const { data: result, error } = await supabase.rpc('send_gift', {
+      p_recipient: session.host_id,
+      p_coins: gift.coins,
+      p_gift_type: gift.label,
+      p_gift_emoji: gift.emoji,
+      p_live_session_id: id,
+    })
 
-    // 1. Deduct from sender wallet
-    await supabase.from('wallets').update({ balance: wallet - gift.coins }).eq('user_id', user.id)
-
-    // 2. Credit host wallet
-    const { data: hostWallet } = await supabase.from('wallets').select('balance').eq('user_id', session.host_id).maybeSingle()
-    if (hostWallet) {
-      await supabase.from('wallets').update({ balance: hostWallet.balance + earned }).eq('user_id', session.host_id)
-    } else {
-      await supabase.from('wallets').insert({ user_id: session.host_id, balance: earned })
+    if (error || result !== 'ok') {
+      alert(result === 'insufficient' ? 'Not enough CareCoins' : 'Could not send gift: ' + (error?.message || result))
+      return
     }
-
-    // 3. Permanently record gift (never deleted)
-    await supabase.from('gifts').insert({
-      sender_id: user.id,
-      recipient_id: session.host_id,
-      post_id: null,
-      gift_type: gift.label,
-      gift_emoji: gift.emoji,
-      coins: gift.coins,
-      live_session_id: id,
-    })
-
-    // 4. Log sender transaction
-    await supabase.from('transactions').insert({
-      user_id: user.id,
-      type: 'gift_sent',
-      amount: gift.coins,
-      recipient_id: session.host_id,
-      reference: `live_${id}_${Date.now()}`,
-      status: 'success',
-    })
-
-    // 5. Log host earnings transaction
-    await supabase.from('transactions').insert({
-      user_id: session.host_id,
-      type: 'gift_received',
-      amount: earned,
-      recipient_id: session.host_id,
-      reference: `live_${id}_${Date.now()}`,
-      status: 'success',
-    })
 
     setWallet(w => w - gift.coins)
 
