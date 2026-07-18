@@ -14,7 +14,7 @@ const DARK = `linear-gradient(135deg, ${navy}, ${navySoft})`
 
 // ── BADGE / PILL ─────────────────────────────────────────────────────────────
 // Always paired with text — never a bare color dot (ACCESSIBILITY.md).
-export function Pill({ label, type = 'gray' }) {
+export function Pill({ label, type = 'gray', style = {} }) {
   const map = {
     gray: { bg: theme.gray100, color: theme.gray600 },
     green: { bg: theme.successBg, color: theme.success },
@@ -26,7 +26,7 @@ export function Pill({ label, type = 'gray' }) {
   }
   const s = map[type] || map.gray
   return (
-    <span style={{ padding: '3px 10px', borderRadius: theme.radius.full, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>
+    <span style={{ padding: '3px 10px', borderRadius: theme.radius.full, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, whiteSpace: 'nowrap', ...style }}>
       {label}
     </span>
   )
@@ -128,9 +128,17 @@ export function SectionHead({ title, sub, btn, onBtn }) {
 }
 
 // ── AVATAR ───────────────────────────────────────────────────────────────────
-export function Avatar({ name, size = 32, bg = tealGradient }) {
+// `src`: a real profile photo, when one exists — falls back to an initial on
+// a colored background otherwise. Every avatar in the product should use
+// this, not a hand-built circle, so the fallback treatment stays consistent.
+export function Avatar({ name, size = 32, bg = tealGradient, src, style = {} }) {
+  if (src) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: theme.radius.full, backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center', flexShrink: 0, ...style }} role="img" aria-label={name || 'Profile photo'} />
+    )
+  }
   return (
-    <div style={{ width: size, height: size, borderRadius: theme.radius.full, background: bg, color: 'white', fontWeight: 900, fontSize: size * 0.38, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div style={{ width: size, height: size, borderRadius: theme.radius.full, background: bg, color: 'white', fontWeight: 900, fontSize: size * 0.38, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, ...style }}>
       {(name || '?')[0].toUpperCase()}
     </div>
   )

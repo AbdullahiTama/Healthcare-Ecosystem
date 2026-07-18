@@ -21,6 +21,7 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import { useRef } from 'react'
+import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 
 function Feed() {
   const { user } = useAuth()
@@ -79,6 +80,8 @@ function Feed() {
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showGoLive, setShowGoLive] = useState(false)
   const [liveSessions, setLiveSessions] = useState([])
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const toast = useToast()
 
   const POST_KIND = {
     question: 'Question',
@@ -302,7 +305,7 @@ function Feed() {
     const file = e.target.files[0]
     if (!file) return
     if (file.size > 12 * 1024 * 1024) {
-      alert('That clip is too large. Please choose one under 12MB (about 15 seconds).')
+      toast.show('That clip is too large. Please choose one under 12MB (about 15 seconds).')
       return
     }
     setUploadingVideo(true)
@@ -313,7 +316,7 @@ function Feed() {
       .upload(path, file, { contentType: file.type || 'video/mp4' })
     if (upErr) {
       setUploadingVideo(false)
-      alert('Could not upload the clip: ' + upErr.message)
+      toast.show('Could not upload the clip: ' + upErr.message)
       return
     }
     const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
@@ -352,7 +355,7 @@ function Feed() {
           })
           const result = await shareOrDownload(blob, `carefind-card.${ext}`)
           setSharingId(null)
-          if (result === 'downloaded') alert('Saved with your voice — post it to your WhatsApp Status.')
+          if (result === 'downloaded') toast.show('Saved with your voice — post it to your WhatsApp Status.')
           return
         } catch (e) {
           // Video failed on this device — fall through to the image so the user still gets something
@@ -364,13 +367,13 @@ function Feed() {
       const result = await shareOrDownload(blob, 'carefind-card.png')
       setSharingId(null)
       if (result === 'downloaded') {
-        alert(post.audio_url
+        toast.show(post.audio_url
           ? "Saved as an image. This phone can't build the video — the voice still plays inside CareFind."
           : 'Saved — post it to your WhatsApp Status.')
       }
     } catch (e) {
       setSharingId(null)
-      alert('Could not prepare the card: ' + (e.message || 'unknown error'))
+      toast.show('Could not prepare the card: ' + (e.message || 'unknown error'))
     }
   }
 
@@ -448,7 +451,7 @@ function Feed() {
       if (uploadError) {
         // Never post silently without the photo the user chose.
         setPosting(false)
-        alert('Could not upload the photo: ' + uploadError.message)
+        toast.show('Could not upload the photo: ' + uploadError.message)
         return
       }
 
@@ -457,7 +460,7 @@ function Feed() {
     }
 
     if (screenContent(content.trim())) {
-      alert('Your post was flagged for review. Please remove any spam-like content and try again.')
+      toast.show('Your post was flagged for review. Please remove any spam-like content and try again.')
       setPosting(false)
       return
     }
@@ -521,7 +524,7 @@ function Feed() {
     } else {
       console.error('Post error:', error)
       // Surface it — a silent failure just looks like a broken button on a phone.
-      alert('Could not post: ' + (error.message || 'unknown error'))
+      toast.show('Could not post: ' + (error.message || 'unknown error'))
     }
     setPosting(false)
   }
@@ -574,7 +577,6 @@ function Feed() {
   }
 
   async function handleDeletePost(postId) {
-    if (!window.confirm('Delete this post? This cannot be undone.')) return
     setDeletingId(postId)
     await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
     loadFeed()
@@ -785,14 +787,7 @@ function Feed() {
           </Link>
 
           <Link to={user ? '/profile' : '/login'} style={{ textDecoration: 'none' }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: '50%',
-              background: myAvatar ? `url(${myAvatar}) center/cover` : theme.tealGradient,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontWeight: 800, fontSize: 13, border: '2px solid rgba(255,255,255,0.28)',
-            }}>
-              {!myAvatar && (myUsername ? myUsername[0].toUpperCase() : '?')}
-            </div>
+            <Avatar name={myUsername} src={myAvatar} size={34} style={{ border: '2px solid rgba(255,255,255,0.28)' }} />
           </Link>
         </div>
 
@@ -922,7 +917,7 @@ function Feed() {
       {user ? (
         <form ref={composerRef} id="post-composer" onSubmit={handlePost} style={{
           marginTop: 18, marginBottom: 16, background: theme.cardBg, border: `1px solid ${theme.border}`,
-          borderRadius: 18, padding: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          borderRadius: theme.radius.lg, padding: theme.space[8], boxShadow: theme.elevation[1],
         }}>
           {(() => {
             const idn = getActiveIdentity()
@@ -1263,16 +1258,9 @@ function Feed() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={posting || !content.trim() || uploadingImage}
-            style={{
-              marginTop: 12, padding: '10px 20px', background: theme.tealGradient, color: '#fff', border: 'none',
-              borderRadius: 12, fontWeight: 800, fontSize: 13, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
-            }}
-          >
+          <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ marginTop: 12 }}>
             {posting ? (uploadingImage ? 'Uploading photo...' : 'Posting...') : 'Post'}
-          </button>
+          </TealBtn>
         </form>
       ) : (
         <p style={{ color: '#666', fontSize: 14, marginBottom: 20 }}>
@@ -1280,24 +1268,29 @@ function Feed() {
         </p>
       )}
 
-      {loading && <p>Loading feed...</p>}
-      {!loading && feedTab !== 'series' && visiblePosts.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
-          }}>
-            🌱
-          </div>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>
-            {feedTab === 'following' ? 'Nothing from people you follow' : 'Nothing here yet'}
-          </h3>
-          <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>
-            {feedTab === 'foryou' ? 'Be the first to share something with the community'
-              : feedTab === 'following' ? 'Follow a few people and their posts land here'
-              : 'Tap + to make the first one'}
-          </p>
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
         </div>
+      )}
+      {!loading && feedTab !== 'series' && visiblePosts.length === 0 && (
+        <Empty
+          icon="🌱"
+          message={
+            <>
+              <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
+                {feedTab === 'following' ? 'Nothing from people you follow' : 'Nothing here yet'}
+              </div>
+              <div style={{ fontSize: 13, color: theme.textLight }}>
+                {feedTab === 'foryou' ? 'Be the first to share something with the community'
+                  : feedTab === 'following' ? 'Follow a few people and their posts land here'
+                  : 'Tap + to make the first one'}
+              </div>
+            </>
+          }
+        />
       )}
 
       {feedTab === 'series' && (
@@ -1333,10 +1326,7 @@ function Feed() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {feedTab !== 'series' && visiblePosts.map((post) => (
-          <div key={post.id} style={{
-            border: `1px solid ${theme.border}`, borderRadius: 18, padding: post.post_type === 'visual' ? 0 : 16,
-            overflow: 'hidden', background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-          }}>
+          <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: post.post_type === 'visual' ? '12px 14px 0 14px' : 0, marginBottom: post.post_type === 'visual' ? 0 : 8 }}>
               <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
                 <div style={{ position: 'relative', flexShrink: 0, marginBottom: user && post.user_id !== user.id ? 4 : 0 }}>
@@ -1417,24 +1407,12 @@ function Feed() {
               </Link>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {post.post_type !== 'text' && post.post_type !== 'visual' && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20,
-                    textTransform: 'uppercase', letterSpacing: '0.03em',
-                    background: post.post_type === 'question' ? '#fef3c7' : post.post_type === 'review' ? '#fef9c3' : '#e0f2fe',
-                    color: post.post_type === 'question' ? theme.warning : post.post_type === 'review' ? '#a16207' : '#0369a1',
-                  }}>
-                    {post.post_type}
-                  </span>
+                  <Pill
+                    label={post.post_type}
+                    type={post.post_type === 'question' ? 'amber' : post.post_type === 'review' ? 'purple' : 'blue'}
+                  />
                 )}
-                {POST_KIND[post.post_type] && (
-                  <span style={{
-                    marginLeft: 'auto', fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: theme.tealDeep, background: '#ECFDF5',
-                    padding: '3px 8px', borderRadius: 7, flexShrink: 0,
-                  }}>
-                    {POST_KIND[post.post_type]}
-                  </span>
-                )}
+                {POST_KIND[post.post_type] && <Pill label={POST_KIND[post.post_type]} type="teal" style={{ marginLeft: 'auto', flexShrink: 0 }} />}
                 {user && post.user_id === user.id && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
@@ -1444,7 +1422,7 @@ function Feed() {
                       ✏️
                     </button>
                     <button
-                      onClick={() => handleDeletePost(post.id)}
+                      onClick={() => setConfirmDeleteId(post.id)}
                       disabled={deletingId === post.id}
                       style={{ background: 'none', border: 'none', fontSize: 12, color: theme.alert, cursor: 'pointer', padding: '2px 6px' }}
                     >
@@ -1465,8 +1443,8 @@ function Feed() {
                   style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: 12, fontFamily: 'inherit' }}
                 />
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1, padding: '8px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Save</button>
-                  <button onClick={() => setEditingPost(null)} style={{ flex: 1, padding: '8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Cancel</button>
+                  <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
+                  <GhostBtn onClick={() => setEditingPost(null)} style={{ flex: 1 }}>Cancel</GhostBtn>
                 </div>
               </div>
             )}
@@ -1647,14 +1625,7 @@ function Feed() {
                 {(comments[post.id] || []).map((c) => (
                   <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
                     <Link to={`/u/${c.user_id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
-                      <div style={{
-                        width: 30, height: 30, borderRadius: '50%',
-                        background: theme.tealGradient,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 11, fontWeight: 800,
-                      }}>
-                        {(c.profiles?.full_name || c.profiles?.display_name || '?')[0]?.toUpperCase()}
-                      </div>
+                      <Avatar name={c.profiles?.full_name || c.profiles?.display_name} src={c.profiles?.avatar_url} size={30} />
                     </Link>
                     <div style={{ flex: 1, background: theme.bg, borderRadius: 12, padding: '8px 10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -1696,12 +1667,7 @@ function Feed() {
 
                 {user ? (
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                    <div style={{
-                      width: 28, height: 28, borderRadius: '50%', background: theme.tealGradient,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, fontWeight: 800, flexShrink: 0,
-                    }}>
-                      {user.email?.[0]?.toUpperCase()}
-                    </div>
+                    <Avatar name={myUsername || user.email} src={myAvatar} size={28} />
                     <input
                       type="text"
                       value={commentDrafts[post.id] || ''}
@@ -1710,12 +1676,9 @@ function Feed() {
                       placeholder="Add a comment..."
                       style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, outline: 'none' }}
                     />
-                    <button
-                      onClick={() => handleAddComment(post.id)}
-                      style={{ padding: '7px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700 }}
-                    >
+                    <TealBtn onClick={() => handleAddComment(post.id)} style={{ padding: '10px 16px', borderRadius: 20, fontSize: 12 }}>
                       Post
-                    </button>
+                    </TealBtn>
                   </div>
                 ) : (
                   <p style={{ fontSize: 13, color: theme.textLight }}>
@@ -1724,72 +1687,53 @@ function Feed() {
                 )}
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
-      {createOpen && (
-        <div
-          onClick={() => setCreateOpen(false)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff', borderRadius: '22px 22px 0 0', width: '100%', maxWidth: 480,
-              padding: '16px 16px 20px', boxSizing: 'border-box',
-            }}
-          >
-            <div style={{ width: 38, height: 4, borderRadius: 2, background: theme.border, margin: '0 auto 14px' }} />
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 900, color: theme.navy }}>Create</h3>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
-              {CREATE_OPTIONS.map((opt) => {
-                const locked = opt.pro && !canGoLive
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => {
-                      setCreateOpen(false)
-                      if (locked) { navigate('/verify'); return }
-                      opt.run()
-                    }}
-                    style={{
-                      position: 'relative', border: `1px solid ${opt.danger ? '#FCA5A5' : theme.border}`,
-                      borderRadius: 14, padding: '13px 6px 10px', textAlign: 'center',
-                      background: opt.danger ? '#FEF2F2' : '#fff',
-                      opacity: locked ? 0.55 : 1, cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{ display: 'block', fontSize: 21, marginBottom: 6 }}>{opt.icon}</span>
-                    <span style={{
-                      fontSize: 10.5, fontWeight: opt.danger ? 900 : 700,
-                      color: opt.danger ? theme.alert : theme.textMid,
-                    }}>{opt.label}</span>
-                    {opt.pro && (
-                      <span style={{
-                        position: 'absolute', top: 7, right: 8, fontSize: 9,
-                        fontWeight: 900, color: theme.tealDeep,
-                      }}>✓</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-
-            {!canGoLive && (
-              <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
-                ✓ Verified only ·{' '}
-                <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
-                  Get verified
-                </Link>
-              </p>
-            )}
-          </div>
+      <Modal show={createOpen} onClose={() => setCreateOpen(false)} title="Create" sheet>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
+          {CREATE_OPTIONS.map((opt) => {
+            const locked = opt.pro && !canGoLive
+            return (
+              <button
+                key={opt.key}
+                onClick={() => {
+                  setCreateOpen(false)
+                  if (locked) { navigate('/verify'); return }
+                  opt.run()
+                }}
+                style={{
+                  position: 'relative', border: `1px solid ${opt.danger ? '#FCA5A5' : theme.border}`,
+                  borderRadius: 14, padding: '13px 6px 10px', textAlign: 'center',
+                  background: opt.danger ? '#FEF2F2' : '#fff',
+                  opacity: locked ? 0.55 : 1, cursor: 'pointer',
+                }}
+              >
+                <span style={{ display: 'block', fontSize: 21, marginBottom: 6 }}>{opt.icon}</span>
+                <span style={{
+                  fontSize: 10.5, fontWeight: opt.danger ? 900 : 700,
+                  color: opt.danger ? theme.alert : theme.textMid,
+                }}>{opt.label}</span>
+                {opt.pro && (
+                  <span style={{
+                    position: 'absolute', top: 7, right: 8, fontSize: 9,
+                    fontWeight: 900, color: theme.tealDeep,
+                  }}>✓</span>
+                )}
+              </button>
+            )
+          })}
         </div>
-      )}
+
+        {!canGoLive && (
+          <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
+            ✓ Verified only ·{' '}
+            <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
+              Get verified
+            </Link>
+          </p>
+        )}
+      </Modal>
 
       {showDraw && (
         <DrawingBoard
@@ -1816,6 +1760,17 @@ function Feed() {
           onClose={() => setGiftingPost(null)}
         />
       )}
+
+      <ConfirmDialog
+        show={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        title="Delete this post?"
+        consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
+        confirmLabel="Delete"
+      />
+
+      <Toast msg={toast.msg} />
     </div>
   )
 }
