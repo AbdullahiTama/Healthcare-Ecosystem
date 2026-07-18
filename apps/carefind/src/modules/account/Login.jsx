@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Card, Inp, TealBtn } from '../../components/ui'
 
 function Login() {
   const [authMethod, setAuthMethod] = useState('email')
@@ -47,12 +48,12 @@ function Login() {
       </div>
 
       <div style={{ padding: '0 20px', marginTop: -28 }}>
-        <div style={{ background: theme.cardBg, borderRadius: 20, padding: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+        <Card style={{ borderRadius: theme.radius.xl, padding: theme.space[9], boxShadow: theme.elevation[2], border: 'none' }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
             <button
               onClick={() => setAuthMethod('email')}
               style={{
-                flex: 1, padding: 9, borderRadius: 12, border: authMethod === 'email' ? 'none' : `1px solid ${theme.border}`,
+                flex: 1, minHeight: 44, padding: 9, borderRadius: 12, border: authMethod === 'email' ? 'none' : `1px solid ${theme.border}`,
                 background: authMethod === 'email' ? theme.tealGradient : theme.bg,
                 color: authMethod === 'email' ? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13,
               }}
@@ -62,7 +63,7 @@ function Login() {
             <button
               onClick={() => setAuthMethod('phone')}
               style={{
-                flex: 1, padding: 9, borderRadius: 12, border: authMethod === 'phone' ? 'none' : `1px solid ${theme.border}`,
+                flex: 1, minHeight: 44, padding: 9, borderRadius: 12, border: authMethod === 'phone' ? 'none' : `1px solid ${theme.border}`,
                 background: authMethod === 'phone' ? theme.tealGradient : theme.bg,
                 color: authMethod === 'phone' ? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13,
               }}
@@ -73,36 +74,29 @@ function Login() {
 
           {authMethod === 'email' ? (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <input
+              <Inp
+                label="Email address"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
+                onChange={setEmail}
+                placeholder="you@example.com"
                 required
-                style={{ padding: 13, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 13 }}
               />
-              <input
+              <Inp
+                label="Password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                onChange={setPassword}
+                placeholder="At least 6 characters"
                 required
                 minLength={6}
-                style={{ padding: 13, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 13 }}
               />
 
-              {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
+              {error && <p role="alert" aria-live="assertive" style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
 
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  padding: 13, fontSize: 14, background: theme.tealGradient, color: '#fff', border: 'none',
-                  borderRadius: 13, fontWeight: 800, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
-                }}
-              >
+              <TealBtn type="submit" disabled={loading}>
                 {loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Log In'}
-              </button>
+              </TealBtn>
             </form>
           ) : (
             <p style={{ color: theme.textLight, fontSize: 13.5 }}>
@@ -114,12 +108,12 @@ function Login() {
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
               onClick={() => { setIsSignUp(!isSignUp); setError('') }}
-              style={{ background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 700, padding: 0 }}
+              style={{ background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 700, padding: '10px 4px', minHeight: 44 }}
             >
               {isSignUp ? 'Log In' : 'Sign Up'}
             </button>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   )

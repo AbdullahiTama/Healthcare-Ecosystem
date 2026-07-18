@@ -253,12 +253,12 @@ export function ConfirmDialog({ show, onClose, onConfirm, title, consequence, co
 // Validate on blur/submit, never on keystroke (UX_PATTERNS.md → Validation).
 // `error` renders an adjacent, specific message and marks the field
 // aria-invalid — required indicators are programmatic, not color-only.
-export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder = '', required, style = {}, readOnly, min, error, id }) {
+export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder = '', required, style = {}, readOnly, min, error, id, ...rest }) {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
   return (
     <div style={style}>
       {label && <label htmlFor={inputId} style={{ display: 'block', fontSize: 11, fontWeight: 700, color: theme.gray600, marginBottom: 6 }}>{label}{required && <span style={{ color: theme.danger }} aria-hidden="true"> *</span>}</label>}
-      <input id={inputId} type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} readOnly={readOnly} min={min}
+      <input id={inputId} type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} readOnly={readOnly} min={min} {...rest}
         required={required} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
         style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: readOnly ? theme.gray50 : 'white', fontFamily: theme.fontFamily }} />
       {error && <div id={`${inputId}-error`} style={{ fontSize: 11, color: theme.danger, marginTop: 4 }}>{error}</div>}
@@ -266,12 +266,12 @@ export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder
   )
 }
 
-export function Sel({ label, value, onChange, options = [], required, style = {}, error, id }) {
+export function Sel({ label, value, onChange, options = [], required, style = {}, error, id, ...rest }) {
   const selectId = id || label?.toLowerCase().replace(/\s+/g, '-')
   return (
     <div style={style}>
       {label && <label htmlFor={selectId} style={{ display: 'block', fontSize: 11, fontWeight: 700, color: theme.gray600, marginBottom: 6 }}>{label}{required && <span style={{ color: theme.danger }} aria-hidden="true"> *</span>}</label>}
-      <select id={selectId} value={value || ''} onChange={e => onChange && onChange(e.target.value)} required={required}
+      <select id={selectId} value={value || ''} onChange={e => onChange && onChange(e.target.value)} required={required} {...rest}
         aria-invalid={!!error} aria-describedby={error ? `${selectId}-error` : undefined}
         style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', background: 'white', boxSizing: 'border-box', fontFamily: theme.fontFamily }}>
         <option value=''>Select...</option>
