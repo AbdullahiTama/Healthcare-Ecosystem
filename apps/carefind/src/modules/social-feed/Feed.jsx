@@ -589,7 +589,7 @@ function Feed() {
     setEditingComment(null)
     const { data } = await supabase
       .from('post_comments')
-      .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty)')
+      .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
     setComments((prev) => ({ ...prev, [postId]: data || [] }))
@@ -625,7 +625,7 @@ function Feed() {
     if (isOpen && !comments[postId]) {
       const { data } = await supabase
         .from('post_comments')
-        .select('id, content, created_at, user_id')
+        .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
       setComments({ ...comments, [postId]: data || [] })
@@ -649,7 +649,7 @@ function Feed() {
       if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/', postId })
       const { data } = await supabase
         .from('post_comments')
-        .select('id, content, created_at, user_id')
+        .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
       setComments({ ...comments, [postId]: data || [] })
