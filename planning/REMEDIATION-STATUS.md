@@ -15,7 +15,7 @@ Last updated: 2026-07-17. This tracks a multi-session engagement working through
 ### Phase 0 — Containment (all 5 steps complete)
 1. `ADMIN_SECRET_SALT` rotated in Vercel (you, manual).
 2. `admin_users`/`admin_teams` RLS applied (you, manual) + `AdminLogin.jsx`/`AdminPanel.jsx` repointed at `api/admin-auth.js` instead of querying those tables directly with the anon key (code).
-3. CareHub's hardcoded super-admin credential (`admin@carehub.ng`/`Admin@2025`) removed from `Login.jsx`; replaced with a `businesses.is_platform_admin` flag. **Correction, 2026-07-18**: this was never actually completed at the database level — the column didn't exist in the live schema (only discovered when it caused Phase 2's migration to fail; see below), meaning platform-admin login has been completely non-functional in production since Phase 0, independent of RLS. Column now added (`ALTER TABLE businesses ADD COLUMN is_platform_admin boolean DEFAULT false`) — **you still need to set it `true` on your own business row**, nobody has it set yet.
+3. CareHub's hardcoded super-admin credential (`admin@carehub.ng`/`Admin@2025`) removed from `Login.jsx`; replaced with a `businesses.is_platform_admin` flag. **Correction, 2026-07-18**: this was never actually completed at the database level — the column didn't exist in the live schema (only discovered when it caused Phase 2's migration to fail; see below), meaning platform-admin login has been completely non-functional in production since Phase 0, independent of RLS. Column added (`ALTER TABLE businesses ADD COLUMN is_platform_admin boolean DEFAULT false`), and set to `true` on **Samir pharmaceutical** (`hatama125@gmail.com`) at your request — this account was already fully migrated (real session, confirmed, prior logins), so platform-admin access should work on next login with no further migration step needed. **Phase 0 is now genuinely complete**, not just documented as complete.
 4. `Locations.jsx`'s `setAuth` crash fixed — `setAuth` added to `AuthContext`'s provider value in `App.jsx`.
 
 ### Phase 1 — Real authentication for CareHub (all 4 sub-steps complete)
@@ -95,7 +95,7 @@ Full detail in `Technical-Debt.md` under C14.
 
 ## Suggested next step
 
-**Most urgent right now**: reach out to (or otherwise prompt) the 6 businesses + 1 staff account currently locked out of CareHub by the just-applied RLS, and set `is_platform_admin = true` on your own business row (the column exists now but nobody has it set, so platform-admin login doesn't work yet).
+**Most urgent right now**: reach out to (or otherwise prompt) the 6 businesses + 1 staff account currently locked out of CareHub by the just-applied RLS. (Platform-admin access is now resolved — `is_platform_admin` is set on Samir pharmaceutical / `hatama125@gmail.com`.)
 
 **Next**: `apps/carefind/sql/carefind_rls_hardening.sql` is written, self-verified, and ready for the same kind of explicit go-ahead CareHub's file just got — the code-side prerequisite (moving admin reads/writes to `api/admin-auth.js`) is already shipped. Unlike CareHub's file, this one isn't waiting on a migration-timing question, since CareFind's admin login was never real Supabase Auth to begin with (that's the separate, still-open C3) — the only accounts that would be affected are consumer accounts, which are already all real Supabase Auth sessions.
 
