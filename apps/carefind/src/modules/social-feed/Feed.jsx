@@ -22,6 +22,9 @@ import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import { useRef } from 'react'
 import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import AppShell from '../../components/layout/AppShell.jsx'
+import RightSidebar from '../../components/layout/RightSidebar.jsx'
 
 function Feed() {
   const { user } = useAuth()
@@ -743,8 +746,20 @@ function Feed() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 90 }}>
+  const { isMobile } = useBreakpoint()
+
+  // Desktop right sidebar's "Trending" — derived from posts already loaded
+  // by loadFeed() above, not a new query. No engagement data yet (e.g. right
+  // after loadFeed's initial fetch, before reactions/commentCounts settle)
+  // just means an empty/neutral sort, which is fine.
+  const trendingPosts = [...posts]
+    .sort((a, b) => (likeCount(b.id) + (commentCounts[b.id] || 0)) - (likeCount(a.id) + (commentCounts[a.id] || 0)))
+    .slice(0, 4)
+
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'sans-serif', maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 90 }
+      : { fontFamily: 'sans-serif' }}>
       <style>{`
         .article-body p { margin: 0 0 14px 0; }
         .article-body p:last-child { margin-bottom: 0; }
@@ -757,59 +772,83 @@ function Feed() {
         }
         .article-body strong { font-weight: 800; color: ${theme.navy}; }
       `}</style>
-      <div style={{
-        background: theme.heroGradient, margin: '-20px -20px 0 -20px', padding: '14px 16px 0',
-        borderRadius: '0 0 22px 22px', color: '#fff',
-      }}>
-        {/* App bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
-          <div style={{ marginRight: 'auto' }}><Logo size={30} /></div>
+      {isMobile && (
+        <div style={{
+          background: theme.heroGradient, margin: '-20px -20px 0 -20px', padding: '14px 16px 0',
+          borderRadius: '0 0 22px 22px', color: '#fff',
+        }}>
+          {/* App bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+            <div style={{ marginRight: 'auto' }}><Logo size={30} /></div>
 
-          <Link to="/search" style={{
-            width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15, textDecoration: 'none',
-          }}>🔍</Link>
+            <Link to="/search" style={{
+              width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15, textDecoration: 'none',
+            }}>🔍</Link>
 
-          <Link to="/notifications" style={{
-            width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
-            textDecoration: 'none', position: 'relative',
-          }}>
-            🔔
-            {unreadNotifs > 0 && (
-              <span style={{
-                position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
-                borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
-                border: `1.5px solid ${theme.navy}`,
-              }}>{unreadNotifs > 99 ? '99+' : unreadNotifs}</span>
-            )}
-          </Link>
+            <Link to="/notifications" style={{
+              width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
+              textDecoration: 'none', position: 'relative',
+            }}>
+              🔔
+              {unreadNotifs > 0 && (
+                <span style={{
+                  position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
+                  borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
+                  border: `1.5px solid ${theme.navy}`,
+                }}>{unreadNotifs > 99 ? '99+' : unreadNotifs}</span>
+              )}
+            </Link>
 
-          <Link to={user ? '/profile' : '/login'} style={{ textDecoration: 'none' }}>
-            <Avatar name={myUsername} src={myAvatar} size={34} style={{ border: '2px solid rgba(255,255,255,0.28)' }} />
-          </Link>
+            <Link to={user ? '/profile' : '/login'} style={{ textDecoration: 'none' }}>
+              <Avatar name={myUsername} src={myAvatar} size={34} style={{ border: '2px solid rgba(255,255,255,0.28)' }} />
+            </Link>
+          </div>
+
+          {/* What do you want to read? */}
+          <div style={{ display: 'flex', gap: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            {FEED_TABS.map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFeedTab(key)}
+                style={{
+                  flexShrink: 0, padding: '0 0 11px', background: 'none', border: 'none',
+                  fontSize: 13.5, fontWeight: feedTab === key ? 800 : 700,
+                  color: feedTab === key ? '#fff' : 'rgba(255,255,255,0.45)',
+                  borderBottom: feedTab === key ? `2.5px solid ${theme.tealBright}` : '2.5px solid transparent',
+                  whiteSpace: 'nowrap', cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
+      )}
 
-        {/* What do you want to read? */}
-        <div style={{ display: 'flex', gap: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* Desktop/tablet: same tabs, plain top-of-content bar instead of the
+          mobile gradient hero (which is replaced by DesktopHeader/AppShell). */}
+      {!isMobile && (
+        <div style={{ display: 'flex', gap: 22, overflowX: 'auto', borderBottom: `1px solid ${theme.border}`, marginBottom: 20 }}>
           {FEED_TABS.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setFeedTab(key)}
               style={{
-                flexShrink: 0, padding: '0 0 11px', background: 'none', border: 'none',
-                fontSize: 13.5, fontWeight: feedTab === key ? 800 : 700,
-                color: feedTab === key ? '#fff' : 'rgba(255,255,255,0.45)',
-                borderBottom: feedTab === key ? `2.5px solid ${theme.tealBright}` : '2.5px solid transparent',
-                whiteSpace: 'nowrap', cursor: 'pointer',
+                flexShrink: 0, padding: '0 0 13px', background: 'none', border: 'none',
+                fontSize: 14, fontWeight: feedTab === key ? 800 : 600,
+                color: feedTab === key ? theme.tealDeep : theme.textLight,
+                borderBottom: feedTab === key ? `2.5px solid ${theme.tealDeep}` : '2.5px solid transparent',
+                whiteSpace: 'nowrap', cursor: 'pointer', minHeight: 44,
               }}
             >
               {label}
             </button>
           ))}
         </div>
-      </div>
+      )}
 
       {/* Only when CareFind itself is on air */}
       {platformLive && (
@@ -841,8 +880,9 @@ function Feed() {
       {/* Stories row */}
       <Stories />
 
-      {/* News highlight strip */}
-      {latestNews.length > 0 && (
+      {/* News highlight strip — mobile only; on desktop this same latestNews
+          data feeds RightSidebar's "Suggested articles" section instead. */}
+      {isMobile && latestNews.length > 0 && (
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
             <span style={{ fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}>📰 Latest News</span>
@@ -894,7 +934,8 @@ function Feed() {
         </Link>
       )}
 
-      {liveSessions.length > 0 && (
+      {/* Live-now strip — mobile only; RightSidebar covers this on desktop. */}
+      {isMobile && liveSessions.length > 0 && (
         <div style={{ padding: '10px 16px 0' }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}>🔴 Live Now</p>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
@@ -1752,7 +1793,7 @@ function Feed() {
 
       {showGoLive && <UserGoLive onClose={() => setShowGoLive(false)} />}
       <SupportPrompt creatorName="CareFind creators" />
-      <BottomNav onCompose={() => setCreateOpen(true)} />
+      {isMobile && <BottomNav onCompose={() => setCreateOpen(true)} />}
       {giftingPost && (
         <GiftPanel
           postId={giftingPost.postId}
@@ -1772,6 +1813,21 @@ function Feed() {
 
       <Toast msg={toast.msg} />
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => setCreateOpen(true)}
+      rightSidebar={<RightSidebar trending={trendingPosts} news={latestNews} live={liveSessions} platformLive={platformLive} />}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 
