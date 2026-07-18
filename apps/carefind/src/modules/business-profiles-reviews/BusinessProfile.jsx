@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { getSentimentSummary } from './sentiment'
+import { Card, Pill, TealBtn, Textarea, Loading, Empty, Toast, useToast } from '../../components/ui'
 
 function BusinessProfile() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const [biz, setBiz] = useState(null)
   const [products, setProducts] = useState([])
@@ -16,6 +18,7 @@ function BusinessProfile() {
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const toast = useToast()
 
   async function loadAll() {
     setLoading(true)
@@ -83,15 +86,17 @@ function BusinessProfile() {
     if (!error) {
       setComment('')
       setRating(5)
+      toast.show('Review posted — thank you!')
       loadAll()
     } else {
       console.error('Review error:', error)
+      toast.show('Could not post your review: ' + error.message)
     }
     setSubmitting(false)
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
-  if (!biz) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Business not found.</div>
+  if (loading) return <Loading text="Loading business…" />
+  if (!biz) return <Empty icon="🏥" message="Business not found." action="Back to search" onAction={() => navigate('/search')} />
 
   const avgRating = reviews.length
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
@@ -160,7 +165,7 @@ function BusinessProfile() {
               href={waLink}
               target="_blank"
               rel="noreferrer"
-              style={{ flex: 1, textAlign: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700 }}
+              style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
             >
               💬 WhatsApp
             </a>
@@ -170,7 +175,7 @@ function BusinessProfile() {
               href={biz.maps_link}
               target="_blank"
               rel="noreferrer"
-              style={{ flex: 1, textAlign: 'center', padding: '11px 16px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700 }}
+              style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
             >
               Directions
             </a>
@@ -180,38 +185,30 @@ function BusinessProfile() {
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Available Products
         </p>
-        {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products listed yet.</p>}
+        {products.length === 0 && <Empty icon="💊" message="No products listed yet." />}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }}>
           {products.map((p) => (
-            <Link
-              key={p.id}
-              to={`/drug/${encodeURIComponent(p.name)}`}
-              style={{ textDecoration: 'none', border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', gap: 12, alignItems: 'center' }}
-            >
-              {p.image_url
-                ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                : <div style={{ fontSize: 24, flexShrink: 0 }}>{p.emoji || '💊'}</div>}
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
-                {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-                  {p.sale_type && (
-                    <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'wholesale' ? '#7c3aed' : theme.tealDeep, background: p.sale_type === 'wholesale' ? '#f3e8ff' : '#ecfdf5', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{p.sale_type}</span>
-                  )}
-                  {p.min_purchase && (
-                    <span style={{ fontSize: 9.5, fontWeight: 700, color: theme.textMid, background: theme.bg, padding: '2px 8px', borderRadius: 10 }}>
-                      Min {p.min_purchase} {p.price_unit || ''}{p.min_purchase > 1 ? 's' : ''}
-                    </span>
-                  )}
+            <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
+              <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
+                {p.image_url
+                  ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
+                  : <div style={{ fontSize: 24, flexShrink: 0 }}>{p.emoji || '💊'}</div>}
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
+                  {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+                    {p.sale_type && <Pill label={p.sale_type} type={p.sale_type === 'wholesale' ? 'purple' : 'teal'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                    {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
+                  </div>
+                  <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See reviews ›</p>
                 </div>
-                <p style={{ margin: '3px 0 0 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See reviews ›</p>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                {p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
-                {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
-                {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
-              </div>
+                <div style={{ textAlign: 'right' }}>
+                  {p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                  {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
+                  {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
+                </div>
+              </Card>
             </Link>
           ))}
         </div>
@@ -221,7 +218,7 @@ function BusinessProfile() {
         </p>
 
         {reviews.length > 0 && (
-          <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 16 }}>
+          <Card style={{ padding: 14, marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
               <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avgRating}</span>
               <div>
@@ -240,13 +237,13 @@ function BusinessProfile() {
                 <span style={{ fontSize: 11, color: theme.textLight, width: 24 }}>{r.count}</span>
               </div>
             ))}
-          </div>
+          </Card>
         )}
 
         {reviews.length > 0 && (() => {
           const { positive, negative, neutral, themes } = getSentimentSummary(reviews)
           return (
-            <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 16 }}>
+            <Card style={{ padding: 14, marginBottom: 16 }}>
               <p style={{ margin: '0 0 10px 0', fontSize: 12, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Sentiment</p>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <div style={{ flex: 1, background: '#ecfdf5', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
@@ -266,46 +263,38 @@ function BusinessProfile() {
                 <>
                   <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Common themes</p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {themes.map((t) => (
-                      <span key={t} style={{ padding: '4px 10px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, fontSize: 12, color: theme.textMid, fontWeight: 600 }}>
-                        {t}
-                      </span>
-                    ))}
+                    {themes.map((t) => <Pill key={t} label={t} type="gray" style={{ fontSize: 12, fontWeight: 600 }} />)}
                   </div>
                 </>
               )}
-            </div>
+            </Card>
           )
         })()}
 
         {user ? (
-          <form onSubmit={handleSubmitReview} style={{ marginBottom: 18, border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+          <form onSubmit={handleSubmitReview} style={{ marginBottom: 18, border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, boxShadow: theme.elevation[1] }}>
             <div style={{ marginBottom: 8 }}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <button
                   type="button"
                   key={n}
                   onClick={() => setRating(n)}
-                  style={{ background: 'none', border: 'none', fontSize: 22, color: n <= rating ? theme.warning : '#ddd' }}
+                  aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                  style={{ minWidth: 44, minHeight: 44, background: 'none', border: 'none', fontSize: 22, color: n <= rating ? theme.warning : '#ddd' }}
                 >
                   ★
                 </button>
               ))}
             </div>
-            <textarea
+            <Textarea
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={setComment}
               placeholder="Share your experience..."
               rows={3}
-              style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit' }}
             />
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{ marginTop: 10, padding: '9px 18px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 13 }}
-            >
+            <TealBtn type="submit" disabled={submitting} style={{ marginTop: 10 }}>
               {submitting ? 'Posting...' : 'Post Review'}
-            </button>
+            </TealBtn>
           </form>
         ) : (
           <p style={{ color: theme.textLight, fontSize: 13, marginBottom: 18 }}>
@@ -313,14 +302,14 @@ function BusinessProfile() {
           </p>
         )}
 
-        {reviews.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reviews yet. Be the first!</p>}
+        {reviews.length === 0 && <Empty icon="⭐" message="No reviews yet. Be the first!" />}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {reviews.map((r) => {
             const who = reviewers[r.user_id]
             const whoName = who?.full_name || who?.display_name || 'CareFind user'
             return (
-              <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+              <Card key={r.id} style={{ padding: 13 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   {r.user_id ? (
                     <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
@@ -335,11 +324,12 @@ function BusinessProfile() {
                 <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>
                   {new Date(r.created_at).toLocaleDateString()}
                 </p>
-              </div>
+              </Card>
             )
           })}
         </div>
       </div>
+      <Toast msg={toast.msg} />
     </div>
   )
 }
