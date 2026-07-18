@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import './styles/global.css'
 import { AuthProvider } from './providers/AuthContext.jsx'
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
