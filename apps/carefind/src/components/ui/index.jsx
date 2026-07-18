@@ -34,10 +34,11 @@ export function Pill({ label, type = 'gray', style = {} }) {
 export const Badge = Pill
 
 // ── CARD ─────────────────────────────────────────────────────────────────────
-export function Card({ children, style = {}, onClick }) {
+export function Card({ children, style = {}, onClick, className }) {
   return (
     <div
       onClick={onClick}
+      className={className}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e) } } : undefined}
@@ -266,15 +267,15 @@ export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder
   )
 }
 
-export function Sel({ label, value, onChange, options = [], required, style = {}, error, id, ...rest }) {
+export function Sel({ label, value, onChange, options = [], required, style = {}, error, id, placeholder = 'Select...', ...rest }) {
   const selectId = id || label?.toLowerCase().replace(/\s+/g, '-')
   return (
     <div style={style}>
       {label && <label htmlFor={selectId} style={{ display: 'block', fontSize: 11, fontWeight: 700, color: theme.gray600, marginBottom: 6 }}>{label}{required && <span style={{ color: theme.danger }} aria-hidden="true"> *</span>}</label>}
       <select id={selectId} value={value || ''} onChange={e => onChange && onChange(e.target.value)} required={required} {...rest}
         aria-invalid={!!error} aria-describedby={error ? `${selectId}-error` : undefined}
-        style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', background: 'white', boxSizing: 'border-box', fontFamily: theme.fontFamily }}>
-        <option value=''>Select...</option>
+        style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', background: 'white', color: value ? theme.navy : theme.textLight, boxSizing: 'border-box', fontFamily: theme.fontFamily }}>
+        <option value=''>{placeholder}</option>
         {options.map(o => typeof o === 'string' ? <option key={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {error && <div id={`${selectId}-error`} style={{ fontSize: 11, color: theme.danger, marginTop: 4 }}>{error}</div>}

@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Card, Pill, Sel, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
@@ -25,6 +26,7 @@ function Search() {
   const [featured, setFeatured] = useState([])
   const [featuredType, setFeaturedType] = useState('promo') // 'promo' or 'product'
   const trackRef = useRef(null)
+  const toast = useToast()
 
   // JS-driven marquee — works even in iOS Low Power Mode (CSS animations get paused, JS doesn't)
   useEffect(() => {
@@ -118,7 +120,7 @@ function Search() {
         results_count: resultCount,
         found: resultCount > 0,
       })
-      if (logErr) alert('Search log failed: ' + logErr.message)
+      if (logErr) toast.show('Search log failed: ' + logErr.message)
     }
   }
 
@@ -143,8 +145,8 @@ function Search() {
         </p>
         <form onSubmit={runSearch}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctor…" style={{ flex: 1, padding: 13, fontSize: 14, border: 'none', borderRadius: 13, boxSizing: 'border-box' }} />
-            <button type="submit" style={{ padding: '0 18px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>Go</button>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctor…" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: 13, boxSizing: 'border-box' }} />
+            <button type="submit" style={{ minHeight: 44, padding: '0 18px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>Go</button>
           </div>
         </form>
       </div>
@@ -168,16 +170,13 @@ function Search() {
 
       <div style={{ padding: '4px 16px 0' }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={{ flex: 1, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, background: '#fff', color: stateFilter ? theme.navy : theme.textLight }}>
-            <option value="">📍 All states</option>
-            {NG_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <Sel value={stateFilter} onChange={setStateFilter} options={NG_STATES} placeholder="📍 All states" aria-label="Filter by state" style={{ flex: 1 }} />
           {tab === 'professionals' && (
-            <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" style={{ flex: 1, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }} />
+            <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" style={{ flex: 1, minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }} />
           )}
         </div>
         {stateFilter && (
-          <button onClick={() => setStateFilter('')} style={{ marginTop: 6, padding: '4px 10px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: 11, color: theme.textLight }}>Clear location</button>
+          <button onClick={() => setStateFilter('')} style={{ marginTop: 6, minHeight: 44, padding: '4px 14px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: 11, color: theme.textLight }}>Clear location</button>
         )}
       </div>
 
@@ -189,23 +188,23 @@ function Search() {
               {[...featured, ...featured].map((p, i) => (
                 featuredType === 'promo' ? (
                   <Link key={i} className="mm-card" to={p.link_url || '/search'} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 200 }}>
-                    <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, overflow: 'hidden', background: theme.cardBg }}>
+                    <Card style={{ overflow: 'hidden' }}>
                       <div style={{ height: 110, background: p.image_url ? `url(${p.image_url})` : theme.heroGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'flex-start', padding: 8 }}>
                         <span style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.06em', color: '#fff', background: theme.tealDeep, padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase' }}>Promo</span>
                       </div>
                       <div style={{ padding: '9px 11px 12px' }}>
                         <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: theme.navy, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</p>
                       </div>
-                    </div>
+                    </Card>
                   </Link>
                 ) : (
                   <Link key={i} className="mm-card" to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 130 }}>
-                    <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg, textAlign: 'center' }}>
+                    <Card style={{ padding: 12, textAlign: 'center' }}>
                       <div style={{ fontSize: 30, marginBottom: 6 }}>{p.emoji || '💊'}</div>
                       <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
                       {p.price != null && <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
                       <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
-                    </div>
+                    </Card>
                   </Link>
                 )
               ))}
@@ -215,16 +214,22 @@ function Search() {
       )}
 
       <div style={{ padding: '14px 16px 0' }}>
-        {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loading…</p>}
+        {loading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        )}
 
         {!loading && tab === 'products' && products.length === 0 && (query.trim() || stateFilter) && (
-          <EmptyState label="No products found" hint="Try another name or state." />
+          <Empty icon="🔍" cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No products found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another name or state.</div></>} />
         )}
         {!loading && tab === 'businesses' && businesses.length === 0 && (
-          <EmptyState label="No health facilities found" hint="Try another state." />
+          <Empty icon="🔍" cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No health facilities found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another state.</div></>} />
         )}
         {!loading && tab === 'professionals' && professionals.length === 0 && (
-          <EmptyState label="No professionals found" hint="Try another specialty or state." />
+          <Empty icon="🔍" cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another specialty or state.</div></>} />
         )}
 
         {products.map((p, idx) => {
@@ -238,14 +243,14 @@ function Search() {
             waLink = `https://wa.me/${num}?text=${encodeURIComponent(`Hi, I'm interested in "${p.name}" on CareFind.`)}`
           }
           return (
-            <div key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg }}>
+            <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, marginBottom: 8 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {p.image_url
                   ? <div style={{ width: 46, height: 46, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
                   : <div style={{ fontSize: 26 }}>{p.emoji || '💊'}</div>}
                 <div style={{ flex: 1 }}>
                   <Link to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
-                    <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{p.name}{p.category && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 10, marginLeft: 6 }}>{p.category}</span>}</p>
+                    <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{p.name}{p.category && <Pill label={p.category} type="teal" style={{ fontSize: 9, padding: '1px 6px', marginLeft: 6 }} />}</p>
                     {p.generic_name && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textMid, fontStyle: 'italic' }}>{p.generic_name}</p>}
                     <p style={{ margin: '0 0 3px 0', fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>⭐ See reviews ›</p>
                   </Link>
@@ -276,16 +281,16 @@ function Search() {
               </div>
               {(p.sale_type || p.min_purchase) && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {p.sale_type && <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'wholesale' ? '#7c3aed' : theme.tealDeep, background: p.sale_type === 'wholesale' ? '#f3e8ff' : '#ecfdf5', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{p.sale_type}</span>}
-                  {p.min_purchase && <span style={{ fontSize: 9.5, fontWeight: 700, color: theme.textMid, background: theme.bg, padding: '2px 8px', borderRadius: 10 }}>Min {p.min_purchase} {p.price_unit || ''}{p.min_purchase > 1 ? 's' : ''}</span>}
+                  {p.sale_type && <Pill label={p.sale_type} type={p.sale_type === 'wholesale' ? 'purple' : 'teal'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                  {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
                 </div>
               )}
               {waLink && (
-                <a href={waLink} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
+                <a href={waLink} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
                   💬 Message on WhatsApp
                 </a>
               )}
-            </div>
+            </Card>
           )
         })}
 
@@ -304,9 +309,7 @@ function Search() {
 
         {professionals.map((pr, idx) => (
           <Link key={pr.id} className="mm-card" to={`/u/${pr.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg, alignItems: 'center' }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
-              {(pr.full_name?.[0] || pr.display_name?.[0] || '?').toUpperCase()}
-            </div>
+            <Avatar name={pr.full_name || pr.display_name} size={44} />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name} <span style={{ color: theme.tealDeep }}>✓</span></p>
               <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
@@ -316,16 +319,7 @@ function Search() {
       </div>
 
       <BottomNav />
-    </div>
-  )
-}
-
-function EmptyState({ label, hint }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '30px 20px' }}>
-      <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
-      <p style={{ fontSize: 14, fontWeight: 700, color: theme.navy, margin: '0 0 4px 0' }}>{label}</p>
-      <p style={{ fontSize: 12.5, color: theme.textLight, margin: 0 }}>{hint}</p>
+      <Toast msg={toast.msg} />
     </div>
   )
 }
