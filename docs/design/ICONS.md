@@ -4,6 +4,10 @@
 
 **One icon set, used consistently, sourced from a single outline/line-style icon library** (e.g. Lucide/Feather-class libraries — consistent stroke width, consistent corner treatment, comprehensive healthcare/business/data coverage). The current codebase uses emoji as functional icons in many places (module nav, stat cards, buttons) — this is acceptable as a fast-prototyping shortcut but is **not the long-term system**: emoji render inconsistently across platforms/OSes, cannot take a stroke-weight or color token, and read as informal in a professional tool. This document defines the target state; migrating existing emoji usage to the icon set is tracked as implementation work, not a design decision to make screen-by-screen.
 
+**Concrete choice: `react-icons/fi` (Feather).** First adopted in CareHub's `Landing.jsx`/`Sidebar.jsx` template migration. Migrate screen-by-screen, same pattern as the color/typography rollout — a screen either uses Feather icons throughout, or (if not yet migrated) keeps its existing emoji, never a mix of both on one screen. Config-driven emoji shared across many not-yet-migrated screens (e.g. `BUSINESS_TYPES`, per-role nav item icons) stay emoji until that config itself is migrated — swapping it for just one consumer screen would make that screen *less* consistent with the rest of the app, not more.
+
+**The CareHub brand mark is one component, not a per-screen icon choice.** `Logo` (`apps/carehub/src/components/ui/index.jsx`) renders the one CareHub mark — `FiActivity` in a flat `teal-600` rounded square, no gradient — and every surface that shows the CareHub brand (marketing nav/footer, dashboard sidebar) renders it via that component, not a locally recreated icon-in-a-box.
+
 ## Sizing
 
 | Token | Size | Usage |

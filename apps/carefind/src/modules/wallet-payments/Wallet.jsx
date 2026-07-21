@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
 import { theme } from '../../styles/theme.js'
+import { useBreakpoint } from '../../hooks/useBreakpoint.js'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Inp, Toast, useToast } from '../../components/ui/index.jsx'
+
+const WITHDRAWAL_FEE_RATE = 0.2
+
+const WITHDRAWAL_ERRORS = {
+  not_logged_in: 'Please log in again.',
+  below_minimum: 'Minimum withdrawal is 5 CareCoins.',
+  missing_bank_details: 'Please fill in all bank details.',
+  insufficient: "You don't have enough CareCoins for that amount.",
+}
 
 const COIN_VALUE_NAIRA = 200
 const TOPUP_PACKAGES = [
@@ -15,61 +28,64 @@ const TOPUP_PACKAGES = [
 
 function Wallet() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const [wallet, setWallet] = useState(null)
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('wallet')
   const [searchParams] = useSearchParams()
+  const [wdAmount, setWdAmount] = useState('')
+  const [wdBankName, setWdBankName] = useState('')
+  const [wdAccountNumber, setWdAccountNumber] = useState('')
+  const [wdAccountName, setWdAccountName] = useState('')
+  const [wdSubmitting, setWdSubmitting] = useState(false)
 
-  // Handle return from Paystack redirect
+  // Handle return from Paystack redirect. The wallet is credited server-side
+  // in /api/verify-payment, which asks Paystack to confirm the charge before
+  // crediting anything — this used to trust whatever `coins`/`naira` numbers
+  // were sitting in the URL, which meant anyone could hand-edit the address
+  // bar to credit themselves for free. Only `reference` (an opaque lookup
+  // key, not an amount) comes from the URL now.
   useEffect(() => {
     async function handlePaystackReturn() {
-      const ref = searchParams.get('reference')
-      const coins = searchParams.get('coins')
-      const naira = searchParams.get('naira')
+      const ref = searchParams.get('reference') || searchParams.get('trxref')
+      if (!ref || !user) return
 
-      if (ref && coins && user) {
-        // Check if already processed
-        const { data: existing } = await supabase
-          .from('transactions')
-          .select('id')
-          .eq('reference', ref)
-          .maybeSingle()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-        if (!existing) {
-          const newCoins = parseInt(coins)
+      try {
+        const response = await fetch('/api/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ reference: ref }),
+        })
+        const data = await response.json()
+        window.history.replaceState({}, '', '/wallet')
 
-          // Get fresh wallet balance from DB
-          const { data: freshWallet } = await supabase
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', user.id)
-            .maybeSingle()
-
-          const currentBalance = freshWallet?.balance || 0
-          const newBalance = currentBalance + newCoins
-
-          await supabase.from('wallets').update({ balance: newBalance }).eq('user_id', user.id)
-          await supabase.from('transactions').insert({
-            user_id: user.id, type: 'topup', amount: newCoins,
-            naira_amount: parseInt(naira) * 100, reference: ref, status: 'success',
-          })
-
-          // Reload wallet and transactions
-          setWallet((prev) => ({ ...(prev || {}), balance: newBalance }))
-
-          const { data: txData } = await supabase
-            .from('transactions').select('*').eq('user_id', user.id)
-            .order('created_at', { ascending: false }).limit(20)
-          setTransactions(txData || [])
-
-          setTab('history')
-          window.history.replaceState({}, '', '/wallet')
-          alert(`✅ ${newCoins} CareCoin${newCoins > 1 ? 's' : ''} added! New balance: ${newBalance} coins`)
-        } else {
-          // Already processed — just clean the URL
-          window.history.replaceState({}, '', '/wallet')
+        if (!response.ok) {
+          showToast(`Could not confirm payment: ${data.error || 'unknown error'}`, { type: 'error' })
+          return
         }
+        if (data.alreadyProcessed) return
+
+        const { data: freshWallet } = await supabase
+          .from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+        setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? data.newBalance }))
+
+        const { data: txData } = await supabase
+          .from('transactions').select('*').eq('user_id', user.id)
+          .order('created_at', { ascending: false }).limit(20)
+        setTransactions(txData || [])
+
+        setTab('history')
+        showToast(`${data.credited} CareCoin${data.credited > 1 ? 's' : ''} added! New balance: ${data.newBalance} coins`, { type: 'success' })
+      } catch (err) {
+        window.history.replaceState({}, '', '/wallet')
+        showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
       }
     }
     if (!authLoading && user) handlePaystackReturn()
@@ -101,18 +117,18 @@ function Wallet() {
 
   async function handleTopUp(pkg) {
     if (!user) return
-    const ref = `cf_${user.id.slice(0, 8)}_${Date.now()}`
-    const callbackUrl = `${window.location.origin}/wallet?reference=${ref}&coins=${pkg.coins}&naira=${pkg.naira}`
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { showToast('Please log in again.', { type: 'error' }); return }
 
     try {
       const response = await fetch('/api/initiate-payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          email: user.email,
-          amount: pkg.naira * 100,
-          ref,
-          callback_url: callbackUrl,
+          // packageId, not an amount — the server looks up the real price
+          // itself so a tampered request can't buy coins below cost.
+          packageId: pkg.coins,
+          callback_url: `${window.location.origin}/wallet`,
         }),
       })
 
@@ -121,11 +137,36 @@ function Wallet() {
       if (data.authorization_url) {
         window.location.href = data.authorization_url
       } else {
-        alert(`Payment error: ${data.error || 'Could not initialize payment'}`)
+        showToast(`Payment error: ${data.error || 'Could not initialize payment'}`, { type: 'error' })
       }
     } catch (err) {
-      alert('Network error. Please check your connection and try again.')
+      showToast('Network error. Please check your connection and try again.', { type: 'error' })
     }
+  }
+
+  async function handleWithdraw(e) {
+    e.preventDefault()
+    setWdSubmitting(true)
+    const { data, error } = await supabase.rpc('request_withdrawal', {
+      p_amount: parseInt(wdAmount, 10),
+      p_bank_name: wdBankName.trim(),
+      p_account_number: wdAccountNumber.trim(),
+      p_account_name: wdAccountName.trim(),
+    })
+    setWdSubmitting(false)
+
+    if (error) { showToast('Could not submit withdrawal request. Please try again.', { type: 'error' }); return }
+    if (data !== 'ok') { showToast(WITHDRAWAL_ERRORS[data] || 'Could not submit withdrawal request.', { type: 'warning' }); return }
+
+    setWdAmount(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName('')
+    const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+    setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
+    const { data: txData } = await supabase
+      .from('transactions').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending: false }).limit(20)
+    setTransactions(txData || [])
+    setTab('history')
+    showToast('Withdrawal requested — it will be reviewed and paid out within 1-3 business days.', { type: 'success' })
   }
 
   function timeAgo(dateStr) {
@@ -136,7 +177,8 @@ function Wallet() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  const txIcon = (type) => ({ topup: '🪙', gift_sent: '🎁', gift_received: '💰', withdrawal: '🏦' }[type] || '💳')
+  const txIcon = (type) => ({ topup: '🪙', gift_sent: '🎁', gift_received: '💰', withdrawal: '🏦', withdrawal_refund: '↩️' }[type] || '💳')
+  const isCredit = (type) => type === 'topup' || type === 'gift_received' || type === 'withdrawal_refund'
 
   if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
 
@@ -149,11 +191,17 @@ function Wallet() {
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 30px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>My Wallet</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 30px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>My Wallet</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins — 1 coin = ₦{COIN_VALUE_NAIRA}</p>
         <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 20, textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BALANCE</p>
@@ -164,7 +212,7 @@ function Wallet() {
         </div>
       </div>
 
-      <div style={{ padding: '20px 20px 0 20px' }}>
+      <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {['wallet', 'history', 'withdraw'].map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
@@ -178,7 +226,7 @@ function Wallet() {
         </div>
 
         {tab === 'wallet' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
             <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
               Choose a package
             </p>
@@ -213,7 +261,7 @@ function Wallet() {
         )}
 
         {tab === 'history' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
             {transactions.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
                 <div style={{ fontSize: 26, marginBottom: 10 }}>🪙</div>
@@ -234,8 +282,8 @@ function Wallet() {
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(tx.created_at)}</p>
                   </div>
                 </div>
-                <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: tx.type === 'topup' || tx.type === 'gift_received' ? theme.success : theme.alert }}>
-                  {tx.type === 'topup' || tx.type === 'gift_received' ? '+' : '-'}{tx.amount} 🪙
+                <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: isCredit(tx.type) ? theme.success : theme.alert }}>
+                  {isCredit(tx.type) ? '+' : '-'}{tx.amount} 🪙
                 </p>
               </div>
             ))}
@@ -252,12 +300,36 @@ function Wallet() {
               Your balance: <strong>🪙 {wallet?.balance || 0} CareCoins</strong>
             </p>
             {(wallet?.balance || 0) >= 5 ? (
-              <button style={{
-                width: '100%', padding: 13, background: theme.tealGradient, color: '#fff',
-                border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-              }}>
-                Request Withdrawal
-              </button>
+              <form onSubmit={handleWithdraw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Inp
+                  label="Amount to withdraw (CareCoins)"
+                  type="number"
+                  value={wdAmount}
+                  onChange={setWdAmount}
+                  placeholder={`5–${wallet.balance}`}
+                  min={5}
+                  required
+                />
+                {wdAmount >= 5 && (
+                  <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.textLight }}>
+                    You'll receive ≈ ₦{Math.floor(wdAmount * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
+                  </p>
+                )}
+                <Inp label="Bank name" value={wdBankName} onChange={setWdBankName} placeholder="e.g. GTBank" required />
+                <Inp label="Account number" value={wdAccountNumber} onChange={setWdAccountNumber} placeholder="0123456789" required />
+                <Inp label="Account name" value={wdAccountName} onChange={setWdAccountName} placeholder="As it appears on your bank account" required />
+                <button
+                  type="submit"
+                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance}
+                  style={{
+                    width: '100%', padding: 13, background: theme.tealGradient, color: '#fff',
+                    border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
+                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance) ? 0.6 : 1,
+                  }}
+                >
+                  {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
+                </button>
+              </form>
             ) : (
               <p style={{ color: theme.textLight, fontSize: 13, textAlign: 'center' }}>
                 You need at least 5 CareCoins to withdraw.
@@ -269,8 +341,16 @@ function Wallet() {
           </div>
         )}
       </div>
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

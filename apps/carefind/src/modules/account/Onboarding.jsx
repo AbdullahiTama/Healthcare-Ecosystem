@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 // Username rule: lowercase letters, numbers, underscores. 3-20 chars.
 function normalizeUsername(raw) {
@@ -15,6 +16,7 @@ function normalizeUsername(raw) {
 function Onboarding() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const { isMobileOrTablet } = useBreakpoint()
 
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
@@ -111,15 +113,79 @@ function Onboarding() {
 
   const inputStyle = { padding: 13, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 13, width: '100%', boxSizing: 'border-box' }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
-      <div style={{ background: theme.heroGradient, padding: '24px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <h1 style={{ fontSize: 23, fontWeight: 900, margin: '0 0 4px 0', letterSpacing: '-0.02em' }}>Complete your profile</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>Just a few details to get you started on CareFind</p>
-      </div>
+  if (isMobileOrTablet) {
+    return (
+      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
+        <div style={{ background: theme.heroGradient, padding: '24px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
+          <h1 style={{ fontSize: 23, fontWeight: 900, margin: '0 0 4px 0', letterSpacing: '-0.02em' }}>Complete your profile</h1>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>Just a few details to get you started on CareFind</p>
+        </div>
 
-      <div style={{ padding: '0 20px', marginTop: -28 }}>
-        <div style={{ background: theme.cardBg, borderRadius: 20, padding: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+        <div style={{ padding: '0 20px', marginTop: -28 }}>
+          <div style={{ background: theme.cardBg, borderRadius: 20, padding: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* Full name */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Full name</label>
+                <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Dr. John Ade-Williams" style={inputStyle} />
+              </div>
+
+              {/* Username */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Username</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: theme.textLight }}>@</span>
+                  <input type="text" value={username} onChange={(e) => setUsername(normalizeUsername(e.target.value))} placeholder="johnade" style={inputStyle} />
+                </div>
+                {username.length >= 3 && (
+                  <p style={{ margin: '5px 0 0 0', fontSize: 12, fontWeight: 600, color: checking ? theme.textLight : available ? theme.success : theme.alert }}>
+                    {checking ? 'Checking availability…' : available ? '✓ Available' : '✕ Taken — try another'}
+                  </p>
+                )}
+                <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Phone number</label>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 08012345678" style={inputStyle} />
+              </div>
+
+              {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
+
+              <button
+                type="submit"
+                disabled={saving || checking || available === false}
+                style={{
+                  padding: 13, fontSize: 14, background: theme.tealGradient, color: '#fff', border: 'none',
+                  borderRadius: 13, fontWeight: 800, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
+                  opacity: (saving || available === false) ? 0.7 : 1,
+                }}
+              >
+                {saving ? 'Saving…' : 'Save & Continue'}
+              </button>
+
+              <Link to="/" style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, textDecoration: 'none', fontWeight: 600 }}>
+                Skip for now
+              </Link>
+            </form>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Laptop+: centered on the viewport rather than a 420px mobile column with
+  // an edge-to-edge hero bleed (RESPONSIVENESS.md — this is a one-time,
+  // pre-app screen, so no persistent nav chrome here, same reasoning as Login).
+  return (
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 900, margin: '0 0 4px 0', letterSpacing: '-0.02em', color: theme.navy }}>Complete your profile</h1>
+        <p style={{ fontSize: 13.5, color: theme.textLight, margin: '0 0 24px 0' }}>Just a few details to get you started on CareFind</p>
+
+        <div style={{ background: theme.cardBg, borderRadius: 20, padding: 24, boxShadow: theme.elevation[2], border: `1px solid ${theme.border}` }}>
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Full name */}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Toast, useToast } from '../../components/ui'
 
 const FREE_LIMIT = 15
 
@@ -25,6 +26,7 @@ function ProductUpload({ businesses, onClose, onAdded }) {
   const [sellerLocation, setSellerLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => { loadCount() }, [])
 
@@ -103,7 +105,7 @@ function ProductUpload({ businesses, onClose, onAdded }) {
           <div style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
             <p style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>You've used your 15 free products</p>
             <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textMid }}>Subscribe for ₦2,500/month to list unlimited products on CareFind.</p>
-            <button onClick={() => alert('Subscription coming soon — payment setup in progress.')} style={{ padding: '11px 20px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
+            <button onClick={() => showToast('Subscription coming soon — payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
           </div>
         ) : (
           <div>
@@ -167,6 +169,8 @@ function ProductUpload({ businesses, onClose, onAdded }) {
           </div>
         )}
       </div>
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 }

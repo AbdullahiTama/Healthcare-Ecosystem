@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Toast, useToast } from '../../components/ui'
 
 export default function GoLive({ onClose }) {
   const { user } = useAuth()
@@ -10,6 +11,7 @@ export default function GoLive({ onClose }) {
   const [topic, setTopic] = useState('')
   const [description, setDescription] = useState('')
   const [starting, setStarting] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   async function startLive() {
     if (!topic.trim()) return
@@ -24,7 +26,7 @@ export default function GoLive({ onClose }) {
       started_at: new Date().toISOString(),
     }).select().single()
 
-    if (error) { alert('Could not start session'); setStarting(false); return }
+    if (error) { showToast('Could not start session: ' + error.message, { type: 'error' }); setStarting(false); return }
 
     // Post to feed so followers see it
     await supabase.from('posts').insert({
@@ -73,6 +75,8 @@ export default function GoLive({ onClose }) {
           {starting ? 'Starting...' : '🔴 Start Live Session'}
         </button>
       </div>
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 }

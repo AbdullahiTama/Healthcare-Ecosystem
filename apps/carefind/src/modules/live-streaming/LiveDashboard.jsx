@@ -3,15 +3,18 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
 import VideoUploader from '../../components/VideoUploader.jsx'
 import VideoRecorder from '../../components/VideoRecorder.jsx'
+import { ConfirmDialog } from '../../components/ui'
 
 function LiveDashboard() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobileOrTablet } = useBreakpoint()
   const [show, setShow] = useState(null)
   const [participants, setParticipants] = useState([])
   const [items, setItems] = useState([])
@@ -21,6 +24,7 @@ function LiveDashboard() {
   const [image, setImage] = useState(null)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false)
   const pollRef = useRef(null)
 
   const isHost = user && show && user.id === show.host_id
@@ -135,7 +139,7 @@ function LiveDashboard() {
   }
 
   async function endShow() {
-    if (!window.confirm('End this live show for everyone?')) return
+    setConfirmEndOpen(false)
     await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id)
     navigate('/')
   }
@@ -173,8 +177,16 @@ function LiveDashboard() {
     load()
   }
 
+  // Deliberately NOT wrapped in AppShell: this is a Full-Width Workspace
+  // (LAYOUTS.md) — a host's live control room, same "no nav distraction
+  // mid-task" reasoning as CareHub's consultation screen. Desktop still gets
+  // a real upgrade: composer/posted-items and audience moderation run side
+  // by side instead of one long stacked column, since a host needs both at
+  // once while live.
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }}>
+    <div style={isMobileOrTablet
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 1100, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ background: theme.navy, padding: '16px', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -205,80 +217,86 @@ function LiveDashboard() {
         </div>
       )}
 
-      {!ended && !scheduled && (
-        <>
-          {/* Composer */}
-          <div style={{ padding: 14, borderBottom: `1px solid ${theme.border}` }}>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Type something to post live…"
-              rows={2}
-              style={{ width: '100%', padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 8 }}
-            />
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', flex: 1 }}>
-                📷 {image ? image.name.slice(0, 20) : 'Add image'}
-                <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
-              </label>
-              <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                {sending ? 'Sending…' : '📡 Post Live'}
-              </button>
-            </div>
-            <VoiceRecorder showId={id} onRecorded={sendVoice} />
-            <SlideUploader showId={id} onPostSlide={sendSlide} />
-            <VideoRecorder showId={id} onRecorded={sendVideo} />
-            <VideoUploader showId={id} onUploaded={sendVideo} />
-            <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes — they go live instantly.</p>
-          </div>
-        </>
-      )}
+      <div style={isMobileOrTablet ? {} : { display: 'flex', alignItems: 'flex-start', gap: 0 }}>
+        <div style={isMobileOrTablet ? {} : { flex: 1, minWidth: 0, borderRight: `1px solid ${theme.border}` }}>
+          {!ended && !scheduled && (
+            <>
+              {/* Composer */}
+              <div style={{ padding: 14, borderBottom: `1px solid ${theme.border}` }}>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Type something to post live…"
+                  rows={2}
+                  style={{ width: '100%', padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 8 }}
+                />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <label style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', flex: 1 }}>
+                    📷 {image ? image.name.slice(0, 20) : 'Add image'}
+                    <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
+                  </label>
+                  <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+                    {sending ? 'Sending…' : '📡 Post Live'}
+                  </button>
+                </div>
+                <VoiceRecorder showId={id} onRecorded={sendVoice} />
+                <SlideUploader showId={id} onPostSlide={sendSlide} />
+                <VideoRecorder showId={id} onRecorded={sendVideo} />
+                <VideoUploader showId={id} onUploaded={sendVideo} />
+                <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes — they go live instantly.</p>
+              </div>
+            </>
+          )}
 
-      {/* Posted items so far */}
-      <div style={{ padding: '12px 14px' }}>
-        <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Posted to show ({items.length})</p>
-        {items.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Nothing posted yet. Your first post goes live to the audience.</p>}
-        {items.map((it) => (
-          <div key={it.id} style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>
-              {(it.profiles?.full_name?.[0] || it.profiles?.display_name?.[0] || '?').toUpperCase()}
-            </div>
-            <div style={{ flex: 1, background: theme.bg, borderRadius: 10, padding: it.kind === 'image' ? 4 : '8px 12px' }}>
-              {it.kind === 'text' && <p style={{ margin: 0, fontSize: 13.5, color: theme.textDark, whiteSpace: 'pre-wrap' }}>{it.content}</p>}
-              {it.kind === 'image' && <img src={it.content} alt="posted" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />}
-              {it.kind === 'voice' && <audio controls src={it.content} style={{ height: 36, maxWidth: 220 }} />}
-              {it.kind === 'video' && <video controls playsInline src={it.content} style={{ maxWidth: 200, borderRadius: 8, display: 'block' }} />}
-              {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}>📑 Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
-            </div>
+          {/* Posted items so far */}
+          <div style={{ padding: '12px 14px' }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Posted to show ({items.length})</p>
+            {items.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Nothing posted yet. Your first post goes live to the audience.</p>}
+            {items.map((it) => (
+              <div key={it.id} style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>
+                  {(it.profiles?.full_name?.[0] || it.profiles?.display_name?.[0] || '?').toUpperCase()}
+                </div>
+                <div style={{ flex: 1, background: theme.bg, borderRadius: 10, padding: it.kind === 'image' ? 4 : '8px 12px' }}>
+                  {it.kind === 'text' && <p style={{ margin: 0, fontSize: 13.5, color: theme.textDark, whiteSpace: 'pre-wrap' }}>{it.content}</p>}
+                  {it.kind === 'image' && <img src={it.content} alt="posted" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />}
+                  {it.kind === 'voice' && <audio controls src={it.content} style={{ height: 36, maxWidth: 220 }} />}
+                  {it.kind === 'video' && <video controls playsInline src={it.content} style={{ maxWidth: 200, borderRadius: 8, display: 'block' }} />}
+                  {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}>📑 Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Audience comments (moderation) */}
-      <div style={{ borderTop: `8px solid ${theme.bg}`, padding: '12px 14px' }}>
-        <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>💬 Audience comments — respond or moderate</p>
-        {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>No comments yet.</p>}
-        {comments.map((c) => (
-          <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, opacity: c.hidden ? 0.4 : 1 }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 1px 0', fontSize: 11.5 }}>
-                <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                <span style={{ color: theme.textLight, marginLeft: 6 }}>{timeAgo(c.created_at)}</span>
-                {c.hidden && <span style={{ color: theme.alert, marginLeft: 6, fontWeight: 700 }}>(hidden)</span>}
-              </p>
-              <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{c.content}</p>
+        {/* Audience comments (moderation) */}
+        <div style={isMobileOrTablet
+          ? { borderTop: `8px solid ${theme.bg}`, padding: '12px 14px' }
+          : { flex: 1, minWidth: 0, padding: '12px 14px', position: 'sticky', top: 64, maxHeight: 'calc(100vh - 64px)', overflowY: 'auto' }}>
+          <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>💬 Audience comments — respond or moderate</p>
+          {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>No comments yet.</p>}
+          {comments.map((c) => (
+            <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, opacity: c.hidden ? 0.4 : 1 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 1px 0', fontSize: 11.5 }}>
+                  <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
+                  <span style={{ color: theme.textLight, marginLeft: 6 }}>{timeAgo(c.created_at)}</span>
+                  {c.hidden && <span style={{ color: theme.alert, marginLeft: 6, fontWeight: 700 }}>(hidden)</span>}
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{c.content}</p>
+              </div>
+              {!c.hidden && (
+                <button onClick={() => hideComment(c.id)} style={{ background: 'none', border: 'none', color: theme.alert, fontSize: 11, fontWeight: 700 }}>Hide</button>
+              )}
             </div>
-            {!c.hidden && (
-              <button onClick={() => hideComment(c.id)} style={{ background: 'none', border: 'none', color: theme.alert, fontSize: 11, fontWeight: 700 }}>Hide</button>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* End show (host only) */}
       {isHost && !ended && (
         <div style={{ padding: 16 }}>
-          <button onClick={endShow} style={{ width: '100%', padding: 13, background: '#fef2f2', color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+          <button onClick={() => setConfirmEndOpen(true)} style={{ width: '100%', padding: 13, background: '#fef2f2', color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
             ⏹ End Live Show
           </button>
         </div>
@@ -289,6 +307,15 @@ function LiveDashboard() {
           <Link to="/" style={{ color: theme.tealDeep, fontWeight: 700, fontSize: 13 }}>Back to Feed</Link>
         </div>
       )}
+
+      <ConfirmDialog
+        show={confirmEndOpen}
+        onClose={() => setConfirmEndOpen(false)}
+        onConfirm={endShow}
+        title="End this live show for everyone?"
+        consequence="Everyone currently watching will be disconnected and the show will be marked ended. You can't resume it."
+        confirmLabel="End show"
+      />
     </div>
   )
 }

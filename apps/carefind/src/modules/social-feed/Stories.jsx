@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Toast, useToast } from '../../components/ui'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
@@ -20,6 +21,7 @@ function Stories() {
   const [liveShow, setLiveShow] = useState(null)
   const [upcomingShow, setUpcomingShow] = useState(null)
   const timerRef = useRef(null)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   const STORY_DURATION = 6000
 
@@ -134,7 +136,7 @@ function Stories() {
       setSTitle(''); setSBody(''); setSBg('#0f766e'); setSImage(null); setComposerOpen(false)
       loadStories()
     } else {
-      alert('Could not post story: ' + error.message)
+      showToast('Could not post story: ' + error.message, { type: 'error' })
     }
     setPosting(false)
   }
@@ -306,6 +308,8 @@ function Stories() {
           </div>
         </div>
       )}
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </>
   )
 }

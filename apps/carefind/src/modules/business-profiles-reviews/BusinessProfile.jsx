@@ -3,6 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
+import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Textarea, Loading, Empty, Toast, useToast } from '../../components/ui'
 
@@ -10,6 +14,8 @@ function BusinessProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [biz, setBiz] = useState(null)
   const [products, setProducts] = useState([])
   const [reviews, setReviews] = useState([])
@@ -119,12 +125,70 @@ function BusinessProfile() {
 
   const typeIcons = { pharmacy: '💊', hospital: '🏥', dental: '🦷', optical: '👁️', wellness: '🌿', skincare: '✨' }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 40 }}>
-      <div style={{ background: theme.heroGradient, padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Back to search</Link>
+  // Desktop only: the hero's key facts + primary actions, as a persistent
+  // sidebar card instead of a one-time scroll-past block (LAYOUTS.md's
+  // "Profile Detail" template — "trust signal and primary action both above
+  // the fold" holds even better on desktop as a sticky panel, since the main
+  // column here is a long scroll of products + reviews).
+  const sidebarContent = (
+    <StickySidebar width={300}>
+      <SidebarSection title="At a glance">
+        <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>Avg Rating</p>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{reviews.length}</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>Reviews</p>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{products.length}</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>Products</p>
+          </div>
+        </div>
+      </SidebarSection>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+      <SidebarSection title="Contact">
+        <p style={{ margin: '0 0 4px 0', fontSize: 13, color: theme.textMid }}>{biz.address}</p>
+        {biz.hours && <p style={{ margin: '0 0 14px 0', color: theme.textLight, fontSize: 12 }}>Hours: {biz.hours}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {waLink && (
+            <a
+              href={waLink}
+              target="_blank"
+              rel="noreferrer"
+              style={{ textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+            >
+              💬 WhatsApp
+            </a>
+          )}
+          {biz.maps_link && (
+            <a
+              href={biz.maps_link}
+              target="_blank"
+              rel="noreferrer"
+              style={{ textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealGradient, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+            >
+              Directions
+            </a>
+          )}
+        </div>
+      </SidebarSection>
+    </StickySidebar>
+  )
+
+  const bodyContent = (
+    <div style={isMobile ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 40 } : { fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile
+          ? { padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px' }
+          : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Back to search</Link>}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: isMobile ? 16 : 0 }}>
           <span style={{
             width: 46, height: 46, borderRadius: 14, background: 'rgba(255,255,255,0.15)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0,
@@ -139,55 +203,63 @@ function BusinessProfile() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
-            <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
+        {isMobile && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{reviews.length}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Reviews</p>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{products.length}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Products</p>
+            </div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{reviews.length}</p>
-            <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Reviews</p>
-          </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{products.length}</p>
-            <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Products</p>
-          </div>
-        </div>
+        )}
       </div>
 
-      <div style={{ padding: '20px 20px 0 20px' }}>
-        <p style={{ margin: '0 0 4px 0', fontSize: 13.5, color: theme.textMid }}>{biz.address}</p>
-        {biz.hours && <p style={{ margin: '0 0 14px 0', color: theme.textLight, fontSize: 12.5 }}>Hours: {biz.hours}</p>}
+      <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
+        {isMobile && (
+          <>
+            <p style={{ margin: '0 0 4px 0', fontSize: 13.5, color: theme.textMid }}>{biz.address}</p>
+            {biz.hours && <p style={{ margin: '0 0 14px 0', color: theme.textLight, fontSize: 12.5 }}>Hours: {biz.hours}</p>}
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-          {waLink && (
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noreferrer"
-              style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-            >
-              💬 WhatsApp
-            </a>
-          )}
-          {biz.maps_link && (
-            <a
-              href={biz.maps_link}
-              target="_blank"
-              rel="noreferrer"
-              style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-            >
-              Directions
-            </a>
-          )}
-        </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+                >
+                  💬 WhatsApp
+                </a>
+              )}
+              {biz.maps_link && (
+                <a
+                  href={biz.maps_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+                >
+                  Directions
+                </a>
+              )}
+            </div>
+          </>
+        )}
 
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Available Products
         </p>
         {products.length === 0 && <Empty icon="💊" message="No products listed yet." />}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }}>
+        <div style={isMobile
+          ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }
+          : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 26 }}>
           {products.map((p) => (
             <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
               <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -331,6 +403,21 @@ function BusinessProfile() {
       </div>
       <Toast msg={toast.msg} />
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => navigate('/')}
+      rightSidebar={sidebarContent}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 

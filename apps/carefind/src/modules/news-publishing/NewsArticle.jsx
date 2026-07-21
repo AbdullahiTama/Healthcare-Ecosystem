@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
+import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
@@ -11,6 +15,9 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 function NewsArticle() {
   const { id } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [more, setMore] = useState([])
@@ -132,24 +139,57 @@ function NewsArticle() {
   if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading…</div>
 
   if (!article || article.status !== 'approved') {
-    return (
-      <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+    const notFoundContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: 38, marginBottom: 12 }}>📰</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Article not available</h3>
           <p style={{ fontSize: 13, color: theme.textLight }}>This story may have been removed or is still under review.</p>
           <Link to="/news" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to News</Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+
+    if (isMobile) return notFoundContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {notFoundContent}
+      </AppShell>
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }}>
+  const sidebarContent = more.length > 0 && (
+    <StickySidebar>
+      <SidebarSection title="More from CareFind News">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {more.map((m) => (
+            <Link key={m.id} to={`/news/${m.id}`} style={{ display: 'flex', gap: 10, textDecoration: 'none', alignItems: 'center' }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: theme.radius.sm, flexShrink: 0,
+                background: m.hero_image_url ? `url(${m.hero_image_url}) center/cover` : theme.heroGradient,
+              }} />
+              <div>
+                <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.headline}</p>
+                <p style={{ margin: '2px 0 0 0', fontSize: 10.5, color: theme.textLight, fontFamily: 'system-ui' }}>{formatDate(m.published_at || m.created_at)}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </SidebarSection>
+    </StickySidebar>
+  )
+
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
+      : { fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontFamily: 'system-ui' }}>
-        <Link to="/news" style={{ fontSize: 13, fontWeight: 700, color: theme.textMid, textDecoration: 'none' }}>← News</Link>
+        {isMobile
+          ? <Link to="/news" style={{ fontSize: 13, fontWeight: 700, color: theme.textMid, textDecoration: 'none' }}>← News</Link>
+          : <span />}
         <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: theme.tealDeep, textTransform: 'uppercase' }}>CareFind Health News</span>
         <button
           onClick={() => { if (navigator.share) navigator.share({ title: article.headline, url: window.location.href }) }}
@@ -283,8 +323,8 @@ function NewsArticle() {
 
       {article.author_id && <SupportPrompt onGift={() => user ? setGifting(true) : (window.location.href = '/login')} creatorName="this article" />}
 
-      {/* More news */}
-      {more.length > 0 && (
+      {/* More news (mobile inline; desktop shows this in the sidebar instead) */}
+      {isMobile && more.length > 0 && (
         <div style={{ borderTop: `8px solid ${theme.bg}`, marginTop: 12, padding: '16px 18px' }}>
           <p style={{ margin: '0 0 12px 0', fontFamily: 'system-ui', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', color: theme.tealDeep, textTransform: 'uppercase' }}>More from CareFind News</p>
           {more.map((m) => (
@@ -301,8 +341,23 @@ function NewsArticle() {
         </div>
       )}
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => navigate('/')}
+      rightSidebar={sidebarContent}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 

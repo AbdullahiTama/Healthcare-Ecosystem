@@ -1,15 +1,22 @@
 import { useEffect, useState, useRef } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
+import { Toast, useToast } from '../../components/ui'
 
 function LiveShow() {
   const { id } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [show, setShow] = useState(null)
   const [items, setItems] = useState([])
   const [comments, setComments] = useState([])
@@ -25,6 +32,7 @@ function LiveShow() {
   const [whoOpen, setWhoOpen] = useState(null) // 'likes' | 'gifts' | 'shares' | 'views' | null
   const [whoList, setWhoList] = useState([])
   const [now, setNow] = useState(Date.now())
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
@@ -159,7 +167,12 @@ function LiveShow() {
       try { await navigator.share(shareData) } catch (e) {}
     } else {
       // Fallback: copy link to clipboard
-      try { await navigator.clipboard.writeText(window.location.href); alert('Live link copied! Share it anywhere.') } catch (e) { alert(window.location.href) }
+      try {
+        await navigator.clipboard.writeText(window.location.href)
+        showToast('Live link copied! Share it anywhere.', { type: 'success' })
+      } catch (e) {
+        showToast(`Could not copy the link automatically: ${window.location.href}`, { type: 'error', duration: 6000 })
+      }
     }
   }
 
@@ -252,15 +265,21 @@ function LiveShow() {
   if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading live show…</div>
 
   if (!show) {
-    return (
-      <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+    const notFoundContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ fontSize: 38, marginBottom: 12 }}>📡</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Live show not found</h3>
           <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to Feed</Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+    if (isMobile) return notFoundContent
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {notFoundContent}
+      </AppShell>
     )
   }
 
@@ -276,7 +295,7 @@ function LiveShow() {
     const mins = Math.max(0, Math.floor((diff % 3600000) / 60000))
     const secs = Math.max(0, Math.floor((diff % 60000) / 1000))
     return (
-      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
+      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: isMobile ? 480 : 640, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
         <div style={{ padding: '18px 16px' }}>
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
@@ -307,17 +326,24 @@ function LiveShow() {
 
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime — a red LIVE badge will appear when we go live. 💚</p>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }}>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       {/* Header */}
-      <div style={{ background: theme.heroGradient, padding: '18px 16px 20px', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
+      <div style={{
+        background: theme.heroGradient, padding: '18px 16px 20px', color: '#fff',
+        ...(isMobile ? { position: 'sticky', top: 0, zIndex: 10 } : { borderRadius: theme.radius.xl, marginBottom: 16 }),
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          {isMobile
+            ? <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+            : <span />}
           {isLive ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#dc2626', padding: '4px 12px', borderRadius: 20 }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />
@@ -534,8 +560,18 @@ function LiveShow() {
       )}
       {/* Gift recipient note: host, or a co-host guest if platform-hosted */}
 
-      <BottomNav />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

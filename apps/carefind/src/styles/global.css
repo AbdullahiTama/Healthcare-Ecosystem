@@ -12,8 +12,10 @@
   --teal-500: #14b8a6;
   --navy-900: #0f172a;
   --navy-800: #1e293b;
+  --teal-mist: #e8f3ee;
 
   /* Neutrals */
+  --bg-page: #f9f9f6;
   --gray-50: #f9fafb;
   --gray-100: #f3f4f6;
   --gray-200: #e5e7eb;
@@ -56,6 +58,8 @@
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
 
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Public marketing pages only — see TYPOGRAPHY.md */
+  --font-display: "Lora", Georgia, "Times New Roman", serif;
 }
 
 /* ── Base reset ──────────────────────────────────────────────────────────── */
@@ -71,9 +75,30 @@ html, body {
 body {
   font-family: var(--font-family);
   color: var(--navy-900);
-  background: var(--gray-50);
+  background: var(--bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
+   @font-face only, never preloaded — see apps/carehub/src/styles/global.css
+   for the full rationale. Same self-hosted files, shared token. */
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/lora-latin.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/lora-latin-ext.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+20A0-20AB, U+20AD-20C0;
 }
 
 /* ── Focus visibility (ACCESSIBILITY.md — every interactive element needs a

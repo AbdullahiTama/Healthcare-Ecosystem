@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { theme } from '../../styles/theme'
-import { Card, Pill } from '../ui'
+import { StickySidebar, SidebarSection } from './SidebarSection.jsx'
 
 // Contextual desktop sidebar. Deliberately "dumb": every section is fed by
 // data the page already fetches (posts/news/live sessions) — nothing here
@@ -10,30 +10,13 @@ import { Card, Pill } from '../ui'
 // (Recommended Providers, Upcoming Appointments, Health Tips) are omitted
 // rather than filled with placeholders.
 
-function SidebarSection({ title, children }) {
-  return (
-    <Card style={{ padding: 16 }}>
-      <p style={{ margin: '0 0 12px 0', fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {title}
-      </p>
-      {children}
-    </Card>
-  )
-}
-
 export default function RightSidebar({ trending = [], news = [], live = [], platformLive = null }) {
   const hasAny = trending.length > 0 || news.length > 0 || live.length > 0 || platformLive
 
   if (!hasAny) return null
 
   return (
-    <aside
-      style={{
-        width: 320, flexShrink: 0, position: 'sticky', top: 80,
-        height: 'fit-content', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto',
-        display: 'flex', flexDirection: 'column', gap: 16,
-      }}
-    >
+    <StickySidebar>
       {(live.length > 0 || platformLive) && (
         <SidebarSection title="🔴 Live now">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -88,6 +71,6 @@ export default function RightSidebar({ trending = [], news = [], live = [], plat
           </div>
         </SidebarSection>
       )}
-    </aside>
+    </StickySidebar>
   )
 }

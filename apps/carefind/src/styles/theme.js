@@ -10,7 +10,7 @@ export const theme = {
   tealBright: '#14b8a6',
   navy: '#0f172a',
   navySoft: '#1e293b',
-  bg: '#f9fafb',
+  bg: '#f9f9f6',
   cardBg: '#ffffff',
   border: '#f0f0f0',
   textDark: '#0f172a',
@@ -42,10 +42,14 @@ export const theme = {
   warningBg: '#fffbeb',
   dangerBg: '#fef2f2',
   infoBg: '#eff6ff',
+  tealMist: '#e8f3ee',
 
   // ── Typography scale (TYPOGRAPHY.md) ────────────────────────────────────────
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   fontMono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  // Marketing/public pages only — never product screens. See TYPOGRAPHY.md's
+  // "Display serif" section.
+  fontDisplay: '"Lora", Georgia, "Times New Roman", serif',
   type: {
     display: { size: 24, weight: 900, lineHeight: 1.2 },
     h1: { size: 21, weight: 900, lineHeight: 1.25 },

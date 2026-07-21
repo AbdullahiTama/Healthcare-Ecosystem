@@ -3,7 +3,11 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { ConfirmDialog, Toast, useToast } from '../../components/ui'
 
 const GIFT_TIERS = [
   { emoji: '💊', label: 'Pill', coins: 1 },
@@ -140,7 +144,7 @@ function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
 }
 
 // ── Voice Note Recorder ───────────────────────
-function VoiceRecorder({ onSend }) {
+function VoiceRecorder({ onSend, onError }) {
   const [recording, setRecording] = useState(false)
   const [audioURL, setAudioURL] = useState(null)
   const [duration, setDuration] = useState(0)
@@ -164,7 +168,7 @@ function VoiceRecorder({ onSend }) {
       setRecording(true)
       setDuration(0)
       timer.current = setInterval(() => setDuration(d => d + 1), 1000)
-    } catch { alert('Microphone access needed for voice notes') }
+    } catch { onError?.('Microphone access needed for voice notes') }
   }
 
   function stopRec() {
@@ -206,6 +210,8 @@ export default function LiveSession() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [session, setSession] = useState(null)
   const [messages, setMessages] = useState([])
   const [strokes, setStrokes] = useState([])
@@ -218,6 +224,8 @@ export default function LiveSession() {
   const [liked, setLiked] = useState(false)
   const [likeAnim, setLikeAnim] = useState(false)
   const [wallet, setWallet] = useState(0)
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const chatEndRef = useRef(null)
   const channelRef = useRef(null)
 
@@ -296,7 +304,7 @@ export default function LiveSession() {
   }
 
   async function sendGift(gift) {
-    if (!user || wallet < gift.coins) { alert('Not enough CareCoins'); return }
+    if (!user || wallet < gift.coins) { showToast('Not enough CareCoins', { type: 'warning' }); return }
 
     const { data: result, error } = await supabase.rpc('send_gift', {
       p_recipient: session.host_id,
@@ -307,7 +315,7 @@ export default function LiveSession() {
     })
 
     if (error || result !== 'ok') {
-      alert(result === 'insufficient' ? 'Not enough CareCoins' : 'Could not send gift: ' + (error?.message || result))
+      showToast(result === 'insufficient' ? 'Not enough CareCoins' : 'Could not send gift: ' + (error?.message || result), { type: result === 'insufficient' ? 'warning' : 'error' })
       return
     }
 
@@ -345,7 +353,7 @@ export default function LiveSession() {
   }
 
   async function endSession() {
-    if (!window.confirm('End this live session?')) return
+    setConfirmEndOpen(false)
 
     const duration = Math.floor((Date.now() - new Date(session.started_at)) / 60000)
     const totalGifts = messages.filter(m => m.type === 'gift').length
@@ -374,7 +382,7 @@ export default function LiveSession() {
 
   function shareSession() {
     if (navigator.share) navigator.share({ title: session?.topic, url: window.location.href })
-    else { navigator.clipboard?.writeText(window.location.href); alert('Link copied!') }
+    else { navigator.clipboard?.writeText(window.location.href); showToast('Link copied!', { type: 'success' }) }
   }
 
   if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading live session...</div>
@@ -382,12 +390,17 @@ export default function LiveSession() {
   const host = session?.profiles
   const hostName = host?.full_name || host?.display_name || 'Host'
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 80, background: '#f9fafb', minHeight: '100vh' }}>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 80, background: '#f9fafb', minHeight: '100vh' }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto', background: '#f9fafb' }}>
       {/* Header */}
-      <div style={{ background: theme.heroGradient, padding: '14px 16px 14px', color: '#fff', position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{
+        background: theme.heroGradient, padding: '14px 16px 14px', color: '#fff',
+        ...(isMobile ? { position: 'sticky', top: 0, zIndex: 50 } : { borderRadius: theme.radius.xl, marginBottom: 16 }),
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>←</Link>
+          {isMobile && <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>←</Link>}
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: session.status === 'live' ? '#4ade80' : '#94a3b8', animation: session.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
@@ -397,7 +410,7 @@ export default function LiveSession() {
             <p style={{ margin: 0, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{session.topic}</p>
           </div>
           {isHost && (
-            <button onClick={endSession} style={{ padding: '5px 10px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>End</button>
+            <button onClick={() => setConfirmEndOpen(true)} style={{ padding: '5px 10px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>End</button>
           )}
         </div>
 
@@ -503,7 +516,7 @@ export default function LiveSession() {
                 />
                 <button onClick={() => sendMessage(input)} style={{ padding: '7px 14px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>Send</button>
               </div>
-              <VoiceRecorder onSend={audioUrl => sendMessage('🎙️ Voice note', 'voice', audioUrl)} />
+              <VoiceRecorder onSend={audioUrl => sendMessage('🎙️ Voice note', 'voice', audioUrl)} onError={msg => showToast(msg, { type: 'error' })} />
             </div>
           )}
           {session.status === 'ended' && <p style={{ padding: '10px 12px', color: theme.textLight, fontSize: 12, textAlign: 'center' }}>This session has ended.</p>}
@@ -514,7 +527,26 @@ export default function LiveSession() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes fadeIn { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
       `}</style>
-      <BottomNav />
+
+      <ConfirmDialog
+        show={confirmEndOpen}
+        onClose={() => setConfirmEndOpen(false)}
+        onConfirm={endSession}
+        title="End this live session?"
+        consequence="Everyone currently watching will be disconnected, the chat and drawing board will be cleared, and the session will be marked ended. You can't resume it."
+        confirmLabel="End session"
+      />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }

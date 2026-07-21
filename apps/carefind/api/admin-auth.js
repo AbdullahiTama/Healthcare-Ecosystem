@@ -237,8 +237,14 @@ export default async function handler(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
-    const { error } = await supabase.from('withdrawal_requests').update({ status: 'approved' }).eq('id', id)
+    // request_withdrawal() already deducted the coins when the request was
+    // filed, so approval is just a status change. Routed through a
+    // SECURITY DEFINER RPC (row-locks the request) instead of a JS
+    // read-then-write so two concurrent approve calls for the same request
+    // (retry, stale tab, two admins) can't both pass the pending check.
+    const { data: result, error } = await supabase.rpc('approve_withdrawal_request', { p_request_id: id })
     if (error) return res.status(400).json({ error: error.message })
+    if (result !== 'ok') return res.status(400).json({ error: result === 'not_found' ? 'Withdrawal request not found' : `Already ${result.replace('already_', '')}` })
     return res.status(200).json({ success: true })
   }
 
@@ -248,8 +254,16 @@ export default async function handler(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
-    const { error } = await supabase.from('withdrawal_requests').update({ status: 'rejected' }).eq('id', id)
+
+    // Coins were deducted when the request was filed — a rejection has to
+    // give them back, or they'd just vanish. reject_withdrawal_request()
+    // does the pending-status check, the refund, and the status change as
+    // one atomic unit (row-locked), replacing a JS read-balance/
+    // compute-in-JS/write sequence that could double-refund under a
+    // concurrent double-submit.
+    const { data: result, error } = await supabase.rpc('reject_withdrawal_request', { p_request_id: id })
     if (error) return res.status(400).json({ error: error.message })
+    if (result !== 'ok') return res.status(400).json({ error: result === 'not_found' ? 'Withdrawal request not found' : `Already ${result.replace('already_', '')}` })
     return res.status(200).json({ success: true })
   }
 

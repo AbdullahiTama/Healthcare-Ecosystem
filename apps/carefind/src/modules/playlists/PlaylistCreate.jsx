@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import DrawingBoard from '../../components/DrawingBoard.jsx'
 import { RichTextInput } from '../social-feed/richText.jsx'
@@ -20,6 +23,8 @@ const VISUAL_THEMES = {
 function PlaylistCreate() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const { id: existingId, partId: editPartId } = useParams()
   const [step, setStep] = useState(existingId ? 'parts' : 'info')
   const [editingId, setEditingId] = useState(editPartId || null)
@@ -132,15 +137,17 @@ function PlaylistCreate() {
 
   const inputStyle = { width: '100%', padding: '12px 14px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: 'inherit' }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }}>
-      <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto', background: '#fff' }}>
+      <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff', ...(isMobile ? {} : { borderRadius: theme.radius.xl, marginBottom: 20 }) }}>
+        {isMobile && <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>}
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 900 }}>🎬 Create Playlist</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>Build a series part by part.</p>
       </div>
 
-      <div style={{ padding: 18 }}>
+      <div style={isMobile ? { padding: 18 } : {}}>
         {error && <p style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{error}</p>}
 
         {step === 'info' && (
@@ -251,8 +258,16 @@ function PlaylistCreate() {
         />
       )}
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

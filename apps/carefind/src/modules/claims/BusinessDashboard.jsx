@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 
 function BusinessDashboard() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [businesses, setBusinesses] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [products, setProducts] = useState([])
@@ -82,105 +88,7 @@ function BusinessDashboard() {
   if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
 
   if (!user) {
-    async function saveProduct(productId) {
-    setSavingProduct(true)
-    await supabase.from('products').update({
-      price: parseInt(editPrice),
-      stock: parseInt(editStock),
-    }).eq('id', productId)
-    setEditingProduct(null)
-    await loadBusinessData(selectedId)
-    setSavingProduct(false)
-  }
-
-  async function toggleProductVisibility(productId, currentVal) {
-    await supabase.from('products').update({ list_on_carefind: !currentVal }).eq('id', productId)
-    await loadBusinessData(selectedId)
-  }
-
-  function downloadTemplate() {
-    const template = [
-      'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
-    ].join('\n')
-    const blob = new Blob([template], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'carefind_stock_template.csv'
-    a.click()
-  }
-
-  async function handleCSVUpload(e) {
-    const file = e.target.files[0]
-    if (!file || !selectedId) return
-    setCsvUploading(true)
-    setCsvResult(null)
-
-    const text = await file.text()
-    const lines = text.trim().split('\n')
-    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''))
-
-    const nameIdx = headers.indexOf('name')
-    const genericIdx = headers.indexOf('generic_name')
-    const priceIdx = headers.indexOf('price')
-    const stockIdx = headers.indexOf('stock')
-    const categoryIdx = headers.indexOf('category')
-    const emojiIdx = headers.indexOf('emoji')
-
-    if (nameIdx === -1 || priceIdx === -1 || stockIdx === -1) {
-      setCsvResult({ error: 'CSV must have columns: name, price, stock' })
-      setCsvUploading(false)
-      return
-    }
-
-    const rows = lines.slice(1).filter(l => l.trim())
-    let added = 0; let updated = 0; let errors = 0
-
-    for (const row of rows) {
-      try {
-        const cols = row.split(',').map(c => c.trim().replace(/"/g, ''))
-        const name = cols[nameIdx]
-        const price = parseInt(cols[priceIdx]) || 0
-        const stock = parseInt(cols[stockIdx]) || 0
-        if (!name || price <= 0) { errors++; continue }
-
-        // Check if product exists
-        const { data: existing } = await supabase
-          .from('products')
-          .select('id')
-          .eq('business_id', selectedId)
-          .ilike('name', name)
-          .maybeSingle()
-
-        const productData = {
-          name,
-          price,
-          stock,
-          business_id: selectedId,
-          list_on_carefind: true,
-          generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
-          category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
-        }
-
-        if (existing) {
-          await supabase.from('products').update({ price, stock, list_on_carefind: true }).eq('id', existing.id)
-          updated++
-        } else {
-          await supabase.from('products').insert(productData)
-          added++
-        }
-      } catch { errors++ }
-    }
-
-    setCsvResult({ added, updated, errors, total: rows.length })
-    await loadBusinessData(selectedId)
-    setCsvUploading(false)
-  }
-
-  return (
+    return (
       <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to manage your business.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
@@ -189,109 +97,14 @@ function BusinessDashboard() {
   }
 
   if (businesses.length === 0) {
-    async function saveProduct(productId) {
-    setSavingProduct(true)
-    await supabase.from('products').update({
-      price: parseInt(editPrice),
-      stock: parseInt(editStock),
-    }).eq('id', productId)
-    setEditingProduct(null)
-    await loadBusinessData(selectedId)
-    setSavingProduct(false)
-  }
-
-  async function toggleProductVisibility(productId, currentVal) {
-    await supabase.from('products').update({ list_on_carefind: !currentVal }).eq('id', productId)
-    await loadBusinessData(selectedId)
-  }
-
-  function downloadTemplate() {
-    const template = [
-      'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
-    ].join('\n')
-    const blob = new Blob([template], { type: 'text/csv' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'carefind_stock_template.csv'
-    a.click()
-  }
-
-  async function handleCSVUpload(e) {
-    const file = e.target.files[0]
-    if (!file || !selectedId) return
-    setCsvUploading(true)
-    setCsvResult(null)
-
-    const text = await file.text()
-    const lines = text.trim().split('\n')
-    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''))
-
-    const nameIdx = headers.indexOf('name')
-    const genericIdx = headers.indexOf('generic_name')
-    const priceIdx = headers.indexOf('price')
-    const stockIdx = headers.indexOf('stock')
-    const categoryIdx = headers.indexOf('category')
-    const emojiIdx = headers.indexOf('emoji')
-
-    if (nameIdx === -1 || priceIdx === -1 || stockIdx === -1) {
-      setCsvResult({ error: 'CSV must have columns: name, price, stock' })
-      setCsvUploading(false)
-      return
-    }
-
-    const rows = lines.slice(1).filter(l => l.trim())
-    let added = 0; let updated = 0; let errors = 0
-
-    for (const row of rows) {
-      try {
-        const cols = row.split(',').map(c => c.trim().replace(/"/g, ''))
-        const name = cols[nameIdx]
-        const price = parseInt(cols[priceIdx]) || 0
-        const stock = parseInt(cols[stockIdx]) || 0
-        if (!name || price <= 0) { errors++; continue }
-
-        // Check if product exists
-        const { data: existing } = await supabase
-          .from('products')
-          .select('id')
-          .eq('business_id', selectedId)
-          .ilike('name', name)
-          .maybeSingle()
-
-        const productData = {
-          name,
-          price,
-          stock,
-          business_id: selectedId,
-          list_on_carefind: true,
-          generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
-          category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
-        }
-
-        if (existing) {
-          await supabase.from('products').update({ price, stock, list_on_carefind: true }).eq('id', existing.id)
-          updated++
-        } else {
-          await supabase.from('products').insert(productData)
-          added++
-        }
-      } catch { errors++ }
-    }
-
-    setCsvResult({ added, updated, errors, total: rows.length })
-    await loadBusinessData(selectedId)
-    setCsvUploading(false)
-  }
-
-  return (
-      <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
-        <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-          <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Business Dashboard</h1>
+    const noBusinessContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{
+          background: theme.heroGradient, color: '#fff',
+          ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
+        }}>
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+          <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Business Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{
@@ -311,8 +124,16 @@ function BusinessDashboard() {
             Claim a Business
           </Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+
+    if (isMobile) return noBusinessContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {noBusinessContent}
+      </AppShell>
     )
   }
 
@@ -325,11 +146,6 @@ function BusinessDashboard() {
     setEditingProduct(null)
     await loadBusinessData(selectedId)
     setSavingProduct(false)
-  }
-
-  async function toggleProductVisibility(productId, currentVal) {
-    await supabase.from('products').update({ list_on_carefind: !currentVal }).eq('id', productId)
-    await loadBusinessData(selectedId)
   }
 
   function downloadTemplate() {
@@ -414,11 +230,16 @@ function BusinessDashboard() {
     setCsvUploading(false)
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Business Dashboard</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Business Dashboard</h1>
 
         {businesses.length > 1 && (
           <select
@@ -432,7 +253,7 @@ function BusinessDashboard() {
       </div>
 
       {selectedBiz && (
-        <div style={{ padding: '20px 20px 0 20px' }}>
+        <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, marginBottom: 20,
@@ -459,7 +280,9 @@ function BusinessDashboard() {
           <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
             Products ({products.length})
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+          <div style={isMobile
+            ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10, marginBottom: 24 }}>
             {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products yet — add them in CareHub.</p>}
             {products.map((p) => (
               <div key={p.id} style={{
@@ -488,7 +311,9 @@ function BusinessDashboard() {
           <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
             Reviews
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={isMobile
+            ? { display: 'flex', flexDirection: 'column', gap: 10 }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
             {reviews.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reviews yet.</p>}
             {reviews.map((r) => (
               <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
@@ -509,8 +334,16 @@ function BusinessDashboard() {
         </div>
       )}
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

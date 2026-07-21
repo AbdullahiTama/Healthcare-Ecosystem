@@ -3,15 +3,22 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
+import { useBreakpoint } from './hooks/useBreakpoint'
+import { useHeaderIdentity } from './hooks/useHeaderIdentity'
+import AppShell from './components/layout/AppShell.jsx'
+import { StickySidebar, SidebarSection } from './components/layout/SidebarSection.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
+import { Card, ConfirmDialog, Toast, useToast } from './components/ui'
 
 function PublicProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [followerCount, setFollowerCount] = useState(0)
@@ -34,6 +41,8 @@ function PublicProfile() {
   const [subInfo, setSubInfo] = useState(null)
   const [subscribing, setSubscribing] = useState(false)
   const [openPost, setOpenPost] = useState(null)
+  const [confirmSubOpen, setConfirmSubOpen] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const timerRef = useRef(null)
   const STORY_DURATION = 6000
 
@@ -104,27 +113,31 @@ function PublicProfile() {
     if (res.renewed) console.log('subscription auto-renewed')
   }
 
-  async function handleSubscribe(priceCoins) {
+  function handleSubscribe(priceCoins) {
     if (!user) { navigate('/login'); return }
-    const naira = coinsToNaira(priceCoins)
-    if (!window.confirm(`Subscribe for ${priceCoins} \ud83e\ude99 (\u20a6${naira.toLocaleString()}) per month?\n\nThis renews automatically from your CareCoins wallet. You can cancel anytime.`)) return
+    setConfirmSubOpen(true)
+  }
+
+  async function confirmSubscribe() {
+    setConfirmSubOpen(false)
+    const priceCoins = profile.subscription_price
     setSubscribing(true)
     const res = await subscribe(user.id, id, priceCoins)
     setSubscribing(false)
     if (res.insufficient) {
-      if (window.confirm('Not enough CareCoins. Top up your wallet now?')) navigate('/wallet')
+      showToast('Not enough CareCoins to subscribe. Top up your wallet to continue.', { type: 'warning' })
       return
     }
-    if (res.error) { alert('Could not subscribe: ' + res.error); return }
+    if (res.error) { showToast('Could not subscribe: ' + res.error, { type: 'error' }); return }
     await refreshAccess()
     notify({ recipientId: id, actorId: user.id, type: 'gift', message: 'subscribed to your content \ud83d\udd13', link: `/u/${user.id}` })
-    alert('Subscribed! You can now read all their subscriber-only content.')
+    showToast('Subscribed! You can now read all their subscriber-only content.', { type: 'success' })
   }
 
   async function handleCancelAutoRenew() {
-    if (!window.confirm('Turn off auto-renew? You keep access until the current month ends.')) return
     await cancelAutoRenew(user.id, id)
     await refreshAccess()
+    showToast("Auto-renew turned off. You'll keep access until your current period ends.", { type: 'info' })
   }
 
   async function loadUserReviews() {
@@ -161,7 +174,7 @@ function PublicProfile() {
       comment: myComment.trim() || null,
     })
     setPostingReview(false)
-    if (error) { alert('Could not post review: ' + error.message); return }
+    if (error) { showToast('Could not post review: ' + error.message, { type: 'error' }); return }
     setMyRating(5)
     setMyComment('')
     loadUserReviews()
@@ -215,11 +228,13 @@ function PublicProfile() {
   if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading...</div>
 
   if (!profile) {
-    return (
-      <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-        <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
-        </div>
+    const notFoundContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
+        {isMobile && (
+          <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
+            <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          </div>
+        )}
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ fontSize: 40, marginBottom: 14 }}>👤</div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Profile not found</h3>
@@ -228,8 +243,16 @@ function PublicProfile() {
             Back to Feed
           </Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+
+    if (isMobile) return notFoundContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {notFoundContent}
+      </AppShell>
     )
   }
 
@@ -237,8 +260,152 @@ function PublicProfile() {
   const isOwnProfile = user?.id === id
   const hasStory = userStories.length > 0
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+  // Primary action (Edit Profile / Follow + Subscribe) — identical content,
+  // mobile positions it absolutely over the hero; desktop stacks it in the
+  // sidebar card instead (LAYOUTS.md: "primary action lives in a fixed,
+  // predictable place per template").
+  const actionButtons = (
+    <div style={isMobile ? { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } : { display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {isOwnProfile ? (
+        <Link to="/profile" style={{
+          border: `1px solid ${theme.border}`, background: '#fff', color: theme.navy, textAlign: 'center',
+          borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+        }}>
+          Edit Profile
+        </Link>
+      ) : user ? (
+        <>
+          <button onClick={toggleFollow} style={{
+            background: isFollowing ? '#fff' : theme.tealGradient,
+            color: isFollowing ? theme.navy : '#fff',
+            border: `1px solid ${isFollowing ? theme.border : 'transparent'}`,
+            borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700,
+          }}>
+            {isFollowing ? 'Following' : '+ Follow'}
+          </button>
+
+          {!(profile?.subscription_price > 0) && profile?.is_verified && (
+            <span
+              style={{
+                background: theme.bg, color: theme.textLight, textAlign: 'center',
+                border: `1px solid ${theme.border}`,
+                borderRadius: 20, padding: '7px 14px', fontSize: 12, fontWeight: 700,
+                cursor: 'not-allowed', opacity: 0.75,
+              }}
+            >
+              🔒 Not accepting subscriptions
+            </span>
+          )}
+
+          {profile?.subscription_price > 0 && (
+            subActive ? (
+              <button
+                onClick={handleCancelAutoRenew}
+                style={{
+                  background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`,
+                  borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
+                }}
+              >
+                ✓ Subscribed
+              </button>
+            ) : (
+              <button
+                onClick={() => handleSubscribe(profile.subscription_price)}
+                disabled={subscribing}
+                style={{
+                  background: theme.navy, color: '#fff', border: 'none',
+                  borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
+                }}
+              >
+                {subscribing ? '…' : `🔒 Subscribe · ${profile.subscription_price} 🪙/mo`}
+              </button>
+            )
+          )}
+        </>
+      ) : (
+        <Link to="/login" style={{
+          background: theme.tealGradient, color: '#fff', border: 'none', textAlign: 'center',
+          borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+        }}>
+          + Follow
+        </Link>
+      )}
+    </div>
+  )
+
+  // Desktop only: the whole hero (cover, avatar, name, bio, stats, primary
+  // action) becomes one persistent sidebar card, since the main column below
+  // is a tabbed, potentially-long scroll (posts/reviews) — same pattern as
+  // BusinessProfile/DrugProfile's sidebar split.
+  const sidebarContent = (
+    <StickySidebar width={300}>
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ height: 80, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.heroGradient }} />
+        <div style={{ padding: '0 16px 16px 16px' }}>
+          <div
+            onClick={() => { if (hasStory) setViewerIndex(0) }}
+            style={{
+              width: 68, height: 68, borderRadius: '50%', padding: hasStory ? 3 : 0, marginTop: -34,
+              background: hasStory ? `linear-gradient(135deg, ${theme.tealBright}, ${theme.tealDeep})` : 'transparent',
+              cursor: hasStory ? 'pointer' : 'default',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+            }}
+          >
+            <div style={{
+              width: 62, height: 62, borderRadius: '50%',
+              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealGradient,
+              border: '3px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 22, fontWeight: 800, boxSizing: 'border-box',
+            }}>
+              {!profile?.avatar_url && (displayName[0]?.toUpperCase() || '?')}
+            </div>
+          </div>
+
+          <h1 style={{ fontSize: 17, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
+          {profile.display_name && <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: theme.textLight }}>@{profile.display_name}</p>}
+          {profile.is_verified && (
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 10px', borderRadius: 20, border: `1px solid ${theme.tealBright}`, display: 'inline-block', marginBottom: 8 }}>
+              ✓ Verified {profile.verification_label}
+            </span>
+          )}
+          {profile.bio && (
+            <p style={{ margin: '6px 0 0 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {profile.bio}
+            </p>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, marginBottom: 12 }}>
+            {profile.location && <span style={{ fontSize: 12, color: theme.textLight }}>📍 {profile.location}</span>}
+            {profile.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: theme.tealDeep, textDecoration: 'none' }}>🔗 {profile.website}</a>}
+          </div>
+
+          <div style={{ display: 'flex', gap: 16, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '10px 0', marginBottom: 14 }}>
+            <div>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>{postCount}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>Posts</p>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>{followerCount}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>Followers</p>
+            </div>
+            <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>
+                {userReviews.length ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / userReviews.length).toFixed(1) : '—'}
+                <span style={{ color: theme.warning, fontSize: 12 }}> ★</span>
+              </p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
+            </button>
+          </div>
+
+          {actionButtons}
+        </div>
+      </Card>
+    </StickySidebar>
+  )
+
+  const bodyContent = (
+    <div style={isMobile ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {isMobile && (
       <div style={{ position: 'relative', marginBottom: 55 }}>
         <div style={{ height: 110, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.heroGradient, position: 'relative' }}>
           <Link to="/" style={{ position: 'absolute', top: 16, left: 16, color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
@@ -337,8 +504,11 @@ function PublicProfile() {
           )}
         </div>
       </div>
+      )}
 
-      <div style={{ padding: '0 16px 16px 16px' }}>
+      <div style={isMobile ? { padding: '0 16px 16px 16px' } : {}}>
+        {isMobile && (
+        <>
         <h1 style={{ fontSize: 20, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
         {profile.display_name && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textLight }}>@{profile.display_name}</p>}
         {profile.is_verified && (
@@ -373,6 +543,8 @@ function PublicProfile() {
             <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
           </button>
         </div>
+        </>
+        )}
 
         {/* Content tabs */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, marginBottom: 12, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -483,7 +655,7 @@ function PublicProfile() {
           if (list.length === 0) return <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '24px 0' }}>Nothing here yet.</p>
           const typeIcon = { question: '❓', review: '⭐', article: '📄', premium: '💎', visual: '🎨' }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div style={isMobile ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
               {list.map(post => (
                 <button key={post.id} onClick={() => setOpenPost(post)} style={{ textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
                   <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', background: theme.cardBg, height: 150, display: 'flex', flexDirection: 'column' }}>
@@ -570,8 +742,34 @@ function PublicProfile() {
         </div>
       )}
 
-      <BottomNav />
+      <ConfirmDialog
+        show={confirmSubOpen}
+        onClose={() => setConfirmSubOpen(false)}
+        onConfirm={confirmSubscribe}
+        title="Subscribe to this creator?"
+        consequence={`You'll be charged ${profile?.subscription_price} CareCoin${profile?.subscription_price === 1 ? '' : 's'} (₦${coinsToNaira(profile?.subscription_price || 0).toLocaleString()}) per month for access to their subscriber-only content. This renews automatically from your CareCoins wallet — you can turn off auto-renew anytime.`}
+        confirmLabel="Subscribe"
+        danger={false}
+      />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => navigate('/')}
+      rightSidebar={sidebarContent}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 

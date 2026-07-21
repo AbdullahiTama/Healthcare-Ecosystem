@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Toast, useToast } from '../../components/ui'
 
 // Full user Go Live: go live now, invite co-hosts, or schedule an upcoming
 // show with an optional trailer. Mirrors the admin's Go Live features.
@@ -19,6 +20,7 @@ function UserGoLive({ onClose }) {
   const [guests, setGuests] = useState([])
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   async function searchGuests(q) {
     setGuestSearch(q)
@@ -83,9 +85,14 @@ function UserGoLive({ onClose }) {
     if (insErr || !show) { setError('Could not schedule: ' + (insErr?.message || 'unknown')); setCreating(false); return }
     await inviteGuests(show.id, show.title)
     setCreating(false)
-    onClose && onClose()
-    alert('Show scheduled! Your audience will see a countdown. Start it from your live dashboard when ready.')
-    navigate(`/live-dashboard/${show.id}`)
+    // Show the confirmation toast before navigating away — a toast tied to
+    // this component's state would otherwise vanish the instant onClose()
+    // unmounts it, so give the user a moment to actually read it first.
+    showToast('Show scheduled! Your audience will see a countdown. Start it from your live dashboard when ready.', { type: 'success' })
+    setTimeout(() => {
+      onClose && onClose()
+      navigate(`/live-dashboard/${show.id}`)
+    }, 1200)
   }
 
   const inputStyle = { width: '100%', padding: '12px 14px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: 'inherit' }
@@ -160,6 +167,8 @@ function UserGoLive({ onClose }) {
           </button>
         )}
         <button onClick={onClose} style={{ display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: theme.textLight, fontSize: 13, fontWeight: 600 }}>Cancel</button>
+
+        <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
       </div>
     </div>
   )

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 
 const SPECIALTIES = [
@@ -16,6 +19,9 @@ const EXPERIENCE_OPTIONS = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 
 
 function VerifyProfessional() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [step, setStep] = useState(1) // 1 = personal details, 2 = credential upload
   const [existingRequest, setExistingRequest] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -119,18 +125,23 @@ function VerifyProfessional() {
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Professional Verification</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 560, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 50px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Professional Verification</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
           Get your verified badge — your specialty will be publicly displayed on all your posts and profile
         </p>
       </div>
 
-      <div style={{ padding: '0 20px', marginTop: -28 }}>
-        <div style={{ background: theme.cardBg, borderRadius: 20, padding: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}>
+      <div style={isMobile ? { padding: '0 20px', marginTop: -28 } : {}}>
+        <div style={{ background: theme.cardBg, borderRadius: 20, padding: isMobile ? 18 : 24, boxShadow: isMobile ? '0 4px 16px rgba(0,0,0,0.08)' : theme.elevation[2], border: isMobile ? 'none' : `1px solid ${theme.border}` }}>
 
           {existingRequest ? (
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
@@ -309,8 +320,16 @@ function VerifyProfessional() {
           )}
         </div>
       </div>
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

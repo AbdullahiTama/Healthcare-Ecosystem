@@ -1,8 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, Pill, Sel, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 
@@ -15,6 +18,9 @@ const NG_STATES = [
 
 function Search() {
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('products')
   const [stateFilter, setStateFilter] = useState('')
@@ -126,8 +132,14 @@ function Search() {
 
   const showingFeatured = tab === 'products' && !query.trim()
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+  const CATEGORY_TABS = [
+    { key: 'products', label: 'Products', icon: '💊' },
+    { key: 'businesses', label: 'Health Facilities', icon: '🏥' },
+    { key: 'professionals', label: 'Professionals', icon: '🩺' },
+  ]
+
+  const bodyContent = (
+    <div style={isMobile ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <style>{`
         @keyframes medmarket-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
@@ -135,49 +147,63 @@ function Search() {
         .mm-card:active { transform: scale(0.96); }
       `}</style>
 
-      <div style={{ background: theme.heroGradient, padding: '24px 18px 22px', borderRadius: '0 0 26px 26px', color: '#fff' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile
+          ? { padding: '24px 18px 22px', borderRadius: '0 0 26px 26px' }
+          : { padding: '28px 32px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span style={{ fontSize: 24 }}>🛒</span>
           <h1 style={{ margin: 0, fontSize: 25, fontWeight: 900, letterSpacing: '-0.02em' }}>MedMarket</h1>
         </div>
-        <p style={{ margin: '0 0 16px 0', fontSize: 13.5, color: 'rgba(255,255,255,0.72)', lineHeight: 1.45 }}>
+        <p style={{ margin: '0 0 16px 0', fontSize: 13.5, color: 'rgba(255,255,255,0.72)', lineHeight: 1.45, maxWidth: isMobile ? undefined : 640 }}>
           Your health marketplace — find medications, trusted health facilities, hospitals, clinics, skincare brands, wellness products, laboratories and verified health professionals near you, all in one place.
         </p>
         <form onSubmit={runSearch}>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, maxWidth: isMobile ? undefined : 520 }}>
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctor…" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: 13, boxSizing: 'border-box' }} />
             <button type="submit" style={{ minHeight: 44, padding: '0 18px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>Go</button>
           </div>
         </form>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '14px 16px 6px' }}>
-        {[
-          { key: 'products', label: 'Products', icon: '💊' },
-          { key: 'businesses', label: 'Health Facilities', icon: '🏥' },
-          { key: 'professionals', label: 'Professionals', icon: '🩺' },
-        ].map((c) => (
-          <button key={c.key} onClick={() => setTab(c.key)} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px',
-            borderRadius: 14, border: tab === c.key ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
-            background: tab === c.key ? '#ecfdf5' : theme.cardBg, cursor: 'pointer',
-          }}>
-            <span style={{ fontSize: 22 }}>{c.icon}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: theme.navy }}>{c.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Filter toolbar: mobile stacks category grid above a filter row;
+          laptop+ has the horizontal room to put category tabs and location/
+          specialty filters on one row (RESPONSIVENESS.md: "Filters: persistent
+          sidebar, inline row, or a bottom sheet" — inline row is the desktop-
+          appropriate choice once there's width for it). */}
+      <div style={isMobile ? {} : { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
+        <div style={isMobile
+          ? { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '14px 16px 6px' }
+          : { display: 'flex', gap: 8 }}>
+          {CATEGORY_TABS.map((c) => (
+            <button key={c.key} onClick={() => setTab(c.key)} style={isMobile ? {
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px',
+              borderRadius: 14, border: tab === c.key ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
+              background: tab === c.key ? '#ecfdf5' : theme.cardBg, cursor: 'pointer',
+            } : {
+              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', minHeight: 44,
+              borderRadius: 12, border: tab === c.key ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
+              background: tab === c.key ? '#ecfdf5' : theme.cardBg, cursor: 'pointer',
+            }}>
+              <span style={{ fontSize: isMobile ? 22 : 16 }}>{c.icon}</span>
+              <span style={{ fontSize: isMobile ? 11 : 13, fontWeight: 700, color: theme.navy }}>{c.label}</span>
+            </button>
+          ))}
+        </div>
 
-      <div style={{ padding: '4px 16px 0' }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Sel value={stateFilter} onChange={setStateFilter} options={NG_STATES} placeholder="📍 All states" aria-label="Filter by state" style={{ flex: 1 }} />
-          {tab === 'professionals' && (
-            <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" style={{ flex: 1, minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }} />
+        <div style={isMobile ? { padding: '4px 16px 0' } : { display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Sel value={stateFilter} onChange={setStateFilter} options={NG_STATES} placeholder="📍 All states" aria-label="Filter by state" style={{ flex: 1, minWidth: isMobile ? undefined : 180 }} />
+            {tab === 'professionals' && (
+              <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" style={{ flex: 1, minWidth: isMobile ? undefined : 160, minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }} />
+            )}
+          </div>
+          {stateFilter && (
+            <button onClick={() => setStateFilter('')} style={{ marginTop: isMobile ? 6 : 0, minHeight: 44, padding: '4px 14px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap' }}>Clear location</button>
           )}
         </div>
-        {stateFilter && (
-          <button onClick={() => setStateFilter('')} style={{ marginTop: 6, minHeight: 44, padding: '4px 14px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 10, fontSize: 11, color: theme.textLight }}>Clear location</button>
-        )}
       </div>
 
       {showingFeatured && featured.length > 0 && (
@@ -213,7 +239,7 @@ function Search() {
         </div>
       )}
 
-      <div style={{ padding: '14px 16px 0' }}>
+      <div style={isMobile ? { padding: '14px 16px 0' } : { padding: '14px 0 0' }}>
         {loading && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <CardSkeleton />
@@ -232,6 +258,11 @@ function Search() {
           <Empty icon="🔍" cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another specialty or state.</div></>} />
         )}
 
+        {/* Laptop+: multi-column result grid — RESPONSIVENESS.md calls this out
+            explicitly as a desktop-appropriate expansion once there's width for
+            it. auto-fill/minmax (the GRID_SYSTEM.md card-grid pattern) rather
+            than a fixed column count, since result counts vary a lot by query. */}
+        <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 12px' }}>
         {products.map((p, idx) => {
           // WhatsApp: product's own number, else the business's number (CareHub inventory)
           const rawWa = p.whatsapp || p.businesses?.whatsapp
@@ -316,11 +347,26 @@ function Search() {
             </div>
           </Link>
         ))}
+        </div>
       </div>
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
       <Toast msg={toast.msg} />
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => navigate('/')}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 

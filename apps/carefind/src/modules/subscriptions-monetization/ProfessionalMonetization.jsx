@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Toast, useToast } from '../../components/ui'
 
 function ProfessionalMonetization() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [profile, setProfile] = useState(null)
   const [subscription, setSubscription] = useState(null)
   const [subscribers, setSubscribers] = useState([])
@@ -23,6 +30,7 @@ function ProfessionalMonetization() {
   const [consultFee, setConsultFee] = useState('')
   const [consultType, setConsultType] = useState('text')
   const [consultNotes, setConsultNotes] = useState('')
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     async function load() {
@@ -81,7 +89,7 @@ function ProfessionalMonetization() {
       status: 'setup',
     })
     setSaving(false)
-    alert('Consultation profile saved! Patients can now book you.')
+    showToast('Consultation profile saved! Patients can now book you.', { type: 'success' })
   }
 
   async function acceptTask(taskId) {
@@ -99,11 +107,14 @@ function ProfessionalMonetization() {
   if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading...</div>
 
   if (!user || !profile?.is_verified) {
-    return (
-      <div style={{ fontFamily: 'system-ui', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
-        <div style={{ background: theme.heroGradient, padding: '22px 20px 26px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-          <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Earn on CareFind</h1>
+    const verifyRequiredContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
+        <div style={{
+          background: theme.heroGradient, color: '#fff',
+          ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
+        }}>
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+          <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Earn on CareFind</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{ fontSize: 40, marginBottom: 14 }}>🩺</div>
@@ -113,8 +124,16 @@ function ProfessionalMonetization() {
             Get Verified
           </Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+
+    if (isMobile) return verifyRequiredContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {verifyRequiredContent}
+      </AppShell>
     )
   }
 
@@ -122,23 +141,28 @@ function ProfessionalMonetization() {
   const pendingConsults = consultations.filter(c => c.status === 'paid').length
   const submittedTaskIds = submissions.map(s => s.task_id)
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 26px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Dashboard</Link>
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Earn on CareFind</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Dashboard</Link>}
+        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Earn on CareFind</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>✓ {profile.specialty || profile.verification_label}</p>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>🪙 {wallet?.balance || 0}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>CareCoins</p>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{subscribers.length}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Subscribers</p>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{pendingConsults}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Bookings</p>
           </div>
@@ -146,7 +170,7 @@ function ProfessionalMonetization() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 6, padding: '14px 20px 4px', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 6, padding: isMobile ? '14px 20px 4px' : '0 0 14px', overflowX: 'auto' }}>
         {[
           { key: 'overview', label: '📊 Overview' },
           { key: 'subscription', label: '🔒 Subscription' },
@@ -164,7 +188,7 @@ function ProfessionalMonetization() {
         ))}
       </div>
 
-      <div style={{ padding: '16px 20px 0' }}>
+      <div style={isMobile ? { padding: '16px 20px 0' } : {}}>
 
         {/* OVERVIEW */}
         {tab === 'overview' && (
@@ -375,8 +399,19 @@ function ProfessionalMonetization() {
           </div>
         )}
       </div>
-      <BottomNav />
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

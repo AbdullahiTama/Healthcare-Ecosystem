@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { Toast, useToast } from '../../components/ui'
 
 const GIFTS = [
   { emoji: '💊', name: 'Pill', coins: 1 },
@@ -67,6 +68,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
   const [selected, setSelected] = useState(GIFTS[0])
   const [sending, setSending] = useState(false)
   const [animation, setAnimation] = useState(null)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     async function loadWallet() {
@@ -84,7 +86,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
   async function sendGift() {
     if (!user || sending) return
     if ((wallet?.balance || 0) < selected.coins) {
-      alert('Not enough CareCoins! Top up your wallet first.')
+      showToast('Not enough CareCoins. Top up your wallet first.', { type: 'warning' })
       return
     }
     setSending(true)
@@ -98,7 +100,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
     })
 
     if (error || result !== 'ok') {
-      alert(result === 'insufficient' ? 'Not enough CareCoins! Top up your wallet first.' : 'Could not send gift: ' + (error?.message || result))
+      showToast(result === 'insufficient' ? 'Not enough CareCoins. Top up your wallet first.' : 'Could not send gift: ' + (error?.message || result), { type: result === 'insufficient' ? 'warning' : 'error' })
       setSending(false)
       return
     }
@@ -179,6 +181,8 @@ function GiftPanel({ postId, recipientId, onClose }) {
       </div>
 
       <div onClick={onClose} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 499 }} />
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </>
   )
 }

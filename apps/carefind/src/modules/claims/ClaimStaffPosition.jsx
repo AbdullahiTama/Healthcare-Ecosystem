@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 
 function ClaimStaffPosition() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [query, setQuery] = useState('')
   const [businessResults, setBusinessResults] = useState([])
   const [selectedBusiness, setSelectedBusiness] = useState(null)
@@ -105,15 +111,20 @@ function ClaimStaffPosition() {
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Claim Your Position</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Claim Your Position</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>
           Find your company, then verify with your work email
         </p>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8 }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: 8, maxWidth: isMobile ? undefined : 480 }}>
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.12)',
             border: '1px solid rgba(255,255,255,0.18)', borderRadius: 16, padding: '11px 14px',
@@ -133,13 +144,15 @@ function ClaimStaffPosition() {
         </form>
       </div>
 
-      <div style={{ padding: '20px 20px 0 20px' }}>
+      <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
         {myClaims.length > 0 && (
           <>
             <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 10px 0' }}>
               My Claim Requests
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+            <div style={isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }
+              : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8, marginBottom: 22 }}>
               {myClaims.map((c) => (
                 <div key={c.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme.cardBg }}>
                   <div>
@@ -162,7 +175,9 @@ function ClaimStaffPosition() {
         {searching && <p style={{ color: theme.textMid }}>Searching...</p>}
 
         {!selectedBusiness && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={isMobile
+            ? { display: 'flex', flexDirection: 'column', gap: 10 }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
             {businessResults.map((biz) => (
               <div key={biz.id} onClick={() => selectBusiness(biz)} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', cursor: 'pointer' }}>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{biz.name}</h3>
@@ -195,7 +210,9 @@ function ClaimStaffPosition() {
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: 10 }
+              : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
               {staffList.map((s) => (
                 <div key={s.staff_id} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{s.full_name}</h3>
@@ -250,8 +267,16 @@ function ClaimStaffPosition() {
           </div>
         )}
       </div>
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

@@ -37,9 +37,10 @@ Premium in this system means: **precision, restraint, and reliability** — not 
 - ✅ Fast, predictable interactions with no jank
 - ✅ A palette used with confidence and restraint
 
-- ❌ Gold accents, serif display faces, or other "luxury" visual cliché — wrong industry, wrong message (a hospital administrator does not want their inventory system to look like a boutique hotel's website)
+- ❌ Gold accents, or other "luxury" visual cliché — wrong industry, wrong message (a hospital administrator does not want their inventory system to look like a boutique hotel's website)
+- ❌ Serif display faces **inside the working product** — dashboards, POS, forms, tables stay strictly sans, for the same reason. The one exception: public marketing/landing pages (the acquisition surface, not the operational tool) use a restrained display serif for headline text, per `TYPOGRAPHY.md`'s "Display serif" section — a logged-out visitor deciding whether to sign up is a different audience, in a different context, than the professional who's already signed in and working.
 - ❌ Glassmorphism, heavy gradients, or decorative illustration for its own sake
-- ❌ Dense marketing-site-style hero sections inside the working product
+- ❌ Dense marketing-site-style hero sections inside the working product (a hero section on the *public* landing page is expected and fine — this rule is about the authenticated product screens)
 
 ## Product differentiation within one brand
 

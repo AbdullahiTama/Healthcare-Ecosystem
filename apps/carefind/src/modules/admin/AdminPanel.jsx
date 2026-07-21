@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
+import { Toast, useToast, ConfirmDialog } from '../../components/ui'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
 import VideoUploader from '../../components/VideoUploader.jsx'
@@ -112,6 +113,14 @@ export default function AdminPanel() {
   const [selectedPost, setSelectedPost] = useState(null)
   const [postAuthor, setPostAuthor] = useState(null)
   const [phoneMap, setPhoneMap] = useState({})
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+  // Generic confirmation-dialog state: { title, consequence, confirmLabel, action }.
+  // `action` is the real, destructive operation — deferred until the admin confirms
+  // (SCREEN_PATTERNS.md pattern 29: never a bare "Are you sure?", state the consequence).
+  const [confirmState, setConfirmState] = useState(null)
+  function askConfirm({ title, consequence, confirmLabel = 'Delete', action }) {
+    setConfirmState({ title, consequence, confirmLabel, action })
+  }
 
   useEffect(() => {
     try {
@@ -238,8 +247,8 @@ export default function AdminPanel() {
   }
 
   async function scheduleShow() {
-    if (!liveTitle.trim()) { alert('Add a show title'); return }
-    if (!scheduledAt) { alert('Pick a date & time for the show'); return }
+    if (!liveTitle.trim()) { showToast('Add a show title', { type: 'warning' }); return }
+    if (!scheduledAt) { showToast('Pick a date & time for the show', { type: 'warning' }); return }
     setCreatingShow(true)
     let trailerUrl = null
     if (trailerFile) {
@@ -260,33 +269,41 @@ export default function AdminPanel() {
         guestIds: liveGuests.map(g => g.id),
       })
     } catch (err) {
-      alert('Could not schedule: ' + err.message)
+      showToast(`Couldn't schedule the show — ${err.message}`, { type: 'error' })
       setCreatingShow(false)
       return
     }
     setLiveTitle(''); setScheduledAt(''); setTrailerFile(null); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
     loadActiveShows()
-    alert('Show scheduled! It will show a countdown to your audience. Tap "Start Now" when you\'re ready to go live.')
+    showToast('Show scheduled! It will show a countdown to your audience. Tap "Start Now" when you\'re ready to go live.', { type: 'success' })
   }
 
   async function startScheduledShow(showId) {
     try {
       await callAdminAuth('start_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
       loadActiveShows()
-      alert('You are now LIVE!')
+      showToast('You are now LIVE!', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't start the show — ${err.message}`, { type: 'error' })
     }
   }
 
-  async function cancelScheduledShow(showId) {
-    if (!window.confirm('Cancel this scheduled show?')) return
+  function cancelScheduledShow(showId) {
+    askConfirm({
+      title: 'Cancel this scheduled show?',
+      consequence: 'This cancels the scheduled show and removes its countdown from the audience view. Invited guests will need to be re-added if you reschedule it.',
+      confirmLabel: 'Cancel Show',
+      action: () => reallyCancelScheduledShow(showId),
+    })
+  }
+  async function reallyCancelScheduledShow(showId) {
     try {
       await callAdminAuth('cancel_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
       loadActiveShows()
+      showToast('Scheduled show cancelled', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't cancel the show — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -295,7 +312,7 @@ export default function AdminPanel() {
   }
 
   async function startLiveShow() {
-    if (!liveTitle.trim()) { alert('Add a show title'); return }
+    if (!liveTitle.trim()) { showToast('Add a show title', { type: 'warning' }); return }
     setCreatingShow(true)
     // Admin login isn't a profile row, so host_id stays null and we mark it a platform show.
     try {
@@ -305,23 +322,31 @@ export default function AdminPanel() {
         guestIds: liveGuests.map(g => g.id),
       })
     } catch (err) {
-      alert('Could not start show: ' + err.message)
+      showToast(`Couldn't start the show — ${err.message}`, { type: 'error' })
       setCreatingShow(false)
       return
     }
     setLiveTitle(''); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
     loadActiveShows()
-    alert('Live show started! Open the Control Room to begin posting.')
+    showToast('Live show started! Open the Control Room to begin posting.', { type: 'success' })
   }
 
-  async function endLiveShow(showId) {
-    if (!window.confirm('End this live show?')) return
+  function endLiveShow(showId) {
+    askConfirm({
+      title: 'End this live show?',
+      consequence: 'This immediately ends the live broadcast for everyone watching. The show cannot be resumed once ended.',
+      confirmLabel: 'End Show',
+      action: () => reallyEndLiveShow(showId),
+    })
+  }
+  async function reallyEndLiveShow(showId) {
     try {
       await callAdminAuth('end_live_show', { token: localStorage.getItem('admin_token'), showId })
       loadActiveShows()
+      showToast('Live show ended', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't end the show — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -354,12 +379,12 @@ export default function AdminPanel() {
       const { error: upErr } = await supabase.storage.from('live-media').upload(path, liveImage)
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
-        await callAdminAuth('post_live_item', { token, showId, kind: 'image', content: urlData.publicUrl }).catch(err => alert('Error: ' + err.message))
+        await callAdminAuth('post_live_item', { token, showId, kind: 'image', content: urlData.publicUrl }).catch(err => showToast(`Couldn't post the image — ${err.message}`, { type: 'error' }))
       }
       setLiveImage(null)
     }
     if (liveDraft.trim()) {
-      await callAdminAuth('post_live_item', { token, showId, kind: 'text', content: liveDraft.trim() }).catch(err => alert('Error: ' + err.message))
+      await callAdminAuth('post_live_item', { token, showId, kind: 'text', content: liveDraft.trim() }).catch(err => showToast(`Couldn't post — ${err.message}`, { type: 'error' }))
       setLiveDraft('')
     }
     setPostingLive(false)
@@ -371,22 +396,22 @@ export default function AdminPanel() {
       await callAdminAuth('hide_live_comment', { token: localStorage.getItem('admin_token'), id: cid })
       loadLiveControl(showId)
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't hide the comment — ${err.message}`, { type: 'error' })
     }
   }
 
   async function postLiveVoice(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => alert('Error: ' + err.message))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => showToast(`Couldn't post the voice note — ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveSlide(showId, url, num, total) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => alert('Error: ' + err.message))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => showToast(`Couldn't post the slide — ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveVideo(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => alert('Error: ' + err.message))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => showToast(`Couldn't post the video — ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
@@ -405,7 +430,7 @@ export default function AdminPanel() {
   }
 
   async function createPromotion() {
-    if (!promoTitle.trim()) { alert('Add a title'); return }
+    if (!promoTitle.trim()) { showToast('Add a title', { type: 'warning' }); return }
     setSavingPromo(true)
     let imageUrl = null
     if (promoImage) {
@@ -427,19 +452,28 @@ export default function AdminPanel() {
       })
       setPromoTitle(''); setPromoLink(''); setPromoDays('7'); setPromoImage(null)
       loadPromotions()
+      showToast('Promotion created', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't create the promotion — ${err.message}`, { type: 'error' })
     }
     setSavingPromo(false)
   }
 
-  async function deletePromotion(id) {
-    if (!window.confirm('Delete this promotion?')) return
+  function deletePromotion(id) {
+    askConfirm({
+      title: 'Delete this promotion?',
+      consequence: 'This permanently removes the promotion from the app. This cannot be undone.',
+      confirmLabel: 'Delete',
+      action: () => reallyDeletePromotion(id),
+    })
+  }
+  async function reallyDeletePromotion(id) {
     try {
       await callAdminAuth('delete_promotion', { token: localStorage.getItem('admin_token'), id })
       loadPromotions()
+      showToast('Promotion deleted', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't delete the promotion — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -471,8 +505,9 @@ export default function AdminPanel() {
       : {}
     try {
       await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
+      showToast('News item approved', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't approve the news item — ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     setSavingNews(false)
@@ -482,20 +517,29 @@ export default function AdminPanel() {
   async function rejectNews(id) {
     try {
       await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
+      showToast('News item rejected', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't reject the news item — ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     loadNews()
   }
 
-  async function deleteNews(id) {
-    if (!window.confirm('Permanently delete this news item?')) return
+  function deleteNews(id) {
+    askConfirm({
+      title: 'Permanently delete this news item?',
+      consequence: 'This permanently removes the news item from the app. This cannot be undone.',
+      confirmLabel: 'Delete',
+      action: () => reallyDeleteNews(id),
+    })
+  }
+  async function reallyDeleteNews(id) {
     try {
       await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
       loadNews()
+      showToast('News item deleted', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't delete the news item — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -522,19 +566,28 @@ export default function AdminPanel() {
       })
       setStoryTitle(''); setStoryBody(''); setStoryBg('#0f766e'); setStoryImageFile(null)
       loadStories()
+      showToast('Story published', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't create the story — ${err.message}`, { type: 'error' })
     }
     setSavingStory(false)
   }
 
-  async function deleteStory(id) {
-    if (!window.confirm('Delete this story?')) return
+  function deleteStory(id) {
+    askConfirm({
+      title: 'Delete this story?',
+      consequence: 'This permanently removes the story from the feed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      action: () => reallyDeleteStory(id),
+    })
+  }
+  async function reallyDeleteStory(id) {
     try {
       await callAdminAuth('delete_story', { token: localStorage.getItem('admin_token'), id })
       loadStories()
+      showToast('Story deleted', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't delete the story — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -552,19 +605,28 @@ export default function AdminPanel() {
       await callAdminAuth('suspend_user', { token: localStorage.getItem('admin_token'), userId, days })
       setSelectedUser(null)
       loadAll()
-      alert(`User suspended for ${days} days`)
+      showToast(`User suspended for ${days} days`, { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't suspend the user — ${err.message}`, { type: 'error' })
     }
   }
 
-  async function deleteUser(userId) {
-    if (!window.confirm('Permanently delete this user and all their content? This CANNOT be undone.')) return
+  function deleteUser(userId) {
+    const name = selectedUser?.full_name || selectedUser?.display_name || 'this user'
+    askConfirm({
+      title: 'Delete this user?',
+      consequence: `This permanently deletes ${name}'s account and all their posts, comments, and content. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      action: () => reallyDeleteUser(userId),
+    })
+  }
+  async function reallyDeleteUser(userId) {
     setDeletingUser(true)
     try {
       await callAdminAuth('delete_user', { token: localStorage.getItem('admin_token'), userId })
+      showToast('User deleted', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't delete the user — ${err.message}`, { type: 'error' })
     }
     setSelectedUser(null)
     setDeletingUser(false)
@@ -575,8 +637,9 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
       loadAll()
+      showToast('Verification approved', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't approve the verification — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -584,8 +647,9 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
       loadAll()
+      showToast('Verification rejected', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't reject the verification — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -593,8 +657,9 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_claim', { token: localStorage.getItem('admin_token'), claimId: id, businessId })
       loadAll()
+      showToast('Claim approved', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't approve the claim — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -602,18 +667,27 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_claim', { token: localStorage.getItem('admin_token'), claimId: id })
       loadAll()
+      showToast('Claim rejected', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't reject the claim — ${err.message}`, { type: 'error' })
     }
   }
 
-  async function deletePost(id) {
-    if (!window.confirm('Delete this post?')) return
+  function deletePost(id) {
+    askConfirm({
+      title: 'Delete this post?',
+      consequence: 'This permanently deletes the post along with its likes and comments. This cannot be undone.',
+      confirmLabel: 'Delete',
+      action: () => reallyDeletePost(id),
+    })
+  }
+  async function reallyDeletePost(id) {
     try {
       await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
       loadAll()
+      showToast('Post deleted', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't delete the post — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -621,8 +695,9 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
       loadAll()
+      showToast('Report resolved', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't resolve the report — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -633,8 +708,9 @@ export default function AdminPanel() {
       setVerifyingUser(null)
       setVerifySpecialty('')
       loadAll()
+      showToast('User verified', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't verify the user — ${err.message}`, { type: 'error' })
     }
   }
 
@@ -653,8 +729,9 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('create_task', { token: localStorage.getItem('admin_token'), title: taskTitle, description: taskDesc, compensation: taskComp, specialty: taskSpec || null })
       setTaskTitle(''); setTaskDesc(''); setTaskComp(''); setTaskSpec('')
+      showToast('Task created', { type: 'success' })
     } catch (err) {
-      alert('Error: ' + err.message)
+      showToast(`Couldn't create the task — ${err.message}`, { type: 'error' })
     }
     setSavingTask(false); loadAll()
   }
@@ -732,6 +809,7 @@ export default function AdminPanel() {
   const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box' }
 
   return (
+    <>
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 40 }}>
       <div style={{ background: theme.heroGradient, padding: '20px 16px 16px', color: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1354,8 +1432,8 @@ export default function AdminPanel() {
                 </div>
                 {w.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll() } catch (err) { alert('Error: ' + err.message) } }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={async () => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll() } catch (err) { alert('Error: ' + err.message) } }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={async () => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal — ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
+                    <button onClick={async () => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal — ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
                   </div>
                 )}
               </div>
@@ -1917,5 +1995,16 @@ export default function AdminPanel() {
 
       </div>
     </div>
+
+    <ConfirmDialog
+      show={!!confirmState}
+      onClose={() => setConfirmState(null)}
+      onConfirm={() => { const action = confirmState?.action; setConfirmState(null); action && action() }}
+      title={confirmState?.title}
+      consequence={confirmState?.consequence}
+      confirmLabel={confirmState?.confirmLabel || 'Delete'}
+    />
+    <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+    </>
   )
 }

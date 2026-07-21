@@ -3,11 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 
 function Notifications() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -58,16 +63,23 @@ function Notifications() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '20px 18px 22px', borderRadius: '0 0 24px 24px', color: '#fff' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
-        </div>
-        <h1 style={{ fontSize: 22, fontWeight: 900, margin: '12px 0 0 0' }}>🔔 Notifications</h1>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '20px 18px 22px', borderRadius: '0 0 24px 24px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Link to="/" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          </div>
+        )}
+        <h1 style={{ fontSize: 22, fontWeight: 900, margin: isMobile ? '12px 0 0 0' : 0 }}>🔔 Notifications</h1>
       </div>
 
-      <div style={{ padding: '12px 16px 0' }}>
+      <div style={isMobile ? { padding: '12px 16px 0' } : {}}>
         {loading && <p style={{ color: theme.textLight, fontSize: 13 }}>Loading…</p>}
 
         {!loading && items.length === 0 && (
@@ -102,8 +114,16 @@ function Notifications() {
         })}
       </div>
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

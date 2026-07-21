@@ -8,7 +8,7 @@ The consolidated token and component reference — the cheat sheet. Every value 
 
 Full detail: `TYPOGRAPHY.md`.
 
-- **Family:** system font stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`) — no webfont, to avoid a render-blocking cost on connection- and data-constrained users. Monospace (`ui-monospace, "SF Mono", Menlo, Consolas, monospace`) for reference codes/IDs only.
+- **Family:** system font stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`) for every authenticated product screen in both apps — no webfont, to avoid a render-blocking cost on connection- and data-constrained users. Monospace (`ui-monospace, "SF Mono", Menlo, Consolas, monospace`) for reference codes/IDs only. **Public marketing pages only** (e.g. CareHub's `Landing.jsx`) additionally use a self-hosted display serif, `"Lora", Georgia, "Times New Roman", serif`, for headline text — declared via `@font-face` (not preloaded) so it's never fetched outside the pages that use it. Full detail: `TYPOGRAPHY.md`.
 - **Scale:** `display` 24px → `h1` 20–22px → `h2` 18px → `h3` 15–16px → `body-lg` 14px → `body` 13px (the system's default) → `body-sm` 12px → `caption` 11px → `micro` 10–10.5px.
 - **Weights:** four only — 400 (regular), 500–600 (medium, the default UI weight), 700–800 (bold), 900 (black, page titles and big numbers). Never an in-between value.
 - **Why this shape:** typography carries hierarchy before color or elevation does (Design Principle 1) — it's the most information-dense, cheapest-to-render signal available, so it has to be precise and restrained rather than decorative.
@@ -17,8 +17,8 @@ Full detail: `TYPOGRAPHY.md`.
 
 Full detail: `COLORS.md`.
 
-- **Brand:** `teal-600` `#0f766e` (primary actions, links, active states), `teal-500` `#14b8a6` (gradient partner). Gradient reserved for primary buttons and small celebratory moments only — never page chrome.
-- **Neutrals:** `navy-900` `#0f172a` (primary text, dark surfaces) through `gray-50` `#f9fafb` (page background) — no pure black anywhere.
+- **Brand:** `teal-600` `#0f766e` (primary actions, links, active states), `teal-500` `#14b8a6` (gradient partner), `teal-mist` `#e8f3ee` (tinted fill behind feature icons/chips). Gradient reserved for primary buttons and small celebratory moments only — never page chrome.
+- **Neutrals:** `navy-900` `#0f172a` (primary text, dark surfaces) through `bg-page` `#f9f9f6` (page background, both apps) — no pure black anywhere.
 - **Semantic:** `success` `#16a34a`, `warning` `#d97706`, `danger` `#dc2626`, `info` `#2563eb`, each with a paired `-bg` tint for badges/banners. `purple` `#7c3aed` as a last-resort fifth categorical color.
 - **Why this shape:** teal reads clinical without reading sterile or alarming (avoids both the generic "blue and white" medical cliché and red-cross anxiety); semantic color is earned by real state, never decorative — a screen with no real status to show has a layout problem, not a palette gap.
 

@@ -3,12 +3,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 
 function News() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -129,15 +134,15 @@ function News() {
   const lead = articles[0]
   const rest = articles.slice(1)
 
-  return (
-    <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }}>
+  const bodyContent = (
+    <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', maxWidth: isMobile ? 480 : 900, margin: '0 auto', paddingBottom: isMobile ? 90 : 40, background: '#fff' }}>
       {/* Masthead */}
       <div style={{ borderBottom: `2px solid ${theme.navy}`, padding: '18px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <p style={{ margin: 0, fontFamily: 'system-ui', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: theme.tealDeep, textTransform: 'uppercase' }}>CareFind</p>
           <h1 style={{ margin: '2px 0 0 0', fontSize: 30, fontWeight: 900, color: theme.navy, letterSpacing: '-0.02em' }}>Health News</h1>
         </div>
-        <Link to="/" style={{ fontFamily: 'system-ui', fontSize: 12, fontWeight: 700, color: theme.textLight, textDecoration: 'none' }}>← Feed</Link>
+        {isMobile && <Link to="/" style={{ fontFamily: 'system-ui', fontSize: 12, fontWeight: 700, color: theme.textLight, textDecoration: 'none' }}>← Feed</Link>}
       </div>
 
       {/* Submit button */}
@@ -194,8 +199,9 @@ function News() {
       {/* Divider */}
       {rest.length > 0 && <div style={{ height: 8, background: theme.bg }} />}
 
-      {/* Rest of stories */}
-      <div>
+      {/* Rest of stories — a true multi-column broadsheet grid once there's
+          the width for it (GRID_SYSTEM.md), each still its own row-style card */}
+      <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24 }}>
         {rest.map((a) => (
           <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ flex: 1 }}>
@@ -306,8 +312,16 @@ function News() {
         </div>
       )}
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

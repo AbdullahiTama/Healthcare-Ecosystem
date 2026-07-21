@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 
 function ProfessionalDashboard() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [profile, setProfile] = useState(null)
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const [followerCount, setFollowerCount] = useState(0)
@@ -49,11 +55,14 @@ function ProfessionalDashboard() {
   }
 
   if (!profile?.is_verified) {
-    return (
-      <div style={{ fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }}>
-        <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-          <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-          <h1 style={{ fontSize: 21, fontWeight: 900, margin: '14px 0 4px 0' }}>Professional Dashboard</h1>
+    const verifyRequiredContent = (
+      <div style={isMobile ? { fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{
+          background: theme.heroGradient, color: '#fff',
+          ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
+        }}>
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+          <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Professional Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{
@@ -73,16 +82,29 @@ function ProfessionalDashboard() {
             Get Verified
           </Link>
         </div>
-        <BottomNav />
+        {isMobile && <BottomNav />}
       </div>
+    )
+
+    if (isMobile) return verifyRequiredContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {verifyRequiredContent}
+      </AppShell>
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
-      <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, marginBottom: 16 }}>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      <div style={{
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+      }}>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: isMobile ? 14 : 0, marginBottom: 16 }}>
           <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>{profile.display_name || 'Professional'}</h1>
           <span style={{
             width: 16, height: 16, borderRadius: '50%', background: theme.tealBright, color: theme.navy,
@@ -95,23 +117,23 @@ function ProfessionalDashboard() {
           {profile.verification_label || 'Verified Professional'}
         </p>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{followerCount}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Followers</p>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{postCount}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Posts</p>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
             <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{questionsAnswered}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Answers Given</p>
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '20px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={isMobile ? { padding: '20px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Link to="/earn" style={{ textDecoration: 'none' }}>
           <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#ecfdf5', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
             <span style={{ width: 34, height: 34, borderRadius: 10, background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>💰</span>
@@ -142,8 +164,16 @@ function ProfessionalDashboard() {
         ))}
       </div>
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

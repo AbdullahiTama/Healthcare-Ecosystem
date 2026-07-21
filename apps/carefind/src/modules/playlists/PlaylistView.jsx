@@ -3,18 +3,29 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
+import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { renderRichText } from '../social-feed/richText.jsx'
+import { ConfirmDialog, Inp, Toast, useToast } from '../../components/ui'
 
 // Watch a playlist: a list of parts, tap to view; an "Up next" prompt to continue.
 function PlaylistView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [playlist, setPlaylist] = useState(null)
   const [parts, setParts] = useState([])
   const [current, setCurrent] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [confirmDeletePartId, setConfirmDeletePartId] = useState(null)
+  const [editingPartId, setEditingPartId] = useState(null)
+  const [editTitleValue, setEditTitleValue] = useState('')
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => { load() }, [id])
 
@@ -27,18 +38,32 @@ function PlaylistView() {
     setLoading(false)
   }
 
-  async function deletePart(partId) {
-    if (!window.confirm('Delete this part? This cannot be undone.')) return
+  async function performDeletePart() {
+    const partId = confirmDeletePartId
+    setConfirmDeletePartId(null)
     await supabase.from('playlist_parts').delete().eq('id', partId)
     if (current >= parts.length - 1) setCurrent(Math.max(0, current - 1))
     load()
   }
 
-  async function editPartTitle(part) {
-    const newTitle = window.prompt('Edit part title:', part.title)
-    if (newTitle == null || !newTitle.trim()) return
-    await supabase.from('playlist_parts').update({ title: newTitle.trim() }).eq('id', part.id)
-    load()
+  function startTitleEdit(part) {
+    setEditingPartId(part.id)
+    setEditTitleValue(part.title || '')
+  }
+
+  function cancelTitleEdit() {
+    setEditingPartId(null)
+    setEditTitleValue('')
+  }
+
+  async function saveTitleEdit(part) {
+    const newTitle = editTitleValue.trim()
+    if (!newTitle || newTitle === part.title) { cancelTitleEdit(); return }
+    await supabase.from('playlist_parts').update({ title: newTitle }).eq('id', part.id)
+    setEditingPartId(null)
+    setEditTitleValue('')
+    await load()
+    showToast('Title updated', { type: 'success' })
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: theme.textLight }}>Loading…</div>
@@ -47,10 +72,82 @@ function PlaylistView() {
   const part = parts[current]
   const hasNext = current < parts.length - 1
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }}>
-      <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff' }}>
-        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>
+  // Desktop only: "All parts" moves from an inline bottom list to a sticky
+  // sidebar — List/Detail Split (LAYOUTS.md), since "now playing" + full part
+  // list side-by-side is the natural desktop shape for a series like this.
+  const allPartsList = (
+    <>
+      {user && playlist.owner_id === user.id && (
+        <Link to={`/playlist/${id}/add`} style={{ display: 'block', textAlign: 'center', padding: 11, background: theme.tealGradient, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', marginBottom: 10 }}>
+          ➕ Add another part
+        </Link>
+      )}
+      {parts.map((p, i) => {
+        const isOwner = user && playlist.owner_id === user.id
+        const isEditingTitle = editingPartId === p.id
+        return (
+          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div
+              role={isEditingTitle ? undefined : 'button'}
+              tabIndex={isEditingTitle ? undefined : 0}
+              onClick={isEditingTitle ? undefined : () => setCurrent(i)}
+              onKeyDown={isEditingTitle ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrent(i) } }}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', background: i === current ? theme.bg : '#fff', border: `1px solid ${theme.border}`, borderRadius: 10, cursor: isEditingTitle ? 'default' : 'pointer' }}
+            >
+              <span style={{ width: 28, height: 28, borderRadius: '50%', background: i === current ? theme.tealGradient : theme.bg, color: i === current ? '#fff' : theme.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
+              {isEditingTitle ? (
+                <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Inp
+                    value={editTitleValue}
+                    onChange={setEditTitleValue}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); saveTitleEdit(p) }
+                      if (e.key === 'Escape') { e.preventDefault(); cancelTitleEdit() }
+                    }}
+                    autoFocus
+                    aria-label={`Edit title for part ${i + 1}`}
+                    style={{ flex: 1 }}
+                  />
+                  <button onClick={() => saveTitleEdit(p)} aria-label="Save title" style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0 }}>✓</button>
+                  <button onClick={cancelTitleEdit} aria-label="Cancel editing title" style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0 }}>✕</button>
+                </div>
+              ) : (
+                <span
+                  onClick={isOwner ? (e) => { e.stopPropagation(); startTitleEdit(p) } : undefined}
+                  title={isOwner ? 'Click to rename' : undefined}
+                  style={{ fontSize: 13.5, fontWeight: 600, color: theme.navy, flex: 1, cursor: isOwner ? 'text' : 'default' }}
+                >
+                  {p.title}
+                </span>
+              )}
+              {!isEditingTitle && p.kind !== 'text' && <span style={{ fontSize: 14 }}>{p.kind === 'video' ? '🎥' : p.kind === 'drawing' ? '✏️' : p.kind === 'image' ? '🖼' : ''}</span>}
+            </div>
+            {isOwner && !isEditingTitle && (
+              <>
+                <button onClick={() => navigate(`/playlist/${id}/edit/${p.id}`)} style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>✏️</button>
+                <button onClick={() => setConfirmDeletePartId(p.id)} style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>🗑</button>
+              </>
+            )}
+          </div>
+        )
+      })}
+    </>
+  )
+
+  const sidebarContent = (
+    <StickySidebar>
+      <SidebarSection title={`All parts (${parts.length})`}>
+        {allPartsList}
+      </SidebarSection>
+    </StickySidebar>
+  )
+
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto', background: '#fff' }}>
+      <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff', ...(isMobile ? {} : { borderRadius: theme.radius.xl, marginBottom: 20 }) }}>
+        {isMobile && <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>}
         <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8 }}>🎬 PLAYLIST · {parts.length} PARTS</div>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 900 }}>{playlist.title}</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.75)' }}>
@@ -93,36 +190,41 @@ function PlaylistView() {
         </div>
       )}
 
-      {/* All parts list */}
-      <div style={{ padding: '0 18px 18px' }}>
-        <p style={{ margin: '0 0 10px 0', fontSize: 12, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.04em' }}>All parts</p>
-        {user && playlist.owner_id === user.id && (
-          <Link to={`/playlist/${id}/add`} style={{ display: 'block', textAlign: 'center', padding: 11, background: theme.tealGradient, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', marginBottom: 10 }}>
-            ➕ Add another part
-          </Link>
-        )}
-        {parts.map((p, i) => {
-          const isOwner = user && playlist.owner_id === user.id
-          return (
-            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <button onClick={() => setCurrent(i)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', background: i === current ? theme.bg : '#fff', border: `1px solid ${theme.border}`, borderRadius: 10, textAlign: 'left', cursor: 'pointer' }}>
-                <span style={{ width: 28, height: 28, borderRadius: '50%', background: i === current ? theme.tealGradient : theme.bg, color: i === current ? '#fff' : theme.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: theme.navy, flex: 1 }}>{p.title}</span>
-                {p.kind !== 'text' && <span style={{ fontSize: 14 }}>{p.kind === 'video' ? '🎥' : p.kind === 'drawing' ? '✏️' : p.kind === 'image' ? '🖼' : ''}</span>}
-              </button>
-              {isOwner && (
-                <>
-                  <button onClick={() => navigate(`/playlist/${id}/edit/${p.id}`)} style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>✏️</button>
-                  <button onClick={() => deletePart(p.id)} style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>🗑</button>
-                </>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {/* All parts list (mobile inline; desktop shows this in the sidebar instead) */}
+      {isMobile && (
+        <div style={{ padding: '0 18px 18px' }}>
+          <p style={{ margin: '0 0 10px 0', fontSize: 12, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.04em' }}>All parts</p>
+          {allPartsList}
+        </div>
+      )}
 
-      <BottomNav />
+      <ConfirmDialog
+        show={!!confirmDeletePartId}
+        onClose={() => setConfirmDeletePartId(null)}
+        onConfirm={performDeletePart}
+        title="Delete this part?"
+        consequence="This cannot be undone. The part and its content will be permanently removed from the playlist."
+        confirmLabel="Delete"
+      />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell
+      user={user}
+      myUsername={myUsername}
+      myAvatar={myAvatar}
+      unreadNotifs={unreadNotifs}
+      onCompose={() => navigate('/')}
+      rightSidebar={sidebarContent}
+    >
+      {bodyContent}
+    </AppShell>
   )
 }
 

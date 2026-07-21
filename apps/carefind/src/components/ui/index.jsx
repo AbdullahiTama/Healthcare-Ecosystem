@@ -149,18 +149,30 @@ export function Avatar({ name, size = 32, bg = tealGradient, src, style = {} }) 
 // Desktop: corner-anchored. Mobile: full-width, safe-area anchored
 // (COMPONENT_LIBRARY.md → Notifications). role="status" + aria-live so
 // screen readers hear it without it stealing focus.
-export function Toast({ msg }) {
+const TOAST_VARIANTS = {
+  success: { bg: theme.success, icon: '✓' },
+  error:   { bg: theme.alert, icon: '✕' },
+  warning: { bg: theme.warning, icon: '!' },
+  info:    { bg: tealGradient, icon: null },
+}
+
+export function Toast({ msg, type = 'info', actionLabel, onAction }) {
   if (!msg) return null
+  const v = TOAST_VARIANTS[type] || TOAST_VARIANTS.info
   return (
     <div role="status" aria-live="polite" className="cf-toast" style={{
       position: 'fixed', zIndex: 9999,
       left: '50%', transform: 'translateX(-50%)', bottom: 88,
       maxWidth: 'calc(100% - 32px)',
       padding: '12px 20px', borderRadius: theme.radius.lg,
-      background: tealGradient, color: 'white', fontWeight: 700, fontSize: 13,
+      background: v.bg, color: 'white', fontWeight: 700, fontSize: 13,
       boxShadow: '0 4px 16px rgba(15,118,110,0.4)', textAlign: 'center',
+      display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
     }}>
-      {msg}
+      <span>{v.icon && <span aria-hidden="true" style={{ marginRight: 6 }}>{v.icon}</span>}{msg}</span>
+      {actionLabel && onAction && (
+        <button onClick={onAction} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: 'white', fontWeight: 800, fontSize: 12, padding: '4px 10px', borderRadius: theme.radius.sm, cursor: 'pointer', flexShrink: 0 }}>{actionLabel}</button>
+      )}
     </div>
   )
 }

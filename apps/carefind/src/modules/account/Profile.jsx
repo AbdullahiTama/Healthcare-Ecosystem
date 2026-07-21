@@ -3,16 +3,22 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { renderRichText, stripMarkers, previewText } from '../social-feed/richText.jsx'
 import ProductUpload from './ProductUpload.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
 import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
+import { Toast, useToast } from '../../components/ui'
 
 function Profile() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [profile, setProfile] = useState(null)
   const [ownedBusinesses, setOwnedBusinesses] = useState([])
   const [approvedClaims, setApprovedClaims] = useState([])
@@ -54,6 +60,7 @@ function Profile() {
   const [postingStory, setPostingStory] = useState(false)
   const [viewStory, setViewStory] = useState(null)
   const [productUpload, setProductUpload] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     if (!user) { navigate('/login'); return }
@@ -201,7 +208,7 @@ function Profile() {
       setSTitle(''); setSBody(''); setSBg('#0f766e'); setSImage(null); setStoryComposer(false)
       loadMyStories()
     } else {
-      alert('Could not post story: ' + error.message)
+      showToast('Could not post story: ' + error.message, { type: 'error' })
     }
   }
 
@@ -268,7 +275,7 @@ function Profile() {
       await supabase.from('profiles').update({ cover_url: urlData.publicUrl }).eq('id', user.id)
       loadProfile()
     } else {
-      alert('Could not upload cover: ' + upErr.message)
+      showToast('Could not upload cover: ' + upErr.message, { type: 'error' })
     }
     setUploadingCover(false)
   }
@@ -278,11 +285,11 @@ function Profile() {
     setSavingPrice(true)
     const { error } = await supabase.from('profiles').update({ subscription_price: price }).eq('id', user.id)
     setSavingPrice(false)
-    if (error) { alert('Could not save price: ' + error.message); return }
+    if (error) { showToast('Could not save price: ' + error.message, { type: 'error' }); return }
     loadProfile()
-    alert(price > 0
+    showToast(price > 0
       ? `Subscriptions on — ${price} 🪙 (₦${coinsToNaira(price).toLocaleString()}) per month.`
-      : 'Subscriptions turned off.')
+      : 'Subscriptions turned off.', { type: 'success' })
   }
 
   async function handleAvatarUpload(e) {
@@ -300,7 +307,7 @@ function Profile() {
       await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id)
       loadProfile()
     } else {
-      alert('Could not upload photo: ' + upErr.message)
+      showToast('Could not upload photo: ' + upErr.message, { type: 'error' })
     }
     setUploadingAvatar(false)
   }
@@ -343,8 +350,10 @@ function Profile() {
   const displayLabel = profile?.full_name || profile?.display_name || 'CareFind User'
   const hasAnyIdentity = ownedBusinesses.length > 0 || approvedClaims.length > 0
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
       {/* Posting-as banner */}
       {(activeBiz || activeStaff) && (
         <div style={{ background: theme.navy, color: '#fff', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -744,7 +753,7 @@ function Profile() {
           }
           const typeIcon = { question: '❓', review: '⭐', article: '📄', premium: '💎' }
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+            <div style={isMobile ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
               {list.map(p => (
                 <button key={p.id} onClick={() => setOpenPost(p)} style={{ textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
                   <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', background: theme.cardBg, height: 150, display: 'flex', flexDirection: 'column' }}>
@@ -845,8 +854,18 @@ function Profile() {
         <ProductUpload businesses={ownedBusinesses} onClose={() => setProductUpload(false)} onAdded={() => {}} />
       )}
 
-      <BottomNav />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

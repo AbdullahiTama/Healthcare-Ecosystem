@@ -10,7 +10,20 @@ Typography is the primary hierarchy tool in this system (`DESIGN_PRINCIPLES.md`,
 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif
 ```
 
-**Why a system stack instead of a branded webfont:** both products serve markets where connection speed and data cost are real constraints (see `DESIGN_VISION.md`). A webfont is a render-blocking cost paid by every user on every load for a marginal brand benefit. The system stack also guarantees every character (including Naira symbols, accented names, and non-Latin script in user-generated content) renders correctly without a font-loading fallback flash. If a distinct display face is ever wanted for marketing surfaces (a public marketing site, not the product itself), it should be scoped to that surface only and never loaded inside CareHub or the CareFind app shell.
+**Why a system stack instead of a branded webfont:** both products serve markets where connection speed and data cost are real constraints (see `DESIGN_VISION.md`). A webfont is a render-blocking cost paid by every user on every load for a marginal brand benefit. The system stack also guarantees every character (including Naira symbols, accented names, and non-Latin script in user-generated content) renders correctly without a font-loading fallback flash. This remains the family for every authenticated product surface — dashboards, POS, forms, tables, cards — in both apps, with no exception.
+
+## Display serif (public marketing surfaces only)
+
+Exercising the scoped exception this document has always anticipated: public marketing/landing pages (CareHub's logged-out `Landing.jsx`, and any future CareFind equivalent) use **Lora**, a warm, moderate-contrast book serif, for headline-level text only — not `body`, not any authenticated product screen.
+
+```
+"Lora", Georgia, "Times New Roman", serif
+```
+
+- Self-hosted, 2 static weights only (600 SemiBold, 700 Bold — enough for hero headlines and section eyebrows), as local `.woff2` files with `font-display: swap`.
+- Declared via `@font-face` only — **no `<link rel="preload">`** in either app's `index.html`. A preload fetches on every route regardless of whether that route uses the font; a bare `@font-face` only triggers a network request when an element actually rendered on screen uses that `font-family`. Since no dashboard/POS/table/form screen ever references it, the file is never fetched outside the marketing pages that use it — the original "never loaded inside CareHub or the CareFind app shell" intent is preserved in practice, just implemented at the CSS level rather than by physically excluding the font declaration from the bundle.
+- Applied only through the `fontDisplay` token in each app's `theme.js` — never hardcoded inline, so the scope stays enforceable in review.
+- Still four weights max system-wide when you count the serif alongside the sans scale below (600/700 for serif, the existing sans weights for everything else) — this doesn't reopen the "no in-between values" rule.
 
 **Monospace** (for reference numbers, batch codes, order IDs — already used in both codebases for exactly this purpose):
 ```
@@ -75,7 +88,7 @@ Typography color follows the neutral/text scale in `COLORS.md`:
 
 ## What this system avoids
 
-- No decorative/script/serif display faces — this is a functional healthcare tool, not an editorial or luxury brand.
-- No more than one type family in the entire product (plus the monospace exception for reference codes).
+- No decorative/script/serif display faces inside the product itself — a hospital administrator's dashboard or a patient's search results should never read as an editorial or luxury brand. The one narrow exception is the display serif defined above, and it is confined to public marketing pages, never the authenticated app.
+- No more than one type family within any single surface (the product stays sans-only; a marketing page pairs the display serif with the same sans body/UI face — never two competing families on one screen, and never the monospace exception used for anything but reference codes).
 - No text set entirely in italics for emphasis — use weight, not style, for emphasis (italics are reserved for genuinely quoted/notes content, e.g. clinical notes fields, matching existing convention).
 - No all-caps body text — all-caps is reserved for `micro`-scale labels only, where the small size and short length keep it legible.

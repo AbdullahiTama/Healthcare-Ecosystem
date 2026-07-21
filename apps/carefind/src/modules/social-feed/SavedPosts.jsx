@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import AppShell from '../../components/layout/AppShell.jsx'
 import { renderArticleHtml } from '../news-publishing/articleFormat'
 import BottomNav from '../../components/BottomNav.jsx'
 
 function SavedPosts() {
   const { user, loading: authLoading } = useAuth()
+  const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
+  const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [posts, setPosts] = useState([])
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
@@ -74,20 +80,22 @@ function SavedPosts() {
     )
   }
 
-  return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }}>
+  const bodyContent = (
+    <div style={isMobile
+      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, padding: '22px 20px 26px 20px',
-        borderRadius: '0 0 28px 28px', color: '#fff',
+        background: theme.heroGradient, color: '#fff',
+        ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>
-        <h1 style={{ fontSize: 22, fontWeight: 900, margin: '14px 0 4px 0' }}>Saved Posts</h1>
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        <h1 style={{ fontSize: 22, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Saved Posts</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
           {posts.length} post{posts.length !== 1 ? 's' : ''} saved
         </p>
       </div>
 
-      <div style={{ padding: '20px 20px 0 20px' }}>
+      <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
         {posts.length === 0 && (
           <div style={{ textAlign: 'center', padding: '30px 10px' }}>
             <div style={{
@@ -101,7 +109,9 @@ function SavedPosts() {
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={isMobile
+          ? { display: 'flex', flexDirection: 'column', gap: 12 }
+          : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
           {posts.map((post) => (
             <div key={post.id} style={{
               border: `1px solid ${theme.border}`, borderRadius: 16, padding: post.post_type === 'visual' ? 0 : 14,
@@ -142,8 +152,16 @@ function SavedPosts() {
         </div>
       </div>
 
-      <BottomNav />
+      {isMobile && <BottomNav />}
     </div>
+  )
+
+  if (isMobile) return bodyContent
+
+  return (
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      {bodyContent}
+    </AppShell>
   )
 }
 

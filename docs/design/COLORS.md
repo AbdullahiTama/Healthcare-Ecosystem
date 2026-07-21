@@ -15,13 +15,20 @@ Teal reads as clinical without reading as sterile — it avoids both the "blue a
 | `navy-900` | `#0f172a` | Primary text color, dark surfaces, secondary buttons (`DarkBtn`) |
 | `navy-800` | `#1e293b` | Secondary dark surface, dark-mode card backgrounds |
 
-**Brand gradient** (use sparingly — see rules below): `linear-gradient(135deg, #0f766e, #14b8a6)`. This exists in code today as the primary-button background and should stay reserved for exactly that: primary calls to action and small celebratory moments (success toasts, completion states). It is not a background pattern, not a card treatment, not a page hero by default.
+**Brand gradient** (legacy — see below): `linear-gradient(135deg, #0f766e, #14b8a6)`. Exists in code as the pre-existing primary-button background across both apps' not-yet-migrated screens. **New work matching the client template does not use it at all** — the template's own primary color is flat `teal-600` everywhere (buttons, active states, the CTA band), no gradient anywhere on the page, and CareHub's `Landing.jsx`/`Sidebar.jsx` (the first screens migrated to the template) now use flat `teal-600` exclusively. Screens not yet migrated keep the gradient until their own migration pass touches them — this is a deliberate, incremental drop of the gradient, not a hard cutover.
+
+| `teal-mist` | `#e8f3ee` | Tinted fill behind feature icons and small illustrative chips — a soft teal recess, distinct from `success-bg`'s more saturated green. Pairs with `teal-600` icon glyphs on top. Small-area use only, same rule as the other `-bg` tokens below. |
+
+## Page background
+
+`bg-page` (`#f9f9f6`) is the default page background for both apps, replacing the previous `gray-50` in that role. It reads as a near-white, faintly warm neutral rather than the older value's cool blue-gray undertone (`gray-50`'s blue channel was slightly higher than its red/green; `bg-page`'s is slightly lower) — deliberately subtle, not a parchment/cream surface. Cards, modals, and inputs still sit on plain `white` on top of it, same as before; only the page canvas itself moves.
 
 ## Neutral scale
 
 | Token | Hex | Usage |
 |---|---|---|
-| `gray-50` | `#f9fafb` | Page background (CareFind) |
+| `bg-page` | `#f9f9f6` | Page background (both apps) — a near-white, barely-warm neutral. Replaces the older cool-toned `gray-50` in that role; see "Page background" below. |
+| `gray-50` | `#f9fafb` | Retained for any surface that specifically wants the older cool-toned value (rare — most call sites should move to `bg-page`) |
 | `gray-100` | `#f3f4f6` | Subtle fills (disabled states, icon backgrounds) |
 | `gray-200` | `#e5e7eb` | Borders, dividers, disabled button background |
 | `gray-300` | `#cbd5e1` | Secondary borders, placeholder-adjacent UI |
@@ -47,7 +54,7 @@ Teal reads as clinical without reading as sterile — it avoids both the "blue a
 
 ## Usage rules
 
-1. **Teal is the only color allowed for a primary action.** A screen has one primary button; it is teal (or the teal gradient). Every other button is neutral (ghost/outline) or navy (secondary-dark).
+1. **Teal is the only color allowed for a primary action.** A screen has one primary button; it is teal — flat `teal-600` on template-migrated screens, the legacy gradient on screens not yet migrated (see "Brand gradient" above). Every other button is neutral (ghost/outline) or navy (secondary-dark).
 2. **Semantic colors are earned by real state, never decorative.** Green only for "this is actually good/complete." Red only for "this is actually bad/destructive/urgent." If you want visual variety on a screen with no real status to convey, that's a sign the layout needs work, not more color.
 3. **Background fills (`-bg` tokens) always pair with their full-saturation counterpart for the foreground element** (text or icon), never used as a large surface fill alone — these are for small-area contexts: badges, pills, banner backgrounds, table row highlights.
 4. **Navy, not black.** Nothing in this system uses pure black (`#000000`) — text, dark surfaces, and shadows all derive from the navy family, keeping the whole palette warm even at its darkest values.
