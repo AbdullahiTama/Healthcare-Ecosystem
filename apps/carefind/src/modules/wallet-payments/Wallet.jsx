@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
+import { ArrowLeft, Banknote, Coins, Gift, Landmark, RotateCcw, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint.js'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
@@ -177,14 +178,23 @@ function Wallet() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  const txIcon = (type) => ({ topup: '🪙', gift_sent: '🎁', gift_received: '💰', withdrawal: '🏦', withdrawal_refund: '↩️' }[type] || '💳')
+  // Each transaction kind gets a distinct icon and a semantic colour, so a
+  // ledger can be scanned without reading every row (SCREEN_PATTERNS.md 20).
+  const TX_KIND = {
+    topup:             { Icon: Coins,     tint: theme.success },
+    gift_sent:         { Icon: Gift,      tint: theme.gray500 },
+    gift_received:     { Icon: Banknote,  tint: theme.success },
+    withdrawal:        { Icon: Landmark,  tint: theme.gray500 },
+    withdrawal_refund: { Icon: RotateCcw, tint: theme.warning },
+  }
+  const txKind = (type) => TX_KIND[type] || { Icon: WalletIcon, tint: theme.gray500 }
   const isCredit = (type) => type === 'topup' || type === 'gift_received' || type === 'withdrawal_refund'
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to access your wallet.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -193,19 +203,27 @@ function Wallet() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 30px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
-        <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>My Wallet</h1>
+        {isMobile && (
+          <Link to="/profile" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+            <ArrowLeft size={15} aria-hidden="true" /> Profile
+          </Link>
+        )}
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>
+          <WalletIcon size={21} aria-hidden="true" /> My wallet
+        </h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins — 1 coin = ₦{COIN_VALUE_NAIRA}</p>
         <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 20, textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BALANCE</p>
-          <p style={{ margin: '0 0 4px 0', fontSize: 42, fontWeight: 900 }}>🪙 {wallet?.balance || 0}</p>
+          <p style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 42, fontWeight: 900 }}>
+            <Coins size={30} aria-hidden="true" /> {wallet?.balance || 0}
+          </p>
           <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
             ≈ ₦{((wallet?.balance || 0) * COIN_VALUE_NAIRA).toLocaleString()}
           </p>
@@ -217,7 +235,7 @@ function Wallet() {
           {['wallet', 'history', 'withdraw'].map((t) => (
             <button key={t} onClick={() => setTab(t)} style={{
               flex: 1, padding: 9, borderRadius: 12, border: tab === t ? 'none' : `1px solid ${theme.border}`,
-              background: tab === t ? theme.tealGradient : theme.bg,
+              background: tab === t ? theme.tealDeep : theme.bg,
               color: tab === t ? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13,
             }}>
               {t === 'wallet' ? 'Top Up' : t.charAt(0).toUpperCase() + t.slice(1)}
@@ -243,7 +261,7 @@ function Wallet() {
               >
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>
-                    🪙 {pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} — {pkg.label}
+                    <Coins size={15} color={theme.tealDeep} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 7 }} />{pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} — {pkg.label}
                   </p>
                   {pkg.savings && (
                     <p style={{ margin: 0, fontSize: 11, color: theme.success, fontWeight: 700 }}>Save ₦{pkg.savings.toLocaleString()}</p>
@@ -264,8 +282,10 @@ function Wallet() {
           <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
             {transactions.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <div style={{ fontSize: 26, marginBottom: 10 }}>🪙</div>
-                <p style={{ color: theme.textLight, fontSize: 13 }}>No transactions yet</p>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <Coins size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" />
+                </div>
+                <p style={{ color: theme.gray500, fontSize: 13 }}>No transactions yet</p>
               </div>
             )}
             {transactions.map((tx) => (
@@ -274,7 +294,16 @@ function Wallet() {
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 22 }}>{txIcon(tx.type)}</span>
+                  {(() => {
+                    const { Icon, tint } = txKind(tx.type)
+                    return (
+                      <span style={{
+                        width: 36, height: 36, borderRadius: theme.radius.md, flexShrink: 0,
+                        background: theme.gray50, color: tint,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}><Icon size={18} aria-hidden="true" /></span>
+                    )
+                  })()}
                   <div>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13.5, fontWeight: 700, color: theme.navy, textTransform: 'capitalize' }}>
                       {tx.type.replace('_', ' ')}
@@ -283,7 +312,7 @@ function Wallet() {
                   </div>
                 </div>
                 <p style={{ margin: 0, fontWeight: 900, fontSize: 14, color: isCredit(tx.type) ? theme.success : theme.alert }}>
-                  {isCredit(tx.type) ? '+' : '-'}{tx.amount} 🪙
+                  {isCredit(tx.type) ? '+' : '-'}{tx.amount} <Coins size={13} aria-label="CareCoins" style={{ verticalAlign: '-2px' }} />
                 </p>
               </div>
             ))}
@@ -297,7 +326,7 @@ function Wallet() {
               Minimum: <strong>5 CareCoins (₦800 after 20% platform fee)</strong>.
             </p>
             <p style={{ fontSize: 13, color: theme.textMid, margin: '0 0 16px 0' }}>
-              Your balance: <strong>🪙 {wallet?.balance || 0} CareCoins</strong>
+              Your balance: <strong>{wallet?.balance || 0} CareCoins</strong>
             </p>
             {(wallet?.balance || 0) >= 5 ? (
               <form onSubmit={handleWithdraw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -322,7 +351,7 @@ function Wallet() {
                   type="submit"
                   disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance}
                   style={{
-                    width: '100%', padding: 13, background: theme.tealGradient, color: '#fff',
+                    width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
                     opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance) ? 0.6 : 1,
                   }}
