@@ -70,18 +70,21 @@ Used for the module-level landing screen (business dashboard home, reception ove
 ### 1. Feed / Vertical Scroll
 The default CareFind shape — home feed, search results, list-style content.
 ```
-+------------------------------------------+
-| Header (logo, search entry)               |
-+------------------------------------------+
-| [Card]                                    |
-| [Card]                                    |
-| [Card]                                    |
-| ...                                       |
-+------------------------------------------+
-| Bottom Nav                                |
-+------------------------------------------+
+Mobile (<768px)                       Desktop (≥1024px)
++------------------------+   +---------+---------------+----------+
+| Header (logo, search)  |   | Header (logo, search, bell, avatar) |
++------------------------+   +---------+---------------+----------+
+| [Card]                 |   | Create  | [Card]        | Trending |
+| [Card]                 |   | Nav     | [Card]        | Articles |
+| [Card]                 |   | ...     | [Card]        |          |
+| ...                    |   | [me]    |               |          |
++------------------------+   +---------+---------------+----------+
+| Bottom Nav             |
++------------------------+
 ```
 **Why it works:** matches the mental model of every mobile discovery product a user already knows — no relearning required, which matters enormously for a first-time, possibly anxious user (Design Principle 12).
+
+**Desktop composition** (`apps/carefind/src/components/layout/AppShell.jsx`): a 64px sticky header, a 240px persistent left nav (72px icon-only rail on tablet), the reading column capped at 640px, and a 320px sticky contextual sidebar — the whole row capped at 1320px and centred. The cap is the point: a wide monitor should get *more context* (a second and third column), not a longer line of body text. The right sidebar renders only sections that have real data and never issues its own queries — it is fed by what the page already fetched. Below 1024px the sidebar moves under the main column; below 768px the shell steps aside entirely and the page renders its own mobile chrome.
 
 ### 2. Search → Results → Detail (progressive)
 ```

@@ -6,7 +6,26 @@
 
 **Concrete choice: `react-icons/fi` (Feather).** First adopted in CareHub's `Landing.jsx`/`Sidebar.jsx` template migration. Migrate screen-by-screen, same pattern as the color/typography rollout — a screen either uses Feather icons throughout, or (if not yet migrated) keeps its existing emoji, never a mix of both on one screen. Config-driven emoji shared across many not-yet-migrated screens (e.g. `BUSINESS_TYPES`, per-role nav item icons) stay emoji until that config itself is migrated — swapping it for just one consumer screen would make that screen *less* consistent with the rest of the app, not more.
 
-**The CareHub brand mark is one component, not a per-screen icon choice.** `Logo` (`apps/carehub/src/components/ui/index.jsx`) renders the one CareHub mark — `FiActivity` in a flat `teal-600` rounded square, no gradient — and every surface that shows the CareHub brand (marketing nav/footer, dashboard sidebar) renders it via that component, not a locally recreated icon-in-a-box.
+**The brand mark is one component per product, not a per-screen icon choice.** `Logo` (`apps/carehub/src/components/ui/index.jsx`) renders the one CareHub mark — `Activity` in a flat `teal-600` rounded square, no gradient — and every surface that shows the CareHub brand (marketing nav/footer, dashboard sidebar) renders it via that component, not a locally recreated icon-in-a-box. CareFind's `Logo` (`apps/carefind/src/modules/social-feed/Logo.jsx`) is the sibling: the **same** `Activity` mark in the same flat teal square, with the CareFind wordmark beside it (it previously carried a gradient tile with a "C"). `BRAND_GUIDELINES.md` asks the two products to be instantly distinguishable but unmistakably related — a shared mark plus a distinct wordmark is how that is expressed here, and it means the mark is defined in exactly two places, not redrawn per screen.
+
+## Migration status
+
+**CareHub:** complete — every user-facing screen is on Lucide.
+
+**CareFind: every user-facing screen is migrated.** Feed, Discover/Search, News + News article, Wallet, Saved, Notifications, Login, Public profile, Profile, Onboarding, Verify professional, Business profile, Drug profile, the claim and dashboard screens, Product upload, Playlists, Live show / Live session / Live dashboard / Go live, Professional monetization, and For business — plus every shared component they render (`PostMenu`, `Stories`, `Logo`, `BottomNav`, the `layout/` shell, `components/ui`, `SupportPrompt`, `VoiceRecorder`, `VideoRecorder`, `VideoUploader`, `SlideUploader`, `DrawingBoard`, `ArticleEditor`), and the emoji that had been baked into data/preview strings (`VisualCard`'s template labels, `richText`'s block summaries, the product glyph on search results, the trailing glyphs in `services/notify.js`'s notification copy).
+
+**The deliberate leftovers, and why each one stays:**
+
+| Where | What | Why |
+|---|---|---|
+| `GiftPanel`, `LiveSession`'s gift list | 💊 ⭐ ❤️ 🏆 👑 … | The glyph **is** the product being sent — user-generated/expressive content (see below). |
+| `LiveShow`'s floating reactions | ❤️ 💚 💛 🧡 💜 | Reactions, same rule. |
+| `posts.content` repost prefix | 🔁 | A **data convention**, not an icon. Confined to `isRepost`/`withoutRepostMark` in `modules/social-feed/postDisplay.jsx`. |
+| Share/repost copy written to posts and WhatsApp | 🔴 LIVE NOW…, 🔁 Reposted… | User-facing **content text** that leaves the app, not product chrome. |
+| `BusinessDashboard`'s CSV import template | 💊 in the sample rows | Changing the sample would change the import contract for files sellers already have. The column is no longer rendered anywhere. |
+| `AdminPanel`, `AdminLogin` | ~130 glyphs | Internal tooling — explicitly permitted below. Migrate if admin ever becomes a customer-facing surface. |
+
+Nothing else in the app mixes the two systems: no user-facing screen carries both a Lucide icon and a decorative emoji.
 
 ## Sizing
 

@@ -1419,6 +1419,75 @@ Skeleton (structured content)         Spinner (short/indeterminate)
 
 ---
 
+## 36. Social Feed
+
+**Purpose:** Let a CareFind user read, judge and act on a stream of community health content — and contribute to it — without ever losing track of *who* is speaking.
+
+**Users:** CareFind — patients/public (reading, reacting, asking), verified professionals and businesses (posting, answering).
+
+**When to use:** CareFind's home route, and any screen that presents a chronological/ranked stream of authored posts (a single profile's posts, Saved posts, a tag stream). Reference implementation: `apps/carefind/src/modules/social-feed/Feed.jsx`.
+
+**When NOT to use:** A list of *records* (providers, medicines, orders) is Search Results (11) or List/Table (6) — those are scanned and compared; a feed is read. Don't mix the two shapes: a result card optimizes for comparison, a post card optimizes for reading and attribution.
+
+**Layout:** Desktop is `AppShell`'s three-column shell; mobile is the single column plus `BottomNav` (`LAYOUTS.md` → Feed / Vertical Scroll).
+```
++---------------------------------------------------------------+
+| Header: [logo]  [ search pill ]              [bell] [avatar]   |
++---------+-------------------------------+-------------------+
+| [+ Create]  | For you  Following  Questions … |  TRENDING     |
+| Home        | ( story rail )                  |  · item       |
+| Discover    | +---------------------------+   |  · item       |
+| News        | | composer card             |   |               |
+| Wallet      | +---------------------------+   |  SUGGESTED    |
+| Saved       | +---------------------------+   |  ARTICLES     |
+| Notifs      | | post card                 |   |  [tile] title |
+|             | +---------------------------+   |  See all news |
+| [me]        |                                 |               |
++---------+-------------------------------+-------------------+
+```
+
+**Information hierarchy:** Inside a post card, identity outranks content: avatar → name → verification badge → handle → credential chip → time, *then* the body, *then* the engagement bar. A reader decides whether to trust health advice before reading it (Design Principle 12), so the trust signal can never sit below the fold of the card or behind a tap.
+
+**Components used:** `Card`, `Pill` (one post-kind pill per card — `text` posts get none), `Avatar`, `PostMenu` (the `⋯` overflow menu), `TealBtn`, `Empty`, `CardSkeleton`, `Toast`, `Modal` (report reasons), `AppShell` + `LeftSidebar` + `RightSidebar` + `SidebarSection`.
+
+**User workflow:** Land → filter with the tab rail if wanted → read → react (like/comment/share) inline, or open `⋯` for the rarer actions (save, report; edit/delete on your own post) → compose from the composer card at the top, or the sidebar's Create button / mobile's centre nav button.
+
+**UX rules:**
+- **One primary action per card region.** The composer's footer carries exactly one primary button (Post), right-aligned, with the secondary attach action on the left — the same rule as Create Form (8).
+- **Engagement bar grouping is fixed:** reading actions (like, comment, share) left; keeping/supporting (views, gift, save) right. The grouping never varies between post kinds, so the target a user reaches for never moves.
+- **Counts live inside their action**, and a zero renders as nothing (or the verb) — never a row of "0"s.
+- **Read-only means read-only.** A reader must never see an editing affordance on someone else's post (an empty caption input, an editor's frame). Any block component used in both modes hides its inputs when `readOnly`.
+- **Anything shown as a snippet is stripped of markup** (`stripArticleMarkup` + `previewText`) — a sidebar or preview that leaks `**bold**`/`==highlight==`/raw block JSON is a bug, not a formatting quirk.
+- **Report is a closed set of reasons in a modal**, never a free-text `window.prompt` — free text produces unmoderatable rows, and `prompt` is unstyled and blocked in some mobile browsers.
+- **Share falls back to clipboard** where the Web Share API is missing (most desktop browsers), and says which one happened — a share button that silently does nothing is worse than no share button.
+
+**Accessibility requirements:** Every icon-only control (menu trigger, gift, save, story close) has an `aria-label` naming the *action and its subject* ("Save this post", "Options for Dr. X's post"). Toggle state rides on `aria-pressed` (like, save, filter tabs, post-type chips), never on fill colour alone. The overflow menu is a real `menu`/`menuitem` structure that closes on Escape and outside click and returns focus to its trigger. Timestamps are `<time datetime>`. All engagement controls keep a ≥40px target on desktop and 44px on mobile (`ACCESSIBILITY.md`).
+
+**Responsive behavior:** Desktop (≥1024px): three columns, main column capped at 640px for line length. Tablet (768–1023px): icon-only left rail, right sidebar drops below the main column. Mobile (<768px): single column, solid-navy brand band with the filter rail, `BottomNav`, right-sidebar content re-expressed as the inline news/live strips. Every horizontal rail (tabs, stories, news) uses `.cf-hscroll` — swipeable, no visible scrollbar track.
+
+**Common mistakes:** Two pills on one card describing the same thing; exposing edit/delete icons permanently instead of collecting them into `⋯`; a per-card `<style>` tag (50 posts shipped 50 copies of the same CSS — hoist it to `global.css`); showing views as a button that does nothing when pressed; letting the engagement bar's icon order differ between post kinds.
+
+**Design rules:** Flat colour only — `tealDeep` for primary, `navy` for dark surfaces, no gradients on controls or brand marks. Cards are white, `radius.lg`, one hairline border, `elevation[1]`. Lucide icons throughout, never emoji (`ICONS.md` — the one exception is genuinely expressive user content such as the gift catalogue). The system font stack (`TYPOGRAPHY.md`) — the display serif never appears on this screen.
+
+**Reusable patterns:** `PostMenu` is reusable on any authored item (comments, reviews, news). The card header block and the grouped engagement bar are the two pieces to lift verbatim when building Profile, Saved, News and Playlist screens — they should not be re-derived per screen.
+
+**Where this pattern is already implemented:** Feed (`modules/social-feed/Feed.jsx`), News article (`modules/news-publishing/NewsArticle.jsx` — same engagement bar), Saved posts, Public profile and Profile (same card header, same post-tile grid).
+
+**The shared pieces — use these, never a local copy:**
+
+| Piece | Lives in | Used by |
+|---|---|---|
+| Engagement bar (`.cf-eng-row` / `-group` / `-item` / `-meta`) | `styles/global.css` | Feed, News article |
+| Horizontal rails (`.cf-hscroll`) | `styles/global.css` | Feed tabs, Stories, news strip, profile tabs |
+| `shareOrCopy()` — Web Share with clipboard fallback | `utils/share.js` | Feed, News article |
+| `PostMenu` — the `⋯` overflow menu | `modules/social-feed/PostMenu.jsx` | Feed (reusable on comments, reviews, news) |
+| `PostTile` / `PostTileGrid`, `isRepost`, `withoutRepostMark`, `POST_KIND_ICON` | `modules/social-feed/postDisplay.jsx` | Public profile, Profile |
+| `Stars` (display) / `StarPicker` (input) | `components/ui` | Public profile, Profile, Business profile, Drug profile, Playlists, Dashboard, Business dashboard |
+
+A rating rendered as `'★'.repeat(n)` or a hand-built star row is a bug — every rating in the product goes through `Stars`/`StarPicker` so the icon, the colour and the screen-reader text stay identical.
+
+---
+
 ## How these patterns relate to each other
 
 ```
@@ -1438,6 +1507,10 @@ Entry/auth sequence:
 
 Discovery sequence (CareFind):
   Global Search → Search Results → Provider Profile → Appointment Workflow
+
+Community sequence (CareFind):
+  Social Feed → Provider Profile → (Appointment Workflow)
+  Social Feed → Detail/Article → Saved
 ```
 
 When building anything new, find the closest node in this graph before inventing something new.
