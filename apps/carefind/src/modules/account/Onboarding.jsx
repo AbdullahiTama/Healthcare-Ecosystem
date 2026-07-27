@@ -220,7 +220,11 @@ function Onboarding() {
               </div>
               {username.length >= 3 && (
                 <p style={{ margin: '5px 0 0 0', fontSize: 12, fontWeight: 600, color: checking ? theme.textLight : available ? theme.success : theme.alert }}>
-                  {checking ? 'Checking availability…' : available ? '✓ Available' : '✕ Taken — try another'}
+                  {checking
+                    ? 'Checking availability…'
+                    : available
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Available</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken — try another</span>}
                 </p>
               )}
               <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
