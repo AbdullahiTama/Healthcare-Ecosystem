@@ -30,6 +30,7 @@ import LiveShow from './modules/live-streaming/LiveShow.jsx'
 import PlaylistCreate from './modules/playlists/PlaylistCreate.jsx'
 import PlaylistView from './modules/playlists/PlaylistView.jsx'
 import LiveDashboard from './modules/live-streaming/LiveDashboard.jsx'
+import ForBusiness from './modules/marketing/ForBusiness.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
@@ -52,6 +53,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/u/:id" element={<PublicProfile />} />
           <Route path="/drug/:name" element={<DrugProfile />} />
           <Route path="/news" element={<News />} />
+          <Route path="/for-business" element={<ForBusiness />} />
           <Route path="/news/:id" element={<NewsArticle />} />
           <Route path="/live/:id" element={<LiveSession />} />
           <Route path="/live-show/:id" element={<LiveShow />} />
