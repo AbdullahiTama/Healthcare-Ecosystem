@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, BadgeCheck, Bookmark } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
@@ -8,6 +9,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { renderArticleHtml } from '../news-publishing/articleFormat'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Avatar, Card, CardSkeleton, Empty } from '../../components/ui'
 
 function SavedPosts() {
   const { user, loading: authLoading } = useAuth()
@@ -58,7 +60,7 @@ function SavedPosts() {
       const userIds = [...new Set(ordered.map((p) => p.user_id))]
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, display_name, avatar_url')
+        .select('id, display_name, full_name, is_verified, avatar_url')
         .in('id', userIds)
       const profileMap = {}
       ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
@@ -69,66 +71,116 @@ function SavedPosts() {
     if (!authLoading) load()
   }, [user, authLoading])
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  function timeAgo(dateStr) {
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
+  }
+
+  function authorName(post) {
+    const p = profiles[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
+  }
+
+  function inShell(content) {
+    if (isMobile) return content
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {content}
+      </AppShell>
+    )
+  }
+
+  if (authLoading || loading) {
+    return inShell(
+      <div role="status" aria-live="polite" style={{ maxWidth: isMobile ? 480 : 640, margin: '0 auto', padding: isMobile ? '20px 16px 90px' : 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Loading saved posts</span>
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    )
+  }
 
   if (!user) {
-    return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
-        <p style={{ color: theme.textMid }}>Log in to see your saved posts.</p>
-        <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
+    return inShell(
+      <div style={{ maxWidth: isMobile ? 480 : 640, margin: '0 auto', padding: isMobile ? '20px 16px 90px' : 0 }}>
+        <Empty
+          icon={<Bookmark size={44} color={theme.gray300} strokeWidth={1.5} />}
+          message={
+            <>
+              <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>Log in to see your saved posts</div>
+              <div style={{ fontSize: 13, color: theme.gray500 }}>Anything you save from the feed is kept here.</div>
+            </>
+          }
+          action="Log in"
+          onAction={() => navigate('/login')}
+        />
       </div>
     )
   }
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
-        <h1 style={{ fontSize: 22, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Saved Posts</h1>
+        {isMobile && (
+          <Link to="/profile" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+            <ArrowLeft size={15} aria-hidden="true" /> Profile
+          </Link>
+        )}
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>
+          <Bookmark size={21} aria-hidden="true" /> Saved posts
+        </h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
           {posts.length} post{posts.length !== 1 ? 's' : ''} saved
         </p>
       </div>
 
-      <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
+      <div style={isMobile ? { padding: '20px 16px 0' } : {}}>
         {posts.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-            <div style={{
-              width: 56, height: 56, borderRadius: 16, background: '#ecfdf5', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
-            }}>
-              🔖
-            </div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No saved posts yet</h3>
-            <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>Tap Save on any post in the feed to keep it here</p>
-          </div>
+          <Empty
+            icon={<Bookmark size={44} color={theme.gray300} strokeWidth={1.5} />}
+            message={
+              <>
+                <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>No saved posts yet</div>
+                <div style={{ fontSize: 13, color: theme.gray500 }}>Save any post from the feed to keep it here.</div>
+              </>
+            }
+            action="Go to the feed"
+            onAction={() => navigate('/')}
+          />
         )}
 
         <div style={isMobile
           ? { display: 'flex', flexDirection: 'column', gap: 12 }
           : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
           {posts.map((post) => (
-            <div key={post.id} style={{
-              border: `1px solid ${theme.border}`, borderRadius: 16, padding: post.post_type === 'visual' ? 0 : 14,
-              overflow: 'hidden', background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: post.post_type === 'visual' ? '12px 14px 0 14px' : 0, marginBottom: post.post_type === 'visual' ? 0 : 8 }}>
-                <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-                  <div style={{
-                    width: 30, height: 30, borderRadius: '50%',
-                    background: profiles[post.user_id]?.avatar_url ? `url(${profiles[post.user_id].avatar_url})` : theme.tealGradient,
-                    backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 800,
-                  }}>
-                    {!profiles[post.user_id]?.avatar_url && (profiles[post.user_id]?.display_name?.[0]?.toUpperCase() || '?')}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: theme.navy }}>
-                    {profiles[post.user_id]?.display_name || 'CareFind User'}
+            <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : 16, overflow: 'hidden' }}>
+              {/* Same identity order as the feed's post card: who, then
+                  whether they're verified, then when. */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: post.post_type === 'visual' ? '14px 16px 0 16px' : 0,
+                marginBottom: post.post_type === 'visual' ? 0 : 10,
+              }}>
+                <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', minWidth: 0 }}>
+                  <Avatar name={authorName(post)} src={profiles[post.user_id]?.avatar_url} size={34} />
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
+                      {profiles[post.user_id]?.is_verified && (
+                        <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ flexShrink: 0 }} />
+                      )}
+                    </span>
+                    <span style={{ display: 'block', fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
+                      <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
+                    </span>
                   </span>
                 </Link>
               </div>
@@ -141,13 +193,13 @@ function SavedPosts() {
                 </div>
               ) : post.post_type === 'article' ? (
                 <div
-                  style={{ fontSize: 14, color: theme.textDark, lineHeight: 1.7, fontFamily: 'Georgia, serif' }}
+                  style={{ fontSize: 14, color: theme.textMid, lineHeight: 1.7, fontFamily: theme.fontFamily }}
                   dangerouslySetInnerHTML={{ __html: renderArticleHtml(post.content) }}
                 />
               ) : (
-                <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>{post.content}</p>
+                <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14.5, color: theme.textMid, lineHeight: 1.6 }}>{post.content}</p>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       </div>
@@ -156,13 +208,7 @@ function SavedPosts() {
     </div>
   )
 
-  if (isMobile) return bodyContent
-
-  return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
-      {bodyContent}
-    </AppShell>
-  )
+  return inShell(bodyContent)
 }
 
 export default SavedPosts
