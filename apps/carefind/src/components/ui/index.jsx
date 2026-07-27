@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
+import { AlertTriangle, Check, Inbox, Star, WifiOff, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 export { useToast } from '../../hooks/useToast'
 
-const { tealGradient, navySoft, navy } = theme
-const DARK = `linear-gradient(135deg, ${navy}, ${navySoft})`
+const { navy } = theme
 
 // Shared component library for CareFind, built on the tokens in
 // ../../styles/theme.js. Mirrors the shape and naming of CareHub's
@@ -85,7 +85,7 @@ const btnBase = {
 export function TealBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
   return (
     <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, background: disabled ? theme.gray200 : tealGradient, color: disabled ? theme.gray400 : 'white', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
+      style={{ ...btnBase, background: disabled ? theme.gray200 : theme.tealDeep, color: disabled ? theme.gray400 : 'white', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
       {children}
     </button>
   )
@@ -93,7 +93,7 @@ export function TealBtn({ children, onClick, style = {}, disabled, type = 'butto
 export function DarkBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
   return (
     <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, background: DARK, color: 'white', ...style }}>
+      style={{ ...btnBase, background: navy, color: 'white', ...style }}>
       {children}
     </button>
   )
@@ -132,7 +132,7 @@ export function SectionHead({ title, sub, btn, onBtn }) {
 // `src`: a real profile photo, when one exists — falls back to an initial on
 // a colored background otherwise. Every avatar in the product should use
 // this, not a hand-built circle, so the fallback treatment stays consistent.
-export function Avatar({ name, size = 32, bg = tealGradient, src, style = {} }) {
+export function Avatar({ name, size = 32, bg = theme.tealDeep, src, style = {} }) {
   if (src) {
     return (
       <div style={{ width: size, height: size, borderRadius: theme.radius.full, backgroundImage: `url(${src})`, backgroundSize: 'cover', backgroundPosition: 'center', flexShrink: 0, ...style }} role="img" aria-label={name || 'Profile photo'} />
@@ -145,15 +145,62 @@ export function Avatar({ name, size = 32, bg = tealGradient, src, style = {} }) 
   )
 }
 
+// ── RATING ───────────────────────────────────────────────────────────────────
+// A rating shown as five icons, with the value always available as text for
+// assistive tech — shape and colour alone never carry the number
+// (ACCESSIBILITY.md). Every rating in the product renders through these, so
+// stars never drift between hand-built rows and icon sets screen to screen.
+export function Stars({ value = 0, size = 14 }) {
+  const rounded = Math.round(value)
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }} role="img" aria-label={`${value} out of 5`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          size={size}
+          color={n <= rounded ? theme.warning : theme.gray300}
+          fill={n <= rounded ? theme.warning : 'none'}
+          aria-hidden="true"
+        />
+      ))}
+    </span>
+  )
+}
+
+// The interactive twin of `Stars` — picking a rating rather than reading one.
+export function StarPicker({ value = 0, onChange, size = 24 }) {
+  return (
+    <div role="group" aria-label="Your rating" style={{ display: 'flex', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          type="button"
+          key={n}
+          onClick={() => onChange(n)}
+          aria-label={`${n} star${n > 1 ? 's' : ''}`}
+          aria-pressed={n === value}
+          style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', lineHeight: 0 }}
+        >
+          <Star
+            size={size}
+            color={n <= value ? theme.warning : theme.gray300}
+            fill={n <= value ? theme.warning : 'none'}
+            aria-hidden="true"
+          />
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── TOAST ────────────────────────────────────────────────────────────────────
 // Desktop: corner-anchored. Mobile: full-width, safe-area anchored
 // (COMPONENT_LIBRARY.md → Notifications). role="status" + aria-live so
 // screen readers hear it without it stealing focus.
 const TOAST_VARIANTS = {
-  success: { bg: theme.success, icon: '✓' },
-  error:   { bg: theme.alert, icon: '✕' },
-  warning: { bg: theme.warning, icon: '!' },
-  info:    { bg: tealGradient, icon: null },
+  success: { bg: theme.success, Icon: Check },
+  error:   { bg: theme.alert, Icon: X },
+  warning: { bg: theme.warning, Icon: AlertTriangle },
+  info:    { bg: theme.tealDeep, Icon: null },
 }
 
 export function Toast({ msg, type = 'info', actionLabel, onAction }) {
@@ -169,7 +216,10 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
       boxShadow: '0 4px 16px rgba(15,118,110,0.4)', textAlign: 'center',
       display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
     }}>
-      <span>{v.icon && <span aria-hidden="true" style={{ marginRight: 6 }}>{v.icon}</span>}{msg}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        {v.Icon && <v.Icon size={16} strokeWidth={2.6} aria-hidden="true" style={{ flexShrink: 0 }} />}
+        {msg}
+      </span>
       {actionLabel && onAction && (
         <button onClick={onAction} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: 'white', fontWeight: 800, fontSize: 12, padding: '4px 10px', borderRadius: theme.radius.sm, cursor: 'pointer', flexShrink: 0 }}>{actionLabel}</button>
       )}
@@ -233,7 +283,11 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
       }}>
         <div style={{ padding: '20px 24px', borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
           <div id="cf-modal-title" style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
-          {!hideCloseButton && <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, borderRadius: theme.radius.full, background: theme.gray100, border: 'none', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>}
+          {!hideCloseButton && (
+            <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, borderRadius: theme.radius.full, background: theme.gray100, border: 'none', cursor: 'pointer', color: theme.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} aria-hidden="true" />
+            </button>
+          )}
         </div>
         <div style={{ padding: '20px 24px', maxHeight: sheet ? undefined : '65vh', overflowY: 'auto' }}>{children}</div>
         {footer && <div style={{ padding: '14px 24px', borderTop: `1px solid ${theme.border}`, display: 'flex', gap: theme.space[6], flexShrink: 0 }}>{footer}</div>}
@@ -351,10 +405,12 @@ export function CardSkeleton() {
 // (SCREEN_PATTERNS.md pattern 30) so the message and action are appropriate:
 // 'none' = nothing exists yet, 'filtered' = filters/search excluded everything,
 // 'positive' = a genuinely good empty state (e.g. "no pending approvals").
-export function Empty({ icon = '📭', message, action, onAction, cause = 'none' }) {
+export function Empty({ icon, message, action, onAction, cause = 'none' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.gray300, textAlign: 'center' }}>
-      <div style={{ fontSize: 44, marginBottom: 16 }} aria-hidden="true">{icon}</div>
+      <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16, display: 'flex' }} aria-hidden="true">
+        {icon || <Inbox size={44} color={theme.gray300} strokeWidth={1.5} />}
+      </div>
       <div style={{ fontSize: 15, color: theme.gray500, marginBottom: action ? 20 : 0, maxWidth: 320 }}>{message}</div>
       {action && (cause === 'filtered'
         ? <GhostBtn onClick={onAction}>{action}</GhostBtn>
@@ -369,11 +425,13 @@ export function Empty({ icon = '📭', message, action, onAction, cause = 'none'
 // offers a next step — never a dead end.
 export function ErrorState({ variant = 'app', message, onRetry }) {
   const copy = variant === 'network'
-    ? { icon: '📡', heading: "You're offline", body: message || "We'll keep trying to reconnect automatically." }
-    : { icon: '⚠️', heading: 'Something went wrong', body: message || "We couldn't load this. Please try again." }
+    ? { Icon: WifiOff, heading: "You're offline", body: message || "We'll keep trying to reconnect automatically." }
+    : { Icon: AlertTriangle, heading: 'Something went wrong', body: message || "We couldn't load this. Please try again." }
   return (
     <div role="alert" aria-live="assertive" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 12 }} aria-hidden="true">{copy.icon}</div>
+      <div style={{ marginBottom: 12, display: 'flex' }} aria-hidden="true">
+        <copy.Icon size={40} color={theme.gray400} strokeWidth={1.5} />
+      </div>
       <div style={{ fontSize: 15, fontWeight: 700, color: theme.textDark, marginBottom: 4 }}>{copy.heading}</div>
       <div style={{ fontSize: 13, color: theme.gray500, marginBottom: onRetry ? 20 : 0, maxWidth: 320 }}>{copy.body}</div>
       {onRetry && <TealBtn onClick={onRetry}>Retry</TealBtn>}

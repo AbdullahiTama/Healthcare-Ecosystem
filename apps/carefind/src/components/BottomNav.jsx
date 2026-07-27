@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
+import { Home, Compass, Plus, Newspaper, User } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function BottomNav({ onCompose }) {
@@ -59,26 +60,26 @@ function BottomNav({ onCompose }) {
       boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
     }}>
       <Link to="/" style={itemStyle(isActive('/'))}>
-        <span style={{ fontSize: 19 }}>🏠</span>
+        <Home size={20} strokeWidth={isActive('/') ? 2.4 : 2} aria-hidden="true" />
         Home
       </Link>
       <Link to="/search" style={itemStyle(isActive('/search'))}>
-        <span style={{ fontSize: 19 }}>🛒</span>
+        <Compass size={20} strokeWidth={isActive('/search') ? 2.4 : 2} aria-hidden="true" />
         MedMarket
       </Link>
       <button
         onClick={handleCompose}
         style={{
-          width: 42, height: 42, borderRadius: 13, background: theme.tealGradient,
+          width: 44, height: 44, borderRadius: theme.radius.md, background: theme.tealDeep,
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-          fontSize: 22, fontWeight: 800, boxShadow: '0 4px 12px rgba(15,118,110,0.4)',
           border: 'none', cursor: 'pointer',
         }}
+        aria-label="Create post"
       >
-        +
+        <Plus size={22} strokeWidth={2.6} aria-hidden="true" />
       </button>
       <Link to="/news" style={{ ...itemStyle(isActive('/news')), position: 'relative' }}>
-        <span style={{ fontSize: 19 }}>📰</span>
+        <Newspaper size={20} strokeWidth={isActive('/news') ? 2.4 : 2} aria-hidden="true" />
         News
         {unreadNews > 0 && (
           <span style={{
@@ -91,7 +92,7 @@ function BottomNav({ onCompose }) {
         )}
       </Link>
       <Link to="/profile" style={itemStyle(isActive('/profile'))}>
-        <span style={{ fontSize: 19 }}>👤</span>
+        <User size={20} strokeWidth={isActive('/profile') ? 2.4 : 2} aria-hidden="true" />
         Profile
       </Link>
     </div>

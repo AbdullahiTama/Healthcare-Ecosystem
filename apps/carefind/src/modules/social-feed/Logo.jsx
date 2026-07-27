@@ -1,7 +1,15 @@
+import { Activity } from 'lucide-react'
 import { theme } from '../../styles/theme'
 
-// The CareFind logo: a teal rounded tile with a white "C", next to the wordmark.
-// One component so the logo is identical everywhere it appears.
+// The CareFind logo: a flat teal rounded tile carrying the shared ecosystem
+// pulse mark, next to the wordmark. One component so the logo is identical
+// everywhere it appears.
+//
+// The mark matches CareHub's (`Activity` in a flat teal-600 rounded square —
+// ICONS.md, "the brand mark is one component"): BRAND_GUIDELINES.md asks for
+// the two products to be instantly distinguishable but unmistakably related,
+// and a shared mark with a different wordmark is exactly that. Flat, not
+// gradient, like every other surface in the system.
 //
 //   <Logo />                       full logo, default size
 //   <Logo size={40} />             bigger
@@ -16,23 +24,21 @@ function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
 
   const mark = (
     <div
+      role="img"
+      aria-label="CareFind"
       style={{
         width: size,
         height: size,
         borderRadius: size * 0.28,
-        background: theme.tealGradient,
+        background: theme.tealDeep,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         color: '#fff',
-        fontWeight: 900,
-        fontSize: size * 0.55,
-        lineHeight: 1,
         flexShrink: 0,
-        boxShadow: '0 2px 8px rgba(13,148,136,0.35)',
       }}
     >
-      C
+      <Activity size={size * 0.58} strokeWidth={2.6} aria-hidden="true" />
     </div>
   )
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { Bell, Search } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar } from '../ui'
 import Logo from '../../modules/social-feed/Logo.jsx'
@@ -38,13 +39,13 @@ export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs
         <Link
           to="/search"
           style={{
-            flex: 1, maxWidth: 420, display: 'flex', alignItems: 'center', gap: 8,
+            flex: 1, maxWidth: 520, display: 'flex', alignItems: 'center', gap: 9,
             minHeight: 40, padding: '0 14px', borderRadius: theme.radius.md,
-            background: theme.gray50, border: `1px solid ${theme.border}`,
-            color: theme.textLight, fontSize: 13, textDecoration: 'none',
+            background: theme.gray50, border: `1px solid ${theme.gray200}`,
+            color: theme.gray400, fontSize: 13, textDecoration: 'none',
           }}
         >
-          <span aria-hidden="true">🔍</span>
+          <Search size={16} aria-hidden="true" />
           Search medication, facility, doctor…
         </Link>
 
@@ -55,10 +56,10 @@ export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs
             style={{
               position: 'relative', width: 40, height: 40, borderRadius: theme.radius.md,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: theme.gray50, textDecoration: 'none', fontSize: 16,
+              background: theme.gray50, textDecoration: 'none', color: theme.gray600,
             }}
           >
-            🔔
+            <Bell size={19} aria-hidden="true" />
             {unreadNotifs > 0 && (
               <span style={{
                 position: 'absolute', top: 4, right: 4, minWidth: 15, height: 15, padding: '0 3px',

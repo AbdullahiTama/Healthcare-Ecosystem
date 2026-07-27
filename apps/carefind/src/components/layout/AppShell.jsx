@@ -24,7 +24,7 @@ export default function AppShell({ children, rightSidebar, user, myUsername, myA
   if (isMobile) return children
 
   return (
-    <div style={{ minHeight: '100vh', background: theme.gray50 }}>
+    <div style={{ minHeight: '100vh', background: theme.bg }}>
       <DesktopHeader user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} />
       <div style={{ maxWidth: 1320, margin: '0 auto', display: 'flex', gap: 24, padding: '0 24px', alignItems: 'flex-start' }}>
         <LeftSidebar

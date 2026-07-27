@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { Home, Compass, Newspaper, Wallet, Bookmark, Bell, Plus } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar } from '../ui'
 
@@ -6,14 +7,15 @@ import { Avatar } from '../ui'
 // routes only — no invented destinations (see main.jsx's <Routes>). The
 // brief's example nav (Providers/Appointments/Messages) has no corresponding
 // page in this app today, so those are intentionally omitted rather than
-// linked to nowhere.
+// linked to nowhere. Icons are lucide (ICONS.md): a single stroke-based set
+// across the whole product, never emoji.
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: '🏠', end: true },
-  { to: '/search', label: 'Discover', icon: '🛒' },
-  { to: '/news', label: 'News', icon: '📰' },
-  { to: '/wallet', label: 'Wallet', icon: '💳' },
-  { to: '/saved', label: 'Saved', icon: '🔖' },
-  { to: '/notifications', label: 'Notifications', icon: '🔔' },
+  { to: '/', label: 'Home', Icon: Home, end: true },
+  { to: '/search', label: 'Discover', Icon: Compass },
+  { to: '/news', label: 'News', Icon: Newspaper },
+  { to: '/wallet', label: 'Wallet', Icon: Wallet },
+  { to: '/saved', label: 'Saved', Icon: Bookmark },
+  { to: '/notifications', label: 'Notifications', Icon: Bell },
 ]
 
 function NavRow({ item, active, collapsed, badge }) {
@@ -36,7 +38,7 @@ function NavRow({ item, active, collapsed, badge }) {
       }}
       title={collapsed ? item.label : undefined}
     >
-      <span style={{ fontSize: 19, flexShrink: 0, filter: active ? 'none' : 'grayscale(15%)' }} aria-hidden="true">{item.icon}</span>
+      <item.Icon size={21} strokeWidth={active ? 2.4 : 2} color={active ? theme.tealDeep : theme.gray500} style={{ flexShrink: 0 }} aria-hidden="true" />
       {!collapsed && <span>{item.label}</span>}
       {badge > 0 && (
         <span style={{
@@ -80,13 +82,12 @@ export default function LeftSidebar({ user, myUsername, myAvatar, unreadNotifs, 
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             minHeight: 44, marginBottom: 16, padding: collapsed ? 0 : '11px 16px',
-            borderRadius: theme.radius.md, border: 'none', background: theme.tealGradient,
+            borderRadius: theme.radius.md, border: 'none', background: theme.tealDeep,
             color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
-            boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
           }}
           aria-label="Create post"
         >
-          <span aria-hidden="true">+</span>{!collapsed && <span>Create</span>}
+          <Plus size={19} strokeWidth={2.6} aria-hidden="true" />{!collapsed && <span>Create</span>}
         </button>
       )}
 

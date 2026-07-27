@@ -114,6 +114,92 @@ body {
   border-radius: var(--radius-sm);
 }
 
+/* ── Horizontal rails ─────────────────────────────────────────────────────
+   Tab rows, story rails and card strips scroll by swipe/trackpad. A visible
+   scrollbar track under them reads as a broken layout rather than an
+   affordance, so it's hidden — the content still scrolls, and keyboard users
+   reach the items via normal tab order, not the bar. */
+.cf-hscroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cf-hscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Engagement bar ────────────────────────────────────────────────────────
+   The like/comment/share row under a post or an article. Defined once, here,
+   because the shape is fixed across every surface that carries authored
+   content (the feed, news articles) — the target a user reaches for must not
+   move between screens. Reading actions group left, keeping/supporting group
+   right; the caller supplies only the buttons and their colours. */
+.cf-eng-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cf-eng-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cf-eng-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-fast) var(--ease-out), transform 80ms;
+}
+
+.cf-eng-item span {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-eng-item:hover {
+  background: var(--gray-50);
+}
+
+.cf-eng-item:active {
+  transform: scale(0.94);
+}
+
+.cf-eng-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* Composer / long-form text inputs */
+.cf-composer-input::placeholder {
+  color: var(--gray-400);
+}
+
+.cf-composer-input:focus {
+  background: #fff;
+  border-color: var(--teal-600);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+}
+
 /* ── Loading motion (MOTION.md) ──────────────────────────────────────────── */
 
 /* Skeleton: slow, subtle opacity pulse — never a fast attention-grabbing sweep */
@@ -180,6 +266,12 @@ body {
   .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+  .cf-eng-item {
+    transition: none;
+  }
+  .cf-eng-item:active {
+    transform: none;
   }
   * {
     scroll-behavior: auto !important;
