@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import {
+  AlertTriangle, BadgeCheck, CheckCircle2, MapPin, MessageCircle, Pill as PillIcon,
+  Sparkles, Star, ThumbsDown, ThumbsUp,
+} from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -10,6 +14,7 @@ import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSe
 import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
+import { StarPicker, Stars } from '../../components/ui'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -145,20 +150,20 @@ function DrugProfile() {
 
   const alreadyReviewedSelected = userReviewedIds.includes(selectedProductId)
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (products.length === 0) {
     const notFoundContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, sans-serif' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         <div style={{
-          background: theme.heroGradient, color: '#fff',
+          background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 28px', borderRadius: theme.radius.xl }),
         }}>
           {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>{decodeURIComponent(name)}</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto' }}>💊</div>
+          <div style={{ width: 56, height: 56, borderRadius: theme.radius.lg, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }}><PillIcon size={26} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No listings found</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>This medication isn't listed by any seller yet</p>
         </div>
@@ -194,15 +199,16 @@ function DrugProfile() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avgRating}</span>
             <div>
-              <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(Number(avgRating)))}{'☆'.repeat(5 - Math.round(Number(avgRating)))}</p>
+              <Stars value={Number(avgRating)} size={15} />
               <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{reviews.length} review{reviews.length !== 1 ? 's' : ''} from users</p>
             </div>
           </div>
 
           {ratingBreakdown.map((r) => (
             <div key={r.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-              <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{r.star}</span>
-              <span style={{ fontSize: 11, color: theme.warning }}>★</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11.5, color: theme.textMid, width: 26 }}>
+                {r.star}<Star size={11} color={theme.warning} fill={theme.warning} aria-hidden="true" />
+              </span>
               <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                 <div style={{ width: `${r.pct}%`, height: '100%', background: r.star >= 4 ? theme.success : r.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
               </div>
@@ -245,7 +251,7 @@ function DrugProfile() {
   const aiInsightsBlock = (analyzingAI || aiInsights) && (
     <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 20 }}>
       <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
-        🤖 AI Intelligence
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Sparkles size={14} aria-hidden="true" /> AI intelligence</span>
       </p>
 
       {analyzingAI && (
@@ -262,7 +268,7 @@ function DrugProfile() {
 
           {aiInsights.sideEffects?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>⚠️ Side Effects Reported</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.alert }}><AlertTriangle size={13} aria-hidden="true" /> Side effects reported</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.sideEffects.map((s) => (
                   <span key={s} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
@@ -275,7 +281,7 @@ function DrugProfile() {
 
           {aiInsights.efficacyReports?.positive?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>✅ Efficacy — Positive</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><CheckCircle2 size={13} aria-hidden="true" /> Efficacy — positive</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.positive.map((e) => (
                   <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
@@ -286,7 +292,7 @@ function DrugProfile() {
 
           {aiInsights.efficacyReports?.negative?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.warning }}>⚠️ Efficacy — Concerns</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.warning }}><AlertTriangle size={13} aria-hidden="true" /> Efficacy — concerns</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.negative.map((e) => (
                   <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
@@ -297,7 +303,7 @@ function DrugProfile() {
 
           {aiInsights.positiveThemes?.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.success }}>👍 People Also Praise</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><ThumbsUp size={13} aria-hidden="true" /> People also praise</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.positiveThemes.map((t) => (
                   <span key={t} style={{ padding: '3px 10px', background: '#ecfdf5', border: `1px solid #bbf7d0`, borderRadius: 20, fontSize: 12, color: theme.success, fontWeight: 600 }}>
@@ -310,7 +316,7 @@ function DrugProfile() {
 
           {aiInsights.negativeThemes?.length > 0 && (
             <div>
-              <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.alert }}>👎 People Also Complain</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.alert }}><ThumbsDown size={13} aria-hidden="true" /> People also complain</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.negativeThemes.map((t) => (
                   <span key={t} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
@@ -333,14 +339,17 @@ function DrugProfile() {
   )
 
   const bodyContent = (
-    <div style={isMobile ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: isMobile ? 14 : 0 }}>
-          <span style={{ fontSize: 28 }}>{products[0]?.emoji || '💊'}</span>
+          <span style={{
+            width: 48, height: 48, borderRadius: theme.radius.lg, flexShrink: 0,
+            background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><PillIcon size={24} aria-hidden="true" /></span>
           <div>
             <h1 style={{ fontSize: 21, fontWeight: 900, margin: '0 0 2px 0' }}>{drugName}</h1>
             {genericName && <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)' }}>Generic: {genericName}</p>}
@@ -393,7 +402,7 @@ function DrugProfile() {
                     ) : (
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName}</p>
                     )}
-                    {loc && <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>📍 {loc}</p>}
+                    {loc && <p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.gray500 }}><MapPin size={12} aria-hidden="true" /> {loc}</p>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     {p.price != null && <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>₦{p.price?.toLocaleString()}</p>}
@@ -422,7 +431,7 @@ function DrugProfile() {
                     rel="noreferrer"
                     style={{ display: 'inline-block', padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                   >
-                    💬 WhatsApp
+                    <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
                   </a>
                 )}
               </div>
@@ -457,17 +466,8 @@ function DrugProfile() {
               <p style={{ fontSize: 13, color: theme.textLight, margin: 0 }}>You've already reviewed this listing.</p>
             ) : (
               <>
-                <div style={{ marginBottom: 8 }}>
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      type="button"
-                      key={n}
-                      onClick={() => setRating(n)}
-                      style={{ background: 'none', border: 'none', fontSize: 22, color: n <= rating ? theme.warning : '#ddd' }}
-                    >
-                      ★
-                    </button>
-                  ))}
+                <div style={{ marginBottom: 10 }}>
+                  <StarPicker value={rating} onChange={setRating} />
                 </div>
                 <textarea
                   value={comment}
@@ -479,7 +479,7 @@ function DrugProfile() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  style={{ marginTop: 10, padding: '9px 18px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 13 }}
+                  style={{ marginTop: 10, padding: '9px 18px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: 13 }}
                 >
                   {submitting ? 'Posting...' : 'Post Review'}
                 </button>
@@ -507,12 +507,13 @@ function DrugProfile() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       {r.user_id ? (
                         <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                          {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
+                          {whoName}
+                          {who?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
                         </Link>
                       ) : (
                         <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{whoName}</span>
                       )}
-                      <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                      <Stars value={r.rating} size={13} />
                     </div>
                     {productForReview?.businesses?.name && (
                       <p style={{ margin: '0 0 4px 0', fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>
