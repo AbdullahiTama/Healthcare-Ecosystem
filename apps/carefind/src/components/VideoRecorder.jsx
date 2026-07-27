@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../config/supabaseClient'
+import { RefreshCw, Send, Video } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 // Tap to record video from the camera, tap stop, preview, then post.
@@ -120,7 +121,7 @@ function VideoRecorder({ showId, onRecorded }) {
       {/* Not started: show the record-video entry button */}
       {!live && !previewUrl && (
         <button onClick={() => openCamera(facing)} type="button" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#fdf2f8', color: '#be185d', border: '1px solid #be185d', borderRadius: 20, fontWeight: 700, fontSize: 13 }}>
-          🎥 Record video
+          <Video size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />Record video
         </button>
       )}
 
@@ -139,7 +140,7 @@ function VideoRecorder({ showId, onRecorded }) {
             {!recording && (
               <>
                 <button onClick={startRecording} type="button" style={{ padding: '8px 16px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 13 }}>● Start recording</button>
-                <button onClick={switchCamera} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>🔄 Flip camera</button>
+                <button onClick={switchCamera} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}><RefreshCw size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Flip camera</button>
                 <button onClick={closeAll} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Cancel</button>
               </>
             )}
@@ -155,8 +156,8 @@ function VideoRecorder({ showId, onRecorded }) {
         <div>
           <video src={previewUrl} controls playsInline style={{ width: '100%', maxWidth: 300, borderRadius: 12, display: 'block', marginBottom: 8 }} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={sendVideo} disabled={uploading} type="button" style={{ padding: '8px 16px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-              {uploading ? 'Uploading… please wait' : '📡 Post video'}
+            <button onClick={sendVideo} disabled={uploading} type="button" style={{ padding: '8px 16px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
+              {uploading ? 'Uploading… please wait' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} aria-hidden="true" /> Post video</span>}
             </button>
             <button onClick={() => { discard(); openCamera(facing) }} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Re-record</button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Discard</button>

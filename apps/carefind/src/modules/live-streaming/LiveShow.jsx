@@ -2,6 +2,10 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import {
+  BadgeCheck, Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
+  Radio, Repeat2, Share2, X,
+} from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -262,15 +266,15 @@ function LiveShow() {
     return `${Math.floor(diff / 86400)}d`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading live show…</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading live show…</div>
 
   if (!show) {
     const notFoundContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 38, marginBottom: 12 }}>📡</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Radio size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Live show not found</h3>
-          <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to Feed</Link>
+          <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Back to Feed</Link>
         </div>
         {isMobile && <BottomNav />}
       </div>
@@ -295,7 +299,7 @@ function LiveShow() {
     const mins = Math.max(0, Math.floor((diff % 3600000) / 60000))
     const secs = Math.max(0, Math.floor((diff % 60000) / 1000))
     return (
-      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: isMobile ? 480 : 640, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
+      <div style={{ fontFamily: theme.fontFamily, maxWidth: isMobile ? 480 : 640, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
         <div style={{ padding: '18px 16px' }}>
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
@@ -319,12 +323,12 @@ function LiveShow() {
           {/* Trailer */}
           {show.trailer_url && (
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>🎬 WATCH THE TRAILER</p>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}><Film size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />WATCH THE TRAILER</p>
               <video src={show.trailer_url} controls playsInline style={{ width: '100%', borderRadius: 14, display: 'block' }} />
             </div>
           )}
 
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime — a red LIVE badge will appear when we go live. 💚</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime — a red LIVE badge will appear when we go live.</p>
         </div>
         {isMobile && <BottomNav />}
       </div>
@@ -333,11 +337,11 @@ function LiveShow() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto', background: '#fff' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
+      : { fontFamily: theme.fontFamily, maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       {/* Header */}
       <div style={{
-        background: theme.heroGradient, padding: '18px 16px 20px', color: '#fff',
+        background: theme.navy, padding: '18px 16px 20px', color: '#fff',
         ...(isMobile ? { position: 'sticky', top: 0, zIndex: 10 } : { borderRadius: theme.radius.xl, marginBottom: 16 }),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -350,20 +354,20 @@ function LiveShow() {
               <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.05em' }}>LIVE</span>
             </div>
           ) : (
-            <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: 20 }}>▶️ REPLAY</span>
+            <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Play size={11} aria-hidden="true" /> REPLAY</span>
           )}
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 4px 0', lineHeight: 1.2 }}>{show.title || 'CareFind Live'}</h1>
         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-          Hosted by {hostName()}{show.host?.is_verified && ' ✓'}
+          Hosted by {hostName()}{show.host?.is_verified && <BadgeCheck size={13} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
           {show.guest && ` · with ${show.guest.full_name || show.guest.display_name}`}
         </p>
         {isLive && (
           <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-            <button onClick={() => openWho('likes')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>❤️ {statsLoaded ? formatCount(likeCount) : '·'}</button>
-            <button onClick={() => openWho('views')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>👁 {statsLoaded ? formatCount(viewCount) : '·'}</button>
-            <button onClick={() => openWho('shares')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>🔗 {statsLoaded ? formatCount(shareCount) : '·'}</button>
-            <button onClick={() => openWho('gifts')} style={{ background: 'none', border: 'none', color: '#fde68a', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer' }}>🎁 {statsLoaded ? formatCount(giftTotal) : '·'}</button>
+            <button onClick={() => openWho('likes')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Heart size={13} aria-hidden="true" /> {statsLoaded ? formatCount(likeCount) : '·'}</button>
+            <button onClick={() => openWho('views')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Eye size={13} aria-hidden="true" /> {statsLoaded ? formatCount(viewCount) : '·'}</button>
+            <button onClick={() => openWho('shares')} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Share2 size={13} aria-hidden="true" /> {statsLoaded ? formatCount(shareCount) : '·'}</button>
+            <button onClick={() => openWho('gifts')} style={{ background: 'none', border: 'none', color: '#fde68a', fontSize: 13, fontWeight: 800, padding: 0, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}><Gift size={13} aria-hidden="true" /> {statsLoaded ? formatCount(giftTotal) : '·'}</button>
           </div>
         )}
       </div>
@@ -373,7 +377,7 @@ function LiveShow() {
         <div style={{ padding: '8px 16px', background: '#ecfdf5', borderBottom: `1px solid ${theme.border}`, overflowX: 'auto', whiteSpace: 'nowrap' }}>
           {activity.map((a, i) => (
             <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: theme.navy, marginRight: 14 }}>
-              {a.type === 'gift' ? '🎁' : '❤️'} <strong>{a.name}</strong> {a.type === 'gift' ? `gifted${a.amount ? ' ' + a.amount : ''}` : 'liked'}
+              {a.type === 'gift' ? <Gift size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> : <Heart size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} />} <strong>{a.name}</strong> {a.type === 'gift' ? `gifted${a.amount ? ' ' + a.amount : ''}` : 'liked'}
             </span>
           ))}
         </div>
@@ -383,13 +387,13 @@ function LiveShow() {
       <div onClick={isLive ? tapAnywhere : undefined} style={{ padding: '16px 16px 8px', cursor: isLive ? 'pointer' : 'default' }}>
         {items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '30px 20px', color: theme.textLight }}>
-            <div style={{ fontSize: 30, marginBottom: 8 }}>📡</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><Radio size={30} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
             <p style={{ fontSize: 13, margin: 0 }}>{isLive ? 'The show is starting… stay tuned.' : 'This show has ended.'}</p>
           </div>
         )}
         {items.map((it) => (
           <div key={it.id} style={{ marginBottom: 14, display: 'flex', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
               {(it.profiles?.full_name?.[0] || it.profiles?.display_name?.[0] || 'C').toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
@@ -404,7 +408,7 @@ function LiveShow() {
                     return (
                       <div style={{ border: `2px solid ${theme.tealDeep}`, borderRadius: 14, overflow: 'hidden', background: '#fff' }}>
                         <div style={{ background: theme.tealDeep, color: '#fff', padding: '5px 12px', fontSize: 11, fontWeight: 800, display: 'flex', justifyContent: 'space-between' }}>
-                          <span>📑 SLIDE {num || '?'}{total ? ` / ${total}` : ''}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><FileText size={12} aria-hidden="true" /> SLIDE {num || '?'}{total ? ` / ${total}` : ''}</span>
                         </div>
                         <img src={surl} alt={`Slide ${num}`} style={{ width: '100%', display: 'block' }} />
                       </div>
@@ -456,7 +460,12 @@ function LiveShow() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '8px 8px 4px', flexWrap: 'wrap' }}>
               {topGifters.map((g, i) => (
                 <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, background: '#fef9c3', padding: '2px 8px', borderRadius: 12 }}>
-                  {['🥇', '🥈', '🥉'][i]} {g.name} · {formatCount(g.total)}
+                  <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 18, height: 18, borderRadius: '50%', marginRight: 7,
+                  background: [theme.warning, theme.gray400, '#b45309'][i], color: '#fff',
+                  fontSize: 10, fontWeight: 900,
+                }} aria-hidden="true">{i + 1}</span>{g.name} · {formatCount(g.total)}
                 </span>
               ))}
             </div>
@@ -465,31 +474,31 @@ function LiveShow() {
           {/* Action buttons */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '4px 8px 10px' }}>
             <button onClick={tapLike} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>❤️</span>
+              <Heart size={21} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Like</span>
             </button>
             {(show.host_id || show.guest_id) && (
               <button onClick={() => user ? setGifting(true) : (window.location.href = '/login')} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-                <span style={{ fontSize: 22 }}>🎁</span>
+                <Gift size={21} aria-hidden="true" />
                 <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Gift</span>
               </button>
             )}
             <button onClick={shareLive} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>🔗</span>
+              <Share2 size={21} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Share</span>
             </button>
             <button onClick={repostLive} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, cursor: 'pointer' }}>
-              <span style={{ fontSize: 22 }}>🔁</span>
+              <Repeat2 size={21} aria-hidden="true" />
               <span style={{ fontSize: 11, fontWeight: 700, color: reposted ? theme.tealDeep : theme.textMid }}>{reposted ? 'Reposted' : 'Repost'}</span>
             </button>
           </div>
-          <p style={{ margin: 0, textAlign: 'center', fontSize: 10, color: theme.textLight, paddingBottom: 8 }}>💡 Tap anywhere on the show above to send hearts</p>
+          <p style={{ margin: 0, textAlign: 'center', fontSize: 10, color: theme.textLight, paddingBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Lightbulb size={12} aria-hidden="true" /> Tap anywhere on the show above to send hearts</p>
         </div>
       )}
 
       {/* Comments section */}
       <div style={{ borderTop: `8px solid ${theme.bg}`, marginTop: 12, padding: '14px 16px' }}>
-        <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>💬 Live comments ({visibleComments.length})</p>
+        <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy, display: 'flex', alignItems: 'center', gap: 7 }}><MessageSquare size={14} aria-hidden="true" /> Live comments ({visibleComments.length})</p>
 
         {isLive && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -501,7 +510,7 @@ function LiveShow() {
               disabled={!user}
               style={{ flex: 1, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }}
             />
-            <button onClick={postComment} style={{ padding: '0 18px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>Send</button>
+            <button onClick={postComment} style={{ padding: '0 18px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>Send</button>
           </div>
         )}
 
@@ -514,7 +523,7 @@ function LiveShow() {
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 1px 0', fontSize: 12 }}>
                 <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                {c.profiles?.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
+                {c.profiles?.is_verified && <BadgeCheck size={12} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />}
                 <span style={{ color: theme.textLight, marginLeft: 6 }}>{timeAgo(c.created_at)}</span>
                 {c.hidden && <span style={{ color: theme.alert, marginLeft: 6, fontWeight: 700 }}>(hidden)</span>}
               </p>
@@ -535,20 +544,25 @@ function LiveShow() {
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '70vh', overflowY: 'auto', padding: 18, boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy, textTransform: 'capitalize' }}>
-                {whoOpen === 'likes' ? '❤️ Likes' : whoOpen === 'gifts' ? '🎁 Gifters' : whoOpen === 'shares' ? '🔗 Shares' : '👁 Viewers'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                {whoOpen === 'likes' ? <><Heart size={15} aria-hidden="true" /> Likes</>
+                  : whoOpen === 'gifts' ? <><Gift size={15} aria-hidden="true" /> Gifters</>
+                  : whoOpen === 'shares' ? <><Share2 size={15} aria-hidden="true" /> Shares</>
+                  : <><Eye size={15} aria-hidden="true" /> Viewers</>}
+              </span>
               </h3>
-              <button onClick={() => setWhoOpen(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
+              <button onClick={() => setWhoOpen(null)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: theme.gray400 }}><X size={18} aria-hidden="true" /></button>
             </div>
             {whoList.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No named {whoOpen} yet. (Guests who aren't logged in aren't listed.)</p>}
             {whoList.map((p, i) => (
               <Link key={i} to={`/u/${p.id}`} onClick={() => setWhoOpen(null)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px solid ${theme.border}`, textDecoration: 'none' }}>
-                <div style={{ width: 38, height: 38, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
                   {(p.full_name?.[0] || p.display_name?.[0] || '?').toUpperCase()}
                 </div>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: theme.navy }}>
-                  {p.full_name || p.display_name || 'User'}{p.is_verified && <span style={{ color: theme.tealDeep, marginLeft: 3 }}>✓</span>}
+                  {p.full_name || p.display_name || 'User'}{p.is_verified && <BadgeCheck size={12} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />}
                 </span>
-                {whoOpen === 'gifts' && p.amount != null && <span style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>🎁 {p.amount}</span>}
+                {whoOpen === 'gifts' && p.amount != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 800, color: theme.tealDeep }}><Gift size={12} aria-hidden="true" /> {p.amount}</span>}
               </Link>
             ))}
           </div>

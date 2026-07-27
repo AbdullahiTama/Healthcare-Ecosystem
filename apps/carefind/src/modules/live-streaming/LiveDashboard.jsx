@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Eye, FileText, Gift, Heart, Image as ImageIcon, Lock, Radio, Send, Share2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
@@ -151,21 +152,21 @@ function LiveDashboard() {
     return `${Math.floor(diff / 3600)}h`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading dashboard…</div>
+  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading dashboard…</div>
 
   if (!show) return (
-    <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
+    <div style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
       <p style={{ fontSize: 15, fontWeight: 800, color: theme.navy }}>Show not found</p>
       <Link to="/" style={{ color: theme.tealDeep, fontWeight: 700 }}>Back to Feed</Link>
     </div>
   )
 
   if (!isParticipant) return (
-    <div style={{ fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
-      <div style={{ fontSize: 34, marginBottom: 10 }}>🔒</div>
+    <div style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Lock size={36} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
       <p style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>Not a participant</p>
       <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>You weren't invited to host this show. You can watch it live instead.</p>
-      <Link to={`/live-show/${id}`} style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Watch the show</Link>
+      <Link to={`/live-show/${id}`} style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>Watch the show</Link>
     </div>
   )
 
@@ -185,8 +186,8 @@ function LiveDashboard() {
   // once while live.
   return (
     <div style={isMobileOrTablet
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 1100, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }
+      : { fontFamily: theme.fontFamily, maxWidth: 1100, margin: '0 auto', paddingBottom: 30, background: '#fff', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ background: theme.navy, padding: '16px', color: '#fff', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -202,10 +203,10 @@ function LiveDashboard() {
           {' · '}{participants.filter(p => p.joined).length} joined
         </p>
         <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>❤️ {fmtCount(stats.likes)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>👁 {fmtCount(stats.views)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>🔗 {fmtCount(stats.shares)}</span>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}>🎁 {fmtCount(stats.gifts)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}><Heart size={14} aria-hidden="true" /> {fmtCount(stats.likes)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}><Eye size={14} aria-hidden="true" /> {fmtCount(stats.views)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}><Share2 size={14} aria-hidden="true" /> {fmtCount(stats.shares)}</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a' }}><Gift size={14} aria-hidden="true" /> {fmtCount(stats.gifts)}</span>
         </div>
       </div>
 
@@ -213,7 +214,7 @@ function LiveDashboard() {
         <div style={{ margin: 14, padding: 16, background: theme.navy, borderRadius: 14, color: '#fff', textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>⏳ This show is scheduled</p>
           <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Your audience sees a countdown. When you're ready, start it live.</p>
-          <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>📡 Start Live Now</button>
+          <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Radio size={15} aria-hidden="true" /> Start live now</span></button>
         </div>
       )}
 
@@ -232,11 +233,11 @@ function LiveDashboard() {
                 />
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <label style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', flex: 1 }}>
-                    📷 {image ? image.name.slice(0, 20) : 'Add image'}
+                    <ImageIcon size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />{image ? image.name.slice(0, 20) : 'Add image'}
                     <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
                   </label>
-                  <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                    {sending ? 'Sending…' : '📡 Post Live'}
+                  <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+                    {sending ? 'Sending…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Send size={14} aria-hidden="true" /> Post live</span>}
                   </button>
                 </div>
                 <VoiceRecorder showId={id} onRecorded={sendVoice} />
@@ -254,7 +255,7 @@ function LiveDashboard() {
             {items.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Nothing posted yet. Your first post goes live to the audience.</p>}
             {items.map((it) => (
               <div key={it.id} style={{ marginBottom: 10, display: 'flex', gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 11, flexShrink: 0 }}>
                   {(it.profiles?.full_name?.[0] || it.profiles?.display_name?.[0] || '?').toUpperCase()}
                 </div>
                 <div style={{ flex: 1, background: theme.bg, borderRadius: 10, padding: it.kind === 'image' ? 4 : '8px 12px' }}>
@@ -262,7 +263,7 @@ function LiveDashboard() {
                   {it.kind === 'image' && <img src={it.content} alt="posted" style={{ maxWidth: '100%', borderRadius: 8, display: 'block' }} />}
                   {it.kind === 'voice' && <audio controls src={it.content} style={{ height: 36, maxWidth: 220 }} />}
                   {it.kind === 'video' && <video controls playsInline src={it.content} style={{ maxWidth: 200, borderRadius: 8, display: 'block' }} />}
-                  {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}>📑 Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
+                  {it.kind === 'slide' && <div><span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep }}><FileText size={11} aria-hidden="true" style={{ verticalAlign: '-1px', marginRight: 4 }} />Slide {(it.content||'').split('|||')[1]}</span><img src={(it.content||'').split('|||')[0]} alt="slide" style={{ maxWidth: '100%', borderRadius: 8, display: 'block', marginTop: 3 }} /></div>}
                 </div>
               </div>
             ))}
@@ -273,7 +274,7 @@ function LiveDashboard() {
         <div style={isMobileOrTablet
           ? { borderTop: `8px solid ${theme.bg}`, padding: '12px 14px' }
           : { flex: 1, minWidth: 0, padding: '12px 14px', position: 'sticky', top: 64, maxHeight: 'calc(100vh - 64px)', overflowY: 'auto' }}>
-          <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>💬 Audience comments — respond or moderate</p>
+          <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Audience comments — respond or moderate</p>
           {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>No comments yet.</p>}
           {comments.map((c) => (
             <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, opacity: c.hidden ? 0.4 : 1 }}>

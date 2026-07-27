@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../config/supabaseClient'
+import { Send, Video } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 const MAX_MB = 50
@@ -56,7 +57,7 @@ function VideoUploader({ showId, onUploaded }) {
 
       {!previewUrl && (
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #1d4ed8', borderRadius: 20, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-          📹 Upload video
+          <Video size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />Upload video
           <input ref={inputRef} type="file" accept="video/*" onChange={pickFile} style={{ display: 'none' }} />
         </label>
       )}
@@ -65,8 +66,8 @@ function VideoUploader({ showId, onUploaded }) {
         <div>
           <video src={previewUrl} controls playsInline style={{ width: '100%', maxWidth: 260, borderRadius: 10, display: 'block', marginBottom: 6 }} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={upload} disabled={uploading} type="button" style={{ padding: '7px 16px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-              {uploading ? 'Uploading… please wait' : '📡 Post video'}
+            <button onClick={upload} disabled={uploading} type="button" style={{ padding: '7px 16px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
+              {uploading ? 'Uploading… please wait' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} aria-hidden="true" /> Post video</span>}
             </button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '7px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>
               Discard

@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import {
+  BadgeCheck, CalendarDays, ChevronRight, ClipboardList, Coins, FileText,
+  Landmark, LayoutDashboard, Lock, MessageSquare, Radio, Stethoscope, Video, Wallet as WalletIcon, Briefcase, Check,
+} from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -104,23 +108,23 @@ function ProfessionalMonetization() {
     }
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user || !profile?.is_verified) {
     const verifyRequiredContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         <div style={{
-          background: theme.heroGradient, color: '#fff',
+          background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
           {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Earn on CareFind</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 40, marginBottom: 14 }}>🩺</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Stethoscope size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Verification required</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>Get verified as a healthcare professional to unlock all earning features</p>
-          <Link to="/verify" style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>
+          <Link to="/verify" style={{ display: 'inline-block', padding: '10px 20px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>
             Get Verified
           </Link>
         </div>
@@ -143,19 +147,19 @@ function ProfessionalMonetization() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Dashboard</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Earn on CareFind</h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>✓ {profile.specialty || profile.verification_label}</p>
+        <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}><BadgeCheck size={14} aria-hidden="true" /> {profile.specialty || profile.verification_label}</p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
           <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>🪙 {wallet?.balance || 0}</p>
+            <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 7, fontSize: 17, fontWeight: 900 }}><Coins size={16} aria-hidden="true" /> {wallet?.balance || 0}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>CareCoins</p>
           </div>
           <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '12px 10px', textAlign: 'center' }}>
@@ -172,18 +176,20 @@ function ProfessionalMonetization() {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, padding: isMobile ? '14px 20px 4px' : '0 0 14px', overflowX: 'auto' }}>
         {[
-          { key: 'overview', label: '📊 Overview' },
-          { key: 'subscription', label: '🔒 Subscription' },
-          { key: 'consultation', label: '📅 Consults' },
-          { key: 'tasks', label: '📋 Tasks' },
+          { key: 'overview', label: 'Overview', Icon: LayoutDashboard },
+          { key: 'subscription', label: 'Subscription', Icon: Lock },
+          { key: 'consultation', label: 'Consults', Icon: CalendarDays },
+          { key: 'tasks', label: 'Tasks', Icon: ClipboardList },
         ].map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flexShrink: 0, padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
             border: tab === t.key ? 'none' : `1px solid ${theme.border}`,
-            background: tab === t.key ? theme.tealGradient : theme.cardBg,
+            background: tab === t.key ? theme.tealDeep : theme.cardBg,
             color: tab === t.key ? '#fff' : theme.textMid,
           }}>
-            {t.label}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <t.Icon size={13} aria-hidden="true" /> {t.label}
+            </span>
           </button>
         ))}
       </div>
@@ -194,33 +200,33 @@ function ProfessionalMonetization() {
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { icon: '🔒', title: 'Premium Content', desc: subscription ? `₦${subscription.price}/month · ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
-              { icon: '📅', title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
-              { icon: '📋', title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
-              { icon: '💰', title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins ≈ ₦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
-              { icon: '🔴', title: 'Live Session Earnings', desc: 'Gifts from your live sessions — permanently recorded', action: () => {} },
+              { Icon: Lock, title: 'Premium Content', desc: subscription ? `₦${subscription.price}/month · ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
+              { Icon: CalendarDays, title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
+              { Icon: ClipboardList, title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
+              { Icon: WalletIcon, title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins ≈ ₦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
+              { Icon: Radio, title: 'Live Session Earnings', desc: 'Gifts from your live sessions — permanently recorded', action: () => {} },
             ].map((item) => (
               <button key={item.title} onClick={item.action} style={{
                 border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg,
                 boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
               }}>
-                <span style={{ width: 40, height: 40, borderRadius: 12, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{item.icon}</span>
+                <span style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><item.Icon size={19} aria-hidden="true" /></span>
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{item.title}</p>
                   <p style={{ margin: 0, fontSize: 12.5, color: theme.textLight }}>{item.desc}</p>
                 </div>
-                <span style={{ color: theme.textLight, fontSize: 16 }}>›</span>
+                <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
               </button>
             ))}
 
             <Link to="/wallet" style={{ textDecoration: 'none' }}>
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, background: '#ecfdf5', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 22 }}>🏦</span>
+                <Landmark size={20} color={theme.tealDeep} aria-hidden="true" />
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.tealDeep }}>Withdraw Earnings</p>
-                  <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep }}>Balance: 🪙 {wallet?.balance || 0} CareCoins</p>
+                  <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep }}>Balance: {wallet?.balance || 0} CareCoins</p>
                 </div>
-                <span style={{ color: theme.tealDeep, fontSize: 16 }}>›</span>
+                <ChevronRight size={17} color={theme.tealDeep} aria-hidden="true" />
               </div>
             </Link>
           </div>
@@ -249,7 +255,7 @@ function ProfessionalMonetization() {
                       rows={3} style={{ width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit' }} />
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={saveSubscription} disabled={saving} style={{ flex: 2, padding: 12, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+                    <button onClick={saveSubscription} disabled={saving} style={{ flex: 2, padding: 12, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
                       {saving ? 'Saving...' : 'Save Plan'}
                     </button>
                     {subscription && <button onClick={() => setEditingPrice(false)} style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 12, fontWeight: 700, fontSize: 13 }}>Cancel</button>}
@@ -277,7 +283,7 @@ function ProfessionalMonetization() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {subscribers.map((s) => (
                     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 800 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 800 }}>
                         {(s.profiles?.full_name || s.profiles?.display_name || '?')[0]?.toUpperCase()}
                       </div>
                       <p style={{ margin: 0, fontSize: 13, color: theme.navy, fontWeight: 600 }}>{s.profiles?.full_name || s.profiles?.display_name || 'Subscriber'}</p>
@@ -305,7 +311,11 @@ function ProfessionalMonetization() {
                       <button key={t} onClick={() => setConsultType(t)} style={{
                         flex: 1, padding: '8px 6px', borderRadius: 10, fontSize: 11.5, fontWeight: 700, border: 'none',
                         background: consultType === t ? theme.tealDeep : theme.bg, color: consultType === t ? '#fff' : theme.textMid, textTransform: 'capitalize',
-                      }}>{t === 'text' ? '💬 Text' : t === 'video' ? '📹 Video' : '📄 Document'}</button>
+                      }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {t === 'text' ? <><MessageSquare size={13} aria-hidden="true" /> Text</> : t === 'video' ? <><Video size={13} aria-hidden="true" /> Video</> : <><FileText size={13} aria-hidden="true" /> Document</>}
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -320,7 +330,7 @@ function ProfessionalMonetization() {
                   <textarea value={consultNotes} onChange={(e) => setConsultNotes(e.target.value)} placeholder="e.g. Available Mon-Fri 9am-5pm. Please describe your symptoms when booking."
                     rows={3} style={{ width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit' }} />
                 </div>
-                <button onClick={submitConsultationSetup} disabled={saving} style={{ padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>
+                <button onClick={submitConsultationSetup} disabled={saving} style={{ padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>
                   {saving ? 'Saving...' : 'Save Consultation Profile'}
                 </button>
               </div>
@@ -346,13 +356,13 @@ function ProfessionalMonetization() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ border: `1px solid #fef3c7`, borderRadius: 14, padding: 12, background: '#fffbeb' }}>
               <p style={{ margin: 0, fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
-                💼 <strong>Sponsored Tasks</strong> are paid assignments from companies and health brands. Complete a task to earn the listed compensation directly to your wallet.
+                <Briefcase size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Sponsored Tasks</strong> are paid assignments from companies and health brands. Complete a task to earn the listed compensation directly to your wallet.
               </p>
             </div>
 
             {tasks.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <div style={{ fontSize: 30, marginBottom: 10 }}>📋</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><ClipboardList size={36} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
                 <p style={{ color: theme.textLight, fontSize: 13 }}>No open tasks right now. Check back soon.</p>
               </div>
             )}
@@ -366,18 +376,18 @@ function ProfessionalMonetization() {
                     <span style={{ fontSize: 14, fontWeight: 900, color: theme.success, marginLeft: 10 }}>₦{task.compensation?.toLocaleString()}</span>
                   </div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}>{task.description}</p>
-                  {task.specialty && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>🩺 For: {task.specialty}</p>}
+                  {task.specialty && <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}><Stethoscope size={12} aria-hidden="true" /> For: {task.specialty}</p>}
                   {task.deadline && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>⏰ Deadline: {new Date(task.deadline).toLocaleDateString()}</p>}
                   <button
                     onClick={() => !submitted && acceptTask(task.id)}
                     disabled={submitted}
                     style={{
                       padding: '8px 16px', borderRadius: 12, border: 'none', fontSize: 13, fontWeight: 700,
-                      background: submitted ? theme.bg : theme.tealGradient,
+                      background: submitted ? theme.bg : theme.tealDeep,
                       color: submitted ? theme.textLight : '#fff',
                     }}
                   >
-                    {submitted ? '✓ Accepted' : 'Accept Task'}
+                    {submitted ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Check size={14} strokeWidth={3} aria-hidden="true" /> Accepted</span> : 'Accept Task'}
                   </button>
                 </div>
               )

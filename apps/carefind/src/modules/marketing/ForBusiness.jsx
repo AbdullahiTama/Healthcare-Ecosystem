@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { Activity, MessageCircle, Search, Star, Shield, Users, ArrowRight } from 'lucide-react'
+import { Activity, ArrowRight, MessageCircle, Search, Shield, Star, Users } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Logo from '../social-feed/Logo.jsx'

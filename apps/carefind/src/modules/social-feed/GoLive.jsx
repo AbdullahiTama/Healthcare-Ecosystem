@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Gift, MessageSquare, Mic, Palette, Radio, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -41,11 +42,11 @@ export default function GoLive({ onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', fontFamily: 'system-ui' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', fontFamily: theme.fontFamily }}>
       <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: '24px 24px 0 0', padding: '20px 20px 40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>🔴 Go Live</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 9, fontSize: 18, fontWeight: 900, color: theme.navy }}><Radio size={18} color={theme.danger} aria-hidden="true" /> Go live</h2>
+          <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 18 }}>
@@ -63,16 +64,16 @@ export default function GoLive({ onClose }) {
 
         <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 16 }}>
           <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep, lineHeight: 1.5 }}>
-            🎨 <strong>Shared drawing board</strong> — viewers see you draw in real time<br/>
-            🎙️ <strong>Voice notes</strong> — record and send audio messages<br/>
-            🎁 <strong>Gifts</strong> — viewers can send CareCoins during your session<br/>
-            💬 <strong>Live chat</strong> — questions and answers in real time
+            <Palette size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Shared drawing board</strong> — viewers see you draw in real time<br/>
+            <Mic size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Voice notes</strong> — record and send audio messages<br/>
+            <Gift size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Gifts</strong> — viewers can send CareCoins during your session<br/>
+            <MessageSquare size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Live chat</strong> — questions and answers in real time
           </p>
         </div>
 
         <button onClick={startLive} disabled={!topic.trim() || starting}
           style={{ width: '100%', padding: 15, background: theme.alert, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 900, fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          {starting ? 'Starting...' : '🔴 Start Live Session'}
+          {starting ? 'Starting…' : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Radio size={15} aria-hidden="true" /> Start live session</span>}
         </button>
       </div>
 

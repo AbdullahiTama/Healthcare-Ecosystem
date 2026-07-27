@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Camera, Check, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -20,7 +21,6 @@ function ProductUpload({ businesses, onClose, onAdded }) {
   const [minPurchase, setMinPurchase] = useState('')
   const [priceUnit, setPriceUnit] = useState('card')
   const [description, setDescription] = useState('')
-  const [emoji, setEmoji] = useState('💊')
   const [bizId, setBizId] = useState(businesses && businesses[0] ? businesses[0].id : '')
   const [image, setImage] = useState(null)
   const [sellerLocation, setSellerLocation] = useState('')
@@ -73,7 +73,7 @@ function ProductUpload({ businesses, onClose, onAdded }) {
       min_purchase: minPurchase ? Number(minPurchase) : null,
       price_unit: priceUnit,
       seller_location: sellerLocation || null,
-      description: description.trim() || null, emoji, list_on_carefind: true,
+      description: description.trim() || null, list_on_carefind: true,
       image_url: imageUrl,
     }
     if (bizId) row.business_id = bizId
@@ -86,18 +86,19 @@ function ProductUpload({ businesses, onClose, onAdded }) {
   }
 
   const inputStyle = { width: '100%', padding: '11px 13px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }
-  const EMOJIS = ['💊', '🧴', '🩹', '🌡️', '💉', '🧼', '🪥', '🧬', '🩺', '👁️', '🦷', '🧫']
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto', padding: 20, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.navy }}>Add Product to MedMarket</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
         </div>
         {count !== null && (
           <p style={{ margin: '0 0 14px 0', fontSize: 12, color: atLimit ? theme.alert : theme.textMid }}>
-            {subscribed ? '✓ Subscribed — unlimited products' : `${count} / ${FREE_LIMIT} free products used`}
+            {subscribed
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Subscribed — unlimited products</span>
+              : `${count} / ${FREE_LIMIT} free products used`}
           </p>
         )}
 
@@ -105,7 +106,7 @@ function ProductUpload({ businesses, onClose, onAdded }) {
           <div style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
             <p style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>You've used your 15 free products</p>
             <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textMid }}>Subscribe for ₦2,500/month to list unlimited products on CareFind.</p>
-            <button onClick={() => showToast('Subscription coming soon — payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
+            <button onClick={() => showToast('Subscription coming soon — payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
           </div>
         ) : (
           <div>
@@ -114,8 +115,8 @@ function ProductUpload({ businesses, onClose, onAdded }) {
             <input value={genericName} onChange={(e) => setGenericName(e.target.value)} placeholder="Generic name / composition (e.g. Paracetamol 500mg)" style={inputStyle} />
             <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Helps people find your product by its active ingredient.</p>
             {sellerLocation
-              ? <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.tealDeep, fontWeight: 600 }}>📍 Listed in {sellerLocation} (from your profile)</p>
-              : <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.warning }}>⚠️ Add a location to your profile so buyers know where you are.</p>}
+              ? <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: theme.tealDeep, fontWeight: 600 }}><MapPin size={12} aria-hidden="true" /> Listed in {sellerLocation} (from your profile)</p>
+              : <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: theme.warning }}><AlertTriangle size={12} aria-hidden="true" /> Add a location to your profile so buyers know where you are.</p>}
             <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (₦)" inputMode="numeric" style={inputStyle} />
 
             {/* Retail or Wholesale */}
@@ -141,13 +142,6 @@ function ProductUpload({ businesses, onClose, onAdded }) {
             <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Buyers can message you directly on WhatsApp about this product.</p>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={3} style={{ ...inputStyle, resize: 'none' }} />
 
-            <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Icon</p>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-              {EMOJIS.map(e => (
-                <button key={e} onClick={() => setEmoji(e)} style={{ fontSize: 20, padding: 6, borderRadius: 8, border: emoji === e ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`, background: '#fff' }}>{e}</button>
-              ))}
-            </div>
-
             {businesses && businesses.length > 0 && (
               <>
                 <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>List under</p>
@@ -159,12 +153,12 @@ function ProductUpload({ businesses, onClose, onAdded }) {
             )}
 
             <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 14 }}>
-              📷 {image ? image.name.slice(0, 24) : 'Add product photo (optional)'}
+              <Camera size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />{image ? image.name.slice(0, 24) : 'Add product photo (optional)'}
               <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
 
-            <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-              {saving ? 'Adding…' : '＋ Add Product'}
+            <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+              {saving ? 'Adding…' : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Plus size={16} aria-hidden="true" /> Add product</span>}
             </button>
           </div>
         )}

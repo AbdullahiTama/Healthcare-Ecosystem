@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Check, ChevronRight, Film, Image as ImageIcon, Pen, PartyPopper, Play, Plus, Star, Trash2, Video, X, BadgeCheck } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -78,8 +80,8 @@ function PlaylistView() {
   const allPartsList = (
     <>
       {user && playlist.owner_id === user.id && (
-        <Link to={`/playlist/${id}/add`} style={{ display: 'block', textAlign: 'center', padding: 11, background: theme.tealGradient, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', marginBottom: 10 }}>
-          ➕ Add another part
+        <Link to={`/playlist/${id}/add`} style={{ display: 'block', textAlign: 'center', padding: 11, background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', marginBottom: 10 }}>
+          <Plus size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />Add another part
         </Link>
       )}
       {parts.map((p, i) => {
@@ -94,7 +96,7 @@ function PlaylistView() {
               onKeyDown={isEditingTitle ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCurrent(i) } }}
               style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', background: i === current ? theme.bg : '#fff', border: `1px solid ${theme.border}`, borderRadius: 10, cursor: isEditingTitle ? 'default' : 'pointer' }}
             >
-              <span style={{ width: 28, height: 28, borderRadius: '50%', background: i === current ? theme.tealGradient : theme.bg, color: i === current ? '#fff' : theme.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
+              <span style={{ width: 28, height: 28, borderRadius: '50%', background: i === current ? theme.tealDeep : theme.bg, color: i === current ? '#fff' : theme.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
               {isEditingTitle ? (
                 <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Inp
@@ -108,8 +110,8 @@ function PlaylistView() {
                     aria-label={`Edit title for part ${i + 1}`}
                     style={{ flex: 1 }}
                   />
-                  <button onClick={() => saveTitleEdit(p)} aria-label="Save title" style={{ background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0 }}>✓</button>
-                  <button onClick={cancelTitleEdit} aria-label="Cancel editing title" style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0 }}>✕</button>
+                  <button onClick={() => saveTitleEdit(p)} aria-label="Save title" style={{ background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0, display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}><Check size={14} strokeWidth={3} aria-hidden="true" /></button>
+                  <button onClick={cancelTitleEdit} aria-label="Cancel editing title" style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13, flexShrink: 0, display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}><X size={14} aria-hidden="true" /></button>
                 </div>
               ) : (
                 <span
@@ -120,12 +122,16 @@ function PlaylistView() {
                   {p.title}
                 </span>
               )}
-              {!isEditingTitle && p.kind !== 'text' && <span style={{ fontSize: 14 }}>{p.kind === 'video' ? '🎥' : p.kind === 'drawing' ? '✏️' : p.kind === 'image' ? '🖼' : ''}</span>}
+              {!isEditingTitle && p.kind !== 'text' && (
+                <span style={{ display: 'inline-flex', color: theme.gray400 }}>
+                  {p.kind === 'video' ? <Video size={14} aria-label="Video" /> : p.kind === 'drawing' ? <Pen size={14} aria-label="Drawing" /> : p.kind === 'image' ? <ImageIcon size={14} aria-label="Image" /> : null}
+                </span>
+              )}
             </div>
             {isOwner && !isEditingTitle && (
               <>
-                <button onClick={() => navigate(`/playlist/${id}/edit/${p.id}`)} style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>✏️</button>
-                <button onClick={() => setConfirmDeletePartId(p.id)} style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 8, padding: '8px 9px', fontSize: 13 }}>🗑</button>
+                <button onClick={() => navigate(`/playlist/${id}/edit/${p.id}`)} style={{ background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 9px', display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }} aria-label="Edit part"><Pen size={14} aria-hidden="true" /></button>
+                <button onClick={() => setConfirmDeletePartId(p.id)} style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 8, padding: '8px 9px', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', color: theme.alert }} aria-label="Delete part"><Trash2 size={14} aria-hidden="true" /></button>
               </>
             )}
           </div>
@@ -144,14 +150,14 @@ function PlaylistView() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto', background: '#fff' }}>
-      <div style={{ background: theme.heroGradient, padding: '18px 16px', color: '#fff', ...(isMobile ? {} : { borderRadius: theme.radius.xl, marginBottom: 20 }) }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff', minHeight: '100vh' }
+      : { fontFamily: theme.fontFamily, maxWidth: 700, margin: '0 auto', background: '#fff' }}>
+      <div style={{ background: theme.navy, padding: '18px 16px', color: '#fff', ...(isMobile ? {} : { borderRadius: theme.radius.xl, marginBottom: 20 }) }}>
         {isMobile && <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>}
-        <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8 }}>🎬 PLAYLIST · {parts.length} PARTS</div>
+        <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={11} aria-hidden="true" /> PLAYLIST · {parts.length} PARTS</div>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 900 }}>{playlist.title}</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.75)' }}>
-          By {playlist.profiles?.full_name || playlist.profiles?.display_name || 'CareFind'}{playlist.profiles?.is_verified && ' ✓'}
+          By {playlist.profiles?.full_name || playlist.profiles?.display_name || 'CareFind'}{playlist.profiles?.is_verified && <BadgeCheck size={13} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
         </p>
         {playlist.description && <p style={{ margin: '8px 0 0 0', fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.4 }}>{playlist.description}</p>}
       </div>
@@ -172,7 +178,7 @@ function PlaylistView() {
             }
             if (part.kind === 'review') {
               let d = {}; try { d = JSON.parse(part.content || '{}') } catch (e) { d = { text: part.content, rating: 0 } }
-              return <div><p style={{ fontSize: 22, margin: '0 0 8px 0' }}>{'⭐'.repeat(d.rating || 0)}{'☆'.repeat(5 - (d.rating || 0))}</p><p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{d.text}</p></div>
+              return <div><div style={{ marginBottom: 10 }}><Stars value={d.rating || 0} size={20} /></div><p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{d.text}</p></div>
             }
             if (part.content) return <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{renderRichText(part.content)}</p>
             return null
@@ -180,12 +186,12 @@ function PlaylistView() {
 
           {/* Up next */}
           {hasNext ? (
-            <button onClick={() => setCurrent(current + 1)} style={{ width: '100%', marginTop: 20, padding: 14, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>▶️ Up next: {parts[current + 1].title}</span>
+            <button onClick={() => setCurrent(current + 1)} style={{ width: '100%', marginTop: 20, padding: 14, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Play size={14} aria-hidden="true" /> Up next: {parts[current + 1].title}</span>
               <span>→</span>
             </button>
           ) : (
-            <p style={{ marginTop: 20, textAlign: 'center', fontSize: 13, color: theme.textLight, fontWeight: 600 }}>🎉 You've finished this series!</p>
+            <p style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: theme.gray500, fontWeight: 600 }}><PartyPopper size={16} aria-hidden="true" /> You&apos;ve finished this series!</p>
           )}
         </div>
       )}
