@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Check, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 
@@ -105,7 +106,7 @@ function Onboarding() {
 
   if (authLoading || loadingProfile) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: theme.fontFamily }}>
         <p style={{ color: theme.textLight }}>Loading...</p>
       </div>
     )
@@ -115,8 +116,8 @@ function Onboarding() {
 
   if (isMobileOrTablet) {
     return (
-      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
-        <div style={{ background: theme.heroGradient, padding: '24px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
+      <div style={{ fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
+        <div style={{ background: theme.navy, padding: '24px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
           <h1 style={{ fontSize: 23, fontWeight: 900, margin: '0 0 4px 0', letterSpacing: '-0.02em' }}>Complete your profile</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>Just a few details to get you started on CareFind</p>
         </div>
@@ -140,7 +141,11 @@ function Onboarding() {
                 </div>
                 {username.length >= 3 && (
                   <p style={{ margin: '5px 0 0 0', fontSize: 12, fontWeight: 600, color: checking ? theme.textLight : available ? theme.success : theme.alert }}>
-                    {checking ? 'Checking availability…' : available ? '✓ Available' : '✕ Taken — try another'}
+                    {checking
+                      ? 'Checking availability…'
+                      : available
+                        ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Available</span>
+                        : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken — try another</span>}
                   </p>
                 )}
                 <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
@@ -158,7 +163,7 @@ function Onboarding() {
                 type="submit"
                 disabled={saving || checking || available === false}
                 style={{
-                  padding: 13, fontSize: 14, background: theme.tealGradient, color: '#fff', border: 'none',
+                  padding: 13, fontSize: 14, background: theme.tealDeep, color: '#fff', border: 'none',
                   borderRadius: 13, fontWeight: 800, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
                   opacity: (saving || available === false) ? 0.7 : 1,
                 }}
@@ -180,7 +185,7 @@ function Onboarding() {
   // an edge-to-edge hero bleed (RESPONSIVENESS.md — this is a one-time,
   // pre-app screen, so no persistent nav chrome here, same reasoning as Login).
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+    <div style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
       <div style={{ width: '100%', maxWidth: 440 }}>
         <h1 style={{ fontSize: 26, fontWeight: 900, margin: '0 0 4px 0', letterSpacing: '-0.02em', color: theme.navy }}>Complete your profile</h1>
         <p style={{ fontSize: 13.5, color: theme.textLight, margin: '0 0 24px 0' }}>Just a few details to get you started on CareFind</p>
@@ -239,7 +244,7 @@ function Onboarding() {
               type="submit"
               disabled={saving || checking || available === false}
               style={{
-                padding: 13, fontSize: 14, background: theme.tealGradient, color: '#fff', border: 'none',
+                padding: 13, fontSize: 14, background: theme.tealDeep, color: '#fff', border: 'none',
                 borderRadius: 13, fontWeight: 800, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
                 opacity: (saving || available === false) ? 0.7 : 1,
               }}

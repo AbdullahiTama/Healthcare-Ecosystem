@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Search } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -100,11 +101,11 @@ function ClaimStaffPosition() {
     return myClaims.some((c) => c.staff_id === staffId)
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to claim your position.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -113,10 +114,10 @@ function ClaimStaffPosition() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 700, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 700, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -129,7 +130,7 @@ function ClaimStaffPosition() {
             flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.12)',
             border: '1px solid rgba(255,255,255,0.18)', borderRadius: 16, padding: '11px 14px',
           }}>
-            <span>🔍</span>
+            <Search size={16} color={theme.gray400} aria-hidden="true" />
             <input
               type="text"
               value={query}
@@ -247,7 +248,7 @@ function ClaimStaffPosition() {
                         <button
                           onClick={() => submitClaim(s.staff_id)}
                           disabled={submitting}
-                          style={{ flex: 2, padding: '8px 12px', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 12, background: theme.tealGradient, color: '#fff' }}
+                          style={{ flex: 2, padding: '8px 12px', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 12, background: theme.tealDeep, color: '#fff' }}
                         >
                           {submitting ? 'Verifying...' : 'Verify & Submit Claim'}
                         </button>
@@ -256,7 +257,7 @@ function ClaimStaffPosition() {
                   ) : (
                     <button
                       onClick={() => startVerify(s.staff_id)}
-                      style={{ padding: '8px 16px', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 12, background: theme.tealGradient, color: '#fff' }}
+                      style={{ padding: '8px 16px', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 12, background: theme.tealDeep, color: '#fff' }}
                     >
                       This is me
                     </button>

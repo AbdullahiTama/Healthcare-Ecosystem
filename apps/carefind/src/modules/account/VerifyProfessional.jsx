@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { AlertCircle, BadgeCheck, CheckCircle2, Clock, Paperclip } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -114,11 +115,11 @@ function VerifyProfessional() {
     setSubmitting(false)
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to request verification.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -127,10 +128,10 @@ function VerifyProfessional() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 560, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 560, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 50px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -150,7 +151,11 @@ function VerifyProfessional() {
                 background: existingRequest.status === 'approved' ? '#ecfdf5' : existingRequest.status === 'rejected' ? '#fef2f2' : '#fef3c7',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
               }}>
-                {existingRequest.status === 'approved' ? '✅' : existingRequest.status === 'rejected' ? '❌' : '⏳'}
+                {existingRequest.status === 'approved'
+                  ? <CheckCircle2 size={30} color={theme.success} aria-hidden="true" />
+                  : existingRequest.status === 'rejected'
+                    ? <AlertCircle size={30} color={theme.danger} aria-hidden="true" />
+                    : <Clock size={30} color={theme.warning} aria-hidden="true" />}
               </div>
               <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>
                 {existingRequest.status === 'approved' ? 'You are verified!' :
@@ -161,7 +166,7 @@ function VerifyProfessional() {
               {existingRequest.status === 'approved' && (
                 <div style={{ marginTop: 12, background: '#ecfdf5', borderRadius: 12, padding: '8px 14px', display: 'inline-block' }}>
                   <p style={{ margin: 0, fontSize: 12, color: theme.success, fontWeight: 700 }}>
-                    ✓ {existingRequest.profession} badge is live on your profile and posts
+                    <BadgeCheck size={14} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 5 }} />{existingRequest.profession} badge is live on your profile and posts
                   </p>
                 </div>
               )}
@@ -222,7 +227,7 @@ function VerifyProfessional() {
                       {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <p style={{ margin: '6px 0 0 0', fontSize: 11, color: theme.textLight }}>
-                      This will appear as "✓ {form.profession}" on all your posts and profile
+                      This will appear as a verified {form.profession} badge on all your posts and profile
                     </p>
                   </div>
 
@@ -246,7 +251,7 @@ function VerifyProfessional() {
                       setStep(2)
                     }}
                     style={{
-                      marginTop: 6, padding: 13, background: theme.tealGradient, color: '#fff', border: 'none',
+                      marginTop: 6, padding: 13, background: theme.tealDeep, color: '#fff', border: 'none',
                       borderRadius: 13, fontWeight: 800, fontSize: 14, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
                     }}
                   >
@@ -259,7 +264,7 @@ function VerifyProfessional() {
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 4 }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{form.full_name}</p>
-                    <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>✓ {form.profession}</p>
+                    <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}><BadgeCheck size={13} aria-hidden="true" /> {form.profession}</p>
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} · {form.years_experience}</p>
                   </div>
 
@@ -274,7 +279,7 @@ function VerifyProfessional() {
                       display: 'block', border: `2px dashed ${theme.border}`, borderRadius: 14, padding: '20px 16px',
                       textAlign: 'center', cursor: 'pointer', background: theme.bg,
                     }}>
-                      <p style={{ margin: '0 0 4px 0', fontSize: 22 }}>📎</p>
+                      <p style={{ margin: '0 0 6px 0', display: 'flex', justifyContent: 'center', color: theme.gray400 }}><Paperclip size={22} aria-hidden="true" /></p>
                       <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>
                         {fileName || 'Tap to choose a file'}
                       </p>
@@ -304,7 +309,7 @@ function VerifyProfessional() {
                     <button
                       type="submit"
                       disabled={submitting}
-                      style={{ flex: 2, padding: 12, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}
+                      style={{ flex: 2, padding: 12, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}
                     >
                       {submitting ? 'Submitting...' : 'Submit for Review'}
                     </button>

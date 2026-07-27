@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -55,11 +57,11 @@ function Dashboard() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to see your dashboard.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -68,10 +70,10 @@ function Dashboard() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -103,7 +105,11 @@ function Dashboard() {
             borderRadius: 14, padding: 12, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
           }}>
             <span style={{ fontSize: 18 }}>
-              {verification.status === 'approved' ? '✅' : verification.status === 'rejected' ? '❌' : '⏳'}
+              {verification.status === 'approved'
+                ? <CheckCircle2 size={26} color={theme.success} aria-hidden="true" />
+                : verification.status === 'rejected'
+                  ? <AlertCircle size={26} color={theme.danger} aria-hidden="true" />
+                  : <Clock size={26} color={theme.warning} aria-hidden="true" />}
             </span>
             <span style={{ fontSize: 13, color: theme.textMid, fontWeight: 600 }}>
               Verification: <span style={{ textTransform: 'capitalize', fontWeight: 800, color: theme.navy }}>{verification.status}</span>
@@ -118,7 +124,7 @@ function Dashboard() {
             onClick={() => setTab('posts')}
             style={{
               flex: 1, padding: 9, borderRadius: 12, border: tab === 'posts' ? 'none' : `1px solid ${theme.border}`,
-              background: tab === 'posts' ? theme.tealGradient : theme.bg,
+              background: tab === 'posts' ? theme.tealDeep : theme.bg,
               color: tab === 'posts' ? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13,
             }}
           >
@@ -128,7 +134,7 @@ function Dashboard() {
             onClick={() => setTab('reviews')}
             style={{
               flex: 1, padding: 9, borderRadius: 12, border: tab === 'reviews' ? 'none' : `1px solid ${theme.border}`,
-              background: tab === 'reviews' ? theme.tealGradient : theme.bg,
+              background: tab === 'reviews' ? theme.tealDeep : theme.bg,
               color: tab === 'reviews' ? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13,
             }}
           >
@@ -162,7 +168,7 @@ function Dashboard() {
               <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                 <p style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{r.businesses?.name}</p>
                 <p style={{ margin: '0 0 4px 0', color: theme.warning, fontSize: 13 }}>
-                  {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                  <Stars value={r.rating} size={13} />
                 </p>
                 {r.comment && <p style={{ margin: '0 0 4px 0', fontSize: 13, color: theme.textMid }}>{r.comment}</p>}
                 <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(r.created_at)}</p>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { BadgeCheck, ChevronRight, Stethoscope, Users, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -43,11 +44,11 @@ function ProfessionalDashboard() {
     if (!authLoading) load()
   }, [user, authLoading])
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to view your professional dashboard.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -56,9 +57,9 @@ function ProfessionalDashboard() {
 
   if (!profile?.is_verified) {
     const verifyRequiredContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, sans-serif' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         <div style={{
-          background: theme.heroGradient, color: '#fff',
+          background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
           {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -69,14 +70,14 @@ function ProfessionalDashboard() {
             width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
-            🩺
+            <Stethoscope size={28} aria-hidden="true" />
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>Verification required</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>
             This dashboard unlocks once you're a verified healthcare professional
           </p>
           <Link to="/verify" style={{
-            display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff',
+            display: 'inline-block', padding: '10px 20px', background: theme.tealDeep, color: '#fff',
             borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13,
           }}>
             Get Verified
@@ -97,10 +98,10 @@ function ProfessionalDashboard() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -110,7 +111,7 @@ function ProfessionalDashboard() {
             width: 16, height: 16, borderRadius: '50%', background: theme.tealBright, color: theme.navy,
             fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900,
           }}>
-            ✓
+            <BadgeCheck size={18} aria-hidden="true" />
           </span>
         </div>
         <p style={{ margin: '-12px 0 16px 0', fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>
@@ -136,24 +137,24 @@ function ProfessionalDashboard() {
       <div style={isMobile ? { padding: '20px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Link to="/earn" style={{ textDecoration: 'none' }}>
           <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#ecfdf5', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>💰</span>
+            <span style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><WalletIcon size={17} aria-hidden="true" /></span>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontSize: 13.5, color: theme.tealDeep, fontWeight: 800 }}>Earn on CareFind</p>
               <p style={{ margin: 0, fontSize: 11, color: theme.tealDeep }}>Subscriptions, consultations & tasks</p>
             </div>
-            <span style={{ color: theme.tealDeep, fontSize: 16 }}>›</span>
+            <ChevronRight size={17} color={theme.tealDeep} aria-hidden="true" />
           </div>
         </Link>
 
         {[
-          { icon: '👥', label: 'Invite Staff/Assistant', desc: 'Coming in a future update' },
+          { Icon: Users, label: 'Invite Staff/Assistant', desc: 'Coming in a future update' },
         ].map((item) => (
           <div key={item.label} style={{
             border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, display: 'flex',
             alignItems: 'center', gap: 12, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
           }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-              {item.icon}
+            <span style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: theme.gray50, color: theme.gray500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <item.Icon size={17} aria-hidden="true" />
             </span>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, fontWeight: 600 }}>{item.label}</p>

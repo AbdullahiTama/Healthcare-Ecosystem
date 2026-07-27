@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { Building2, Star, TrendingUp } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -85,11 +87,11 @@ function BusinessDashboard() {
 
   const selectedBiz = businesses.find((b) => b.id === selectedId)
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>
+  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
 
   if (!user) {
     return (
-      <div style={{ padding: 20, fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ padding: 20, fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', textAlign: 'center' }}>
         <p style={{ color: theme.textMid }}>Log in to manage your business.</p>
         <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log In</Link>
       </div>
@@ -98,9 +100,9 @@ function BusinessDashboard() {
 
   if (businesses.length === 0) {
     const noBusinessContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui, sans-serif', maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, sans-serif' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         <div style={{
-          background: theme.heroGradient, color: '#fff',
+          background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
           {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -111,14 +113,14 @@ function BusinessDashboard() {
             width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
-            🏥
+            <Building2 size={26} aria-hidden="true" />
           </div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No approved business yet</h3>
           <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>
             Once your business claim is approved, it'll show up here
           </p>
           <Link to="/claim-business" style={{
-            display: 'inline-block', padding: '10px 20px', background: theme.tealGradient, color: '#fff',
+            display: 'inline-block', padding: '10px 20px', background: theme.tealDeep, color: '#fff',
             borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13,
           }}>
             Claim a Business
@@ -232,10 +234,10 @@ function BusinessDashboard() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
-      : { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 640, margin: '0 auto' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
-        background: theme.heroGradient, color: '#fff',
+        background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
@@ -262,7 +264,9 @@ function BusinessDashboard() {
             <div>
               <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>{selectedBiz.name}</p>
               <p style={{ margin: 0, fontSize: 12.5, color: theme.textLight }}>
-                {avgRating ? `⭐ ${avgRating} · ${reviews.length} reviews` : 'No reviews yet'}
+                {avgRating
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Star size={13} color={theme.warning} fill={theme.warning} aria-hidden="true" /> {avgRating} · {reviews.length} reviews</span>
+                  : 'No reviews yet'}
               </p>
             </div>
             <button
@@ -317,7 +321,7 @@ function BusinessDashboard() {
             {reviews.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reviews yet.</p>}
             {reviews.map((r) => (
               <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-                <p style={{ margin: '0 0 4px 0', color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</p>
+                <div style={{ marginBottom: 4 }}><Stars value={r.rating} size={13} /></div>
                 {r.comment && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{r.comment}</p>}
               </div>
             ))}
@@ -328,7 +332,7 @@ function BusinessDashboard() {
             background: theme.bg, textAlign: 'center',
           }}>
             <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-              📈 Detailed analytics, review replies, and staff invites are coming soon
+              <TrendingUp size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Detailed analytics, review replies, and staff invites are coming soon
             </p>
           </div>
         </div>
