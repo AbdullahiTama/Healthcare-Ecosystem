@@ -1,5 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import {
+  Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
+  Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
+  Lock, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
+  Plus, Radio, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
+  Trash2, Trees, Unlock, Waves, X, Flag,
+} from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import BottomNav from '../../components/BottomNav.jsx'
@@ -20,7 +27,8 @@ import { loadActiveCreatorIds, coinsToNaira } from '../subscriptions-monetizatio
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
-import { useRef } from 'react'
+import { shareOrCopy } from '../../utils/share.js'
+import PostMenu from './PostMenu.jsx'
 import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -51,6 +59,7 @@ function Feed() {
   const [userSubscriptions, setUserSubscriptions] = useState([])
   const [reportedPosts, setReportedPosts] = useState([])
   const [reportingId, setReportingId] = useState(null)
+  const [reportPostId, setReportPostId] = useState(null)
   const [giftingPost, setGiftingPost] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
   const [editingPost, setEditingPost] = useState(null) // { id, content }
@@ -86,11 +95,38 @@ function Feed() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
 
+  // One pill per post, never two. `text` posts deliberately have no pill —
+  // labelling the default kind adds noise without adding information.
   const POST_KIND = {
     question: 'Question',
     article: 'Article',
     visual: 'Voice',
     review: 'Review',
+  }
+
+  const POST_KIND_TONE = {
+    question: 'amber',
+    article: 'blue',
+    visual: 'teal',
+    review: 'purple',
+  }
+
+  // The four things a reader can actually report. Free text was the old
+  // behaviour and produced unmoderatable rows ("idk", ""), so the reasons are
+  // now a closed set the moderation queue can group by.
+  const REPORT_REASONS = [
+    'Spam',
+    'False medical information',
+    'Harassment',
+    'Inappropriate content',
+  ]
+
+  // One place that answers "whose post is this" — the header, the follow
+  // button's label and the overflow menu's label all have to agree.
+  function authorName(post) {
+    if (post.posted_as_type) return post.posted_as_name || 'Business'
+    const p = profiles[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
   }
 
   const FEED_TABS = [
@@ -104,17 +140,17 @@ function Feed() {
   ]
 
   const themeLabels = {
-    'teal-depth': '🌊 Ocean',
-    'navy-clinical': '✨ Sky',
-    'midnight-teal': '🌃 Night',
-    'forest-wellness': '🌿 Forest',
-    'slate-pulse': '❤️ Pulse',
+    'teal-depth': 'Ocean',
+    'navy-clinical': 'Sky',
+    'midnight-teal': 'Night',
+    'forest-wellness': 'Forest',
+    'slate-pulse': 'Pulse',
   }
   const themeKeys = Object.keys(themeLabels)
 
   const postTypeLabels = {
     text: 'Text Post',
-    visual: '🎤 Voice Card',
+    visual: 'Voice card',
     question: 'Question',
     review: 'Review',
     article: 'Article',
@@ -136,7 +172,9 @@ function Feed() {
     ])
     const results = [
       ...(bizRes.data || []).map((b) => ({ type: 'business', id: b.id, name: b.name, sub: b.business_type })),
-      ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: `${p.emoji || '💊'} ${p.name}`, sub: 'Medication' })),
+      // The row's type is carried by its leading lucide icon (ICONS.md), not
+      // by a glyph pasted into the name string.
+      ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: p.name, sub: 'Medication' })),
     ]
     if (results.length === 0) {
       results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed — review anyway' })
@@ -542,15 +580,15 @@ function Feed() {
   }
 
   const CREATE_OPTIONS = [
-    { key: 'text',     icon: '💬', label: 'Post',          run: () => startPost('text') },
-    { key: 'question', icon: '❓', label: 'Question',      run: () => startPost('question') },
-    { key: 'review',   icon: '⭐', label: 'Review',        run: () => startPost('review') },
-    { key: 'visual',   icon: '🎤', label: 'Voice card',    run: () => startPost('visual') },
-    { key: 'article',  icon: '📄', label: 'Article',       run: () => startPost('article') },
-    { key: 'story',    icon: '📖', label: 'Story',         run: () => navigate('/profile') },
-    { key: 'series',   icon: '🎬', label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
-    { key: 'product',  icon: '🛒', label: 'Sell a product', run: () => navigate('/profile'), pro: true },
-    { key: 'live',     icon: '📡', label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
+    { key: 'text',     Icon: MessageSquare, label: 'Post',          run: () => startPost('text') },
+    { key: 'question', Icon: HelpCircle,    label: 'Question',      run: () => startPost('question') },
+    { key: 'review',   Icon: Star,          label: 'Review',        run: () => startPost('review') },
+    { key: 'visual',   Icon: Mic,           label: 'Voice card',    run: () => startPost('visual') },
+    { key: 'article',  Icon: FileText,      label: 'Article',       run: () => startPost('article') },
+    { key: 'story',    Icon: BookOpen,      label: 'Story',         run: () => navigate('/profile') },
+    { key: 'series',   Icon: Film,          label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
+    { key: 'product',  Icon: ShoppingCart,  label: 'Sell a product', run: () => navigate('/profile'), pro: true },
+    { key: 'live',     Icon: Radio,         label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
   ]
 
   // The tabs answer "what do you want to read?" — they slice the same feed.
@@ -692,25 +730,56 @@ function Feed() {
     }
   }
 
-  async function handleReport(postId) {
-    if (!user) return
-    if (reportedPosts.includes(postId)) return
+  // Reporting is a two-step flow: the overflow menu opens a reason picker,
+  // the picked reason writes the report. A `window.prompt` (what this used to
+  // be) is unstyled, unlabelled and blocked outright in some mobile browsers,
+  // so a moderation path can't depend on it — and the handler was never
+  // wired to anything, so reporting was unreachable.
+  function openReport(postId) {
+    if (!user) { navigate('/login'); return }
+    if (reportedPosts.includes(postId)) {
+      toast.show('You already reported this post.')
+      return
+    }
+    setReportPostId(postId)
+  }
+
+  async function submitReport(reason) {
+    const postId = reportPostId
+    if (!user || !postId) return
     setReportingId(postId)
 
-    const reason = prompt('Why are you reporting this post?\n\n1. Spam\n2. False medical information\n3. Harassment\n4. Inappropriate content\n\nType the reason:')
-    if (!reason) {
-      setReportingId(null)
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: user.id,
+      post_id: postId,
+      reason,
+    })
+
+    setReportingId(null)
+    setReportPostId(null)
+
+    if (error) {
+      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
       return
     }
 
-    await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason: reason,
-    })
-
     setReportedPosts((prev) => [...prev, postId])
-    setReportingId(null)
+    toast.show('Thanks — our team will review this post.', { type: 'success' })
+  }
+
+  // Prefer the thread we've actually loaded (it reflects a just-added or
+  // just-deleted comment); fall back to the count loadFeed already fetched,
+  // so the number is right before the thread is ever opened.
+  function commentTotal(postId) {
+    const loaded = comments[postId]
+    if (loaded) return loaded.length
+    return commentCounts[postId] || 0
+  }
+
+  async function sharePost(post) {
+    const result = await shareOrCopy({ title: 'CareFind', text: post.content })
+    if (result === 'copied') toast.show('Post copied — paste it anywhere to share.', { type: 'success' })
+    if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
   }
 
   function isSaved(postId) {
@@ -774,7 +843,7 @@ function Feed() {
       `}</style>
       {isMobile && (
         <div style={{
-          background: theme.heroGradient, margin: '-20px -20px 0 -20px', padding: '14px 16px 0',
+          background: theme.navy, margin: '-20px -20px 0 -20px', padding: '14px 16px 0',
           borderRadius: '0 0 22px 22px', color: '#fff',
         }}>
           {/* App bar */}
@@ -784,14 +853,14 @@ function Feed() {
             <Link to="/search" style={{
               width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
               justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15, textDecoration: 'none',
-            }}>🔍</Link>
+            }}><SearchIcon size={18} aria-hidden="true" /></Link>
 
             <Link to="/notifications" style={{
               width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
               justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
               textDecoration: 'none', position: 'relative',
             }}>
-              🔔
+              <Bell size={18} aria-hidden="true" />
               {unreadNotifs > 0 && (
                 <span style={{
                   position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
@@ -808,7 +877,7 @@ function Feed() {
           </div>
 
           {/* What do you want to read? */}
-          <div style={{ display: 'flex', gap: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div role="group" aria-label="Filter the feed" className="cf-hscroll" style={{ display: 'flex', gap: 20, WebkitOverflowScrolling: 'touch' }}>
             {FEED_TABS.map(([key, label]) => (
               <button
                 key={key}
@@ -831,7 +900,7 @@ function Feed() {
       {/* Desktop/tablet: same tabs, plain top-of-content bar instead of the
           mobile gradient hero (which is replaced by DesktopHeader/AppShell). */}
       {!isMobile && (
-        <div style={{ display: 'flex', gap: 22, overflowX: 'auto', borderBottom: `1px solid ${theme.border}`, marginBottom: 20 }}>
+        <div role="group" aria-label="Filter the feed" className="cf-hscroll" style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${theme.gray200}`, marginBottom: 20 }}>
           {FEED_TABS.map(([key, label]) => (
             <button
               key={key}
@@ -860,7 +929,7 @@ function Feed() {
           <div style={{
             width: 38, height: 38, borderRadius: 11, flexShrink: 0, fontSize: 17,
             background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>📡</div>
+          }}><Radio size={20} aria-hidden="true" /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: '0 0 1px', fontSize: 12.5, fontWeight: 900, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', boxShadow: '0 0 0 3px rgba(255,255,255,0.3)' }} />
@@ -885,15 +954,15 @@ function Feed() {
       {isMobile && latestNews.length > 0 && (
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
-            <span style={{ fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}>📰 Latest News</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}><Newspaper size={14} aria-hidden="true" /> Latest news</span>
             <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all →</Link>
           </div>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+          <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
             {latestNews.map((n) => (
               <Link key={n.id} to="/news" style={{ flexShrink: 0, width: 190, textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, overflow: 'hidden', background: theme.cardBg }}>
                   <div style={{
-                    height: 100, background: n.hero_image_url ? `url(${n.hero_image_url})` : theme.heroGradient,
+                    height: 100, background: n.hero_image_url ? `url(${n.hero_image_url})` : theme.navy,
                     backgroundSize: 'cover', backgroundPosition: 'center',
                     display: 'flex', alignItems: 'flex-start', padding: 8,
                   }}>
@@ -918,7 +987,7 @@ function Feed() {
             marginTop: 16, background: '#ecfdf5', border: `1px solid ${theme.tealBright}`, borderRadius: 14,
             padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
           }}>
-            <span style={{ fontSize: 20 }}>👋</span>
+            <Hand size={20} color={theme.tealDeep} aria-hidden="true" />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 1px 0', fontSize: 13, fontWeight: 800, color: theme.tealDeep }}>Complete your profile</p>
               <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Add your name, username and phone to get the most out of CareFind</p>
@@ -926,9 +995,10 @@ function Feed() {
             <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>›</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBannerDismissed(true) }}
-              style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 16, padding: '0 2px' }}
+              aria-label="Dismiss"
+              style={{ background: 'none', border: 'none', color: theme.gray400, padding: '0 2px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
             >
-              ✕
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
         </Link>
@@ -937,8 +1007,8 @@ function Feed() {
       {/* Live-now strip — mobile only; RightSidebar covers this on desktop. */}
       {isMobile && liveSessions.length > 0 && (
         <div style={{ padding: '10px 16px 0' }}>
-          <p style={{ fontSize: 11, fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}>🔴 Live Now</p>
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+          <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: theme.danger, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}><Radio size={12} aria-hidden="true" /> Live now</p>
+          <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4 }}>
             {liveSessions.map(s => (
               <a key={s.id} href={`/live/${s.id}`} style={{ textDecoration: 'none', flexShrink: 0, width: 140 }}>
                 <div style={{ border: '2px solid #dc2626', borderRadius: 14, padding: 10, background: '#fff' }}>
@@ -965,7 +1035,7 @@ function Feed() {
             if (!idn) return null
             return (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12, background: theme.navy, marginBottom: 12 }}>
-                <span style={{ fontSize: 16 }}>{idn.type === 'staff' ? '🎖️' : '🏢'}</span>
+                {idn.type === 'staff' ? <Award size={16} aria-hidden="true" /> : <Building2 size={16} aria-hidden="true" />}
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff' }}>
                   Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' · ' + idn.businessName : idn.name}
                 </p>
@@ -982,7 +1052,7 @@ function Feed() {
                 style={{
                   padding: '7px 13px', borderRadius: 14, border: postType === t ? 'none' : `1px solid ${theme.border}`,
                   fontSize: 11.5, fontWeight: 700,
-                  background: postType === t ? theme.tealGradient : theme.bg,
+                  background: postType === t ? theme.tealDeep : theme.bg,
                   color: postType === t ? '#fff' : theme.textMid,
                 }}
               >
@@ -1004,7 +1074,9 @@ function Feed() {
               }}
             >
               <span style={{ fontSize: 12.5, fontWeight: 800 }}>
-                {subscriberOnly ? '🔒 Subscribers only' : '🔓 Free for everyone'}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {subscriberOnly ? <><Lock size={13} aria-hidden="true" /> Subscribers only</> : <><Unlock size={13} aria-hidden="true" /> Free for everyone</>}
+                </span>
               </span>
               <span style={{
                 fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 10,
@@ -1019,7 +1091,7 @@ function Feed() {
 
           {canGoLive && (
             <Link to="/playlist/create" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 13px', borderRadius: 12, background: theme.navy, color: '#fff', fontSize: 12.5, fontWeight: 800, textDecoration: 'none', marginBottom: 12 }}>
-              🎬 Create a Playlist (series)
+              <Film size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />Create a playlist (series)
             </Link>
           )}
 
@@ -1053,7 +1125,7 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                🖼 {imagePreview ? 'Change photo' : 'Add photo'}
+                <ImageIcon size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />{imagePreview ? 'Change photo' : 'Add photo'}
                 <input
                   type="file"
                   accept="image/*"
@@ -1076,7 +1148,7 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                ✏️ Draw
+                <Pen size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />Draw
               </button>
 
               <label
@@ -1086,7 +1158,9 @@ function Feed() {
                   fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
                 }}
               >
-                {uploadingVideo ? '⏳ …' : cardVideoPreview ? '🎬 Change clip' : '🎬 Clip'}
+                {uploadingVideo
+                  ? '…'
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={15} aria-hidden="true" /> {cardVideoPreview ? 'Change clip' : 'Clip'}</span>}
                 <input type="file" accept="video/*" onChange={handleCardVideo} style={{ display: 'none' }} />
               </label>
 
@@ -1099,10 +1173,12 @@ function Feed() {
                   }}
                   style={{
                     padding: '9px 12px', borderRadius: 10, border: `1px solid ${theme.alert}`,
-                    background: '#fef2f2', color: theme.alert, fontSize: 12, fontWeight: 800,
+                    background: theme.dangerBg, color: theme.alert, fontSize: 12, fontWeight: 800,
+                    display: 'inline-flex', alignItems: 'center', cursor: 'pointer',
                   }}
+                  aria-label="Remove clip"
                 >
-                  ✕
+                  <X size={14} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -1114,7 +1190,7 @@ function Feed() {
               {cardAudio ? (
                 <div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>
-                    🎤 Voice attached
+                    <Mic size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Voice attached
                   </p>
                   <audio src={cardAudio} controls style={{ width: '100%', height: 36 }} />
                   <button
@@ -1128,7 +1204,7 @@ function Feed() {
               ) : (
                 <>
                   <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.navy }}>
-                    🎤 Add your voice <span style={{ fontWeight: 600, color: theme.textLight }}>(optional)</span>
+                    <Mic size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Add your voice <span style={{ fontWeight: 600, color: theme.textLight }}>(optional)</span>
                   </p>
                   <p style={{ margin: '0 0 10px 0', fontSize: 10.5, color: theme.textLight }}>
                     People can download this card with your voice and share it to WhatsApp Status — with your CareFind logo on it.
@@ -1144,15 +1220,19 @@ function Feed() {
               {reviewTarget ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? '#fef9c3' : '#ecfdf5', borderRadius: 12, padding: '8px 12px' }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: reviewTarget.type === 'unclaimed' ? '#a16207' : theme.tealDeep, flex: 1 }}>
-                    {reviewTarget.type === 'business' ? '🏥' : reviewTarget.type === 'product' ? '💊' : reviewTarget.entityType === 'business' ? '🏥' : '💊'} {reviewTarget.name}
+                    {(reviewTarget.type === 'business' || reviewTarget.entityType === 'business')
+                      ? <Building2 size={15} style={{ flexShrink: 0 }} aria-hidden="true" />
+                      : <PillIcon size={15} style={{ flexShrink: 0 }} aria-hidden="true" />}
+                    {reviewTarget.name}
                     {reviewTarget.type === 'unclaimed' && <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 4 }}>(unlisted)</span>}
                   </span>
                   <button
                     type="button"
                     onClick={() => { setReviewTarget(null); setReviewSearch(''); setReviewSearchResults([]) }}
-                    style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 16 }}
+                    aria-label="Clear tag"
+                    style={{ background: 'none', border: 'none', color: theme.gray400, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
                   >
-                    ✕
+                    <X size={16} aria-hidden="true" />
                   </button>
                 </div>
               ) : (
@@ -1187,14 +1267,14 @@ function Feed() {
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'business' }); setReviewSearchResults([]) }}
                                 style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
                               >
-                                🏥 It's a business
+                                <Building2 size={14} aria-hidden="true" /> It's a business
                               </button>
                               <button
                                 type="button"
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'product' }); setReviewSearchResults([]) }}
                                 style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
                               >
-                                💊 It's a medication
+                                <PillIcon size={14} aria-hidden="true" /> It's a medication
                               </button>
                             </div>
                           </div>
@@ -1226,7 +1306,7 @@ function Feed() {
                   onClick={() => setPostRating(n)}
                   style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: n <= postRating ? '#f5b301' : '#ccc' }}
                 >
-                  ★
+                  <Star size={24} color={n <= postRating ? '#f5b301' : theme.gray300} fill={n <= postRating ? '#f5b301' : 'none'} aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -1277,31 +1357,38 @@ function Feed() {
             </>
           )}
 
-          {postType !== 'visual' && (
-            <div style={{ marginTop: 8 }}>
-              {imagePreview ? (
-                <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <img src={imagePreview} alt="preview" style={{ maxWidth: '100%', maxHeight: 160, borderRadius: 8 }} />
-                  <button
-                    type="button"
-                    onClick={clearImage}
-                    style={{ position: 'absolute', top: 4, right: 4, background: '#000', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, fontSize: 12 }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <label style={{ fontSize: 13, color: '#0f766e', fontWeight: 600, cursor: 'pointer' }}>
-                  📷 Add a photo
-                  <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
-                </label>
-              )}
+          {postType !== 'visual' && imagePreview && (
+            <div style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
+              <img src={imagePreview} alt="Selected photo preview" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: theme.radius.md, display: 'block' }} />
+              <button
+                type="button"
+                onClick={clearImage}
+                aria-label="Remove photo"
+                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(15,23,42,0.75)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
             </div>
           )}
 
-          <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ marginTop: 12 }}>
-            {posting ? (uploadingImage ? 'Uploading photo...' : 'Posting...') : 'Post'}
-          </TealBtn>
+          {/* Composer footer: the secondary attach action sits left, the one
+              primary action sits right — the same "one primary action, fixed
+              position" rule the form patterns use (SCREEN_PATTERNS.md 8). */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.border}`,
+          }}>
+            {postType !== 'visual' && !imagePreview ? (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
+                <Camera size={17} aria-hidden="true" /> Add a photo
+                <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+              </label>
+            ) : <span />}
+
+            <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ minWidth: 108, flexShrink: 0 }}>
+              {posting ? (uploadingImage ? 'Uploading photo…' : 'Posting…') : 'Post'}
+            </TealBtn>
+          </div>
         </form>
       ) : (
         <p style={{ color: '#666', fontSize: 14, marginBottom: 20 }}>
@@ -1318,7 +1405,7 @@ function Feed() {
       )}
       {!loading && feedTab !== 'series' && visiblePosts.length === 0 && (
         <Empty
-          icon="🌱"
+          icon={<Sprout size={44} color={theme.gray300} strokeWidth={1.5} />}
           message={
             <>
               <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
@@ -1349,8 +1436,8 @@ function Feed() {
             }}>
               <div style={{
                 width: 46, height: 46, borderRadius: 12, flexShrink: 0, fontSize: 21,
-                background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>🎬</div>
+                background: theme.navy, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><Film size={22} aria-hidden="true" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pl.title}</p>
                 {pl.description && (
@@ -1368,109 +1455,113 @@ function Feed() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {feedTab !== 'series' && visiblePosts.map((post) => (
           <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: post.post_type === 'visual' ? '12px 14px 0 14px' : 0, marginBottom: post.post_type === 'visual' ? 0 : 8 }}>
-              <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
-                <div style={{ position: 'relative', flexShrink: 0, marginBottom: user && post.user_id !== user.id ? 4 : 0 }}>
-                  <div
+            {/* Card header: identity left, one kind pill + overflow menu right.
+                Identity reads name → verified badge → handle → credential →
+                time, i.e. "who is this, and can I trust them" before anything
+                else (Design Principle 12 — trust is a design output). */}
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 11,
+              padding: post.post_type === 'visual' ? '14px 16px 0 16px' : 0,
+              marginBottom: post.post_type === 'visual' ? 0 : 10,
+            }}>
+              <Link
+                to={`/u/${post.user_id}`}
+                aria-label={`${authorName(post)}'s profile`}
+                style={{ position: 'relative', flexShrink: 0, textDecoration: 'none', display: 'block' }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 42, height: 42, borderRadius: post.posted_as_type ? theme.radius.md : '50%',
+                    background: post.posted_as_type
+                      ? theme.navy
+                      : (profiles[post.user_id]?.avatar_url
+                          ? `url(${profiles[post.user_id].avatar_url}) center/cover`
+                          : theme.tealDeep),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: 15, fontWeight: 800,
+                  }}
+                >
+                  {post.posted_as_type
+                    ? (post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />)
+                    : (!profiles[post.user_id]?.avatar_url &&
+                        (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
+                </div>
+
+                {/* Follow badge sitting on the avatar (TikTok-style) */}
+                {user && post.user_id !== user.id && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFollow(post.user_id) }}
+                    aria-label={isFollowing(post.user_id) ? `Unfollow ${authorName(post)}` : `Follow ${authorName(post)}`}
                     style={{
-                      width: 38, height: 38, borderRadius: post.posted_as_type ? 10 : '50%',
-                      background: post.posted_as_type
-                        ? theme.navy
-                        : (profiles[post.user_id]?.avatar_url
-                            ? `url(${profiles[post.user_id].avatar_url}) center/cover`
-                            : theme.tealGradient),
+                      position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+                      width: 21, height: 21, borderRadius: '50%', padding: 0, lineHeight: 1,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 14, fontWeight: 800,
+                      cursor: 'pointer',
+                      background: isFollowing(post.user_id) ? '#fff' : theme.tealDeep,
+                      border: isFollowing(post.user_id) ? `2px solid ${theme.tealDeep}` : '2px solid #fff',
+                      color: isFollowing(post.user_id) ? theme.tealDeep : '#fff',
+                      boxShadow: isFollowing(post.user_id) ? 'none' : theme.elevation[2],
                     }}
                   >
-                    {post.posted_as_type
-                      ? (post.posted_as_type === 'staff' ? '🎖️' : '🏢')
-                      : (!profiles[post.user_id]?.avatar_url &&
-                          (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
-                  </div>
+                    {isFollowing(post.user_id) ? <Check size={12} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
+                  </button>
+                )}
+              </Link>
 
-                  {/* Follow badge sitting on the avatar (TikTok-style) */}
-                  {user && post.user_id !== user.id && (
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFollow(post.user_id) }}
-                      aria-label={isFollowing(post.user_id) ? 'Following' : 'Follow'}
-                      style={{
-                        position: 'absolute', bottom: -7, left: '50%', transform: 'translateX(-50%)',
-                        width: 22, height: 22, borderRadius: '50%', padding: 0, lineHeight: 1,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer',
-                        background: isFollowing(post.user_id) ? '#fff' : theme.navy,
-                        border: isFollowing(post.user_id) ? `2px solid ${theme.tealDeep}` : '2px solid #fff',
-                        color: isFollowing(post.user_id) ? theme.tealDeep : '#fff',
-                        fontSize: isFollowing(post.user_id) ? 11 : 16,
-                        fontWeight: 900,
-                        boxShadow: isFollowing(post.user_id) ? 'none' : '0 2px 7px rgba(15,23,42,0.5)',
-                      }}
-                    >
-                      {isFollowing(post.user_id) ? '✓' : '+'}
-                    </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                  <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none' }}>
+                    <span style={{ fontSize: 14.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
+                  </Link>
+                  {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
+                    <BadgeCheck size={15} color={theme.tealDeep} style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
+                  )}
+                  {!post.posted_as_type && profiles[post.user_id]?.display_name && (
+                    <span style={{ fontSize: 12.5, color: theme.gray400, fontWeight: 600 }}>
+                      @{profiles[post.user_id].display_name}
+                    </span>
                   )}
                 </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: theme.navy }}>
-                      {post.posted_as_type ? post.posted_as_name : (profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'User')}
-                    </span>
-                    {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
-                      <span style={{
-                        width: 14, height: 14, borderRadius: '50%', background: theme.tealDeep, color: '#fff',
-                        fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900,
-                      }}>✓</span>
-                    )}
-                  </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
                   {post.posted_as_type ? (
-                    <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700, display: 'block' }}>
+                    <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>
                       {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
                       {' · posted by '}
                       {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
                     </span>
                   ) : (
-                    <>
-                      {profiles[post.user_id]?.display_name && (
-                        <span style={{ fontSize: 11.5, color: theme.textLight, fontWeight: 600, display: 'block' }}>
-                          @{profiles[post.user_id].display_name}
-                        </span>
-                      )}
-                      {profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
-                        <span style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>
-                          ✓ {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
-                        </span>
-                      )}
-                    </>
+                    profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+                        color: theme.tealDeep, background: theme.tealMist,
+                        padding: '2px 8px', borderRadius: theme.radius.full,
+                      }}>
+                        <BadgeCheck size={12} aria-hidden="true" /> {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
+                      </span>
+                    )
                   )}
-                  <span style={{ fontSize: 11, color: theme.textLight, fontWeight: 600, display: 'block' }}>{timeAgo(post.created_at)}</span>
+                  <span style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
+                    <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
+                  </span>
                 </div>
-              </Link>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                {post.post_type !== 'text' && post.post_type !== 'visual' && (
-                  <Pill
-                    label={post.post_type}
-                    type={post.post_type === 'question' ? 'amber' : post.post_type === 'review' ? 'purple' : 'blue'}
-                  />
-                )}
-                {POST_KIND[post.post_type] && <Pill label={POST_KIND[post.post_type]} type="teal" style={{ marginLeft: 'auto', flexShrink: 0 }} />}
-                {user && post.user_id === user.id && (
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      onClick={() => setEditingPost({ id: post.id, content: post.content })}
-                      style={{ background: 'none', border: 'none', fontSize: 12, color: theme.textLight, cursor: 'pointer', padding: '2px 6px' }}
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(post.id)}
-                      disabled={deletingId === post.id}
-                      style={{ background: 'none', border: 'none', fontSize: 12, color: theme.alert, cursor: 'pointer', padding: '2px 6px' }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {POST_KIND[post.post_type] && <Pill label={POST_KIND[post.post_type]} type={POST_KIND_TONE[post.post_type]} />}
+                <PostMenu
+                  label={`Options for ${authorName(post)}'s post`}
+                  items={user && post.user_id === user.id
+                    ? [
+                        { key: 'edit', label: 'Edit post', Icon: Pencil, onSelect: () => setEditingPost({ id: post.id, content: post.content }) },
+                        { key: 'delete', label: 'Delete post', Icon: Trash2, danger: true, onSelect: () => setConfirmDeleteId(post.id) },
+                      ]
+                    : [
+                        { key: 'save', label: isSaved(post.id) ? 'Remove from saved' : 'Save post', Icon: Bookmark, onSelect: () => (user ? toggleSave(post.id) : navigate('/login')) },
+                        { key: 'report', label: reportedPosts.includes(post.id) ? 'Reported' : 'Report post', Icon: Flag, danger: true, onSelect: () => openReport(post.id) },
+                      ]}
+                />
               </div>
             </div>
 
@@ -1508,7 +1599,7 @@ function Feed() {
                   border: `1px solid ${theme.border}`, borderRadius: 14,
                   padding: 16, textAlign: 'center', background: theme.bg, marginTop: 4,
                 }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: 20 }}>🔒</p>
+                  <p style={{ margin: '0 0 6px 0', display: 'flex', justifyContent: 'center', color: theme.tealDeep }}><Lock size={22} aria-hidden="true" /></p>
                   <p style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>
                     Subscriber-only content
                   </p>
@@ -1518,7 +1609,7 @@ function Feed() {
                   <Link
                     to={`/u/${post.user_id}`}
                     style={{
-                      display: 'inline-block', padding: '10px 22px', background: theme.tealGradient,
+                      display: 'inline-block', padding: '10px 22px', background: theme.tealDeep,
                       color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: 'none',
                     }}
                   >
@@ -1552,15 +1643,17 @@ function Feed() {
                   {sharingId === post.id
                     ? 'Preparing…'
                     : post.audio_url && canExportVideo()
-                      ? '⬇️ Download with voice · share to status'
-                      : '⬇️ Download card · share to status'}
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download with voice · share to status</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download card · share to status</span>}
                 </button>
               </div>
             ) : (
               <>
                 {post.post_type === 'review' && post.rating && (
-                  <p style={{ margin: '8px 0 6px 0', color: theme.warning, fontSize: 14 }}>
-                    {'★'.repeat(post.rating)}{'☆'.repeat(5 - post.rating)}
+                  <p style={{ margin: '8px 0 6px 0', display: 'flex', gap: 1 }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star key={n} size={15} color="#f5b301" fill={n <= post.rating ? '#f5b301' : 'none'} aria-hidden="true" />
+                    ))}
                   </p>
                 )}
                 {post.post_type === 'article' || post.post_type === 'premium' ? (
@@ -1576,89 +1669,81 @@ function Feed() {
                 )}
               </>
             )}
-            <div style={{
-              padding: post.post_type === 'visual' ? '6px 16px 0 16px' : '4px 0 0 0',
-              display: 'flex', gap: 12, alignItems: 'center',
-            }}>
-              {likeCount(post.id) > 0 && (
-                <span style={{ fontSize: 12, color: theme.textLight, fontWeight: 600 }}>
-                  ❤️ {formatCount(likeCount(post.id))} {likeCount(post.id) === 1 ? 'like' : 'likes'}
-                </span>
-              )}
-              {comments[post.id] && comments[post.id].length > 0 && (
-                <span style={{ fontSize: 12, color: theme.textLight, fontWeight: 600 }}>
-                  💬 {comments[post.id].length}
-                </span>
-              )}
-            </div>
-            <style>{`
-              .eng-row { display: flex; align-items: center; justify-content: space-between; }
-              .eng-item { background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 10px 2px; -webkit-tap-highlight-color: transparent; transition: transform 0.08s; }
-              .eng-item:active { transform: scale(0.88); }
-              .eng-item span { font-size: 13px; font-weight: 600; }
-            `}</style>
-            <div className="eng-row" style={{
-              borderTop: `1px solid ${theme.border}`, marginTop: 8,
-              marginLeft: post.post_type === 'visual' ? 16 : 0, marginRight: post.post_type === 'visual' ? 16 : 0,
+            {/* Engagement bar. Reading actions (react, reply, pass on) group
+                left; keeping and supporting group right — the same left/right
+                split on every card, so the target a user reaches for never
+                moves. Views are a read-only fact, so they're text, not a
+                button that does nothing when pressed. The icons were
+                hand-drawn SVG copies of lucide glyphs with hardcoded colours
+                and no labels; the row's CSS lives in global.css. */}
+            <div className="cf-eng-row" style={{
+              borderTop: `1px solid ${theme.border}`, marginTop: 10, paddingTop: 4,
+              marginLeft: post.post_type === 'visual' ? 16 : 0,
+              marginRight: post.post_type === 'visual' ? 16 : 0,
               marginBottom: post.post_type === 'visual' ? 16 : 0,
-              paddingTop: 4,
             }}>
-              {/* Comment */}
-              <button className="eng-item" onClick={() => toggleComments(post.id)}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#536471" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span style={{ color: '#536471' }}>{comments[post.id]?.length ? formatCount(comments[post.id].length) : ''}</span>
-              </button>
+              <div className="cf-eng-group">
+                {/* Like */}
+                <button
+                  className="cf-eng-item"
+                  onClick={() => (user ? toggleLike(post.id) : navigate('/login'))}
+                  aria-pressed={userHasLiked(post.id)}
+                  aria-label={userHasLiked(post.id) ? 'Unlike this post' : 'Like this post'}
+                  style={{ color: userHasLiked(post.id) ? theme.danger : theme.gray500 }}
+                >
+                  <Heart size={18} aria-hidden="true" fill={userHasLiked(post.id) ? theme.danger : 'none'} />
+                  {likeCount(post.id) > 0 && (
+                    <span>{formatCount(likeCount(post.id))} {likeCount(post.id) === 1 ? 'like' : 'likes'}</span>
+                  )}
+                </button>
 
-              {/* Repost / Share look */}
-              <button className="eng-item" onClick={() => {
-                if (navigator.share) navigator.share({ title: 'CareFind', text: post.content, url: window.location.href })
-              }}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#536471" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                  <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-                </svg>
-                <span style={{ color: '#536471' }}></span>
-              </button>
+                {/* Comment */}
+                <button
+                  className="cf-eng-item"
+                  onClick={() => toggleComments(post.id)}
+                  aria-expanded={!!openComments[post.id]}
+                  aria-label={`Comments on ${authorName(post)}'s post`}
+                  style={{ color: theme.gray500 }}
+                >
+                  <MessageCircle size={18} aria-hidden="true" />
+                  <span>{commentTotal(post.id) > 0 ? formatCount(commentTotal(post.id)) : 'Comment'}</span>
+                </button>
 
-              {/* Like */}
-              <button className="eng-item" onClick={() => toggleLike(post.id)}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill={userHasLiked(post.id) ? '#f91880' : 'none'} stroke={userHasLiked(post.id) ? '#f91880' : '#536471'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-                <span style={{ color: userHasLiked(post.id) ? '#f91880' : '#536471' }}>{likeCount(post.id) ? formatCount(likeCount(post.id)) : ''}</span>
-              </button>
+                {/* Share */}
+                <button className="cf-eng-item" onClick={() => sharePost(post)} aria-label="Share this post" style={{ color: theme.gray500 }}>
+                  <Share2 size={18} aria-hidden="true" />
+                  <span>Share</span>
+                </button>
+              </div>
 
-              {/* Views */}
-              <button className="eng-item" style={{ cursor: 'default' }}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#536471" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="6" y1="20" x2="6" y2="14"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="10"/>
-                </svg>
-                <span style={{ color: '#536471' }}>{formatCount(post.view_count)}</span>
-              </button>
+              <div className="cf-eng-group">
+                {post.view_count > 0 && (
+                  <span className="cf-eng-meta" style={{ color: theme.gray400 }}>
+                    <Eye size={15} aria-hidden="true" /> {formatCount(post.view_count)}
+                  </span>
+                )}
 
-              {/* Save */}
-              <button className="eng-item" onClick={() => toggleSave(post.id)}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill={isSaved(post.id) ? theme.tealDeep : 'none'} stroke={isSaved(post.id) ? theme.tealDeep : '#536471'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span style={{ color: '#536471' }}></span>
-              </button>
+                {/* Gift */}
+                <button
+                  className="cf-eng-item"
+                  aria-label={`Send a gift to ${authorName(post)}`}
+                  onClick={() => (user ? setGiftingPost({ postId: post.id, authorId: post.user_id }) : navigate('/login'))}
+                  style={{ color: theme.tealDeep }}
+                >
+                  <Gift size={18} aria-hidden="true" />
+                </button>
 
-              {/* Gift */}
-              <button className="eng-item" onClick={() => {
-                user ? setGiftingPost({ postId: post.id, authorId: post.user_id }) : window.location.href = '/login'
-              }}>
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={theme.tealDeep} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 12 20 22 4 22 4 12"/>
-                  <rect x="2" y="7" width="20" height="5"/>
-                  <line x1="12" y1="22" x2="12" y2="7"/>
-                  <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
-                  <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
-                </svg>
-                <span style={{ color: theme.tealDeep }}></span>
-              </button>
+                {/* Save */}
+                <button
+                  className="cf-eng-item"
+                  onClick={() => (user ? toggleSave(post.id) : navigate('/login'))}
+                  aria-pressed={isSaved(post.id)}
+                  aria-label={isSaved(post.id) ? 'Remove from saved' : 'Save this post'}
+                  style={{ color: isSaved(post.id) ? theme.tealDeep : theme.gray500 }}
+                >
+                  <Bookmark size={18} aria-hidden="true" fill={isSaved(post.id) ? theme.tealDeep : 'none'} />
+                </button>
+              </div>
             </div>
 
             {openComments[post.id] && (
@@ -1678,14 +1763,14 @@ function Feed() {
                           </Link>
                           {c.profiles?.is_verified && (
                             <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>
-                              ✓ {c.profiles?.specialty || ''}
+                              <BadgeCheck size={11} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 3 }} />{c.profiles?.specialty || ''}
                             </span>
                           )}
                         </div>
                         {user && c.user_id === user.id && (
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => setEditingComment({ id: c.id, content: c.content, post_id: post.id })} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.textLight }}>✏️</button>
-                            <button onClick={() => handleDeleteComment(c.id, post.id)} style={{ background: 'none', border: 'none', fontSize: 11, cursor: 'pointer', color: theme.alert }}>🗑️</button>
+                            <button onClick={() => setEditingComment({ id: c.id, content: c.content, post_id: post.id })} aria-label="Edit comment" style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.gray400, display: 'flex', alignItems: 'center', padding: 2 }}><Pencil size={13} aria-hidden="true" /></button>
+                            <button onClick={() => handleDeleteComment(c.id, post.id)} aria-label="Delete comment" style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.alert, display: 'flex', alignItems: 'center', padding: 2 }}><Trash2 size={13} aria-hidden="true" /></button>
                           </div>
                         )}
                       </div>
@@ -1697,7 +1782,7 @@ function Feed() {
                             style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: `1px solid ${theme.tealDeep}`, borderRadius: 8 }}
                           />
                           <button onClick={() => handleEditComment(c.id, post.id, editingComment.content)} style={{ padding: '5px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>Save</button>
-                          <button onClick={() => setEditingComment(null)} style={{ padding: '5px 8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 11 }}>✕</button>
+                          <button onClick={() => setEditingComment(null)} aria-label="Cancel edit" style={{ padding: '5px 8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 8, display: 'flex', alignItems: 'center', cursor: 'pointer' }}><X size={13} aria-hidden="true" /></button>
                         </div>
                       ) : (
                         <p style={{ margin: 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>
@@ -1759,7 +1844,7 @@ function Feed() {
                   <span style={{
                     position: 'absolute', top: 7, right: 8, fontSize: 9,
                     fontWeight: 900, color: theme.tealDeep,
-                  }}>✓</span>
+                  }}><BadgeCheck size={12} aria-hidden="true" /></span>
                 )}
               </button>
             )
@@ -1768,7 +1853,7 @@ function Feed() {
 
         {!canGoLive && (
           <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
-            ✓ Verified only ·{' '}
+            <BadgeCheck size={12} aria-hidden="true" /> Verified only ·{' '}
             <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
               Get verified
             </Link>
@@ -1811,7 +1896,34 @@ function Feed() {
         confirmLabel="Delete"
       />
 
-      <Toast msg={toast.msg} />
+      {/* Report reasons — a closed set, one tap each. */}
+      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
+        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
+          Tell us what's wrong with it. Our moderation team reviews every report — the author isn't told who reported them.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => submitReport(reason)}
+              disabled={!!reportingId}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
+                padding: '11px 14px', borderRadius: theme.radius.md,
+                border: `1px solid ${theme.gray200}`, background: '#fff',
+                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
+                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
+              }}
+            >
+              <Flag size={16} color={theme.gray400} aria-hidden="true" />
+              {reason}
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      <Toast msg={toast.msg} type={toast.type} />
     </div>
   )
 

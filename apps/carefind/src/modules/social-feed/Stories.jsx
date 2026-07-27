@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { CalendarClock, Image as ImageIcon, Radio, Sparkles, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -159,15 +160,15 @@ function Stories() {
     <>
       <style>{`@keyframes cf-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); } 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0); } }`}</style>
       {/* Story row */}
-      <div style={{
-        display: 'flex', gap: 14, overflowX: 'auto', padding: '4px 2px 2px',
+      <div className="cf-hscroll" style={{
+        display: 'flex', gap: 14, padding: '4px 2px 2px',
         marginTop: 16, marginBottom: 4, WebkitOverflowScrolling: 'touch',
       }}>
         {/* LIVE show indicator (first) */}
         {liveShow && (
           <a href={`/live-show/${liveShow.id}`} style={{ flexShrink: 0, textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 70 }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', padding: 3, background: '#dc2626', position: 'relative', animation: 'cf-pulse 1.5s infinite' }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 24, fontWeight: 900 }}>📡</div>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealDeep, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', }}><Radio size={24} aria-hidden="true" /></div>
               <span style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', background: '#dc2626', color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 6px', borderRadius: 8, letterSpacing: '0.05em' }}>LIVE</span>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 800, color: '#dc2626', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Live now</span>
@@ -178,7 +179,7 @@ function Stories() {
         {upcomingShow && (
           <a href={`/live-show/${upcomingShow.id}`} style={{ flexShrink: 0, textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 70 }}>
             <div style={{ width: 64, height: 64, borderRadius: '50%', padding: 3, background: theme.navy, position: 'relative' }}>
-              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealGradient, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 900 }}>⏳</div>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.tealDeep, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', }}><CalendarClock size={23} aria-hidden="true" /></div>
               <span style={{ position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)', background: theme.navy, color: '#fff', fontSize: 8, fontWeight: 900, padding: '1px 5px', borderRadius: 8, whiteSpace: 'nowrap' }}>{countdownLabel(upcomingShow.scheduled_at)}</span>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Upcoming</span>
@@ -213,7 +214,7 @@ function Stories() {
             }}>
               <div style={{
                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                background: s.image_url ? `url(${s.image_url})` : (s.bg_color || theme.tealGradient),
+                background: s.image_url ? `url(${s.image_url})` : (s.bg_color || theme.tealDeep),
                 backgroundSize: 'cover', backgroundPosition: 'center',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 border: '2px solid #fff', color: '#fff', fontSize: 22, fontWeight: 900,
@@ -222,7 +223,8 @@ function Stories() {
               </div>
             </div>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.is_platform ? '⭐ CareFind' : storyLabel(s)}
+              {s.is_platform && <Sparkles size={11} color={theme.warning} aria-hidden="true" style={{ flexShrink: 0 }} />}
+              {storyLabel(s)}
             </span>
           </button>
         ))}
@@ -240,16 +242,17 @@ function Stories() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: stories[viewerIndex].is_platform ? 'linear-gradient(135deg,#f59e0b,#0f766e)' : theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: stories[viewerIndex].is_platform ? theme.warning : theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
               {storyInitial(stories[viewerIndex])}
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>
-                {stories[viewerIndex].is_platform ? '⭐ CareFind' : storyLabel(stories[viewerIndex])}
+                {stories[viewerIndex].is_platform && <Sparkles size={13} color={theme.warning} aria-hidden="true" />}
+                {storyLabel(stories[viewerIndex])}
               </p>
               <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(stories[viewerIndex].created_at)}</p>
             </div>
-            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>✕</button>
+            <button onClick={closeViewer} aria-label="Close story" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} aria-hidden="true" /></button>
           </div>
 
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -283,7 +286,7 @@ function Stories() {
           <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 18, boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Add to your story</h3>
-              <button onClick={() => setComposerOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: theme.textLight }}>✕</button>
+              <button onClick={() => setComposerOpen(false)} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
 
             <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Title (optional)" style={{ width: '100%', padding: 12, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', marginBottom: 8 }} />
@@ -297,11 +300,11 @@ function Stories() {
             </div>
 
             <label style={{ fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', display: 'block', marginBottom: 12 }}>
-              📷 {sImage ? sImage.name : 'Add an image (optional)'}
+              <ImageIcon size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />{sImage ? sImage.name : 'Add an image (optional)'}
               <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
 
-            <button onClick={postStory} disabled={posting} style={{ width: '100%', padding: 13, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>
+            <button onClick={postStory} disabled={posting} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>
               {posting ? 'Posting…' : 'Share to story'}
             </button>
             <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>Your story disappears after 24 hours.</p>
