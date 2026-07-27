@@ -1,5 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
+import {
+  ArrowLeft, BadgeCheck, Check, ChevronRight, Film, Link2, Lock, MapPin,
+  MessageSquare, Repeat2, Star, User, X,
+} from 'lucide-react'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
 import { theme } from './styles/theme'
@@ -11,7 +15,8 @@ import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
-import { Card, ConfirmDialog, Toast, useToast } from './components/ui'
+import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
+import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 
 function PublicProfile() {
   const { id } = useParams()
@@ -225,24 +230,53 @@ function PublicProfile() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: 'system-ui' }}>Loading...</div>
+  // Back to the feed — mobile only; on desktop the shell's nav is always
+  // there, so a back link would be a second way to do the same thing.
+  const backLink = (
+    <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+      <ArrowLeft size={15} aria-hidden="true" /> Feed
+    </Link>
+  )
+
+  // Structured loading, not a bare "Loading..." string — the page's shape is
+  // known ahead of the data (MOTION.md → skeletons for structured content).
+  if (loading) {
+    const loadingContent = (
+      <div style={{ maxWidth: isMobile ? 480 : undefined, margin: '0 auto', padding: isMobile ? '20px 16px 90px' : 0 }} role="status" aria-live="polite">
+        <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Loading profile</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    )
+    if (isMobile) return loadingContent
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+        {loadingContent}
+      </AppShell>
+    )
+  }
 
   if (!profile) {
     const notFoundContent = (
-      <div style={isMobile ? { fontFamily: 'system-ui', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui' }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
         {isMobile && (
-          <div style={{ background: theme.heroGradient, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
-            <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
+          <div style={{ background: theme.navy, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
+            {backLink}
           </div>
         )}
-        <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-          <div style={{ fontSize: 40, marginBottom: 14 }}>👤</div>
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Profile not found</h3>
-          <p style={{ fontSize: 13, color: theme.textLight }}>This user may have deleted their account.</p>
-          <Link to="/" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', background: theme.tealGradient, color: '#fff', borderRadius: 14, textDecoration: 'none', fontWeight: 700, fontSize: 13 }}>
-            Back to Feed
-          </Link>
-        </div>
+        <Empty
+          icon={<User size={44} color={theme.gray300} strokeWidth={1.5} />}
+          message={
+            <>
+              <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>Profile not found</div>
+              <div style={{ fontSize: 13, color: theme.gray500 }}>This account may have been deleted.</div>
+            </>
+          }
+          action="Back to the feed"
+          onAction={() => navigate('/')}
+        />
         {isMobile && <BottomNav />}
       </div>
     )
@@ -259,41 +293,48 @@ function PublicProfile() {
   const displayName = profile.full_name || profile.display_name || 'CareFind User'
   const isOwnProfile = user?.id === id
   const hasStory = userStories.length > 0
+  const avgReviewRating = userReviews.length
+    ? userReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / userReviews.length
+    : 0
 
   // Primary action (Edit Profile / Follow + Subscribe) — identical content,
   // mobile positions it absolutely over the hero; desktop stacks it in the
   // sidebar card instead (LAYOUTS.md: "primary action lives in a fixed,
   // predictable place per template").
+  const pillBtn = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 40, padding: '8px 18px', borderRadius: theme.radius.full,
+    fontSize: 13, fontWeight: 700, fontFamily: theme.fontFamily,
+    textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+  }
+
   const actionButtons = (
     <div style={isMobile ? { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } : { display: 'flex', flexDirection: 'column', gap: 8 }}>
       {isOwnProfile ? (
-        <Link to="/profile" style={{
-          border: `1px solid ${theme.border}`, background: '#fff', color: theme.navy, textAlign: 'center',
-          borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-        }}>
-          Edit Profile
+        <Link to="/profile" style={{ ...pillBtn, border: `1px solid ${theme.gray200}`, background: '#fff', color: theme.navy }}>
+          Edit profile
         </Link>
       ) : user ? (
         <>
-          <button onClick={toggleFollow} style={{
-            background: isFollowing ? '#fff' : theme.tealGradient,
-            color: isFollowing ? theme.navy : '#fff',
-            border: `1px solid ${isFollowing ? theme.border : 'transparent'}`,
-            borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700,
-          }}>
-            {isFollowing ? 'Following' : '+ Follow'}
+          <button
+            onClick={toggleFollow}
+            aria-pressed={isFollowing}
+            style={{
+              ...pillBtn,
+              background: isFollowing ? '#fff' : theme.tealDeep,
+              color: isFollowing ? theme.navy : '#fff',
+              border: `1px solid ${isFollowing ? theme.gray200 : 'transparent'}`,
+            }}
+          >
+            {isFollowing ? <><Check size={15} strokeWidth={2.6} aria-hidden="true" /> Following</> : 'Follow'}
           </button>
 
           {!(profile?.subscription_price > 0) && profile?.is_verified && (
-            <span
-              style={{
-                background: theme.bg, color: theme.textLight, textAlign: 'center',
-                border: `1px solid ${theme.border}`,
-                borderRadius: 20, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                cursor: 'not-allowed', opacity: 0.75,
-              }}
-            >
-              🔒 Not accepting subscriptions
+            <span style={{
+              ...pillBtn, background: theme.bg, color: theme.gray400,
+              border: `1px solid ${theme.gray200}`, fontSize: 12, cursor: 'default',
+            }}>
+              <Lock size={14} aria-hidden="true" /> Not accepting subscriptions
             </span>
           )}
 
@@ -301,37 +342,139 @@ function PublicProfile() {
             subActive ? (
               <button
                 onClick={handleCancelAutoRenew}
-                style={{
-                  background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`,
-                  borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
-                }}
+                style={{ ...pillBtn, background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`, fontSize: 12.5, fontWeight: 800 }}
               >
-                ✓ Subscribed
+                <Check size={15} strokeWidth={2.6} aria-hidden="true" /> Subscribed
               </button>
             ) : (
               <button
                 onClick={() => handleSubscribe(profile.subscription_price)}
                 disabled={subscribing}
-                style={{
-                  background: theme.navy, color: '#fff', border: 'none',
-                  borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
-                }}
+                style={{ ...pillBtn, background: theme.navy, color: '#fff', border: 'none', fontSize: 12.5, fontWeight: 800 }}
               >
-                {subscribing ? '…' : `🔒 Subscribe · ${profile.subscription_price} 🪙/mo`}
+                {subscribing
+                  ? 'Subscribing\u2026'
+                  : <><Lock size={14} aria-hidden="true" /> Subscribe · {profile.subscription_price} CareCoins/mo</>}
               </button>
             )
           )}
         </>
       ) : (
-        <Link to="/login" style={{
-          background: theme.tealGradient, color: '#fff', border: 'none', textAlign: 'center',
-          borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-        }}>
-          + Follow
+        <Link to="/login" style={{ ...pillBtn, background: theme.tealDeep, color: '#fff', border: 'none' }}>
+          Follow
         </Link>
       )}
     </div>
   )
+
+  // The avatar, wearing a teal ring when there's an unexpired story to open.
+  // One definition, two sizes: large over the mobile cover, small in the
+  // desktop sidebar card. It's a real button only when there's something to
+  // open — a click target that does nothing is worse than no target.
+  function StoryAvatar({ size, fontSize, borderWidth = 3, style = {} }) {
+    const ringPad = hasStory ? Math.round(size * 0.045) + 2 : 0
+    const face = (
+      <div style={{
+        width: size - ringPad * 2, height: size - ringPad * 2, borderRadius: '50%',
+        background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+        border: `${borderWidth}px solid #fff`, boxShadow: theme.elevation[2],
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff', fontSize, fontWeight: 800, boxSizing: 'border-box',
+      }}>
+        {!profile?.avatar_url && (displayName[0]?.toUpperCase() || '?')}
+      </div>
+    )
+
+    const ringStyle = {
+      width: size, height: size, borderRadius: '50%', padding: ringPad,
+      background: hasStory ? theme.tealDeep : 'transparent',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      border: 'none', boxSizing: 'border-box', ...style,
+    }
+
+    if (!hasStory) return <div style={ringStyle}>{face}</div>
+
+    return (
+      <button
+        type="button"
+        onClick={() => setViewerIndex(0)}
+        aria-label={`View ${displayName}'s story`}
+        style={{ ...ringStyle, cursor: 'pointer' }}
+      >
+        {face}
+      </button>
+    )
+  }
+
+  // Name, handle, credential, bio, links and the stat row — identical content
+  // in the desktop sidebar card and the mobile hero, so it's built once.
+  // `scale` only nudges type sizes: mobile has the full column width, the
+  // desktop sidebar is 300px.
+  function identityBlock(scale = 'sidebar') {
+    const big = scale === 'hero'
+    return (
+      <>
+        <h1 style={{ fontSize: big ? 20 : 17, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
+        {profile.display_name && (
+          <p style={{ margin: '0 0 6px 0', fontSize: big ? 13 : 12.5, color: theme.gray400, fontWeight: 600 }}>@{profile.display_name}</p>
+        )}
+        {profile.is_verified && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
+            fontSize: big ? 11 : 10.5, fontWeight: 800, color: theme.tealDeep,
+            background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
+          }}>
+            {/* The stored label usually already reads "Verified Doctor" —
+                prefixing it printed "Verified Verified Doctor". */}
+            <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || 'Verified'}
+          </span>
+        )}
+        {profile.bio && (
+          <p style={{ margin: big ? '10px 0 0 0' : '6px 0 0 0', fontSize: big ? 13.5 : 13, color: theme.textMid, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+            {profile.bio}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: big ? 'row' : 'column', flexWrap: 'wrap', gap: big ? 12 : 5, marginTop: 10, marginBottom: 12 }}>
+          {profile.location && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: theme.gray500 }}>
+              <MapPin size={13} aria-hidden="true" /> {profile.location}
+            </span>
+          )}
+          {profile.website && (
+            <a href={profile.website} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>
+              <Link2 size={13} aria-hidden="true" /> {profile.website}
+            </a>
+          )}
+        </div>
+
+        <div style={{
+          display: 'flex', gap: big ? 20 : 16, marginBottom: big ? 16 : 14,
+          borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`,
+          padding: big ? '12px 0' : '10px 0',
+        }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{postCount}</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Posts</p>
+          </div>
+          <div>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followerCount}</p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Followers</p>
+          </div>
+          <button
+            onClick={() => setActiveTab('reviews')}
+            style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
+          >
+            <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>
+              {avgReviewRating ? avgReviewRating.toFixed(1) : '\u2014'}
+              <Star size={big ? 13 : 12} color={theme.warning} fill={theme.warning} aria-hidden="true" />
+            </p>
+            <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
+          </button>
+        </div>
+      </>
+    )
+  }
 
   // Desktop only: the whole hero (cover, avatar, name, bio, stats, primary
   // action) becomes one persistent sidebar card, since the main column below
@@ -340,63 +483,10 @@ function PublicProfile() {
   const sidebarContent = (
     <StickySidebar width={300}>
       <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ height: 80, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.heroGradient }} />
+        <div style={{ height: 80, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.navy }} />
         <div style={{ padding: '0 16px 16px 16px' }}>
-          <div
-            onClick={() => { if (hasStory) setViewerIndex(0) }}
-            style={{
-              width: 68, height: 68, borderRadius: '50%', padding: hasStory ? 3 : 0, marginTop: -34,
-              background: hasStory ? `linear-gradient(135deg, ${theme.tealBright}, ${theme.tealDeep})` : 'transparent',
-              cursor: hasStory ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10,
-            }}
-          >
-            <div style={{
-              width: 62, height: 62, borderRadius: '50%',
-              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealGradient,
-              border: '3px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 22, fontWeight: 800, boxSizing: 'border-box',
-            }}>
-              {!profile?.avatar_url && (displayName[0]?.toUpperCase() || '?')}
-            </div>
-          </div>
-
-          <h1 style={{ fontSize: 17, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
-          {profile.display_name && <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: theme.textLight }}>@{profile.display_name}</p>}
-          {profile.is_verified && (
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 10px', borderRadius: 20, border: `1px solid ${theme.tealBright}`, display: 'inline-block', marginBottom: 8 }}>
-              ✓ Verified {profile.verification_label}
-            </span>
-          )}
-          {profile.bio && (
-            <p style={{ margin: '6px 0 0 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-              {profile.bio}
-            </p>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10, marginBottom: 12 }}>
-            {profile.location && <span style={{ fontSize: 12, color: theme.textLight }}>📍 {profile.location}</span>}
-            {profile.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: theme.tealDeep, textDecoration: 'none' }}>🔗 {profile.website}</a>}
-          </div>
-
-          <div style={{ display: 'flex', gap: 16, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '10px 0', marginBottom: 14 }}>
-            <div>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>{postCount}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>Posts</p>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>{followerCount}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>Followers</p>
-            </div>
-            <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
-              <p style={{ margin: 0, fontWeight: 900, fontSize: 15, color: theme.navy }}>
-                {userReviews.length ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / userReviews.length).toFixed(1) : '—'}
-                <span style={{ color: theme.warning, fontSize: 12 }}> ★</span>
-              </p>
-              <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
-            </button>
-          </div>
-
+          <StoryAvatar size={68} fontSize={22} borderWidth={3} style={{ marginTop: -34, marginBottom: 10 }} />
+          {identityBlock('sidebar')}
           {actionButtons}
         </div>
       </Card>
@@ -404,153 +494,46 @@ function PublicProfile() {
   )
 
   const bodyContent = (
-    <div style={isMobile ? { fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
       {isMobile && (
-      <div style={{ position: 'relative', marginBottom: 55 }}>
-        <div style={{ height: 110, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.heroGradient, position: 'relative' }}>
-          <Link to="/" style={{ position: 'absolute', top: 16, left: 16, color: 'rgba(255,255,255,0.8)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
-        </div>
-        <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
-          {/* Avatar with optional story ring */}
-          <div
-            onClick={() => { if (hasStory) setViewerIndex(0) }}
-            style={{
-              width: 94, height: 94, borderRadius: '50%', padding: hasStory ? 4 : 0,
-              background: hasStory ? `linear-gradient(135deg, ${theme.tealBright}, ${theme.tealDeep})` : 'transparent',
-              cursor: hasStory ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <div style={{
-              width: 86, height: 86, borderRadius: '50%',
-              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealGradient,
-              border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 28, fontWeight: 800, boxSizing: 'border-box',
-            }}>
-              {!profile?.avatar_url && (displayName[0]?.toUpperCase() || '?')}
-            </div>
+        <div style={{ position: 'relative', marginBottom: 58 }}>
+          <div style={{ height: 110, background: profile?.cover_url ? `url(${profile.cover_url}) center/cover` : theme.navy, position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 16, left: 16 }}>{backLink}</div>
           </div>
-          {hasStory && (
-            <span style={{ display: 'block', textAlign: 'center', fontSize: 10, fontWeight: 800, color: theme.tealDeep, marginTop: 2 }}>
-              Tap to view story
-            </span>
-          )}
+          <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
+            <StoryAvatar size={94} fontSize={28} borderWidth={4} />
+            {hasStory && (
+              <span style={{ display: 'block', textAlign: 'center', fontSize: 10, fontWeight: 800, color: theme.tealDeep, marginTop: 2 }}>
+                Tap to view story
+              </span>
+            )}
+          </div>
+          <div style={{ position: 'absolute', bottom: -44, right: 16 }}>
+            {actionButtons}
+          </div>
         </div>
-        <div style={{ position: 'absolute', bottom: -40, right: 16 }}>
-          {isOwnProfile ? (
-            <Link to="/profile" style={{
-              border: `1px solid ${theme.border}`, background: '#fff', color: theme.navy,
-              borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-            }}>
-              Edit Profile
-            </Link>
-          ) : user ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button onClick={toggleFollow} style={{
-                background: isFollowing ? '#fff' : theme.tealGradient,
-                color: isFollowing ? theme.navy : '#fff',
-                border: `1px solid ${isFollowing ? theme.border : 'transparent'}`,
-                borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700,
-              }}>
-                {isFollowing ? 'Following' : '+ Follow'}
-              </button>
-
-              {!(profile?.subscription_price > 0) && profile?.is_verified && (
-                <span
-                  style={{
-                    background: theme.bg, color: theme.textLight,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 20, padding: '7px 14px', fontSize: 12, fontWeight: 700,
-                    cursor: 'not-allowed', opacity: 0.75,
-                  }}
-                >
-                  🔒 Not accepting subscriptions
-                </span>
-              )}
-
-              {profile?.subscription_price > 0 && (
-                subActive ? (
-                  <button
-                    onClick={handleCancelAutoRenew}
-                    style={{
-                      background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`,
-                      borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
-                    }}
-                  >
-                    ✓ Subscribed
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSubscribe(profile.subscription_price)}
-                    disabled={subscribing}
-                    style={{
-                      background: theme.navy, color: '#fff', border: 'none',
-                      borderRadius: 20, padding: '7px 14px', fontSize: 12.5, fontWeight: 800,
-                    }}
-                  >
-                    {subscribing ? '…' : `🔒 Subscribe · ${profile.subscription_price} 🪙/mo`}
-                  </button>
-                )
-              )}
-            </div>
-          ) : (
-            <Link to="/login" style={{
-              background: theme.tealGradient, color: '#fff', border: 'none',
-              borderRadius: 20, padding: '7px 18px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-            }}>
-              + Follow
-            </Link>
-          )}
-        </div>
-      </div>
       )}
 
       <div style={isMobile ? { padding: '0 16px 16px 16px' } : {}}>
-        {isMobile && (
-        <>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
-        {profile.display_name && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textLight }}>@{profile.display_name}</p>}
-        {profile.is_verified && (
-          <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '2px 10px', borderRadius: 20, border: `1px solid ${theme.tealBright}`, display: 'inline-block', marginBottom: 8 }}>
-            ✓ Verified {profile.verification_label}
-          </span>
-        )}
-        {profile.bio && (
-          <p style={{ margin: '10px 0 0 0', fontSize: 13.5, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-            {profile.bio}
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, marginTop: 8 }}>
-          {profile.location && <span style={{ fontSize: 12.5, color: theme.textLight }}>📍 {profile.location}</span>}
-          {profile.website && <a href={profile.website} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: theme.tealDeep, textDecoration: 'none' }}>🔗 {profile.website}</a>}
-        </div>
-
-        <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
-          <div>
-            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{postCount}</p>
-            <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Posts</p>
-          </div>
-          <div>
-            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followerCount}</p>
-            <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Followers</p>
-          </div>
-          <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
-            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>
-              {userReviews.length ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / userReviews.length).toFixed(1) : '—'}
-              <span style={{ color: theme.warning, fontSize: 13 }}> ★</span>
-            </p>
-            <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>{userReviews.length} review{userReviews.length !== 1 ? 's' : ''}</p>
-          </button>
-        </div>
-        </>
-        )}
+        {isMobile && identityBlock('hero')}
 
         {/* Content tabs */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${theme.border}`, marginBottom: 12, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {[['posts', '📝 Posts'], ['reposts', '🔁 Reposts'], ['playlists', '🎬 Playlists'], ['reviews', '⭐ Reviews']].map(([key, label]) => (
-            <button key={key} onClick={() => setActiveTab(key)} style={{ flexShrink: 0, whiteSpace: 'nowrap', padding: '10px 12px', background: 'none', border: 'none', borderBottom: activeTab === key ? `2px solid ${theme.tealDeep}` : '2px solid transparent', color: activeTab === key ? theme.navy : theme.textLight, fontWeight: 800, fontSize: 12.5, cursor: 'pointer' }}>
-              {label}
+        <div role="group" aria-label="Profile sections" className="cf-hscroll" style={{ display: 'flex', borderBottom: `1px solid ${theme.gray200}`, marginBottom: 14, WebkitOverflowScrolling: 'touch' }}>
+          {[['posts', 'Posts', MessageSquare], ['reposts', 'Reposts', Repeat2], ['playlists', 'Playlists', Film], ['reviews', 'Reviews', Star]].map(([key, label, Icon]) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              aria-pressed={activeTab === key}
+              style={{
+                flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6,
+                whiteSpace: 'nowrap', minHeight: 44, padding: '10px 14px',
+                background: 'none', border: 'none', fontFamily: theme.fontFamily,
+                borderBottom: activeTab === key ? `2.5px solid ${theme.tealDeep}` : '2.5px solid transparent',
+                color: activeTab === key ? theme.tealDeep : theme.gray500,
+                fontWeight: activeTab === key ? 800 : 600, fontSize: 13, cursor: 'pointer',
+              }}
+            >
+              <Icon size={15} aria-hidden="true" /> {label}
             </button>
           ))}
         </div>
@@ -558,15 +541,17 @@ function PublicProfile() {
         {/* Playlists tab */}
         {activeTab === 'playlists' && (
           playlists.length === 0
-            ? <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '20px 0' }}>No playlists yet.</p>
+            ? <Empty icon={<Film size={40} color={theme.gray300} strokeWidth={1.5} />} message="No playlists yet." />
             : playlists.map(pl => (
                 <Link key={pl.id} to={`/playlist/${pl.id}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 12, marginBottom: 8, textDecoration: 'none' }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 10, background: theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>🎬</div>
+                  <div style={{ width: 44, height: 44, borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Film size={21} aria-hidden="true" />
+                  </div>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pl.title}</p>
                     {pl.description && <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pl.description}</p>}
                   </div>
-                  <span style={{ color: theme.textLight }}>›</span>
+                  <ChevronRight size={18} color={theme.gray400} aria-hidden="true" style={{ flexShrink: 0 }} />
                 </Link>
               ))
         )}
@@ -574,7 +559,7 @@ function PublicProfile() {
         {/* Reviews tab — this person's aggregated review profile */}
         {activeTab === 'reviews' && (() => {
           const total = userReviews.length
-          const avg = total ? (userReviews.reduce((s, r) => s + (r.rating || 0), 0) / total) : 0
+          const avg = avgReviewRating
           const breakdown = [5, 4, 3, 2, 1].map((n) => ({
             star: n,
             count: userReviews.filter((r) => r.rating === n).length,
@@ -587,14 +572,15 @@ function PublicProfile() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <span style={{ fontSize: 28, fontWeight: 900, color: theme.navy }}>{avg.toFixed(1)}</span>
                     <div>
-                      <p style={{ margin: 0, color: theme.warning, fontSize: 14 }}>{'★'.repeat(Math.round(avg))}{'☆'.repeat(5 - Math.round(avg))}</p>
+                      <Stars value={avg} size={15} />
                       <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{total} review{total !== 1 ? 's' : ''}</p>
                     </div>
                   </div>
                   {breakdown.map((b) => (
                     <div key={b.star} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                      <span style={{ fontSize: 11.5, color: theme.textMid, width: 12 }}>{b.star}</span>
-                      <span style={{ fontSize: 11, color: theme.warning }}>★</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11.5, color: theme.textMid, width: 26 }}>
+                        {b.star}<Star size={11} color={theme.warning} fill={theme.warning} aria-hidden="true" />
+                      </span>
                       <div style={{ flex: 1, height: 6, background: theme.bg, borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ width: `${b.pct}%`, height: '100%', background: b.star >= 4 ? theme.success : b.star === 3 ? theme.warning : theme.alert, borderRadius: 4 }} />
                       </div>
@@ -607,10 +593,8 @@ function PublicProfile() {
               {user && user.id !== id && (
                 <form onSubmit={submitUserReview} style={{ border: `1px dashed ${theme.border}`, borderRadius: 14, padding: 14, marginBottom: 14 }}>
                   <p style={{ margin: '0 0 8px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Leave a review</p>
-                  <div style={{ marginBottom: 8 }}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button type="button" key={n} onClick={() => setMyRating(n)} style={{ background: 'none', border: 'none', fontSize: 22, color: n <= myRating ? theme.warning : '#ddd', padding: 0 }}>★</button>
-                    ))}
+                  <div style={{ marginBottom: 10 }}>
+                    <StarPicker value={myRating} onChange={setMyRating} />
                   </div>
                   <textarea
                     value={myComment}
@@ -619,13 +603,15 @@ function PublicProfile() {
                     rows={3}
                     style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'none' }}
                   />
-                  <button type="submit" disabled={postingReview} style={{ marginTop: 10, width: '100%', padding: 11, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
+                  <button type="submit" disabled={postingReview} style={{ marginTop: 10, width: '100%', padding: 11, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
                     {postingReview ? 'Posting…' : 'Post Review'}
                   </button>
                 </form>
               )}
 
-              {total === 0 && <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '20px 0' }}>No reviews yet.</p>}
+              {total === 0 && (
+                <Empty icon={<Star size={40} color={theme.gray300} strokeWidth={1.5} />} message="No reviews yet." />
+              )}
 
               {userReviews.map((r) => {
                 const who = reviewers[r.user_id]
@@ -634,9 +620,10 @@ function PublicProfile() {
                   <div key={r.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 13, background: theme.cardBg, marginBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
-                        {whoName}{who?.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}
+                        {whoName}
+                        {who?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
                       </Link>
-                      <span style={{ color: theme.warning, fontSize: 13 }}>{'★'.repeat(r.rating || 0)}{'☆'.repeat(5 - (r.rating || 0))}</span>
+                      <Stars value={r.rating || 0} size={13} />
                     </div>
                     {r.comment && <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.5 }}>{r.comment}</p>}
                     <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>{new Date(r.created_at).toLocaleDateString()}</p>
@@ -649,30 +636,18 @@ function PublicProfile() {
 
         {/* Posts / Reposts grid */}
         {activeTab !== 'playlists' && activeTab !== 'reviews' && (() => {
-          const list = activeTab === 'reposts'
-            ? posts.filter(p => (p.content || '').startsWith('🔁'))
-            : posts.filter(p => !(p.content || '').startsWith('🔁'))
-          if (list.length === 0) return <p style={{ textAlign: 'center', fontSize: 13, color: theme.textLight, padding: '24px 0' }}>Nothing here yet.</p>
-          const typeIcon = { question: '❓', review: '⭐', article: '📄', premium: '💎', visual: '🎨' }
-          return (
-            <div style={isMobile ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
-              {list.map(post => (
-                <button key={post.id} onClick={() => setOpenPost(post)} style={{ textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden', background: theme.cardBg, height: 150, display: 'flex', flexDirection: 'column' }}>
-                    {post.image_url ? (
-                      <div style={{ height: 80, background: `url(${post.image_url}) center/cover` }} />
-                    ) : (
-                      <div style={{ height: 80, background: post.post_type === 'visual' ? (visualThemes[post.theme] || visualThemes.teal) : theme.heroGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>{typeIcon[post.post_type] || '💬'}</div>
-                    )}
-                    <div style={{ padding: '8px 10px', flex: 1, overflow: 'hidden' }}>
-                      {post.post_type && post.post_type !== 'text' && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{typeIcon[post.post_type]} {post.post_type}</span>}
-                      <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.navy, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{previewText((post.content || '').replace(/^🔁\s*/, ''))}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )
+          const list = activeTab === 'reposts' ? posts.filter(isRepost) : posts.filter((p) => !isRepost(p))
+          if (list.length === 0) {
+            return (
+              <Empty
+                icon={activeTab === 'reposts'
+                  ? <Repeat2 size={40} color={theme.gray300} strokeWidth={1.5} />
+                  : <MessageSquare size={40} color={theme.gray300} strokeWidth={1.5} />}
+                message={activeTab === 'reposts' ? 'No reposts yet.' : 'No posts yet.'}
+              />
+            )
+          }
+          return <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
         })()}
       </div>
 
@@ -681,7 +656,7 @@ function PublicProfile() {
         <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} style={{ background: 'none', border: 'none', fontSize: 22, color: theme.textLight }}>✕</button>
+              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
             {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
             {openPost.post_type === 'visual' && !openPost.image_url && (
@@ -689,7 +664,7 @@ function PublicProfile() {
                 <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
               </div>
             )}
-            {openPost.post_type !== 'visual' && <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText((openPost.content || '').replace(/^🔁\s*/, '')))}</p>}
+            {openPost.post_type !== 'visual' && <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText(withoutRepostMark(openPost.content)))}</p>}
             <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
           </div>
         </div>
@@ -707,14 +682,14 @@ function PublicProfile() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
               {displayName[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{displayName}</p>
               <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(userStories[viewerIndex].created_at)}</p>
             </div>
-            <button onClick={closeViewer} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 26, lineHeight: 1, padding: '0 6px' }}>✕</button>
+            <button onClick={closeViewer} aria-label="Close story" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} aria-hidden="true" /></button>
           </div>
 
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
