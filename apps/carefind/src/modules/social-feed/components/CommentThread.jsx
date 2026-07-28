@@ -47,8 +47,10 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
     try {
       await commentRepository.updateComment(commentId, user.id, newContent.trim())
       setEditingComment(null)
-const fresh = await commentRepository.getComments(postId)
+      const fresh = await commentRepository.getComments(postId)
       onCommentsChange(fresh)
+    } catch (e) {
+      notify('Could not save edit — comment may have been removed', { type: 'error' })
     } finally {
       setIsLoading(false)
     }
@@ -61,6 +63,8 @@ const fresh = await commentRepository.getComments(postId)
       onCommentsChange(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId))
     } finally {
       setIsLoading(false)
+    }
+  })
 
   const allComments = Array.isArray(comments) ? comments : []
   const topLevel = allComments.filter(c => !c.parent_id)
