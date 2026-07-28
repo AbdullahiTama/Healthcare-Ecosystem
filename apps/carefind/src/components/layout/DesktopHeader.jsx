@@ -36,20 +36,22 @@ export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs
           <Logo size={28} tone="dark" />
         </Link>
 
-        <Link
-          to="/search"
-          style={{
-            flex: 1, maxWidth: 520, display: 'flex', alignItems: 'center', gap: 9,
-            minHeight: 40, padding: '0 14px', borderRadius: theme.radius.md,
-            background: theme.gray50, border: `1px solid ${theme.gray200}`,
-            color: theme.gray400, fontSize: 13, textDecoration: 'none',
-          }}
-        >
-          <Search size={16} aria-hidden="true" />
-          Search medication, facility, doctor…
-        </Link>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <Link
+            to="/search"
+            style={{
+              width: '100%', maxWidth: 520, display: 'flex', alignItems: 'center', gap: 9,
+              minHeight: 40, padding: '0 14px', borderRadius: theme.radius.md,
+              background: theme.gray50, border: `1px solid ${theme.gray200}`,
+              color: theme.gray400, fontSize: 13, textDecoration: 'none',
+            }}
+          >
+            <Search size={16} aria-hidden="true" />
+            Search medication, facility, doctor…
+          </Link>
+        </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Link
             to="/notifications"
             aria-label="Notifications"
