@@ -19,15 +19,15 @@ const FEATURES = [
 ]
 
 const STEPS = [
-  { title: 'Search', desc: 'Find the medicine, pharmacy, hospital or lab you need near you. Browse verified listings with detailed profiles.', image: 'https://picsum.photos/seed/healthcare-search/800/600' },
-  { title: 'Compare', desc: 'Read reviews from real patients, check ratings, and compare options side by side before making a decision.', image: 'https://picsum.photos/seed/healthcare-compare/800/600' },
-  { title: 'Connect', desc: 'Message the provider on WhatsApp or visit them in person. Same-day care is just a few taps away.', image: 'https://picsum.photos/seed/healthcare-connect/800/600' },
+  { title: 'Search', desc: 'Find the medicine, pharmacy, hospital or lab you need near you. Browse verified listings with detailed profiles.', image: 'https://picsum.photos/seed/carefind-pharmacy/800/600' },
+  { title: 'Compare', desc: 'Read reviews from real patients, check ratings, and compare options side by side before making a decision.', image: 'https://picsum.photos/seed/carefind-doctor/800/600' },
+  { title: 'Connect', desc: 'Message the provider on WhatsApp or visit them in person. Same-day care is just a few taps away.', image: 'https://picsum.photos/seed/carefind-clinic/800/600' },
 ]
 
 const TESTIMONIALS = [
-  { quote: 'I found a pharmacy that had my medication in stock within minutes. This app saved me hours of calling around.', name: 'Sarah K.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait1/100/100' },
-  { quote: 'Being able to see real reviews from verified patients made choosing a doctor so much easier. I finally trust my healthcare decisions.', name: 'James M.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait2/100/100' },
-  { quote: 'The WhatsApp connection feature is brilliant. I messaged a clinic directly and had an appointment scheduled in under a minute.', name: 'Amara O.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait3/100/100' },
+  { quote: 'I found a pharmacy that had my medication in stock within minutes. This app saved me hours of calling around.', name: 'Sarah K.', role: 'Patient', avatar: 'https://picsum.photos/seed/carefind-patient-a/100/100' },
+  { quote: 'Being able to see real reviews from verified patients made choosing a doctor so much easier. I finally trust my healthcare decisions.', name: 'James M.', role: 'Patient', avatar: 'https://picsum.photos/seed/carefind-patient-b/100/100' },
+  { quote: 'The WhatsApp connection feature is brilliant. I messaged a clinic directly and had an appointment scheduled in under a minute.', name: 'Amara O.', role: 'Patient', avatar: 'https://picsum.photos/seed/carefind-patient-c/100/100' },
 ]
 
 const PARTNERS = ['Lagos State Hospital', 'MedPlus Pharmacy', 'Reddington Hospital', 'HealthPlus', 'ecare Africa', 'ClinicPlus']
@@ -197,12 +197,12 @@ export default function ForBusiness() {
 
       {/* ── Hero ──────────────────────────────────────────────── */}
       <div ref={heroRef} style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <div className="hero-image" style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://picsum.photos/seed/healthcare-hero/1920/1080)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(0.3) contrast(1.1)' }} />
+        <div className="hero-image" style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://picsum.photos/seed/carefind-hero/1920/1080)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(0.25) saturate(0.8) contrast(1.15)', transform: 'scale(1.05)' }} />
         <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at center, rgba(11,74,62,0.3) 0%, rgba(11,74,62,0.75) 60%, ${navy} 100%)` }} />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '120px 24px 80px', maxWidth: 900, margin: '0 auto' }}>
           <h1 className="hero-fade" style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(2.8rem, 6vw, 5rem)', lineHeight: 1.08, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 10px' }}>
             Find the care you{' '}
-            <span style={{ display: 'inline-block', width: 64, height: 48, borderRadius: 24, verticalAlign: 'middle', margin: '0 4px', backgroundImage: 'url(https://picsum.photos/seed/care-emblem/200/200)', backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid rgba(255,255,255,0.3)' }} />
+            <span style={{ display: 'inline-block', width: 64, height: 48, borderRadius: 24, verticalAlign: 'middle', margin: '0 4px', backgroundImage: 'url(https://picsum.photos/seed/carefind-emblem/200/200)', backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid rgba(255,255,255,0.3)', filter: 'saturate(0.9) contrast(1.1)' }} />
             {' '}need, right where you are.
           </h1>
           <p className="hero-fade" style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', maxWidth: 600, margin: '0 auto 36px', lineHeight: 1.7, fontWeight: 400 }}>
