@@ -87,6 +87,7 @@ export default function ForBusiness() {
   const testimonialsRef = useRef(null)
   const ctaRef = useRef(null)
   const [activeStep, setActiveStep] = useState(0)
+  const [navScrolled, setNavScrolled] = useState(false)
   const [testimonialIndex, setTestimonialIndex] = useState(0)
 
   useEffect(() => {
@@ -127,6 +128,7 @@ export default function ForBusiness() {
       ScrollTrigger.create({
         trigger: document.body, start: 'top -80',
         onToggle: ({ isActive }) => {
+          setNavScrolled(isActive)
           gsap.to('.landing-nav', {
             background: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.08)',
             backdropFilter: isActive ? 'blur(16px)' : 'blur(0px)',
@@ -184,7 +186,7 @@ export default function ForBusiness() {
         transition: 'background 0.3s ease',
       }}>
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
-          <Logo size={24} tone={isMobile ? 'dark' : 'light'} />
+          <Logo size={24} tone={isMobile || navScrolled ? 'dark' : 'light'} />
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!isMobile && (

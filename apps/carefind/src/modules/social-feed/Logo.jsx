@@ -45,7 +45,7 @@ function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
   if (markOnly) return <div style={style}>{mark}</div>
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.35, ...style }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.35, textDecoration: 'none', ...style }}>
       {mark}
       <span
         style={{

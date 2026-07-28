@@ -847,13 +847,19 @@ function Feed() {
         }}>
           {/* App bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
-            <div style={{ marginRight: 'auto' }}><Logo size={30} /></div>
-
-            <Link to="/search" style={{
-              width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
-              textDecoration: 'none', color: '#fff',
-            }}><SearchIcon size={18} aria-hidden="true" /></Link>
+            <Logo size={30} />
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+              <div style={{ position: 'relative', width: '100%', maxWidth: 280 }}>
+                <SearchIcon size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }} />
+                <input
+                  placeholder="Search providers, pharmacies…"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { navigate(`/search?q=${encodeURIComponent(e.target.value.trim())}`) } }}
+                  style={{
+                    width: '100%', padding: '8px 12px 8px 32px', borderRadius: 20, border: 'none',
+                    background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, outline: 'none',
+                  }} />
+              </div>
+            </div>
 
             <Link to="/notifications" style={{
               width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
