@@ -133,6 +133,15 @@ export default function ForBusiness() {
             borderBottom: isActive ? `1px solid ${border}` : '1px solid transparent',
             duration: 0.3,
           })
+          gsap.to('.nav-link', {
+            color: isActive ? navy : '#fff',
+            duration: 0.3,
+          })
+          gsap.to('.nav-signin', {
+            color: isActive ? navy : '#fff',
+            borderColor: isActive ? border : 'rgba(255,255,255,0.3)',
+            duration: 0.3,
+          })
         },
       })
 
@@ -180,13 +189,13 @@ export default function ForBusiness() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!isMobile && (
             <>
-              <a href="#features" className="hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+              <a href="#features" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>Features</a>
-              <a href="#how-it-works" className="hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+              <a href="#how-it-works" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>How it works</a>
             </>
           )}
-          <button onClick={() => navigate('/login')} className="hero-fade" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <button onClick={() => navigate('/login')} className="nav-signin hero-fade" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             Sign in
           </button>
           <button onClick={() => navigate('/search')} className="hero-fade" style={{ padding: '8px 18px', borderRadius: 40, border: 'none', background: '#fff', color: navy, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
