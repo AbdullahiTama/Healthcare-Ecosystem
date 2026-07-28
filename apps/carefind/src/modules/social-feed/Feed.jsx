@@ -851,13 +851,14 @@ function Feed() {
 
             <Link to="/search" style={{
               width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15, textDecoration: 'none',
+              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
+              textDecoration: 'none', color: '#fff',
             }}><SearchIcon size={18} aria-hidden="true" /></Link>
 
             <Link to="/notifications" style={{
               width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
               justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
-              textDecoration: 'none', position: 'relative',
+              textDecoration: 'none', color: '#fff', position: 'relative',
             }}>
               <Bell size={18} aria-hidden="true" />
               {unreadNotifs > 0 && (
