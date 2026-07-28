@@ -1,40 +1,77 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Activity, ArrowRight, MessageCircle, Search, Shield, Star, Users } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Heart, MessageCircle, Search, Shield, Star, Users } from 'lucide-react'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Logo from '../social-feed/Logo.jsx'
 
-const { tealDeep, tealMist, fontDisplay, bg, navy, textMid, textLight, border } = theme
+gsap.registerPlugin(ScrollTrigger)
+
+const { tealDeep, tealBright, navy, navySoft, bg, cardBg, border, textDark, textMid, textLight } = theme
 
 const FEATURES = [
-  [Search, 'Find care near you', 'Search medicines, pharmacies, hospitals and labs in your area. Real listings, real locations.'],
-  [Star, 'Real patient reviews', 'See what actual patients say before you book. Every review comes from a verified visit.'],
-  [MessageCircle, 'Connect on WhatsApp', 'Message providers directly. No extra app, no phone tag, just tap and talk.'],
-  [Shield, 'Verified providers', 'Every business on CareFind is verified. Your health deserves nothing less.'],
+  { icon: Search, title: 'Find care near you', desc: 'Search medicines, pharmacies, hospitals and labs in your area. Real listings, real locations.', color: '#0E6F5A' },
+  { icon: Star, title: 'Real patient reviews', desc: 'See what actual patients say before you book. Every review comes from a verified visit.', color: '#1A8A72' },
+  { icon: MessageCircle, title: 'Connect on WhatsApp', desc: 'Message providers directly. No extra app, no phone tag, just tap and talk.', color: '#155A4B' },
+  { icon: Shield, title: 'Verified providers', desc: 'Every business on CareFind is verified. Your health deserves nothing less.', color: '#0B4A3E' },
 ]
 
 const STEPS = [
-  ['1', 'Search', 'Find the medicine, pharmacy, hospital or lab you need near you.'],
-  ['2', 'Compare', 'Read reviews, check ratings, compare options side by side.'],
-  ['3', 'Connect', 'Message the provider on WhatsApp or visit them to get the care you need.'],
+  { title: 'Search', desc: 'Find the medicine, pharmacy, hospital or lab you need near you. Browse verified listings with detailed profiles.', image: 'https://picsum.photos/seed/healthcare-search/800/600' },
+  { title: 'Compare', desc: 'Read reviews from real patients, check ratings, and compare options side by side before making a decision.', image: 'https://picsum.photos/seed/healthcare-compare/800/600' },
+  { title: 'Connect', desc: 'Message the provider on WhatsApp or visit them in person. Same-day care is just a few taps away.', image: 'https://picsum.photos/seed/healthcare-connect/800/600' },
 ]
 
-function Eyebrow({ children }) {
+const TESTIMONIALS = [
+  { quote: 'I found a pharmacy that had my medication in stock within minutes. This app saved me hours of calling around.', name: 'Sarah K.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait1/100/100' },
+  { quote: 'Being able to see real reviews from verified patients made choosing a doctor so much easier. I finally trust my healthcare decisions.', name: 'James M.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait2/100/100' },
+  { quote: 'The WhatsApp connection feature is brilliant. I messaged a clinic directly and had an appointment scheduled in under a minute.', name: 'Amara O.', role: 'Patient', avatar: 'https://picsum.photos/seed/portrait3/100/100' },
+]
+
+const PARTNERS = ['Lagos State Hospital', 'MedPlus Pharmacy', 'Reddington Hospital', 'HealthPlus', 'ecare Africa', 'ClinicPlus']
+
+function FeatureCard({ icon: Icon, title, desc, color, index }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: tealDeep, marginBottom: 10 }}>
-      {children}
+    <div className="feature-card" data-index={index} style={{
+      background: cardBg, borderRadius: theme.radius.xl, padding: 28, border: `1px solid ${border}`,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{ width: 44, height: 44, borderRadius: 14, background: `${color}15`, color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 16 }}>
+        <Icon size={22} aria-hidden="true" />
+      </div>
+      <div style={{ fontWeight: 800, fontSize: 15, color: textDark, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 13, color: textMid, lineHeight: 1.65, flex: 1 }}>{desc}</div>
     </div>
   )
 }
 
-function NavLink({ href, children }) {
-  return <a href={href} style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>{children}</a>
-}
-
-function IconTile({ Icon, size = 36 }) {
+function StepPanel({ step, index, active, onHover }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.32, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <Icon size={size * 0.48} aria-hidden="true" />
+    <div
+      className="step-panel"
+      data-index={index}
+      onMouseEnter={() => onHover(index)}
+      style={{
+        flex: active ? 3 : 1, minWidth: 0,
+        borderRadius: theme.radius.xl, overflow: 'hidden',
+        background: `linear-gradient(135deg, ${navy} 0%, ${navySoft} 100%)`,
+        cursor: 'pointer', transition: 'flex 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+        position: 'relative', display: 'flex', alignItems: 'flex-end',
+        minHeight: 320,
+      }}
+    >
+      <div style={{
+        position: 'absolute', inset: 0, opacity: 0.3,
+        backgroundImage: `url(${step.image})`, backgroundSize: 'cover', backgroundPosition: 'center',
+      }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(11,74,62,0.95) 0%, rgba(11,74,62,0.3) 60%, rgba(11,74,62,0.1) 100%)' }} />
+      <div style={{ position: 'relative', zIndex: 1, padding: 24, width: '100%' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 800, marginBottom: 10 }}>{index + 1}</div>
+        <div style={{ fontWeight: 800, fontSize: active ? 18 : 15, color: '#fff', marginBottom: active ? 8 : 0, transition: 'all 0.4s ease' }}>{step.title}</div>
+        {active && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, maxWidth: 360 }}>{step.desc}</div>}
+      </div>
     </div>
   )
 }
@@ -42,110 +79,267 @@ function IconTile({ Icon, size = 36 }) {
 export default function ForBusiness() {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
+  const sectionRef = useRef(null)
+  const heroRef = useRef(null)
+  const featuresRef = useRef(null)
+  const stepsRef = useRef(null)
+  const marqueeRef = useRef(null)
+  const testimonialsRef = useRef(null)
+  const ctaRef = useRef(null)
+  const [activeStep, setActiveStep] = useState(0)
+  const [testimonialIndex, setTestimonialIndex] = useState(0)
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      // Hero entrance
+      gsap.from(heroRef.current?.querySelectorAll('.hero-fade'), {
+        y: 60, opacity: 0, duration: 1, stagger: 0.2, ease: 'power3.out',
+      })
+      gsap.from(heroRef.current?.querySelector('.hero-image'), {
+        scale: 1.15, opacity: 0, duration: 1.4, ease: 'power2.out',
+      })
+
+      // Features scroll entrance
+      gsap.from(featuresRef.current?.querySelectorAll('.feature-card'), {
+        scrollTrigger: { trigger: featuresRef.current, start: 'top 85%' },
+        y: 50, opacity: 0, duration: 0.8, stagger: 0.15, ease: 'power3.out',
+      })
+
+      // Steps scroll entrance
+      gsap.from(stepsRef.current?.querySelectorAll('.step-panel'), {
+        scrollTrigger: { trigger: stepsRef.current, start: 'top 80%' },
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'power2.out',
+      })
+
+      // Testimonials
+      gsap.from(testimonialsRef.current?.querySelector('.testimonial-card'), {
+        scrollTrigger: { trigger: testimonialsRef.current, start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.8, ease: 'power2.out',
+      })
+
+      // CTA
+      gsap.from(ctaRef.current?.querySelectorAll('.cta-fade'), {
+        scrollTrigger: { trigger: ctaRef.current, start: 'top 90%' },
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.15, ease: 'power3.out',
+      })
+
+      // Nav glass to solid on scroll
+      ScrollTrigger.create({
+        trigger: document.body, start: 'top -80',
+        onToggle: ({ isActive }) => {
+          gsap.to('.landing-nav', {
+            background: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.08)',
+            backdropFilter: isActive ? 'blur(16px)' : 'blur(0px)',
+            borderBottom: isActive ? `1px solid ${border}` : '1px solid transparent',
+            duration: 0.3,
+          })
+        },
+      })
+
+      // Image scale on scroll for step panels
+      gsap.to(stepsRef.current?.querySelectorAll('.step-panel img'), {
+        scrollTrigger: { trigger: stepsRef.current, start: 'top bottom', end: 'bottom top', scrub: 0.5 },
+        scale: 0.95, opacity: 0.6,
+      })
+    }, sectionRef)
+
+    return () => ctx.revert()
+  }, [])
+
+  // Auto-rotate testimonials
+  useEffect(() => {
+    if (!testimonialsRef.current) return
+    const t = setInterval(() => setTestimonialIndex(i => (i + 1) % TESTIMONIALS.length), 5000)
+    return () => clearInterval(t)
+  }, [])
+
   return (
-    <div style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: bg, overflowX: 'hidden', color: navy }}>
-      {/* Nav */}
-      <nav style={{ background: 'white', borderBottom: `1px solid ${border}`, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, gap: 12 }}>
-        <Link to="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
-          <Logo size={28} tone="dark" />
+    <main ref={sectionRef} style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: bg, color: textDark, overflowX: 'hidden', width: '100%', maxWidth: '100%' }}>
+      <style>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .marquee-track { animation: marquee 30s linear infinite; }
+        .marquee-track:hover { animation-play-state: paused; }
+      `}</style>
+
+      {/* ── Glass Nav ─────────────────────────────────────────── */}
+      <nav className="landing-nav" style={{
+        position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+        background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(0px)',
+        borderRadius: 60, padding: '8px 10px 8px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        zIndex: 100, width: isMobile ? 'calc(100% - 24px)' : 720,
+        border: '1px solid rgba(255,255,255,0.15)',
+        transition: 'background 0.3s ease',
+      }}>
+        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+          <Logo size={24} tone={isMobile ? 'dark' : 'light'} />
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!isMobile && (
-            <div style={{ display: 'flex', gap: 24 }}>
-              <NavLink href="#features">Features</NavLink>
-              <NavLink href="#how-it-works">How it works</NavLink>
-              <Link to="/feed" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>Feed</Link>
-            </div>
+            <>
+              <a href="#features" className="hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+                onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>Features</a>
+              <a href="#how-it-works" className="hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+                onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>How it works</a>
+            </>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 12 : 10 }}>
-            {isMobile
-              ? <button onClick={() => navigate('/login')} style={{ padding: 0, border: 'none', background: 'none', color: navy, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Sign in</button>
-              : <button onClick={() => navigate('/login')} style={{ padding: '9px 16px', borderRadius: 10, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Sign in</button>}
-            <button onClick={() => navigate('/search')} style={{ padding: isMobile ? '9px 14px' : '9px 16px', borderRadius: 10, border: 'none', background: tealDeep, color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}>Get started</button>
-          </div>
+          <button onClick={() => navigate('/login')} className="hero-fade" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            Sign in
+          </button>
+          <button onClick={() => navigate('/search')} className="hero-fade" style={{ padding: '8px 18px', borderRadius: 40, border: 'none', background: '#fff', color: navy, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            Get started
+          </button>
         </div>
       </nav>
 
-      {/* Hero */}
-      <div style={{ padding: '80px 24px 72px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderRadius: theme.radius.full, background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 700, marginBottom: 22 }}>
-            <Activity size={14} /> Your health marketplace
-          </div>
-          <h1 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 'clamp(32px,4.8vw,52px)', lineHeight: 1.12, letterSpacing: '-0.02em', margin: '0 0 18px', color: navy }}>
-            Find the care you need,{isMobile ? ' ' : <br />}right where you are.
+      {/* ── Hero ──────────────────────────────────────────────── */}
+      <div ref={heroRef} style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <div className="hero-image" style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://picsum.photos/seed/healthcare-hero/1920/1080)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(0.3) contrast(1.1)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at center, rgba(11,74,62,0.3) 0%, rgba(11,74,62,0.75) 60%, ${navy} 100%)` }} />
+        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '120px 24px 80px', maxWidth: 900, margin: '0 auto' }}>
+          <h1 className="hero-fade" style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(2.8rem, 6vw, 5rem)', lineHeight: 1.08, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 10px' }}>
+            Find the care you{' '}
+            <span style={{ display: 'inline-block', width: 64, height: 48, borderRadius: 24, verticalAlign: 'middle', margin: '0 4px', backgroundImage: 'url(https://picsum.photos/seed/care-emblem/200/200)', backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid rgba(255,255,255,0.3)' }} />
+            {' '}need, right where you are.
           </h1>
-          <p style={{ fontSize: 16, color: textMid, maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.7 }}>
+          <p className="hero-fade" style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', maxWidth: 600, margin: '0 auto 36px', lineHeight: 1.7, fontWeight: 400 }}>
             Search medicines, compare pharmacies, read real reviews, and connect with healthcare providers near you — all in one place.
           </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 24 }}>
-            <button onClick={() => navigate('/search')} style={{ padding: '14px 28px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <div className="hero-fade" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button onClick={() => navigate('/search')} style={{ padding: '16px 32px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
+              onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 12px 32px rgba(0,0,0,0.2)' }}
+              onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}>
               Start searching <ArrowRight size={18} />
             </button>
-            <button onClick={() => navigate('/feed')} style={{ padding: '14px 28px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
+            <button onClick={() => navigate('/feed')} style={{ padding: '16px 32px', borderRadius: 60, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', transition: 'background 0.2s ease' }}
+              onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.08)'}>
               Browse feed
             </button>
           </div>
-          <p style={{ fontSize: 12.5, color: textLight, margin: 0 }}>
-            Healthcare businesses — <Link to="/claim-business" style={{ color: tealDeep, fontWeight: 700 }}>claim your listing</Link> and reach patients today.
+        </div>
+      </div>
+
+      {/* ── Features Bento ────────────────────────────────────── */}
+      <div ref={featuresRef} id="features" style={{ padding: '80px 24px 96px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <h2 style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', color: textDark, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
+            Everything you need to{' '}<span style={{ color: tealDeep }}>make informed health decisions</span>.
+          </h2>
+          <p style={{ fontSize: 15, color: textMid, maxWidth: 540, margin: '0 auto', lineHeight: 1.6 }}>CareFind brings together every tool you need to navigate your health journey with confidence.</p>
+        </div>
+        <div className="bento-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, gridAutoFlow: 'dense' }}>
+          {FEATURES.map((f, i) => (
+            <FeatureCard key={f.title} {...f} index={i} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Steps Horizontal Accordion ────────────────────────── */}
+      <div ref={stepsRef} id="how-it-works" style={{ padding: '80px 24px 96px', background: cardBg }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <h2 style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', color: textDark, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
+              Three steps to{' '}<span style={{ color: tealDeep }}>better care</span>.
+            </h2>
+            <p style={{ fontSize: 15, color: textMid, maxWidth: 540, margin: '0 auto', lineHeight: 1.6 }}>Getting the care you need has never been simpler.</p>
+          </div>
+          <div style={{ display: 'flex', gap: 12, minHeight: 360 }}>
+            {isMobile ? (
+              STEPS.map((s, i) => (
+                <div key={s.title} style={{ flex: 1, borderRadius: theme.radius.xl, overflow: 'hidden', background: `linear-gradient(135deg, ${navy} 0%, ${navySoft} 100%)`, position: 'relative', display: 'flex', alignItems: 'flex-end', minHeight: 320 }}>
+                  <div style={{ position: 'absolute', inset: 0, opacity: 0.3, backgroundImage: `url(${s.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(11,74,62,0.95) 0%, rgba(11,74,62,0.3) 60%, rgba(11,74,62,0.1) 100%)' }} />
+                  <div style={{ position: 'relative', zIndex: 1, padding: 20, width: '100%' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 800, marginBottom: 8 }}>{i + 1}</div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: '#fff', marginBottom: 4 }}>{s.title}</div>
+                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{s.desc}</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              STEPS.map((s, i) => (
+                <StepPanel key={s.title} step={s} index={i} active={activeStep === i} onHover={setActiveStep} />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Infinite Marquee (Trust Partners) ─────────────────── */}
+      <div style={{ padding: '60px 0', overflow: 'hidden', background: bg }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: textLight, textAlign: 'center', marginBottom: 20 }}>Trusted by healthcare providers across the region</div>
+        <div style={{ display: 'flex', overflow: 'hidden', maskImage: 'linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%)', WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%)' }}>
+          <div className="marquee-track" style={{ display: 'flex', gap: 48, flexShrink: 0, padding: '0 24px' }}>
+            {[...PARTNERS, ...PARTNERS].map((name, i) => (
+              <div key={i} style={{ flexShrink: 0, fontSize: 15, fontWeight: 700, color: textLight, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+                {name}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Testimonials ──────────────────────────────────────── */}
+      <div ref={testimonialsRef} style={{ padding: '80px 24px 96px', maxWidth: 800, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <h2 style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', color: textDark, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
+            What patients are saying
+          </h2>
+        </div>
+        <div className="testimonial-card" style={{ background: cardBg, borderRadius: theme.radius.xl, padding: 40, border: `1px solid ${border}`, textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: -8, marginBottom: 20 }}>
+            {TESTIMONIALS.map((t, i) => (
+              <div key={i} style={{ width: 48, height: 48, borderRadius: '50%', border: '3px solid white', marginLeft: i > 0 ? -12 : 0, backgroundImage: `url(${t.avatar})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: i === testimonialIndex ? 1 : 0.4, transition: 'opacity 0.5s ease' }} />
+            ))}
+          </div>
+          <p style={{ fontSize: 17, color: textMid, lineHeight: 1.7, margin: '0 0 20px', fontStyle: 'italic', maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+            &ldquo;{TESTIMONIALS[testimonialIndex].quote}&rdquo;
           </p>
-        </div>
-      </div>
-
-      {/* Features */}
-      <div id="features" style={{ borderTop: `1px solid ${border}`, padding: '60px 24px 64px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-          <Eyebrow>Why CareFind</Eyebrow>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 28, color: navy, margin: '0 0 32px', maxWidth: 560, lineHeight: 1.25 }}>Everything you need to make informed health decisions.</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
-            {FEATURES.map(([Icon, title, desc]) => (
-              <div key={title} style={{ background: 'white', padding: 20, borderRadius: theme.radius.lg, border: `1px solid ${border}` }}>
-                <IconTile Icon={Icon} />
-                <div style={{ fontWeight: 800, fontSize: 14, color: navy, margin: '14px 0 6px' }}>{title}</div>
-                <div style={{ fontSize: 12.5, color: textMid, lineHeight: 1.6 }}>{desc}</div>
-              </div>
-            ))}
+          <div style={{ fontWeight: 800, fontSize: 14, color: textDark }}>{TESTIMONIALS[testimonialIndex].name}</div>
+          <div style={{ fontSize: 12, color: textLight }}>{TESTIMONIALS[testimonialIndex].role}</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24 }}>
+            <button onClick={() => setTestimonialIndex(i => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)} aria-label="Previous testimonial" style={{ width: 44, height: 44, borderRadius: '50%', border: `1px solid ${border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMid }}>
+              <ChevronLeft size={18} />
+            </button>
+            <button onClick={() => setTestimonialIndex(i => (i + 1) % TESTIMONIALS.length)} aria-label="Next testimonial" style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: tealDeep, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+              <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* How it works */}
-      <div id="how-it-works" style={{ borderTop: `1px solid ${border}`, padding: '60px 24px 64px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-          <Eyebrow>How it works</Eyebrow>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 26, color: navy, margin: '0 0 32px' }}>Three steps to better care.</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 20 }}>
-            {STEPS.map(([n, title, desc]) => (
-              <div key={n} style={{ background: 'white', padding: 20, borderRadius: theme.radius.lg, border: `1px solid ${border}` }}>
-                <div style={{ width: 28, height: 28, borderRadius: theme.radius.full, border: `1.5px solid ${tealDeep}`, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, marginBottom: 14 }}>{n}</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: navy, marginBottom: 6 }}>{title}</div>
-                <div style={{ fontSize: 12.5, color: textMid, lineHeight: 1.65 }}>{desc}</div>
-              </div>
-            ))}
-          </div>
+      {/* ── CTA ────────────────────────────────────────────────── */}
+      <div ref={ctaRef} style={{ background: `linear-gradient(135deg, ${navy} 0%, ${navySoft} 50%, ${tealDeep} 100%)`, padding: '80px 24px', textAlign: 'center' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto' }}>
+          <h2 className="cta-fade" style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(1.6rem, 3vw, 2.6rem)', color: '#fff', margin: '0 0 12px', letterSpacing: '-0.02em' }}>
+            Ready to find the care you need?
+          </h2>
+          <p className="cta-fade" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', margin: '0 0 32px', lineHeight: 1.6 }}>
+            Join thousands of patients using CareFind every day. Start your health journey today.
+          </p>
+          <button className="cta-fade" onClick={() => navigate('/search')} style={{ padding: '16px 36px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
+            onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 16px 40px rgba(0,0,0,0.2)' }}
+            onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}>
+            Start searching <ArrowRight size={18} />
+          </button>
         </div>
       </div>
 
-      {/* CTA */}
-      <div style={{ background: tealDeep, padding: '44px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20, maxWidth: 1140, margin: '0 auto', borderRadius: theme.radius.lg }}>
-        <div>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 24, color: 'white', margin: '0 0 6px' }}>Ready to find the care you need?</h2>
-          <p style={{ color: 'rgba(255,255,255,0.75)', margin: 0, fontSize: 13.5 }}>Join thousands of patients using CareFind every day.</p>
-        </div>
-        <button onClick={() => navigate('/search')} style={{ padding: '13px 26px', borderRadius: theme.radius.md, border: 'none', background: 'white', color: tealDeep, fontWeight: 800, fontSize: 14, cursor: 'pointer', flexShrink: 0 }}>Start searching</button>
-      </div>
-
-      {/* Footer */}
-      <div style={{ padding: '28px 24px', maxWidth: 1140, margin: '40px auto 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderTop: `1px solid ${border}` }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: textLight }}>
+      {/* ── Footer ────────────────────────────────────────────── */}
+      <div style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: textLight }}>
           <Logo size={18} tone="dark" markOnly />
           &copy; 2026 CareFind &middot; Part of the Care ecosystem
         </div>
-        <div style={{ display: 'flex', gap: 18 }}>
+        <div style={{ display: 'flex', gap: 20 }}>
           <Link to="/feed" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>Feed</Link>
           <Link to="/claim-business" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>For businesses</Link>
+          <a href="#features" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>Features</a>
         </div>
       </div>
-    </div>
+    </main>
   )
 }
