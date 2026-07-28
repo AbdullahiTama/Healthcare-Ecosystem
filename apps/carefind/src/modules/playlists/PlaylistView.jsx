@@ -11,7 +11,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { renderRichText } from '../social-feed/richText.jsx'
-import { ConfirmDialog, Inp, Toast, useToast } from '../../components/ui'
+import { ConfirmDialog, Inp, Loading, Toast, useToast } from '../../components/ui'
 
 // Watch a playlist: a list of parts, tap to view; an "Up next" prompt to continue.
 function PlaylistView() {
@@ -68,7 +68,7 @@ function PlaylistView() {
     showToast('Title updated', { type: 'success' })
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: theme.textLight }}>Loading…</div>
+  if (loading) return <Loading />
   if (!playlist) return <div style={{ padding: 40, textAlign: 'center', color: theme.textLight }}>Playlist not found.</div>
 
   const part = parts[current]

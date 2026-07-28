@@ -9,7 +9,7 @@ import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
 import VideoUploader from '../../components/VideoUploader.jsx'
 import VideoRecorder from '../../components/VideoRecorder.jsx'
-import { ConfirmDialog } from '../../components/ui'
+import { ConfirmDialog, Loading } from '../../components/ui'
 
 function LiveDashboard() {
   const { id } = useParams()
@@ -152,7 +152,7 @@ function LiveDashboard() {
     return `${Math.floor(diff / 3600)}h`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading dashboard…</div>
+  if (loading) return <Loading text="Loading dashboard…" />
 
   if (!show) return (
     <div style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>

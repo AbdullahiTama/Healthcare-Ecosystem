@@ -8,7 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { ConfirmDialog, Toast, useToast } from '../../components/ui'
+import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 
 const GIFT_TIERS = [
   { emoji: '💊', label: 'Pill', coins: 1 },
@@ -386,7 +386,7 @@ export default function LiveSession() {
     else { navigator.clipboard?.writeText(window.location.href); showToast('Link copied!', { type: 'success' }) }
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading live session...</div>
+  if (loading) return <Loading text="Loading live session..." />
 
   const host = session?.profiles
   const hostName = host?.full_name || host?.display_name || 'Host'

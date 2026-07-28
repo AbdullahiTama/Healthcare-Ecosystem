@@ -161,7 +161,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                     value={commentDrafts[`${postId}_reply_${comment.id}`] || ''}
                     onChange={e => setCommentDrafts(prev => ({ ...prev, [`${postId}_reply_${comment.id}`]: e.target.value }))}
                     onKeyDown={e => { if (e.key === 'Enter') { const txt = commentDrafts[`${postId}_reply_${comment.id}`] || ''; if (txt.trim()) handleAddComment(comment.id, txt) } }}
-                    placeholder="Write a reply..."
+                    placeholder="Write a reply..." aria-label="Write a reply"
                     style={{ flex: 1, padding: '6px 10px', fontSize: 12, border: `1px solid ${theme.border}`, borderRadius: 16, outline: 'none' }}
                   />
                   <button onClick={() => { const txt = commentDrafts[`${postId}_reply_${comment.id}`] || ''; if (txt.trim()) handleAddComment(comment.id, txt) }} style={{ padding: '6px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 16, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reply</button>
@@ -187,7 +187,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
             value={commentDrafts[postId] || ''}
             onChange={e => setCommentDrafts(prev => ({ ...prev, [postId]: e.target.value }))}
             onKeyDown={e => e.key === 'Enter' && handleAddComment(null, e.target.value)}
-            placeholder="Add a comment"
+            placeholder="Add a comment" aria-label="Add a comment"
             style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, outline: 'none' }}
           />
           <TealBtn onClick={() => handleAddComment(null)} style={{ padding: '10px 16px', borderRadius: 20, fontSize: 12 }} disabled={isLoading}>

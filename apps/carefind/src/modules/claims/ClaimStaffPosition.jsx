@@ -202,7 +202,7 @@ function ClaimStaffPosition() {
               <button onClick={() => { setSelectedBusiness(null); setStaffList([]); setVerifyingId(null) }} style={{ background: 'none', border: 'none', color: theme.tealDeep, fontSize: 13, fontWeight: 700 }}>Change company</button>
             </div>
 
-            {loadingStaff && <p style={{ color: theme.textMid, fontSize: 13 }}>Loading team...</p>}
+            {loadingStaff && <Loading text="Loading team..." />}
 
             {!loadingStaff && staffList.length === 0 && (
               <div style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 20, textAlign: 'center', background: theme.cardBg }}>

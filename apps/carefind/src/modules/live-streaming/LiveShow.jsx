@@ -13,7 +13,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
-import { Toast, useToast } from '../../components/ui'
+import { Loading, Toast, useToast } from '../../components/ui'
 
 function LiveShow() {
   const { id } = useParams()
@@ -266,7 +266,7 @@ function LiveShow() {
     return `${Math.floor(diff / 86400)}d`
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading live show…</div>
+  if (loading) return <Loading text="Loading live show…" />
 
   if (!show) {
     const notFoundContent = (

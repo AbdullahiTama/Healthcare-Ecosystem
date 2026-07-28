@@ -3,7 +3,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { CalendarClock, Image as ImageIcon, Radio, Sparkles, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Toast, useToast } from '../../components/ui'
+import { Loading, Toast, useToast } from '../../components/ui'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
@@ -11,6 +11,7 @@ function Stories() {
   const { user } = useAuth()
   const [stories, setStories] = useState([])
   const [viewerIndex, setViewerIndex] = useState(null)
+  const [loadingStories, setLoadingStories] = useState(true)
   const [progress, setProgress] = useState(0)
   const [canPost, setCanPost] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -63,6 +64,7 @@ function Stories() {
   }
 
   async function loadStories() {
+    setLoadingStories(true)
     const { data } = await supabase
       .from('stories')
       .select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, profiles(full_name, display_name, is_verified)')
@@ -76,6 +78,7 @@ function Stories() {
       return new Date(b.created_at) - new Date(a.created_at)
     })
     setStories(list)
+    setLoadingStories(false)
   }
 
   useEffect(() => {
@@ -143,6 +146,11 @@ function Stories() {
   }
 
   const hasStories = stories.length > 0
+  if (loadingStories) return (
+    <div className="cf-hscroll" style={{ display: 'flex', gap: 14, padding: '4px 2px 2px 16px', overflow: 'hidden' }}>
+      {[1, 2, 3, 4].map(i => <div key={i} style={{ flexShrink: 0, width: 64, height: 64, borderRadius: '50%', background: theme.gray200, animation: 'cf-pulse 1.5s infinite' }} />)}
+    </div>
+  )
   if (!hasStories && !liveShow && !upcomingShow) return null
 
   function countdownLabel(dateStr) {
@@ -301,7 +309,7 @@ function Stories() {
 
             <label style={{ fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', display: 'block', marginBottom: 12 }}>
               <ImageIcon size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />{sImage ? sImage.name : 'Add an image (optional)'}
-              <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ display: 'none' }} />
+              <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
             </label>
 
             <button onClick={postStory} disabled={posting} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 14 }}>

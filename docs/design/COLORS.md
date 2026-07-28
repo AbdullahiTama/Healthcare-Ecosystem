@@ -4,77 +4,104 @@ The palette below formalizes and extends the colors already in production use ac
 
 ## Why this palette
 
-Teal reads as clinical without reading as sterile — it avoids both the "blue and white" cliché of generic medical software and the anxious red-cross association of emergency healthcare branding. Paired with a deep navy rather than black, the palette stays warm and premium instead of cold and corporate. Both colors are already battle-tested across dozens of real screens in both products; this document exists to make their *use* consistent, not to replace them.
+Warm natural teal paired with a deep forest-navy — avoids both the "blue and white" cliché of generic medical software and the anxious red-cross association of emergency healthcare branding. Paired with a deep forest-navy rather than black, the palette stays warm and premium instead of cold and corporate. Both colors are already battle-tested across dozens of real screens in both products; this document exists to make their *use* consistent, not to replace them.
 
 ## Core brand colors
 
 | Token | Hex | Usage |
 |---|---|---|
-| `teal-600` (deep) | `#0f766e` | Primary brand color. Primary buttons, active nav states, links, focus rings |
-| `teal-500` (bright) | `#14b8a6` | Gradient partner to teal-600, hover states, secondary accents |
-| `navy-900` | `#0f172a` | Primary text color, dark surfaces, secondary buttons (`DarkBtn`) |
-| `navy-800` | `#1e293b` | Secondary dark surface, dark-mode card backgrounds |
+| `tealDeep` | `#0E6F5A` | Primary brand color. Primary buttons, active nav states, links, focus rings |
+| `tealBright` | `#1A8A72` | Gradient partner to tealDeep, hover states, secondary accents |
+| `tealHover` | `#0B5A49` | Button hover state |
+| `navy` | `#0B4A3E` | Primary text color, dark surfaces, secondary buttons (`DarkBtn`) |
+| `navySoft` | `#155A4B` | Secondary dark surface, gradient partner |
 
-**Brand gradient** (legacy — see below): `linear-gradient(135deg, #0f766e, #14b8a6)`. Exists in code as the pre-existing primary-button background across both apps' not-yet-migrated screens. **New work matching the client template does not use it at all** — the template's own primary color is flat `teal-600` everywhere (buttons, active states, the CTA band), no gradient anywhere on the page, and CareHub's `Landing.jsx`/`Sidebar.jsx` (the first screens migrated to the template) now use flat `teal-600` exclusively. Screens not yet migrated keep the gradient until their own migration pass touches them — this is a deliberate, incremental drop of the gradient, not a hard cutover.
+**Brand gradient:** `linear-gradient(135deg, #0B4A3E 0%, #155A4B 55%, #0E6F5A 130%)` — used as the hero gradient and on DarkBtn.
 
-| `teal-mist` | `#e8f3ee` | Tinted fill behind feature icons and small illustrative chips — a soft teal recess, distinct from `success-bg`'s more saturated green. Pairs with `teal-600` icon glyphs on top. Small-area use only, same rule as the other `-bg` tokens below. |
+**Teal gradient:** `linear-gradient(135deg, #0E6F5A, #0B4A3E)` — used for primary buttons on screens not yet migrated to flat `tealDeep`.
+
+| Token | Hex | Usage |
+|---|---|---|
+| `tealMist` | `#e8f3ee` | Tinted fill behind feature icons and small illustrative chips — a soft teal recess, distinct from `successBg`'s more saturated green. Pairs with `tealDeep` icon glyphs on top. Small-area use only. |
 
 ## Page background
 
-`bg-page` (`#f9f9f6`) is the default page background for both apps, replacing the previous `gray-50` in that role. It reads as a near-white, faintly warm neutral rather than the older value's cool blue-gray undertone (`gray-50`'s blue channel was slightly higher than its red/green; `bg-page`'s is slightly lower) — deliberately subtle, not a parchment/cream surface. Cards, modals, and inputs still sit on plain `white` on top of it, same as before; only the page canvas itself moves.
+`bg` (`#F7F5EF`) is the default page background for both apps. It reads as a near-white, faintly warm neutral — deliberately subtle, not a parchment/cream surface. Cards, modals, and inputs sit on `cardBg` (`#FBFAF6`) on top of it.
 
 ## Neutral scale
 
 | Token | Hex | Usage |
 |---|---|---|
-| `bg-page` | `#f9f9f6` | Page background (both apps) — a near-white, barely-warm neutral. Replaces the older cool-toned `gray-50` in that role; see "Page background" below. |
-| `gray-50` | `#f9fafb` | Retained for any surface that specifically wants the older cool-toned value (rare — most call sites should move to `bg-page`) |
-| `gray-100` | `#f3f4f6` | Subtle fills (disabled states, icon backgrounds) |
-| `gray-200` | `#e5e7eb` | Borders, dividers, disabled button background |
-| `gray-300` | `#cbd5e1` | Secondary borders, placeholder-adjacent UI |
-| `gray-400` | `#94a3b8` | Tertiary text, placeholder text, disabled text |
-| `gray-500` | `#64748b` | Secondary text |
-| `gray-600` | `#475569` | Body text (mid-emphasis) |
-| `gray-900` | `#0f172a` | Primary text (same as `navy-900` — text and the darkest neutral are deliberately the same value) |
-| `white` | `#ffffff` | Card/surface background, text-on-dark |
+| `bg` | `#F7F5EF` | Page background |
+| `cardBg` | `#FBFAF6` | Card, modal, and input surface background |
+| `border` | `#ECEAE0` | Borders, dividers |
+| `gray50` | `#F7F5EF` | Subtle fills (disabled states, icon backgrounds) |
+| `gray100` | `#F0EEE5` | Secondary fills, badge backgrounds |
+| `gray200` | `#E7E4D9` | Borders, dividers, disabled button background |
+| `gray300` | `#D4D0C5` | Secondary borders, placeholder-adjacent UI |
+| `gray400` | `#9AA69F` | Tertiary text, placeholder text, disabled text |
+| `gray500` | `#8B978F` | Secondary text |
+| `gray600` | `#3C4B44` | Body text (mid-emphasis) |
+| `gray900` | `#182722` | Primary text (matches `textDark`) |
+
+## Text colors
+
+| Token | Hex | Usage |
+|---|---|---|
+| `textDark` | `#182722` | Primary text/headings |
+| `textMid` | `#3C4B44` | Body text |
+| `textLight` | `#6B7B73` | Secondary text, captions, metadata |
+
+All text-on-background combinations using these tokens pass WCAG 2.1 AA (4.5:1 minimum).
 
 ## Semantic colors
 
 | Token | Hex | Meaning | Usage |
 |---|---|---|---|
 | `success` | `#16a34a` | Positive, completed, healthy | Success toasts, "active"/"paid"/"approved" status, positive deltas |
-| `success-bg` | `#f0fdf4` | — | Background fill behind success badges/banners |
+| `successBg` | `#f0fdf4` | — | Background fill behind success badges/banners |
 | `warning` | `#d97706` | Needs attention, pending | Pending status, low-stock warnings, expiring-soon flags |
-| `warning-bg` | `#fffbeb` | — | Background fill behind warning badges/banners |
-| `danger` | `#dc2626` | Destructive, error, expired | Delete actions, error messages, expired/rejected status |
-| `danger-bg` | `#fef2f2` | — | Background fill behind danger badges/banners |
-| `info` | `#2563eb` | Neutral informational | Informational banners, "new" badges — used sparingly since blue is not a brand color; prefer teal for anything that isn't strictly neutral-informational |
-| `info-bg` | `#eff6ff` | — | Background fill behind info badges/banners |
-| `purple` (auxiliary) | `#7c3aed` | Tertiary categorical color | Used only for status differentiation when success/warning/danger/info are already in use on the same screen for other statuses (e.g. a 5-state pipeline) — never as a primary brand color |
+| `warningBg` | `#fffbeb` | — | Background fill behind warning badges/banners |
+| `alert` / `danger` | `#dc2626` | Destructive, error, expired | Delete actions, error messages, expired/rejected status |
+| `dangerBg` | `#fef2f2` | — | Background fill behind danger badges/banners |
+| `info` | `#2563eb` | Neutral informational | Informational banners, "new" badges — used sparingly since blue is not a brand color |
+| `infoBg` | `#eff6ff` | — | Background fill behind info badges/banners |
+| `purple` | `#7c3aed` | Tertiary categorical color | Used only for status differentiation when success/warning/danger/info are already in use |
 
 ## Usage rules
 
-1. **Teal is the only color allowed for a primary action.** A screen has one primary button; it is teal — flat `teal-600` on template-migrated screens, the legacy gradient on screens not yet migrated (see "Brand gradient" above). Every other button is neutral (ghost/outline) or navy (secondary-dark).
-2. **Semantic colors are earned by real state, never decorative.** Green only for "this is actually good/complete." Red only for "this is actually bad/destructive/urgent." If you want visual variety on a screen with no real status to convey, that's a sign the layout needs work, not more color.
-3. **Background fills (`-bg` tokens) always pair with their full-saturation counterpart for the foreground element** (text or icon), never used as a large surface fill alone — these are for small-area contexts: badges, pills, banner backgrounds, table row highlights.
-4. **Navy, not black.** Nothing in this system uses pure black (`#000000`) — text, dark surfaces, and shadows all derive from the navy family, keeping the whole palette warm even at its darkest values.
-5. **The purple auxiliary color is a last resort**, used only when four semantic colors are genuinely insufficient to distinguish real states on one screen (e.g., an order pipeline: submitted/approved/processing/dispatched/delivered — five real states). Never introduce a sixth categorical color; redesign the status model instead.
+1. **Teal is the only color allowed for a primary action.** A screen has one primary button; it is teal — flat `tealDeep`. Every other button is neutral (ghost/outline) or navy.
+2. **Semantic colors are earned by real state, never decorative.** Green only for "this is actually good/complete." Red only for "this is actually bad/destructive/urgent."
+3. **Background fills (`-Bg` tokens) always pair with their full-saturation counterpart** for the foreground element (text or icon), never used as a large surface fill alone.
+4. **Navy, not black.** Nothing in this system uses pure black (`#000000`) — text, dark surfaces, and shadows all derive from the forest-navy family.
+5. **The purple auxiliary color is a last resort**, used only when four semantic colors are genuinely insufficient.
 
 ## Contrast and accessibility
 
 All text-on-background and icon-on-background combinations in this system must meet **WCAG 2.1 AA**: 4.5:1 for normal text, 3:1 for large text (18px+/14px+bold) and UI components/graphical objects. See `ACCESSIBILITY.md` for the full standard. Practically:
 
-- `navy-900` text on `white` or any `gray-50`–`gray-200` background: passes comfortably.
-- `white` text on `teal-600` or `navy-900`: passes.
-- `white` text on `teal-500` alone (without the gradient's darker end): **borderline — verify per use, prefer the full gradient or teal-600 for text-bearing surfaces.**
-- Never place body text directly on the teal gradient without verifying contrast at both ends of the gradient.
-- Semantic `-bg` tokens paired with their matching saturated foreground color (e.g. `success` text on `success-bg`) are pre-verified to pass and are the default pattern for badges/pills — don't substitute other foreground/background pairings without checking contrast.
+- `navy` (`#0B4A3E`) or `textDark` (`#182722`) text on `cardBg` or `bg`: passes comfortably (contrast > 9:1).
+- `white` text on `tealDeep` (`#0E6F5A`) or `navy` (`#0B4A3E`): passes (contrast > 5:1).
+- `textLight` (`#6B7B73`) on `cardBg` (`#FBFAF6`): passes (~5.5:1).
+- Never place body text directly on the teal gradient without verifying contrast at both ends.
+- Semantic `-Bg` tokens paired with their matching saturated foreground color (e.g. `success` text on `successBg`) are pre-verified to pass.
+
+## Elevation / shadow scale
+
+Shadows use the forest-navy base (`#0B4A3E`), never pure black:
+
+| Level | Shadow |
+|---|---|
+| 1 | `0 1px 4px rgba(11,74,62,0.05)` |
+| 2 | `0 4px 16px rgba(11,74,62,0.08)` |
+| 3 | `0 8px 24px rgba(11,74,62,0.12)` |
+| 4 | `0 20px 48px rgba(11,74,62,0.18)` |
 
 ## Dark surfaces (navy-on-navy contexts)
 
-CareHub's admin/detail-view headers occasionally use a dark navy surface with white text (see `SCREEN_PATTERNS.md` → Detail View). On these surfaces:
+CareHub's admin/detail-view headers occasionally use a dark navy surface with white text. On these surfaces:
 - Primary text: white
-- Secondary text: `#94a3b8` (gray-400) at reduced opacity is acceptable for de-emphasized metadata
+- Secondary text: `#9AA69F` (gray-400)
 - Borders/dividers on dark surfaces: `rgba(255,255,255,0.12)`, not a neutral gray value
 
 ## What this palette explicitly avoids

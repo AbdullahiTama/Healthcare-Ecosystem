@@ -13,7 +13,7 @@ export const theme = {
   border: '#ECEAE0',
   textDark: '#182722',
   textMid: '#3C4B44',
-  textLight: '#8B978F',
+  textLight: '#6B7B73',
   success: '#16a34a',
   warning: '#d97706',
   alert: '#dc2626',

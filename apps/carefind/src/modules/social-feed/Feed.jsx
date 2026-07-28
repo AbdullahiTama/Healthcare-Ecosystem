@@ -1135,7 +1135,7 @@ function Feed() {
                     setImageFile(f)
                     setImagePreview(URL.createObjectURL(f))
                   }}
-                  style={{ display: 'none' }}
+                  style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}
                 />
               </label>
 
@@ -1161,7 +1161,7 @@ function Feed() {
                 {uploadingVideo
                   ? '…'
                   : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={15} aria-hidden="true" /> {cardVideoPreview ? 'Change clip' : 'Clip'}</span>}
-                <input type="file" accept="video/*" onChange={handleCardVideo} style={{ display: 'none' }} />
+                <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
 
               {(imagePreview || cardVideoPreview) && (
@@ -1381,7 +1381,7 @@ function Feed() {
             {postType !== 'visual' && !imagePreview ? (
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
                 <Camera size={17} aria-hidden="true" /> Add a photo
-                <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+                <input type="file" accept="image/*" onChange={handleImageSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
             ) : <span />}
 
