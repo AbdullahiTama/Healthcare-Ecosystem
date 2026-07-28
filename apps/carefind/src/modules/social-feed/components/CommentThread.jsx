@@ -60,11 +60,12 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
     setIsLoading(true)
     try {
       await commentRepository.deleteComment(commentId, user.id)
-      onCommentsChange(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId))
+      const fresh = await commentRepository.getComments(postId)
+      onCommentsChange(fresh)
     } finally {
       setIsLoading(false)
     }
-  })
+  }, [postId, onCommentsChange])
 
   const allComments = Array.isArray(comments) ? comments : []
   const topLevel = allComments.filter(c => !c.parent_id)

@@ -679,16 +679,15 @@ function Feed() {
   }
 
   async function toggleComments(postId) {
-    const isOpen = !openComments[postId]
-    setOpenComments({ ...openComments, [postId]: isOpen })
+    setOpenComments(prev => ({ ...prev, [postId]: !prev[postId] }))
 
-    if (isOpen && !comments[postId]) {
+    if (!openComments[postId] && !comments[postId]) {
       const { data } = await supabase
         .from('post_comments')
         .select('id, content, created_at, user_id, parent_id, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
-      setComments({ ...comments, [postId]: data || [] })
+      setComments(prev => ({ ...prev, [postId]: data || [] }))
     }
   }
 
