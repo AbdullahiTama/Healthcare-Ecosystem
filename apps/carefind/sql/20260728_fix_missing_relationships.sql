@@ -4,6 +4,10 @@
 -- Uses NOT VALID because existing data has orphaned user_ids (users deleted
 -- but comments/messages remain). Future inserts/updates ARE validated; old
 -- orphans are left in place rather than deleted.
+--
+-- Status: NOT YET APPLIED — apply via Supabase SQL editor or psql before
+--         the join queries in Feed, LiveSession, and LiveShow stop returning
+--         400 errors.
 -- ============================================================================
 
 -- 1. post_comments.user_id → profiles.id

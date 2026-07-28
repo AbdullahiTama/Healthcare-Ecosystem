@@ -115,7 +115,6 @@ function PublicProfile() {
     const res = await checkAccess(user.id, id)
     setSubActive(!!res.active)
     setSubInfo(res.sub || null)
-    if (res.renewed) console.log('subscription auto-renewed')
   }
 
   function handleSubscribe(priceCoins) {
