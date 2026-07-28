@@ -1,8 +1,10 @@
-import { Link } from 'react-router-dom'
-import { Bell, Search } from 'lucide-react'
+import { useRef, useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Bell, Search, LogOut, User } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar } from '../ui'
 import Logo from '../../modules/social-feed/Logo.jsx'
+import { useAuth } from '../../providers/AuthContext'
 
 // Desktop/tablet top bar. Same logo, colors, and destinations as the mobile
 // header (Feed.jsx's own app bar) — just laid out horizontally instead of
@@ -19,6 +21,25 @@ import Logo from '../../modules/social-feed/Logo.jsx'
 // overstate its role here. GitHub/Slack/Notion/Linear all anchor search near
 // the brand mark for the same reason.
 export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+  const navigate = useNavigate()
+  const { signOut } = useAuth()
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  async function handleSignOut() {
+    setMenuOpen(false)
+    await signOut()
+    navigate('/login')
+  }
+
   return (
     <header
       style={{
@@ -72,9 +93,62 @@ export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs
             )}
           </Link>
 
-          <Link to={user ? '/profile' : '/login'} style={{ textDecoration: 'none' }}>
-            <Avatar name={myUsername} src={myAvatar} size={36} />
-          </Link>
+          <div ref={menuRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => user && setMenuOpen(p => !p)}
+              aria-label="Account menu"
+              style={{
+                width: 36, height: 36, borderRadius: '50%', padding: 0, border: 'none',
+                cursor: user ? 'pointer' : 'default', overflow: 'hidden',
+              }}
+            >
+              {user ? (
+                <Avatar name={myUsername} src={myAvatar} size={36} />
+              ) : (
+                <Link to="/login" style={{ textDecoration: 'none', display: 'block' }}>
+                  <Avatar name="" size={36} />
+                </Link>
+              )}
+            </button>
+            {menuOpen && user && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 8,
+                minWidth: 180, background: '#fff', borderRadius: theme.radius.lg,
+                border: `1px solid ${theme.border}`, boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                padding: 6, zIndex: 50,
+              }}>
+                <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, marginBottom: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: theme.navy }}>{myUsername || 'User'}</div>
+                  {user.email && <div style={{ fontSize: 12, color: theme.gray500, marginTop: 2 }}>{user.email}</div>}
+                </div>
+                <Link
+                  to="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+                    borderRadius: theme.radius.md, color: theme.navy, fontSize: 13, fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = theme.gray50}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <User size={15} /> Profile
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
+                    borderRadius: theme.radius.md, color: theme.alert, fontSize: 13, fontWeight: 600,
+                    border: 'none', background: 'transparent', cursor: 'pointer', width: '100%',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <LogOut size={15} /> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>
