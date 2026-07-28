@@ -47,7 +47,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
     try {
       await commentRepository.updateComment(commentId, user.id, newContent.trim())
       setEditingComment(null)
-      const fresh = await commentRepository.getByPostId(postId)
+const fresh = await commentRepository.getComments(postId)
       onCommentsChange(fresh)
     } finally {
       setIsLoading(false)
@@ -61,10 +61,8 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
       onCommentsChange(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId))
     } finally {
       setIsLoading(false)
-    }
-  }, [user, onCommentsChange])
 
-  const allComments = comments || []
+  const allComments = Array.isArray(comments) ? comments : []
   const topLevel = allComments.filter(c => !c.parent_id)
   const replies = allComments.filter(c => c.parent_id)
   const repliesByParent = {}
