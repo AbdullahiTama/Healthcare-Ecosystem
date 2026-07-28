@@ -32,7 +32,7 @@ export default function DesktopHeader({ user, myUsername, myAvatar, unreadNotifs
         display: 'flex', alignItems: 'center', gap: 24, padding: '0 24px',
         boxSizing: 'border-box',
       }}>
-        <Link to="/" style={{ flexShrink: 0 }}>
+        <Link to="/" style={{ flexShrink: 0, textDecoration: 'none' }}>
           <Logo size={28} tone="dark" />
         </Link>
 

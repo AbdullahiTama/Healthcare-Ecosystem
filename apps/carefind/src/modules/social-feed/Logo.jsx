@@ -55,6 +55,7 @@ function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
           textTransform: 'uppercase',
           color: wordColor,
           lineHeight: 1,
+          textDecoration: 'none',
         }}
       >
         CareFind
