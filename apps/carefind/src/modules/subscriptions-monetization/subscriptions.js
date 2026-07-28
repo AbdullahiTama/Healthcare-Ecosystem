@@ -58,6 +58,42 @@ export async function subscribe(subscriberId, creatorId, priceCoins) {
   return { error: 'Could not complete subscription' }
 }
 
+// Try wallet first, then return a Paystack payment URL if insufficient.
+// The caller uses the URL to redirect the user to Paystack for card payment.
+export async function subscribeWithPaystackFallback(subscriberId, creatorId, priceCoins, callbackUrl) {
+  const walletResult = await subscribe(subscriberId, creatorId, priceCoins)
+  if (walletResult.ok) return { ok: true }
+  if (walletResult.error) return { error: walletResult.error }
+  if (!walletResult.insufficient) return { error: 'Could not complete subscription' }
+
+  // Wallet insufficient — offer Paystack direct charge
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { error: 'Please log in again' }
+
+    const response = await fetch('/api/charge-subscription', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        creatorId,
+        priceCoins,
+        callback_url: callbackUrl,
+      }),
+    })
+
+    const data = await response.json()
+    if (data.authorization_url) {
+      return { paystackUrl: data.authorization_url }
+    }
+    return { error: data.error || 'Could not initiate payment' }
+  } catch (err) {
+    return { error: 'Network error. Please check your connection.' }
+  }
+}
+
 export async function cancelAutoRenew(subscriberId, creatorId) {
   const { error } = await supabase
     .from('creator_subscriptions')

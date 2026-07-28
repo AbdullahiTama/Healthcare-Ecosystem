@@ -38,7 +38,9 @@ function Wallet() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('wallet')
   const [searchParams] = useSearchParams()
+  const [banks, setBanks] = useState([])
   const [wdAmount, setWdAmount] = useState('')
+  const [wdBankCode, setWdBankCode] = useState('')
   const [wdBankName, setWdBankName] = useState('')
   const [wdAccountNumber, setWdAccountNumber] = useState('')
   const [wdAccountName, setWdAccountName] = useState('')
@@ -116,6 +118,19 @@ function Wallet() {
     if (!authLoading) load()
   }, [user, authLoading])
 
+  useEffect(() => {
+    async function loadBanks() {
+      try {
+        const response = await fetch('/api/banks')
+        if (response.ok) {
+          const data = await response.json()
+          setBanks(data)
+        }
+      } catch (err) {}
+    }
+    loadBanks()
+  }, [])
+
   async function handleTopUp(pkg) {
     if (!user) return
     const { data: { session } } = await supabase.auth.getSession()
@@ -148,26 +163,46 @@ function Wallet() {
   async function handleWithdraw(e) {
     e.preventDefault()
     setWdSubmitting(true)
-    const { data, error } = await supabase.rpc('request_withdrawal', {
-      p_amount: parseInt(wdAmount, 10),
-      p_bank_name: wdBankName.trim(),
-      p_account_number: wdAccountNumber.trim(),
-      p_account_name: wdAccountName.trim(),
-    })
-    setWdSubmitting(false)
 
-    if (error) { showToast('Could not submit withdrawal request. Please try again.', { type: 'error' }); return }
-    if (data !== 'ok') { showToast(WITHDRAWAL_ERRORS[data] || 'Could not submit withdrawal request.', { type: 'warning' }); return }
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) { showToast('Please log in again.', { type: 'error' }); setWdSubmitting(false); return }
 
-    setWdAmount(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName('')
-    const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-    setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
-    const { data: txData } = await supabase
-      .from('transactions').select('*').eq('user_id', user.id)
-      .order('created_at', { ascending: false }).limit(20)
-    setTransactions(txData || [])
-    setTab('history')
-    showToast('Withdrawal requested — it will be reviewed and paid out within 1-3 business days.', { type: 'success' })
+      const response = await fetch('/api/initiate-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          amount: wdAmount,
+          bankCode: wdBankCode,
+          bankName: wdBankName,
+          accountNumber: wdAccountNumber,
+          accountName: wdAccountName,
+        }),
+      })
+      const data = await response.json()
+      setWdSubmitting(false)
+
+      if (!response.ok) {
+        const msg = data.error === 'insufficient' ? "You don't have enough CareCoins for that amount."
+          : data.error === 'Payment provider balance low' ? 'Payment provider balance low — try again later.'
+          : data.error || 'Could not process withdrawal.'
+        showToast(msg, { type: 'error' })
+        return
+      }
+
+      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName('')
+      const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+      setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
+      const { data: txData } = await supabase
+        .from('transactions').select('*').eq('user_id', user.id)
+        .order('created_at', { ascending: false }).limit(20)
+      setTransactions(txData || [])
+      setTab('history')
+      showToast(`₦${data.payoutNaira.toLocaleString()} sent to your bank!`, { type: 'success' })
+    } catch (err) {
+      setWdSubmitting(false)
+      showToast('Network error. Please check your connection and try again.', { type: 'error' })
+    }
   }
 
   function timeAgo(dateStr) {
@@ -344,16 +379,40 @@ function Wallet() {
                     You'll receive ≈ ₦{Math.floor(wdAmount * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
                   </p>
                 )}
-                <Inp label="Bank name" value={wdBankName} onChange={setWdBankName} placeholder="e.g. GTBank" required />
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  Bank
+                  <select
+                    value={wdBankCode}
+                    onChange={(e) => {
+                      const bank = banks.find(b => b.code === e.target.value)
+                      setWdBankCode(e.target.value)
+                      setWdBankName(bank ? bank.name : '')
+                    }}
+                    required
+                    style={{
+                      padding: '10px 12px', fontSize: 13, borderRadius: 12,
+                      border: `1px solid ${theme.border}`, background: '#fff',
+                      color: theme.textDark, fontFamily: 'inherit',
+                    }}
+                  >
+                    <option value="">Select your bank</option>
+                    {banks.map((b) => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
+                  {banks.length === 0 && (
+                    <span style={{ fontSize: 11, color: theme.textLight }}>Loading banks…</span>
+                  )}
+                </label>
                 <Inp label="Account number" value={wdAccountNumber} onChange={setWdAccountNumber} placeholder="0123456789" required />
                 <Inp label="Account name" value={wdAccountName} onChange={setWdAccountName} placeholder="As it appears on your bank account" required />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance}
+                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
