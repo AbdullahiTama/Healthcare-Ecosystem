@@ -8,6 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Loading } from '../../components/ui'
 
 function ClaimBusiness() {
   const { user, loading: authLoading } = useAuth()
@@ -70,7 +71,7 @@ function ClaimBusiness() {
     return myClaims.some((c) => c.business_id === businessId)
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -128,7 +129,7 @@ function ClaimBusiness() {
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: theme.navy }}>{c.businesses?.name}</span>
                   <span style={{
                     fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 20, textTransform: 'capitalize',
-                    background: c.status === 'approved' ? '#ecfdf5' : c.status === 'rejected' ? '#fef2f2' : '#fef3c7',
+                    background: c.status === 'approved' ? theme.tealMist : c.status === 'rejected' ? '#fef2f2' : '#fef3c7',
                     color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.alert : theme.warning,
                   }}>
                     {c.status}
@@ -172,7 +173,7 @@ function ClaimBusiness() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

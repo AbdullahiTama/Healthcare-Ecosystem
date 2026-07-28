@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Stars } from '../../components/ui'
+import { Loading, Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -57,7 +57,7 @@ function Dashboard() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -185,7 +185,7 @@ function Dashboard() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

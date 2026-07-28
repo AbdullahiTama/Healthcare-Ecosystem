@@ -13,6 +13,7 @@ import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
+import { Loading } from '../../components/ui'
 
 function NewsArticle() {
   const { id } = useParams()
@@ -148,7 +149,7 @@ function NewsArticle() {
     return a?.profiles?.full_name || a?.profiles?.display_name || 'CareFind Contributor'
   }
 
-  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading…</div>
+  if (loading) return <Loading />
 
   if (!article || article.status !== 'approved') {
     const notFoundContent = (
@@ -166,7 +167,7 @@ function NewsArticle() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {notFoundContent}
       </AppShell>
     )
@@ -403,7 +404,7 @@ function NewsArticle() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/')}
+      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

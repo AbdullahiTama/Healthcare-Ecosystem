@@ -9,6 +9,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
+import { Loading } from '../../components/ui'
 
 function News() {
   const { user } = useAuth()
@@ -179,7 +180,7 @@ function News() {
         </div>
       )}
 
-      {loading && <p style={{ fontFamily: theme.fontFamily, color: theme.textLight, fontSize: 13, padding: 16 }}>Loading news…</p>}
+      {loading && <Loading />}
       {!loading && articles.length === 0 && (
         <div style={{ textAlign: 'center', padding: '50px 20px', fontFamily: theme.fontFamily }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Newspaper size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
@@ -232,7 +233,7 @@ function News() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{previewing ? 'Preview' : 'Submit News'}</h2>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button onClick={() => setPreviewing(!previewing)} style={{ padding: '6px 12px', background: previewing ? theme.navy : '#ecfdf5', color: previewing ? '#fff' : theme.tealDeep, border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
+                <button onClick={() => setPreviewing(!previewing)} style={{ padding: '6px 12px', background: previewing ? theme.navy : theme.tealMist, color: previewing ? '#fff' : theme.tealDeep, border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     {previewing ? <><Pencil size={13} aria-hidden="true" /> Back to editing</> : <><Eye size={13} aria-hidden="true" /> Preview</>}
                   </span>
@@ -307,7 +308,7 @@ function News() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setPreviewing(true)} style={{ flex: 1, padding: 13, background: '#ecfdf5', color: theme.tealDeep, border: `1px solid ${theme.tealBright}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+                  <button onClick={() => setPreviewing(true)} style={{ flex: 1, padding: 13, background: theme.tealMist, color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Eye size={15} aria-hidden="true" /> Preview</span>
                   </button>
                   <button onClick={submitNews} disabled={submitting} style={{ flex: 1, padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
@@ -328,7 +329,7 @@ function News() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

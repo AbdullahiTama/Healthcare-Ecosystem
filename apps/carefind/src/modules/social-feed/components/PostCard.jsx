@@ -26,7 +26,7 @@ export function PostCard({ post, user, profiles, reactions, commentCount, onLike
   }
 
   return (
-    <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden', marginBottom: 16 }}>
+    <div style={{ background: theme.cardBg, borderRadius: 16, boxShadow: theme.elevation[1], overflow: 'hidden', marginBottom: 16 }}>
       <div style={{ padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
         <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none' }}>
           <Avatar name={authorName(post)} src={profiles[post.user_id]?.avatar_url} size={36} />
@@ -56,7 +56,7 @@ export function PostCard({ post, user, profiles, reactions, commentCount, onLike
             <ChevronRight size={20} />
           </button>
           {showMenu && (
-            <div style={{ position: 'absolute', right: 0, top: '100%', background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, minWidth: 180 }}>
+            <div style={{ position: 'absolute', right: 0, top: '100%', background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 8, boxShadow: theme.elevation[2], zIndex: 10, minWidth: 180 }}>
               {isOwnPost && (
                 <>
                   <button onClick={() => onEdit?.(post)} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: theme.navy }}>Edit</button>

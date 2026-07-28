@@ -112,7 +112,7 @@ function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
     canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
   }
 
-  const COLORS = ['#0f172a', '#0f766e', '#dc2626', '#2563eb', '#7c3aed', '#f59e0b', '#ffffff']
+  const COLORS = ['#0B4A3E', '#0E6F5A', '#dc2626', '#2563eb', '#7c3aed', '#f59e0b', '#ffffff']
 
   return (
     <div style={{ background: '#fff', borderRadius: 16, overflow: 'hidden', border: `2px solid ${theme.tealBright}` }}>
@@ -244,7 +244,7 @@ export default function LiveSession() {
 
   async function loadSession() {
     const { data } = await supabase.from('live_sessions').select('*, profiles(full_name, display_name, avatar_url, specialty, is_verified)').eq('id', id).single()
-    if (!data) { navigate('/'); return }
+    if (!data) { navigate('/feed'); return }
     setSession(data)
     setStrokes(data.board_strokes || [])
     setLikes(data.likes || 0)
@@ -378,7 +378,7 @@ export default function LiveSession() {
       expires_at: expiresAt,
     })
 
-    navigate('/')
+    navigate('/feed')
   }
 
   function shareSession() {
@@ -449,7 +449,7 @@ export default function LiveSession() {
           <button onClick={tapLike} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: liked ? '#fef2f2' : theme.bg, border: `1px solid ${liked ? '#fca5a5' : theme.border}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: liked ? theme.alert : theme.textMid }}>
             <Heart size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Like
           </button>
-          <button onClick={() => setGiftPanel(!giftPanel)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: '#ecfdf5', border: `1px solid ${theme.tealBright}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: theme.tealDeep }}>
+          <button onClick={() => setGiftPanel(!giftPanel)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: theme.tealMist, border: `1px solid ${theme.tealDeep}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: theme.tealDeep }}>
             <Gift size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Gift
           </button>
           <button onClick={shareSession} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: theme.textMid }}>
@@ -465,7 +465,7 @@ export default function LiveSession() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {GIFT_TIERS.map(g => (
                 <button key={g.label} onClick={() => sendGift(g)} disabled={wallet < g.coins}
-                  style={{ padding: '10px 6px', borderRadius: 12, border: `1px solid ${theme.border}`, background: wallet >= g.coins ? '#ecfdf5' : '#f9fafb', cursor: wallet >= g.coins ? 'pointer' : 'not-allowed', opacity: wallet < g.coins ? 0.5 : 1, textAlign: 'center' }}>
+                  style={{ padding: '10px 6px', borderRadius: 12, border: `1px solid ${theme.border}`, background: wallet >= g.coins ? theme.tealMist : theme.gray50, cursor: wallet >= g.coins ? 'pointer' : 'not-allowed', opacity: wallet < g.coins ? 0.5 : 1, textAlign: 'center' }}>
                   <p style={{ margin: '0 0 2px', fontSize: 22 }}>{g.emoji}</p>
                   <p style={{ margin: '0 0 2px', fontSize: 11, fontWeight: 700, color: theme.navy }}>{g.label}</p>
                   <p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: theme.tealDeep, fontWeight: 700 }}><Coins size={10} aria-hidden="true" /> {g.coins}</p>
@@ -546,7 +546,7 @@ export default function LiveSession() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { Building2, Star, TrendingUp } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Stars } from '../../components/ui'
+import { Loading, Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -87,7 +87,7 @@ function BusinessDashboard() {
 
   const selectedBiz = businesses.find((b) => b.id === selectedId)
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -133,7 +133,7 @@ function BusinessDashboard() {
     if (isMobile) return noBusinessContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {noBusinessContent}
       </AppShell>
     )
@@ -273,7 +273,7 @@ function BusinessDashboard() {
               onClick={() => toggleBusinessVisibility(selectedBiz)}
               style={{
                 padding: '7px 14px', borderRadius: 12, border: 'none', fontSize: 12, fontWeight: 700,
-                background: selectedBiz.visible_on_carefind ? '#ecfdf5' : '#fef2f2',
+                background: selectedBiz.visible_on_carefind ? theme.tealMist : '#fef2f2',
                 color: selectedBiz.visible_on_carefind ? theme.success : theme.alert,
               }}
             >
@@ -302,7 +302,7 @@ function BusinessDashboard() {
                   onClick={() => toggleProductVisibility(p)}
                   style={{
                     padding: '6px 12px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700,
-                    background: p.list_on_carefind ? '#ecfdf5' : theme.bg,
+                    background: p.list_on_carefind ? theme.tealMist : theme.bg,
                     color: p.list_on_carefind ? theme.success : theme.textLight,
                   }}
                 >
@@ -345,7 +345,7 @@ function BusinessDashboard() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

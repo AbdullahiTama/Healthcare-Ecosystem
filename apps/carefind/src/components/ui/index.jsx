@@ -22,11 +22,11 @@ export function Pill({ label, type = 'gray', style = {} }) {
     red: { bg: theme.dangerBg, color: theme.danger },
     blue: { bg: theme.infoBg, color: theme.info },
     purple: { bg: '#f5f3ff', color: theme.purple },
-    teal: { bg: '#f0fdfa', color: theme.tealDeep },
+    teal: { bg: theme.tealMist, color: theme.tealDeep },
   }
   const s = map[type] || map.gray
   return (
-    <span style={{ padding: '3px 10px', borderRadius: theme.radius.full, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, whiteSpace: 'nowrap', ...style }}>
+    <span style={{ padding: '3px 10px', borderRadius: theme.radius.full, fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', background: s.bg, color: s.color, whiteSpace: 'nowrap', ...style }}>
       {label}
     </span>
   )
@@ -45,11 +45,15 @@ export function Card({ children, style = {}, onClick, className }) {
       style={{
         background: theme.cardBg,
         borderRadius: theme.radius.lg,
-        border: `1px solid ${theme.border}`,
         boxShadow: theme.elevation[1],
         cursor: onClick ? 'pointer' : 'default',
+        transition: `box-shadow ${theme.motion.base} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
         ...style,
       }}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.boxShadow = theme.elevation[2] } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.boxShadow = theme.elevation[1] } : undefined}
+      onMouseDown={onClick ? (e) => { e.currentTarget.style.transform = 'scale(0.98)' } : undefined}
+      onMouseUp={onClick ? (e) => { e.currentTarget.style.transform = 'scale(1)' } : undefined}
     >
       {children}
     </div>
@@ -80,36 +84,66 @@ const btnBase = {
   fontSize: 13,
   cursor: 'pointer',
   fontFamily: theme.fontFamily,
+  transition: `all ${theme.motion.base} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
 }
 
+const btnHover = {
+  teal: { background: theme.tealHover },
+  dark: { background: '#092D25' },
+  ghost: { borderColor: theme.gray300, background: theme.gray50 },
+  red: { background: theme.dangerBg, color: '#b91c1c' },
+}
+
+const btnActive = { transform: 'scale(0.97)' }
+
 export function TealBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
+  const ref = useRef(null)
   return (
-    <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, background: disabled ? theme.gray200 : theme.tealDeep, color: disabled ? theme.gray400 : 'white', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}>
+    <button ref={ref} type={type} onClick={onClick} disabled={disabled} {...rest}
+      style={{ ...btnBase, background: disabled ? theme.gray200 : theme.tealDeep, color: disabled ? theme.gray400 : 'white', cursor: disabled ? 'not-allowed' : 'pointer', ...style }}
+      onMouseEnter={disabled ? undefined : () => { if (ref.current) ref.current.style.background = theme.tealHover }}
+      onMouseLeave={disabled ? undefined : () => { if (ref.current) ref.current.style.background = theme.tealDeep }}
+      onMouseDown={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(0.97)' }}
+      onMouseUp={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(1)' }}>
       {children}
     </button>
   )
 }
 export function DarkBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
+  const ref = useRef(null)
   return (
-    <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, background: navy, color: 'white', ...style }}>
+    <button ref={ref} type={type} onClick={onClick} disabled={disabled} {...rest}
+      style={{ ...btnBase, background: navy, color: 'white', ...style }}
+      onMouseEnter={disabled ? undefined : () => { if (ref.current) ref.current.style.background = '#092D25' }}
+      onMouseLeave={disabled ? undefined : () => { if (ref.current) ref.current.style.background = navy }}
+      onMouseDown={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(0.97)' }}
+      onMouseUp={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(1)' }}>
       {children}
     </button>
   )
 }
 export function GhostBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
+  const ref = useRef(null)
   return (
-    <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, minHeight: 40, padding: '7px 13px', border: `1px solid ${theme.gray200}`, background: 'white', color: theme.gray600, fontSize: 12, ...style }}>
+    <button ref={ref} type={type} onClick={onClick} disabled={disabled} {...rest}
+      style={{ ...btnBase, minHeight: 40, padding: '7px 13px', border: `1px solid ${theme.gray200}`, background: 'white', color: theme.gray600, fontSize: 12, ...style }}
+      onMouseEnter={disabled ? undefined : () => { if (ref.current) { ref.current.style.borderColor = theme.gray300; ref.current.style.background = theme.gray50 } }}
+      onMouseLeave={disabled ? undefined : () => { if (ref.current) { ref.current.style.borderColor = theme.gray200; ref.current.style.background = 'white' } }}
+      onMouseDown={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(0.97)' }}
+      onMouseUp={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(1)' }}>
       {children}
     </button>
   )
 }
 export function RedBtn({ children, onClick, style = {}, disabled, type = 'button', ...rest }) {
+  const ref = useRef(null)
   return (
-    <button type={type} onClick={onClick} disabled={disabled} {...rest}
-      style={{ ...btnBase, minHeight: 40, padding: '7px 13px', background: theme.dangerBg, color: theme.danger, fontSize: 12, ...style }}>
+    <button ref={ref} type={type} onClick={onClick} disabled={disabled} {...rest}
+      style={{ ...btnBase, minHeight: 40, padding: '7px 13px', background: theme.dangerBg, color: theme.danger, fontSize: 12, ...style }}
+      onMouseEnter={disabled ? undefined : () => { if (ref.current) { ref.current.style.background = '#fef2f2'; ref.current.style.color = '#b91c1c' } }}
+      onMouseLeave={disabled ? undefined : () => { if (ref.current) { ref.current.style.background = theme.dangerBg; ref.current.style.color = theme.danger } }}
+      onMouseDown={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(0.97)' }}
+      onMouseUp={disabled ? undefined : () => { if (ref.current) ref.current.style.transform = 'scale(1)' }}>
       {children}
     </button>
   )
@@ -213,7 +247,7 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
       maxWidth: 'calc(100% - 32px)',
       padding: '12px 20px', borderRadius: theme.radius.lg,
       background: v.bg, color: 'white', fontWeight: 700, fontSize: 13,
-      boxShadow: '0 4px 16px rgba(15,118,110,0.4)', textAlign: 'center',
+      boxShadow: '0 4px 16px rgba(14,111,90,0.4)', textAlign: 'center',
       display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
     }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -270,7 +304,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
       aria-labelledby="cf-modal-title"
       className="cf-backdrop-enter"
       onClick={() => { if (!preventBackdropClose) onClose?.() }}
-      style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: sheet ? 'flex-end' : 'center', justifyContent: 'center', padding: sheet ? 0 : 16, overflowY: 'auto' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(11,74,62,0.55)', display: 'flex', alignItems: sheet ? 'flex-end' : 'center', justifyContent: 'center', padding: sheet ? 0 : 16, overflowY: 'auto' }}
     >
       <div ref={cardRef} onClick={(e) => e.stopPropagation()} className={sheet ? 'cf-sheet-enter' : 'cf-dialog-enter'} style={{
         width: '100%', maxWidth: wide ? 700 : 500,
@@ -327,7 +361,7 @@ export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder
       {label && <label htmlFor={inputId} style={{ display: 'block', fontSize: 11, fontWeight: 700, color: theme.gray600, marginBottom: 6 }}>{label}{required && <span style={{ color: theme.danger }} aria-hidden="true"> *</span>}</label>}
       <input id={inputId} type={type} value={value || ''} onChange={e => onChange && onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} readOnly={readOnly} min={min} {...rest}
         required={required} aria-invalid={!!error} aria-describedby={error ? `${inputId}-error` : undefined}
-        style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: readOnly ? theme.gray50 : 'white', fontFamily: theme.fontFamily }} />
+        style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${error ? theme.danger : theme.gray200}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: readOnly ? theme.gray50 : 'white', fontFamily: theme.fontFamily, transition: `border-color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}` }} />
       {error && <div id={`${inputId}-error`} style={{ fontSize: 11, color: theme.danger, marginTop: 4 }}>{error}</div>}
     </div>
   )
@@ -375,12 +409,20 @@ export function Toggle({ label, desc, value, onChange }) {
   )
 }
 
-// ── LOADING (spinner — button-level / short indeterminate waits only) ───────
-export function Loading({ text = 'Loading...' }) {
+// ── LOADING (spinner) ────────────────────────────────────────────────────────
+export function Loading({ text = 'Loading...', fullScreen = false }) {
   return (
-    <div role="status" aria-live="polite" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.gray400 }}>
-      <div className="cf-spinner" style={{ width: 28, height: 28, borderRadius: theme.radius.full, border: `3px solid ${theme.gray200}`, borderTopColor: theme.tealDeep, marginBottom: 12 }} />
-      <div style={{ fontSize: 14 }}>{text}</div>
+    <div role="status" aria-live="polite" style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: fullScreen ? 0 : 60,
+      minHeight: fullScreen ? '100vh' : undefined,
+      color: theme.gray400,
+    }}>
+      <div className="cf-spinner" style={{ width: fullScreen ? 36 : 28, height: fullScreen ? 36 : 28, borderRadius: theme.radius.full, border: `3px solid ${theme.gray200}`, borderTopColor: theme.tealDeep, marginBottom: 14 }} />
+      <div style={{ fontSize: fullScreen ? 15 : 14, fontWeight: 600, color: theme.textLight }}>{text}</div>
     </div>
   )
 }

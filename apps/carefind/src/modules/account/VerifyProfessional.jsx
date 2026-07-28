@@ -8,6 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Loading } from '../../components/ui'
 
 const SPECIALTIES = [
   'Pharmacist', 'Medical Doctor', 'Cardiologist', 'Surgeon', 'Pediatrician',
@@ -115,7 +116,7 @@ function VerifyProfessional() {
     setSubmitting(false)
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -148,7 +149,7 @@ function VerifyProfessional() {
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
               <div style={{
                 width: 56, height: 56, borderRadius: 16,
-                background: existingRequest.status === 'approved' ? '#ecfdf5' : existingRequest.status === 'rejected' ? '#fef2f2' : '#fef3c7',
+                background: existingRequest.status === 'approved' ? theme.tealMist : existingRequest.status === 'rejected' ? '#fef2f2' : '#fef3c7',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
               }}>
                 {existingRequest.status === 'approved'
@@ -164,7 +165,7 @@ function VerifyProfessional() {
               <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 4px 0' }}>{existingRequest.full_name}</p>
               <p style={{ fontSize: 13, fontWeight: 700, color: theme.tealDeep, margin: 0 }}>{existingRequest.profession}</p>
               {existingRequest.status === 'approved' && (
-                <div style={{ marginTop: 12, background: '#ecfdf5', borderRadius: 12, padding: '8px 14px', display: 'inline-block' }}>
+                <div style={{ marginTop: 12, background: theme.tealMist, borderRadius: 12, padding: '8px 14px', display: 'inline-block' }}>
                   <p style={{ margin: 0, fontSize: 12, color: theme.success, fontWeight: 700 }}>
                     <BadgeCheck size={14} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 5 }} />{existingRequest.profession} badge is live on your profile and posts
                   </p>
@@ -262,7 +263,7 @@ function VerifyProfessional() {
 
               {step === 2 && (
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 4 }}>
+                  <div style={{ background: theme.tealMist, borderRadius: 12, padding: 12, marginBottom: 4 }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{form.full_name}</p>
                     <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}><BadgeCheck size={13} aria-hidden="true" /> {form.profession}</p>
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} · {form.years_experience}</p>
@@ -332,7 +333,7 @@ function VerifyProfessional() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

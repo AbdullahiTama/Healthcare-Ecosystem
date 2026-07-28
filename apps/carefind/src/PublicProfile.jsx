@@ -52,7 +52,7 @@ function PublicProfile() {
   const STORY_DURATION = 6000
 
   const visualThemes = {
-    teal: 'linear-gradient(135deg, #0f766e, #134e4a)',
+    teal: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
     sunset: 'linear-gradient(135deg, #f97316, #db2777)',
     ocean: 'linear-gradient(135deg, #0ea5e9, #1e3a8a)',
     purple: 'linear-gradient(135deg, #7c3aed, #4c1d95)',
@@ -252,7 +252,7 @@ function PublicProfile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {loadingContent}
       </AppShell>
     )
@@ -275,7 +275,7 @@ function PublicProfile() {
             </>
           }
           action="Back to the feed"
-          onAction={() => navigate('/')}
+          onAction={() => navigate('/feed')}
         />
         {isMobile && <BottomNav />}
       </div>
@@ -284,7 +284,7 @@ function PublicProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {notFoundContent}
       </AppShell>
     )
@@ -740,7 +740,7 @@ function PublicProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/')}
+      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

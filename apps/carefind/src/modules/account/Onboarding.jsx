@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { Check, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { Loading } from '../../components/ui'
 
 // Username rule: lowercase letters, numbers, underscores. 3-20 chars.
 function normalizeUsername(raw) {
@@ -101,15 +102,11 @@ function Onboarding() {
       return
     }
 
-    navigate('/')
+    navigate('/feed')
   }
 
   if (authLoading || loadingProfile) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: theme.fontFamily }}>
-        <p style={{ color: theme.textLight }}>Loading...</p>
-      </div>
-    )
+    return <Loading fullScreen />
   }
 
   const inputStyle = { padding: 13, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 13, width: '100%', boxSizing: 'border-box' }

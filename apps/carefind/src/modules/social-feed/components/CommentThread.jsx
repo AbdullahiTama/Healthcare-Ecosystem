@@ -21,7 +21,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
 
     setIsLoading(true)
     try {
-      const newComment = await commentRepository.add(postId, user.id, text, parentId)
+      const newComment = await commentRepository.addComment(postId, user.id, text, parentId)
       if (newComment) {
         setCommentDrafts(prev => {
           const cleared = { ...prev, [postId]: '' }
@@ -33,7 +33,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
         })
         setReplyingTo(null)
 
-        const fresh = await commentRepository.getByPostId(postId)
+        const fresh = await commentRepository.getComments(postId)
         onCommentsChange(fresh)
       }
     } finally {
@@ -45,7 +45,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
     if (!newContent.trim()) return
     setIsLoading(true)
     try {
-      await commentRepository.update(commentId, user.id, { content: newContent.trim() })
+      await commentRepository.updateComment(commentId, user.id, newContent.trim())
       setEditingComment(null)
       const fresh = await commentRepository.getByPostId(postId)
       onCommentsChange(fresh)
@@ -57,7 +57,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
   const handleDeleteComment = useCallback(async (commentId) => {
     setIsLoading(true)
     try {
-      await commentRepository.remove(commentId, user.id)
+      await commentRepository.deleteComment(commentId, user.id)
       onCommentsChange(prev => prev.filter(c => c.id !== commentId && c.parent_id !== commentId))
     } finally {
       setIsLoading(false)

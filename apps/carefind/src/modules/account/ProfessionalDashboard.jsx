@@ -8,6 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { Loading } from '../../components/ui'
 
 function ProfessionalDashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -44,7 +45,7 @@ function ProfessionalDashboard() {
     if (!authLoading) load()
   }, [user, authLoading])
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -90,7 +91,7 @@ function ProfessionalDashboard() {
     if (isMobile) return verifyRequiredContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {verifyRequiredContent}
       </AppShell>
     )
@@ -136,7 +137,7 @@ function ProfessionalDashboard() {
 
       <div style={isMobile ? { padding: '20px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Link to="/earn" style={{ textDecoration: 'none' }}>
-          <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: '#ecfdf5', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+          <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12, background: theme.tealMist, boxShadow: theme.elevation[1] }}>
             <span style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><WalletIcon size={17} aria-hidden="true" /></span>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontSize: 13.5, color: theme.tealDeep, fontWeight: 800 }}>Earn on CareFind</p>
@@ -172,7 +173,7 @@ function ProfessionalDashboard() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

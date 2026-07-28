@@ -10,7 +10,7 @@ import { Avatar } from '../ui'
 // linked to nowhere. Icons are lucide (ICONS.md): a single stroke-based set
 // across the whole product, never emoji.
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', Icon: Home, end: true },
+  { to: '/feed', label: 'Home', Icon: Home, end: true },
   { to: '/search', label: 'Discover', Icon: Compass },
   { to: '/news', label: 'News', Icon: Newspaper },
   { to: '/wallet', label: 'Wallet', Icon: Wallet },
@@ -29,7 +29,7 @@ function NavRow({ item, active, collapsed, badge }) {
         borderRadius: theme.radius.md,
         textDecoration: 'none',
         color: active ? theme.tealDeep : theme.gray600,
-        background: active ? '#ecfdf5' : 'transparent',
+        background: active ? theme.tealMist : 'transparent',
         fontWeight: active ? 800 : 600,
         fontSize: 14,
         position: 'relative',

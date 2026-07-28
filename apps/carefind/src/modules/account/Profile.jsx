@@ -62,7 +62,7 @@ function Profile() {
   const [storyComposer, setStoryComposer] = useState(false)
   const [sTitle, setSTitle] = useState('')
   const [sBody, setSBody] = useState('')
-  const [sBg, setSBg] = useState('#0f766e')
+  const [sBg, setSBg] = useState('#0E6F5A')
   const [sImage, setSImage] = useState(null)
   const [postingStory, setPostingStory] = useState(false)
   const [viewStory, setViewStory] = useState(null)
@@ -212,7 +212,7 @@ function Profile() {
     })
     setPostingStory(false)
     if (!error) {
-      setSTitle(''); setSBody(''); setSBg('#0f766e'); setSImage(null); setStoryComposer(false)
+      setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
       loadMyStories()
     } else {
       showToast('Could not post story: ' + error.message, { type: 'error' })
@@ -362,7 +362,7 @@ function Profile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {loadingContent}
       </AppShell>
     )
@@ -643,7 +643,7 @@ function Profile() {
           {hasAnyIdentity && (
             <div
               onClick={switchToPersonal}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${!activeBiz && !activeStaff ? theme.tealDeep : theme.border}`, background: !activeBiz && !activeStaff ? '#ecfdf5' : theme.cardBg, marginBottom: 8, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${!activeBiz && !activeStaff ? theme.tealDeep : theme.border}`, background: !activeBiz && !activeStaff ? theme.tealMist : theme.cardBg, marginBottom: 8, cursor: 'pointer' }}
             >
               <div style={{ width: 40, height: 40, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15 }}>
                 {displayLabel[0]?.toUpperCase()}
@@ -660,7 +660,7 @@ function Profile() {
           {ownedBusinesses.map((b) => {
             const isActive = activeBiz?.id === b.id
             return (
-              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? '#ecfdf5' : theme.cardBg, marginBottom: 8 }}>
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? theme.tealMist : theme.cardBg, marginBottom: 8 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
                   {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={18} aria-hidden="true" />)}
                 </div>
@@ -684,7 +684,7 @@ function Profile() {
             const isActive = activeStaff?.staffId === c.staff_id
             const title = c.staff?.public_title || 'Team Member'
             return (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? '#ecfdf5' : theme.cardBg, marginBottom: 8 }}>
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${isActive ? theme.tealDeep : theme.border}`, background: isActive ? theme.tealMist : theme.cardBg, marginBottom: 8 }}>
                 <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: theme.navy, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
                   <Award size={19} aria-hidden="true" />
                 </div>
@@ -905,7 +905,7 @@ function Profile() {
               <textarea value={sBody} onChange={(e) => setSBody(e.target.value)} placeholder="Say something…" rows={2} style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              {['#0f766e', '#1e293b', '#be185d', '#0369a1', '#166534', '#b45309'].map(c => (
+              {['#0E6F5A', '#155A4B', '#be185d', '#0369a1', '#166534', '#b45309'].map(c => (
                 <button key={c} onClick={() => setSBg(c)} style={{ width: 30, height: 30, borderRadius: '50%', background: c, border: sBg === c ? '3px solid #333' : 'none' }} />
               ))}
             </div>
@@ -943,7 +943,7 @@ function Profile() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

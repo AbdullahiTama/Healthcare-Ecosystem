@@ -14,7 +14,7 @@ import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSe
 import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
-import { StarPicker, Stars } from '../../components/ui'
+import { Loading, StarPicker, Stars } from '../../components/ui'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -150,7 +150,7 @@ function DrugProfile() {
 
   const alreadyReviewedSelected = userReviewedIds.includes(selectedProductId)
 
-  if (loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (loading) return <Loading />
 
   if (products.length === 0) {
     const notFoundContent = (
@@ -174,7 +174,7 @@ function DrugProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {notFoundContent}
       </AppShell>
     )
@@ -217,7 +217,7 @@ function DrugProfile() {
           ))}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <div style={{ flex: 1, background: '#ecfdf5', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: theme.successBg, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.success }}>{positive.length}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.success, fontWeight: 700 }}>Positive</p>
             </div>
@@ -306,7 +306,7 @@ function DrugProfile() {
               <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><ThumbsUp size={13} aria-hidden="true" /> People also praise</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.positiveThemes.map((t) => (
-                  <span key={t} style={{ padding: '3px 10px', background: '#ecfdf5', border: `1px solid #bbf7d0`, borderRadius: 20, fontSize: 12, color: theme.success, fontWeight: 600 }}>
+                  <span key={t} style={{ padding: '3px 10px', background: theme.successBg, border: `1px solid #bbf7d0`, borderRadius: 20, fontSize: 12, color: theme.success, fontWeight: 600 }}>
                     {t}
                   </span>
                 ))}
@@ -414,7 +414,7 @@ function DrugProfile() {
                 {(p.sale_type || p.min_purchase) && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                     {p.sale_type && (
-                      <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'wholesale' ? '#7c3aed' : theme.tealDeep, background: p.sale_type === 'wholesale' ? '#f3e8ff' : '#ecfdf5', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{p.sale_type}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'wholesale' ? '#7c3aed' : theme.tealDeep, background: p.sale_type === 'wholesale' ? '#f3e8ff' : theme.tealMist, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{p.sale_type}</span>
                     )}
                     {p.min_purchase && (
                       <span style={{ fontSize: 9.5, fontWeight: 700, color: theme.textMid, background: theme.bg, padding: '2px 8px', borderRadius: 10 }}>
@@ -544,7 +544,7 @@ function DrugProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/')}
+      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

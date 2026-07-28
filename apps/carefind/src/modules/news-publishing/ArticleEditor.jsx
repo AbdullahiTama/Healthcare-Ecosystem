@@ -193,7 +193,7 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
     setDraggingLabel(null)
   }
 
-  const COLORS = ['#0f172a', '#0f766e', '#dc2626', '#2563eb', '#7c3aed', '#d97706', '#ffffff']
+  const COLORS = ['#0B4A3E', '#0E6F5A', '#dc2626', '#2563eb', '#7c3aed', '#d97706', '#ffffff']
   const SIZES = [2, 4, 7, 12]
 
   return (
@@ -442,7 +442,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
         <button
           type="button"
           onClick={insertDrawing}
-          style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.tealDeep}`, background: '#ecfdf5', color: theme.tealDeep, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}
+          style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.tealDeep}`, background: theme.tealMist, color: theme.tealDeep, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}
         >
           ✏️ + Drawing
         </button>

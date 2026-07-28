@@ -8,7 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint.js'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Inp, Toast, useToast } from '../../components/ui/index.jsx'
+import { Inp, Loading, Toast, useToast } from '../../components/ui/index.jsx'
 
 const WITHDRAWAL_FEE_RATE = 0.2
 
@@ -190,7 +190,7 @@ function Wallet() {
   const txKind = (type) => TX_KIND[type] || { Icon: WalletIcon, tint: theme.gray500 }
   const isCredit = (type) => type === 'topup' || type === 'gift_received' || type === 'withdrawal_refund'
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user) {
     return (
@@ -377,7 +377,7 @@ function Wallet() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

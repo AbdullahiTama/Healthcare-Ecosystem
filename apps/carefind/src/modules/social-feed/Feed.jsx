@@ -28,6 +28,7 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import { shareOrCopy } from '../../utils/share.js'
+import { CommentThread } from './components/CommentThread.jsx'
 import PostMenu from './PostMenu.jsx'
 import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -64,9 +65,11 @@ function Feed() {
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
   const [editingPost, setEditingPost] = useState(null) // { id, content }
   const [editingComment, setEditingComment] = useState(null) // { id, content, post_id }
+  const [replyingTo, setReplyingTo] = useState(null) // { commentId, postId }
   const [deletingId, setDeletingId] = useState(null)
   const [comments, setComments] = useState({})
   const [openComments, setOpenComments] = useState({})
+  const openCommentsRef = useRef(openComments)
   const [commentDrafts, setCommentDrafts] = useState({})
   const [content, setContent] = useState('')
   const [postType, setPostType] = useState('text') // text, visual, question, review, article
@@ -311,6 +314,39 @@ function Feed() {
     loadSeries()
     loadLiveSessions()
   }, [user])
+
+  openCommentsRef.current = openComments
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('post-comments-realtime')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'post_comments' },
+        (payload) => {
+          const newComment = payload.new
+          if (openCommentsRef.current[newComment.post_id]) {
+            supabase
+              .from('post_comments')
+              .select('id, content, created_at, user_id, parent_id, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url)')
+              .eq('id', newComment.id)
+              .single()
+              .then(({ data }) => {
+                if (data) {
+                  setComments(prev => {
+                    const existing = prev[data.post_id] || []
+                    if (existing.some(c => c.id === data.id)) return prev
+                    return { ...prev, [data.post_id]: [...existing, data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) }
+                  })
+                }
+              })
+            setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   async function loadLiveSessions() {
     const { data } = await supabase
@@ -624,23 +660,6 @@ function Feed() {
     setDeletingId(null)
   }
 
-  async function handleEditComment(commentId, postId, newContent) {
-    if (!newContent.trim()) return
-    await supabase.from('post_comments').update({ content: newContent.trim() }).eq('id', commentId).eq('user_id', user.id)
-    setEditingComment(null)
-    const { data } = await supabase
-      .from('post_comments')
-      .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-    setComments((prev) => ({ ...prev, [postId]: data || [] }))
-  }
-
-  async function handleDeleteComment(commentId, postId) {
-    await supabase.from('post_comments').delete().eq('id', commentId).eq('user_id', user.id)
-    setComments((prev) => ({ ...prev, [postId]: (prev[postId] || []).filter((c) => c.id !== commentId) }))
-  }
-
   async function toggleLike(postId) {
     if (!user) return
     const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
@@ -666,35 +685,16 @@ function Feed() {
     if (isOpen && !comments[postId]) {
       const { data } = await supabase
         .from('post_comments')
-        .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
+        .select('id, content, created_at, user_id, parent_id, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
       setComments({ ...comments, [postId]: data || [] })
     }
   }
 
-  async function handleAddComment(postId) {
-    const text = (commentDrafts[postId] || '').trim()
-    if (!text || !user) return
-
-    const { error } = await supabase.from('post_comments').insert({
-      post_id: postId,
-      user_id: user.id,
-      content: text,
-    })
-
-    if (!error) {
-      setCommentDrafts({ ...commentDrafts, [postId]: '' })
-      // Notify the post author
-      const post = posts.find((p) => p.id === postId)
-      if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/', postId })
-      const { data } = await supabase
-        .from('post_comments')
-        .select('id, content, created_at, user_id, profiles(id, display_name, full_name, is_verified, specialty, avatar_url)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
-      setComments({ ...comments, [postId]: data || [] })
-    }
+  async function handleNotifyComment(postId) {
+    const post = posts.find((p) => p.id === postId)
+    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
   }
 
   function isFollowing(authorId) {
@@ -827,8 +827,8 @@ function Feed() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: 'sans-serif', maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 90 }
-      : { fontFamily: 'sans-serif' }}>
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 90 }
+      : { fontFamily: theme.fontFamily }}>
       <style>{`
         .article-body p { margin: 0 0 14px 0; }
         .article-body p:last-child { margin-bottom: 0; }
@@ -864,7 +864,7 @@ function Feed() {
               {unreadNotifs > 0 && (
                 <span style={{
                   position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
-                  borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900,
+                  borderRadius: 8, background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
                   border: `1.5px solid ${theme.navy}`,
                 }}>{unreadNotifs > 99 ? '99+' : unreadNotifs}</span>
@@ -984,7 +984,7 @@ function Feed() {
       {user && !profileComplete && !bannerDismissed && (
         <Link to="/onboarding" style={{ textDecoration: 'none' }}>
           <div style={{
-            marginTop: 16, background: '#ecfdf5', border: `1px solid ${theme.tealBright}`, borderRadius: 14,
+            marginTop: 16, background: theme.tealMist, border: `1px solid ${theme.tealDeep}`, borderRadius: 14,
             padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
           }}>
             <Hand size={20} color={theme.tealDeep} aria-hidden="true" />
@@ -1218,7 +1218,7 @@ function Feed() {
           {postType === 'review' && (
             <div style={{ marginBottom: 10 }}>
               {reviewTarget ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? '#fef9c3' : '#ecfdf5', borderRadius: 12, padding: '8px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? theme.warningBg : theme.tealMist, borderRadius: 12, padding: '8px 12px' }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: reviewTarget.type === 'unclaimed' ? '#a16207' : theme.tealDeep, flex: 1 }}>
                     {(reviewTarget.type === 'business' || reviewTarget.entityType === 'business')
                       ? <Building2 size={15} style={{ flexShrink: 0 }} aria-hidden="true" />
@@ -1392,7 +1392,7 @@ function Feed() {
         </form>
       ) : (
         <p style={{ color: '#666', fontSize: 14, marginBottom: 20 }}>
-          <Link to="/login" style={{ color: '#0f766e', fontWeight: 600 }}>Log in</Link> to post and join the conversation.
+          <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 600 }}>Log in</Link> to post and join the conversation.
         </p>
       )}
 
@@ -1747,71 +1747,20 @@ function Feed() {
             </div>
 
             {openComments[post.id] && (
-              <div style={{ paddingTop: 10, borderTop: `1px solid ${theme.border}`, paddingLeft: post.post_type === 'visual' ? 14 : 0, paddingRight: post.post_type === 'visual' ? 14 : 0, paddingBottom: post.post_type === 'visual' ? 14 : 0 }}>
-                {(comments[post.id] || []).map((c) => (
-                  <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
-                    <Link to={`/u/${c.user_id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
-                      <Avatar name={c.profiles?.full_name || c.profiles?.display_name} src={c.profiles?.avatar_url} size={30} />
-                    </Link>
-                    <div style={{ flex: 1, background: theme.bg, borderRadius: 12, padding: '8px 10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Link to={`/u/${c.user_id}`} style={{ textDecoration: 'none' }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: theme.navy }}>
-                              {c.profiles?.full_name || c.profiles?.display_name || 'CareFind User'}
-                            </span>
-                          </Link>
-                          {c.profiles?.is_verified && (
-                            <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>
-                              <BadgeCheck size={11} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 3 }} />{c.profiles?.specialty || ''}
-                            </span>
-                          )}
-                        </div>
-                        {user && c.user_id === user.id && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => setEditingComment({ id: c.id, content: c.content, post_id: post.id })} aria-label="Edit comment" style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.gray400, display: 'flex', alignItems: 'center', padding: 2 }}><Pencil size={13} aria-hidden="true" /></button>
-                            <button onClick={() => handleDeleteComment(c.id, post.id)} aria-label="Delete comment" style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.alert, display: 'flex', alignItems: 'center', padding: 2 }}><Trash2 size={13} aria-hidden="true" /></button>
-                          </div>
-                        )}
-                      </div>
-                      {editingComment?.id === c.id ? (
-                        <div style={{ display: 'flex', gap: 5, marginTop: 4 }}>
-                          <input
-                            value={editingComment.content}
-                            onChange={(e) => setEditingComment({ ...editingComment, content: e.target.value })}
-                            style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: `1px solid ${theme.tealDeep}`, borderRadius: 8 }}
-                          />
-                          <button onClick={() => handleEditComment(c.id, post.id, editingComment.content)} style={{ padding: '5px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>Save</button>
-                          <button onClick={() => setEditingComment(null)} aria-label="Cancel edit" style={{ padding: '5px 8px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 8, display: 'flex', alignItems: 'center', cursor: 'pointer' }}><X size={13} aria-hidden="true" /></button>
-                        </div>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {user ? (
-                  <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
-                    <Avatar name={myUsername || user.email} src={myAvatar} size={28} />
-                    <input
-                      type="text"
-                      value={commentDrafts[post.id] || ''}
-                      onChange={(e) => setCommentDrafts({ ...commentDrafts, [post.id]: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddComment(post.id)}
-                      placeholder="Add a comment..."
-                      style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, outline: 'none' }}
-                    />
-                    <TealBtn onClick={() => handleAddComment(post.id)} style={{ padding: '10px 16px', borderRadius: 20, fontSize: 12 }}>
-                      Post
-                    </TealBtn>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 13, color: theme.textLight }}>
-                    <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 700 }}>Log in</Link> to comment.
-                  </p>
-                )}
-              </div>
+              <CommentThread
+                postId={post.id}
+                user={user}
+                comments={comments[post.id] || []}
+                onCommentsChange={(updated) => setComments(prev => ({ ...prev, [post.id]: updated }))}
+                editingComment={editingComment}
+                setEditingComment={setEditingComment}
+                replyingTo={replyingTo}
+                setReplyingTo={setReplyingTo}
+                commentDrafts={commentDrafts}
+                setCommentDrafts={setCommentDrafts}
+                myUsername={myUsername}
+                myAvatar={myAvatar}
+              />
             )}
           </Card>
         ))}

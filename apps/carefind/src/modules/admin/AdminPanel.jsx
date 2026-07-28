@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
-import { Toast, useToast, ConfirmDialog } from '../../components/ui'
+import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
 import VideoUploader from '../../components/VideoUploader.jsx'
@@ -82,7 +82,7 @@ export default function AdminPanel() {
   const [stories, setStories] = useState([])
   const [storyTitle, setStoryTitle] = useState('')
   const [storyBody, setStoryBody] = useState('')
-  const [storyBg, setStoryBg] = useState('#0f766e')
+  const [storyBg, setStoryBg] = useState('#0E6F5A')
   const [storyImageFile, setStoryImageFile] = useState(null)
   const [savingStory, setSavingStory] = useState(false)
   const [newsItems, setNewsItems] = useState([])
@@ -564,7 +564,7 @@ export default function AdminPanel() {
         imageUrl,
         bgColor: storyBg,
       })
-      setStoryTitle(''); setStoryBody(''); setStoryBg('#0f766e'); setStoryImageFile(null)
+      setStoryTitle(''); setStoryBody(''); setStoryBg('#0E6F5A'); setStoryImageFile(null)
       loadStories()
       showToast('Story published', { type: 'success' })
     } catch (err) {
@@ -771,11 +771,7 @@ export default function AdminPanel() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
-      <p style={{ color: '#64748b' }}>Loading...</p>
-    </div>
-  )
+  if (loading) return <Loading fullScreen />
 
   const TABS = [
     { key: 'overview', label: '📊 Overview' },
@@ -823,7 +819,7 @@ export default function AdminPanel() {
                 <button onClick={() => setTab('overview')} style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   🔔
                 </button>
-                <div style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #0f766e' }}>
+                <div style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center',                     border: '2px solid #0E6F5A' }}>
                   {roleNotifCount > 99 ? '99+' : roleNotifCount}
                 </div>
               </div>
@@ -881,7 +877,7 @@ export default function AdminPanel() {
                       { label: 'Users', value: users.filter(u => (!dateFrom || u.created_at >= dateFrom) && (!dateTo || u.created_at <= dateTo + 'T23:59:59')).length },
                       { label: 'Transactions', value: transactions.filter(t => (!dateFrom || t.created_at >= dateFrom) && (!dateTo || t.created_at <= dateTo + 'T23:59:59')).length },
                     ].map(s => (
-                      <div key={s.label} style={{ flex: 1, background: '#ecfdf5', borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
+                      <div key={s.label} style={{ flex: 1, background: theme.tealMist, borderRadius: 10, padding: '8px 6px', textAlign: 'center' }}>
                         <p style={{ margin: '0 0 2px 0', fontSize: 18, fontWeight: 900, color: theme.tealDeep }}>{s.value}</p>
                         <p style={{ margin: 0, fontSize: 10, color: theme.textLight, fontWeight: 700 }}>{s.label}</p>
                       </div>
@@ -906,7 +902,7 @@ export default function AdminPanel() {
                     {v.phone && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textLight }}>{v.phone} · {v.workplace}</p>}
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(v.created_at)}</p>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: v.status === 'approved' ? '#ecfdf5' : v.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: v.status === 'approved' ? theme.success : v.status === 'rejected' ? theme.alert : '#92400e' }}>{v.status}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: v.status === 'approved' ? theme.tealMist : v.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: v.status === 'approved' ? theme.success : v.status === 'rejected' ? theme.alert : '#92400e' }}>{v.status}</span>
                 </div>
                 {v.credential_url && <a href={v.credential_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: 10, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>📎 View Credential</a>}
                 {v.status === 'pending' && (
@@ -930,7 +926,7 @@ export default function AdminPanel() {
                     <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{c.businesses?.name}</p>
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(c.created_at)}</p>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: c.status === 'approved' ? '#ecfdf5' : c.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.alert : '#92400e' }}>{c.status}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: c.status === 'approved' ? theme.tealMist : c.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.alert : '#92400e' }}>{c.status}</span>
                 </div>
                 {c.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -966,7 +962,7 @@ export default function AdminPanel() {
           <div>
             {/* User Detail Modal */}
             {selectedUser && (
-              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: '#ecfdf5', marginBottom: 14 }}>
+              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: theme.tealMist, marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>👤 User Details</h3>
                   <button onClick={() => setSelectedUser(null)} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>✕</button>
@@ -1102,7 +1098,7 @@ export default function AdminPanel() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <p style={{ margin: '0 0 1px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{u.full_name || u.display_name || 'No name'}</p>
-                      {u.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>✓</span>}
+                      {u.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: theme.tealMist, padding: '1px 6px', borderRadius: 20 }}>✓</span>}
                     </div>
                     {u.display_name && u.full_name && <p style={{ margin: '0 0 1px 0', fontSize: 11, color: theme.textLight }}>@{u.display_name}</p>}
                     {u.verification_label && <p style={{ margin: '0 0 1px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{u.verification_label}</p>}
@@ -1128,7 +1124,7 @@ export default function AdminPanel() {
           <div>
             {/* Post Detail Panel */}
             {selectedPost && (
-              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: '#ecfdf5', marginBottom: 14 }}>
+              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: theme.tealMist, marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>📝 Post Detail</h3>
                   <button onClick={() => { setSelectedPost(null); setPostAuthor(null) }} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>✕</button>
@@ -1142,7 +1138,7 @@ export default function AdminPanel() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.navy }}>{postAuthor?.full_name || postAuthor?.display_name || 'Unknown user'}</p>
-                      {postAuthor?.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '1px 6px', borderRadius: 20 }}>✓</span>}
+                      {postAuthor?.is_verified && <span style={{ fontSize: 9, fontWeight: 800, color: theme.tealDeep, background: theme.tealMist, padding: '1px 6px', borderRadius: 20 }}>✓</span>}
                     </div>
                     {postAuthor?.display_name && postAuthor?.full_name && <p style={{ margin: '1px 0 0 0', fontSize: 11, color: theme.textLight }}>@{postAuthor.display_name}</p>}
                     {postAuthor?.verification_label && <p style={{ margin: '1px 0 0 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{postAuthor.verification_label}</p>}
@@ -1216,7 +1212,7 @@ export default function AdminPanel() {
                     <div key={p.id} style={card}>
                       <div onClick={() => viewPostDetails(p)} style={{ cursor: 'pointer' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: '#ecfdf5', padding: '2px 7px', borderRadius: 20 }}>{p.post_type}</span>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: theme.tealMist, padding: '2px 7px', borderRadius: 20 }}>{p.post_type}</span>
                           <span style={{ fontSize: 11, color: theme.textLight }}>{timeAgo(p.created_at)}</span>
                         </div>
                         <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '…' : ''}</p>
@@ -1301,7 +1297,7 @@ export default function AdminPanel() {
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                     {[
-                      { label: 'Positive', value: positive, color: '#ecfdf5', textColor: theme.success },
+                      { label: 'Positive', value: positive, color: theme.tealMist, textColor: theme.success },
                       { label: 'Neutral', value: filtered.length - positive - negative, color: '#fef9c3', textColor: '#92400e' },
                       { label: 'Negative', value: negative, color: '#fef2f2', textColor: theme.alert },
                     ].map(s => (
@@ -1396,7 +1392,7 @@ export default function AdminPanel() {
                       <p style={{ margin: '0 0 1px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>{m.full_name}</p>
                       <p style={{ margin: 0, fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{m.role}</p>
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: m.is_active ? '#ecfdf5' : '#fef2f2', color: m.is_active ? theme.success : theme.alert }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: m.is_active ? theme.tealMist : '#fef2f2', color: m.is_active ? theme.success : theme.alert }}>
                       {m.is_active ? 'Active' : 'Suspended'}
                     </span>
                   </div>
@@ -1428,7 +1424,7 @@ export default function AdminPanel() {
                     {w.account_name && <p style={{ margin: '0 0 2px 0', fontSize: 12, color: theme.textLight }}>{w.account_name}</p>}
                     <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{timeAgo(w.created_at)}</p>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: w.status === 'approved' ? '#ecfdf5' : w.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: w.status === 'approved' ? theme.success : w.status === 'rejected' ? theme.alert : '#92400e' }}>{w.status}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: w.status === 'approved' ? theme.tealMist : w.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: w.status === 'approved' ? theme.success : w.status === 'rejected' ? theme.alert : '#92400e' }}>{w.status}</span>
                 </div>
                 {w.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -1470,7 +1466,7 @@ export default function AdminPanel() {
             </div>
 
             {selectedBiz && (
-              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 14, padding: 14, background: '#ecfdf5', marginBottom: 12 }}>
+              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 14, padding: 14, background: theme.tealMist, marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: theme.navy }}>{selectedBiz.name}</p>
                   <button onClick={() => { setSelectedBiz(null); setBizReviews([]); setBizProducts([]) }} style={{ background: 'none', border: 'none', color: theme.textLight, fontSize: 18 }}>✕</button>
@@ -1529,7 +1525,7 @@ export default function AdminPanel() {
                           <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}, {b.state}</p>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: b.visible_on_carefind ? '#ecfdf5' : '#fef3c7', color: b.visible_on_carefind ? theme.success : '#92400e' }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: b.visible_on_carefind ? theme.tealMist : '#fef3c7', color: b.visible_on_carefind ? theme.success : '#92400e' }}>
                             {b.visible_on_carefind ? 'Claimed' : 'Unclaimed'}
                           </span>
                           <span style={{ fontSize: 10, color: theme.textLight }}>Tap to view</span>
@@ -1555,7 +1551,7 @@ export default function AdminPanel() {
                 <div>
                   <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 700, color: theme.textMid }}>Background color (for text stories)</p>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {['#0f766e', '#0f172a', '#7c3aed', '#be123c', '#c2410c', '#0369a1'].map(c => (
+                    {['#0E6F5A', '#0B4A3E', '#7c3aed', '#be123c', '#c2410c', '#0369a1'].map(c => (
                       <button key={c} onClick={() => setStoryBg(c)} style={{
                         width: 34, height: 34, borderRadius: '50%', background: c, cursor: 'pointer',
                         border: storyBg === c ? '3px solid #000' : '2px solid #fff', boxShadow: '0 0 0 1px #ccc',
@@ -1632,7 +1628,7 @@ export default function AdminPanel() {
                   {/* Status + submitter */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: n.status === 'approved' ? '#ecfdf5' : n.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: n.status === 'approved' ? theme.success : n.status === 'rejected' ? theme.alert : '#92400e' }}>{n.status}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, background: n.status === 'approved' ? theme.tealMist : n.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: n.status === 'approved' ? theme.success : n.status === 'rejected' ? theme.alert : '#92400e' }}>{n.status}</span>
                       <p style={{ margin: '6px 0 0 0', fontSize: 11.5, color: theme.textLight }}>
                         Submitted by <strong style={{ color: theme.navy }}>{n.profiles?.full_name || n.profiles?.display_name || 'User'}</strong> · {timeAgo(n.created_at)}
                       </p>
@@ -1641,7 +1637,7 @@ export default function AdminPanel() {
 
                   {/* Contact submitter */}
                   {(n.contact_phone || n.contact_email || phone) && (
-                    <div style={{ background: '#ecfdf5', borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
+                    <div style={{ background: theme.tealMist, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
                       <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>Contact submitter</p>
                       {(n.contact_phone || phone) && (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
@@ -1811,7 +1807,7 @@ export default function AdminPanel() {
                           <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{s.query}</span>
                           <span style={{ fontSize: 10.5, color: theme.textLight, marginLeft: 8 }}>{s.category} · {s.profiles?.full_name || s.profiles?.display_name || 'Guest'}</span>
                         </div>
-                        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: s.found ? '#ecfdf5' : '#fef2f2', color: s.found ? theme.success : theme.alert }}>{s.found ? `${s.results_count} found` : 'none'}</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: s.found ? theme.tealMist : '#fef2f2', color: s.found ? theme.success : theme.alert }}>{s.found ? `${s.results_count} found` : 'none'}</span>
                       </div>
                     ))}
                   </div>
@@ -1834,7 +1830,7 @@ export default function AdminPanel() {
                         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: theme.navy }}>{s.title}</p>
                         <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Started {new Date(s.started_at).toLocaleTimeString()}</p>
                       </div>
-                      <a href={`/live-show/${s.id}`} style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#ecfdf5', padding: '6px 10px', borderRadius: 16, textDecoration: 'none' }}>👁 Audience</a>
+                      <a href={`/live-show/${s.id}`} style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: theme.tealMist, padding: '6px 10px', borderRadius: 16, textDecoration: 'none' }}>👁 Audience</a>
                       <button onClick={() => endLiveShow(s.id)} style={{ fontSize: 11, fontWeight: 700, color: theme.alert, background: '#fef2f2', border: 'none', padding: '6px 10px', borderRadius: 16 }}>End</button>
                     </div>
 
@@ -1912,7 +1908,7 @@ export default function AdminPanel() {
                     {s.trailer_url && <video src={s.trailer_url} controls playsInline style={{ maxWidth: 160, borderRadius: 8, display: 'block', marginBottom: 8 }} />}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => startScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#dc2626', border: 'none', padding: '8px 14px', borderRadius: 16 }}>📡 Start Now</button>
-                      <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: '#ecfdf5', padding: '8px 12px', borderRadius: 16, textDecoration: 'none' }}>👁 Preview</a>
+                      <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: theme.tealMist, padding: '8px 12px', borderRadius: 16, textDecoration: 'none' }}>👁 Preview</a>
                       <button onClick={() => cancelScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 700, color: theme.alert, background: '#fef2f2', border: 'none', padding: '8px 12px', borderRadius: 16 }}>Cancel</button>
                     </div>
                   </div>
@@ -1934,7 +1930,7 @@ export default function AdminPanel() {
                 }).slice(0, 30).map(u => {
                   const selected = liveGuests.some(g => g.id === u.id)
                   return (
-                    <div key={u.id} onClick={() => toggleGuest(u)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 10, marginBottom: 4, cursor: 'pointer', background: selected ? '#ecfdf5' : theme.bg, border: `1px solid ${selected ? theme.tealDeep : 'transparent'}` }}>
+                    <div key={u.id} onClick={() => toggleGuest(u)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 10, marginBottom: 4, cursor: 'pointer', background: selected ? theme.tealMist : theme.bg, border: `1px solid ${selected ? theme.tealDeep : 'transparent'}` }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 12 }}>
                         {(u.full_name?.[0] || u.display_name?.[0] || '?').toUpperCase()}
                       </div>
@@ -1983,7 +1979,7 @@ export default function AdminPanel() {
                     {n.subtitle && <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textMid }}>{n.subtitle}</p>}
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{ fontSize: 10, color: theme.textLight }}>{timeAgo(n.time)}</span>
-                      <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: n.severity === 'urgent' ? '#fef2f2' : n.severity === 'warning' ? '#fef3c7' : '#ecfdf5', color: n.severity === 'urgent' ? theme.alert : n.severity === 'warning' ? '#92400e' : theme.tealDeep, textTransform: 'uppercase' }}>{n.severity}</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: n.severity === 'urgent' ? '#fef2f2' : n.severity === 'warning' ? '#fef3c7' : theme.tealMist, color: n.severity === 'urgent' ? theme.alert : n.severity === 'warning' ? '#92400e' : theme.tealDeep, textTransform: 'uppercase' }}>{n.severity}</span>
                     </div>
                   </div>
                   <span style={{ color: theme.textLight, fontSize: 14 }}>›</span>

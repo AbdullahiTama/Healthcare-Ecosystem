@@ -281,7 +281,7 @@ function LiveShow() {
     )
     if (isMobile) return notFoundContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {notFoundContent}
       </AppShell>
     )
@@ -374,7 +374,7 @@ function LiveShow() {
 
       {/* Live activity feed */}
       {isLive && activity.length > 0 && (
-        <div style={{ padding: '8px 16px', background: '#ecfdf5', borderBottom: `1px solid ${theme.border}`, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+        <div style={{ padding: '8px 16px', background: theme.tealMist, borderBottom: `1px solid ${theme.border}`, overflowX: 'auto', whiteSpace: 'nowrap' }}>
           {activity.map((a, i) => (
             <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: theme.navy, marginRight: 14 }}>
               {a.type === 'gift' ? <Gift size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> : <Heart size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} />} <strong>{a.name}</strong> {a.type === 'gift' ? `gifted${a.amount ? ' ' + a.amount : ''}` : 'liked'}
@@ -583,7 +583,7 @@ function LiveShow() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

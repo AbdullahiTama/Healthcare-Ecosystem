@@ -16,7 +16,7 @@ function Stories() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [sTitle, setSTitle] = useState('')
   const [sBody, setSBody] = useState('')
-  const [sBg, setSBg] = useState('#0f766e')
+  const [sBg, setSBg] = useState('#0E6F5A')
   const [sImage, setSImage] = useState(null)
   const [posting, setPosting] = useState(false)
   const [liveShow, setLiveShow] = useState(null)
@@ -134,7 +134,7 @@ function Stories() {
       expires_at: expiresAt,
     })
     if (!error) {
-      setSTitle(''); setSBody(''); setSBg('#0f766e'); setSImage(null); setComposerOpen(false)
+      setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setComposerOpen(false)
       loadStories()
     } else {
       showToast('Could not post story: ' + error.message, { type: 'error' })
@@ -294,7 +294,7 @@ function Stories() {
 
             <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 700, color: theme.textMid }}>Background color</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-              {['#0f766e', '#0f172a', '#7c3aed', '#be123c', '#c2410c', '#0369a1'].map(c => (
+              {['#0E6F5A', '#0B4A3E', '#7c3aed', '#be123c', '#c2410c', '#0369a1'].map(c => (
                 <button key={c} onClick={() => setSBg(c)} style={{ width: 32, height: 32, borderRadius: '50%', background: c, cursor: 'pointer', border: sBg === c ? '3px solid #000' : '2px solid #fff', boxShadow: '0 0 0 1px #ccc' }} />
               ))}
             </div>

@@ -7,11 +7,11 @@ function DrawingBoard({ onSave, onCancel }) {
   const canvasRef = useRef(null)
   const ctxRef = useRef(null)
   const drawing = useRef(false)
-  const [color, setColor] = useState('#0f172a')
+  const [color, setColor] = useState('#0B4A3E')
   const [size, setSize] = useState(4)
   const [saving, setSaving] = useState(false)
 
-  const colors = ['#0f172a', '#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#ffffff']
+  const colors = ['#0B4A3E', '#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#ffffff']
 
   useEffect(() => {
     const canvas = canvasRef.current

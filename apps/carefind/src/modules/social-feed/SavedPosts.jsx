@@ -21,7 +21,7 @@ function SavedPosts() {
   const [loading, setLoading] = useState(true)
 
   const visualThemes = {
-    teal: 'linear-gradient(135deg, #0f766e, #134e4a)',
+    teal: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
     sunset: 'linear-gradient(135deg, #f97316, #db2777)',
     ocean: 'linear-gradient(135deg, #0ea5e9, #1e3a8a)',
     purple: 'linear-gradient(135deg, #7c3aed, #4c1d95)',
@@ -87,7 +87,7 @@ function SavedPosts() {
   function inShell(content) {
     if (isMobile) return content
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {content}
       </AppShell>
     )
@@ -153,7 +153,7 @@ function SavedPosts() {
               </>
             }
             action="Go to the feed"
-            onAction={() => navigate('/')}
+            onAction={() => navigate('/feed')}
           />
         )}
 

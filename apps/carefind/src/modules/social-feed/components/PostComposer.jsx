@@ -107,7 +107,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
   }, [user, content, postType, visualTheme, postRating, imageFile, imagePreview, toast, onClose, onPosted, removeImage])
 
   return (
-    <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', padding: 16 }}>
+    <div style={{ background: theme.cardBg, borderRadius: 16, boxShadow: theme.elevation[1], padding: 16 }}>
       <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
         <Avatar name={myUsername || user?.email} src={myAvatar} size={40} />
         <div style={{ flex: 1 }}>

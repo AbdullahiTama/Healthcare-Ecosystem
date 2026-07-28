@@ -41,7 +41,7 @@ function Login() {
       // New users go to onboarding to complete their profile
       navigate('/onboarding')
     } else {
-      navigate('/')
+      navigate('/feed')
     }
 
     setLoading(false)

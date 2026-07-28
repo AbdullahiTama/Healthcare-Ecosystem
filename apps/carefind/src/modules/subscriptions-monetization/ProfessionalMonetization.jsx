@@ -11,7 +11,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Toast, useToast } from '../../components/ui'
+import { Loading, Toast, useToast } from '../../components/ui'
 
 function ProfessionalMonetization() {
   const { user, loading: authLoading } = useAuth()
@@ -108,7 +108,7 @@ function ProfessionalMonetization() {
     }
   }
 
-  if (authLoading || loading) return <div style={{ padding: 20, fontFamily: theme.fontFamily }}>Loading...</div>
+  if (authLoading || loading) return <Loading />
 
   if (!user || !profile?.is_verified) {
     const verifyRequiredContent = (
@@ -135,7 +135,7 @@ function ProfessionalMonetization() {
     if (isMobile) return verifyRequiredContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
         {verifyRequiredContent}
       </AppShell>
     )
@@ -220,7 +220,7 @@ function ProfessionalMonetization() {
             ))}
 
             <Link to="/wallet" style={{ textDecoration: 'none' }}>
-              <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 14, background: '#ecfdf5', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: 16, padding: 14, background: theme.tealMist, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Landmark size={20} color={theme.tealDeep} aria-hidden="true" />
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: theme.tealDeep }}>Withdraw Earnings</p>
@@ -263,7 +263,7 @@ function ProfessionalMonetization() {
                 </div>
               ) : (
                 <div>
-                  <div style={{ background: '#ecfdf5', borderRadius: 14, padding: 14, marginBottom: 12 }}>
+                  <div style={{ background: theme.tealMist, borderRadius: 14, padding: 14, marginBottom: 12 }}>
                     <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: theme.tealDeep }}>₦{subscription.price}<span style={{ fontSize: 13, fontWeight: 600 }}>/month</span></p>
                     {subscription.description && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{subscription.description}</p>}
                   </div>
@@ -419,7 +419,7 @@ function ProfessionalMonetization() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
       {bodyContent}
     </AppShell>
   )

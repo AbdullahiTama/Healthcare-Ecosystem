@@ -35,8 +35,8 @@ import ForBusiness from './modules/marketing/ForBusiness.jsx'
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
 const Loading = () => (
-  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
-    <p style={{ color: '#64748b' }}>Loading...</p>
+  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="cf-spinner" style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0E6F5A', animation: 'cf-spin 0.7s linear infinite' }} />
   </div>
 )
 
@@ -46,14 +46,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <Routes>
           {/* Public — no login required */}
-          <Route path="/" element={<Feed />} />
+          <Route path="/" element={<ForBusiness />} />
+          <Route path="/feed" element={<Feed />} />
           <Route path="/search" element={<Search />} />
           <Route path="/business/:id" element={<BusinessProfile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/u/:id" element={<PublicProfile />} />
           <Route path="/drug/:name" element={<DrugProfile />} />
           <Route path="/news" element={<News />} />
-          <Route path="/for-business" element={<ForBusiness />} />
           <Route path="/news/:id" element={<NewsArticle />} />
           <Route path="/live/:id" element={<LiveSession />} />
           <Route path="/live-show/:id" element={<LiveShow />} />

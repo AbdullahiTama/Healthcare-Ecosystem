@@ -185,11 +185,11 @@ function Search() {
             <button key={c.key} onClick={() => setTab(c.key)} style={isMobile ? {
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '12px 4px',
               borderRadius: 14, border: tab === c.key ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
-              background: tab === c.key ? '#ecfdf5' : theme.cardBg, cursor: 'pointer',
+              background: tab === c.key ? theme.tealMist : theme.cardBg, cursor: 'pointer',
             } : {
               display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', minHeight: 44,
               borderRadius: 12, border: tab === c.key ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
-              background: tab === c.key ? '#ecfdf5' : theme.cardBg, cursor: 'pointer',
+              background: tab === c.key ? theme.tealMist : theme.cardBg, cursor: 'pointer',
             }}>
               <c.Icon size={isMobile ? 22 : 17} color={tab === c.key ? theme.tealDeep : theme.gray500} aria-hidden="true" />
               <span style={{ fontSize: isMobile ? 11 : 13, fontWeight: 700, color: theme.navy }}>{c.label}</span>
@@ -382,7 +382,7 @@ function Search() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/')}
+      onCompose={() => navigate('/feed')}
     >
       {bodyContent}
     </AppShell>

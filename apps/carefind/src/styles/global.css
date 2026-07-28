@@ -8,22 +8,22 @@
 
 :root {
   /* Brand */
-  --teal-600: #0f766e;
-  --teal-500: #14b8a6;
-  --navy-900: #0f172a;
-  --navy-800: #1e293b;
-  --teal-mist: #e8f3ee;
+  --teal-600: #0E6F5A;
+  --teal-500: #1A8A72;
+  --navy-900: #0B4A3E;
+  --navy-800: #155A4B;
+  --teal-mist: #E3EEE8;
 
   /* Neutrals */
-  --bg-page: #f9f9f6;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #cbd5e1;
-  --gray-400: #94a3b8;
-  --gray-500: #64748b;
-  --gray-600: #475569;
-  --gray-900: #0f172a;
+  --bg-page: #F7F5EF;
+  --gray-50: #F7F5EF;
+  --gray-100: #F0EEE5;
+  --gray-200: #E7E4D9;
+  --gray-300: #D4D0C5;
+  --gray-400: #9AA69F;
+  --gray-500: #8B978F;
+  --gray-600: #3C4B44;
+  --gray-900: #182722;
 
   /* Semantic */
   --success: #16a34a;
@@ -44,11 +44,11 @@
   /* Radius */
   --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px; --radius-full: 9999px;
 
-  /* Elevation — navy-based, never pure black */
-  --elevation-1: 0 1px 4px rgba(15,23,42,0.05);
-  --elevation-2: 0 4px 16px rgba(15,23,42,0.08);
-  --elevation-3: 0 8px 24px rgba(15,23,42,0.12);
-  --elevation-4: 0 20px 48px rgba(15,23,42,0.18);
+  /* Elevation — deep-teal-based, never pure black */
+  --elevation-1: 0 1px 4px rgba(11,74,62,0.05);
+  --elevation-2: 0 4px 16px rgba(11,74,62,0.08);
+  --elevation-3: 0 8px 24px rgba(11,74,62,0.12);
+  --elevation-4: 0 20px 48px rgba(11,74,62,0.18);
 
   /* Motion (MOTION.md — nothing exceeds ~320ms) */
   --motion-fast: 140ms;
@@ -57,9 +57,9 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
 
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* Public marketing pages only — see TYPOGRAPHY.md */
-  --font-display: "Lora", Georgia, "Times New Roman", serif;
+  --font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* ── Base reset ──────────────────────────────────────────────────────────── */
@@ -162,7 +162,7 @@ body {
   padding: 8px 10px;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
-  transition: background var(--motion-fast) var(--ease-out), transform 80ms;
+  transition: background var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
 }
 
 .cf-eng-item span {
@@ -195,9 +195,9 @@ body {
 }
 
 .cf-composer-input:focus {
-  background: #fff;
+  background: var(--gray-50);
   border-color: var(--teal-600);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  box-shadow: 0 0 0 3px rgba(14, 111, 90, 0.1);
 }
 
 /* ── Loading motion (MOTION.md) ──────────────────────────────────────────── */

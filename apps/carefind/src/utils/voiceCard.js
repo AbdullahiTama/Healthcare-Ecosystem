@@ -7,8 +7,8 @@
 // Both bake in the CareFind logo, so the brand travels with the post.
 
 export const CARD_THEMES = {
-  'teal-depth':      { from: '#0F766E', to: '#0D9488', text: '#FFFFFF' },
-  'navy-clinical':   { from: '#0F172A', to: '#1E293B', text: '#FFFFFF' },
+  'teal-depth':      { from: '#0E6F5A', to: '#1A8A72', text: '#FFFFFF' },
+  'navy-clinical':   { from: '#0B4A3E', to: '#155A4B', text: '#FFFFFF' },
   'midnight-teal':   { from: '#042F2E', to: '#134E4A', text: '#FFFFFF' },
   'forest-wellness': { from: '#14532D', to: '#166534', text: '#FFFFFF' },
   'slate-pulse':     { from: '#7F1D1D', to: '#9F1239', text: '#FFFFFF' },
@@ -69,8 +69,8 @@ function drawLogo(ctx, username) {
   const y = SIZE - 70 - s
 
   const g = ctx.createLinearGradient(x, y, x + s, y + s)
-  g.addColorStop(0, '#0D9488')
-  g.addColorStop(1, '#14B8A6')
+  g.addColorStop(0, '#0E6F5A')
+  g.addColorStop(1, '#1A8A72')
   ctx.fillStyle = g
   roundRect(ctx, x, y, s, s, s * 0.28)
   ctx.fill()

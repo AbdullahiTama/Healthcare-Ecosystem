@@ -1,0 +1,15 @@
+{
+  "name": "@care-ecosystem/shared-notifications",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

@@ -142,7 +142,7 @@ function LiveDashboard() {
   async function endShow() {
     setConfirmEndOpen(false)
     await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id)
-    navigate('/')
+    navigate('/feed')
   }
 
   function timeAgo(dateStr) {

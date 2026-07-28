@@ -62,7 +62,7 @@ export default function GoLive({ onClose }) {
           </div>
         </div>
 
-        <div style={{ background: '#ecfdf5', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+        <div style={{ background: theme.tealMist, borderRadius: 12, padding: 12, marginBottom: 16 }}>
           <p style={{ margin: 0, fontSize: 12, color: theme.tealDeep, lineHeight: 1.5 }}>
             <Palette size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Shared drawing board</strong> — viewers see you draw in real time<br/>
             <Mic size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} /><strong>Voice notes</strong> — record and send audio messages<br/>

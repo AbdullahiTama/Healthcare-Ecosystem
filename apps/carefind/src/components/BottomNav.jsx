@@ -39,8 +39,8 @@ function BottomNav({ onCompose }) {
   }, [user, location.pathname])
 
   function handleCompose() {
-    if (location.pathname !== '/') {
-      navigate('/')
+    if (location.pathname !== '/feed') {
+      navigate('/feed')
       setTimeout(() => {
         const el = document.getElementById('post-composer')
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.querySelector('textarea')?.focus() }
@@ -59,8 +59,8 @@ function BottomNav({ onCompose }) {
       display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '10px 0 18px 0',
       boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
     }}>
-      <Link to="/" style={itemStyle(isActive('/'))}>
-        <Home size={20} strokeWidth={isActive('/') ? 2.4 : 2} aria-hidden="true" />
+      <Link to="/feed" style={itemStyle(isActive('/feed'))}>
+        <Home size={20} strokeWidth={isActive('/feed') ? 2.4 : 2} aria-hidden="true" />
         Home
       </Link>
       <Link to="/search" style={itemStyle(isActive('/search'))}>
@@ -84,7 +84,7 @@ function BottomNav({ onCompose }) {
         {unreadNews > 0 && (
           <span style={{
             position: 'absolute', top: -4, right: 6, minWidth: 16, height: 16, padding: '0 4px',
-            borderRadius: 8, background: '#ef4444', color: '#fff', fontSize: 9, fontWeight: 900,
+            borderRadius: 8, background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900,
             display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
           }}>
             {unreadNews > 99 ? '99+' : unreadNews}
