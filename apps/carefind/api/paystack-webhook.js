@@ -2,10 +2,9 @@ import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { creditTopup } from './_lib/paystackCredit.js'
 
-// Consolidated Paystack webhook handler — register this single URL in your
-// Paystack dashboard. It dispatches to the right handler based on event type
-// and metadata, so one endpoint covers top-ups, subscriptions, transfers, and
-// CareHub plan payments.
+// Single Paystack webhook for all apps — register this URL in the Paystack
+// dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
+// and CareHub plan payments all route through here.
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
