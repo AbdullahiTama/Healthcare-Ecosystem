@@ -18,6 +18,7 @@ import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import GoLive from './GoLive.jsx'
 import UserGoLive from './UserGoLive.jsx'
 import { notify } from '../../services/notify.js'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import Logo from './Logo.jsx'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../../utils/voiceCard.js'
@@ -98,7 +99,7 @@ function Feed() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
 
-  // One pill per post, never two. `text` posts deliberately have no pill —
+  // One pill per post, never two. `text` posts deliberately have no pill : 
   // labelling the default kind adds noise without adding information.
   const POST_KIND = {
     question: 'Question',
@@ -124,7 +125,7 @@ function Feed() {
     'Inappropriate content',
   ]
 
-  // One place that answers "whose post is this" — the header, the follow
+  // One place that answers "whose post is this": the header, the follow
   // button's label and the overflow menu's label all have to agree.
   function authorName(post) {
     if (post.posted_as_type) return post.posted_as_name || 'Business'
@@ -180,7 +181,7 @@ function Feed() {
       ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: p.name, sub: 'Medication' })),
     ]
     if (results.length === 0) {
-      results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed — review anyway' })
+      results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed: review anyway' })
     }
     setReviewSearchResults(results)
     setReviewSearching(false)
@@ -377,7 +378,7 @@ function Feed() {
     return !unlockedCreators.includes(post.user_id)
   }
 
-  // Short clip as the card backdrop. Kept small on purpose — data is expensive.
+  // Short clip as the card backdrop. Kept small on purpose: data is expensive.
   async function handleCardVideo(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -432,10 +433,10 @@ function Feed() {
           })
           const result = await shareOrDownload(blob, `carefind-card.${ext}`)
           setSharingId(null)
-          if (result === 'downloaded') toast.show('Saved with your voice — post it to your WhatsApp Status.')
+          if (result === 'downloaded') toast.show('Saved with your voice: post it to your WhatsApp Status.')
           return
         } catch (e) {
-          // Video failed on this device — fall through to the image so the user still gets something
+          // Video failed on this device: fall through to the image so the user still gets something
           console.warn('Video export failed, falling back to image:', e)
         }
       }
@@ -445,8 +446,8 @@ function Feed() {
       setSharingId(null)
       if (result === 'downloaded') {
         toast.show(post.audio_url
-          ? "Saved as an image. This phone can't build the video — the voice still plays inside CareFind."
-          : 'Saved — post it to your WhatsApp Status.')
+          ? "Saved as an image. This phone can't build the video: the voice still plays inside CareFind."
+          : 'Saved: post it to your WhatsApp Status.')
       }
     } catch (e) {
       setSharingId(null)
@@ -515,7 +516,7 @@ function Feed() {
     if (imageFile) {
       setUploadingImage(true)
 
-      // Shrink first — a full-size phone photo is often 5-8MB and the upload dies on it.
+      // Shrink first: a full-size phone photo is often 5-8MB and the upload dies on it.
       const resized = await resizeImage(imageFile, 1400, 0.85)
       const filePath = `${user.id}-${Date.now()}.jpg`
 
@@ -543,6 +544,9 @@ function Feed() {
     }
 
     const identity = getActiveIdentity()
+
+    // fk_posts_user guard: ensure the poster has a profiles row first
+    await ensureProfile(user)
 
     const { error } = await supabase.from('posts').insert({
       user_id: user.id,
@@ -600,7 +604,7 @@ function Feed() {
       loadFeed()
     } else {
       console.error('Post error:', error)
-      // Surface it — a silent failure just looks like a broken button on a phone.
+      // Surface it: a silent failure just looks like a broken button on a phone.
       toast.show('Could not post: ' + (error.message || 'unknown error'))
     }
     setPosting(false)
@@ -627,7 +631,7 @@ function Feed() {
     { key: 'live',     Icon: Radio,         label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
   ]
 
-  // The tabs answer "what do you want to read?" — they slice the same feed.
+  // The tabs answer "what do you want to read?": they slice the same feed.
   const visiblePosts = posts.filter((p) => {
     if (feedTab === 'foryou') return true
     if (feedTab === 'following') {
@@ -664,7 +668,7 @@ function Feed() {
     if (!user) return
     const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
 
-    // Optimistic update — instant UI response
+    // Optimistic update: instant UI response
     if (existing) {
       setReactions((prev) => prev.filter((r) => r.id !== existing.id))
       supabase.from('post_reactions').delete().eq('id', existing.id)
@@ -732,7 +736,7 @@ function Feed() {
   // Reporting is a two-step flow: the overflow menu opens a reason picker,
   // the picked reason writes the report. A `window.prompt` (what this used to
   // be) is unstyled, unlabelled and blocked outright in some mobile browsers,
-  // so a moderation path can't depend on it — and the handler was never
+  // so a moderation path can't depend on it: and the handler was never
   // wired to anything, so reporting was unreachable.
   function openReport(postId) {
     if (!user) { navigate('/login'); return }
@@ -763,7 +767,7 @@ function Feed() {
     }
 
     setReportedPosts((prev) => [...prev, postId])
-    toast.show('Thanks — our team will review this post.', { type: 'success' })
+    toast.show('Thanks: our team will review this post.', { type: 'success' })
   }
 
   // Prefer the thread we've actually loaded (it reflects a just-added or
@@ -777,7 +781,7 @@ function Feed() {
 
   async function sharePost(post) {
     const result = await shareOrCopy({ title: 'CareFind', text: post.content })
-    if (result === 'copied') toast.show('Post copied — paste it anywhere to share.', { type: 'success' })
+    if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
   }
 
@@ -816,7 +820,7 @@ function Feed() {
 
   const { isMobile } = useBreakpoint()
 
-  // Desktop right sidebar's "Trending" — derived from posts already loaded
+  // Desktop right sidebar's "Trending": derived from posts already loaded
   // by loadFeed() above, not a new query. No engagement data yet (e.g. right
   // after loadFeed's initial fetch, before reactions/commentCounts settle)
   // just means an empty/neutral sort, which is fine.
@@ -955,7 +959,7 @@ function Feed() {
       {/* Stories row */}
       <Stories />
 
-      {/* News highlight strip — mobile only; on desktop this same latestNews
+      {/* News highlight strip: mobile only; on desktop this same latestNews
           data feeds RightSidebar's "Suggested articles" section instead. */}
       {isMobile && latestNews.length > 0 && (
         <div style={{ marginTop: 14, marginBottom: 4 }}>
@@ -1010,7 +1014,7 @@ function Feed() {
         </Link>
       )}
 
-      {/* Live-now strip — mobile only; RightSidebar covers this on desktop. */}
+      {/* Live-now strip: mobile only; RightSidebar covers this on desktop. */}
       {isMobile && liveSessions.length > 0 && (
         <div style={{ padding: '10px 16px 0' }}>
           <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: theme.danger, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 8px 0' }}><Radio size={12} aria-hidden="true" /> Live now</p>
@@ -1121,7 +1125,7 @@ function Feed() {
             </div>
           )}
 
-          {/* Voice Card — background: photo or drawing */}
+          {/* Voice Card: background: photo or drawing */}
           {postType === 'visual' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               <label
@@ -1190,7 +1194,7 @@ function Feed() {
             </div>
           )}
 
-          {/* Voice Card — attach a recorded voice */}
+          {/* Voice Card: attach a recorded voice */}
           {postType === 'visual' && (
             <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
               {cardAudio ? (
@@ -1213,7 +1217,7 @@ function Feed() {
                     <Mic size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Add your voice <span style={{ fontWeight: 600, color: theme.textLight }}>(optional)</span>
                   </p>
                   <p style={{ margin: '0 0 10px 0', fontSize: 10.5, color: theme.textLight }}>
-                    People can download this card with your voice and share it to WhatsApp Status — with your CareFind logo on it.
+                    People can download this card with your voice and share it to WhatsApp Status: with your CareFind logo on it.
                   </p>
                   <VoiceRecorder hq showId={`card-${user?.id || 'anon'}`} onRecorded={(url) => setCardAudio(url)} />
                 </>
@@ -1265,7 +1269,7 @@ function Feed() {
                         r.type === 'unclaimed' ? (
                           <div key="unclaimed" style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, background: '#fef9c3' }}>
                             <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: '#a16207', fontWeight: 700 }}>
-                              "{r.name}" not found on CareFind — review anyway?
+                              "{r.name}" not found on CareFind: review anyway?
                             </p>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button
@@ -1336,7 +1340,7 @@ function Feed() {
                 />
               </div>
               <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, textAlign: 'center' }}>
-                Tap the card and type — your text appears live on the card
+                Tap the card and type: your text appears live on the card
               </p>
             </div>
           ) : (
@@ -1378,7 +1382,7 @@ function Feed() {
           )}
 
           {/* Composer footer: the secondary attach action sits left, the one
-              primary action sits right — the same "one primary action, fixed
+              primary action sits right: the same "one primary action, fixed
               position" rule the form patterns use (SCREEN_PATTERNS.md 8). */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -1464,7 +1468,7 @@ function Feed() {
             {/* Card header: identity left, one kind pill + overflow menu right.
                 Identity reads name → verified badge → handle → credential →
                 time, i.e. "who is this, and can I trust them" before anything
-                else (Design Principle 12 — trust is a design output). */}
+                else (Design Principle 12: trust is a design output). */}
             <div style={{
               display: 'flex', alignItems: 'flex-start', gap: 11,
               padding: post.post_type === 'visual' ? '14px 16px 0 16px' : 0,
@@ -1676,7 +1680,7 @@ function Feed() {
               </>
             )}
             {/* Engagement bar. Reading actions (react, reply, pass on) group
-                left; keeping and supporting group right — the same left/right
+                left; keeping and supporting group right: the same left/right
                 split on every card, so the target a user reaches for never
                 moves. Views are a read-only fact, so they're text, not a
                 button that does nothing when pressed. The icons were
@@ -1821,7 +1825,7 @@ function Feed() {
           onCancel={() => setShowDraw(false)}
           onSave={(blob) => {
             if (blob) {
-              // A drawing is just an image — same pipeline as a photo
+              // A drawing is just an image: same pipeline as a photo
               const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' })
               setImageFile(file)
               setImagePreview(URL.createObjectURL(blob))
@@ -1851,10 +1855,10 @@ function Feed() {
         confirmLabel="Delete"
       />
 
-      {/* Report reasons — a closed set, one tap each. */}
+      {/* Report reasons: a closed set, one tap each. */}
       <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
         <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
-          Tell us what's wrong with it. Our moderation team reviews every report — the author isn't told who reported them.
+          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {REPORT_REASONS.map((reason) => (

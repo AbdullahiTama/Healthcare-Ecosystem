@@ -41,7 +41,7 @@ function BusinessProfile() {
 
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, stock, emoji, image_url, price_unit, sale_type, min_purchase')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, latitude, longitude')
       .eq('business_id', id)
       .eq('list_on_carefind', true)
 
@@ -285,7 +285,7 @@ function BusinessProfile() {
                   <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
                   {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-                    {p.sale_type && <Pill label={p.sale_type} type={p.sale_type === 'wholesale' ? 'purple' : 'teal'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                    {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
                     {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
                   </div>
                   <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
@@ -293,7 +293,8 @@ function BusinessProfile() {
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  {p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                  {p.show_price !== false && p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                  {p.show_price === false && <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
                   {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
                   {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
                 </div>

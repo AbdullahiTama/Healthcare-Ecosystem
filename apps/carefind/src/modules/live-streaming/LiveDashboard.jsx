@@ -193,7 +193,7 @@ function LiveDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: ended ? '#94a3b8' : '#dc2626' }} />
-            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE — CONTROL ROOM'}</span>
+            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE · CONTROL ROOM'}</span>
           </span>
           <Link to={`/live-show/${id}`} style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontWeight: 700 }}>View audience →</Link>
         </div>
@@ -244,7 +244,7 @@ function LiveDashboard() {
                 <SlideUploader showId={id} onPostSlide={sendSlide} />
                 <VideoRecorder showId={id} onRecorded={sendVideo} />
                 <VideoUploader showId={id} onUploaded={sendVideo} />
-                <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes — they go live instantly.</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: 10.5, color: theme.textLight }}>Post text, images, or voice notes. They go live instantly.</p>
               </div>
             </>
           )}
@@ -274,7 +274,7 @@ function LiveDashboard() {
         <div style={isMobileOrTablet
           ? { borderTop: `8px solid ${theme.bg}`, padding: '12px 14px' }
           : { flex: 1, minWidth: 0, padding: '12px 14px', position: 'sticky', top: 64, maxHeight: 'calc(100vh - 64px)', overflowY: 'auto' }}>
-          <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Audience comments — respond or moderate</p>
+          <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Audience comments: respond or moderate</p>
           {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>No comments yet.</p>}
           {comments.map((c) => (
             <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 10, opacity: c.hidden ? 0.4 : 1 }}>

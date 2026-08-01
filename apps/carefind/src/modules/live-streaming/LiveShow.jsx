@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import {
   BadgeCheck, Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
   Radio, Repeat2, Share2, X,
@@ -187,6 +188,7 @@ function LiveShow() {
     // Repost counts as a share too
     setShareCount(c => c + 1)
     supabase.from('live_shares').insert({ show_id: id, user_id: user.id })
+    await ensureProfile(user)
     await supabase.from('posts').insert({
       user_id: user.id,
       content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
@@ -328,7 +330,7 @@ function LiveShow() {
             </div>
           )}
 
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime — a red LIVE badge will appear when we go live.</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Come back at showtime. A red LIVE badge will appear when we go live.</p>
         </div>
         {isMobile && <BottomNav />}
       </div>

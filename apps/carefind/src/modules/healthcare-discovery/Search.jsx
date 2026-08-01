@@ -9,10 +9,15 @@ import {
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Card, Pill, Sel, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, productCoords, haversineMeters } from '../utils/marketplace.js'
 
+// Nigerian states offered as autocomplete suggestions. The location filter
+// itself is a free-text field so it works globally (any city, region or
+// country), per the "global location filter" requirement.
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
   'Ebonyi','Edo','Ekiti','Enugu','FCT - Abuja','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina',
@@ -20,14 +25,33 @@ const NG_STATES = [
   'Sokoto','Taraba','Yobe','Zamfara',
 ]
 
+const SALE_FILTERS = [
+  { key: '', label: 'All' },
+  { key: 'retail', label: 'Retail' },
+  { key: 'wholesale', label: 'Wholesale' },
+  { key: 'distributor', label: 'Distributor' },
+]
+
 function Search() {
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
+  const { coords: userCoords } = useGeolocation()
+
+// Distance in meters between a product (or its business) and a user location;
+// Infinity when either side has no coordinates so unknowns sort last.
+const distanceMeters = (p, u) => {
+  const c = productCoords(p)
+  if (!c || !u) return Infinity
+  const d = haversineMeters(c.lat, c.lng, u.lat, u.lng)
+  return d == null ? Infinity : d
+}
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [tab, setTab] = useState('products')
   const [stateFilter, setStateFilter] = useState('')
+  const [saleTypeFilter, setSaleTypeFilter] = useState('')
+  const [nearMe, setNearMe] = useState(false)
   const [specialtyFilter, setSpecialtyFilter] = useState('')
   const [businesses, setBusinesses] = useState([])
   const [products, setProducts] = useState([])
@@ -59,7 +83,7 @@ function Search() {
   }, [featured])
 
   useEffect(() => { loadFeatured() }, [])
-  useEffect(() => { runSearch() }, [tab, stateFilter, specialtyFilter])
+  useEffect(() => { runSearch() }, [tab, stateFilter, saleTypeFilter, specialtyFilter, nearMe])
 
   async function loadFeatured() {
     const { data } = await supabase
@@ -76,7 +100,7 @@ function Search() {
     // Fallback: auto-pull products if no active promotions
     const { data: prods } = await supabase
       .from('products')
-      .select('id, name, emoji, price, business_id, list_on_carefind, businesses(name)')
+      .select('id, name, emoji, price, show_price, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude)')
       .order('created_at', { ascending: false })
       .limit(14)
     setFeatured((prods || []).filter(p => p.list_on_carefind !== false))
@@ -90,11 +114,18 @@ function Search() {
     let resultCount = 0
 
     if (tab === 'products') {
-      let pq = supabase.from('products').select('id, name, emoji, price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, business_id, list_on_carefind, businesses(name, city, state, whatsapp)')
+      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, list_on_carefind, businesses(name, city, state, whatsapp, latitude, longitude)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
       const { data } = await pq.limit(40)
       let list = (data || []).filter(p => p.list_on_carefind !== false)
-      if (stateFilter) list = list.filter(p => (p.businesses?.state || '').toLowerCase().includes(stateFilter.toLowerCase()))
+      if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
+      if (saleTypeFilter) list = list.filter(p => p.sale_type === saleTypeFilter)
+      // Nearest first: sort by raw distance in meters so mixed m/km distances order correctly
+      if (nearMe && userCoords) list = [...list].sort((a, b) => {
+        const da = distanceMeters(a, userCoords)
+        const db = distanceMeters(b, userCoords)
+        return da - db
+      })
       setProducts(list)
       setBusinesses([]); setProfessionals([])
       resultCount = list.length
@@ -162,7 +193,7 @@ function Search() {
           <h1 style={{ margin: 0, fontSize: 25, fontWeight: 900, letterSpacing: '-0.02em' }}>MedMarket</h1>
         </div>
         <p style={{ margin: '0 0 16px 0', fontSize: 13.5, color: 'rgba(255,255,255,0.72)', lineHeight: 1.45, maxWidth: isMobile ? undefined : 640 }}>
-          Your health marketplace — find medications, trusted health facilities, hospitals, clinics, skincare brands, wellness products, laboratories and verified health professionals near you, all in one place.
+          Your health marketplace: find medications, trusted health facilities, hospitals, clinics, skincare brands, wellness products, laboratories and verified health professionals near you, all in one place.
         </p>
         <form onSubmit={runSearch}>
           <div style={{ display: 'flex', gap: 8, maxWidth: isMobile ? undefined : 520 }}>
@@ -198,8 +229,28 @@ function Search() {
         </div>
 
         <div style={isMobile ? { padding: '4px 16px 0' } : { display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Sel value={stateFilter} onChange={setStateFilter} options={NG_STATES} placeholder="All states" aria-label="Filter by state" style={{ flex: 1, minWidth: isMobile ? undefined : 180 }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              placeholder={tab === 'professionals' ? 'Location (any city or country)' : 'Location (any city or state)'}
+              aria-label="Filter by location"
+              list="carefind-locations"
+              style={{ flex: 1, minWidth: isMobile ? undefined : 220, minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }}
+            />
+            <datalist id="carefind-locations">
+              {NG_STATES.map(s => <option key={s} value={s} />)}
+            </datalist>
+            {tab === 'products' && (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                {SALE_FILTERS.map(f => (
+                  <button key={f.key || 'all'} onClick={() => setSaleTypeFilter(f.key)} style={{ padding: '9px 12px', minHeight: 44, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', background: saleTypeFilter === f.key ? theme.tealDeep : theme.bg, color: saleTypeFilter === f.key ? '#fff' : theme.textMid }}>{f.label}</button>
+                ))}
+                <button onClick={() => setNearMe(!nearMe)} disabled={!userCoords} title={userCoords ? 'Sort by distance from you' : 'Allow location to sort by distance'} style={{ padding: '9px 12px', minHeight: 44, borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 5, background: nearMe ? theme.tealDeep : theme.bg, color: nearMe ? '#fff' : (userCoords ? theme.textMid : theme.gray300) }}>
+                  <MapPin size={13} aria-hidden="true" /> {nearMe ? 'Nearest first' : 'Near me'}
+                </button>
+              </div>
+            )}
             {tab === 'professionals' && (
               <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" style={{ flex: 1, minWidth: isMobile ? undefined : 160, minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 11, boxSizing: 'border-box' }} />
             )}
@@ -236,7 +287,9 @@ function Search() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}><PillIcon size={22} aria-hidden="true" /></div>
                       <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
-                      {p.price != null && <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
+                      {canShowPrice(p)
+                        ? <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                        : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
                       <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
                     </Card>
                   </Link>
@@ -317,16 +370,28 @@ function Search() {
                     </p>
                   )}
                 </div>
-                {p.price != null && (
+                {(() => {
+                  const dist = distanceLabel(p, userCoords)
+                  return dist ? (
+                    <p style={{ margin: '0 0 3px 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}>
+                      <MapPin size={11} aria-hidden="true" /> {dist}
+                    </p>
+                  ) : null
+                })()}
+                {canShowPrice(p) ? (
                   <div style={{ textAlign: 'right' }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                     {p.price_unit && <p style={{ margin: 0, fontSize: 9.5, color: theme.textLight }}>per {p.price_unit}</p>}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: theme.textLight }}>Ask for price</p>
                   </div>
                 )}
               </div>
               {(p.sale_type || p.min_purchase) && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {p.sale_type && <Pill label={p.sale_type} type={p.sale_type === 'wholesale' ? 'purple' : 'teal'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                  {p.sale_type && <Pill label={SALE_TYPE_LABELS[p.sale_type] || p.sale_type} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
                   {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
                 </div>
               )}

@@ -19,7 +19,7 @@ function VideoUploader({ showId, onUploaded }) {
     if (!f) return
     const sizeMb = f.size / (1024 * 1024)
     if (sizeMb > MAX_MB) {
-      setError(`That video is ${sizeMb.toFixed(0)}MB — too large. Please use one under ${MAX_MB}MB (a shorter or lower-quality clip).`)
+      setError(`That video is ${sizeMb.toFixed(0)}MB, too large. Please use one under ${MAX_MB}MB (a shorter or lower-quality clip).`)
       if (inputRef.current) inputRef.current.value = ''
       return
     }

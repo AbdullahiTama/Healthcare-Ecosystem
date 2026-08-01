@@ -184,7 +184,7 @@ function Wallet() {
 
       if (!response.ok) {
         const msg = data.error === 'insufficient' ? "You don't have enough CareCoins for that amount."
-          : data.error === 'Payment provider balance low' ? 'Payment provider balance low — try again later.'
+          : data.error === 'Payment provider balance low' ? 'Payment provider balance low. Try again later.'
           : data.error || 'Could not process withdrawal.'
         showToast(msg, { type: 'error' })
         return
@@ -253,7 +253,7 @@ function Wallet() {
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>
           <WalletIcon size={21} aria-hidden="true" /> My wallet
         </h1>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins — 1 coin = ₦{COIN_VALUE_NAIRA}</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 20px 0' }}>CareCoins: 1 coin = ₦{COIN_VALUE_NAIRA}</p>
         <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 20, textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>BALANCE</p>
           <p style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontSize: 42, fontWeight: 900 }}>
@@ -296,7 +296,7 @@ function Wallet() {
               >
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>
-                    <Coins size={15} color={theme.tealDeep} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 7 }} />{pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} — {pkg.label}
+                    <Coins size={15} color={theme.tealDeep} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 7 }} />{pkg.coins} CareCoin{pkg.coins > 1 ? 's' : ''} · {pkg.label}
                   </p>
                   {pkg.savings && (
                     <p style={{ margin: 0, fontSize: 11, color: theme.success, fontWeight: 700 }}>Save ₦{pkg.savings.toLocaleString()}</p>

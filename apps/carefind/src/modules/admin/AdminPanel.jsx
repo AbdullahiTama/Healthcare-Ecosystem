@@ -269,7 +269,7 @@ export default function AdminPanel() {
         guestIds: liveGuests.map(g => g.id),
       })
     } catch (err) {
-      showToast(`Couldn't schedule the show — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't schedule the show: ${err.message}`, { type: 'error' })
       setCreatingShow(false)
       return
     }
@@ -285,7 +285,7 @@ export default function AdminPanel() {
       loadActiveShows()
       showToast('You are now LIVE!', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't start the show — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't start the show: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -303,7 +303,7 @@ export default function AdminPanel() {
       loadActiveShows()
       showToast('Scheduled show cancelled', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't cancel the show — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't cancel the show: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -322,7 +322,7 @@ export default function AdminPanel() {
         guestIds: liveGuests.map(g => g.id),
       })
     } catch (err) {
-      showToast(`Couldn't start the show — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't start the show: ${err.message}`, { type: 'error' })
       setCreatingShow(false)
       return
     }
@@ -346,7 +346,7 @@ export default function AdminPanel() {
       loadActiveShows()
       showToast('Live show ended', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't end the show — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't end the show: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -379,12 +379,12 @@ export default function AdminPanel() {
       const { error: upErr } = await supabase.storage.from('live-media').upload(path, liveImage)
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
-        await callAdminAuth('post_live_item', { token, showId, kind: 'image', content: urlData.publicUrl }).catch(err => showToast(`Couldn't post the image — ${err.message}`, { type: 'error' }))
+        await callAdminAuth('post_live_item', { token, showId, kind: 'image', content: urlData.publicUrl }).catch(err => showToast(`Couldn't post the image: ${err.message}`, { type: 'error' }))
       }
       setLiveImage(null)
     }
     if (liveDraft.trim()) {
-      await callAdminAuth('post_live_item', { token, showId, kind: 'text', content: liveDraft.trim() }).catch(err => showToast(`Couldn't post — ${err.message}`, { type: 'error' }))
+      await callAdminAuth('post_live_item', { token, showId, kind: 'text', content: liveDraft.trim() }).catch(err => showToast(`Couldn't post: ${err.message}`, { type: 'error' }))
       setLiveDraft('')
     }
     setPostingLive(false)
@@ -396,22 +396,22 @@ export default function AdminPanel() {
       await callAdminAuth('hide_live_comment', { token: localStorage.getItem('admin_token'), id: cid })
       loadLiveControl(showId)
     } catch (err) {
-      showToast(`Couldn't hide the comment — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't hide the comment: ${err.message}`, { type: 'error' })
     }
   }
 
   async function postLiveVoice(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => showToast(`Couldn't post the voice note — ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => showToast(`Couldn't post the voice note: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveSlide(showId, url, num, total) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => showToast(`Couldn't post the slide — ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => showToast(`Couldn't post the slide: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveVideo(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => showToast(`Couldn't post the video — ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => showToast(`Couldn't post the video: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
@@ -454,7 +454,7 @@ export default function AdminPanel() {
       loadPromotions()
       showToast('Promotion created', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't create the promotion — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't create the promotion: ${err.message}`, { type: 'error' })
     }
     setSavingPromo(false)
   }
@@ -473,7 +473,7 @@ export default function AdminPanel() {
       loadPromotions()
       showToast('Promotion deleted', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't delete the promotion — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't delete the promotion: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -507,7 +507,7 @@ export default function AdminPanel() {
       await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
       showToast('News item approved', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't approve the news item — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't approve the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     setSavingNews(false)
@@ -519,7 +519,7 @@ export default function AdminPanel() {
       await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
       showToast('News item rejected', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't reject the news item — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't reject the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     loadNews()
@@ -539,7 +539,7 @@ export default function AdminPanel() {
       loadNews()
       showToast('News item deleted', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't delete the news item — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't delete the news item: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -568,7 +568,7 @@ export default function AdminPanel() {
       loadStories()
       showToast('Story published', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't create the story — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't create the story: ${err.message}`, { type: 'error' })
     }
     setSavingStory(false)
   }
@@ -587,7 +587,7 @@ export default function AdminPanel() {
       loadStories()
       showToast('Story deleted', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't delete the story — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't delete the story: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -607,7 +607,7 @@ export default function AdminPanel() {
       loadAll()
       showToast(`User suspended for ${days} days`, { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't suspend the user — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't suspend the user: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -626,7 +626,7 @@ export default function AdminPanel() {
       await callAdminAuth('delete_user', { token: localStorage.getItem('admin_token'), userId })
       showToast('User deleted', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't delete the user — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't delete the user: ${err.message}`, { type: 'error' })
     }
     setSelectedUser(null)
     setDeletingUser(false)
@@ -639,7 +639,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Verification approved', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't approve the verification — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't approve the verification: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -649,7 +649,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Verification rejected', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't reject the verification — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't reject the verification: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -659,7 +659,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Claim approved', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't approve the claim — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't approve the claim: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -669,7 +669,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Claim rejected', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't reject the claim — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't reject the claim: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -687,7 +687,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't delete the post — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -697,7 +697,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('Report resolved', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't resolve the report — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't resolve the report: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -710,7 +710,7 @@ export default function AdminPanel() {
       loadAll()
       showToast('User verified', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't verify the user — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't verify the user: ${err.message}`, { type: 'error' })
     }
   }
 
@@ -731,7 +731,7 @@ export default function AdminPanel() {
       setTaskTitle(''); setTaskDesc(''); setTaskComp(''); setTaskSpec('')
       showToast('Task created', { type: 'success' })
     } catch (err) {
-      showToast(`Couldn't create the task — ${err.message}`, { type: 'error' })
+      showToast(`Couldn't create the task: ${err.message}`, { type: 'error' })
     }
     setSavingTask(false); loadAll()
   }
@@ -1428,8 +1428,8 @@ export default function AdminPanel() {
                 </div>
                 {w.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={async () => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal — ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
-                    <button onClick={async () => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal — ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
+                    <button onClick={async () => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal: ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>
+                    <button onClick={async () => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id: w.id }); loadAll(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} style={{ flex: 1, padding: 9, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✕ Reject</button>
                   </div>
                 )}
               </div>
@@ -1571,7 +1571,7 @@ export default function AdminPanel() {
                   background: storyImageFile ? '#e5e7eb' : storyBg, textAlign: 'center',
                 }}>
                   {storyImageFile ? (
-                    <span style={{ fontSize: 12, color: theme.textMid }}>🖼️ Image selected — text shows over it</span>
+                    <span style={{ fontSize: 12, color: theme.textMid }}>🖼️ Image selected: text shows over it</span>
                   ) : (
                     <div>
                       {storyTitle && <p style={{ margin: '0 0 6px 0', color: '#fff', fontWeight: 900, fontSize: 16 }}>{storyTitle}</p>}
@@ -1775,7 +1775,7 @@ export default function AdminPanel() {
 
                   {/* Demand gaps — the gold */}
                   <div style={card}>
-                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>🎯 Demand gaps — searched but NOT found</p>
+                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>🎯 Demand gaps: searched but NOT found</p>
                     <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>These are products/services people want that you don't have yet. Consider stocking or adding them.</p>
                     {gaps.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No unmet searches yet.</p>}
                     {gaps.map(([term, count]) => (
@@ -1918,7 +1918,7 @@ export default function AdminPanel() {
 
             <div style={card}>
               <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📡 Start a Live Show</p>
-              <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Go live on CareFind. A red LIVE indicator shows in everyone's stories row. Invite guests to co-host — they'll get a notification.</p>
+              <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Go live on CareFind. A red LIVE indicator shows in everyone's stories row. Invite guests to co-host. They'll get a notification.</p>
               <input value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} placeholder="Show title (e.g. Malaria Awareness Live)" style={{ ...input, marginBottom: 12 }} />
 
               <p style={{ margin: '0 0 6px 0', fontSize: 12, fontWeight: 700, color: theme.navy }}>Invite guests to co-host ({liveGuests.length} selected)</p>
@@ -1967,7 +1967,7 @@ export default function AdminPanel() {
             {notifications.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
                 <p style={{ fontSize: 30, margin: '0 0 10px 0' }}>🔔</p>
-                <p style={{ color: theme.textLight, fontSize: 13 }}>All clear — no pending issues</p>
+                <p style={{ color: theme.textLight, fontSize: 13 }}>All clear. No pending issues</p>
               </div>
             )}
             {notifications.map((n, i) => (

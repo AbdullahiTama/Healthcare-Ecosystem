@@ -9,12 +9,14 @@ import {
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
+import { canShowPrice, distanceLabel, SALE_TYPE_LABELS } from '../utils/marketplace.js'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -22,6 +24,7 @@ function DrugProfile() {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
+  const { coords: userCoords } = useGeolocation()
   const [products, setProducts] = useState([])
   const [reviews, setReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
@@ -41,7 +44,7 @@ function DrugProfile() {
     // Pull BOTH pathways: CareHub inventory (business_id) and CareFind uploads (owner_id)
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind)')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude)')
       .ilike('name', `%${decodedName}%`)
       .eq('list_on_carefind', true)
 
@@ -145,7 +148,7 @@ function DrugProfile() {
     pct: reviews.length ? Math.round((reviews.filter((r) => r.rating === n).length / reviews.length) * 100) : 0,
   }))
 
-  const pricedProducts = products.filter((p) => p.price != null)
+  const pricedProducts = products.filter((p) => canShowPrice(p))
   const lowestPrice = pricedProducts.length ? Math.min(...pricedProducts.map((p) => p.price)) : null
 
   const alreadyReviewedSelected = userReviewedIds.includes(selectedProductId)
@@ -281,7 +284,7 @@ function DrugProfile() {
 
           {aiInsights.efficacyReports?.positive?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><CheckCircle2 size={13} aria-hidden="true" /> Efficacy — positive</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><CheckCircle2 size={13} aria-hidden="true" /> Efficacy: positive</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.positive.map((e) => (
                   <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
@@ -292,7 +295,7 @@ function DrugProfile() {
 
           {aiInsights.efficacyReports?.negative?.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.warning }}><AlertTriangle size={13} aria-hidden="true" /> Efficacy — concerns</p>
+              <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.warning }}><AlertTriangle size={13} aria-hidden="true" /> Efficacy: concerns</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.negative.map((e) => (
                   <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
@@ -405,16 +408,26 @@ function DrugProfile() {
                     {loc && <p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.gray500 }}><MapPin size={12} aria-hidden="true" /> {loc}</p>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    {p.price != null && <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>₦{p.price?.toLocaleString()}</p>}
-                    {p.price_unit && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>per {p.price_unit}</p>}
+                    {canShowPrice(p) ? (
+                      <>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>₦{p.price?.toLocaleString()}</p>
+                        {p.price_unit && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>per {p.price_unit}</p>}
+                      </>
+                    ) : (
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: theme.textLight }}>Ask for price</p>
+                    )}
                     {p.business_id && p.stock != null && <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>Stock: {p.stock}</p>}
+                    {(() => {
+                      const dist = distanceLabel(p, userCoords)
+                      return dist ? <p style={{ margin: 0, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}>{dist}</p> : null
+                    })()}
                   </div>
                 </div>
 
                 {(p.sale_type || p.min_purchase) && (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                     {p.sale_type && (
-                      <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'wholesale' ? '#7c3aed' : theme.tealDeep, background: p.sale_type === 'wholesale' ? '#f3e8ff' : theme.tealMist, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{p.sale_type}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 800, color: p.sale_type === 'retail' ? theme.tealDeep : '#7c3aed', background: p.sale_type === 'retail' ? theme.tealMist : '#f3e8ff', padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{SALE_TYPE_LABELS[p.sale_type] || p.sale_type}</span>
                     )}
                     {p.min_purchase && (
                       <span style={{ fontSize: 9.5, fontWeight: 700, color: theme.textMid, background: theme.bg, padding: '2px 8px', borderRadius: 10 }}>
@@ -455,7 +468,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {(p.businesses?.name || 'CareFind seller')}{p.price != null ? ` — ₦${p.price}` : ''}
+                      {(p.businesses?.name || 'CareFind seller')}{canShowPrice(p) ? ` — ₦${p.price}` : ' — Ask for price'}
                     </option>
                   ))}
                 </select>

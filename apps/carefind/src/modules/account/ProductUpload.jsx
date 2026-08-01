@@ -3,17 +3,24 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { Camera, Check, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import { SALE_TYPES } from '../utils/marketplace.js'
 import { Toast, useToast } from '../../components/ui'
 
-const FREE_LIMIT = 15
+// Verified sellers list up to 20 products free; 21+ needs a subscription.
+// Non-verified users can only sell by claiming a position at a verified
+// company, and their listings are tagged with that company's name.
+const FREE_LIMIT = 20
 
-// Verified users add products to MedMarket. First 15 free; 16+ needs subscription.
-function ProductUpload({ businesses, onClose, onAdded }) {
+// Verified users add products to MedMarket. First 20 free; 21+ needs subscription.
+function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
   const { user } = useAuth()
+  const { coords: geoCoords } = useGeolocation()
   const [count, setCount] = useState(null)      // how many products they already have
   const [subscribed, setSubscribed] = useState(false)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
+  const [showPrice, setShowPrice] = useState(true)
   const [category, setCategory] = useState('')
   const [genericName, setGenericName] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
@@ -31,8 +38,12 @@ function ProductUpload({ businesses, onClose, onAdded }) {
   useEffect(() => { loadCount() }, [])
 
   async function loadCount() {
-    // Count products owned by this user (by owner_id OR any of their businesses)
-    const bizIds = (businesses || []).map(b => b.id)
+    // Count products owned by this user (by owner_id OR any of their
+    // businesses OR the companies they hold an approved position at)
+    const bizIds = [...new Set([
+      ...(businesses || []).map(b => b.id),
+      ...(claimBusinesses || []).map(b => b.id),
+    ])]
     let q = supabase.from('products').select('id', { count: 'exact', head: true })
     if (bizIds.length) {
       q = q.or(`owner_id.eq.${user.id},business_id.in.(${bizIds.join(',')})`)
@@ -53,7 +64,7 @@ function ProductUpload({ businesses, onClose, onAdded }) {
 
   async function save() {
     if (!name.trim()) { setError('Product name is required.'); return }
-    if (!price || isNaN(Number(price))) { setError('Enter a valid price.'); return }
+    if (showPrice && (!price || isNaN(Number(price)))) { setError('Enter a valid price, or turn the price toggle off to show "Ask for price".'); return }
     setSaving(true); setError('')
     let imageUrl = null
     if (image) {
@@ -66,7 +77,11 @@ function ProductUpload({ businesses, onClose, onAdded }) {
       }
     }
     const row = {
-      name: name.trim(), price: Number(price), category: category.trim() || null,
+      name: name.trim(), price: showPrice ? (Number(price) || 0) : null,
+      show_price: showPrice,
+      latitude: geoCoords?.lat ?? null,
+      longitude: geoCoords?.lng ?? null,
+      category: category.trim() || null,
       generic_name: genericName.trim() || null,
       whatsapp: whatsapp.trim() || null,
       sale_type: saleType,
@@ -97,16 +112,16 @@ function ProductUpload({ businesses, onClose, onAdded }) {
         {count !== null && (
           <p style={{ margin: '0 0 14px 0', fontSize: 12, color: atLimit ? theme.alert : theme.textMid }}>
             {subscribed
-              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Subscribed — unlimited products</span>
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Subscribed: unlimited products</span>
               : `${count} / ${FREE_LIMIT} free products used`}
           </p>
         )}
 
         {atLimit ? (
           <div style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
-            <p style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>You've used your 15 free products</p>
+            <p style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>You've used your {FREE_LIMIT} free products</p>
             <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textMid }}>Subscribe for ₦2,500/month to list unlimited products on CareFind.</p>
-            <button onClick={() => showToast('Subscription coming soon — payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
+            <button onClick={() => showToast('Subscription coming soon: payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
           </div>
         ) : (
           <div>
@@ -117,12 +132,30 @@ function ProductUpload({ businesses, onClose, onAdded }) {
             {sellerLocation
               ? <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: theme.tealDeep, fontWeight: 600 }}><MapPin size={12} aria-hidden="true" /> Listed in {sellerLocation} (from your profile)</p>
               : <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: theme.warning }}><AlertTriangle size={12} aria-hidden="true" /> Add a location to your profile so buyers know where you are.</p>}
-            <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (₦)" inputMode="numeric" style={inputStyle} />
 
-            {/* Retail or Wholesale */}
+            {/* Price visibility toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 13px', border: `1px solid ${theme.border}`, borderRadius: 10, marginBottom: 10, background: showPrice ? '#fff' : theme.bg }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.navy }}>Show price on listing</p>
+                <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{showPrice ? 'Buyers see the price' : 'Buyers see "Ask for price" instead'}</p>
+              </div>
+              <button
+                onClick={() => setShowPrice(!showPrice)}
+                role="switch"
+                aria-checked={showPrice}
+                aria-label="Show price on listing"
+                style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 20, border: 'none', cursor: 'pointer', padding: 0, background: showPrice ? theme.tealDeep : theme.gray300, transition: 'background 0.2s ease' }}
+              >
+                <span style={{ display: 'block', width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)', marginLeft: showPrice ? 22 : 2, transition: 'margin-left 0.2s ease' }} />
+              </button>
+            </div>
+            {showPrice && <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (₦)" inputMode="numeric" style={inputStyle} />}
+            {!showPrice && <p style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.textMid }}>You can still send the price privately when buyers message you on WhatsApp.</p>}
+
+            {/* Retail, Wholesale or Distributor */}
             <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Sale type</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-              {['retail', 'wholesale'].map(t => (
+              {SALE_TYPES.map(t => (
                 <button key={t} onClick={() => setSaleType(t)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, textTransform: 'capitalize', background: saleType === t ? theme.tealDeep : theme.bg, color: saleType === t ? '#fff' : theme.textMid }}>{t}</button>
               ))}
             </div>
@@ -142,15 +175,16 @@ function ProductUpload({ businesses, onClose, onAdded }) {
             <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Buyers can message you directly on WhatsApp about this product.</p>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={3} style={{ ...inputStyle, resize: 'none' }} />
 
-            {businesses && businesses.length > 0 && (
+            {(businesses && businesses.length > 0) || (claimBusinesses && claimBusinesses.length > 0) ? (
               <>
                 <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>List under</p>
                 <select value={bizId} onChange={(e) => setBizId(e.target.value)} style={inputStyle}>
                   {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  {(claimBusinesses || []).map(b => <option key={b.id} value={b.id}>{b.name} (your position)</option>)}
                   <option value="">My personal account</option>
                 </select>
               </>
-            )}
+            ) : null}
 
             <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 14 }}>
               <Camera size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />{image ? image.name.slice(0, 24) : 'Add product photo (optional)'}

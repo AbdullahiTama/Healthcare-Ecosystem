@@ -4,6 +4,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Card, Inp, TealBtn } from '../../components/ui'
+import { MailCheck } from 'lucide-react'
 import Logo from '../social-feed/Logo.jsx'
 
 // Real, existing features only — no invented stats or testimonials (there's
@@ -20,6 +21,8 @@ function Login() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [location, setLocation] = useState('')
+  const [confirmationSent, setConfirmationSent] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -32,16 +35,26 @@ function Login() {
     setError('')
     setLoading(true)
 
-    const action = isSignUp ? signUp : signIn
-    const { error: authError } = await action(email, password)
-
-    if (authError) {
-      setError(authError.message)
-    } else if (isSignUp) {
-      // New users go to onboarding to complete their profile
-      navigate('/onboarding')
+    if (isSignUp) {
+      // Location is stored in auth metadata (global — any city or country)
+      // so onboarding and the profile can prefill it.
+      const { data, error: authError } = await signUp(email, password, { location: location.trim() || null })
+      if (authError) {
+        setError(authError.message)
+      } else if (!data?.session) {
+        // Email confirmation is required — Supabase created the user but no
+        // session: tell them to check their inbox instead of navigating on.
+        setConfirmationSent(true)
+      } else {
+        navigate('/onboarding')
+      }
     } else {
-      navigate('/feed')
+      const { error: authError } = await signIn(email, password)
+      if (authError) {
+        setError(authError.message)
+      } else {
+        navigate('/feed')
+      }
     }
 
     setLoading(false)
@@ -73,6 +86,21 @@ function Login() {
       </div>
 
       {authMethod === 'email' ? (
+        confirmationSent ? (
+          <div style={{ textAlign: 'center', padding: '12px 0' }}>
+            <MailCheck size={40} color={theme.tealDeep} strokeWidth={1.6} style={{ marginBottom: 10 }} />
+            <p style={{ margin: '0 0 6px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>Confirm your email</p>
+            <p style={{ margin: '0 0 12px 0', fontSize: 13.5, color: theme.textLight, lineHeight: 1.55 }}>
+              We sent a confirmation link to <strong style={{ color: theme.navy }}>{email}</strong>. Click it to activate your account, then log in.
+            </p>
+            <button
+              onClick={() => { setConfirmationSent(false); setIsSignUp(false); setError('') }}
+              style={{ background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 700, fontSize: 13.5, padding: '10px 4px', minHeight: 44, cursor: 'pointer' }}
+            >
+              Back to log in
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Inp
             label="Email address"
@@ -91,13 +119,31 @@ function Login() {
             required
             minLength={6}
           />
+          {isSignUp && (
+            <>
+              <Inp
+                label="Your location (city, state or country)"
+                type="text"
+                value={location}
+                onChange={setLocation}
+                placeholder="e.g. Lagos, Nigeria"
+              />
+              <p style={{ margin: '-6px 0 0 0', fontSize: 11, color: theme.textLight }}>Anywhere in the world. Buyers near you will find your listings faster.</p>
+            </>
+          )}
 
           {error && <p role="alert" aria-live="assertive" style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
 
           <TealBtn type="submit" disabled={loading}>
             {loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Log In'}
           </TealBtn>
+          {!isSignUp && (
+            <p style={{ margin: 0, textAlign: 'center' }}>
+              <Link to="/reset-password" style={{ color: theme.textMid, fontSize: 12.5, fontWeight: 600, textDecoration: 'none' }}>Forgot password?</Link>
+            </p>
+          )}
         </form>
+        )
       ) : (
         <p style={{ color: theme.textLight, fontSize: 13.5 }}>
           Phone login is coming soon. Please use email for now.

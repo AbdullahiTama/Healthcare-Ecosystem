@@ -8,6 +8,7 @@ import Feed from './modules/social-feed/Feed.jsx'
 import Search from './modules/healthcare-discovery/Search.jsx'
 import BusinessProfile from './modules/business-profiles-reviews/BusinessProfile.jsx'
 import Login from './modules/account/Login.jsx'
+import ResetPassword from './modules/account/ResetPassword.jsx'
 import Onboarding from './modules/account/Onboarding.jsx'
 import Profile from './modules/account/Profile.jsx'
 import PublicProfile from './PublicProfile.jsx'
@@ -51,6 +52,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/search" element={<Search />} />
           <Route path="/business/:id" element={<BusinessProfile />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/u/:id" element={<PublicProfile />} />
           <Route path="/drug/:name" element={<DrugProfile />} />
           <Route path="/news" element={<News />} />

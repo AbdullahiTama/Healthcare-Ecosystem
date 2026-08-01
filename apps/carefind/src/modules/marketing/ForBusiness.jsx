@@ -217,7 +217,7 @@ export default function ForBusiness() {
             {' '}need, right where you are.
           </h1>
           <p className="hero-fade" style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', maxWidth: 600, margin: '0 auto 36px', lineHeight: 1.7, fontWeight: 400 }}>
-            Search medicines, compare pharmacies, read real reviews, and connect with healthcare providers near you — all in one place.
+            Search medicines, compare pharmacies, read real reviews, and connect with healthcare providers near you, all in one place.
           </p>
           <div className="hero-fade" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button onClick={() => navigate('/search')} style={{ padding: '16px 32px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}

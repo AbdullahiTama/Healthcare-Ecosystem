@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../../config/supabaseClient'
 import { useAuth } from '../../../providers/AuthContext'
+import { ensureProfile } from '../../../services/ensureProfile.js'
 import { notify } from '../../../services/notify.js'
 import { getActiveIdentity } from '../../../lib/activeIdentity'
 import { theme } from '../../../styles/theme'
@@ -69,6 +70,14 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
 
     setPosting(true)
     try {
+      // fk_posts_user guard: some accounts have no profiles row, which
+      // makes the post insert fail the foreign key check. Cheap no-op
+      // when the row already exists.
+      const profileOk = await ensureProfile(user)
+      if (!profileOk) {
+        toast.show('Could not create post: profile setup incomplete', { type: 'error' })
+        return
+      }
       const activeIdentity = getActiveIdentity()
 
       const postData = {
@@ -100,7 +109,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
       onClose?.()
     } catch (e) {
       console.error('Create post error:', e)
-      toast.show('Failed to create post', { type: 'error' })
+      toast.show('Could not post: ' + (e.message || 'please try again'), { type: 'error' })
     } finally {
       setPosting(false)
     }

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import { BadgeCheck, Coins, Eraser, Gift, Heart, MessageSquare, Mic, Pen, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -371,6 +372,7 @@ export default function LiveSession() {
 
     // Save a lightweight summary post (auto-expires via expires_at)
     const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString()
+    await ensureProfile(user)
     await supabase.from('posts').insert({
       user_id: user.id,
       content: `🔴 Live Session ended\n\n📌 Topic: ${session.topic}\n⏱️ Duration: ${duration} min\n🎁 Gifts received: ${totalGifts}\n👥 Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
@@ -482,7 +484,7 @@ export default function LiveSession() {
             <span style={{ fontSize: 11, color: theme.textLight }}>{messages.length} messages</span>
           </div>
           <div style={{ height: 220, overflowY: 'auto', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {messages.length === 0 && <p style={{ color: theme.textLight, fontSize: 13, textAlign: 'center', margin: 'auto' }}>No messages yet — say hello.</p>}
+            {messages.length === 0 && <p style={{ color: theme.textLight, fontSize: 13, textAlign: 'center', margin: 'auto' }}>No messages yet. Say hello.</p>}
             {messages.map(m => (
               <div key={m.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                 <div style={{ width: 24, height: 24, borderRadius: '50%', background: m.type === 'gift' ? theme.warning : theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 9, fontWeight: 800, flexShrink: 0 }}>

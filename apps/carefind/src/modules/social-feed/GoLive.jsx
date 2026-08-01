@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import { Gift, MessageSquare, Mic, Palette, Radio, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
@@ -30,6 +31,7 @@ export default function GoLive({ onClose }) {
     if (error) { showToast('Could not start session: ' + error.message, { type: 'error' }); setStarting(false); return }
 
     // Post to feed so followers see it
+    await ensureProfile(user)
     await supabase.from('posts').insert({
       user_id: user.id,
       content: `🔴 LIVE NOW: ${topic.trim()}${description ? '\n' + description.trim() : ''}\n\nJoin here 👇`,

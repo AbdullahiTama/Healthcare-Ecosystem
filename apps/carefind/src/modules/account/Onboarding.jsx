@@ -23,6 +23,7 @@ function Onboarding() {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
+  const [location, setLocation] = useState('')
   const [checking, setChecking] = useState(false)
   const [available, setAvailable] = useState(null) // null | true | false
   const [error, setError] = useState('')
@@ -40,13 +41,17 @@ function Onboarding() {
       if (!user) return
       const { data } = await supabase
         .from('profiles')
-        .select('full_name, display_name, phone')
+        .select('full_name, display_name, phone, location')
         .eq('id', user.id)
         .maybeSingle()
       if (data) {
         setFullName(data.full_name || '')
         setUsername(data.display_name || '')
         setPhone(data.phone || '')
+        setLocation(data.location || '')
+      } else {
+        // Fresh account: prefill location from what they typed at signup
+        setLocation(user.user_metadata?.location || '')
       }
       setLoadingProfile(false)
     }
@@ -88,6 +93,7 @@ function Onboarding() {
       full_name: fullName.trim(),
       display_name: username,
       phone: phone.trim(),
+      location: location.trim() || null,
     }, { onConflict: 'id' })
 
     if (saveError) {
@@ -142,7 +148,7 @@ function Onboarding() {
                       ? 'Checking availability…'
                       : available
                         ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Available</span>
-                        : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken — try another</span>}
+                        : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken: try another</span>}
                   </p>
                 )}
                 <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
@@ -152,6 +158,13 @@ function Onboarding() {
               <div>
                 <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Phone number</label>
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 08012345678" style={inputStyle} />
+              </div>
+
+              {/* Location: global, any city or country */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Location</label>
+                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" style={inputStyle} />
+                <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Anywhere in the world: helps buyers find your listings.</p>
               </div>
 
               {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}
@@ -179,7 +192,7 @@ function Onboarding() {
   }
 
   // Laptop+: centered on the viewport rather than a 420px mobile column with
-  // an edge-to-edge hero bleed (RESPONSIVENESS.md — this is a one-time,
+  // an edge-to-edge hero bleed (RESPONSIVENESS.md: this is a one-time,
   // pre-app screen, so no persistent nav chrome here, same reasoning as Login).
   return (
     <div style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
@@ -221,7 +234,7 @@ function Onboarding() {
                     ? 'Checking availability…'
                     : available
                       ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Available</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken — try another</span>}
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={13} strokeWidth={3} aria-hidden="true" /> Taken: try another</span>}
                 </p>
               )}
               <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Lowercase letters, numbers and underscores only.</p>
@@ -237,6 +250,19 @@ function Onboarding() {
                 placeholder="e.g. 08012345678"
                 style={inputStyle}
               />
+            </div>
+
+            {/* Location: global, any city or country */}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: theme.navy, display: 'block', marginBottom: 5 }}>Location</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Lagos, Nigeria"
+                style={inputStyle}
+              />
+              <p style={{ margin: '5px 0 0 0', fontSize: 11, color: theme.textLight }}>Anywhere in the world: helps buyers find your listings.</p>
             </div>
 
             {error && <p style={{ color: theme.alert, fontSize: 13, margin: 0 }}>{error}</p>}

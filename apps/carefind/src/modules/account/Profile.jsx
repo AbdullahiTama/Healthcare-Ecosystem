@@ -15,6 +15,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { renderRichText, stripMarkers, previewText } from '../social-feed/richText.jsx'
 import ProductUpload from './ProductUpload.jsx'
+import FollowersSheet from '../social-feed/FollowersSheet.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
 import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
@@ -67,6 +68,7 @@ function Profile() {
   const [postingStory, setPostingStory] = useState(false)
   const [viewStory, setViewStory] = useState(null)
   const [productUpload, setProductUpload] = useState(false)
+  const [sheetKind, setSheetKind] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
@@ -271,7 +273,7 @@ function Profile() {
     const file = e.target.files[0]
     if (!file) return
     setUploadingCover(true)
-    // Shrink before upload — covers are wide, so allow a bigger max
+    // Shrink before upload: covers are wide, so allow a bigger max
     const resized = await resizeImage(file, 1400, 0.82)
     const path = `cover-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -295,7 +297,7 @@ function Profile() {
     if (error) { showToast('Could not save price: ' + error.message, { type: 'error' }); return }
     loadProfile()
     showToast(price > 0
-      ? `Subscriptions on — ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
+      ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
       : 'Subscriptions turned off.', { type: 'success' })
   }
 
@@ -303,7 +305,7 @@ function Profile() {
     const file = e.target.files[0]
     if (!file) return
     setUploadingAvatar(true)
-    // Avatars display small — 600px is plenty and keeps the upload tiny
+    // Avatars display small: 600px is plenty and keeps the upload tiny
     const resized = await resizeImage(file, 600, 0.85)
     const path = `avatar-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -440,7 +442,7 @@ function Profile() {
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, 160))}
-              placeholder="Bio — tell people who you are"
+              placeholder="Bio: tell people who you are"
               rows={3}
               style={{ padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, fontFamily: 'inherit', resize: 'none' }}
             />
@@ -463,7 +465,7 @@ function Profile() {
                     fontSize: 11, fontWeight: 800, color: theme.tealDeep,
                     background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
                   }}>
-                    {/* The stored label usually already reads "Verified Doctor" —
+                    {/* The stored label usually already reads "Verified Doctor" : 
                         prefixing it printed "Verified Verified Doctor". */}
                     <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || 'Verified'}
                   </span>
@@ -494,11 +496,15 @@ function Profile() {
         {/* Stats */}
         <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
           <div><p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{postCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Posts</p></div>
-          <div><p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followerCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Followers</p></div>
-          <div><p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followingCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Following</p></div>
+          <button onClick={() => setSheetKind('followers')} aria-label={`${followerCount} followers: view list`} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followerCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Followers</p>
+          </button>
+          <button onClick={() => setSheetKind('following')} aria-label={`${followingCount} following: view list`} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
+            <p style={{ margin: 0, fontWeight: 900, fontSize: 16, color: theme.navy }}>{followingCount}</p><p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>Following</p>
+          </button>
           <button onClick={() => setActiveTab('reviews')} style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}>
             <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 900, fontSize: 16, color: theme.navy }}>
-              {avgMyRating ? avgMyRating.toFixed(1) : '—'}
+              {avgMyRating ? avgMyRating.toFixed(1) : ': '}
               <Star size={13} color={theme.warning} fill={theme.warning} aria-hidden="true" />
             </p>
             <p style={{ margin: 0, fontSize: 11, color: theme.textLight, fontWeight: 600 }}>{myReviews.length} review{myReviews.length !== 1 ? 's' : ''}</p>
@@ -614,14 +620,23 @@ function Profile() {
           </div>
         )}
 
-        {/* Sell on MedMarket (verified only) */}
-        {profile?.is_verified && (
+        {/* Sell on MedMarket: verified sellers, or anyone with an approved
+            position at a company (listings are tagged with that company) */}
+        {(profile?.is_verified || approvedClaims.length > 0 || ownedBusinesses.length > 0) ? (
           <button onClick={() => setProductUpload(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 14px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, marginBottom: 16, cursor: 'pointer' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800 }}>
               <ShoppingCart size={16} aria-hidden="true" /> Add a product to MedMarket
             </span>
             <ChevronRight size={18} aria-hidden="true" />
           </button>
+        ) : (
+          <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 12, padding: 14, marginBottom: 16, background: theme.bg }}>
+            <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Want to sell on MedMarket?</p>
+            <p style={{ margin: '0 0 8px 0', fontSize: 11.5, color: theme.textLight, lineHeight: 1.5 }}>
+              Verified sellers can list up to 20 products free. You can also sell under a company by getting an approved position there.
+            </p>
+            <Link to="/verify" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Get verified →</Link>
+          </div>
         )}
 
         {/* My Businesses + Post-as switcher */}
@@ -757,7 +772,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Reviews tab — what people say about you (read-only) */}
+        {/* Reviews tab: what people say about you (read-only) */}
         {activeTab === 'reviews' && (() => {
           const total = myReviews.length
           const avg = avgMyRating
@@ -931,7 +946,25 @@ function Profile() {
       )}
 
       {productUpload && (
-        <ProductUpload businesses={ownedBusinesses} onClose={() => setProductUpload(false)} onAdded={() => {}} />
+        <ProductUpload
+          businesses={ownedBusinesses}
+          claimBusinesses={approvedClaims.map((c) => ({ id: c.staff?.business_id, name: c.businessName })).filter((b) => b.id)}
+          onClose={() => setProductUpload(false)}
+          onAdded={() => { loadProfile() }}
+        />
+      )}
+
+      {sheetKind && (
+        <FollowersSheet
+          profileId={user.id}
+          kind={sheetKind}
+          count={sheetKind === 'followers' ? followerCount : followingCount}
+          onClose={() => setSheetKind(null)}
+          onCountChange={(delta) => {
+            if (sheetKind === 'followers') setFollowerCount((n) => Math.max(0, n + delta))
+            else setFollowingCount((n) => Math.max(0, n + delta))
+          }}
+        />
       )}
 
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />

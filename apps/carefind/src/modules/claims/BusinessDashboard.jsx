@@ -44,7 +44,7 @@ function BusinessDashboard() {
   async function loadBusinessData(businessId) {
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, price, stock, list_on_carefind')
+      .select('id, name, price, show_price, stock, sale_type, min_purchase, price_unit, list_on_carefind')
       .eq('business_id', businessId)
 
     const { data: reviewData } = await supabase
@@ -78,6 +78,11 @@ function BusinessDashboard() {
 
   async function toggleProductVisibility(product) {
     await supabase.from('products').update({ list_on_carefind: !product.list_on_carefind }).eq('id', product.id)
+    loadBusinessData(selectedId)
+  }
+
+  async function togglePriceVisibility(product) {
+    await supabase.from('products').update({ show_price: !product.show_price }).eq('id', product.id)
     loadBusinessData(selectedId)
   }
 
@@ -287,7 +292,7 @@ function BusinessDashboard() {
           <div style={isMobile
             ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }
             : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10, marginBottom: 24 }}>
-            {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products yet — add them in CareHub.</p>}
+            {products.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No products yet. Add them in CareHub.</p>}
             {products.map((p) => (
               <div key={p.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -296,18 +301,33 @@ function BusinessDashboard() {
               }}>
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{p.name}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>₦{p.price} · Stock: {p.stock}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
+                    {p.show_price !== false && p.price != null ? `₦${p.price}` : 'Ask for price'}{p.price_unit ? ` / ${p.price_unit}` : ''} · Stock: {p.stock}
+                  </p>
                 </div>
-                <button
-                  onClick={() => toggleProductVisibility(p)}
-                  style={{
-                    padding: '6px 12px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700,
-                    background: p.list_on_carefind ? theme.tealMist : theme.bg,
-                    color: p.list_on_carefind ? theme.success : theme.textLight,
-                  }}
-                >
-                  {p.list_on_carefind ? 'Listed' : 'Hidden'}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                  <button
+                    onClick={() => togglePriceVisibility(p)}
+                    title={p.show_price !== false ? 'Buyers see the price' : 'Buyers see "Ask for price"'}
+                    style={{
+                      padding: '6px 12px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700,
+                      background: p.show_price !== false ? theme.tealMist : theme.bg,
+                      color: p.show_price !== false ? theme.success : theme.textLight,
+                    }}
+                  >
+                    {p.show_price !== false ? 'Price shown' : 'Ask for price'}
+                  </button>
+                  <button
+                    onClick={() => toggleProductVisibility(p)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 10, border: 'none', fontSize: 11, fontWeight: 700,
+                      background: p.list_on_carefind ? theme.tealMist : theme.bg,
+                      color: p.list_on_carefind ? theme.success : theme.textLight,
+                    }}
+                  >
+                    {p.list_on_carefind ? 'Listed' : 'Hidden'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

@@ -15,6 +15,7 @@ import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
+import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 
@@ -27,8 +28,10 @@ function PublicProfile() {
   const [profile, setProfile] = useState(null)
   const [posts, setPosts] = useState([])
   const [followerCount, setFollowerCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
   const [postCount, setPostCount] = useState(0)
   const [isFollowing, setIsFollowing] = useState(false)
+  const [sheetKind, setSheetKind] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // Stories for this profile
@@ -65,7 +68,7 @@ function PublicProfile() {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, full_name, display_name, is_verified, verification_label, location, website, avatar_url, cover_url, subscription_price, bio')
+        .select('id, full_name, display_name, is_verified, verification_label, location, website, avatar_url, cover_url, subscription_price, bio, show_followers')
         .eq('id', id)
         .maybeSingle()
 
@@ -84,15 +87,17 @@ function PublicProfile() {
         }
       }
 
-      const [postData, followerData, storyData, playlistData] = await Promise.all([
+      const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
         supabase.from('posts').select('id, content, created_at, post_type, theme, image_url').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
+        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
         supabase.from('stories').select('id, title, body, image_url, bg_color, created_at').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
         supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
       ])
 
       setPosts(postData.data || [])
       setFollowerCount(followerData.count || 0)
+      setFollowingCount(followingData.count || 0)
       setPostCount(postData.data?.length || 0)
       setUserStories(storyData.data || [])
       setPlaylists(playlistData.data || [])
@@ -456,10 +461,36 @@ function PublicProfile() {
             <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{postCount}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Posts</p>
           </div>
-          <div>
-            <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followerCount}</p>
-            <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Followers</p>
-          </div>
+          {profile.show_followers === false && !isOwnProfile ? (
+            <div>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>—</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Followers</p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSheetKind('followers')}
+              aria-label={`${followerCount} followers — view list`}
+              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
+            >
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followerCount}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Followers</p>
+            </button>
+          )}
+          {profile.show_followers === false && !isOwnProfile ? (
+            <div>
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>—</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Following</p>
+            </div>
+          ) : (
+            <button
+              onClick={() => setSheetKind('following')}
+              aria-label={`${followingCount} following — view list`}
+              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
+            >
+              <p style={{ margin: 0, fontWeight: 900, fontSize: big ? 16 : 15, color: theme.navy }}>{followingCount}</p>
+              <p style={{ margin: 0, fontSize: 10.5, color: theme.gray400, fontWeight: 600 }}>Following</p>
+            </button>
+          )}
           <button
             onClick={() => setActiveTab('reviews')}
             style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: theme.fontFamily }}
@@ -721,10 +752,22 @@ function PublicProfile() {
         onClose={() => setConfirmSubOpen(false)}
         onConfirm={confirmSubscribe}
         title="Subscribe to this creator?"
-        consequence={`You'll be charged ${profile?.subscription_price} CareCoin${profile?.subscription_price === 1 ? '' : 's'} (₦${coinsToNaira(profile?.subscription_price || 0).toLocaleString()}) per month for access to their subscriber-only content. This renews automatically from your CareCoins wallet — you can turn off auto-renew anytime.`}
+        consequence={`You'll be charged ${profile?.subscription_price} CareCoin${profile?.subscription_price === 1 ? '' : 's'} (₦${coinsToNaira(profile?.subscription_price || 0).toLocaleString()}) per month for access to their subscriber-only content. This renews automatically from your CareCoins wallet. You can turn off auto-renew anytime.`}
         confirmLabel="Subscribe"
         danger={false}
       />
+      {sheetKind && (
+        <FollowersSheet
+          profileId={id}
+          kind={sheetKind}
+          count={sheetKind === 'followers' ? followerCount : followingCount}
+          onClose={() => setSheetKind(null)}
+          onCountChange={(delta) => {
+            if (sheetKind === 'followers') setFollowerCount((n) => Math.max(0, n + delta))
+            else setFollowingCount((n) => Math.max(0, n + delta))
+          }}
+        />
+      )}
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
 
       {isMobile && <BottomNav />}

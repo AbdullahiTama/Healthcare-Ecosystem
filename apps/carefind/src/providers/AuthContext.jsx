@@ -22,12 +22,24 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  async function signUp(email, password) {
-    return supabase.auth.signUp({ email, password })
+  async function signUp(email, password, metadata = {}) {
+    return supabase.auth.signUp({ email, password, options: { data: metadata } })
   }
 
   async function signIn(email, password) {
     return supabase.auth.signInWithPassword({ email, password })
+  }
+
+  async function resetPassword(email) {
+    // Redirect back to the in-app reset page, which swaps in the new-password
+    // form when Supabase fires the PASSWORD_RECOVERY event on load.
+    return supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+  }
+
+  async function updatePassword(newPassword) {
+    return supabase.auth.updateUser({ password: newPassword })
   }
 
   async function signOut() {
@@ -35,7 +47,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, resetPassword, updatePassword, signOut }}>
       {children}
     </AuthContext.Provider>
   )

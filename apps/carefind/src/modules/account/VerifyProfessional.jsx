@@ -138,7 +138,7 @@ function VerifyProfessional() {
         {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Professional Verification</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
-          Get your verified badge — your specialty will be publicly displayed on all your posts and profile
+          Get your verified badge. Your specialty will be publicly displayed on all your posts and profile
         </p>
       </div>
 
@@ -218,7 +218,7 @@ function VerifyProfessional() {
                   <div>
                     <label style={{ fontSize: 11.5, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>
                       Specialty / Designation
-                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>— publicly shown on your posts</span>
+                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>· shown publicly on your posts</span>
                     </label>
                     <select
                       value={form.profession}
@@ -284,7 +284,7 @@ function VerifyProfessional() {
                       <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>
                         {fileName || 'Tap to choose a file'}
                       </p>
-                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG — max 5MB</p>
+                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG · max 5MB</p>
                       <input
                         type="file"
                         accept="image/*"
