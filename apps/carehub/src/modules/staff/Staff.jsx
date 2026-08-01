@@ -365,7 +365,7 @@ export default function Staff({ brand, role, perms }) {
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Modules this role can open</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: '8px', maxHeight: 220, overflowY: 'auto', padding: '12px', border: `1px solid ${border}`, borderRadius: theme.radius.md }}>
-              {ALL_NAV_UNION.filter(([key]) => brand?.business_type === 'skincare' || key !== 'consultation').map(([key, , label]) => (
+              {ALL_NAV_UNION.filter(([key]) => brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy' || key !== 'consultation').map(([key, , label]) => (
                 <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12.5px', color: navy, cursor: 'pointer' }}>
                   <input type='checkbox' checked={roleForm.nav.includes(key)} onChange={e => setRoleForm(p => ({ ...p, nav: e.target.checked ? [...p.nav, key] : p.nav.filter(k => k !== key) }))} style={{ accentColor: tealDeep }} />
                   {label}

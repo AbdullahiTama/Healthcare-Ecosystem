@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { theme } from '../../styles/theme'
 import { Card, Inp, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
+import { Chips, Pills, YesNo, SectionCard } from './formParts'
 import { getClients, addClient, addConsultation } from '../../services/supabase'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, bg } = theme
@@ -15,64 +16,6 @@ const ALLERGY_OPTIONS = ['Skincare Products', 'Fragrances', 'Latex', 'Aspirin', 
 const FITZPATRICK = ['I', 'II', 'III', 'IV', 'V', 'VI']
 
 const today = () => new Date().toISOString().split('T')[0]
-
-function Chips({ options, selected = [], onToggle, customLabel }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {options.map(o => {
-        const on = selected.includes(o)
-        return (
-          <button key={o} type="button" onClick={() => onToggle(o)} aria-pressed={on}
-            style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {customLabel ? customLabel(o) : o}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function Pills({ options, value, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      {options.map(o => {
-        const on = value === o
-        return (
-          <button key={o} type="button" onClick={() => onChange(on ? '' : o)} aria-pressed={on}
-            style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {o}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function YesNo({ value, onChange }) {
-  return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      {['Yes', 'No'].map(o => {
-        const on = value === (o === 'Yes' ? 'yes' : 'no')
-        return (
-          <button key={o} type="button" onClick={() => onChange(on ? '' : (o === 'Yes' ? 'yes' : 'no'))} aria-pressed={on}
-            style={{ padding: '7px 16px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {o}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function SectionCard({ title, hint, children }) {
-  return (
-    <Card style={{ padding: 18, marginBottom: 14 }}>
-      <div style={{ fontWeight: 800, fontSize: 14, color: navy, marginBottom: hint ? 2 : 14 }}>{title}</div>
-      {hint && <div style={{ fontSize: 12, color: gray400, marginBottom: 12 }}>{hint}</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
-    </Card>
-  )
-}
 
 export default function ConsultationForm({ brand, products = [], staffName = '', initialClient = null, onSaved, onCancel }) {
   const toast = useToast()
@@ -124,14 +67,14 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
   async function saveQuickAdd() {
     if (!quick.fullName.trim() || !quick.phone.trim()) { toast.show('Name and phone are required for a new client.', { type: 'warning' }); return }
     try {
-      const created = await addClient({
+      const created = (await addClient({
         business_id: brand.id,
         full_name: quick.fullName.trim(),
         phone: quick.phone.trim(),
         email: quick.email || '',
         total_spend: 0,
         visit_count: 0,
-      })
+      }))[0] || null
       setClient(created)
       setShowQuickAdd(false)
       setQuick({ fullName: '', phone: '', email: '' })
@@ -151,8 +94,8 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
         client_id: client.id,
         client_name: client.full_name,
         consultation_date: form.date,
-        therapist_name: form.assessment.therapist_name,
-        skin_type: form.assessment.skin_type,
+        consultation_type: 'skincare',
+        provider_name: form.assessment.therapist_name,
         recommended_products: recProductIds.map(id => productOptions.find(p => p.id === id)).filter(Boolean),
         data: {
           client_info: { full_name: client.full_name, ...form.clientInfo },

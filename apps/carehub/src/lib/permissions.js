@@ -240,9 +240,9 @@ export function getNavItems(role, businessType, customRoles = {}) {
   let all = ALL_NAV_DEFAULT
   if (businessType === 'hospital') all = ALL_NAV_HOSPITAL
   if (businessType === 'manufacturer_importer' || businessType === 'wholesale') all = ALL_NAV_ENTERPRISE
-  // Consultation forms are a skincare-only module — hide for every other
+  // Consultation forms are a skincare + pharmacy module — hide for every other
   // business type even though several presets grant the route.
-  if (businessType !== 'skincare') all = all.filter(i => i[0] !== 'consultation')
+  if (businessType !== 'skincare' && businessType !== 'pharmacy') all = all.filter(i => i[0] !== 'consultation')
   return all.filter(item => perms.nav.includes(item[0]))
 }
 
