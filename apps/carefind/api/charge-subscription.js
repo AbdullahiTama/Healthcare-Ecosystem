@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from './_lib/verifyUser.js'
+import { paystackFetch } from './_lib/paystack.js'
 
 // Initializes a Paystack transaction for a creator subscription.
 // Called when a user wants to subscribe but doesn't have enough CareCoins
@@ -59,20 +60,14 @@ export default async function handler(req, res) {
       body.transaction_charge = Math.floor(nairaAmount * 100 * 0.1) // 10% platform fee
     }
 
-    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+    const data = await paystackFetch('/transaction/initialize', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     })
-
-    const data = await response.json()
     if (!data.status) return res.status(400).json({ error: data.message || 'Paystack error' })
 
     return res.status(200).json({ authorization_url: data.data.authorization_url, reference })
   } catch (err) {
-    return res.status(500).json({ error: 'Server error' })
+    return res.status(500).json({ error: err.message || 'Server error' })
   }
 }

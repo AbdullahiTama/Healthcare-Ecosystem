@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyBusiness } from './_lib/verifyBusiness.js'
+import { paystackFetch } from './_lib/paystack.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -19,10 +20,12 @@ export default async function handler(req, res) {
   const { reference } = req.body
   if (!reference) return res.status(400).json({ error: 'Missing reference' })
 
-  const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` },
-  })
-  const paystackData = await paystackRes.json()
+  let paystackData
+  try {
+    paystackData = await paystackFetch(`/transaction/verify/${encodeURIComponent(reference)}`)
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Could not verify payment' })
+  }
 
   if (!paystackData.status || paystackData.data?.status !== 'success') {
     return res.status(400).json({ error: 'Payment not confirmed by Paystack' })

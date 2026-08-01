@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
+import { getPaystackSecretKey } from './_lib/paystack.js'
 import { creditTopup } from './_lib/paystackCredit.js'
 
 // Single Paystack webhook for all apps — register this URL in the Paystack
@@ -118,8 +119,14 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const rawBody = await readRawBody(req)
+  let secretKey
+  try {
+    secretKey = getPaystackSecretKey()
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
   const hash = crypto
-    .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+    .createHmac('sha512', secretKey)
     .update(rawBody)
     .digest('hex')
 

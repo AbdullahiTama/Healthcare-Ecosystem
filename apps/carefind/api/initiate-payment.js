@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { verifyUser } from './_lib/verifyUser.js'
+import { paystackFetch } from './_lib/paystack.js'
 import { TOPUP_PACKAGES } from './_lib/topupPackages.js'
 
 const supabase = createClient(
@@ -29,12 +30,8 @@ export default async function handler(req, res) {
   const reference = `cf_${user.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
 
   try {
-    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+    const data = await paystackFetch('/transaction/initialize', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
         email: user.email,
         amount: pkg.naira * 100,
@@ -45,14 +42,14 @@ export default async function handler(req, res) {
       }),
     })
 
-    const data = await response.json()
-
     if (!data.status) {
       return res.status(400).json({ error: data.message || 'Paystack error' })
     }
 
     return res.status(200).json({ authorization_url: data.data.authorization_url, reference })
   } catch (err) {
-    return res.status(500).json({ error: 'Server error' })
+    // Includes the descriptive "Invalid Paystack key" message when
+    // PAYSTACK_SECRET_KEY is missing or a publishable key.
+    return res.status(500).json({ error: err.message || 'Server error' })
   }
 }

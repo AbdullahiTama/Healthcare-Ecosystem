@@ -5,20 +5,7 @@
 // subsequent withdrawals by the same user reuse the same recipient.
 
 import crypto from 'crypto'
-
-const PAYSTACK_BASE = 'https://api.paystack.co'
-
-async function paystackFetch(path, options = {}) {
-  const response = await fetch(PAYSTACK_BASE + path, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  })
-  return response.json()
-}
+import { paystackFetch } from './paystack.js'
 
 // Create a transfer recipient on Paystack. Returns the recipient_code.
 // Subsequent calls with the same account details return the existing code.
