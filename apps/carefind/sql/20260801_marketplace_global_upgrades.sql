@@ -51,14 +51,16 @@ where p.id is null;
 
 --    Trigger going forward: install only if missing (the live database
 --    already has an on_auth_user_created trigger, so never overwrite it).
-do $$
+--    NOTE: the inner function uses $func$ tags so it nests safely inside the
+--    outer do $do$ block (same-tag dollar quotes would end the block early).
+do $do$
 begin
   if not exists (select 1 from pg_trigger where tgname = 'on_auth_user_created') then
     create or replace function public.handle_new_user()
     returns trigger
     language plpgsql
     security definer set search_path = public
-    as $$
+    as $func$
     begin
       insert into public.profiles (id, display_name, location)
       values (
@@ -69,10 +71,10 @@ begin
       on conflict (id) do nothing;
       return new;
     end;
-    $$;
+    $func$;
 
     create trigger on_auth_user_created
       after insert on auth.users
       for each row execute function public.handle_new_user();
   end if;
-end $$;
+end $do$;
