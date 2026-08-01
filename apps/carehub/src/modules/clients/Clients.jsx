@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Users, UserPlus, DollarSign, Search, Download, ShoppingCart, Calendar, Landmark } from 'lucide-react'
-import { getClients, addClient, updateClient, getSalesByClient, getAppointmentsByClient, getDebtsByClient } from '../../services/supabase'
+import { Users, UserPlus, DollarSign, Search, Download, ShoppingCart, Calendar, Landmark, Clipboard } from 'lucide-react'
+import { getClients, addClient, updateClient, getSalesByClient, getAppointmentsByClient, getDebtsByClient, getConsultationsByClient } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -10,6 +10,7 @@ const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, 
 const HISTORY_TABS = [
   ['sales', ShoppingCart, 'Sales'],
   ['appointments', Calendar, 'Appointments'],
+  ['consultations', Clipboard, 'Consultations'],
   ['debts', Landmark, 'Debts'],
 ]
 
@@ -35,7 +36,7 @@ export default function Clients({ brand, role, perms }) {
     if (!selected?.id) { setHistory([]); return }
     let live = true
     setHistoryLoading(true)
-    const fetchHistory = historyTab === 'sales' ? getSalesByClient : historyTab === 'appointments' ? getAppointmentsByClient : getDebtsByClient
+    const fetchHistory = historyTab === 'sales' ? getSalesByClient : historyTab === 'appointments' ? getAppointmentsByClient : historyTab === 'consultations' ? getConsultationsByClient : getDebtsByClient
     fetchHistory(selected.id).then(h => { if (live) setHistory(h || []) }).catch(() => { if (live) setHistory([]) }).finally(() => { if (live) setHistoryLoading(false) })
     return () => { live = false }
   }, [selected?.id, historyTab])
@@ -79,6 +80,36 @@ export default function Clients({ brand, role, perms }) {
     const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients.csv'; a.click()
     URL.revokeObjectURL(url)
     showToast('Clients exported as CSV!', { type: 'success' })
+  }
+
+  // Exports whatever the client-detail History tab is currently showing
+  // (sales / appointments / consultations / debts) as a flat CSV.
+  function exportHistoryCsv() {
+    if (!history.length) { showToast('Nothing to export yet.', { type: 'warning' }); return }
+    let rows
+    if (historyTab === 'sales') {
+      rows = [['Txn No', 'Date', 'Payment', 'Total', 'Balance', 'Items']]
+      history.forEach(s => {
+        let items = []
+        try { items = JSON.parse(s.items || '[]') } catch (e) {}
+        rows.push([s.txn_no || '', s.created_at?.slice(0, 16).replace('T', ' ') || '', s.payment_method || '', s.total || 0, s.balance || 0, items.map(i => (i.name + ' x' + i.qty) + (i.source === 'recommended' ? ' [rec]' : '')).join('; ')])
+      })
+    } else if (historyTab === 'appointments') {
+      rows = [['Service', 'Date', 'Time', 'Staff', 'Status']]
+      history.forEach(a => rows.push([a.service || '', a.date || '', a.time || '', a.staff_name || '', a.status || '']))
+    } else if (historyTab === 'consultations') {
+      rows = [['Date', 'Therapist', 'Skin Type', 'Recommended Products', 'Source']]
+      history.forEach(c => rows.push([c.consultation_date || '', c.therapist_name || '', c.skin_type || '', (c.recommended_products || []).map(p => p.name).join(', '), c.source || 'walk-in']))
+    } else {
+      rows = [['Date', 'Direction', 'Description', 'Balance']]
+      history.forEach(d => rows.push([d.created_at?.slice(0, 10) || '', d.direction === 'owes_us' ? 'Owes us' : 'We owe', d.description || d.party_name || '', d.balance || 0]))
+    }
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_' + selected?.full_name + '_' + historyTab + '.csv'; a.click()
+    URL.revokeObjectURL(url)
+    showToast('History exported as CSV!', { type: 'success' })
   }
 
   const filtered = clients.filter(c =>
@@ -170,9 +201,15 @@ export default function Clients({ brand, role, perms }) {
               </div>
             ))}
 
-            {/* Full history across POS, appointments and debts */}
+            {/* Full history across POS, appointments, consultations and debts */}
             <div style={{ marginTop: '22px' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', marginBottom: '10px' }}>History</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase' }}>History</div>
+                <button onClick={() => exportHistoryCsv()} title='Export this history as CSV'
+                  style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: gray600 }}>
+                  <Download size={12} /> Export
+                </button>
+              </div>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                 {HISTORY_TABS.map(([key, Icon, label]) => {
                   const on = historyTab === key
@@ -186,7 +223,7 @@ export default function Clients({ brand, role, perms }) {
               </div>
               {historyLoading ? <Loading /> : history.length === 0 ? (
                 <div style={{ padding: '22px 14px', borderRadius: '10px', background: bg, textAlign: 'center', fontSize: '12px', color: gray500 }}>
-                  {historyTab === 'sales' ? 'No sales recorded for this client yet. Charge them at the POS and link their name to build history.' : historyTab === 'appointments' ? 'No appointments yet. Book one from Appointments and pick this client.' : 'No debts for this client yet. Credit sales and manual debts will appear here.'}
+                  {historyTab === 'sales' ? 'No sales recorded for this client yet. Charge them at the POS and link their name to build history.' : historyTab === 'appointments' ? 'No appointments yet. Book one from Appointments and pick this client.' : historyTab === 'consultations' ? 'No consultations yet. Start one from the Consultations page for this client.' : 'No debts for this client yet. Credit sales and manual debts will appear here.'}
                 </div>
               ) : historyTab === 'sales' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
@@ -202,7 +239,16 @@ export default function Clients({ brand, role, perms }) {
                         <div style={{ fontSize: '11px', color: gray500, marginTop: '3px' }}>
                           {s.created_at?.slice(0, 16).replace('T', ' ') || '—'} · {s.payment_method || '—'}{s.balance > 0 ? ' · Balance: ' + fmt(s.balance) : ''}
                         </div>
-                        {items.length > 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '3px' }}>{items.map(i => i.name + ' x' + i.qty).join(', ')}</div>}
+                        {items.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '11px', color: gray400, marginTop: '3px' }}>
+                            {items.map(i => (
+                              <span key={i.id || i.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                {i.name + ' x' + i.qty}
+                                {i.source === 'recommended' && <Pill label='rec' type='purple' style={{ fontSize: 9, marginLeft: 2 }} />}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -216,6 +262,24 @@ export default function Clients({ brand, role, perms }) {
                         <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>{a.date || '—'} at {a.time || '—'}{a.staff_name ? ' · ' + a.staff_name : ''}</div>
                       </div>
                       <Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} />
+                    </div>
+                  ))}
+                </div>
+              ) : historyTab === 'consultations' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
+                  {history.map(c => (
+                    <div key={c.id} style={{ padding: '11px 13px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{c.consultation_date || '—'}</span>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          {c.skin_type && <Pill label={c.skin_type} type='teal' style={{ fontSize: 9 }} />}
+                          {(c.recommended_products || []).length > 0 && <Pill label={c.recommended_products.length + ' rec'} type='purple' style={{ fontSize: 9 }} />}
+                        </div>
+                      </div>
+                      {c.therapist_name && <div style={{ fontSize: '11px', color: gray500, marginTop: '3px' }}>Therapist: {c.therapist_name}</div>}
+                      {(c.recommended_products || []).length > 0 && (
+                        <div style={{ fontSize: '11px', color: gray400, marginTop: '3px' }}>{c.recommended_products.map(p => p.name).join(', ')}</div>
+                      )}
                     </div>
                   ))}
                 </div>

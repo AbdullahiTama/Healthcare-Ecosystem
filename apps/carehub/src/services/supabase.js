@@ -172,6 +172,26 @@ export async function getSalesByClient(clientId) { return sbFetch('sales?client_
 export async function getAppointmentsByClient(clientId) { return sbFetch('appointments?client_id=eq.' + clientId + '&order=date.asc&select=*') }
 export async function getDebtsByClient(clientId) { return sbFetch('debts?client_id=eq.' + clientId + '&order=created_at.desc&select=*') }
 
+// CONSULTATIONS (skincare & aesthetic module — 20260803_skincare_consultations.sql).
+// Own table `skincare_consultations` — the hospital module owns `consultations`
+// (patient_id-linked), so the two workflows never share a table.
+// Filters are server-side; `query` matches the client-name snapshot.
+export async function getConsultations(businessId, filters = {}) {
+  let query = 'skincare_consultations?business_id=eq.' + businessId + '&order=consultation_date.desc&select=*'
+  if (filters.clientId) query += '&client_id=eq.' + filters.clientId
+  if (filters.query) query += '&client_name=ilike.*' + encodeURIComponent(filters.query) + '*'
+  if (filters.from) query += '&consultation_date=gte.' + filters.from
+  if (filters.to) query += '&consultation_date=lte.' + filters.to
+  return sbFetch(query)
+}
+export async function getConsultationsByClient(clientId) { return sbFetch('skincare_consultations?client_id=eq.' + clientId + '&order=consultation_date.desc&select=*') }
+export async function getLatestConsultation(clientId) {
+  const data = await getConsultationsByClient(clientId)
+  return Array.isArray(data) && data.length ? data[0] : null
+}
+export async function addConsultation(data) { return sbFetch('skincare_consultations', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateConsultation(id, data) { return sbFetch('skincare_consultations?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
 // DEMAND (out-of-stock book, customer requests, requisitions) — the digital
 // replacement for the paper demand log. Tables from
 // 20260801_customer_and_requisition_modules.sql.
@@ -240,7 +260,7 @@ export async function addPatient(data) { return sbFetch('patients', { method: 'P
 export async function updatePatient(id, data) { return sbFetch('patients?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getTriage(patientId) { const r = await sbFetch('triage?patient_id=eq.' + patientId + '&select=*'); return r[0] || null }
 export async function addTriage(data) { return sbFetch('triage', { method: 'POST', body: JSON.stringify(data) }) }
-export async function addConsultation(data) { return sbFetch('consultations', { method: 'POST', body: JSON.stringify(data) }) }
+export async function addHospitalConsultation(data) { return sbFetch('consultations', { method: 'POST', body: JSON.stringify(data) }) }
 export async function getPrescriptions(businessId) { return sbFetch('prescriptions?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
 export async function addPrescription(data) { return sbFetch('prescriptions', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updatePrescription(id, data) { return sbFetch('prescriptions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }

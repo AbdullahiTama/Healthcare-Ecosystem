@@ -17,6 +17,26 @@
 -- user whose email matches a legacy row (left behind by earlier signUp()
 -- provisioning calls).
 --
+-- Run history:
+--   • Run #1 failed with 23505 on `unique_display_name`: the signup trigger
+--     handle_new_user() derives profiles.display_name from the email local
+--     part, and `profiles` has a UNIQUE constraint on display_name that a
+--     previous account already claimed ('hatama125').
+--   • Run #2 tried to disable that trigger for the transaction and failed
+--     with 42501 "must be owner of table users" — the SQL editor role is not
+--     a superuser and `auth.users` is owned by supabase_auth_admin, so no
+--     ALTER on the auth schema is permitted.
+--   • This version needs no auth-schema privileges at all: the trigger stays
+--     enabled and the script frees up the display name it wants BEFORE each
+--     insert — if another profile already holds the plain local-part name,
+--     that profile is moved to a free `base_N` suffix first, so the trigger's
+--     own insert succeeds exactly as it does for ordinary signups. All writes
+--     to `public.profiles` are allowed (public tables are owned by this role).
+--
+-- Alternative permanent fix (product decision, not done here): the root cause
+-- is unique_display_name itself — drop it (`alter table public.profiles drop
+-- constraint unique_display_name`) and the trigger can never collide again.
+--
 -- Run once via the Supabase SQL editor or psql, AFTER deploying the code in
 -- Login.jsx/authClient.js (the new provisionRealAuthAccount retry). Safe to
 -- re-run at any time (no-ops on existing/confirmed users).
@@ -27,6 +47,12 @@ declare
   r record;
   uid uuid;
   profile_count int;
+  base text;
+  cand text;
+  cand2 text;
+  i int;
+  j int;
+  claim_id uuid;
 begin
   -- 1. Businesses (owner accounts)
   for r in select email, password from businesses where email is not null and lower(email) <> '' loop
@@ -37,6 +63,30 @@ begin
     select id into uid from auth.users where lower(email) = lower(r.email);
 
     if uid is null then
+      base := split_part(r.email, '@', 1);
+      if base is null or base = '' then
+        -- no usable display name for the trigger — skip; the account keeps
+        -- its legacy login rather than risking a hard failure
+        raise notice 'Skipping business email % (no usable display name)', r.email;
+        continue;
+      end if;
+
+      -- Free the plain name for this user's trigger-created profile: if
+      -- another profile already holds `base`, move it to a free `base_N`.
+      select id into claim_id
+        from public.profiles where display_name = base
+        order by created_at limit 1;
+      if claim_id is not null then
+        for j in 2..1000 loop
+          cand2 := base || '_' || j;
+          perform 1 from public.profiles where display_name = cand2;
+          if not found then
+            update public.profiles set display_name = cand2 where id = claim_id;
+            exit;
+          end if;
+        end loop;
+      end if;
+
       uid := gen_random_uuid();
       insert into auth.users (
         instance_id, id, aud, role, email, encrypted_password,
@@ -57,6 +107,8 @@ begin
         jsonb_build_object('sub', uid::text, 'email', r.email, 'email_verified', true),
         'email', now(), now(), now()
       );
+      -- NB: the auth.users INSERT trigger handle_new_user() now creates the
+      -- profile row itself (display_name = `base`, which we just freed).
     else
       update auth.users
         set email_confirmed_at = coalesce(email_confirmed_at, now()),
@@ -75,6 +127,26 @@ begin
     select id into uid from auth.users where lower(email) = lower(r.email);
 
     if uid is null then
+      base := split_part(r.email, '@', 1);
+      if base is null or base = '' then
+        raise notice 'Skipping staff email % (no usable display name)', r.email;
+        continue;
+      end if;
+
+      select id into claim_id
+        from public.profiles where display_name = base
+        order by created_at limit 1;
+      if claim_id is not null then
+        for j in 2..1000 loop
+          cand2 := base || '_' || j;
+          perform 1 from public.profiles where display_name = cand2;
+          if not found then
+            update public.profiles set display_name = cand2 where id = claim_id;
+            exit;
+          end if;
+        end loop;
+      end if;
+
       uid := gen_random_uuid();
       insert into auth.users (
         instance_id, id, aud, role, email, encrypted_password,
@@ -103,9 +175,10 @@ begin
     end if;
   end loop;
 
-  -- 3. Profiles for the newly-created users, so the story/live FK inserts
-  --    (stories.user_id, live_items.sender_id → profiles.id) can't fail.
-  --    Only for users that have no profile row yet.
+  -- 3. Safety net: profiles for any confirmed legacy user that still has
+  --    none (e.g. provisioned users whose trigger ran before this fix), with
+  --    collision-free display names — stories.user_id / live_items.sender_id
+  --    FK → profiles.id, so these rows are required.
   for r in select u.id, u.email
            from auth.users u
            where u.email_confirmed_at is not null
@@ -113,8 +186,20 @@ begin
                or lower(u.email) in (select lower(email) from staff where email is not null)) loop
     select count(*) into profile_count from public.profiles where id = r.id;
     if profile_count = 0 then
-      insert into public.profiles (id, display_name, created_at)
-      values (r.id, split_part(r.email, '@', 1), now());
+      base := split_part(r.email, '@', 1);
+      if base is null or base = '' then
+        base := 'user_' || left(r.id::text, 8);
+      end if;
+      for i in 1..1000 loop
+        cand := case when i = 1 then base else base || '_' || i end;
+        begin
+          insert into public.profiles (id, display_name, created_at)
+          values (r.id, cand, now());
+          exit;
+        exception when unique_violation then
+          null; -- display_name taken — try the next suffix
+        end;
+      end loop;
     end if;
   end loop;
 end $$;

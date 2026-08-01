@@ -18,6 +18,7 @@ This document tracks architecture issues discovered during review.
 ## Medium
 
 - [ ] Supabase "Confirm email" setting is effectively ON (live signup probe: 201 but no session, `confirmation_sent_at` set) — silently-provisioned accounts can never complete sign-in. Backfill migration `20260802_backfill_confirmed_auth_users.sql` bypasses this, but consider disabling confirmation for this project.
+- [ ] `handle_new_user()` trigger (on `auth.users`) is not collision-safe: it sets `profiles.display_name = split_part(email,'@',1)`, but `profiles.display_name` is UNIQUE (`unique_display_name`) — any second signup whose local part is already taken fails the whole user insert (surfaced as 23505 during the backfill run). The backfill works around it by freeing the name before each insert, but the trigger should be hardened long-term (suffix on collision) or `unique_display_name` dropped — also note the SQL editor cannot modify the auth schema (42501), so any fix must be a function replacement or a `public.profiles` change.
 
 ---
 

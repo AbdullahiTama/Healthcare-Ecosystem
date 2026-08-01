@@ -39,7 +39,7 @@ import Doctor from './hospital/Doctor'
 import RxInbox from './hospital/RxInbox'
 import Lab from './hospital/Lab'
 import Imaging from './hospital/Imaging'
-import ConsultationRouter from '../../modules/consultation/ConsultationRouter'
+import Consultation from '../../modules/consultation/Consultation'
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory',
@@ -123,7 +123,7 @@ export default function BusinessDashboard() {
 
   const online = useOnlineStatus()
 
-  const pageProps = { brand, products, setProducts, role, perms, showToast, loadProducts }
+  const pageProps = { brand, products, setProducts, role, perms, showToast, loadProducts, staffName: staffUser?.full_name || '' }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -163,7 +163,7 @@ export default function BusinessDashboard() {
             <Route path='inventory' element={guard('inventory', <><TopBar title='Inventory' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Inventory {...pageProps} /></div></>)} />
             <Route path='clients' element={guard('clients', <><TopBar title={brand?.business_type === 'hospital' ? 'Patients' : 'Clients'} brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Clients {...pageProps} /></div></>)} />
             <Route path='appointments' element={guard('appointments', <><TopBar title='Appointments' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Appointments {...pageProps} /></div></>)} />
-            <Route path='consultation' element={guard('consultation', <><TopBar title='Consultations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><ConsultationRouter {...pageProps} /></div></>)} />
+            <Route path='consultation' element={guard('consultation', <><TopBar title='Consultations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Consultation {...pageProps} /></div></>)} />
             <Route path='expenses' element={guard('expenses', <><TopBar title='Expenses' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Expenses {...pageProps} /></div></>)} />
             <Route path='debts' element={guard('debts', <><TopBar title='Debts' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Debts {...pageProps} /></div></>)} />
             <Route path='purchases' element={guard('purchases', <><TopBar title='Purchases' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Purchases {...pageProps} /></div></>)} />

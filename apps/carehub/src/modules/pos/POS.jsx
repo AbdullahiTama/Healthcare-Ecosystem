@@ -4,7 +4,7 @@ import {
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
   DollarSign, Repeat, Divide, Search, Package, Clipboard,
 } from 'lucide-react'
-import { addSale, updateSale, getSales, getTodaySales, getSettings, queueOfflineSale, getOfflineQueue, recordUnderpayment, updateDebt, getClients } from '../../services/supabase'
+import { addSale, updateSale, getSales, getTodaySales, getSettings, queueOfflineSale, getOfflineQueue, recordUnderpayment, updateDebt, getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
@@ -103,6 +103,20 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     return match?.id || null
   }
 
+  // Tags each cart line with whether it was recommended on this client's most
+  // recent consultation (source: 'recommended') or sold as a walk-in ('walk-in').
+  // Fail-safe: any error (offline, no client, no consultation) → all walk-in.
+  async function tagItems(clientId) {
+    const recIds = new Set()
+    if (clientId) {
+      try {
+        const latest = await getLatestConsultation(clientId)
+        ;(latest?.recommended_products || []).forEach(p => recIds.add(p.id))
+      } catch (e) {}
+    }
+    return cart.map(i => ({ ...i, source: recIds.has(i.id) ? 'recommended' : 'walk-in' }))
+  }
+
   // A completed sale closes the loop on a resumed held sale: the original
   // held row is soft-deleted so it can't be resumed twice or linger in the
   // sales list as a phantom "resumed" entry.
@@ -131,6 +145,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const txnNo = genId('TXN')
     const clientName = client || 'Walk-in'
     const clientId = resolveClientId(clientName)
+    const items = await tagItems(clientId)
     const amtPaid = method === 'Cash' ? parseFloat(cash) || total : method === 'Split' ? splitTotal : total
     const balance = Math.max(0, total - amtPaid)
     const isShortfall = amtPaid < total && method !== 'Credit'
@@ -139,7 +154,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       txn_no: txnNo,
       client_id: clientId,
       client_name: clientName,
-      items: JSON.stringify(cart),
+      items: JSON.stringify(items),
       subtotal: sub,
       discount: discAmt,
       total,
@@ -154,7 +169,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const receiptData = {
       id: txnNo,
       client: clientName,
-      items: [...cart],
+      items,
       subtotal: sub,
       disc: discAmt,
       total,
@@ -200,11 +215,12 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const balance = total - amtPaid
     const clientName = client || 'Walk-in'
     const clientId = resolveClientId(clientName)
+    const items = await tagItems(clientId)
     const saleData = {
       txn_no: txnNo,
       client_id: clientId,
       client_name: clientName,
-      items: JSON.stringify(cart),
+      items: JSON.stringify(items),
       subtotal: sub,
       discount: discAmt,
       total,
@@ -214,7 +230,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       is_credit: true,
       is_on_hold: false,
     }
-    setReceipt({ id: txnNo, client: clientName, items: [...cart], subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
+    setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
     setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && p.cat !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
     await saveSale(saleData)
     await finishResumedSale()

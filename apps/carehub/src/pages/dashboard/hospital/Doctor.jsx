@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus, Search as SearchIcon } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
-import { getPatients, getTriage, addConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
+import { getPatients, getTriage, addHospitalConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
 import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, Pill, useToast, Toast } from '../../../components/ui'
@@ -77,7 +77,7 @@ export default function Doctor({ brand, products }) {
     try {
       const sentDestinations = []
       // Save consultation with doctor name
-      const c = await addConsultation({
+      const c = await addHospitalConsultation({
         patient_id: selected.id,
         business_id: brand.id,
         hpi: consult.hpi || '',
