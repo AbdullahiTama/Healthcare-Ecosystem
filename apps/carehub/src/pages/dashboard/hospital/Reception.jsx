@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, UserCheck, CheckCircle, Bell, Users, Hourglass, BedDouble, ArrowUpRight, Siren } from 'lucide-react'
+import { ArrowLeft, UserCheck, CheckCircle, Bell, Users, Hourglass, BedDouble, ArrowUpRight, Siren, Search as SearchIcon } from 'lucide-react'
 import { getPatients, addPatient, updatePatient } from '../../../services/supabase'
 import { todayDate, genId } from '../../../lib/utils'
 import { NIG_STATES } from '../../../config/constants'
@@ -31,10 +31,28 @@ export default function Reception({ brand }) {
   const [form, setForm] = useState({ regDate: todayDate(), regNo: genId('REG') })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
+  const [searching, setSearching] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const DEPTS = ['General OPD', 'Emergency', 'Cardiology', 'Pediatrics', 'Obstetrics', 'Surgery', 'Orthopedics', 'ENT', 'Ophthalmology', 'Dermatology', 'Psychiatry', 'Neurology', 'Other']
 
-  useEffect(() => { load() }, [brand?.id])
+  // Global search across all departments — server-side ilike on name, reg no,
+  // phone, department and doctor, so any staff member can pull up a patient
+  // who is elsewhere in the hospital.
+  useEffect(() => {
+    if (!brand?.id) return
+    setSearching(true)
+    const t = setTimeout(async () => {
+      try {
+        const p = await getPatients(brand.id, { query: searchTerm.trim(), department: deptFilter || undefined })
+        setPatients(p || [])
+      } catch (e) {}
+      setSearching(false)
+    }, 300)
+    return () => { clearTimeout(t); setSearching(false) }
+  }, [brand?.id, searchTerm, deptFilter])
 
   async function load() {
     setLoading(true)
@@ -96,7 +114,7 @@ export default function Reception({ brand }) {
             <Inp label='Next of Kin Phone' value={form.nokPhone} onChange={v => f('nokPhone', v)} placeholder='Phone number' />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Sel label='Department' value={form.dept} onChange={v => f('dept', v)} options={['General OPD', 'Emergency', 'Cardiology', 'Pediatrics', 'Obstetrics', 'Surgery', 'Orthopedics', 'ENT', 'Ophthalmology', 'Dermatology', 'Psychiatry', 'Neurology', 'Other']} />
+            <Sel label='Department' value={form.dept} onChange={v => f('dept', v)} options={DEPTS} />
             <Inp label='Assigned Doctor' value={form.doctor} onChange={v => f('doctor', v)} placeholder='Dr. Name' />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -139,8 +157,16 @@ export default function Reception({ brand }) {
         <StatCard icon={<ArrowUpRight />} label='Referred Out' value={patients.filter(p => p.status === 'referred').length} />
         <StatCard icon={<Siren />} label='Emergency Transfer' value={patients.filter(p => p.status === 'transferred').length} />
       </div>
-      {loading ? <Loading /> : patients.length === 0 ? <Empty icon={<Users size={40} />} message='No patients today' action='+ Register First Patient' onAction={() => setView('new')} /> : (
+      {loading ? <Loading /> : patients.length === 0 ? <Empty icon={<Users size={40} />} message={searching ? 'Searching…' : searchTerm || deptFilter ? 'No patients match your search' : 'No patients today'} action='+ Register First Patient' onAction={() => setView('new')} /> : (
         <Card>
+          <div style={{ display: 'flex', gap: '10px', padding: '14px 14px 0 14px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+              <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: gray400 }} />
+              <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient — name, reg no, phone, department or doctor…'
+                style={{ width: '100%', padding: '10px 12px 10px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
+            </div>
+            <Sel label='' value={deptFilter} onChange={v => setDeptFilter(v)} options={DEPTS} style={{ minWidth: 180 }} placeholder='All departments' />
+          </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>

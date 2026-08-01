@@ -5,7 +5,7 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import { Toast, useToast } from '../../components/ui'
-import { getProducts, cacheData, getCached, syncOfflineSales } from '../../services/supabase'
+import { getProducts, cacheData, getCached, syncOfflineSales, getRoles } from '../../services/supabase'
 import { getNavItems, getPerms } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -54,12 +54,24 @@ export default function BusinessDashboard() {
   const brand = auth?.brand
   const staffUser = auth?.staff
   const role = staffUser?.role || 'Owner'
-  const perms = getPerms(role)
+  const [customRoles, setCustomRoles] = useState({})
+  // Custom business-defined roles (Staff.jsx → roles table): name → permissions
+  // jsonb. getPerms/getNavItems override presets with these so custom-role
+  // staff see exactly the modules their owner configured.
+  useEffect(() => {
+    if (!brand?.id) return
+    getRoles(brand.id).then(r => {
+      const map = {}
+      ;(r || []).forEach(x => { map[x.name] = x.permissions || {} })
+      setCustomRoles(map)
+    }).catch(() => {})
+  }, [brand?.id])
+  const perms = getPerms(role, customRoles)
   const navigate = useNavigate()
   // Same business-type resolution Sidebar.jsx uses — kept identical so the
   // guard below never disagrees with what the sidebar actually shows.
   const bType = brand?.business_type || brand?.type || 'skincare'
-  const allowedRouteKeys = getNavItems(role, bType).map(item => item[0])
+  const allowedRouteKeys = getNavItems(role, bType, customRoles).map(item => item[0])
   // Route-level enforcement of lib/permissions.js's role/business-type matrix.
   // Previously this matrix only filtered what the Sidebar rendered — a user
   // could still reach any nested route by typing the URL directly, since the
@@ -115,7 +127,7 @@ export default function BusinessDashboard() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar brand={brand} role={role} mobileOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <Sidebar brand={brand} role={role} customRoles={customRoles} mobileOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, position: 'relative' }}>
         {/* Fallback menu trigger for routes that render their own header
             instead of TopBar (POS, Warehouses, Territories, Messages, Stock,

@@ -53,6 +53,9 @@ export default function Appointments({ brand, role, perms }) {
         status: 'pending',
         staff_name: form.staffName || '',
         notes: form.notes || '',
+        booking_type: form.bookingType || 'physical',
+        source: 'carehub',
+        phone: form.phone || '',
       })
       showToast('Appointment booked!', { type: 'success' })
       setForm({ date: todayDate() }); setShowAdd(false); load()
@@ -125,7 +128,10 @@ export default function Appointments({ brand, role, perms }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <Avatar name={a.client_name} size={30} />
                         <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{a.client_name}</span>
+                        {a.source === 'carefind' && <Pill label='Web' type='blue' />}
+                        {a.booking_type === 'online' && <Pill label='Online' type='purple' />}
                       </div>
+                      <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{a.phone ? a.phone : ''}</div>
                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{a.service || '—'}</td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '700', color: navy }}>{a.date}</td>
@@ -168,6 +174,10 @@ export default function Appointments({ brand, role, perms }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Date *' value={form.date} onChange={v => f('date', v)} type='date' required />
             <Inp label='Time *' value={form.time} onChange={v => f('time', v)} type='time' required />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Sel label='Booking type' value={form.bookingType || 'physical'} onChange={v => f('bookingType', v)} options={[{ value: 'physical', label: 'Physical visit' }, { value: 'online', label: 'Online (video/phone)' }]} />
+            <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
           </div>
           <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
           <Textarea label='Notes' value={form.notes} onChange={v => f('notes', v)} placeholder='Any special notes or instructions...' rows={2} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus } from 'lucide-react'
+import { ArrowLeft, Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus, Search as SearchIcon } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
 import { getPatients, getTriage, addConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
@@ -24,6 +24,7 @@ export default function Doctor({ brand, products }) {
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
   const [sentTo, setSentTo] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
   // Destinations — doctor can select multiple
   const [destinations, setDestinations] = useState({ pharmacy: false, lab: false, imaging: false })
   // Lab tests to order
@@ -34,11 +35,20 @@ export default function Doctor({ brand, products }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const c = (k, v) => setConsult(p => ({ ...p, [k]: v }))
 
-  useEffect(() => { load() }, [brand?.id])
+  useEffect(() => {
+    const t = setTimeout(() => { load() }, 300)
+    return () => clearTimeout(t)
+  }, [brand?.id, searchTerm])
 
   async function load() {
     setLoading(true)
-    try { const p = await getPatients(brand.id); setPatients((p || []).filter(x => x.status === 'at_doctor')) } catch (e) {}
+    try {
+      // Global search: when the doctor searches, pull matching patients from
+      // EVERY department; otherwise show the at_doctor queue as before.
+      const q = searchTerm.trim()
+      const p = await getPatients(brand.id, { status: q ? undefined : 'at_doctor', query: q })
+      setPatients(p || [])
+    } catch (e) {}
     setLoading(false)
   }
 
@@ -391,8 +401,13 @@ export default function Doctor({ brand, products }) {
   return (
     <div>
       <SectionHead title='Doctor Consultation' sub='Patients waiting to see doctor' />
+      <div style={{ position: 'relative', marginBottom: '16px' }}>
+        <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: gray400 }} />
+        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
+          style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
+      </div>
       {loading ? <Loading /> : patients.length === 0 ? (
-        <Empty icon={<Stethoscope size={40} />} message='No patients waiting for doctor' />
+        <Empty icon={<Stethoscope size={40} />} message={searchTerm.trim() ? 'No patients match your search' : 'No patients waiting for doctor'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {patients.map(p => (

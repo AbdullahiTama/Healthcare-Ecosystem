@@ -14,6 +14,157 @@ import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSe
 import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Textarea, Loading, Empty, StarPicker, Stars, Toast, useToast } from '../../components/ui'
 
+function BookingCard({ biz }) {
+  const toast = useToast()
+  const [date, setDate] = useState('')
+  const [slot, setSlot] = useState('')
+  const [apptType, setApptType] = useState(biz.booking_type === 'online' ? 'online' : 'physical')
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [booking, setBooking] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const today = new Date().toISOString().split('T')[0]
+  const isToday = date === today
+
+  // Drop already-passed times when booking for today
+  const slots = (biz.booking_slots || []).filter((t) => {
+    if (!isToday) return true
+    const now = new Date()
+    const [h, m] = String(t).split(':')
+    return Number(h) * 60 + Number(m) > now.getHours() * 60 + now.getMinutes()
+  })
+
+  async function submitBooking(e) {
+    e.preventDefault()
+    if (!date || !slot || !name.trim() || !phone.trim()) return
+    setBooking(true)
+    try {
+      const res = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          business_id: biz.id,
+          date,
+          time: slot,
+          booking_type: apptType,
+          name: name.trim(),
+          phone: phone.trim(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setDone(true)
+        toast.show('Request sent — the business will confirm your appointment.')
+      } else {
+        toast.show(data.error || 'Could not send booking request.')
+      }
+    } catch (err) {
+      console.error('Booking error:', err)
+      toast.show('Could not send booking request.')
+    }
+    setBooking(false)
+  }
+
+  return (
+    <Card style={{ padding: 14, marginBottom: 26 }}>
+      <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
+        Book an Appointment
+      </p>
+      <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
+        Pick a date and time — the business will confirm your request.
+      </p>
+
+      {done ? (
+        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+      ) : (
+        <form onSubmit={submitBooking}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Inp
+                label="Date"
+                type="date"
+                value={date}
+                onChange={setDate}
+                min={today}
+                required
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <Inp
+                label="Your name"
+                value={name}
+                onChange={setName}
+                placeholder="Full name"
+                required
+              />
+            </div>
+          </div>
+
+          <Inp
+            label="Phone number"
+            type="tel"
+            value={phone}
+            onChange={setPhone}
+            placeholder="e.g. 08012345678"
+            required
+            style={{ marginBottom: 10 }}
+          />
+
+          {biz.booking_type === 'both' && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {['physical', 'online'].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setApptType(t)}
+                  style={{
+                    flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid',
+                    borderColor: apptType === t ? theme.tealDeep : theme.border,
+                    background: apptType === t ? theme.tealMist : '#fff',
+                    color: apptType === t ? theme.tealDeep : theme.textMid,
+                    fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                  }}
+                >
+                  {t === 'physical' ? 'Visit in person' : 'Online visit'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Preferred time
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {slots.length === 0 && <span style={{ fontSize: 12.5, color: theme.textLight }}>No times left for this date — pick another day.</span>}
+            {slots.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSlot(t)}
+                style={{
+                  padding: '7px 12px', borderRadius: 10, border: '1px solid',
+                  borderColor: slot === t ? theme.tealDeep : theme.border,
+                  background: slot === t ? theme.tealMist : '#fff',
+                  color: slot === t ? theme.tealDeep : theme.textMid,
+                  fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          <TealBtn type="submit" disabled={booking}>
+            {booking ? 'Sending...' : 'Request Appointment'}
+          </TealBtn>
+        </form>
+      )}
+    </Card>
+  )
+}
+
 function BusinessProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -35,7 +186,7 @@ function BusinessProfile() {
 
     const { data: bizData } = await supabase
       .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, hours, maps_link, cover_url')
+      .select('id, name, address, city, state, business_type, whatsapp, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots')
       .eq('id', id)
       .maybeSingle()
 
@@ -192,19 +343,29 @@ function BusinessProfile() {
         ...(isMobile
           ? { padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px' }
           : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
+        ...(biz.cover_url ? { padding: '0 0 24px 0', overflow: 'hidden' } : {}),
       }}>
+        {biz.cover_url && (
+          <div style={{
+            height: isMobile ? 96 : 132,
+            background: `url(${biz.cover_url}) center/cover`,
+            marginBottom: isMobile ? 16 : 20,
+          }} role="img" aria-label={`${biz.name} banner`} />
+        )}
         {isMobile && (
-          <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>
+          <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700, ...(biz.cover_url ? { marginLeft: 20 } : {}) }}>
             <ArrowLeft size={15} aria-hidden="true" /> Back to search
           </Link>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: isMobile ? 16 : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: isMobile ? 16 : 0, ...(biz.cover_url ? { marginLeft: isMobile ? 20 : 28, marginRight: isMobile ? 20 : 28 } : {}) }}>
           <span style={{
             width: 46, height: 46, borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden',
           }}>
-            <TypeIcon size={22} aria-hidden="true" />
+            {biz.logo_url
+              ? <img src={biz.logo_url} alt={`${biz.name} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+              : <TypeIcon size={22} aria-hidden="true" />}
           </span>
           <div>
             <h1 style={{ fontSize: 19, fontWeight: 900, margin: '0 0 2px 0', letterSpacing: '-0.01em' }}>{biz.name}</h1>
@@ -215,7 +376,7 @@ function BusinessProfile() {
         </div>
 
         {isMobile && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16, ...(biz.cover_url ? { marginLeft: 20, marginRight: 20 } : {}) }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
@@ -262,6 +423,19 @@ function BusinessProfile() {
             </div>
           </>
         )}
+
+        {biz.description && (
+          <>
+            <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px 0' }}>
+              About
+            </p>
+            <Card style={{ padding: 14, marginBottom: 26 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{biz.description}</p>
+            </Card>
+          </>
+        )}
+
+        {biz.booking_enabled && <BookingCard biz={biz} />}
 
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Available Products

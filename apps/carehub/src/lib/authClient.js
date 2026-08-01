@@ -7,10 +7,27 @@ import { SB_URL, SB_KEY } from '../config/supabase.js'
 // auto-refresh like a normal Supabase Auth client.
 export const authClient = createClient(SB_URL, SB_KEY)
 
-// Best-effort, fire-and-forget: creates (or, if it already exists, no-ops/resends
-// confirmation for) a real Supabase Auth account. Never throws — callers must
-// never let this block or fail the primary registration/login flow, since the
-// legacy plaintext check is still the source of truth until this succeeds.
-export function provisionRealAuthAccount(email, password) {
-  authClient.auth.signUp({ email, password }).catch(() => {})
+// Best-effort: creates (or, if it already exists, no-ops/resends confirmation
+// for) a real Supabase Auth account AND tries to establish a session for it.
+// Returns the session (or null) — never throws, so callers can always fall
+// back to the legacy plaintext check as the source of truth.
+//
+// Why the extra signInWithPassword: signUp() only returns a session when
+// email confirmation is disabled. This project requires confirmation
+// (confirmation_sent_at was observed on live sign-ups), so a provisioned
+// account alone never produced a session — and sessionless requests fall
+// back to the anon key, where RLS (phase2_rls_pilot.sql) rejects every
+// write (the "Could not save patient" bug). The backfill migration
+// (sql/20260802_backfill_confirmed_auth_users.sql) pre-creates confirmed
+// auth users for all legacy businesses/staff rows, so this sign-in succeeds
+// for migrated accounts and upgrades them to a real session on next login.
+export async function provisionRealAuthAccount(email, password) {
+  try {
+    const { data, error } = await authClient.auth.signUp({ email, password })
+    if (data?.session) return data.session
+    const res = await authClient.auth.signInWithPassword({ email, password })
+    return res.data?.session || null
+  } catch (e) {
+    return null
+  }
 }

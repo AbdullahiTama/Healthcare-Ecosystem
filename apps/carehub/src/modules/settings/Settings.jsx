@@ -16,9 +16,11 @@ export default function Settings({ brand, role, perms }) {
   const { auth, setAuth } = useAuth()
   const [settings, setSettings] = useState({})
   const [bizForm, setBizForm] = useState({})
+  const [bookingForm, setBookingForm] = useState({ enabled: false, type: 'physical', slotsText: '' })
   const [loading, setLoading] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [savingBiz, setSavingBiz] = useState(false)
+  const [savingBooking, setSavingBooking] = useState(false)
   const [renewing, setRenewing] = useState(false)
   const [searchParams] = useSearchParams()
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
@@ -101,7 +103,15 @@ export default function Settings({ brand, role, perms }) {
         city: brand.city || '',
         hours: brand.hours || '',
         website: brand.website || '',
+        logo_url: brand.logo_url || '',
+        cover_url: brand.cover_url || '',
+        description: brand.description || '',
         visible_on_carefind: brand.visible_on_carefind !== false,
+      })
+      setBookingForm({
+        enabled: !!brand.booking_enabled,
+        type: brand.booking_type || 'physical',
+        slotsText: (Array.isArray(brand.booking_slots) ? brand.booking_slots : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00']).join(', '),
       })
     } catch (e) {}
     setLoading(false)
@@ -136,6 +146,23 @@ export default function Settings({ brand, role, perms }) {
 
   const s = (k, v) => setSettings(p => ({ ...p, [k]: v }))
   const b = (k, v) => setBizForm(p => ({ ...p, [k]: v }))
+  const bk = (k, v) => setBookingForm(p => ({ ...p, [k]: v }))
+
+  async function saveBookingSettings() {
+    if (!isOwner) { showToast('Only the Owner can change booking settings', { type: 'warning' }); return }
+    setSavingBooking(true)
+    try {
+      const slots = bookingForm.slotsText.split(',').map(x => x.trim()).filter(Boolean)
+      if (bookingForm.enabled && slots.length === 0) { showToast('Add at least one available time slot.', { type: 'warning' }); setSavingBooking(false); return }
+      await updateBusiness(brand.id, {
+        booking_enabled: !!bookingForm.enabled,
+        booking_type: bookingForm.type,
+        booking_slots: slots,
+      })
+      showToast(bookingForm.enabled ? 'Online booking is live on your CareFind profile!' : 'Online booking turned off.', { type: 'success' })
+    } catch (e) { showToast('Could not save booking settings. Please try again.', { type: 'error' }) }
+    setSavingBooking(false)
+  }
 
   if (!isOwner) return (
     <div style={{ padding: '40px', textAlign: 'center', color: gray400 }}>
@@ -218,8 +245,35 @@ export default function Settings({ brand, role, perms }) {
           </div>
           <Inp label='Business Hours' value={bizForm.hours} onChange={v => b('hours', v)} placeholder='e.g. Mon-Sat 8am-8pm' />
           <Inp label='Website / Instagram' value={bizForm.website} onChange={v => b('website', v)} placeholder='@yourbusiness' />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Inp label='Logo URL' value={bizForm.logo_url} onChange={v => b('logo_url', v)} placeholder='https://yourwebsite.com/logo.png' />
+            <Inp label='Cover Image URL' value={bizForm.cover_url} onChange={v => b('cover_url', v)} placeholder='https://yourwebsite.com/banner.jpg' />
+          </div>
+          {bizForm.logo_url && (
+            <img src={bizForm.logo_url} alt='Logo preview' style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', border: `1px solid ${border}` }} onError={e => e.target.style.display = 'none'} />
+          )}
+          <Textarea label='About your business' value={bizForm.description || ''} onChange={v => b('description', v)} rows={3} placeholder='Shown on your public CareFind profile — services, specialties, what makes you stand out...' />
           <Toggle label='Listed on CareFind' desc='Allow patients to find your business on the public CareFind platform' value={bizForm.visible_on_carefind !== false} onChange={v => b('visible_on_carefind', v)} />
           <TealBtn onClick={saveBizDetails} style={{ alignSelf: 'flex-start', padding: '11px 24px' }}>{savingBiz ? 'Saving...' : 'Save Business Details'}</TealBtn>
+        </div>
+      </Card>
+
+      {/* Booking */}
+      <Card style={{ padding: '24px', marginBottom: '20px' }}>
+        <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px', color: navy }}>Appointment Booking</div>
+        <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>Let patients book appointments directly from your public CareFind profile</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Toggle label='Accept online bookings' desc='Shows a "Book an Appointment" section on your CareFind profile page' value={bookingForm.enabled} onChange={v => bk('enabled', v)} />
+          {bookingForm.enabled && (
+            <>
+              <Sel label='Appointment type' value={bookingForm.type} onChange={v => bk('type', v)} options={[{ value: 'physical', label: 'Physical visits only' }, { value: 'online', label: 'Online (video/phone) only' }, { value: 'both', label: 'Both — let the patient choose' }]} />
+              <Inp label='Available time slots (comma-separated, 24h)' value={bookingForm.slotsText} onChange={v => bk('slotsText', v)} placeholder='09:00, 10:00, 11:00, 14:00, 15:00' />
+              <div style={{ fontSize: '12px', color: gray500, padding: '10px 12px', borderRadius: theme.radius.md, background: bg }}>
+                Bookings arrive in your <strong>Appointments</strong> page with a <strong>Web</strong> badge, ready for you to confirm or reschedule.
+              </div>
+            </>
+          )}
+          <TealBtn onClick={saveBookingSettings} style={{ alignSelf: 'flex-start', padding: '11px 24px' }}>{savingBooking ? 'Saving...' : 'Save Booking Settings'}</TealBtn>
         </div>
       </Card>
 

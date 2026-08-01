@@ -135,12 +135,37 @@ export const DEFAULT_STAFF_PERMS = {
   label: 'Staff',
 }
 
-export function getPerms(role) {
+// Custom business-defined roles (the `roles` table: business_id, name,
+// permissions jsonb). A custom role's permissions.jsonb carries the same keys
+// as the preset shapes above — this merges them over the safe defaults so a
+// partially-specified role never accidentally grants more than intended.
+export function buildCustomPerms(permissions) {
+  const p = permissions || {}
+  return {
+    nav: Array.isArray(p.nav) ? p.nav : DEFAULT_STAFF_PERMS.nav,
+    canEditPrice: !!p.canEditPrice,
+    canEditStock: !!p.canEditStock,
+    canDelete: !!p.canDelete,
+    canViewReports: !!p.canViewReports,
+    canExportReports: !!p.canExportReports,
+    canManageStaff: !!p.canManageStaff,
+    canViewFinance: !!p.canViewFinance,
+    canMakeSales: !!p.canMakeSales,
+    canViewSettings: !!p.canViewSettings,
+    label: p.label || 'Custom Role',
+  }
+}
+
+// customRoles: map of role name → permissions.jsonb (loaded from the `roles`
+// table by BusinessDashboard/Staff). Custom role names override presets, so a
+// business can redefine e.g. "Manager" or invent "Regional Manager".
+export function getPerms(role, customRoles = {}) {
+  if (customRoles[role]) return buildCustomPerms(customRoles[role])
   return ROLES[role] || DEFAULT_STAFF_PERMS
 }
 
-export function can(role, action) {
-  return getPerms(role)[action] || false
+export function can(role, action, customRoles = {}) {
+  return getPerms(role, customRoles)[action] || false
 }
 
 // Nav icons are lucide-react component references (ICONS.md's "one outline
@@ -210,8 +235,8 @@ export const ALL_NAV_ENTERPRISE = [
   ['settings', Settings, 'Settings'],
 ]
 
-export function getNavItems(role, businessType) {
-  const perms = getPerms(role)
+export function getNavItems(role, businessType, customRoles = {}) {
+  const perms = getPerms(role, customRoles)
   let all = ALL_NAV_DEFAULT
   if (businessType === 'hospital') all = ALL_NAV_HOSPITAL
   if (businessType === 'manufacturer_importer' || businessType === 'wholesale') all = ALL_NAV_ENTERPRISE

@@ -26,6 +26,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const [showUpload, setShowUpload] = useState(false)
   const [uploadData, setUploadData] = useState([])
   const [uploadError, setUploadError] = useState('')
+  const [importing, setImporting] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState(null)
   const [showCleanup, setShowCleanup] = useState(false)
@@ -242,19 +243,67 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     reader.readAsText(file); e.target.value = ''
   }
 
-  async function confirmUpload() {
-    let count = 0
+  // Bulk CSV import — batches parallel inserts (20 at a time) instead of the
+  // old one-await-per-row loop, which took minutes and died on the first
+  // network hiccup for 2,000+ product files. Duplicates are skipped up front
+  // against the currently-loaded product list.
+  async function importProducts() {
+    if (uploadData.length === 0) return
+    setImporting(true)
+    showToast('Importing ' + uploadData.length + ' products…', { type: 'info' })
+    let added = 0
+    let skipped = 0
+    let failed = 0
+    const skippedNames = []
+    const failedNames = []
+    const fresh = []
     for (const p of uploadData) {
-      try {
-        const { cat, ...cleanP } = p
-        await addProduct({ ...cleanP, category: p.category || p.cat || 'Medicines', business_id: brand.id })
-        count++
-      } catch (e) { console.error('Upload error:', e.message) }
+      if (findDuplicate(products, p.name, p.generic_name)) {
+        skipped++
+        skippedNames.push(p.name)
+        continue
+      }
+      fresh.push({
+        name: p.name,
+        generic_name: p.generic_name || '',
+        category: p.category || 'Medicines',
+        price: parseFloat(p.price) || 0,
+        cost_price: parseFloat(p.cost_price) || 0,
+        stock: parseInt(p.stock) || 0,
+        reorder_level: parseInt(p.reorder_level) || 5,
+        barcode: p.barcode || '',
+        list_on_carefind: p.list_on_carefind !== false,
+        emoji: '💊',
+        business_id: brand.id,
+      })
+    }
+    const BATCH = 20
+    for (let i = 0; i < fresh.length; i += BATCH) {
+      const batch = fresh.slice(i, i + BATCH)
+      const results = await Promise.all(batch.map(p =>
+        addProduct(p).then(() => ({ ok: true })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
+      ))
+      for (const r of results) {
+        if (r.ok) added++
+        else {
+          failed++
+          if (failedNames.length < 5) failedNames.push(r.name + ' (' + r.msg + ')')
+        }
+      }
     }
     await reload()
-    showToast(count + ' products imported successfully!', { type: 'success' })
     setUploadData([])
     setShowUpload(false)
+    setImporting(false)
+    const parts = [added + ' imported']
+    if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
+    if (failed > 0) parts.push(failed + ' failed')
+    const summary = parts.join(' · ')
+    if (failed > 0) {
+      showToast(summary + (failedNames.length > 0 ? ': ' + failedNames.join(', ') : ''), { type: 'warning' })
+    } else {
+      showToast(summary + '!', { type: 'success' })
+    }
   }
 
   function startScan() {
@@ -464,45 +513,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           <div style={{ display: 'flex', gap: '10px' }}>
             <GhostBtn onClick={downloadTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
             {uploadData.length > 0 && (
-              <button onClick={async () => {
-                showToast('Importing ' + uploadData.length + ' products...', { type: 'info' })
-                let added = 0
-                let skipped = 0
-                const skippedNames = []
-                for (const p of uploadData) {
-                  const dupe = findDuplicate(products, p.name, p.generic_name)
-                  if (dupe) {
-                    skipped++
-                    skippedNames.push(p.name)
-                    continue
-                  }
-                  try {
-                    await addProduct({
-                      name: p.name,
-                      generic_name: p.generic_name || '',
-                      category: p.category || 'Medicines',
-                      price: parseFloat(p.price) || 0,
-                      cost_price: parseFloat(p.cost_price) || 0,
-                      stock: parseInt(p.stock) || 0,
-                      reorder_level: parseInt(p.reorder_level) || 5,
-                      barcode: p.barcode || '',
-                      list_on_carefind: p.list_on_carefind !== false,
-                      emoji: '💊',
-                      business_id: brand.id,
-                    })
-                    added++
-                  } catch (e) { console.error('Error adding product:', p.name, e) }
-                }
-                await reload()
-                if (skipped > 0) {
-                  showToast(added + ' added · ' + skipped + ' skipped (already exist): ' + skippedNames.slice(0, 3).join(', ') + (skippedNames.length > 3 ? '...' : ''), { type: 'warning' })
-                } else {
-                  showToast(added + ' of ' + uploadData.length + ' products imported!', { type: 'success' })
-                }
-                setUploadData([])
-                setShowUpload(false)
-              }} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: 'pointer' }}>
-                Import {uploadData.length} Products
+              <button onClick={importProducts} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
+                {importing ? 'Importing…' : 'Import ' + uploadData.length + ' Products'}
               </button>
             )}
           </div>

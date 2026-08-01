@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
 import { CalendarClock, Image as ImageIcon, Radio, Sparkles, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -127,6 +128,10 @@ function Stories() {
       }
     }
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
+    // stories.user_id references profiles(id) (fk_stories_user) — same
+    // safety net as PostComposer: accounts without a profiles row get a
+    // 23503 FK violation on the first story insert.
+    await ensureProfile(user)
     const { error } = await supabase.from('stories').insert({
       title: sTitle.trim() || null,
       body: sBody.trim() || null,

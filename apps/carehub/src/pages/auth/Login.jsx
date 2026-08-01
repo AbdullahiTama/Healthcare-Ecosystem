@@ -49,14 +49,14 @@ export default function Login() {
       const biz = await loginBusiness(normalizedEmail, pass)
       if (biz) {
         if (biz.is_platform_admin) {
-          provisionRealAuthAccount(normalizedEmail, pass)
+          await provisionRealAuthAccount(normalizedEmail, pass)
           login(biz, null, { isAdmin: true, role: 'SuperAdmin' })
           navigate('/admin')
           return
         }
         if (biz.status === 'pending') { setErr('Your account is pending admin approval. You will be notified once approved.'); setLoading(false); return }
         if (biz.status === 'suspended') { setErr('Your account has been suspended. Contact support@carehub.ng'); setLoading(false); return }
-        provisionRealAuthAccount(normalizedEmail, pass)
+        await provisionRealAuthAccount(normalizedEmail, pass)
         login(biz, null)
         navigate('/dashboard/dashboard')
         return
@@ -66,7 +66,7 @@ export default function Login() {
       if (staff) {
         const biz2 = await getBusinessById(staff.business_id)
         if (biz2) {
-          provisionRealAuthAccount(normalizedEmail, pass)
+          await provisionRealAuthAccount(normalizedEmail, pass)
           login(biz2, staff)
           navigate('/dashboard/dashboard')
           return

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause } from 'lucide-react'
-import { getStaff, addStaff, updateStaff, deleteStaff, getStaffClaims, approveStaffClaim, rejectStaffClaim } from '../../services/supabase'
+import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
+import { getStaff, addStaff, updateStaff, deleteStaff, getStaffClaims, approveStaffClaim, rejectStaffClaim, getRoles, addRole, updateRole, deleteRole } from '../../services/supabase'
 import { emailStaffWelcome } from '../../lib/email'
-import { ROLE_LIST } from '../../lib/permissions'
+import { ROLE_LIST, ALL_NAV_DEFAULT, ALL_NAV_HOSPITAL, ALL_NAV_ENTERPRISE } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -12,11 +12,17 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, da
 export default function Staff({ brand, role, perms }) {
   const [staff, setStaff] = useState([])
   const [claims, setClaims] = useState([])
+  const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [roleDeleteTarget, setRoleDeleteTarget] = useState(null)
+  const [roleEditorOpen, setRoleEditorOpen] = useState(false)
+  const [editingRole, setEditingRole] = useState(null)
+  const [roleForm, setRoleForm] = useState({ name: '', label: '', nav: [], flags: {} })
+  const [savingRole, setSavingRole] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
@@ -35,12 +41,81 @@ export default function Staff({ brand, role, perms }) {
       const c = await getStaffClaims(brand.id)
       setClaims(c || [])
     } catch (e) {}
+    try {
+      const r = await getRoles(brand.id)
+      setRoles(r || [])
+    } catch (e) {}
     setLoading(false)
   }
 
   // Every role already used at this company — becomes the suggestion list,
   // so the company's own hierarchy naturally builds itself as they add people.
   const usedRoles = [...new Set(staff.map(s => s.role).filter(Boolean))]
+  // Role picker = preset roles + business-defined custom roles.
+  const customRoleNames = roles.map(r => r.name)
+  const roleOptions = [...ROLE_LIST, ...customRoleNames]
+
+  const ALL_NAV_UNION = [...new Map([...ALL_NAV_DEFAULT, ...ALL_NAV_HOSPITAL, ...ALL_NAV_ENTERPRISE].map(i => [i[0], i])).values()]
+
+  const FLAG_META = [
+    ['canEditPrice', 'Edit prices', 'Can change selling prices in Inventory and POS.'],
+    ['canEditStock', 'Edit stock', 'Can adjust stock levels and record purchases.'],
+    ['canDelete', 'Delete records', 'Can delete products, sales, clients and other records.'],
+    ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
+    ['canExportReports', 'Export reports', 'Can download/export report data.'],
+    ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
+    ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
+    ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
+    ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
+  ]
+
+  function openRoleEditor(roleRow) {
+    if (roleRow) {
+      const p = roleRow.permissions || {}
+      setEditingRole(roleRow)
+      setRoleForm({ name: roleRow.name, label: p.label || '', nav: Array.isArray(p.nav) ? p.nav : [], flags: { canEditPrice: !!p.canEditPrice, canEditStock: !!p.canEditStock, canDelete: !!p.canDelete, canViewReports: !!p.canViewReports, canExportReports: !!p.canExportReports, canManageStaff: !!p.canManageStaff, canViewFinance: !!p.canViewFinance, canMakeSales: !!p.canMakeSales, canViewSettings: !!p.canViewSettings } })
+    } else {
+      setEditingRole(null)
+      setRoleForm({ name: '', label: '', nav: ['dashboard'], flags: { canViewReports: false, canMakeSales: false } })
+    }
+    setRoleEditorOpen(true)
+  }
+
+  async function saveRole() {
+    if (!roleForm.name.trim()) { showToast('Give the role a name.', { type: 'warning' }); return }
+    setSavingRole(true)
+    const payload = {
+      business_id: brand.id,
+      name: roleForm.name.trim(),
+      permissions: {
+        nav: roleForm.nav,
+        label: roleForm.label.trim() || roleForm.name.trim(),
+        canEditPrice: !!roleForm.flags.canEditPrice,
+        canEditStock: !!roleForm.flags.canEditStock,
+        canDelete: !!roleForm.flags.canDelete,
+        canViewReports: !!roleForm.flags.canViewReports,
+        canExportReports: !!roleForm.flags.canExportReports,
+        canManageStaff: !!roleForm.flags.canManageStaff,
+        canViewFinance: !!roleForm.flags.canViewFinance,
+        canMakeSales: !!roleForm.flags.canMakeSales,
+        canViewSettings: !!roleForm.flags.canViewSettings,
+      },
+    }
+    try {
+      if (editingRole) await updateRole(editingRole.id, payload)
+      else await addRole(payload)
+      showToast(editingRole ? 'Role updated!' : 'Role created!', { type: 'success' })
+      setRoleEditorOpen(false)
+      load()
+    } catch (e) { showToast('Could not save this role. Please try again.', { type: 'error' }) }
+    setSavingRole(false)
+  }
+
+  async function handleDeleteRole() {
+    const id = roleDeleteTarget?.id
+    setRoleDeleteTarget(null)
+    try { await deleteRole(id); load(); showToast('Role deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete this role. Please try again.', { type: 'error' }) }
+  }
 
   async function save() {
     if (!form.fullName || !form.email || !form.password || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
@@ -214,7 +289,10 @@ export default function Staff({ brand, role, perms }) {
               </div>
             </div>
           ) : (
-            <Sel label='Role *' value={form.role} onChange={v => f('role', v)} options={ROLE_LIST} required />
+            <div>
+              <Sel label='Role *' value={form.role} onChange={v => f('role', v)} options={roleOptions} required />
+              {customRoleNames.length > 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>Custom roles appear alongside the presets — manage them in Roles &amp; Permissions below.</div>}
+            </div>
           )}
 
           <Inp label='Password *' value={form.password} onChange={v => f('password', v)} type='password' placeholder='Set a password for them' required />
@@ -241,10 +319,90 @@ export default function Staff({ brand, role, perms }) {
         </div>
       </Modal>
 
+      {isOwner && (
+        <div style={{ marginTop: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={17} color={navy} />
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: '800', color: navy }}>Roles &amp; Permissions</div>
+                <div style={{ fontSize: '12px', color: gray500 }}>Define your own roles with exactly the modules and actions each one can use</div>
+              </div>
+            </div>
+            <TealBtn onClick={() => openRoleEditor(null)} style={{ padding: '10px 16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Plus size={14} /> New Role</TealBtn>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {roles.length === 0 && (
+              <Card style={{ padding: '16px', fontSize: '13px', color: gray500 }}>No custom roles yet. Preset roles (Owner, Manager, Pharmacist…) are always available — create your first custom role to tailor access.</Card>
+            )}
+            {roles.map(r => {
+              const p = r.permissions || {}
+              const navCount = Array.isArray(p.nav) ? p.nav.length : 0
+              const flagCount = FLAG_META.filter(([k]) => p[k]).length
+              return (
+                <Card key={r.id} style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{r.name}</div>
+                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{p.label || r.name} · {navCount} modules · {flagCount} actions</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => openRoleEditor(r)} style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Edit</button>
+                    <RedBtn onClick={() => setRoleDeleteTarget(r)} style={{ padding: '6px 12px' }}>Delete</RedBtn>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <Modal show={roleEditorOpen} onClose={() => setRoleEditorOpen(false)} title={editingRole ? 'Edit Role' : 'Create Custom Role'}
+        footer={<><GhostBtn onClick={() => setRoleEditorOpen(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRole} style={{ flex: 1, padding: '12px' }}>{savingRole ? 'Saving...' : 'Save Role'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Inp label='Role Name *' value={roleForm.name} onChange={v => setRoleForm(p => ({ ...p, name: v }))} placeholder='e.g. Regional Manager, Lab Supervisor' required />
+          <Inp label='Display Label (optional)' value={roleForm.label} onChange={v => setRoleForm(p => ({ ...p, label: v }))} placeholder='Shown in the app if you want a friendlier label' />
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Modules this role can open</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: '8px', maxHeight: 220, overflowY: 'auto', padding: '12px', border: `1px solid ${border}`, borderRadius: theme.radius.md }}>
+              {ALL_NAV_UNION.map(([key, , label]) => (
+                <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12.5px', color: navy, cursor: 'pointer' }}>
+                  <input type='checkbox' checked={roleForm.nav.includes(key)} onChange={e => setRoleForm(p => ({ ...p, nav: e.target.checked ? [...p.nav, key] : p.nav.filter(k => k !== key) }))} style={{ accentColor: tealDeep }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Actions</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {FLAG_META.map(([key, label, desc]) => (
+                <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={!!roleForm.flags[key]} onChange={e => setRoleForm(p => ({ ...p, flags: { ...p.flags, [key]: e.target.checked } }))} style={{ marginTop: '2px', accentColor: tealDeep }} />
+                  <span>
+                    <div style={{ fontWeight: '700', fontSize: '12.5px', color: navy }}>{label}</div>
+                    <div style={{ fontSize: '11.5px', color: gray500 }}>{desc}</div>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            Staff assigned this role see only the modules and actions you check. Roles apply immediately to everyone already using them.
+          </div>
+        </div>
+      </Modal>
+
       <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
         title='Remove this staff member?'
         consequence={`This permanently deletes ${deleteTarget?.full_name || 'this staff member'}'s account and revokes their login access immediately. This cannot be undone — you'll need to add them again from scratch if you change your mind.`}
         confirmLabel='Remove' />
+
+      <ConfirmDialog show={!!roleDeleteTarget} onClose={() => setRoleDeleteTarget(null)} onConfirm={handleDeleteRole}
+        title='Delete this role?'
+        consequence={`Staff currently assigned the "${roleDeleteTarget?.name || 'custom'}" role will lose their custom access and fall back to the default staff permissions until you assign them another role.`}
+        confirmLabel='Delete Role' />
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

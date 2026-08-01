@@ -1,6 +1,6 @@
 // Triage.jsx
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Activity, AlertTriangle, CheckCircle, Bell } from 'lucide-react'
+import { ArrowLeft, Activity, AlertTriangle, CheckCircle, Bell, Search as SearchIcon } from 'lucide-react'
 import { getPatients, addTriage, updatePatient, getTriage } from '../../../services/supabase'
 import { theme } from '../../../styles/theme'
 import { Card, SectionHead, Inp, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, Pill, useToast, Toast } from '../../../components/ui'
@@ -20,14 +20,24 @@ export default function Triage({ brand }) {
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  useEffect(() => { load() }, [brand?.id])
+  useEffect(() => {
+    const t = setTimeout(() => { load() }, 300)
+    return () => clearTimeout(t)
+  }, [brand?.id, searchTerm])
 
   async function load() {
     setLoading(true)
-    try { const p = await getPatients(brand.id); setPatients((p || []).filter(x => x.status === 'at_triage')) } catch (e) {}
+    try {
+      // Global search: searching pulls matching patients from every
+      // department; otherwise the at_triage queue as before.
+      const q = searchTerm.trim()
+      const p = await getPatients(brand.id, { status: q ? undefined : 'at_triage', query: q })
+      setPatients(p || [])
+    } catch (e) {}
     setLoading(false)
   }
 
@@ -101,8 +111,13 @@ export default function Triage({ brand }) {
   return (
     <div>
       <SectionHead title='Triage' sub='Patients waiting for nurse assessment' />
+      <div style={{ position: 'relative', marginBottom: '16px' }}>
+        <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: gray400 }} />
+        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
+          style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
+      </div>
       {loading ? <Loading /> : patients.length === 0 ? (
-        <Empty icon={<Activity size={40} />} message='No patients at triage right now' />
+        <Empty icon={<Activity size={40} />} message={searchTerm.trim() ? 'No patients match your search' : 'No patients at triage right now'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {patients.map(p => (

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
 import { Eye, FileText, Gift, Heart, Image as ImageIcon, Lock, Radio, Send, Share2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -9,7 +10,7 @@ import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
 import VideoUploader from '../../components/VideoUploader.jsx'
 import VideoRecorder from '../../components/VideoRecorder.jsx'
-import { ConfirmDialog, Loading } from '../../components/ui'
+import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 
 function LiveDashboard() {
   const { id } = useParams()
@@ -27,6 +28,7 @@ function LiveDashboard() {
   const [loading, setLoading] = useState(true)
   const [confirmEndOpen, setConfirmEndOpen] = useState(false)
   const pollRef = useRef(null)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   const isHost = user && show && user.id === show.host_id
   const isParticipant = user && (isHost || participants.some(p => p.user_id === user.id))
@@ -101,19 +103,30 @@ function LiveDashboard() {
   async function sendItem() {
     if (!draft.trim() && !image) return
     setSending(true)
+    // live_items.sender_id references profiles(id) — hosts without a
+    // profiles row get a 23503 FK violation and the post silently never
+    // appears. Same safety net as PostComposer/Stories.
+    await ensureProfile(user)
     if (image) {
       const ext = image.name.split('.').pop()
       const path = `live-${id}-${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage.from('live-media').upload(path, image)
-      if (!upErr) {
+      if (upErr) {
+        showToast(`Couldn't upload the image: ${upErr.message}`, { type: 'error' })
+      } else {
         const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
-        await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'image', content: urlData.publicUrl })
+        const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'image', content: urlData.publicUrl })
+        if (error) showToast(`Couldn't post the image: ${error.message}`, { type: 'error' })
       }
       setImage(null)
     }
     if (draft.trim()) {
-      await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'text', content: draft.trim() })
-      setDraft('')
+      const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'text', content: draft.trim() })
+      if (error) {
+        showToast(`Couldn't post live: ${error.message}`, { type: 'error' })
+      } else {
+        setDraft('')
+      }
     }
     setSending(false)
     loadItems()
@@ -125,17 +138,23 @@ function LiveDashboard() {
   }
 
   async function sendVoice(url) {
-    await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'voice', content: url })
+    await ensureProfile(user)
+    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'voice', content: url })
+    if (error) showToast(`Couldn't post the voice note: ${error.message}`, { type: 'error' })
     loadItems()
   }
 
   async function sendSlide(url, num, total) {
-    await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'slide', content: `${url}|||${num}|||${total}` })
+    await ensureProfile(user)
+    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'slide', content: `${url}|||${num}|||${total}` })
+    if (error) showToast(`Couldn't post the slide: ${error.message}`, { type: 'error' })
     loadItems()
   }
 
   async function sendVideo(url) {
-    await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'video', content: url })
+    await ensureProfile(user)
+    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'video', content: url })
+    if (error) showToast(`Couldn't post the video: ${error.message}`, { type: 'error' })
     loadItems()
   }
 
@@ -317,6 +336,7 @@ function LiveDashboard() {
         consequence="Everyone currently watching will be disconnected and the show will be marked ended. You can't resume it."
         confirmLabel="End show"
       />
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 }

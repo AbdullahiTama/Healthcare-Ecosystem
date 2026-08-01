@@ -109,6 +109,13 @@ export async function addStaff(data) { return sbFetch('staff', { method: 'POST',
 export async function updateStaff(id, data) { return sbFetch('staff?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteStaff(id) { return sbFetch('staff?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
 
+// CUSTOM ROLES (the `roles` table — business-defined roles with a
+// permissions.jsonb matching lib/permissions.js's preset shapes)
+export async function getRoles(businessId) { return sbFetch('roles?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
+export async function addRole(data) { return sbFetch('roles', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateRole(id, data) { return sbFetch('roles?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+export async function deleteRole(id) { return sbFetch('roles?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
 // PRODUCTS
 export async function getProducts(businessId) { return sbFetch('products?business_id=eq.' + businessId + '&order=name.asc&select=*') }
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
@@ -217,7 +224,18 @@ export async function addPurchase(data) { return sbFetch('purchases', { method: 
 export async function updatePurchase(id, data) { return sbFetch('purchases?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
 // PATIENTS (hospital)
-export async function getPatients(businessId) { return sbFetch('patients?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
+export async function getPatients(businessId, opts = {}) {
+  let q = 'patients?business_id=eq.' + businessId + '&order=created_at.desc&select=*'
+  if (opts.status) q += '&status=eq.' + opts.status
+  if (opts.department) q += '&department=eq.' + encodeURIComponent(opts.department)
+  // Global search: matches across every department of the business, not just
+  // the caller's own queue (name, reg no, phone, department, assigned doctor).
+  if (opts.query) {
+    const term = encodeURIComponent(opts.query)
+    q += '&or=(full_name.ilike.*' + term + '*,reg_no.ilike.*' + term + '*,phone.ilike.*' + term + '*,department.ilike.*' + term + '*,assigned_doctor.ilike.*' + term + '*)'
+  }
+  return sbFetch(q)
+}
 export async function addPatient(data) { return sbFetch('patients', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updatePatient(id, data) { return sbFetch('patients?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getTriage(patientId) { const r = await sbFetch('triage?patient_id=eq.' + patientId + '&select=*'); return r[0] || null }
