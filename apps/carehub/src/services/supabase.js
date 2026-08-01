@@ -158,6 +158,28 @@ export async function getDebts(businessId) { return sbFetch('debts?business_id=e
 export async function addDebt(data) { return sbFetch('debts', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateDebt(id, data) { return sbFetch('debts?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
+// CLIENT HISTORY (customer database) — every touchpoint a client has had,
+// linked through the client_id columns added by
+// 20260801_customer_and_requisition_modules.sql.
+export async function getSalesByClient(clientId) { return sbFetch('sales?client_id=eq.' + clientId + '&order=created_at.desc&select=*') }
+export async function getAppointmentsByClient(clientId) { return sbFetch('appointments?client_id=eq.' + clientId + '&order=date.asc&select=*') }
+export async function getDebtsByClient(clientId) { return sbFetch('debts?client_id=eq.' + clientId + '&order=created_at.desc&select=*') }
+
+// DEMAND (out-of-stock book, customer requests, requisitions) — the digital
+// replacement for the paper demand log. Tables from
+// 20260801_customer_and_requisition_modules.sql.
+export async function getOutOfStock(businessId) { return sbFetch('out_of_stock?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
+export async function addOutOfStock(data) { return sbFetch('out_of_stock', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateOutOfStock(id, data) { return sbFetch('out_of_stock?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
+export async function getCustomerRequests(businessId) { return sbFetch('customer_requests?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
+export async function addCustomerRequest(data) { return sbFetch('customer_requests', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateCustomerRequest(id, data) { return sbFetch('customer_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
+export async function getRequisitions(businessId) { return sbFetch('requisitions?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
+export async function addRequisition(data) { return sbFetch('requisitions', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateRequisition(id, data) { return sbFetch('requisitions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
 // The "an underpaid sale or purchase automatically creates a debt" rule —
 // previously reimplemented independently at all 3 of its call sites (POS.jsx's
 // charge() and chargeCredit(), Purchases.jsx's save()), which had already
@@ -166,12 +188,13 @@ export async function updateDebt(id, data) { return sbFetch('debts?id=eq.' + id,
 // write must not undo an already-completed sale or purchase (same contract
 // as notify(), and fixes a latent bug in Purchases.jsx's save(), where an
 // addDebt failure used to surface as a false "Error saving purchase").
-export async function recordUnderpayment({ businessId, direction, partyName, amount, amountPaid, dueDate = '', description, source, sourceRef }) {
+export async function recordUnderpayment({ businessId, direction, partyName, amount, amountPaid, dueDate = '', description, source, sourceRef, clientId = null }) {
   const balance = amount - amountPaid
   if (balance <= 0) return null
   try {
     return await addDebt({
       business_id: businessId,
+      client_id: clientId,
       direction,
       party_name: partyName,
       amount,

@@ -21,6 +21,7 @@ import Appointments from '../../modules/appointments/Appointments'
 import Expenses from '../../modules/expenses/Expenses'
 import Debts from '../../modules/debts/Debts'
 import Purchases from '../../modules/purchases/Purchases'
+import Demand from '../../modules/demand/Demand'
 import Staff from '../../modules/staff/Staff'
 import Reports from '../../modules/reports/Reports'
 import Settings from '../../modules/settings/Settings'
@@ -43,7 +44,7 @@ import ConsultationRouter from '../../modules/consultation/ConsultationRouter'
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory',
   clients: 'Clients', appointments: 'Appointments', consultation: 'Consultations',
-  expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases',
+  expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
 }
@@ -154,6 +155,7 @@ export default function BusinessDashboard() {
             <Route path='expenses' element={guard('expenses', <><TopBar title='Expenses' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Expenses {...pageProps} /></div></>)} />
             <Route path='debts' element={guard('debts', <><TopBar title='Debts' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Debts {...pageProps} /></div></>)} />
             <Route path='purchases' element={guard('purchases', <><TopBar title='Purchases' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Purchases {...pageProps} /></div></>)} />
+            <Route path='demand' element={guard('demand', <><TopBar title='Demand' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Demand {...pageProps} /></div></>)} />
             <Route path='staff' element={guard('staff', <><TopBar title='Staff' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Staff {...pageProps} /></div></>)} />
             <Route path='reports' element={guard('reports', <><TopBar title='Reports' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reports {...pageProps} /></div></>)} />
             <Route path='settings' element={guard('settings', <><TopBar title='Settings' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Settings {...pageProps} /></div></>)} />

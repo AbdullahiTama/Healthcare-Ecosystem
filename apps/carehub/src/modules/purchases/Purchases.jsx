@@ -1,25 +1,46 @@
 import { useState, useEffect } from 'react'
-import { Truck, CreditCard, Hourglass, Search } from 'lucide-react'
-import { getPurchases, addPurchase, updatePurchase, recordUnderpayment, updateDebt, getDebts } from '../../services/supabase'
+import { Truck, CreditCard, Hourglass, Search, Plus, X } from 'lucide-react'
+import { getPurchases, addPurchase, updatePurchase, recordUnderpayment, updateDebt, getDebts, getProducts, updateProduct, addProduct } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
+import { findDuplicate } from '../../lib/productMatches'
+import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
 
-const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
+
+// Margin applied to newly created products from a purchase so they are
+// immediately sellable (stock is also set). Existing products keep their
+// own selling price; only stock and cost are updated.
+const NEW_PRODUCT_MARKUP = 1.5
+
+const blankItem = () => ({ name: '', qty: '', cost: '', cat: 'Medicines' })
 
 export default function Purchases({ brand, role, perms }) {
   const [purchases, setPurchases] = useState([])
+  const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [form, setForm] = useState({ supplyDate: todayDate() })
+  const [form, setForm] = useState({ supplyDate: todayDate(), items: [blankItem()] })
   const [saving, setSaving] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const setItem = (i, k, v) => setForm(p => {
+    const items = p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it)
+    return { ...p, items }
+  })
+  const addItem = () => setForm(p => ({ ...p, items: [...p.items, blankItem()] }))
+  const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }))
 
   useEffect(() => { load() }, [brand?.id])
+  useEffect(() => {
+    let live = true
+    getProducts(brand.id).then(p => { if (live) setInventory(p || []) }).catch(() => {})
+    return () => { live = false }
+  }, [brand?.id])
 
   async function load() {
     setLoading(true)
@@ -27,19 +48,25 @@ export default function Purchases({ brand, role, perms }) {
     setLoading(false)
   }
 
+  const validItems = form.items.filter(i => i.name.trim() && parseInt(i.qty) > 0 && parseFloat(i.cost) > 0)
+  const computedTotal = validItems.reduce((s, i) => s + parseInt(i.qty) * parseFloat(i.cost), 0)
+
   async function save() {
-    if (!form.supplier || !form.totalCost) { showToast('Please enter supplier name and total cost.', { type: 'warning' }); return }
+    if (!form.supplier) { showToast('Please enter the supplier name.', { type: 'warning' }); return }
+    if (validItems.length === 0) { showToast('Enter at least one item with a name, quantity and unit cost.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      const total = parseFloat(form.totalCost) || 0
+      const total = computedTotal
       const paid = parseFloat(form.amountPaid) || 0
       const balance = total - paid
+      const totalQty = validItems.reduce((s, i) => s + parseInt(i.qty), 0)
+      const productNames = validItems.map(i => i.name.trim())
       const purchase = await addPurchase({
         business_id: brand.id,
         supplier_name: form.supplier,
-        product_name: form.product || '',
-        quantity: parseInt(form.qty) || 0,
-        cost_price: parseFloat(form.costPrice) || 0,
+        product_name: productNames.join(', '),
+        quantity: totalQty,
+        cost_price: totalQty > 0 ? total / totalQty : 0,
         total_cost: total,
         amount_paid: paid,
         balance: balance,
@@ -48,6 +75,45 @@ export default function Purchases({ brand, role, perms }) {
         status: paid >= total ? 'paid' : 'pending',
         notes: form.notes || '',
       })
+      const purchaseId = (purchase[0] || {}).id || ''
+
+      // INVENTORY SYNC: every purchased item is added to Inventory instantly.
+      // Existing products get stock added (and the new unit cost recorded);
+      // new products are created with stock and a default sell price.
+      let created = 0
+      let updated = 0
+      for (const item of validItems) {
+        const qty = parseInt(item.qty)
+        const cost = parseFloat(item.cost)
+        const existing = findDuplicate(inventory, item.name.trim(), '', null)
+        try {
+          if (existing) {
+            await updateProduct(existing.id, {
+              stock: (existing.stock || 0) + qty,
+              cost_price: cost,
+            })
+            updated++
+          } else {
+            await addProduct({
+              business_id: brand.id,
+              name: item.name.trim(),
+              category: item.cat || 'Medicines',
+              price: Math.ceil(cost * NEW_PRODUCT_MARKUP),
+              cost_price: cost,
+              stock: qty,
+              reorder_level: 5,
+              list_on_carefind: true,
+            })
+            created++
+          }
+        } catch (e) {
+          console.error('Inventory sync failed for:', item.name, e.message)
+        }
+      }
+      if (created > 0 || updated > 0) {
+        getProducts(brand.id).then(setInventory).catch(() => {})
+      }
+
       // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically
       if (balance > 0) {
         await recordUnderpayment({
@@ -57,13 +123,20 @@ export default function Purchases({ brand, role, perms }) {
           amount: total,
           amountPaid: paid,
           dueDate: form.dueDate || '',
-          description: 'Purchase — ' + (form.product || 'Stock') + ' — Due: ' + (form.dueDate || 'Not set'),
+          description: 'Purchase: ' + (productNames[0] || 'Stock') + (productNames.length > 1 ? ' +' + (productNames.length - 1) + ' more' : '') + ': Due: ' + (form.dueDate || 'Not set'),
           source: 'purchase',
-          sourceRef: (purchase[0] || {}).id || '',
+          sourceRef: purchaseId,
         })
       }
-      showToast('Purchase recorded!' + (balance > 0 ? ' Debt of ' + fmt(balance) + ' added to Debts automatically.' : ''), { type: 'success' })
-      setForm({ supplyDate: todayDate() }); setShowAdd(false); load()
+      const parts = []
+      parts.push('Purchase recorded!')
+      if (created > 0 || updated > 0) {
+        parts.push(created + ' new product(s) added to Inventory, ' + updated + ' updated')
+        if (created > 0) parts.push('new items priced at a ' + Math.round((NEW_PRODUCT_MARKUP - 1) * 100) + '% markup: adjust in Inventory anytime')
+      }
+      if (balance > 0) parts.push('Debt of ' + fmt(balance) + ' added to Debts automatically')
+      showToast(parts.join(' · '), { type: 'success' })
+      setForm({ supplyDate: todayDate(), items: [blankItem()] }); setShowAdd(false); load()
     } catch (e) { showToast('Could not save purchase. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
@@ -96,7 +169,7 @@ export default function Purchases({ brand, role, perms }) {
 
   return (
     <div>
-      <SectionHead title='Purchases' sub='Track supplier purchases and payments' btn='+ Record Purchase' onBtn={() => setShowAdd(true)} />
+      <SectionHead title='Purchases' sub='Record multi-item supplier purchases' btn='+ Record Purchase' onBtn={() => setShowAdd(true)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Truck />} label='Total Purchases' value={purchases.length} />
@@ -137,7 +210,7 @@ export default function Purchases({ brand, role, perms }) {
                 {filtered.map(p => (
                   <tr key={p.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}>{p.supplier_name}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600 }}>{p.product_name || '—'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || '—'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.quantity || '—'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: navy }}>{p.cost_price ? fmt(p.cost_price) : '—'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.total_cost || 0)}</td>
@@ -157,23 +230,62 @@ export default function Purchases({ brand, role, perms }) {
         </Card>
       )}
 
-      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ supplyDate: todayDate() }) }} title='Record Purchase'
-        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ supplyDate: todayDate() }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Purchase'}</TealBtn></>}>
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} title='Record Purchase'
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ supplyDate: todayDate(), items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Purchase'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Inp label='Supplier Name *' value={form.supplier} onChange={v => f('supplier', v)} placeholder='e.g. MedSupply Ltd' required />
-          <Inp label='Product / Item Name' value={form.product} onChange={v => f('product', v)} placeholder='e.g. Amoxicillin 500mg x 1000 caps' />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Quantity' value={form.qty} onChange={v => f('qty', v)} type='number' placeholder='e.g. 100' />
-            <Inp label='Unit Cost Price (₦)' value={form.costPrice} onChange={v => f('costPrice', v)} type='number' placeholder='0' />
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: gray500 }}>ITEMS PURCHASED *</span>
+              <button onClick={addItem} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealMist, color: tealDeep, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}><Plus size={13} /> Add item</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {form.items.map((item, i) => {
+                const sub = (parseInt(item.qty) || 0) * (parseFloat(item.cost) || 0)
+                return (
+                  <div key={i} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input value={item.name} onChange={e => setItem(i, 'name', e.target.value)} placeholder='Product name e.g. Amoxicillin 500mg'
+                        style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                      <input value={item.qty} onChange={e => setItem(i, 'qty', e.target.value)} type='number' min='1' placeholder='Qty'
+                        aria-label='Quantity'
+                        style={{ width: '72px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                      <input value={item.cost} onChange={e => setItem(i, 'cost', e.target.value)} type='number' min='0' placeholder='Unit cost ₦'
+                        aria-label='Unit cost'
+                        style={{ width: '110px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                      <button onClick={() => removeItem(i)} aria-label={'Remove ' + (item.name || 'item')}
+                        style={{ width: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer' }}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '8px' }}>
+                      <select value={item.cat} onChange={e => setItem(i, 'cat', e.target.value)} aria-label='Category'
+                        style={{ padding: '6px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }}>
+                        {PRODUCT_CATS.map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : '—'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {form.items.length === 0 && <div style={{ fontSize: '12px', color: gray400 }}>No items yet: tap "Add item" to start.</div>}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Total Cost (₦) *' value={form.totalCost} onChange={v => f('totalCost', v)} type='number' placeholder='0' required />
-            <Inp label='Amount Paid (₦)' value={form.amountPaid} onChange={v => f('amountPaid', v)} type='number' placeholder='0' />
+
+          <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            Every item you save is added to Inventory instantly: new products are created with stock and a 50% markup sell price, existing products get more stock. Adjust prices anytime in Inventory.
           </div>
-          {form.totalCost && (
+
+          <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+            <span style={{ color: gray500 }}>Total Cost (auto)</span>
+            <span style={{ fontWeight: '900', color: navy }}>{fmt(computedTotal)}</span>
+          </div>
+          <Inp label='Amount Paid (₦)' value={form.amountPaid} onChange={v => f('amountPaid', v)} type='number' placeholder='0' />
+          {computedTotal > 0 && (
             <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
               <span style={{ color: gray500 }}>Balance remaining</span>
-              <span style={{ fontWeight: '900', color: danger }}>{fmt((parseFloat(form.totalCost) || 0) - (parseFloat(form.amountPaid) || 0))}</span>
+              <span style={{ fontWeight: '900', color: danger }}>{fmt(computedTotal - (parseFloat(form.amountPaid) || 0))}</span>
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

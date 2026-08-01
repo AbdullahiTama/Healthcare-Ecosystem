@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Hourglass, CheckCircle } from 'lucide-react'
-import { getAppointments, addAppointment, updateAppointment, deleteAppointment } from '../../services/supabase'
+import { Calendar, Hourglass, CheckCircle, Search, Download } from 'lucide-react'
+import { getAppointments, addAppointment, updateAppointment, deleteAppointment, getClients } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -9,6 +9,7 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, bo
 
 export default function Appointments({ brand, role, perms }) {
   const [appointments, setAppointments] = useState([])
+  const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [showAdd, setShowAdd] = useState(false)
@@ -19,11 +20,23 @@ export default function Appointments({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
+  useEffect(() => {
+    let live = true
+    getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
+    return () => { live = false }
+  }, [brand?.id])
 
   async function load() {
     setLoading(true)
     try { const a = await getAppointments(brand.id); setAppointments(a || []) } catch (e) {}
     setLoading(false)
+  }
+
+  // Picking a saved client auto-fills the name and links the record so the
+  // appointment appears on the client's history in the customer database.
+  function pickClient(name) {
+    const c = clients.find(x => x.full_name === name)
+    setForm(p => ({ ...p, clientName: name, client_id: c?.id || null }))
   }
 
   async function save() {
@@ -32,6 +45,7 @@ export default function Appointments({ brand, role, perms }) {
     try {
       await addAppointment({
         business_id: brand.id,
+        client_id: form.client_id || null,
         client_name: form.clientName,
         service: form.service || '',
         date: form.date,
@@ -44,6 +58,19 @@ export default function Appointments({ brand, role, perms }) {
       setForm({ date: todayDate() }); setShowAdd(false); load()
     } catch (e) { showToast('Could not save appointment. Please try again.', { type: 'error' }) }
     setSaving(false)
+  }
+
+  function exportCsv() {
+    const rows = [['Client', 'Service', 'Date', 'Time', 'Staff', 'Status', 'Notes']]
+    appointments.forEach(a => {
+      rows.push([a.client_name || '', a.service || '', a.date || '', a.time || '', a.staff_name || '', a.status || '', a.notes || ''])
+    })
+    const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Appointments.csv'; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Appointments exported as CSV!', { type: 'success' })
   }
 
   async function updateStatus(id, status) {
@@ -64,7 +91,7 @@ export default function Appointments({ brand, role, perms }) {
 
   return (
     <div>
-      <SectionHead title='Appointments' sub='Manage all bookings and schedules' btn='+ New Appointment' onBtn={() => setShowAdd(true)} />
+      <SectionHead title='Appointments' sub='Manage all bookings and schedules' btn='+ New Appointment' onBtn={() => setShowAdd(true)} extraBtn={{ label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv }} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Calendar />} label='Today' value={todayAppts.length} sub={todayAppts.filter(a => a.status === 'confirmed').length + ' confirmed'} />
@@ -126,7 +153,17 @@ export default function Appointments({ brand, role, perms }) {
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ date: todayDate() }) }} title='New Appointment'
         footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ date: todayDate() }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Book Appointment'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <Inp label='Client Name *' value={form.clientName} onChange={v => f('clientName', v)} placeholder='Client full name' required />
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Client Name *</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
+              <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
+              <input list='appt-clients' value={form.clientName || ''} onChange={e => pickClient(e.target.value)} placeholder='Pick a saved client or type a name...'
+                style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+              <datalist id='appt-clients'>
+                {clients.map(c => <option key={c.id} value={c.full_name} />)}
+              </datalist>
+            </div>
+          </div>
           <Inp label='Service' value={form.service} onChange={v => f('service', v)} placeholder='e.g. Facial Treatment, Consultation' />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Date *' value={form.date} onChange={v => f('date', v)} type='date' required />

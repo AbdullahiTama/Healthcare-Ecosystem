@@ -140,14 +140,23 @@ export function RedBtn({ children, onClick, style = {}, disabled, type = 'button
 }
 
 // ── SECTION HEAD ─────────────────────────────────────────────────────────────
-export function SectionHead({ title, sub, btn, onBtn }) {
+// `extraBtn`: an optional secondary button rendered beside the primary one
+// (e.g. "Export CSV") — { label, icon, onClick }.
+export function SectionHead({ title, sub, btn, onBtn, extraBtn }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: theme.space[10], flexWrap: 'wrap', gap: theme.space[6] }}>
       <div>
         <div style={{ fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.textDark }}>{title}</div>
         {sub && <div style={{ fontSize: theme.type.body.size, color: theme.textLight, marginTop: 3 }}>{sub}</div>}
       </div>
-      {btn && <TealBtn onClick={onBtn}>{btn}</TealBtn>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {extraBtn && (
+          <button onClick={extraBtn.onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', color: theme.textDark, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            {extraBtn.icon} {extraBtn.label}
+          </button>
+        )}
+        {btn && <TealBtn onClick={onBtn}>{btn}</TealBtn>}
+      </div>
     </div>
   )
 }

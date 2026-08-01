@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Landmark, Truck, ShoppingCart, Pencil, Search } from 'lucide-react'
-import { getDebts, addDebt, updateDebt } from '../../services/supabase'
+import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
+import { getDebts, addDebt, updateDebt, getClients } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -17,6 +17,7 @@ function sourceLabel(source, short) {
 
 export default function Debts({ brand, role, perms }) {
   const [debts, setDebts] = useState([])
+  const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
@@ -27,6 +28,18 @@ export default function Debts({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => { load() }, [brand?.id])
+  useEffect(() => {
+    let live = true
+    getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
+    return () => { live = false }
+  }, [brand?.id])
+
+  // Picking a saved client links the debt to their customer record so it
+  // shows up on their history.
+  function pickClient(name) {
+    const c = clients.find(x => x.full_name === name)
+    setForm(p => ({ ...p, party: name, client_id: c?.id || null }))
+  }
 
   async function load() {
     setLoading(true)
@@ -42,6 +55,7 @@ export default function Debts({ brand, role, perms }) {
       const paid = parseFloat(form.amountPaid) || 0
       await addDebt({
         business_id: brand.id,
+        client_id: form.client_id || null,
         direction: form.direction || 'owes_us',
         party_name: form.party,
         amount: amt,
@@ -119,7 +133,10 @@ export default function Debts({ brand, role, perms }) {
                       <Pill label={sourceLabel(d.source, false)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} />
                     </td>
                     <td style={{ padding: '12px 14px' }}><Pill label={d.direction === 'owes_us' ? 'Owed to Us' : 'We Owe'} type={d.direction === 'owes_us' ? 'green' : 'red'} /></td>
-                    <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>{d.party_name}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>
+                      {d.party_name}
+                      {d.client_id && <div style={{ marginTop: '4px' }}><Pill label={<> <UserCheck size={10} /> Client record</>} type='teal' /></div>}
+                    </td>
                     <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '200px' }}>
                       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.description || '—'}</div>
                       {d.source && <div style={{ marginTop: '4px' }}><Pill label={sourceLabel(d.source, true)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} /></div>}
@@ -153,7 +170,17 @@ export default function Debts({ brand, role, perms }) {
               ))}
             </div>
           </div>
-          <Inp label='Party Name *' value={form.party} onChange={v => f('party', v)} placeholder='Client or supplier name' required />
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Party Name *</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
+              <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
+              <input list='debt-clients' value={form.party || ''} onChange={e => pickClient(e.target.value)} placeholder='Pick a saved client or type a name...'
+                style={{ flex: 1, padding: '10px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+              <datalist id='debt-clients'>
+                {clients.map(c => <option key={c.id} value={c.full_name} />)}
+              </datalist>
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Total Amount (₦) *' value={form.amount} onChange={v => f('amount', v)} type='number' placeholder='0' required />
             <Inp label='Amount Already Paid (₦)' value={form.amountPaid} onChange={v => f('amountPaid', v)} type='number' placeholder='0' />

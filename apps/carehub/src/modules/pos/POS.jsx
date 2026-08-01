@@ -4,7 +4,7 @@ import {
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
   DollarSign, Repeat, Divide, Search, Package, Clipboard,
 } from 'lucide-react'
-import { addSale, updateSale, getSales, getTodaySales, getSettings, queueOfflineSale, getOfflineQueue, recordUnderpayment, updateDebt } from '../../services/supabase'
+import { addSale, updateSale, getSales, getTodaySales, getSettings, queueOfflineSale, getOfflineQueue, recordUnderpayment, updateDebt, getClients } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
@@ -47,6 +47,11 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   const [holdNote, setHoldNote] = useState('')
   const [showHoldModal, setShowHoldModal] = useState(false)
   const [deleteHeldTarget, setDeleteHeldTarget] = useState(null)
+  // The held-sale row resumed into the current cart, if any — removed (soft
+  // deleted) the moment this cart is actually charged, so held sales never
+  // linger as phantom rows after completion (#17).
+  const [resumedSaleId, setResumedSaleId] = useState(null)
+  const [clients, setClients] = useState([])
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
 
@@ -59,6 +64,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   useEffect(() => {
     if (brand?.id) {
       getSettings(brand.id).then(s => setSettings(s))
+      getClients(brand.id).then(c => setClients(c || [])).catch(() => {})
       loadSalesData()
     }
   }, [brand?.id])
@@ -90,6 +96,22 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   const change = method === 'Cash' && cash ? parseFloat(cash) - total : 0
   const splitTotal = method === 'Split' ? Object.values(splitAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) : 0
 
+  // When the typed client name matches a saved client, the sale and any debt
+  // it creates get linked to that client's record (customer database).
+  function resolveClientId(name) {
+    const match = clients.find(c => c.full_name === name)
+    return match?.id || null
+  }
+
+  // A completed sale closes the loop on a resumed held sale: the original
+  // held row is soft-deleted so it can't be resumed twice or linger in the
+  // sales list as a phantom "resumed" entry.
+  async function finishResumedSale() {
+    if (!resumedSaleId) return
+    try { await updateSale(resumedSaleId, { is_on_hold: false, status: 'deleted' }) } catch (e) {}
+    setResumedSaleId(null)
+  }
+
   async function saveSale(saleData) {
     try {
       if (navigator.onLine) {
@@ -108,12 +130,14 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     if (method === 'Split' && splitTotal < total) { showToast('Split amounts do not add up to total.', { type: 'warning' }); return }
     const txnNo = genId('TXN')
     const clientName = client || 'Walk-in'
+    const clientId = resolveClientId(clientName)
     const amtPaid = method === 'Cash' ? parseFloat(cash) || total : method === 'Split' ? splitTotal : total
     const balance = Math.max(0, total - amtPaid)
     const isShortfall = amtPaid < total && method !== 'Credit'
 
     const saleData = {
       txn_no: txnNo,
+      client_id: clientId,
       client_name: clientName,
       items: JSON.stringify(cart),
       subtotal: sub,
@@ -146,6 +170,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p
     }))
     await saveSale(saleData)
+    await finishResumedSale()
 
     // AUTO-CREATE DEBT if amount paid is less than total
     if (balance > 0 && brand?.id) {
@@ -153,6 +178,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       await recordUnderpayment({
         businessId: brand.id,
         direction: 'owes_us',
+        clientId,
         partyName: isWalkIn ? 'Walk-in — ' + txnNo : clientName,
         amount: total,
         amountPaid: amtPaid,
@@ -173,8 +199,10 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const amtPaid = parseFloat(creditAmountPaid) || 0
     const balance = total - amtPaid
     const clientName = client || 'Walk-in'
+    const clientId = resolveClientId(clientName)
     const saleData = {
       txn_no: txnNo,
+      client_id: clientId,
       client_name: clientName,
       items: JSON.stringify(cart),
       subtotal: sub,
@@ -189,11 +217,13 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     setReceipt({ id: txnNo, client: clientName, items: [...cart], subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
     setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && p.cat !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
     await saveSale(saleData)
+    await finishResumedSale()
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
     if (balance > 0 && brand?.id) {
       await recordUnderpayment({
         businessId: brand.id,
         direction: 'owes_us',
+        clientId,
         partyName: clientName,
         amount: total,
         amountPaid: amtPaid,
@@ -252,6 +282,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     setClient(sale.client_name || 'Walk-in')
     try { await updateSale(sale.id, { is_on_hold: false, status: 'resumed' }) } catch (e) {}
     setView('pos')
+    setResumedSaleId(sale.id)
     loadSalesData()
   }
 
@@ -271,7 +302,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     loadSalesData()
   }
 
-  function newSale() { setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
+  function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
 
   function printReceipt(r) {
     const biz = brand
@@ -614,8 +645,13 @@ export default function POS({ brand, products, setProducts, role, perms }) {
         {/* Header + client */}
         <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: navy }}>Current sale</div>
-          <input value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in'
-            style={{ width: 140, padding: '8px 12px', borderRadius: theme.radius.full, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
+          <div style={{ position: 'relative' }}>
+            <input list='pos-clients' value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in'
+              style={{ width: 140, padding: '8px 12px', borderRadius: theme.radius.full, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
+            <datalist id='pos-clients'>
+              {clients.map(c => <option key={c.id} value={c.full_name} />)}
+            </datalist>
+          </div>
         </div>
 
         {/* Items */}

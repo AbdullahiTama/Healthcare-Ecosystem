@@ -1,6 +1,6 @@
 export const ROLES = {
   Owner: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -13,7 +13,7 @@ export const ROLES = {
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','reports','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -152,6 +152,7 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
+  ClipboardList,
 } from 'lucide-react'
 
 export const ALL_NAV_DEFAULT = [
@@ -164,6 +165,7 @@ export const ALL_NAV_DEFAULT = [
   ['expenses', Receipt, 'Expenses'],
   ['debts', Landmark, 'Debts'],
   ['purchases', Truck, 'Purchases'],
+  ['demand', ClipboardList, 'Demand'],
   ['carefind', Search, 'CareFind Profile'],
   ['locations', Building2, 'Locations'],
   ['staff', User, 'Staff'],
@@ -185,6 +187,7 @@ export const ALL_NAV_HOSPITAL = [
   ['expenses', Receipt, 'Expenses'],
   ['debts', Landmark, 'Debts'],
   ['purchases', Truck, 'Purchases'],
+  ['demand', ClipboardList, 'Demand'],
   ['carefind', Search, 'CareFind Profile'],
   ['locations', Building2, 'Locations'],
   ['staff', User, 'Staff'],
