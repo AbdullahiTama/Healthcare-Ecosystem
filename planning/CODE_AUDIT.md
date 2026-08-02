@@ -44,7 +44,7 @@ This document tracks architecture issues discovered during review.
 
 ## Security
 
-- [ ]
+- [ ] Referral Agent Program (2026-08-02) is code-complete and builds, but `sql/20260802_referral_agent_program.sql` is **NOT YET APPLIED** to Supabase — the program's tables/trigger/RLS and the `businesses.referring_agent_id`/`plan_payments.is_first_payment` columns must be created before agents/payouts go live. Server probes in the plan's §11 (payment→commission, UNIQUE(payment_id) idempotency, agent-anon RLS) are pending until then.
 
 ---
 

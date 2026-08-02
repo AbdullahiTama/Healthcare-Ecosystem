@@ -5,6 +5,9 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import BusinessDashboard from './pages/dashboard/BusinessDashboard'
+import AgentLogin from './pages/agent/AgentLogin'
+import ApplyAgent from './pages/agent/ApplyAgent'
+import AgentDashboard from './modules/referral-agent/AgentDashboard'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
 import AuthProvider from './providers/AuthProvider'
@@ -13,6 +16,16 @@ export default function App() {
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('carehub_auth')
+      return saved ? JSON.parse(saved) : null
+    } catch (e) { return null }
+  })
+
+  // Independent identity lane for Referral Agents — a separate surface from
+  // businesses/staff (an agent is not a business account), with its own
+  // localStorage cache, same save/load idiom.
+  const [agent, setAgent] = useState(() => {
+    try {
+      const saved = localStorage.getItem('carehub_agent_auth')
       return saved ? JSON.parse(saved) : null
     } catch (e) { return null }
   })
@@ -26,6 +39,17 @@ export default function App() {
   const logout = () => {
     setAuth(null)
     localStorage.removeItem('carehub_auth')
+    authClient.auth.signOut().catch(() => {})
+  }
+
+  const loginAgent = (agentRow) => {
+    setAgent(agentRow)
+    localStorage.setItem('carehub_agent_auth', JSON.stringify(agentRow))
+  }
+
+  const logoutAgent = () => {
+    setAgent(null)
+    localStorage.removeItem('carehub_agent_auth')
     authClient.auth.signOut().catch(() => {})
   }
 
@@ -57,12 +81,15 @@ export default function App() {
   }, [])
 
   return (
-    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin }}>
+    <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <Routes>
           <Route path='/' element={<Landing />} />
           <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
           <Route path='/register' element={<Register />} />
+          <Route path='/apply-agent' element={<ApplyAgent />} />
+          <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
+          <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
           <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />
           <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
           <Route path='*' element={<Navigate to='/' />} />

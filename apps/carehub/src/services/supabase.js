@@ -759,6 +759,78 @@ export async function commentOnActivity(data, businessId, repStaffId) {
   return saved
 }
 
+// REFERRAL AGENT PROGRAM (planning/20260802_referral_agent_program_plan.md)
+// Agent faces read their own rows through RLS (contact_email match); admin
+// faces go through the same table with is_platform_admin() overriding. The
+// agent's businesses come ONLY from the get_agent_portfolio() RPC — the
+// `businesses` table carries plaintext password columns and must never be
+// reachable through an agent session.
+export async function getAgentByEmail(email) {
+  if (!email) return null
+  const r = await sbFetch('agents?contact_email=eq.' + encodeURIComponent(email) + '&select=*')
+  return r[0] || null
+}
+export async function getAgentPortfolio() {
+  return sbFetch('rpc/get_agent_portfolio', { method: 'POST' })
+}
+export async function getAgentCommissions(agentId) {
+  return sbFetch('commissions?agent_id=eq.' + agentId + '&order=created_at.desc&select=*')
+}
+export async function getAgentPayouts(agentId) {
+  return sbFetch('payouts?agent_id=eq.' + agentId + '&order=created_at.desc&select=*')
+}
+export async function getAgentSupportLogs(agentId) {
+  return sbFetch('agent_support_logs?agent_id=eq.' + agentId + '&order=created_at.desc&select=*')
+}
+export async function addAgentSupportLog(data) {
+  return sbFetch('agent_support_logs', { method: 'POST', body: JSON.stringify(data) })
+}
+
+// Public application form — anon INSERT policy covers this call.
+export async function submitAgentApplication(data) {
+  return sbFetch('agent_applications', { method: 'POST', body: JSON.stringify(data) })
+}
+
+// Admin — application review, agent lifecycle, ledger, payouts, coverage.
+export async function getAgentApplications() {
+  return sbFetch('agent_applications?order=submitted_at.desc&select=*')
+}
+export async function reviewAgentApplication(id, patch) {
+  return sbFetch('agent_applications?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
+}
+export async function getAgents() {
+  return sbFetch('agents?order=created_at.desc&select=*')
+}
+export async function addAgentRow(data) {
+  return sbFetch('agents', { method: 'POST', body: JSON.stringify(data) })
+}
+export async function updateAgentRow(id, patch) {
+  return sbFetch('agents?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
+}
+export async function getCommissionsLedger() {
+  return sbFetch('commissions?order=created_at.desc&select=*&limit=1000')
+}
+export async function updateCommission(id, patch) {
+  return sbFetch('commissions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
+}
+export async function getCommissionReviewFlags() {
+  return sbFetch('commission_review_flags?order=created_at.desc&select=*&limit=200')
+}
+export async function getPayouts() {
+  return sbFetch('payouts?order=created_at.desc&select=*')
+}
+export async function createPayout(payload) {
+  return sbFetch('payouts', { method: 'POST', body: JSON.stringify(payload) })
+}
+export async function updatePayout(id, patch) {
+  return sbFetch('payouts?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
+}
+// Portfolio sizes + at-risk signals for the admin view (admin can read
+// businesses directly, unlike an agent).
+export async function getBusinessesByAgent(agentId) {
+  return sbFetch('businesses?referring_agent_id=eq.' + agentId + '&order=created_at.desc&select=id,name,business_type,plan,plan_expires_at,created_at')
+}
+
 // OFFLINE SUPPORT
 const CACHE = 'carehub_v1'
 export function cacheData(key, data) {

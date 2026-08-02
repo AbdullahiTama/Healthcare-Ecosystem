@@ -7,6 +7,7 @@ import { emailBusinessApproved, emailBusinessRejected } from '../../lib/email'
 import { businessLucideIcon, businessName, DARK } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo } from '../../components/ui'
+import { ApplicationsPanel, AgentsPanel, LedgerPanel, PayoutsPanel, CoveragePanel } from './referral/AdminReferralPanels'
 
 export default function AdminDashboard() {
   const [businesses, setBusinesses] = useState([])
@@ -93,8 +94,8 @@ export default function AdminDashboard() {
           <StatCard icon={<Users />} label='Admin Team' value={team.length} />
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          {['businesses', 'team'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? '#0E6F5A' : '#f3f4f6', color: tab === t ? 'white' : '#666', textTransform: 'capitalize' }}>{t}</button>)}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? '#0E6F5A' : '#f3f4f6', color: tab === t ? 'white' : '#666', textTransform: 'capitalize' }}>{t}</button>)}
         </div>
 
         {loading ? <Loading /> : tab === 'businesses' ? (
@@ -115,7 +116,12 @@ export default function AdminDashboard() {
               </Card>
             ))}
           </div>
-        ) : (
+        ) : tab === 'applications' ? <ApplicationsPanel />
+        : tab === 'agents' ? <AgentsPanel />
+        : tab === 'ledger' ? <LedgerPanel />
+        : tab === 'payouts' ? <PayoutsPanel />
+        : tab === 'coverage' ? <CoveragePanel />
+        : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
               <TealBtn onClick={() => setShowInvite(true)}>+ Invite Team Member</TealBtn>

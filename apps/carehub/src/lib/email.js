@@ -354,3 +354,85 @@ export async function emailStaffWelcome({ staffName, staffEmail, businessName, r
     html,
   })
 }
+
+// ── 7. REFERRAL AGENT APPROVED ────────────────────────────────────────────────
+export async function emailAgentApproved({ agentName, agentEmail, city, area, referralCode }) {
+  const html = `
+    <div style="${baseStyle}">
+      ${logoHeader()}
+      <div style="${cardStyle}">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="font-size: 56px; margin-bottom: 12px;">🤝</div>
+          <h2 style="color: #0f172a; margin: 0 0 8px;">Welcome to the CareHub Referral Agent Program!</h2>
+          <p style="color: #888; margin: 0;">${agentName}, you're now covering <strong>${area}, ${city}</strong>.</p>
+        </div>
+
+        <div style="background: #FDFBF7; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+          <p style="margin: 0 0 8px; color: #0E6F5A; font-weight: 700; font-size: 14px;">✅ Your application has been approved!</p>
+          <p style="margin: 0 0 12px; color: #555; font-size: 13px; line-height: 1.7;">
+            You'll finish onboarding/training with the CareHub team before your area goes live.
+            Once active, you'll earn <strong>40% of every first payment</strong> and <strong>5% of every
+            renewal</strong> from the businesses you bring onto CareHub.
+          </p>
+          <p style="margin: 0; color: #555; font-size: 13px; line-height: 1.7;">
+            <strong>Your referral code:</strong>
+          </p>
+          <div style="margin: 8px 0 0; display: inline-block; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 18px; font-weight: 800; color: #0E6F5A; background: #f9fafb; border: 1px dashed #0E6F5A; border-radius: 8px; padding: 8px 14px;">
+            ${referralCode || '—'}
+          </div>
+        </div>
+
+        <a href="https://skincarepro.vercel.app/agent/login" style="${btnStyle}">
+          Sign in to your Agent Dashboard →
+        </a>
+
+        <p style="margin-top: 20px; font-size: 12px; color: #aaa; text-align: center;">
+          Need help? Reply to this email or contact support@carehub.ng
+        </p>
+      </div>
+      ${footer()}
+    </div>
+  `
+
+  return sendEmail({
+    to: agentEmail,
+    subject: '🤝 Welcome to CareHub — Agent Application Approved',
+    html,
+  })
+}
+
+// ── 8. REFERRAL AGENT REJECTED ────────────────────────────────────────────────
+export async function emailAgentRejected({ agentName, agentEmail, city, area, reason }) {
+  const html = `
+    <div style="${baseStyle}">
+      ${logoHeader()}
+      <div style="${cardStyle}">
+        <h2 style="color: #0f172a; margin: 0 0 8px;">Application Update</h2>
+        <p style="color: #888; margin: 0 0 24px;">Dear ${agentName},</p>
+
+        <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
+          Thank you for applying to cover <strong>${area}, ${city}</strong> as a CareHub Referral Agent.
+          After review, we weren't able to approve this application at this time.
+        </p>
+
+        ${reason ? `
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
+          <p style="margin: 0; color: #dc2626; font-size: 13px;"><strong>Reason:</strong> ${reason}</p>
+        </div>
+        ` : ''}
+
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">
+          You're welcome to reapply with updated details, or contact our team at
+          <a href="mailto:support@carehub.ng" style="color: #0E6F5A;">support@carehub.ng</a>.
+        </p>
+      </div>
+      ${footer()}
+    </div>
+  `
+
+  return sendEmail({
+    to: agentEmail,
+    subject: 'CareHub — Referral Agent Application Status',
+    html,
+  })
+}

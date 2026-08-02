@@ -458,6 +458,36 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* ── Become a Referral Agent ─────────────────────────────── */}
+      <div className="referral-section" style={{ padding: '80px 24px', maxWidth: 900, margin: '0 auto', borderTop: `1px solid ${border}`, textAlign: 'center' }}>
+        <div style={{ marginBottom: 16, display: 'inline-flex', padding: '8px 16px', borderRadius: theme.radius.full, background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em' }}>
+          EARN WHILE YOU INTRODUCE
+        </div>
+        <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
+          Become a CareHub Referral Agent.
+        </h2>
+        <p style={{ fontSize: 14.5, color: gray500, maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.7 }}>
+          Own one area. Earn <strong style={{ color: tealDeep }}>40% of the first payment</strong> on every healthcare business you bring in, then <strong style={{ color: tealDeep }}>5% on every renewal</strong> for as long as they stay. Real public in your neighbourhood, recurring income for you.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button onClick={() => navigate('/apply-agent')} style={{
+            padding: '15px 32px', borderRadius: theme.radius.md, border: 'none',
+            background: tealDeep, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            Apply to cover your area <ArrowRight size={16} />
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap', marginTop: 24 }}>
+          {['Free to apply', 'No purchase needed', 'You keep your day job'].map(c => (
+            <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: gray500 }}>
+              <CheckIcon size={13} color={tealDeep} strokeWidth={3} aria-hidden="true" />
+              {c}
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ── CTA ────────────────────────────────────────────────── */}
       <div className="cta-section" style={{
         padding: isMobile ? '48px 24px' : '64px 24px',

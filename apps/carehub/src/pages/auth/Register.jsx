@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
 import { provisionRealAuthAccount } from '../../lib/authClient'
@@ -34,6 +34,11 @@ export default function Register() {
   const [done, setDone] = useState(false)
   const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+  // Referral agent attribution — `?ref=CODE` on the register URL. The client
+  // never sends an agent id; the DB `apply_referring_agent()` trigger resolves
+  // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md §2).
+  const refCode = new URLSearchParams(location.search).get('ref') || ''
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const STEPS = ['Business Info', 'Contact & Location', 'Owner Info', 'Account', 'Review']
   const f = (k, v) => setData(p => ({ ...p, [k]: v }))
@@ -69,6 +74,7 @@ export default function Register() {
         status: 'pending',
         visible_on_carefind: data.visibleOnCareFind !== false,
         plan: 'basic',
+        referral_code_used: refCode || null,
       })
       // New accounts get a real Supabase Auth account from day one — best-effort,
       // never blocks registration if it fails (falls back to the legacy login path,
@@ -159,6 +165,14 @@ export default function Register() {
         </div>
 
         <Card style={{ padding: '28px', marginBottom: '16px', borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
+          {refCode && (
+            <div style={{ marginBottom: '16px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${tealDeep}`, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Sparkles size={16} color={tealDeep} style={{ flexShrink: 0 }} />
+              <div style={{ fontSize: '13px', color: tealDeep, fontWeight: '700' }}>
+                Invited by a CareHub Referral Agent (code {refCode.toUpperCase()})
+              </div>
+            </div>
+          )}
           {step === 1 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>Business Information</div>
