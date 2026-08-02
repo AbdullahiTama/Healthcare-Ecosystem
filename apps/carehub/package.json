@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@care-ecosystem/shared-marketplace": "file:../../packages/shared-marketplace",
     "@care-ecosystem/shared-notifications": "file:../../packages/shared-notifications",
     "@supabase/supabase-js": "^2.45.0",
     "gsap": "^3.15.0",

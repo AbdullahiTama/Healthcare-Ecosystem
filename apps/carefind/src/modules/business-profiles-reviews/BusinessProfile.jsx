@@ -9,6 +9,8 @@ import {
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import { distanceLabel } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
@@ -180,6 +182,7 @@ function BusinessProfile() {
   const [comment, setComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const toast = useToast()
+  const { coords: userCoords } = useGeolocation()
 
   async function loadAll() {
     setLoading(true)
@@ -461,6 +464,7 @@ function BusinessProfile() {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
                     {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
                     {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
+                    {(() => { const dist = distanceLabel(p, userCoords); return dist ? <Pill label={dist} type="gray" style={{ fontSize: 9.5 }} /> : null })()}
                   </div>
                   <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
                     <Star size={11} aria-hidden="true" /> See reviews

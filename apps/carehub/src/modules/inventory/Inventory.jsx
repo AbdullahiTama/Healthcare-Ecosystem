@@ -6,6 +6,7 @@ import {
 import { getProducts, addProduct, updateProduct, deleteProduct, deleteProductsBulk } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
+import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findDuplicate, findAllDuplicateGroups } from '../../lib/productMatches'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -614,16 +615,34 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
-  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true })
+  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
   const canEditPrice = !isEdit || perms?.canEditPrice
 
+  const isService = (form.cat || form.category) === 'Services'
+  const hasSaleFields = !isService
+
+  const setSaleType = (t) => {
+    const currentUnit = form.price_unit
+    f('sale_type', t)
+    if (!isUnitValidForSaleType(currentUnit, t)) f('price_unit', '')
+  }
+
   const save = async () => {
     if (!form.name || !form.price) { showToast('Please enter product name and selling price.', { type: 'warning' }); return }
+    const listedOnCareFind = form.list_on_carefind !== false
+    if (hasSaleFields && listedOnCareFind && form.price_unit && !isUnitValidForSaleType(form.price_unit, form.sale_type || 'retail')) {
+      showToast(saleUnitError(form.price_unit, form.sale_type || 'retail'), { type: 'error' })
+      return
+    }
     setSaving(true)
-    await onSave({ ...form, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: (form.cat || form.category) === 'Services' ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines' })
+    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, ...restForm } = form
+    const saleData = hasSaleFields
+      ? { sale_type: form.sale_type || 'retail', price_unit: form.price_unit || null, min_purchase: form.min_purchase ? Number(form.min_purchase) : null }
+      : {}
+    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines' })
     setSaving(false)
   }
 
@@ -651,6 +670,34 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           </div>
         )}
         <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
+        {!isService && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Sel
+              label='Sale Type'
+              value={form.sale_type || 'retail'}
+              onChange={setSaleType}
+              options={SALE_TYPES.map(t => ({ value: t, label: SALE_TYPE_LABELS[t] || t }))}
+              placeholder='Retail'
+            />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Sel
+                label='Price is per'
+                value={form.price_unit || ''}
+                onChange={v => f('price_unit', v)}
+                options={unitsForSaleType(form.sale_type || 'retail').map(u => ({ value: u, label: unitLabel(u) }))}
+                placeholder='Choose unit'
+              />
+              <Inp
+                label='Min purchase'
+                value={form.min_purchase}
+                onChange={v => f('min_purchase', v)}
+                type='number'
+                min='0'
+                placeholder={form.price_unit ? `In ${form.price_unit}s` : '0'}
+              />
+            </div>
+          </div>
+        )}
         <Toggle label='List on CareFind' desc='Show this product publicly on CareFind so patients can search for it' value={form.list_on_carefind !== false} onChange={v => f('list_on_carefind', v)} />
       </div>
     </Modal>

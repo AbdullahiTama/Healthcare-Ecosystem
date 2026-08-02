@@ -21,7 +21,7 @@ Only **two relationships in the entire CareHub codebase are proven** (via PostgR
 ## Shared Tables — What's Actually Shared vs. Owned
 
 - **`businesses`** — CareHub writes core fields; CareFind's `Search.jsx`/`BusinessProfile.jsx` read (filtered `visible_on_carefind`); CareFind's own `AdminPanel.jsx` also *writes* to it (`approveClaim()` sets `visible_on_carefind = true`).
-- **`products`** — CareHub owns core fields; CareFind reads additional marketplace columns (`whatsapp`, `image_url`, `sale_type`, `price_unit`, `min_purchase`, `seller_location`) that **have no confirmed write path anywhere in CareHub's own product-editing UI**.
+- **`products`** — CareHub owns core fields; CareFind reads additional marketplace columns (`whatsapp`, `image_url`, `sale_type`, `price_unit`, `min_purchase`, `seller_location`). `sale_type`/`price_unit`/`min_purchase` now have CareHub-side writers: CareHub's inventory `ProductModal` (plus CareFind's own `ProductUpload.jsx`), gated by the shared `@care-ecosystem/shared-marketplace` rules. `whatsapp`/`image_url`/`seller_location` are authored from CareFind's seller flow only.
 - **`staff_claims`** — the ecosystem's one genuinely well-designed cross-product workflow: CareFind users submit claims, CareHub's `Staff.jsx` approves/rejects them.
 - **`business_claims`** — CareFind users claim a business; CareFind's own admin panel approves and writes back into CareHub's `businesses` table.
 

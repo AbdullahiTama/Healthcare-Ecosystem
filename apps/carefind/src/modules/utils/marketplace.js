@@ -1,6 +1,20 @@
 // Shared marketplace helpers: price visibility, sale-type tagging and
 // distance calculation. Single definitions so every buyer view (Search,
-// DrugProfile, featured rails, seller dashboards) renders the same way.
+// product detail, featured rails, seller dashboards) renders the same way.
+
+// Sale types, their labels and the allowed unit-per-sale-type matrix come
+// from the shared package so CareHub and CareFind are always in agreement.
+export {
+  SALE_TYPES,
+  SALE_TYPE_LABELS,
+  UNITS_BY_SALE_TYPE,
+  ALL_UNITS,
+  UNIT_LABELS,
+  unitsForSaleType,
+  isUnitValidForSaleType,
+  unitLabel,
+  saleUnitError,
+} from '@care-ecosystem/shared-marketplace'
 
 // A product shows its price only when the seller has not turned the
 // price-visibility toggle off (show_price defaults to true) AND a price
@@ -47,16 +61,6 @@ export function distanceLabel(product, userCoords) {
   return formatDistance(haversineMeters(userCoords.lat, userCoords.lng, coords.lat, coords.lng))
 }
 
-export const SALE_TYPES = ['retail', 'wholesale', 'distributor']
-
-export const SALE_TYPE_LABELS = {
-  retail: 'Retail',
-  wholesale: 'Wholesale',
-  distributor: 'Distributor',
-}
-
-// Pill colours per sale type (distributor joins wholesale in purple family
-// to stay in the two-tint system, ACCESSIBILITY.md: never colour-only).
 export function saleTypeColor(type) {
   if (type === 'wholesale' || type === 'distributor') return '#7c3aed'
   return '#0E6F5A'

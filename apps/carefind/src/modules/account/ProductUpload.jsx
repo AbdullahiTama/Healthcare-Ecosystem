@@ -4,7 +4,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { Camera, Check, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { SALE_TYPES } from '../utils/marketplace.js'
+import { SALE_TYPES, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '../utils/marketplace.js'
 import { Toast, useToast } from '../../components/ui'
 
 // Verified sellers list up to 20 products free; 21+ needs a subscription.
@@ -65,6 +65,11 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
   async function save() {
     if (!name.trim()) { setError('Product name is required.'); return }
     if (showPrice && (!price || isNaN(Number(price)))) { setError('Enter a valid price, or turn the price toggle off to show "Ask for price".'); return }
+    if (showPrice && !priceUnit) { setError('Choose a unit under "Price is per".'); return }
+    if (showPrice && priceUnit && !isUnitValidForSaleType(priceUnit, saleType)) {
+      setError(saleUnitError(priceUnit, saleType))
+      return
+    }
     setSaving(true); setError('')
     let imageUrl = null
     if (image) {
@@ -156,14 +161,14 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
             <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Sale type</p>
             <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
               {SALE_TYPES.map(t => (
-                <button key={t} onClick={() => setSaleType(t)} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, textTransform: 'capitalize', background: saleType === t ? theme.tealDeep : theme.bg, color: saleType === t ? '#fff' : theme.textMid }}>{t}</button>
+                <button key={t} onClick={() => { setSaleType(t); if (!isUnitValidForSaleType(priceUnit, t)) setPriceUnit('') }} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, textTransform: 'capitalize', background: saleType === t ? theme.tealDeep : theme.bg, color: saleType === t ? '#fff' : theme.textMid }}>{t}</button>
               ))}
             </div>
 
-            {/* Price per unit */}
+            {/* Price per unit — only the units allowed for the chosen sale type */}
             <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Price is per</p>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-              {['card', 'box', 'roll', 'carton', 'bottle', 'sachet', 'pack', 'piece'].map(u => (
+              {unitsForSaleType(saleType).map(u => (
                 <button key={u} onClick={() => setPriceUnit(u)} style={{ padding: '7px 12px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, textTransform: 'capitalize', background: priceUnit === u ? theme.tealDeep : theme.bg, color: priceUnit === u ? '#fff' : theme.textMid }}>{u}</button>
               ))}
             </div>
