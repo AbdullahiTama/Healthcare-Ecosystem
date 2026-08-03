@@ -54,6 +54,21 @@ Core Modules:
 
 ---
 
+## Testing
+
+Each workspace has its own Vitest setup — run from that directory:
+
+| Area | Command |
+|---|---|
+| `apps/carehub` | `npm test` |
+| `apps/carefind` | `npm test` (or `npm run test:watch`) |
+| `packages/shared-marketplace` | `npm test` |
+| `packages/shared-notifications` | `npm test` |
+
+Tests verify behavior through public interfaces (integration-style), not implementation details — see `planning/CODE_AUDIT.md` for open audit items.
+
+---
+
 ## Engineering Philosophy
 
 This project prioritizes:
