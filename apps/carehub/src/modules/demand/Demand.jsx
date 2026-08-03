@@ -10,7 +10,7 @@ import {
 } from '../../services/supabase'
 import { fmt, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
 
