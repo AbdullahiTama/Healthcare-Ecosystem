@@ -5,7 +5,8 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import { Toast, useToast } from '../../components/ui'
-import { getProducts, cacheData, getCached, syncOfflineSales, getRoles } from '../../services/supabase'
+import { getProducts, cacheData, getCached, getRoles } from '../../services/supabase'
+import { saleRepository } from '../../modules/pos/repositories'
 import { getNavItems, getPerms } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -94,7 +95,7 @@ export default function BusinessDashboard() {
     if (!brand?.id) return
     loadProducts()
     if (navigator.onLine) {
-      syncOfflineSales(brand.id).then(n => { if (n > 0) showToast(n + ' offline sale(s) synced!') })
+      saleRepository.syncQueued(brand.id).then(n => { if (n > 0) showToast(n + ' offline sale(s) synced!') })
     }
   }, [brand?.id])
 
@@ -116,7 +117,7 @@ export default function BusinessDashboard() {
 
   const handleSync = async () => {
     setSyncing(true)
-    const n = await syncOfflineSales(brand?.id)
+    const n = await saleRepository.syncQueued(brand?.id)
     showToast(n > 0 ? n + ' sale(s) synced!' : 'All sales already synced.')
     setSyncing(false)
   }

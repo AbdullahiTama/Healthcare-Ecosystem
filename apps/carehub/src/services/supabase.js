@@ -135,7 +135,12 @@ export async function getSales(businessId, filters = {}) {
   return sbFetch(query)
 }
 export async function addSale(data) { return sbFetch('sales', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateSale(id, data) { return sbFetch('sales?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+// NOTE: `updateSale(id, data)` used to live here — a PATCH on the sales table
+// filtered by id alone. POS was its only caller and now goes through
+// modules/pos/repositories, which scopes by business_id too, so it was removed
+// rather than left as an unscoped write on the money table.
+// getSales/getTodaySales/addSale stay: DashboardHome, Reports, Locations and
+// PharmacyForm still import them.
 export async function getTodaySales(businessId) {
   const today = new Date().toISOString().split('T')[0]
   return sbFetch('sales?business_id=eq.' + businessId + '&created_at=gte.' + today + 'T00:00:00&is_on_hold=eq.false&order=created_at.desc&select=*')
@@ -721,31 +726,8 @@ export function cacheData(key, data) {
 export function getCached(key) {
   try { const d = localStorage.getItem(CACHE + '_' + key); return d ? JSON.parse(d) : null } catch (e) { return null }
 }
-export function queueOfflineSale(sale) {
-  try {
-    const q = JSON.parse(localStorage.getItem(CACHE + '_offline_sales') || '[]')
-    q.push({ ...sale, _offline_id: Date.now() })
-    localStorage.setItem(CACHE + '_offline_sales', JSON.stringify(q))
-  } catch (e) {}
-}
-export function getOfflineQueue() {
-  try { return JSON.parse(localStorage.getItem(CACHE + '_offline_sales') || '[]') } catch (e) { return [] }
-}
-export function clearOfflineQueue() {
-  try { localStorage.removeItem(CACHE + '_offline_sales') } catch (e) {}
-}
-export async function syncOfflineSales(businessId) {
-  if (!navigator.onLine) return 0
-  const queue = getOfflineQueue()
-  if (!queue.length) return 0
-  let count = 0
-  for (const sale of queue) {
-    try {
-      const { _offline_id, ...data } = sale
-      await addSale({ ...data, business_id: businessId })
-      count++
-    } catch (e) {}
-  }
-  if (count > 0) clearOfflineQueue()
-  return count
-}
+// The offline sale queue (queueOfflineSale/getOfflineQueue/clearOfflineQueue/
+// syncOfflineSales) moved to modules/pos/repositories, where it sits next to
+// the sale writes it backs. The localStorage key is unchanged, so sales already
+// queued on a device still replay. cacheData/getCached above stay here: they
+// cache products for the whole dashboard, not just sales.

@@ -4,7 +4,10 @@ import {
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
   DollarSign, Repeat, Divide, Search, Package, Clipboard,
 } from 'lucide-react'
-import { addSale, updateSale, getSales, getTodaySales, getSettings, queueOfflineSale, getOfflineQueue, recordUnderpayment, updateDebt, getClients, getLatestConsultation } from '../../services/supabase'
+import { saleRepository } from './repositories'
+// Cross-aggregate reads/writes owned by modules that have not adopted the
+// repository seam yet (settings, clients, consultations, debts).
+import { getSettings, recordUnderpayment, updateDebt, getClients, getLatestConsultation, getDebts } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
@@ -72,7 +75,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   async function loadSalesData() {
     setLoadingSales(true)
     try {
-      const [today, all] = await Promise.all([getTodaySales(brand.id), getSales(brand.id)])
+      const [today, all] = await Promise.all([saleRepository.getToday(brand.id), saleRepository.getAll(brand.id)])
       setTodaySales(today || [])
       setAllSales(all || [])
       setHeldSales((all || []).filter(s => s.is_on_hold))
@@ -122,20 +125,18 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   // sales list as a phantom "resumed" entry.
   async function finishResumedSale() {
     if (!resumedSaleId) return
-    try { await updateSale(resumedSaleId, { is_on_hold: false, status: 'deleted' }) } catch (e) {}
+    try { await saleRepository.update(resumedSaleId, brand.id, { is_on_hold: false, status: 'deleted' }) } catch (e) {}
     setResumedSaleId(null)
   }
 
+  // The repository decides whether the sale reaches the database or the offline
+  // queue; the page only reports what happened. A queued-on-error sale stays
+  // silent, exactly as before — the cashier is told nothing failed because
+  // nothing was lost.
   async function saveSale(saleData) {
-    try {
-      if (navigator.onLine) {
-        await addSale({ ...saleData, business_id: brand.id })
-      } else {
-        queueOfflineSale({ ...saleData, business_id: brand.id })
-        showToast('Sale saved offline — will sync when connected', { type: 'info' })
-      }
-    } catch (e) {
-      queueOfflineSale({ ...saleData, business_id: brand.id })
+    const { queued, reason } = await saleRepository.create(brand.id, saleData)
+    if (queued && reason === 'offline') {
+      showToast('Sale saved offline — will sync when connected', { type: 'info' })
     }
   }
 
@@ -285,7 +286,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const sale = deleteHeldTarget
     setDeleteHeldTarget(null)
     try {
-      await updateSale(sale.id, { is_on_hold: false, status: 'deleted' })
+      await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'deleted' })
       showToast('Held sale deleted.', { type: 'success' })
       loadSalesData()
     } catch (e) { showToast('Could not delete held sale. Please try again.', { type: 'error' }) }
@@ -296,7 +297,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     try { items = JSON.parse(sale.items || '[]') } catch (e) {}
     setCart(items)
     setClient(sale.client_name || 'Walk-in')
-    try { await updateSale(sale.id, { is_on_hold: false, status: 'resumed' }) } catch (e) {}
+    try { await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'resumed' }) } catch (e) {}
     setView('pos')
     setResumedSaleId(sale.id)
     loadSalesData()
@@ -305,10 +306,10 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   async function collectCredit(sale, amount) {
     const newPaid = (sale.amount_paid || 0) + parseFloat(amount)
     const newBalance = sale.total - newPaid
-    await updateSale(sale.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
+    await saleRepository.update(sale.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
     // AUTO-UPDATE matching debt
     try {
-      const debts = await import('../../services/supabase').then(m => m.getDebts(brand.id))
+      const debts = await getDebts(brand.id)
       const matchDebt = debts.find(d => d.source === 'credit_sale' && d.source_ref === sale.txn_no && d.status !== 'paid')
       if (matchDebt) {
         await updateDebt(matchDebt.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), status: newBalance <= 0 ? 'paid' : 'pending' })
