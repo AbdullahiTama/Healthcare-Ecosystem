@@ -119,6 +119,45 @@ describe('saleRepository', () => {
     expect(offline.all()).toHaveLength(0)
   })
 
+  // A partial sync used to clear the whole queue as long as one sale landed,
+  // destroying the sales that never reached the database — real money, gone.
+  it('syncQueued keeps the sales that failed and drops only the ones that landed', async () => {
+    const offline = createMemoryOfflineQueue([
+      { txn_no: 'TXN-ok-1', total: 100 },
+      { txn_no: 'TXN-bad', total: 200 },
+      { txn_no: 'TXN-ok-2', total: 300 },
+    ])
+    const written = []
+    const repo = createSaleRepository({
+      request: async (path, options) => {
+        const row = JSON.parse(options.body)
+        if (row.txn_no === 'TXN-bad') throw new Error('rejected by server')
+        written.push(row)
+        return [row]
+      },
+      offline,
+      isOnline: () => true,
+    })
+
+    const count = await repo.syncQueued(A)
+
+    expect(count).toBe(2)
+    expect(written.map((r) => r.txn_no)).toEqual(['TXN-ok-1', 'TXN-ok-2'])
+    // the rejected sale is still queued, and will be retried
+    expect(offline.all().map((s) => s.txn_no)).toEqual(['TXN-bad'])
+  })
+
+  it('syncQueued leaves the queue intact when every sale fails', async () => {
+    const offline = createMemoryOfflineQueue([{ txn_no: 'TXN-1' }, { txn_no: 'TXN-2' }])
+    const repo = createSaleRepository({
+      request: async () => { throw new Error('server down') },
+      offline,
+      isOnline: () => true,
+    })
+    expect(await repo.syncQueued(A)).toBe(0)
+    expect(offline.all()).toHaveLength(2)
+  })
+
   it('syncQueued is a no-op while offline, so the queue survives', async () => {
     const { repo, client, offline } = build({ online: false, queued: [{ txn_no: 'TXN-1' }] })
     expect(await repo.syncQueued(A)).toBe(0)

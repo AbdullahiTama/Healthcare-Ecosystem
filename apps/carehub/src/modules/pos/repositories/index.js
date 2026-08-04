@@ -121,19 +121,29 @@ export function createSaleRepository({
 
     // Replays queued sales and returns how many landed. Called on dashboard
     // mount and from the manual Sync button.
+    //
+    // Only the sales that actually synced are removed. The previous
+    // implementation cleared the whole queue whenever at least one succeeded,
+    // so a partial failure — three of five accepted, two rejected — destroyed
+    // the two that never reached the database. Failures stay queued and are
+    // retried on the next sync.
     async syncQueued(businessId) {
       if (!isOnline()) return 0
       const queue = offline.all()
       if (!queue.length) return 0
+
+      const unsynced = []
       let count = 0
       for (const sale of queue) {
         try {
           const { _offline_id, ...data } = sale
           await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: businessId }) })
           count++
-        } catch (e) {}
+        } catch (e) {
+          unsynced.push(sale)
+        }
       }
-      if (count > 0) offline.replace([])
+      if (count > 0) offline.replace(unsynced)
       return count
     },
   }
