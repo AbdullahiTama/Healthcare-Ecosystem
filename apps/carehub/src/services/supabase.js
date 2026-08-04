@@ -11,7 +11,7 @@ async function authToken() {
   return data?.session?.access_token || SB_KEY
 }
 
-async function sbFetch(path, options = {}) {
+export async function sbFetch(path, options = {}) {
   const res = await fetch(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {

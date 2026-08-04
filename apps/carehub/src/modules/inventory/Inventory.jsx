@@ -3,7 +3,7 @@ import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus,
 } from 'lucide-react'
-import { getProducts, addProduct, updateProduct, deleteProduct, deleteProductsBulk } from '../../services/supabase'
+import { productRepository } from './repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -53,7 +53,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   async function reload() {
     try {
-      const p = await getProducts(brand.id)
+      const p = await productRepository.getAll(brand.id)
       if (Array.isArray(p)) setProducts(p)
       if (loadProducts) loadProducts()
     } catch (e) {
@@ -89,10 +89,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       if (isEdit) {
-        await updateProduct(data.id, productData)
+        await productRepository.update(data.id, brand.id, productData)
         showToast('Product updated!', { type: 'success' })
       } else {
-        await addProduct({ ...productData, business_id: brand.id })
+        await productRepository.create(brand.id, productData)
         showToast('Product added!', { type: 'success' })
       }
       await reload()
@@ -107,7 +107,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     if (!duplicateWarning) return
     try {
       const { existing, incoming } = duplicateWarning
-      await updateProduct(existing.id, {
+      await productRepository.update(existing.id, brand.id, {
         price: incoming.price,
         cost_price: incoming.cost_price,
         stock: (existing.stock || 0) + (incoming.stock || 0),
@@ -152,7 +152,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       const UPDATE_BATCH_SIZE = 25
       for (let i = 0; i < updates.length; i += UPDATE_BATCH_SIZE) {
         const batch = updates.slice(i, i + UPDATE_BATCH_SIZE)
-        await Promise.all(batch.map(u => updateProduct(u.id, { stock: u.stock })))
+        await Promise.all(batch.map(u => productRepository.update(u.id, brand.id, { stock: u.stock })))
         showToast('Updating products... ' + Math.min(i + UPDATE_BATCH_SIZE, updates.length) + ' / ' + updates.length, { type: 'info' })
       }
 
@@ -161,7 +161,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       let deletedSoFar = 0
       for (let i = 0; i < idsToDelete.length; i += DELETE_BATCH_SIZE) {
         const batch = idsToDelete.slice(i, i + DELETE_BATCH_SIZE)
-        await deleteProductsBulk(batch)
+        await productRepository.deleteBulk(batch, brand.id)
         deletedSoFar += batch.length
         showToast('Removing duplicates... ' + deletedSoFar + ' / ' + idsToDelete.length, { type: 'info' })
       }
@@ -180,12 +180,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await deleteProduct(id); await reload(); showToast('Product deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete product. Please try again.', { type: 'error' }) }
+    try { await productRepository.delete(id, brand.id); await reload(); showToast('Product deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete product. Please try again.', { type: 'error' }) }
   }
 
   async function handleRestock(product, qty, note) {
     try {
-      await updateProduct(product.id, { stock: (product.stock || 0) + parseInt(qty) })
+      await productRepository.update(product.id, brand.id, { stock: (product.stock || 0) + parseInt(qty) })
       await reload()
       showToast(qty + ' units added to ' + product.name, { type: 'success' })
     } catch (e) { showToast('Could not update stock. Please try again.', { type: 'error' }) }
@@ -193,7 +193,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   async function toggleCareFind(product) {
     try {
-      await updateProduct(product.id, { list_on_carefind: !product.list_on_carefind })
+      await productRepository.update(product.id, brand.id, { list_on_carefind: !product.list_on_carefind })
       await reload()
     } catch (e) {}
   }
@@ -282,7 +282,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     for (let i = 0; i < fresh.length; i += BATCH) {
       const batch = fresh.slice(i, i + BATCH)
       const results = await Promise.all(batch.map(p =>
-        addProduct(p).then(() => ({ ok: true })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
+        productRepository.create(brand.id, p).then(() => ({ ok: true })).catch(err => ({ ok: false, name: p.name, msg: err.message }))
       ))
       for (const r of results) {
         if (r.ok) added++

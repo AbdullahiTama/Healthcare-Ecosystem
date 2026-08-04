@@ -149,7 +149,7 @@ export function useInventory(businessId, brand) {
       let deletedSoFar = 0
       for (let i = 0; i < idsToDelete.length; i += DELETE_BATCH_SIZE) {
         const batch = idsToDelete.slice(i, i + DELETE_BATCH_SIZE)
-        await productRepository.deleteBulk(batch)
+        await productRepository.deleteBulk(batch, businessId)
         deletedSoFar += batch.length
         toast.show('Removing duplicates... ' + deletedSoFar + ' / ' + idsToDelete.length, { type: 'info' })
       }
