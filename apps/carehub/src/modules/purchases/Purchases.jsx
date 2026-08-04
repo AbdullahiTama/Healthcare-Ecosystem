@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Truck, CreditCard, Hourglass, Search, Plus, X } from 'lucide-react'
-import { getPurchases, addPurchase, updatePurchase, recordUnderpayment, updateDebt, getDebts, getProducts, updateProduct, addProduct } from '../../services/supabase'
+import { getPurchases, addPurchase, updatePurchase, recordUnderpayment, updateDebt, getDebts } from '../../services/supabase'
+// Product writes go through the inventory seam: replenishment must be atomic
+// now that sales decrement stock server-side (C5/C12).
+import { productRepository } from '../inventory/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { findDuplicate } from '../../lib/productMatches'
 import { PRODUCT_CATS } from '../../config/constants'
@@ -38,7 +41,7 @@ export default function Purchases({ brand, role, perms }) {
   useEffect(() => { load() }, [brand?.id])
   useEffect(() => {
     let live = true
-    getProducts(brand.id).then(p => { if (live) setInventory(p || []) }).catch(() => {})
+    productRepository.getAll(brand.id).then(p => { if (live) setInventory(p || []) }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
 
@@ -88,14 +91,15 @@ export default function Purchases({ brand, role, perms }) {
         const existing = findDuplicate(inventory, item.name.trim(), '', null)
         try {
           if (existing) {
-            await updateProduct(existing.id, {
-              stock: (existing.stock || 0) + qty,
-              cost_price: cost,
-            })
+            // Stock is incremented in the database, not read-modify-written
+            // here — a till selling this product concurrently must not have its
+            // decrement clobbered. cost_price is a plain overwrite, so it has
+            // no such race and stays a normal scoped update.
+            await productRepository.incrementStock(existing.id, brand.id, qty)
+            await productRepository.update(existing.id, brand.id, { cost_price: cost })
             updated++
           } else {
-            await addProduct({
-              business_id: brand.id,
+            await productRepository.create(brand.id, {
               name: item.name.trim(),
               category: item.cat || 'Medicines',
               price: Math.ceil(cost * NEW_PRODUCT_MARKUP),
@@ -111,7 +115,7 @@ export default function Purchases({ brand, role, perms }) {
         }
       }
       if (created > 0 || updated > 0) {
-        getProducts(brand.id).then(setInventory).catch(() => {})
+        productRepository.getAll(brand.id).then(setInventory).catch(() => {})
       }
 
       // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically

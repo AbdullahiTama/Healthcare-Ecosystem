@@ -1,11 +1,38 @@
 -- ============================================================================
 -- C5 — make a sale actually decrement stock (and make replenishment atomic)
 --
--- STATUS: DRAFT. NOT APPLIED TO PRODUCTION.
--- Do not run this without explicit authorization, same as phase2_rls_pilot.sql
--- and carefind_rls_hardening.sql before it. When it is applied, apply it as a
--- TRACKED migration so it lands in supabase_migrations.schema_migrations —
--- untracked direct changes are what produced C16 and C17.
+-- STATUS: APPLIED TO PRODUCTION 2026-08-04, on explicit user authorization.
+-- Applied as TRACKED migrations via the Supabase MCP connector, so they are
+-- recorded in supabase_migrations.schema_migrations rather than being untracked
+-- direct changes (the failure mode behind C16 and C17):
+--   1. sale_stock_movement_and_atomic_replenishment   — the objects below
+--   2. restrict_increment_product_stock_to_authenticated — ACL follow-up, see note
+--
+-- ACL FOLLOW-UP (why there are two migrations, not one)
+-- -----------------------------------------------------
+-- The REVOKE ALL ON FUNCTION ... FROM PUBLIC below did not produce the intended
+-- ACL on its own: Supabase's default privileges grant EXECUTE on new public
+-- functions to anon/authenticated/service_role at creation time, which re-added
+-- anon after the revoke ran. A second migration revoked anon explicitly.
+-- Verified after: acl = postgres | authenticated | service_role.
+-- This was never a live hole (increment_product_stock is SECURITY INVOKER, so
+-- an anon caller has no current_business_ids() and matches zero rows) — but the
+-- lesson generalises: after any GRANT/REVOKE here, re-read proacl rather than
+-- trusting the statement to be the final word.
+--
+-- VERIFIED IN PRODUCTION, end to end, 2026-08-04
+-- -----------------------------------------------
+-- Run inside a DO block that raised at the end, so the test sale rolled back
+-- and never entered the sales ledger (confirmed after: stock restored to its
+-- original value, zero TRIGGER-SELFTEST rows remaining):
+--   product stock before                          6500
+--   after a completed sale of qty 3               6497   (decremented exactly 3)
+--   after a HELD sale of qty 3                    6497   (unchanged, as intended)
+-- The test deliberately used the double-encoded items shape the app writes, so
+-- the branch that would have silently no-opped is the one that was proven.
+--
+-- Advisors re-run after applying: identical to the pre-change baseline. Neither
+-- new function appears (both SECURITY INVOKER with a pinned search_path).
 --
 -- WHAT THIS FIXES
 -- ---------------

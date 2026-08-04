@@ -55,6 +55,30 @@ export function createProductRepository(request = sbFetch) {
       })
     },
 
+    // Atomic replenishment via the increment_product_stock RPC (C5/C12,
+    // 20260804_sale_stock_movement.sql). Purchases used to read stock, add the
+    // quantity in JavaScript and write an absolute value back — against the
+    // sale_stock_movement trigger that is a lost update, so recording a
+    // purchase while a till sold the same product silently restored the sold
+    // units. The RPC does `stock = stock + qty` inside the database instead.
+    //
+    // The RPC is SECURITY INVOKER, so products' RLS still scopes it; passing
+    // businessId keeps the filter explicit on this side too.
+    async incrementStock(productId, businessId, qty) {
+      if (!qty || qty <= 0) return null
+      const result = await request('rpc/increment_product_stock', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_product_id: productId,
+          p_business_id: businessId,
+          p_qty: qty,
+        }),
+      })
+      // PostgREST returns the scalar the function returns — the new stock
+      // level, or null when no row matched (wrong tenant, deleted product).
+      return Array.isArray(result) ? result[0] : result
+    },
+
     async getStockBatches(businessId) {
       return request(`stock_batches?business_id=eq.${businessId}&order=expiry_date.asc.nullslast&select=*`)
     },

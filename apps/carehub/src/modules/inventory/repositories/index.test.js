@@ -90,8 +90,39 @@ describe('productRepository', () => {
     expect(repo.updateStock).toBeUndefined()
   })
 
+  // ── Atomic replenishment (C5/C12) ──────────────────────────────────────────
+  // The point of this method is that the addition happens in the database, not
+  // in JavaScript — a read-modify-write here would clobber the sale trigger's
+  // decrement. So the assertion is about the call it makes, not a resulting
+  // row: it must post to the RPC with the tenant and quantity, and never read
+  // stock first.
+  it('incrementStock calls the RPC with the tenant and quantity, reading nothing first', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path, options) => {
+      calls.push({ path, method: options?.method, body: options?.body ? JSON.parse(options.body) : null })
+      return 12
+    })
+
+    const newStock = await repo.incrementStock('prod-1', A, 5)
+
+    expect(calls).toHaveLength(1) // no read-modify-write
+    expect(calls[0].path).toBe('rpc/increment_product_stock')
+    expect(calls[0].method).toBe('POST')
+    expect(calls[0].body).toEqual({ p_product_id: 'prod-1', p_business_id: A, p_qty: 5 })
+    expect(newStock).toBe(12)
+  })
+
+  it('incrementStock is a no-op for a zero or negative quantity', async () => {
+    let called = false
+    const repo = createProductRepository(async () => { called = true; return null })
+    expect(await repo.incrementStock('prod-1', A, 0)).toBeNull()
+    expect(await repo.incrementStock('prod-1', A, -3)).toBeNull()
+    expect(called).toBe(false)
+  })
+
   it('exports a default productRepository instance', () => {
     expect(typeof productRepository.getAll).toBe('function')
     expect(typeof productRepository.deleteBulk).toBe('function')
+    expect(typeof productRepository.incrementStock).toBe('function')
   })
 })

@@ -232,7 +232,11 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       is_on_hold: false,
     }
     setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
-    setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && p.cat !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
+    // `p.cat` was always undefined here — the column is `category` (Inventory
+    // strips `cat` on write), so Services lines were decremented on this path
+    // but not in charge(). Both now agree, and both are display-only: the
+    // authoritative decrement is the sale_stock_movement trigger.
+    setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
     await saveSale(saleData)
     await finishResumedSale()
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
