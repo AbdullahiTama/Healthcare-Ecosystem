@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Users, UserPlus, DollarSign, Search, Download, ShoppingCart, Calendar, Landmark, Clipboard, History } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { getClients, addClient, updateClient, getSalesByClient, getAppointmentsByClient, getDebtsByClient, getConsultationsByClient } from '../../services/supabase'
+import { clientRepository } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -116,17 +116,17 @@ export default function Clients({ brand, role, perms }) {
 
   // Dedicated raw lists for the timeline merge + "currently on" traceability.
   useEffect(() => {
-    if (!selected?.id) { setClientSales([]); setClientConsults([]); return }
+    if (!selected?.id || !brand?.id) { setClientSales([]); setClientConsults([]); return }
     let live = true
-    getSalesByClient(selected.id).then(s => { if (live) setClientSales(s || []) }).catch(() => { if (live) setClientSales([]) })
-    getConsultationsByClient(selected.id).then(c => { if (live) setClientConsults(c || []) }).catch(() => { if (live) setClientConsults([]) })
+    clientRepository.getSales(selected.id, brand.id).then(s => { if (live) setClientSales(s || []) }).catch(() => { if (live) setClientSales([]) })
+    clientRepository.getConsultations(selected.id, brand.id).then(c => { if (live) setClientConsults(c || []) }).catch(() => { if (live) setClientConsults([]) })
     return () => { live = false }
-  }, [selected?.id])
+  }, [selected?.id, brand?.id])
 
   // Full per-client history across POS, appointments, consultations and debts,
   // linked via the client_id columns (20260801_customer_and_requisition_modules.sql).
   useEffect(() => {
-    if (!selected?.id) { setHistory([]); return }
+    if (!selected?.id || !brand?.id) { setHistory([]); return }
     let live = true
     setHistoryLoading(true)
     if (historyTab === 'timeline') {
@@ -137,14 +137,17 @@ export default function Clients({ brand, role, perms }) {
       if (live) { setHistory(merged); setHistoryLoading(false) }
       return () => { live = false }
     }
-    const fetchHistory = historyTab === 'sales' ? getSalesByClient : historyTab === 'appointments' ? getAppointmentsByClient : historyTab === 'consultations' ? getConsultationsByClient : getDebtsByClient
-    fetchHistory(selected.id).then(h => { if (live) setHistory(h || []) }).catch(() => { if (live) setHistory([]) }).finally(() => { if (live) setHistoryLoading(false) })
+    const fetchHistory = historyTab === 'sales' ? clientRepository.getSales
+      : historyTab === 'appointments' ? clientRepository.getAppointments
+      : historyTab === 'consultations' ? clientRepository.getConsultations
+      : clientRepository.getDebts
+    fetchHistory(selected.id, brand.id).then(h => { if (live) setHistory(h || []) }).catch(() => { if (live) setHistory([]) }).finally(() => { if (live) setHistoryLoading(false) })
     return () => { live = false }
-  }, [selected?.id, historyTab, clientSales, clientConsults])
+  }, [selected?.id, brand?.id, historyTab, clientSales, clientConsults])
 
   async function load() {
     setLoading(true)
-    try { const c = await getClients(brand.id); setClients(c || []) } catch (e) {}
+    try { const c = await clientRepository.getAll(brand.id); setClients(c || []) } catch (e) {}
     setLoading(false)
   }
 
@@ -152,8 +155,7 @@ export default function Clients({ brand, role, perms }) {
     if (!form.fullName || !form.phone) { showToast('Please enter client name and phone number.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      await addClient({
-        business_id: brand.id,
+      await clientRepository.create(brand.id, {
         full_name: form.fullName,
         phone: form.phone,
         email: form.email || '',

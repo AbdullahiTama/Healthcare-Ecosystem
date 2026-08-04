@@ -144,7 +144,11 @@ export async function getTodaySales(businessId) {
 // CLIENTS
 export async function getClients(businessId) { return sbFetch('clients?business_id=eq.' + businessId + '&order=full_name.asc&select=*') }
 export async function addClient(data) { return sbFetch('clients', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateClient(id, data) { return sbFetch('clients?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+// NOTE: `updateClient(id, data)` used to live here. It PATCHed `clients?id=eq.`
+// with no business filter and had zero callers app-wide — same unscoped-write
+// class as the removed inventory `updateStock`. Removed; client edits go
+// through modules/clients/repositories, which scopes by business_id.
+// getClients/addClient stay: six not-yet-migrated modules still import them.
 export async function searchClients(businessId, query) {
   return sbFetch('clients?business_id=eq.' + businessId + '&full_name=ilike.*' + encodeURIComponent(query) + '*&select=*')
 }
@@ -165,12 +169,11 @@ export async function getDebts(businessId) { return sbFetch('debts?business_id=e
 export async function addDebt(data) { return sbFetch('debts', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateDebt(id, data) { return sbFetch('debts?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
-// CLIENT HISTORY (customer database) — every touchpoint a client has had,
-// linked through the client_id columns added by
-// 20260801_customer_and_requisition_modules.sql.
-export async function getSalesByClient(clientId) { return sbFetch('sales?client_id=eq.' + clientId + '&order=created_at.desc&select=*') }
-export async function getAppointmentsByClient(clientId) { return sbFetch('appointments?client_id=eq.' + clientId + '&order=date.asc&select=*') }
-export async function getDebtsByClient(clientId) { return sbFetch('debts?client_id=eq.' + clientId + '&order=created_at.desc&select=*') }
+// CLIENT HISTORY — moved to modules/clients/repositories, which additionally
+// scopes each read by business_id (these filtered on client_id alone).
+// getSalesByClient/getAppointmentsByClient/getDebtsByClient had no callers left
+// once Clients.jsx migrated, so they were removed rather than left as unscoped
+// reads waiting to be reused.
 
 // CONSULTATIONS (skincare & pharmacy forms — 20260803_consultation_forms.sql).
 // One shared table `consultation_forms`, discriminated by consultation_type —
@@ -186,6 +189,10 @@ export async function getConsultations(businessId, filters = {}) {
   if (filters.to) query += '&consultation_date=lte.' + filters.to
   return sbFetch(query)
 }
+// Kept (unlike its sales/appointments/debts siblings) because getLatestConsultation
+// below still wraps it for POS. Both filter on client_id alone — POS only ever
+// passes an id from its own business-scoped client list, so it is not a live
+// leak, but it should take a businessId when POS adopts the repository seam.
 export async function getConsultationsByClient(clientId) { return sbFetch('consultation_forms?client_id=eq.' + clientId + '&order=consultation_date.desc&select=*') }
 export async function getLatestConsultation(clientId) {
   const data = await getConsultationsByClient(clientId)
