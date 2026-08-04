@@ -1,0 +1,80 @@
+-- ============================================================================
+-- C17 — drop the leftover, publicly-callable public.credit_wallet()
+--
+-- STATUS: APPLIED TO PRODUCTION 2026-08-04, on explicit user authorization.
+-- Applied via the Supabase MCP connector as a tracked migration
+-- (`drop_public_credit_wallet_leftover`), so it is recorded in
+-- supabase_migrations.schema_migrations rather than being yet another
+-- untracked direct change (the failure mode that produced C16).
+--
+-- WHAT WAS WRONG
+-- --------------
+-- public.credit_wallet(p_user uuid, p_coins numeric, p_reference text, p_naira integer)
+--
+--   SECURITY DEFINER
+--   ACL: =X/postgres | postgres=X/postgres | anon=X/postgres
+--        | authenticated=X/postgres | service_role=X/postgres
+--
+-- The body credited a *caller-supplied* p_user with a *caller-supplied*
+-- p_coins:
+--
+--     insert into wallets (user_id, balance) values (p_user, p_coins)
+--     on conflict (user_id) do update set balance = wallets.balance + p_coins;
+--
+-- There was no auth.uid() check, no ownership check, and no search_path. Being
+-- SECURITY DEFINER, it bypassed RLS. EXECUTE was granted to `anon`, so any
+-- holder of the public anon key — which ships in the client bundle by design —
+-- could POST /rest/v1/rpc/credit_wallet with any user id and any amount and
+-- mint wallet balance from nothing, without signing in. Combined with
+-- request_withdrawal, that is a path to real money leaving the business.
+--
+-- WHY IT EXISTED
+-- --------------
+-- It was superseded by credit_wallet_topup() in C15
+-- (wallet_payment_hardening.sql) and simply never dropped — exactly the same
+-- class of mistake as C15's own finding, where two vulnerable send_gift()
+-- overloads were left behind when the safe auth.uid()-based version shipped.
+-- Replacing a function does not remove the old one when the signature differs.
+--
+-- The successor is correctly locked down and remains in place:
+--   credit_wallet_topup(p_user_id uuid, p_coins integer, p_naira_amount integer, p_reference text)
+--     SECURITY DEFINER, SET search_path TO 'public'
+--     ACL: postgres=X/postgres | service_role=X/postgres   (no anon, no authenticated)
+--     Claims the reference atomically via ON CONFLICT rather than check-then-act.
+--
+-- Verified zero callers across the whole repository before dropping: every code
+-- path (apps/carefind/api/_lib/paystackCredit.js and its test) calls
+-- credit_wallet_topup, never credit_wallet.
+--
+-- HOW IT WAS FOUND
+-- ----------------
+-- Not by looking for it. It surfaced in a routine `get_advisors` security
+-- baseline taken before an unrelated CareHub inventory migration — the linter
+-- flagged it under anon_security_definer_function_executable. Worth noting for
+-- future passes: this advisor check earns its keep.
+-- ============================================================================
+
+DROP FUNCTION IF EXISTS public.credit_wallet(uuid, numeric, text, integer);
+
+-- ---------------------------------------------------------------------------
+-- Post-migration verification (run read-only; both were run 2026-08-04)
+-- ---------------------------------------------------------------------------
+--
+-- 1. Only the safe successor remains, still restricted:
+--
+--    select p.proname,
+--           pg_get_function_identity_arguments(p.oid) as args,
+--           p.prosecdef,
+--           array_to_string(p.proacl::text[], ' | ') as acl
+--    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+--    where n.nspname = 'public' and p.proname ilike '%credit_wallet%';
+--
+--    Result: one row — credit_wallet_topup, security_definer = true,
+--            acl = postgres=X/postgres | service_role=X/postgres
+--
+-- 2. get_advisors(security): credit_wallet no longer appears in any finding
+--    (it had appeared in three: function_search_path_mutable,
+--    anon_security_definer_function_executable, and
+--    authenticated_security_definer_function_executable). Every other finding
+--    is unchanged from the pre-drop baseline — nothing new was introduced.
+-- ---------------------------------------------------------------------------
