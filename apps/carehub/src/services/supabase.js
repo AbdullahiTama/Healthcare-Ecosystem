@@ -33,7 +33,7 @@ export async function sbFetch(path, options = {}) {
 
 // Shared by the three upload functions below — was previously triplicated
 // with the same hardcoded-anon-key header block each copy.
-async function sbUpload(bucket, path, file, contentType, errorLabel) {
+export async function sbUpload(bucket, path, file, contentType, errorLabel) {
   const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + encodeURIComponent(path), {
     method: 'POST',
     headers: {
@@ -498,132 +498,7 @@ export async function adjustStock(batch, newQty, reason, movedBy) {
   })
 }
 
-// ORDERS & LPO (rep submits, tagged manager approves, warehouse dispatches)
-export async function getOrders(businessId) {
-  return sbFetch('orders?business_id=eq.' + businessId + '&order=created_at.desc&select=*')
-}
-export async function getOrderById(id) {
-  const r = await sbFetch('orders?id=eq.' + id + '&select=*')
-  return r[0] || null
-}
-export async function getOrderItems(orderIds) {
-  if (!orderIds || orderIds.length === 0) return []
-  return sbFetch('order_items?order_id=in.(' + orderIds.join(',') + ')&select=*')
-}
-export async function getOrderWatchers(orderIds) {
-  if (!orderIds || orderIds.length === 0) return []
-  return sbFetch('order_watchers?order_id=in.(' + orderIds.join(',') + ')&select=*')
-}
-export async function getOrderFiles(orderIds) {
-  if (!orderIds || orderIds.length === 0) return []
-  return sbFetch('order_files?order_id=in.(' + orderIds.join(',') + ')&select=*')
-}
-export async function getOrderEvents(orderId) {
-  return sbFetch('order_events?order_id=eq.' + orderId + '&order=created_at.asc&select=*')
-}
-export async function addOrderEvent(data) {
-  return sbFetch('order_events', { method: 'POST', body: JSON.stringify(data) })
-}
-
-export async function uploadOrderFile(file) {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = Date.now() + '-' + Math.floor(Math.random() * 100000) + '-' + safeName
-  return sbUpload('order-files', path, file, file.type || 'application/octet-stream')
-}
-
-export async function createOrder(order, items, watchers, files) {
-  const rows = await sbFetch('orders', { method: 'POST', body: JSON.stringify(order) })
-  const saved = Array.isArray(rows) ? rows[0] : rows
-  if (!saved || !saved.id) throw new Error('Order was not saved — no id returned.')
-
-  if (items && items.length > 0) {
-    const payload = items.map(function (i) { return { ...i, order_id: saved.id } })
-    await sbFetch('order_items', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-  }
-  if (watchers && watchers.length > 0) {
-    const payload = watchers.map(function (w) { return { ...w, order_id: saved.id } })
-    await sbFetch('order_watchers', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-  }
-  if (files && files.length > 0) {
-    const payload = files.map(function (f) { return { ...f, order_id: saved.id } })
-    await sbFetch('order_files', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-  }
-
-  await addOrderEvent({
-    order_id: saved.id,
-    event_type: 'submitted',
-    note: null,
-    actor_name: order.created_by_name,
-  })
-
-  // The approver needs to act. Everyone copied just needs to know.
-  await notify(
-    order.business_id,
-    [{ staffId: order.approver_staff_id }],
-    'order_approval',
-    'Order needs your approval',
-    order.created_by_name + ' raised an order for ' + order.customer_name,
-    'orders'
-  )
-
-  if (watchers && watchers.length > 0) {
-    const cc = watchers.map(function (w) { return { staffId: w.staff_id } })
-    await notify(
-      order.business_id,
-      cc,
-      'order_copy',
-      'You were copied on an order',
-      order.created_by_name + ' raised an order for ' + order.customer_name,
-      'orders'
-    )
-  }
-
-  return saved
-}
-
-export async function advanceOrder(orderId, status, extra, actorName, note) {
-  const patch = { status: status }
-  if (extra) {
-    const keys = Object.keys(extra)
-    for (let i = 0; i < keys.length; i++) { patch[keys[i]] = extra[keys[i]] }
-  }
-  await sbFetch('orders?id=eq.' + orderId, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' })
-  await addOrderEvent({
-    order_id: orderId,
-    event_type: status,
-    note: note || null,
-    actor_name: actorName,
-  })
-
-  // Tell the rep who raised it, and everyone copied.
-  try {
-    const order = await getOrderById(orderId)
-    if (order) {
-      const watchers = await getOrderWatchers([orderId])
-      const targets = [{ staffId: order.created_by_staff_id }]
-      ;(watchers || []).forEach(function (w) {
-        targets.push({ staffId: w.staff_id })
-      })
-
-      const labels = {
-        approved: 'Order approved',
-        rejected: 'Order rejected',
-        processing: 'Order sent to warehouse',
-        dispatched: 'Order dispatched',
-        delivered: 'Order delivered',
-      }
-
-      await notify(
-        order.business_id,
-        targets,
-        'order_update',
-        labels[status] || 'Order updated',
-        actorName + ' — ' + order.customer_name + (note ? ' · ' + note : ''),
-        'orders'
-      )
-    }
-  } catch (e) {}
-}
+// ORDERS & LPO — relocated to modules/orders/repositories (createOrderRepository).
 
 // FIELD ACTIVITY (live rep activity — company-defined fields, voice notes, GPS)
 export async function getActivityFields(businessId) {

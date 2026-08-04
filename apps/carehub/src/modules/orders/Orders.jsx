@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { X, Check } from 'lucide-react'
-import { getOrders, getOrderItems, getOrderWatchers, getOrderFiles, getOrderEvents, createOrder, advanceOrder, uploadOrderFile, getStaff, getProducts, getTerritories, getEnterpriseLocations } from '../../services/supabase'
+import { orderRepository } from './repositories'
+import { productRepository } from '../inventory/repositories'
+// Cross-aggregate reads that belong to other modules' seams (not yet migrated).
+import { getStaff, getTerritories, getEnterpriseLocations } from '../../services/supabase'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
@@ -88,9 +91,9 @@ export default function Orders({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const o = await getOrders(brand.id)
+      const o = await orderRepository.getAll(brand.id)
       const s = await getStaff(brand.id)
-      const p = await getProducts(brand.id)
+      const p = await productRepository.getAll(brand.id)
       const t = await getTerritories(brand.id)
       const l = await getEnterpriseLocations(brand.id)
       setOrders(o || [])
@@ -100,7 +103,7 @@ export default function Orders({ brand }) {
       setLocations(l || [])
 
       const ids = (o || []).map(function (x) { return x.id })
-      const its = await getOrderItems(ids)
+      const its = await orderRepository.getItems(ids)
       const imap = {}
       ;(its || []).forEach(function (i) {
         if (!imap[i.order_id]) imap[i.order_id] = []
@@ -108,7 +111,7 @@ export default function Orders({ brand }) {
       })
       setItemsByOrder(imap)
 
-      const ws = await getOrderWatchers(ids)
+      const ws = await orderRepository.getWatchers(ids)
       const wmap = {}
       ;(ws || []).forEach(function (w) {
         if (!wmap[w.order_id]) wmap[w.order_id] = []
@@ -116,7 +119,7 @@ export default function Orders({ brand }) {
       })
       setWatchersByOrder(wmap)
 
-      const fs = await getOrderFiles(ids)
+      const fs = await orderRepository.getFiles(ids)
       const fmap = {}
       ;(fs || []).forEach(function (f) {
         if (!fmap[f.order_id]) fmap[f.order_id] = []
@@ -220,7 +223,7 @@ export default function Orders({ brand }) {
       for (let i = 0; i < attachments.length; i++) {
         const file = attachments[i]
         setUploadStatus('Uploading ' + (i + 1) + ' of ' + attachments.length + ' — ' + file.name)
-        const url = await uploadOrderFile(file)
+        const url = await orderRepository.uploadFile(file)
         uploaded.push({
           file_name: file.name,
           file_url: url,
@@ -249,7 +252,7 @@ export default function Orders({ brand }) {
         return { staff_id: staffIdFor(id), watcher_name: nameFor(id) }
       })
 
-      await createOrder({
+      await orderRepository.create({
         business_id: brand.id,
         order_ref: ref,
         customer_name: form.customer_name,
@@ -281,7 +284,7 @@ export default function Orders({ brand }) {
     setOpenOrder(o)
     setActionNote('')
     try {
-      const ev = await getOrderEvents(o.id)
+      const ev = await orderRepository.getEvents(o.id)
       setEvents(ev || [])
     } catch (e) {
       showToast('Could not load order history: ' + e.message, { type: 'error' })
@@ -298,7 +301,7 @@ export default function Orders({ brand }) {
   async function act(o, status, extra) {
     setActing(true)
     try {
-      await advanceOrder(o.id, status, extra, meName, actionNote)
+      await orderRepository.advance(o.id, brand.id, status, extra, meName, actionNote)
       showToast('Order ' + status, { type: 'success' })
       setOpenOrder(null)
       setActionNote('')
