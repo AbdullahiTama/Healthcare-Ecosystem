@@ -97,25 +97,10 @@ export const purchaseRepository = {
   },
 }
 
-export const expenseRepository = {
-  async getAll(businessId) {
-    return sbFetch(`expenses?business_id=eq.${businessId}&order=created_at.desc&select=*`)
-  },
-
-  async create(businessId, expense) {
-    return sbFetch('expenses', {
-      method: 'POST',
-      body: JSON.stringify({ ...expense, business_id: businessId }),
-    })
-  },
-
-  async delete(expenseId, businessId) {
-    return sbFetch(`expenses?id=eq.${expenseId}&business_id=eq.${businessId}`, {
-      method: 'DELETE',
-      prefer: 'return=minimal',
-    })
-  },
-}
+// expenseRepository moved to modules/expenses/repositories (its own aggregate).
+// purchaseRepository (above) and debtRepository (below) still live here
+// unused/misplaced — they belong in modules/purchases and modules/debts and
+// should move as those modules adopt the repository seam.
 
 export const debtRepository = {
   async getAll(businessId) {

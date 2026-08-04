@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus } from 'lucide-react'
-import { getExpenses, addExpense, deleteExpense } from '../../services/supabase'
+import { expenseRepository } from './repositories'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -52,7 +52,7 @@ export default function Expenses({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const e = await getExpenses(brand.id); setExpenses(e || []) } catch (e) {}
+    try { const e = await expenseRepository.getAll(brand.id); setExpenses(e || []) } catch (e) {}
     setLoading(false)
   }
 
@@ -60,8 +60,7 @@ export default function Expenses({ brand, role, perms }) {
     if (!form.category || !form.amount) { showToast('Please enter category and amount.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      await addExpense({
-        business_id: brand.id,
+      await expenseRepository.create(brand.id, {
         category: form.category,
         description: form.description || '',
         amount: parseFloat(form.amount) || 0,
@@ -78,7 +77,7 @@ export default function Expenses({ brand, role, perms }) {
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await deleteExpense(id); load(); showToast('Expense deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete expense. Please try again.', { type: 'error' }) }
+    try { await expenseRepository.delete(id, brand.id); load(); showToast('Expense deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete expense. Please try again.', { type: 'error' }) }
   }
 
   function saveBudgetAmount() {

@@ -1,65 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createProductRepository, productRepository } from './index.js'
-
-// ── In-memory adapter ────────────────────────────────────────────────────────
-// The repository's only outside dependency is a `request(path, options)`
-// function with sbFetch's shape. In production that transport is bound to the
-// real PostgREST-backed sbFetch; here it is bound to this in-memory adapter —
-// the second adapter that makes the seam real and turns the repository's query
-// shape and tenant scoping into the test surface.
-//
-// It understands exactly the PostgREST path shapes the product repository
-// emits: `eq.` filters, `in.(...)` id lists, `select`/`order` (ignored), and
-// the GET/POST/PATCH/DELETE verbs.
-function createInMemoryClient(seed = {}) {
-  const db = {}
-  for (const [table, rows] of Object.entries(seed)) db[table] = rows.map((r) => ({ ...r }))
-  let autoId = 1000
-
-  const parse = (path) => {
-    const [table, query = ''] = path.split('?')
-    return { table, params: new URLSearchParams(query) }
-  }
-
-  const matches = (row, params) => {
-    for (const [key, val] of params.entries()) {
-      if (key === 'select' || key === 'order') continue
-      if (val.startsWith('eq.')) {
-        if (String(row[key]) !== val.slice(3)) return false
-      } else if (val.startsWith('in.(')) {
-        const ids = val.slice(4, -1).split(',')
-        if (!ids.includes(String(row[key]))) return false
-      }
-    }
-    return true
-  }
-
-  const request = async (path, options = {}) => {
-    const method = options.method || 'GET'
-    const { table, params } = parse(path)
-    db[table] = db[table] || []
-    if (method === 'GET') return db[table].filter((r) => matches(r, params)).map((r) => ({ ...r }))
-    if (method === 'POST') {
-      const body = JSON.parse(options.body)
-      const rows = (Array.isArray(body) ? body : [body]).map((r) => ({ id: r.id ?? ++autoId, ...r }))
-      db[table].push(...rows.map((r) => ({ ...r })))
-      return rows
-    }
-    if (method === 'PATCH') {
-      const patch = JSON.parse(options.body)
-      const affected = db[table].filter((r) => matches(r, params))
-      affected.forEach((r) => Object.assign(r, patch))
-      return options.prefer === 'return=minimal' ? [] : affected.map((r) => ({ ...r }))
-    }
-    if (method === 'DELETE') {
-      db[table] = db[table].filter((r) => !matches(r, params))
-      return []
-    }
-    throw new Error('unsupported method ' + method)
-  }
-  request.rows = (table) => (db[table] || []).map((r) => ({ ...r }))
-  return request
-}
+import { createInMemoryClient } from '../../../test/inMemoryClient.js'
 
 const A = 'biz-A'
 const B = 'biz-B'
