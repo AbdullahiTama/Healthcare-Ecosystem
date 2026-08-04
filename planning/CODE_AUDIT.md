@@ -4,7 +4,9 @@ This document tracks architecture issues discovered during review.
 
 ## Critical
 
-- [ ]
+- [ ] **Selling through POS never decrements stock in the database — confirmed against the live DB (2026-08-04).** `POS.jsx` reduces stock only via `setProducts(...)` (`charge()` and `chargeCredit()`), which is React state owned by `BusinessDashboard.jsx` and re-seeded from the database by `loadProducts()` on every mount. So the decrease a cashier sees is cosmetic and is overwritten on the next page load. No client-side write touches `products.stock` on a sale: POS never calls `updateProduct`, and `stock_batches` (Stock.jsx transfer/adjust) is a separate mechanism not wired to sales. Corroborating: the inventory seam commit removed an `updateStock` that was dead and malformed — client-side stock persistence was clearly intended here and never worked.
+  **Verified server-side, not assumed:** a `pg_trigger`/`pg_proc` query against the live `carehub` project returned **zero rows** — no trigger on `sales`/`products`/`stock_batches`/`stock_movements`, and no `public` function whose body even mentions stock. Nothing decrements `products.stock` anywhere.
+  Consequences: `products.stock` is overstated by every unit ever sold; POS out-of-stock and low-stock badges, Inventory's stock/cost valuation totals, and the CareFind listing filter (`stock > 0`) are all computed from a number that only ever goes up. **Historical stock values cannot be reconstructed from `products` alone** — a fix going forward does not repair existing quantities, and any backfill would have to be derived from the `sales.items` JSON. Fix design is an open decision (trigger on `sales` vs. an RPC called by the sale repository); it also needs rules for held sales, Services-category lines, and whether stock may go negative.
 
 ---
 
