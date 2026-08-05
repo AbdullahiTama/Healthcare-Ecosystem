@@ -79,16 +79,12 @@ export function createProductRepository(request = sbFetch) {
       return Array.isArray(result) ? result[0] : result
     },
 
-    async getStockBatches(businessId) {
-      return request(`stock_batches?business_id=eq.${businessId}&order=expiry_date.asc.nullslast&select=*`)
-    },
-
-    async addStockBatch(businessId, batch) {
-      return request('stock_batches', {
-        method: 'POST',
-        body: JSON.stringify({ ...batch, business_id: businessId }),
-      })
-    },
+    // NOTE: `getStockBatches`/`addStockBatch` used to live here too. They had
+    // zero callers and zero test coverage, and they reached into
+    // `stock_batches` — a table the stock module owns — with a different
+    // ordering (expiry_date vs created_at) than the functions the app actually
+    // used. Removed when `stock` adopted the seam; batches belong to
+    // modules/stock/repositories.
 
     // NOTE: a previous `updateStock` issued an unscoped PATCH with a
     // `{ stock: { increment } }` body PostgREST does not honour — it was dead

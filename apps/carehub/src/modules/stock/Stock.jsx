@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { getStockBatches, addStockBatch, updateStockBatch, deleteStockBatch, transferStock, adjustStock, getEnterpriseLocations, getProducts } from '../../services/supabase'
+import { stockRepository } from './repositories'
+// Cross-aggregate reads owned by modules that have not adopted the seam yet
+// (warehouses/locations, and the product catalogue for the receive form).
+import { getEnterpriseLocations, getProducts } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog } from '../../components/ui'
 
@@ -62,7 +65,7 @@ export default function Stock({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const b = await getStockBatches(brand.id)
+      const b = await stockRepository.getBatches(brand.id)
       const l = await getEnterpriseLocations(brand.id)
       const p = await getProducts(brand.id)
       setBatches(b || [])
@@ -92,8 +95,7 @@ export default function Stock({ brand }) {
     if (!form.quantity || Number(form.quantity) <= 0) { showToast('Please enter a quantity greater than zero.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      await addStockBatch({
-        business_id: brand.id,
+      await stockRepository.createBatch(brand.id, {
         location_id: form.location_id,
         product_id: form.product_id || null,
         product_name: form.product_name,
@@ -121,7 +123,7 @@ export default function Stock({ brand }) {
     if (!transferTo) { showToast('Choose a destination warehouse.', { type: 'warning' }); return }
     if (transferTo === transferring.location_id) { showToast('That is the same warehouse it is already in.', { type: 'warning' }); return }
     try {
-      await transferStock(transferring, transferTo, transferQty, meName)
+      await stockRepository.transfer(brand.id, { batch: transferring, toLocationId: transferTo, qty: transferQty, movedBy: meName })
       showToast('Stock transferred', { type: 'success' })
       setTransferring(null)
       setTransferTo('')
@@ -135,7 +137,7 @@ export default function Stock({ brand }) {
   async function doAdjust() {
     if (adjustQty === '') { showToast('Enter the corrected quantity.', { type: 'warning' }); return }
     try {
-      await adjustStock(adjusting, adjustQty, adjustReason, meName)
+      await stockRepository.adjust(brand.id, { batch: adjusting, newQty: adjustQty, reason: adjustReason, movedBy: meName })
       showToast('Stock adjusted', { type: 'success' })
       setAdjusting(null)
       setAdjustQty('')
@@ -148,7 +150,7 @@ export default function Stock({ brand }) {
 
   async function setStatus(batch, status) {
     try {
-      await updateStockBatch(batch.id, { status: status })
+      await stockRepository.updateBatch(batch.id, brand.id, { status: status })
       showToast('Marked as ' + status, { type: 'success' })
       load()
     } catch (e) {
@@ -161,7 +163,7 @@ export default function Stock({ brand }) {
   async function removeBatch() {
     if (!batchToDelete) return
     try {
-      await deleteStockBatch(batchToDelete.id)
+      await stockRepository.deleteBatch(batchToDelete.id, brand.id)
       setBatchToDelete(null)
       showToast('Batch deleted', { type: 'success' })
       load()

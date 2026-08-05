@@ -410,79 +410,18 @@ export async function markMessageRead(recipientRowId) {
   return sbFetch('internal_message_recipients?id=eq.' + recipientRowId, { method: 'PATCH', body: JSON.stringify({ read_at: new Date().toISOString() }), prefer: 'return=minimal' })
 }
 
-// STOCK BATCHES (warehouse receiving, expiry, transfers, adjustments)
-export async function getStockBatches(businessId) {
-  return sbFetch('stock_batches?business_id=eq.' + businessId + '&order=created_at.desc&select=*')
-}
-export async function addStockBatch(data) {
-  return sbFetch('stock_batches', { method: 'POST', body: JSON.stringify(data) })
-}
-export async function updateStockBatch(id, data) {
-  return sbFetch('stock_batches?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' })
-}
-export async function deleteStockBatch(id) {
-  return sbFetch('stock_batches?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' })
-}
-export async function getStockMovements(businessId) {
-  return sbFetch('stock_movements?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=100')
-}
-export async function addStockMovement(data) {
-  return sbFetch('stock_movements', { method: 'POST', body: JSON.stringify(data) })
-}
-
-export async function transferStock(batch, toLocationId, qty, movedBy) {
-  const amount = Number(qty)
-  if (!amount || amount <= 0) throw new Error('Enter a quantity greater than zero.')
-  if (amount > batch.quantity) throw new Error('You only have ' + batch.quantity + ' units in this batch.')
-
-  if (amount === batch.quantity) {
-    await updateStockBatch(batch.id, { location_id: toLocationId })
-  } else {
-    await updateStockBatch(batch.id, { quantity: batch.quantity - amount })
-    await addStockBatch({
-      business_id: batch.business_id,
-      location_id: toLocationId,
-      product_id: batch.product_id,
-      product_name: batch.product_name,
-      batch_number: batch.batch_number,
-      quantity: amount,
-      expiry_date: batch.expiry_date,
-      date_received: batch.date_received,
-      supplier_source: batch.supplier_source,
-      storage_location: batch.storage_location,
-      status: batch.status,
-      received_by: batch.received_by,
-    })
-  }
-
-  await addStockMovement({
-    business_id: batch.business_id,
-    batch_id: batch.id,
-    from_location_id: batch.location_id,
-    to_location_id: toLocationId,
-    movement_type: 'transfer',
-    quantity: amount,
-    reason: null,
-    moved_by: movedBy,
-  })
-}
-
-export async function adjustStock(batch, newQty, reason, movedBy) {
-  const amount = Number(newQty)
-  if (isNaN(amount) || amount < 0) throw new Error('Enter a valid quantity.')
-  const diff = amount - batch.quantity
-  await updateStockBatch(batch.id, { quantity: amount })
-  await addStockMovement({
-    business_id: batch.business_id,
-    batch_id: batch.id,
-    from_location_id: batch.location_id,
-    to_location_id: null,
-    movement_type: 'adjustment',
-    quantity: diff,
-    reason: reason || null,
-    moved_by: movedBy,
-  })
-}
+// STOCK BATCHES & MOVEMENTS — all moved to modules/stock/repositories, which
+// owns `stock_batches`, the `stock_movements` journal, and the two multi-step
+// operations (transfer, adjust) that must not be reassembled by callers.
+// `updateStockBatch` and `deleteStockBatch` were both unscoped here (id-only
+// PATCH and id-only DELETE); the repository scopes them by business_id.
+//
+// `getStockMovements` was NOT carried over: nothing in the app has ever read
+// the movement log. It is written on every transfer and adjustment and then
+// never surfaced anywhere — a half-built audit trail, not dead leftovers.
+// Adding a read method no screen calls would have made the repository
+// speculative (the mistake the clients migration had to undo), so the gap is
+// recorded in CODE_AUDIT.md as a product decision instead.
 
 // ORDERS & LPO — relocated to modules/orders/repositories (createOrderRepository).
 

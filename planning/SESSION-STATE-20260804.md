@@ -261,9 +261,58 @@ appointments read on repositories, it imports nothing from the service module.
 Same consumer shape as `reports`, so it is listed as done without ever having
 had a migration of its own.
 
-**Recommended next unit: `settings`.** Small, self-contained, and `saveBizDetails`
-(already tracked under Refactoring) lives in that area — the whitelist question
-can be settled at the same time. `stock` is the alternative if a bigger one is
-wanted: it owns `stock_batches`, which `productRepository` currently reaches
-into, so migrating it would resolve a genuine ownership overlap rather than just
-moving calls.
+---
+
+## 10. Next unit completed — `stock` (2026-08-05)
+
+**11 of 24 modules are now on the seam.** Suite is **164**, up from 145 — 19
+tests, the largest aggregate migrated so far.
+
+`createStockRepository({ request })` owns `stock_batches`, the `stock_movements`
+journal, and the two multi-step **commands** (`transfer`, `adjust`) that were
+previously loose functions in `services/supabase.js` for callers to assemble.
+
+**The journal is not an injected collaborator.** `orders` injects `upload` and
+`notify` because those are other systems; `stock_movements` is the same database
+through the same transport and part of this aggregate. Writing a batch change
+without its movement row is not a valid state, so no caller is given the option.
+That distinction is worth keeping straight on the remaining modules: inject what
+is a different system, absorb what is the same aggregate.
+
+Both writes were unscoped (`updateStockBatch` id-only PATCH, `deleteStockBatch`
+id-only DELETE) — now scoped, with cross-tenant regression tests on both plus on
+`transfer` and `adjust`. The thrown validation messages go straight into toasts,
+so they are preserved verbatim and asserted.
+
+**Ownership overlap resolved.** `productRepository` carried
+`getStockBatches`/`addStockBatch` reaching into a table stock owns — zero
+callers, zero test coverage, and a *different* ordering
+(`expiry_date.asc.nullslast`) than the functions the app actually used
+(`created_at.desc`). Removed. This overlap is why `stock` was the right next
+unit rather than `settings`.
+
+### Two findings that need a decision (neither fixed)
+
+1. **`stock_movements` is written but never read.** Every transfer and
+   adjustment journals a complete row — batch, from/to location, signed
+   quantity, reason, who — and nothing in the app has ever surfaced it.
+   `getStockMovements` was the only reader-side function and had no callers, so
+   it was not carried into the repository: adding a read method no screen calls
+   would have made it speculative, the exact mistake the clients migration had
+   to undo. Either build the movement-history view (the data is already there
+   and complete) or stop writing it — but do not quietly drop the writes, since
+   the journal is the only record of who moved or corrected stock.
+2. **The partial-transfer path is not atomic.** Moving *part* of a batch is two
+   writes with no transaction: decrement the source, then insert the destination
+   batch. If the insert fails after the decrement lands, the units are debited
+   from the source and arrive nowhere — **stock silently vanishes**, and the
+   movement row is never written either, so nothing records the loss. Same class
+   as the offline-sync data loss fixed earlier in this rollout. Preserved
+   exactly as found here per commit discipline; the fix is a database function
+   in the shape of C5's `increment_product_stock` and belongs in its own change.
+
+**Recommended next unit: `settings`.** Small and self-contained, and
+`saveBizDetails`'s whitelist question (tracked under Refactoring) can be settled
+at the same time. `warehouses`/`territories` are the alternative — `stock` and
+`orders` both still read `getEnterpriseLocations` from `services/supabase`, so
+migrating warehouses would retire a genuine shared cross-aggregate read.
