@@ -445,11 +445,48 @@ honest) versus `ON DELETE SET NULL` on the two movement FKs, which would
 silently blank the history's origin. Related to the open "`stock_movements` is
 written but never read" question from §10.
 
-**Recommended next unit: `territories`.** Its own aggregate (`territories` plus
-the `rep_territories` join), the same id-only PATCH/DELETE pattern, and two
-cross-aggregate readers left to retire `getTerritories` — `Orders` and
-`LiveActivity`. That would take Orders down to a single residual (`getStaff`),
-making `staff` the natural one after it.
+---
+
+## 14. Next unit completed — `territories` (2026-08-05)
+
+**14 of 24 modules on the seam.** Suite is **208**, up from 191.
+
+`createTerritoryRepository(request = sbFetch)` over `territories` **and** the
+`rep_territories` join. Both cross-aggregate readers repointed (`Orders`,
+`LiveActivity`), which takes **Orders down to a single residual: `getStaff`**.
+
+**The thing to know before touching this aggregate: tenancy is not uniform
+across it.**
+
+| table | tenancy |
+|---|---|
+| `territories` | has `business_id` — scoped directly, like every other aggregate |
+| `rep_territories` | **no `business_id` at all** — RLS derives it through the parent: `territory_id IN (SELECT id FROM territories WHERE business_id IN current_business_ids())` |
+
+That is a sound design, not an omission, so the repository does not invent a
+filter for a column that does not exist. It scopes join rows by **territory** —
+ids that themselves came from a business-scoped list — which is exactly the
+boundary RLS enforces server-side. Checked against the live schema and
+`pg_policies`, not inferred. `removeRepFromTerritory` was an id-only DELETE and
+is now scoped that way.
+
+**`lib/dbErrors.js` extracted.** The delete-message helper written for
+warehouses was needed verbatim here, so `translateConstraintError` became
+shared rather than copied. Each repository keeps its own constraint→reason
+table; the matching rule and the rethrow-unrecognised-untouched guarantee are
+shared.
+
+**Logged, not changed:** deleting a territory with reps assigned fails on
+`rep_territories_territory_id_fkey`, and unlike the warehouses equivalent this
+is immediately reachable — assigning a rep is a normal action on the same page,
+with no guard before the delete confirm. The message is readable now, but
+whether deleting a territory should simply remove its assignments is a product
+decision.
+
+**Recommended next unit: `staff`.** It is now the last residual on three
+migrated modules (`orders`, `warehouses`, `territories`) plus `Territories`
+itself, so migrating it closes Orders out entirely and removes the most
+widely-shared remaining `services/supabase` read.
 
 Still open and unchanged: **`stock_movements` is written but never read** (§10),
 and `getClients` remains a shared `services/supabase` read used by `Debts.jsx`,
