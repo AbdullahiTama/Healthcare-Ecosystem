@@ -4,12 +4,11 @@ import {
   BarChart2, Pause, CreditCard, AlertTriangle, Package, Pill, Calendar,
   Plus, FileText, Receipt, CheckCircle, ArrowRight, ShoppingCart,
 } from 'lucide-react'
-// Cross-aggregate read: the dashboard summarises sales it does not own, so it
-// reads through the POS module's repository rather than a second copy of the
-// query. `getAppointments` still comes from services/supabase — appointments
-// has not adopted the seam yet.
+// The dashboard owns no table of its own — it is a projection over two
+// aggregates other modules own, so it composes their repositories rather than
+// keeping a second copy of either query. Same shape as Reports.
 import { saleRepository } from '../pos/repositories'
-import { getAppointments } from '../../services/supabase'
+import { appointmentRepository } from '../appointments/repositories'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Avatar, Empty, Loading } from '../../components/ui'
@@ -81,7 +80,7 @@ export default function DashboardHome({ brand, products, role, perms }) {
       Promise.all([
         saleRepository.getToday(brand.id).then(s => setTodaySales(s || [])).catch(() => {}),
         saleRepository.getAll(brand.id).then(s => setAllSales(s || [])).catch(() => {}),
-        canSeeAppts ? getAppointments(brand.id).then(a => setAppts(a || [])).catch(() => {}) : Promise.resolve(),
+        canSeeAppts ? appointmentRepository.getAll(brand.id).then(a => setAppts(a || [])).catch(() => {}) : Promise.resolve(),
       ]).finally(() => setLoading(false))
     } else {
       setLoading(false)

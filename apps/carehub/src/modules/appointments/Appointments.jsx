@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Calendar, Hourglass, CheckCircle, Search, Download } from 'lucide-react'
-import { getAppointments, addAppointment, updateAppointment, deleteAppointment, getClients } from '../../services/supabase'
+import { appointmentRepository } from './repositories'
+// Cross-aggregate read: the client list belongs to the clients module. Still
+// the shared services/supabase read, used by several unmigrated modules too.
+import { getClients } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -28,7 +31,7 @@ export default function Appointments({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const a = await getAppointments(brand.id); setAppointments(a || []) } catch (e) {}
+    try { const a = await appointmentRepository.getAll(brand.id); setAppointments(a || []) } catch (e) {}
     setLoading(false)
   }
 
@@ -43,8 +46,7 @@ export default function Appointments({ brand, role, perms }) {
     if (!form.clientName || !form.date || !form.time) { showToast('Please enter client name, date and time.', { type: 'warning' }); return }
     setSaving(true)
     try {
-      await addAppointment({
-        business_id: brand.id,
+      await appointmentRepository.create(brand.id, {
         client_id: form.client_id || null,
         client_name: form.clientName,
         service: form.service || '',
@@ -77,14 +79,14 @@ export default function Appointments({ brand, role, perms }) {
   }
 
   async function updateStatus(id, status) {
-    try { await updateAppointment(id, { status }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+    try { await appointmentRepository.update(id, brand.id, { status }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
   }
 
   function askDelete(appt) { setDeleteTarget(appt) }
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await deleteAppointment(id); load(); showToast('Appointment deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete appointment. Please try again.', { type: 'error' }) }
+    try { await appointmentRepository.delete(id, brand.id); load(); showToast('Appointment deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete appointment. Please try again.', { type: 'error' }) }
   }
 
   const today = todayDate()

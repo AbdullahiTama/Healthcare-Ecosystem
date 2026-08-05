@@ -225,9 +225,45 @@ parks failed/offline writes on the offline queue for replay, which is right for
 a till but would silently change behaviour for consultation dispensing. That
 call is for the `consultation` migration to make deliberately.
 
-**Recommended next unit: `appointments`.** It is a self-contained aggregate with
-its own table and a real write surface (`getAppointments`/`addAppointment`/
-`updateAppointment`/`deleteAppointment`, the last two both id-only PATCH/DELETE
-with no business filter — the same class this rollout keeps finding). Unlike
-`reports` it genuinely owns something, so it gets a real repository and real
-tests. `settings` is the smaller alternative.
+---
+
+## 9. Next unit completed — `appointments` (2026-08-05)
+
+**10 of 24 modules are now on the seam.**
+
+| Status | Modules |
+|---|---|
+| Fully off `services/supabase` | `inventory`, `expenses`, `clients`, `debts`, `purchases`, `reports`, `appointments`, `dashboard-home` |
+| Own aggregate on the seam, cross-aggregate residual (flagged in-file) | `orders`, `pos` |
+| Sales reads repointed only — otherwise unmigrated | `locations` |
+| Untouched | `carefind`, `consultation` (3 files), `demand`, `live-activity`, `messages`, `referral-agent`, `settings`, `staff`, `stock`, `territories`, `warehouses` |
+
+`createAppointmentRepository(request = sbFetch)`, 9 tests. Suite is **145**, up
+from 136.
+
+**The most consequential unscoped write found so far.** Both appointment writes
+were unscoped in `services/supabase.js`: `updateAppointment` filtered on id
+alone, and `deleteAppointment` was an id-only DELETE. The others this rollout
+has found were corrective PATCHes; this one destroys a row, sits behind a
+permission check and a confirm dialog that tells the user it cannot be undone.
+Both are now scoped by `business_id`, with regression tests asserting a
+cross-tenant update and a cross-tenant delete are each a no-op. Still latent
+rather than a live leak — ids came from a business-scoped list.
+
+**One thing the repository deliberately does not do:** filter by `source`.
+CareFind books into this same table with `source: 'carefind'`, so those rows are
+not CareHub's own writes but must stay visible. Covered by a test so a later
+"tidy up the query" pass cannot quietly drop them.
+
+`dashboard-home` fell off `services/supabase` entirely as a side effect — it
+owns no table, and with its sales reads (from the `reports` unit) and now its
+appointments read on repositories, it imports nothing from the service module.
+Same consumer shape as `reports`, so it is listed as done without ever having
+had a migration of its own.
+
+**Recommended next unit: `settings`.** Small, self-contained, and `saveBizDetails`
+(already tracked under Refactoring) lives in that area — the whitelist question
+can be settled at the same time. `stock` is the alternative if a bigger one is
+wanted: it owns `stock_batches`, which `productRepository` currently reaches
+into, so migrating it would resolve a genuine ownership overlap rather than just
+moving calls.

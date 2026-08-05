@@ -163,11 +163,11 @@ export async function searchClients(businessId, query) {
 // because Reports still read expenses from here. `deleteExpense` was also an
 // id-only DELETE with no business filter — the repository scopes it.
 
-// APPOINTMENTS
-export async function getAppointments(businessId) { return sbFetch('appointments?business_id=eq.' + businessId + '&order=date.asc&select=*') }
-export async function addAppointment(data) { return sbFetch('appointments', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateAppointment(id, data) { return sbFetch('appointments?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function deleteAppointment(id) { return sbFetch('appointments?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// APPOINTMENTS — all moved to modules/appointments/repositories. Both writes
+// were unscoped here: `updateAppointment` filtered on id alone, and
+// `deleteAppointment` was an id-only DELETE — destructive, and the one the page
+// describes as permanent. The repository scopes both by business_id. Their two
+// callers (Appointments, and DashboardHome's schedule panel) use it now.
 
 // DEBTS — moved to modules/debts/repositories. `updateDebt` was the last
 // id-only PATCH on a money table; it is scoped by business_id there. Its three
