@@ -16,7 +16,8 @@ import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
-import { canShowPrice, distanceLabel, SALE_TYPE_LABELS } from '../utils/marketplace.js'
+import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink } from '../utils/marketplace.js'
+import { attachOwnerProfiles, sellerName, sellerContact } from '../utils/sellerLookup.js'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -58,7 +59,7 @@ function DrugProfile() {
       }
       return true
     })
-    setProducts(filtered)
+    setProducts(await attachOwnerProfiles(filtered))
 
     if (filtered.length > 0) {
       const productIds = filtered.map((p) => p.id)
@@ -128,14 +129,10 @@ function DrugProfile() {
     setSubmitting(false)
   }
 
-  // WhatsApp link: product's own number first, else the business's number
+  // WhatsApp link: product's own number first, then the business's number,
+  // then the owner profile's phone.
   function waLinkFor(p) {
-    const raw = p.whatsapp || p.businesses?.whatsapp
-    if (!raw) return null
-    let num = String(raw).replace(/\D/g, '')
-    if (num.startsWith('0')) num = '234' + num.slice(1)
-    else if (!num.startsWith('234')) num = '234' + num
-    return `https://wa.me/${num}?text=${encodeURIComponent(`Hi, I'm interested in "${p.name}" on CareFind.`)}`
+    return whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
   }
 
   const avgRating = reviews.length
@@ -387,7 +384,7 @@ function DrugProfile() {
           : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 10, marginBottom: 24 }}>
           {products.slice().sort((a, b) => (a.price == null ? Infinity : a.price) - (b.price == null ? Infinity : b.price)).map((p) => {
             const wa = waLinkFor(p)
-            const sellerName = p.businesses?.name || 'CareFind seller'
+            const seller = sellerName(p)
             const bizLoc = [p.businesses?.city, p.businesses?.state].filter(Boolean).join(', ')
             const loc = p.seller_location || bizLoc
             return (
@@ -396,14 +393,16 @@ function DrugProfile() {
                   <div style={{ flex: 1 }}>
                     {p.business_id ? (
                       <Link to={`/business/${p.business_id}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} ›</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{seller} ›</p>
                       </Link>
                     ) : p.owner_id ? (
                       <Link to={`/u/${p.owner_id}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName} ›</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>
+                          {seller} {p._owner?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px' }} />} ›
+                        </p>
                       </Link>
                     ) : (
-                      <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{sellerName}</p>
+                      <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{seller}</p>
                     )}
                     {loc && <p style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.gray500 }}><MapPin size={12} aria-hidden="true" /> {loc}</p>}
                   </div>
@@ -468,7 +467,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {(p.businesses?.name || 'CareFind seller')}{canShowPrice(p) ? ` — ₦${p.price}` : ' — Ask for price'}
+                      {sellerName(p)}{canShowPrice(p) ? ` — ₦${Number(p.price).toLocaleString()}` : ' — Ask for price'}
                     </option>
                   ))}
                 </select>

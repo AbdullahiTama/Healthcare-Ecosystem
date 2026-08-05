@@ -13,7 +13,8 @@ import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
-import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, productCoords, haversineMeters } from '../utils/marketplace.js'
+import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, productCoords, haversineMeters, whatsappLink } from '../utils/marketplace.js'
+import { attachOwnerProfiles, sellerName, sellerContact } from '../utils/sellerLookup.js'
 
 // Nigerian states offered as autocomplete suggestions. The location filter
 // itself is a free-text field so it works globally (any city, region or
@@ -54,6 +55,7 @@ const distanceMeters = (p, u) => {
   const [nearMe, setNearMe] = useState(false)
   const [specialtyFilter, setSpecialtyFilter] = useState('')
   const [businesses, setBusinesses] = useState([])
+  const [bizHasMore, setBizHasMore] = useState(false)
   const [products, setProducts] = useState([])
   const [professionals, setProfessionals] = useState([])
   const [loading, setLoading] = useState(false)
@@ -107,6 +109,32 @@ const distanceMeters = (p, u) => {
     setFeaturedType('product')
   }
 
+  // Health-facility query builder: one shape shared by the initial search and
+  // the "load more" pager so the two can never drift apart. Eligibility is the
+  // platform rule, applied server-side: the business must have been approved
+  // (status 'active' — registration starts 'pending', admin suspension makes
+  // it 'suspended') and must be publicly listed (visible_on_carefind). A
+  // pending or suspended business must not appear in the public directory
+  // even though registration sets visible_on_carefind optimistically.
+  const businessesQuery = (q, st) => {
+    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp')
+      .eq('visible_on_carefind', true)
+      .eq('status', 'active')
+    // A facility query is usually a name, a kind ("pharmacy", "lab"), or a
+    // place ("lagos", "abuja") — match all of them server-side. Matching only
+    // `name` made real queries like "clinic in Abuja" return zero results.
+    if (q) bq = bq.or(`name.ilike.%${q}%,business_type.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
+    if (st) bq = bq.ilike('state', `%${st}%`)
+    return bq
+  }
+
+  async function loadMoreBusinesses() {
+    const offset = businesses.length
+    const { data } = await businessesQuery(query.trim(), stateFilter).range(offset, offset + 39)
+    setBusinesses(prev => [...prev, ...(data || [])])
+    setBizHasMore((data || []).length === 40)
+  }
+
   async function runSearch(e) {
     if (e) e.preventDefault()
     setLoading(true)
@@ -114,12 +142,22 @@ const distanceMeters = (p, u) => {
     let resultCount = 0
 
     if (tab === 'products') {
-      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, list_on_carefind, businesses(name, city, state, whatsapp, latitude, longitude)')
+      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, latitude, longitude)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
-      const { data } = await pq.limit(40)
+      // The sale-type (Retail/Wholesale/Distributor) filter must run server-side,
+      // before limit(), not on the fetched batch: the products table holds many
+      // legacy rows whose sale_type is null, and a client-side filter over a
+      // small unordered batch of them silently emptied the tagged tabs.
+      if (saleTypeFilter) pq = pq.eq('sale_type', saleTypeFilter)
+      // Newest first, so the most recent (always sale_type-tagged) listings
+      // surface deterministically ahead of untagged legacy inventory.
+      pq = pq.order('created_at', { ascending: false }).limit(100)
+      const { data } = await pq
       let list = (data || []).filter(p => p.list_on_carefind !== false)
       if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
-      if (saleTypeFilter) list = list.filter(p => p.sale_type === saleTypeFilter)
+      // Resolve standalone sellers' profiles so every card can show a name,
+      // a profile link and a contact — not just business-attached products.
+      list = await attachOwnerProfiles(list)
       // Nearest first: sort by raw distance in meters so mixed m/km distances order correctly
       if (nearMe && userCoords) list = [...list].sort((a, b) => {
         const da = distanceMeters(a, userCoords)
@@ -131,11 +169,9 @@ const distanceMeters = (p, u) => {
       resultCount = list.length
     }
     else if (tab === 'businesses') {
-      let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp').eq('visible_on_carefind', true)
-      if (q) bq = bq.ilike('name', `%${q}%`)
-      if (stateFilter) bq = bq.ilike('state', `%${stateFilter}%`)
-      const { data } = await bq.limit(40)
+      const { data } = await businessesQuery(q, stateFilter).range(0, 39)
       setBusinesses(data || [])
+      setBizHasMore((data || []).length === 40)
       setProducts([]); setProfessionals([])
       resultCount = (data || []).length
     }
@@ -325,15 +361,9 @@ const distanceMeters = (p, u) => {
             than a fixed column count, since result counts vary a lot by query. */}
         <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 12px' }}>
         {products.map((p, idx) => {
-          // WhatsApp: product's own number, else the business's number (CareHub inventory)
-          const rawWa = p.whatsapp || p.businesses?.whatsapp
-          let waLink = null
-          if (rawWa) {
-            let num = rawWa.replace(/\D/g, '')
-            if (num.startsWith('0')) num = '234' + num.slice(1)
-            else if (!num.startsWith('234')) num = '234' + num
-            waLink = `https://wa.me/${num}?text=${encodeURIComponent(`Hi, I'm interested in "${p.name}" on CareFind.`)}`
-          }
+          // WhatsApp: product's own number, else the business's number (CareHub
+          // inventory), else the owner profile's phone (standalone CareFind seller).
+          const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
           return (
             <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, marginBottom: 8 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -354,9 +384,18 @@ const distanceMeters = (p, u) => {
                   </Link>
                   {p.business_id ? (
                     <Link to={`/business/${p.business_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
-                      {p.businesses?.name || 'View business'}
+                      {sellerName(p)}
                       {(() => {
                         const loc = p.seller_location || p.businesses?.state || p.businesses?.city
+                        return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
+                      })()}
+                      {' ›'}
+                    </Link>
+                  ) : p.owner_id ? (
+                    <Link to={`/u/${p.owner_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
+                      {sellerName(p)}
+                      {(() => {
+                        const loc = p.seller_location
                         return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
                       })()}
                       {' ›'}
@@ -432,6 +471,14 @@ const distanceMeters = (p, u) => {
           </Link>
         ))}
         </div>
+
+        {!loading && tab === 'businesses' && bizHasMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0 4px' }}>
+            <button onClick={loadMoreBusinesses} style={{ minHeight: 44, padding: '0 24px', border: `1px solid ${theme.border}`, borderRadius: 12, background: '#fff', color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+              Load more facilities
+            </button>
+          </div>
+        )}
       </div>
 
       {isMobile && <BottomNav />}

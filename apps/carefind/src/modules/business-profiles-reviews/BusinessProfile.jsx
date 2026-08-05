@@ -10,11 +10,11 @@ import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { distanceLabel } from '../utils/marketplace'
+import { canShowPrice, distanceLabel, whatsappLink } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
-import { Card, Pill, TealBtn, Textarea, Loading, Empty, StarPicker, Stars, Toast, useToast } from '../../components/ui'
+import { Card, Pill, TealBtn, Inp, Textarea, Loading, Empty, StarPicker, Stars, Toast, useToast } from '../../components/ui'
 
 function BookingCard({ biz }) {
   const toast = useToast()
@@ -189,18 +189,33 @@ function BusinessProfile() {
 
     const { data: bizData } = await supabase
       .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots')
+      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind')
       .eq('id', id)
       .maybeSingle()
 
+    // Public eligibility, same rule the directory and the booking endpoint
+    // enforce: the business must be approved (status 'active') and not opted
+    // out of the public directory. A pending or suspended business reached by
+    // a direct URL must not render as a live profile.
+    if (!bizData || bizData.status !== 'active' || bizData.visible_on_carefind === false) {
+      setBiz(null)
+      setProducts([])
+      setReviews([])
+      setLoading(false)
+      return
+    }
+
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, latitude, longitude')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude')
       .eq('business_id', id)
-      .eq('list_on_carefind', true)
+
+    // list_on_carefind may be NULL on legacy CareHub rows — treat anything but
+    // an explicit false as listed, matching MedMarket search semantics.
+    const listed = (productData || []).filter((p) => p.list_on_carefind !== false)
 
     // Only hide products explicitly out of stock (stock may be null for some listings)
-    const visibleProducts = (productData || []).filter((p) => p.stock == null || p.stock > 0)
+    const visibleProducts = listed.filter((p) => p.stock == null || p.stock > 0)
 
     const { data: reviewData } = await supabase
       .from('reviews')
@@ -260,7 +275,7 @@ function BusinessProfile() {
   }
 
   if (loading) return <Loading text="Loading business…" />
-  if (!biz) return <Empty icon={<Building2 size={44} color={theme.gray300} strokeWidth={1.5} />} message="Business not found." action="Back to search" onAction={() => navigate('/search')} />
+  if (!biz) return <Empty icon={<Building2 size={44} color={theme.gray300} strokeWidth={1.5} />} message="This business is not currently listed on CareFind." action="Back to search" onAction={() => navigate('/search')} />
 
   const avgRating = reviews.length
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
@@ -273,13 +288,10 @@ function BusinessProfile() {
   }))
 
   // Build a proper wa.me link (handles Nigerian 080... numbers)
-  let waLink = null
-  if (biz.whatsapp) {
-    let num = String(biz.whatsapp).replace(/\D/g, '')
-    if (num.startsWith('0')) num = '234' + num.slice(1)
-    else if (!num.startsWith('234')) num = '234' + num
-    waLink = `https://wa.me/${num}?text=${encodeURIComponent(`Hi ${biz.name}, I found you on CareFind.`)}`
-  }
+  const waLink = whatsappLink(biz.whatsapp, `Hi ${biz.name}, I found you on CareFind.`)
+
+  // Website field accepts bare domains or handles — normalize to a usable href
+  const websiteHref = biz.website && (biz.website.startsWith('http') ? biz.website : 'https://' + biz.website)
 
   // Business-type icons, matching CareHub's `businessLucideIcon()` vocabulary
   // so the same business type reads the same in both products.
@@ -311,8 +323,16 @@ function BusinessProfile() {
       </SidebarSection>
 
       <SidebarSection title="Contact">
-        <p style={{ margin: '0 0 4px 0', fontSize: 13, color: theme.textMid }}>{biz.address}</p>
-        {biz.hours && <p style={{ margin: '0 0 14px 0', color: theme.textLight, fontSize: 12 }}>Hours: {biz.hours}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+          <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{biz.address}</p>
+          {biz.hours && <p style={{ margin: 0, color: theme.textLight, fontSize: 12 }}>Hours: {biz.hours}</p>}
+          {biz.phone && <p style={{ margin: 0, color: theme.textMid, fontSize: 13 }}>Phone: {biz.phone}</p>}
+          {websiteHref && (
+            <p style={{ margin: 0, fontSize: 12.5, overflowWrap: 'anywhere' }}>
+              <a href={websiteHref} target="_blank" rel="noreferrer" style={{ color: theme.tealDeep, textDecoration: 'none', fontWeight: 700 }}>{biz.website}</a>
+            </p>
+          )}
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {waLink && (
             <a
@@ -399,8 +419,16 @@ function BusinessProfile() {
       <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
         {isMobile && (
           <>
-            <p style={{ margin: '0 0 4px 0', fontSize: 13.5, color: theme.textMid }}>{biz.address}</p>
-            {biz.hours && <p style={{ margin: '0 0 14px 0', color: theme.textLight, fontSize: 12.5 }}>Hours: {biz.hours}</p>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid }}>{biz.address}</p>
+              {biz.hours && <p style={{ margin: 0, color: theme.textLight, fontSize: 12.5 }}>Hours: {biz.hours}</p>}
+              {biz.phone && <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid }}>Phone: {biz.phone}</p>}
+              {websiteHref && (
+                <p style={{ margin: 0, fontSize: 13, overflowWrap: 'anywhere' }}>
+                  <a href={websiteHref} target="_blank" rel="noreferrer" style={{ color: theme.tealDeep, textDecoration: 'none', fontWeight: 700 }}>{biz.website}</a>
+                </p>
+              )}
+            </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
               {waLink && (
@@ -471,9 +499,12 @@ function BusinessProfile() {
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  {p.show_price !== false && p.price != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>}
-                  {p.show_price === false && <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
-                  {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
+                  {canShowPrice(p)
+                    ? <>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                        {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
+                      </>
+                    : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
                   {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
                 </div>
               </Card>

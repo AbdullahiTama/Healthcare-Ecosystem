@@ -269,6 +269,8 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
 export function Modal({ show, onClose, title, children, footer, wide, sheet, preventBackdropClose, hideCloseButton }) {
   const cardRef = useRef(null)
   const triggerRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
     if (!show) return
@@ -280,7 +282,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
     firstFocusable?.focus()
 
     function onKeyDown(e) {
-      if (e.key === 'Escape' && !preventBackdropClose) { onClose?.(); return }
+      if (e.key === 'Escape' && !preventBackdropClose) { onCloseRef.current?.(); return }
       if (e.key !== 'Tab') return
       const items = Array.from(focusable() || [])
       if (items.length === 0) return
@@ -294,7 +296,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
       document.removeEventListener('keydown', onKeyDown)
       triggerRef.current?.focus?.()
     }
-  }, [show, onClose, preventBackdropClose])
+  }, [show, preventBackdropClose])
 
   if (!show) return null
   return (

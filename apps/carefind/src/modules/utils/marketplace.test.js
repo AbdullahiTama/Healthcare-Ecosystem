@@ -9,6 +9,7 @@ saleTypeColor,
   SALE_TYPES,
   unitsForSaleType,
   isUnitValidForSaleType,
+  whatsappLink,
 } from './marketplace.js'
 
 describe('canShowPrice', () => {
@@ -117,5 +118,32 @@ describe('saleTypeColor', () => {
     expect(saleTypeColor('wholesale')).toBe('#7c3aed')
     expect(saleTypeColor('distributor')).toBe('#7c3aed')
     expect(saleTypeColor('retail')).toBe('#0E6F5A')
+  })
+})
+
+describe('whatsappLink', () => {
+  it('returns null without a contact', () => {
+    expect(whatsappLink(null, 'hi')).toBeNull()
+    expect(whatsappLink('', 'hi')).toBeNull()
+  })
+
+  it('rewrites Nigerian 080 numbers to +234', () => {
+    const link = whatsappLink('08012345678', 'Hello')
+    expect(link).toMatch(/^https:\/\/wa\.me\/2348012345678\?text=/)
+    expect(decodeURIComponent(link)).toContain('?text=Hello')
+  })
+
+  it('rewrites bare digits without a country code', () => {
+    expect(whatsappLink('1234567890', 'hi')).toContain('wa.me/2341234567890')
+  })
+
+  it('leaves an already-international number alone', () => {
+    expect(whatsappLink('+2348012345678', 'hi')).toContain('wa.me/2348012345678')
+    expect(whatsappLink('2348012345678', 'hi')).toContain('wa.me/2348012345678')
+  })
+
+  it('encodes the message', () => {
+    const link = whatsappLink('08012345678', 'Hi "Pharmacy", price?')
+    expect(decodeURIComponent(link)).toContain('Hi "Pharmacy", price?')
   })
 })

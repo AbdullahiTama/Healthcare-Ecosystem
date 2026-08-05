@@ -9,6 +9,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import { canShowPrice } from '../utils/marketplace'
 
 function BusinessDashboard() {
   const { user, loading: authLoading } = useAuth()
@@ -302,7 +303,7 @@ function BusinessDashboard() {
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{p.name}</p>
                   <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-                    {p.show_price !== false && p.price != null ? `₦${p.price}` : 'Ask for price'}{p.price_unit ? ` / ${p.price_unit}` : ''} · Stock: {p.stock}
+                    {canShowPrice(p) ? `₦${Number(p.price).toLocaleString()}` : 'Ask for price'}{p.price_unit ? ` / ${p.price_unit}` : ''} · Stock: {p.stock}
                   </p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
