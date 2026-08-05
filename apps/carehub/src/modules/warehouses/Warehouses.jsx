@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { warehouseRepository } from './repositories'
-// Cross-aggregate read: staff belongs to the staff module, which has not
-// adopted the seam yet.
-import { getStaff } from '../../services/supabase'
+// Cross-aggregate read: a location has a manager, who is staff.
+import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 
@@ -26,7 +25,7 @@ export default function Warehouses({ brand }) {
     if (!brand?.id) return
     setLoading(true)
     try {
-      const [locs, stf] = await Promise.all([warehouseRepository.getAll(brand.id), getStaff(brand.id)])
+      const [locs, stf] = await Promise.all([warehouseRepository.getAll(brand.id), staffRepository.getAll(brand.id)])
       setLocations(locs || [])
       setStaff(stf || [])
     } catch (e) {

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Plus, Check } from 'lucide-react'
 import { territoryRepository } from './repositories'
-// Cross-aggregate read: staff belongs to the staff module, which has not
-// adopted the seam yet.
-import { getStaff } from '../../services/supabase'
+// Cross-aggregate read: reps assigned to a territory are staff.
+import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 
@@ -28,7 +27,7 @@ export default function Territories({ brand }) {
     if (!brand?.id) return
     setLoading(true)
     try {
-      const [terrs, stf] = await Promise.all([territoryRepository.getAll(brand.id), getStaff(brand.id)])
+      const [terrs, stf] = await Promise.all([territoryRepository.getAll(brand.id), staffRepository.getAll(brand.id)])
       setTerritories(terrs || [])
       setStaff(stf || [])
       const ids = (terrs || []).map(t => t.id)

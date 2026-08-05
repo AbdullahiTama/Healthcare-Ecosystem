@@ -5,7 +5,10 @@ import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
 import PlanExpiryBanner from '../../components/layout/PlanExpiryBanner'
 import { Toast, useToast } from '../../components/ui'
-import { getProducts, cacheData, getCached, getRoles } from '../../services/supabase'
+import { getProducts, cacheData, getCached } from '../../services/supabase'
+// Cross-aggregate read: the permission flags a staff member's role grants are
+// owned by the staff module.
+import { staffRepository } from '../../modules/staff/repositories'
 import { saleRepository } from '../../modules/pos/repositories'
 import { getNavItems, getPerms } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
@@ -61,7 +64,7 @@ export default function BusinessDashboard() {
   // staff see exactly the modules their owner configured.
   useEffect(() => {
     if (!brand?.id) return
-    getRoles(brand.id).then(r => {
+    staffRepository.getRoles(brand.id).then(r => {
       const map = {}
       ;(r || []).forEach(x => { map[x.name] = x.permissions || {} })
       setCustomRoles(map)

@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react'
 import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
 import { productRepository } from '../inventory/repositories'
-// Cross-aggregate reads that belong to other modules' seams (not yet migrated).
-// Cross-aggregate reads: an order is raised for a location and a territory,
-// owned by the warehouses and territories modules respectively.
+// Cross-aggregate reads, each through the module that owns it: an order is
+// raised for a location and a territory, and is raised/approved/watched by
+// staff. Orders now imports nothing from services/supabase.
 import { warehouseRepository } from '../warehouses/repositories'
 import { territoryRepository } from '../territories/repositories'
-// Cross-aggregate read owned by a module that has not adopted the seam yet.
-import { getStaff } from '../../services/supabase'
+import { staffRepository } from '../staff/repositories'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
@@ -97,7 +96,7 @@ export default function Orders({ brand }) {
     setLoading(true)
     try {
       const o = await orderRepository.getAll(brand.id)
-      const s = await getStaff(brand.id)
+      const s = await staffRepository.getAll(brand.id)
       const p = await productRepository.getAll(brand.id)
       const t = await territoryRepository.getAll(brand.id)
       const l = await warehouseRepository.getAll(brand.id)

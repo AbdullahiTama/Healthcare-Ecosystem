@@ -104,17 +104,22 @@ export async function getAllLocations(mainBusinessId) {
 }
 
 // STAFF
-export async function getStaff(businessId) { return sbFetch('staff?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addStaff(data) { return sbFetch('staff', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateStaff(id, data) { return sbFetch('staff?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function deleteStaff(id) { return sbFetch('staff?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// STAFF — moved to modules/staff/repositories, which scopes the update and
+// delete by business_id (both were id-only here). Its six readers — the Staff
+// page, Orders, Warehouses, Territories, LiveActivity and Messages — all go
+// through that repository now.
+//
+// `loginStaff` and `getStaffByEmail` above deliberately stay: they read `staff`
+// before any session exists, as part of authentication, which cannot use a
+// business-scoped repository because there is no business yet.
 
 // CUSTOM ROLES (the `roles` table — business-defined roles with a
 // permissions.jsonb matching lib/permissions.js's preset shapes)
-export async function getRoles(businessId) { return sbFetch('roles?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addRole(data) { return sbFetch('roles', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateRole(id, data) { return sbFetch('roles?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function deleteRole(id) { return sbFetch('roles?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// ROLES — moved to modules/staff/repositories alongside `staff`: a role is the
+// permission set a staff member is given, managed on the same page. Both writes
+// were id-only here and are now scoped by business_id, which matters because a
+// role row carries the permission flags. Read by the Staff page and by
+// BusinessDashboard's permission bootstrap.
 
 // PRODUCTS
 export async function getProducts(businessId) { return sbFetch('products?business_id=eq.' + businessId + '&order=name.asc&select=*') }
@@ -333,12 +338,11 @@ export async function markAllNotificationsRead(businessId, staffId) {
 // Not to be confused with getAllLocations/getBranches/addBranch above: those
 // are the multi-branch `businesses` tree, a different thing entirely.
 
-// STAFF CLAIMS
-export async function getStaffClaims(businessId) {
-  return sbFetch('staff_claims?select=id,status,created_at,staff_id,staff:staff_id(id,full_name,public_title,business_id)&staff.business_id=eq.' + businessId + '&status=eq.pending')
-}
-export async function approveStaffClaim(id) { return sbFetch('staff_claims?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }), prefer: 'return=minimal' }) }
-export async function rejectStaffClaim(id) { return sbFetch('staff_claims?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }), prefer: 'return=minimal' }) }
+// STAFF CLAIMS — moved to modules/staff/repositories. The read now embeds
+// `staff!inner(...)`: without `!inner`, PostgREST applies the
+// `staff.business_id` filter to the embedded resource rather than the parent,
+// so the old query returned every pending claim in the database with a null
+// embed for other businesses'.
 
 // TERRITORIES — moved to modules/territories/repositories, along with the
 // `rep_territories` join. `updateTerritory`/`deleteTerritory` were id-only

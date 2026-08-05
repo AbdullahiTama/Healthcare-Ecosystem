@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
-import { getStaff, addStaff, updateStaff, deleteStaff, getStaffClaims, approveStaffClaim, rejectStaffClaim, getRoles, addRole, updateRole, deleteRole } from '../../services/supabase'
+import { staffRepository } from './repositories'
 import { emailStaffWelcome } from '../../lib/email'
 import { ROLE_LIST, ALL_NAV_DEFAULT, ALL_NAV_HOSPITAL, ALL_NAV_ENTERPRISE } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -34,15 +34,15 @@ export default function Staff({ brand, role, perms }) {
   async function load() {
     setLoading(true)
     try {
-      const s = await getStaff(brand.id)
+      const s = await staffRepository.getAll(brand.id)
       setStaff(s || [])
     } catch (e) {}
     try {
-      const c = await getStaffClaims(brand.id)
+      const c = await staffRepository.getPendingClaims(brand.id)
       setClaims(c || [])
     } catch (e) {}
     try {
-      const r = await getRoles(brand.id)
+      const r = await staffRepository.getRoles(brand.id)
       setRoles(r || [])
     } catch (e) {}
     setLoading(false)
@@ -102,8 +102,8 @@ export default function Staff({ brand, role, perms }) {
       },
     }
     try {
-      if (editingRole) await updateRole(editingRole.id, payload)
-      else await addRole(payload)
+      if (editingRole) await staffRepository.updateRole(editingRole.id, brand.id, payload)
+      else await staffRepository.createRole(brand.id, payload)
       showToast(editingRole ? 'Role updated!' : 'Role created!', { type: 'success' })
       setRoleEditorOpen(false)
       load()
@@ -114,7 +114,7 @@ export default function Staff({ brand, role, perms }) {
   async function handleDeleteRole() {
     const id = roleDeleteTarget?.id
     setRoleDeleteTarget(null)
-    try { await deleteRole(id); load(); showToast('Role deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete this role. Please try again.', { type: 'error' }) }
+    try { await staffRepository.deleteRole(id, brand.id); load(); showToast('Role deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete this role. Please try again.', { type: 'error' }) }
   }
 
   async function save() {
@@ -126,8 +126,7 @@ export default function Staff({ brand, role, perms }) {
     }
     setSaving(true)
     try {
-      await addStaff({
-        business_id: brand.id,
+      await staffRepository.create(brand.id, {
         full_name: form.fullName,
         email: form.email.toLowerCase(),
         password: form.password,
@@ -154,26 +153,35 @@ export default function Staff({ brand, role, perms }) {
   }
 
   async function toggleStatus(s) {
-    try { await updateStaff(s.id, { status: s.status === 'active' ? 'inactive' : 'active' }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+    try { await staffRepository.update(s.id, brand.id, { status: s.status === 'active' ? 'inactive' : 'active' }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
   }
 
   async function toggleCareFind(s) {
-    try { await updateStaff(s.id, { show_on_carefind: !s.show_on_carefind }); load(); showToast(!s.show_on_carefind ? 'Now visible on CareFind' : 'Hidden from CareFind', { type: 'success' }) } catch (e) { showToast('Could not update CareFind visibility. Please try again.', { type: 'error' }) }
+    try { await staffRepository.update(s.id, brand.id, { show_on_carefind: !s.show_on_carefind }); load(); showToast(!s.show_on_carefind ? 'Now visible on CareFind' : 'Hidden from CareFind', { type: 'success' }) } catch (e) { showToast('Could not update CareFind visibility. Please try again.', { type: 'error' }) }
   }
 
   function askDelete(s) { setDeleteTarget(s) }
   async function handleDelete() {
     const id = deleteTarget?.id
     setDeleteTarget(null)
-    try { await deleteStaff(id); load(); showToast('Staff member removed.', { type: 'success' }) } catch (e) { showToast('Could not remove staff member. Please try again.', { type: 'error' }) }
+    // Fifteen tables reference `staff` and none of those foreign keys cascade,
+    // so anyone who has actually used the system cannot be deleted. The
+    // repository turns that refusal into a reason worth reading — usually
+    // "deactivate instead" — so it is surfaced rather than replaced with a
+    // generic retry message the user cannot act on.
+    try {
+      await staffRepository.delete(id, brand.id, deleteTarget?.full_name)
+      load()
+      showToast('Staff member removed.', { type: 'success' })
+    } catch (e) { showToast(e.message || 'Could not remove staff member. Please try again.', { type: 'error' }) }
   }
 
   async function handleApproveClaim(claimId) {
-    try { await approveStaffClaim(claimId); load(); showToast('Claim approved!', { type: 'success' }) } catch (e) { showToast('Could not approve this claim. Please try again.', { type: 'error' }) }
+    try { await staffRepository.decideClaim(claimId, 'approved'); load(); showToast('Claim approved!', { type: 'success' }) } catch (e) { showToast('Could not approve this claim. Please try again.', { type: 'error' }) }
   }
 
   async function handleRejectClaim(claimId) {
-    try { await rejectStaffClaim(claimId); load(); showToast('Claim rejected.', { type: 'info' }) } catch (e) { showToast('Could not reject this claim. Please try again.', { type: 'error' }) }
+    try { await staffRepository.decideClaim(claimId, 'rejected'); load(); showToast('Claim rejected.', { type: 'info' }) } catch (e) { showToast('Could not reject this claim. Please try again.', { type: 'error' }) }
   }
 
   const roleColor = r => ({ Owner: 'purple', Manager: 'blue', Doctor: 'teal', Pharmacist: 'teal', Nurse: 'teal' }[r] || 'gray')
