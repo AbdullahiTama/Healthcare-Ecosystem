@@ -402,10 +402,54 @@ Worth generalising: this is the fourth critical in this engagement found
 *incidentally* rather than by hunting (C10, C13, C14, C17 before it). The
 pattern holds — reading code carefully enough to change it is what finds them.
 
-**Recommended next unit: `warehouses`/`territories`.** `stock` and `orders` both
-still read `getEnterpriseLocations` from `services/supabase`, so migrating
-warehouses retires a genuine shared cross-aggregate read rather than just moving
-calls. `staff` is the alternative.
+---
+
+## 13. Next unit completed — `warehouses` (2026-08-05)
+
+**13 of 24 modules on the seam.** Suite is **191**, up from 176. Two commits:
+the migration (`83a2581`) and a behaviour fix (`cb31ce8`).
+
+`createWarehouseRepository(request = sbFetch)` over `enterprise_locations`.
+`updateEnterpriseLocation`/`deleteEnterpriseLocation` were both unscoped
+(id-only PATCH, id-only DELETE) and are now scoped by `business_id` — which
+matters more than usual here, because four foreign keys point at this table.
+
+**Why this was the right unit:** it retires a genuinely *shared* read rather
+than just moving calls. Both cross-aggregate readers were repointed — `Stock`
+(which warehouse a batch sits in) and `Orders` (which location an order is
+raised for) — so all four functions are gone from `services/supabase.js` and
+Orders' flagged residual shrinks to `getStaff`/`getTerritories`.
+
+Do not confuse this aggregate with `getAllLocations`/`getBranches`/`addBranch`,
+which are the multi-branch `businesses` tree and stay put. Noted at the call
+site so the next person does not merge them.
+
+### Behaviour fix, own commit
+
+Deleting a location still referenced by stock, orders or movement history is
+correctly refused by the database, but the raw foreign-key violation went
+straight into a toast. The repository now maps the **constraint name** — a
+stable schema object, unlike the violation's prose — to a reason the user can
+act on, and rethrows anything unrecognised untouched so a network error is
+never flattened into "this location is in use".
+
+### New finding, logged not fixed
+
+**A warehouse that has ever received a transfer can never be deleted.**
+`stock_movements.from_location_id`/`to_location_id` are FKs to
+`enterprise_locations` with no cascade, and the movement log is append-only, so
+once a location appears in it the row is permanent. Retiring a closed warehouse
+has no path today. Inert right now (0 movements). Needs a product decision: an
+archive flag on `enterprise_locations` (preferred — keeps the audit trail
+honest) versus `ON DELETE SET NULL` on the two movement FKs, which would
+silently blank the history's origin. Related to the open "`stock_movements` is
+written but never read" question from §10.
+
+**Recommended next unit: `territories`.** Its own aggregate (`territories` plus
+the `rep_territories` join), the same id-only PATCH/DELETE pattern, and two
+cross-aggregate readers left to retire `getTerritories` — `Orders` and
+`LiveActivity`. That would take Orders down to a single residual (`getStaff`),
+making `staff` the natural one after it.
 
 Still open and unchanged: **`stock_movements` is written but never read** (§10),
 and `getClients` remains a shared `services/supabase` read used by `Debts.jsx`,
