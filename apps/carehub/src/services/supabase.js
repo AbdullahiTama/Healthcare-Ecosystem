@@ -340,17 +340,13 @@ export async function getStaffClaims(businessId) {
 export async function approveStaffClaim(id) { return sbFetch('staff_claims?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }), prefer: 'return=minimal' }) }
 export async function rejectStaffClaim(id) { return sbFetch('staff_claims?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }), prefer: 'return=minimal' }) }
 
-// TERRITORIES
-export async function getTerritories(businessId) { return sbFetch('territories?business_id=eq.' + businessId + '&order=created_at.asc&select=*') }
-export async function addTerritory(data) { return sbFetch('territories', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateTerritory(id, data) { return sbFetch('territories?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function deleteTerritory(id) { return sbFetch('territories?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
-export async function getRepAssignments(territoryIds) {
-  if (!territoryIds || territoryIds.length === 0) return []
-  return sbFetch('rep_territories?territory_id=in.(' + territoryIds.join(',') + ')&select=id,staff_id,territory_id,staff:staff_id(id,full_name,public_title)')
-}
-export async function assignRepToTerritory(staffId, territoryId) { return sbFetch('rep_territories', { method: 'POST', body: JSON.stringify({ staff_id: staffId, territory_id: territoryId }) }) }
-export async function removeRepFromTerritory(id) { return sbFetch('rep_territories?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// TERRITORIES — moved to modules/territories/repositories, along with the
+// `rep_territories` join. `updateTerritory`/`deleteTerritory` were id-only
+// PATCH/DELETE and are now scoped by business_id; `removeRepFromTerritory` was
+// also id-only and is now scoped by its parent territory, since
+// `rep_territories` has no business_id of its own (its RLS derives tenancy
+// through the parent, which the repository mirrors). Its three readers — the
+// Territories page, Orders and LiveActivity — all go through the repository.
 
 // INTERNAL MESSAGES (official correspondence — To, CC, threaded replies, attachments)
 export async function getMessageThreads(businessId) {

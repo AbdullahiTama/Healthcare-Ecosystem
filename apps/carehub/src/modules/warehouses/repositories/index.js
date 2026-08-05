@@ -1,15 +1,11 @@
 import { sbFetch } from '../../../services/supabase'
+import { translateConstraintError } from '../../../lib/dbErrors'
 
 // Four tables reference enterprise_locations and none of those foreign keys
 // cascade, so deleting a location that is still in use is refused by the
-// database. That refusal is correct — the problem was the message, which
-// arrived as a raw Postgres foreign-key violation and went straight into a
-// toast.
-//
-// Matching on the constraint name rather than the prose: constraint names are
-// stable schema objects, the wording of the violation is not. `sbFetch`
-// collapses the PostgREST error body down to its `message` string, which is
-// where the constraint name survives.
+// database. That refusal is correct; these are the reasons, phrased for
+// someone who just pressed Delete. See lib/dbErrors for why the match is on
+// the constraint name.
 const DELETE_BLOCKERS = [
   ['stock_batches_location_id_fkey', 'still holds stock. Transfer or remove its batches first.'],
   ['orders_location_id_fkey', 'has orders raised against it. Close or reassign those orders first.'],
@@ -17,14 +13,6 @@ const DELETE_BLOCKERS = [
   ['stock_movements_to_location_id_fkey', 'has stock movement history, which is kept as an audit record and cannot be removed.'],
   ['enterprise_locations_parent_location_id_fkey', 'has other locations under it. Reassign or delete those first.'],
 ]
-
-function describeDeleteFailure(name, error) {
-  const raw = error?.message || ''
-  for (const [constraint, reason] of DELETE_BLOCKERS) {
-    if (raw.includes(constraint)) return new Error(`"${name}" ${reason}`)
-  }
-  return error
-}
 
 // ── Warehouse (enterprise location) repository ────────────────────────────────
 // A deep module over `enterprise_locations` — the warehouses, hubs and regional
@@ -81,7 +69,7 @@ export function createWarehouseRepository(request = sbFetch) {
         // The database is the authority on whether a location is still in use;
         // this only translates its answer. Anything unrecognised is rethrown
         // untouched rather than being flattened into a wrong explanation.
-        throw describeDeleteFailure(name, e)
+        throw translateConstraintError(name, e, DELETE_BLOCKERS)
       }
     },
   }

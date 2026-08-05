@@ -4,8 +4,11 @@ import {
   getDefaultViewers, setDefaultViewers,
   getFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
   logActivity, reactToActivity, unreactToActivity, commentOnActivity,
-  uploadActivityVoice, reverseGeocode, getStaff, getTerritories,
+  uploadActivityVoice, reverseGeocode, getStaff,
 } from '../../services/supabase'
+// Cross-aggregate read: activity is logged against a territory, which the
+// territories module owns.
+import { territoryRepository } from '../territories/repositories'
 import { watchTable } from '../../lib/realtime'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
@@ -153,7 +156,7 @@ export default function LiveActivity({ brand }) {
       const flds = await getActivityFields(brand.id)
       const acts = await getFieldActivities(brand.id)
       const stf = await getStaff(brand.id)
-      const ters = await getTerritories(brand.id)
+      const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
       setActivities(acts || [])
       setStaffList(stf || [])

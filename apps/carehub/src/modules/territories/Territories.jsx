@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Plus, Check } from 'lucide-react'
-import { getTerritories, addTerritory, updateTerritory, deleteTerritory, getStaff, getRepAssignments, assignRepToTerritory, removeRepFromTerritory } from '../../services/supabase'
+import { territoryRepository } from './repositories'
+// Cross-aggregate read: staff belongs to the staff module, which has not
+// adopted the seam yet.
+import { getStaff } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 
@@ -25,11 +28,11 @@ export default function Territories({ brand }) {
     if (!brand?.id) return
     setLoading(true)
     try {
-      const [terrs, stf] = await Promise.all([getTerritories(brand.id), getStaff(brand.id)])
+      const [terrs, stf] = await Promise.all([territoryRepository.getAll(brand.id), getStaff(brand.id)])
       setTerritories(terrs || [])
       setStaff(stf || [])
       const ids = (terrs || []).map(t => t.id)
-      const assigns = await getRepAssignments(ids)
+      const assigns = await territoryRepository.getAssignments(ids)
       setAssignments(assigns || [])
     } catch (e) {
       showToast('Failed to load: ' + e.message, { type: 'error' })
@@ -49,18 +52,18 @@ export default function Territories({ brand }) {
 
   const save = async () => {
     if (!form.name) { showToast('Please enter a territory name.', { type: 'warning' }); return }
+    // business_id is stamped by the repository, not assembled here.
     const payload = {
-      business_id: brand.id,
       name: form.name,
       level: form.level || null,
       parent_territory_id: form.parent_territory_id || null,
     }
     try {
       if (editingId) {
-        await updateTerritory(editingId, payload)
+        await territoryRepository.update(editingId, brand.id, payload)
         showToast('Territory updated', { type: 'success' })
       } else {
-        await addTerritory(payload)
+        await territoryRepository.create(brand.id, payload)
         showToast('Territory added', { type: 'success' })
       }
       setShowForm(false)
@@ -75,7 +78,7 @@ export default function Territories({ brand }) {
   const remove = async () => {
     if (!territoryToDelete) return
     try {
-      await deleteTerritory(territoryToDelete.id)
+      await territoryRepository.delete(territoryToDelete.id, brand.id, territoryToDelete.name)
       setTerritoryToDelete(null)
       showToast('Territory deleted', { type: 'success' })
       load()
@@ -91,9 +94,9 @@ export default function Territories({ brand }) {
     const existing = assignments.find(a => a.territory_id === territoryId && a.staff_id === staffId)
     try {
       if (existing) {
-        await removeRepFromTerritory(existing.id)
+        await territoryRepository.unassignRep(existing.id, territoryId)
       } else {
-        await assignRepToTerritory(staffId, territoryId)
+        await territoryRepository.assignRep(staffId, territoryId)
       }
       load()
     } catch (e) {
