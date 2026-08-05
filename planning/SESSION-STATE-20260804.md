@@ -483,10 +483,73 @@ with no guard before the delete confirm. The message is readable now, but
 whether deleting a territory should simply remove its assignments is a product
 decision.
 
-**Recommended next unit: `staff`.** It is now the last residual on three
-migrated modules (`orders`, `warehouses`, `territories`) plus `Territories`
-itself, so migrating it closes Orders out entirely and removes the most
-widely-shared remaining `services/supabase` read.
+---
+
+## 15. `staff` (2026-08-05) — and the critical it uncovered
+
+**15 of 24 modules on the seam.** Suite is **229**, up from 208.
+
+### C19 first — found before a line of the migration was written
+
+Checking RLS on `staff` showed an `Allow all` (`qual: true`) policy alongside
+the scoped one. **C14 had never actually been fixed on 16 CareHub tables**, and
+the whole of Phase 2's RLS was inert on them. Full write-up in `CODE_AUDIT.md`
+(Critical) and `apps/carehub/sql/20260805_c14_regression_drop_blanket_policies.sql`.
+
+The cause is worth internalising: `phase2_rls_pilot.sql` dropped
+`"Allow all staff"` / `"Allow all products"` / … while the live policies were
+all named plain `"Allow all"`. **`DROP POLICY IF EXISTS` on a wrong name is a
+silent no-op.** One table in that file used the correct unsuffixed name
+(`businesses`), which is why it genuinely was clean and made the whole file
+look applied. So the fix drops **by predicate, not by name**.
+
+That is the second instance of the same shape in one day — see also the
+`REVOKE … FROM PUBLIC` trap in `20260805_atomic_stock_transfer.sql`. **A DDL
+statement completing is not evidence it did anything.**
+
+### The migration
+
+`createStaffRepository` covers `staff`, `roles` and `staff_claims`. It retires
+the most widely-shared read in the codebase — six call sites plus
+`BusinessDashboard`'s permission bootstrap — and **`orders` is now fully off
+`services/supabase`**.
+
+Three tables, three different scoping situations, checked against live
+`pg_policies` rather than assumed:
+
+| table | scoping |
+|---|---|
+| `staff` | `business_id`, direct |
+| `roles` | `business_id`, direct |
+| `staff_claims` | **no tenant column reachable from a PostgREST filter** — RLS derives the reviewing business through the claimed staff row, so the decision writes are id-only by necessity |
+
+That is the second aggregate in a row (after `territories`/`rep_territories`)
+where tenancy is not uniform across the tables. Treat "check the live policy
+per table" as the default, not the exception.
+
+Also fixed `getStaffClaims`: it filtered `staff.business_id` on an embed
+**without `!inner`**, which in PostgREST constrains the embedded resource
+rather than the parent — so it returned every pending claim in the database
+with a null embed for other businesses'. Inert on current data.
+
+### `loginStaff`/`loginBusiness` are now unreachable — verified harmless
+
+Both do a plaintext comparison as `anon`. `businesses` has been scoped since
+July; `staff` since C19 today. Before accepting that, it was checked: all 12
+active staff already have `auth.users` rows (`never_migrated: 0`), and four
+staff sessions were impersonated to confirm each resolves its own row and full
+team through the real Supabase Auth path. Nobody is locked out. This also means
+**C2's plaintext password columns now have no live reader**, which makes that
+cleanup materially easier.
+
+**Recommended next unit: `messages`** (its own `internal_messages` aggregate,
+and the last non-auth reader in that area), or **`consultation`** — which is
+what would let `addSale` finally move onto `saleRepository.create` as a
+deliberate decision rather than a side effect.
+
+**Bigger open item than any remaining module:** the 9 tables from C19 that have
+a blanket `ALL` policy and *no* scoped policy at all. Those still need policies
+written.
 
 Still open and unchanged: **`stock_movements` is written but never read** (§10),
 and `getClients` remains a shared `services/supabase` read used by `Debts.jsx`,
