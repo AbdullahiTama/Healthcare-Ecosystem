@@ -551,6 +551,48 @@ deliberate decision rather than a side effect.
 a blanket `ALL` policy and *no* scoped policy at all. Those still need policies
 written.
 
+---
+
+## 16. `messages` (2026-08-05) — 16 of 24, and a sharper test adapter
+
+**Suite is 246**, up from 229.
+
+`createMessageRepository({ request, upload, notify })` — the same three
+collaborators as `orders`, for the same reason: `send()` writes three tables
+then fans out a notification, and that is only assertable without a network, a
+bucket or a notifications table if storage and notification are seams.
+`Messages.jsx` is now fully off `services/supabase`.
+
+Two scoping fixes went with it:
+- **`getThreadMessages(rootId)` had no tenant filter at all** — it matched
+  `or=(id.eq.X,parent_id.eq.X)` and nothing else, so another tenant's root id
+  would have returned their whole conversation. Latent (ids came from a scoped
+  thread list) but it was the only read in the module with no business filter.
+- `markMessageRead(id)` was an id-only PATCH; now scoped by its parent message.
+
+The two child tables have no `business_id`, so the parent message is their
+boundary — mirroring the live `"… via parent message"` policies rather than
+inventing a filter. That is the **third** aggregate in a row with non-uniform
+tenancy (after `territories` and `staff`).
+
+### The test adapter now fails loudly
+
+`inMemoryClient` silently ignored any filter operator it did not implement. A
+repository could add a tenant filter the adapter dropped on the floor, and the
+test asserting that filter would pass for the wrong reason. It now throws on
+anything it cannot model, and understands `eq`/`neq`/`is.null`/`in`/`gte`/
+`lte`/`gt`/`lt` plus flat `or=(…)`.
+
+It earned that change immediately, twice: the new `getThread` cross-tenant test
+failed for the right reason (revealing `or=(…)` was being skipped), and then the
+stricter version exposed that POS's *"getToday excludes held sales"* had been
+passing while the `created_at=gte.<today>` cutoff was ignored entirely. Adding
+the range operators is what makes that assertion true.
+
+**Recommended next unit: `consultation`** — the one that would let `addSale`
+finally move onto `saleRepository.create` as a deliberate decision rather than a
+side effect.
+
 Still open and unchanged: **`stock_movements` is written but never read** (§10),
 and `getClients` remains a shared `services/supabase` read used by `Debts.jsx`,
 `POS.jsx` and `Appointments.jsx` even though `clients` owns a repository with
