@@ -100,49 +100,7 @@ export function createProductRepository(request = sbFetch) {
 
 export const productRepository = createProductRepository()
 
-export const purchaseRepository = {
-  async getAll(businessId) {
-    return sbFetch(`purchases?business_id=eq.${businessId}&order=created_at.desc&select=*`)
-  },
-
-  async create(businessId, purchase) {
-    return sbFetch('purchases', {
-      method: 'POST',
-      body: JSON.stringify({ ...purchase, business_id: businessId }),
-    })
-  },
-
-  async update(purchaseId, businessId, updates) {
-    return sbFetch(`purchases?id=eq.${purchaseId}&business_id=eq.${businessId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-      prefer: 'return=minimal',
-    })
-  },
-}
-
-// expenseRepository moved to modules/expenses/repositories (its own aggregate).
-// purchaseRepository (above) and debtRepository (below) still live here
-// unused/misplaced — they belong in modules/purchases and modules/debts and
-// should move as those modules adopt the repository seam.
-
-export const debtRepository = {
-  async getAll(businessId) {
-    return sbFetch(`debts?business_id=eq.${businessId}&order=created_at.desc&select=*`)
-  },
-
-  async create(businessId, debt) {
-    return sbFetch('debts', {
-      method: 'POST',
-      body: JSON.stringify({ ...debt, business_id: businessId }),
-    })
-  },
-
-  async update(debtId, businessId, updates) {
-    return sbFetch(`debts?id=eq.${debtId}&business_id=eq.${businessId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-      prefer: 'return=minimal',
-    })
-  },
-}
+// This file now holds only the product aggregate. The expense, purchase and
+// debt repositories that used to sit here — misplaced, and in the latter two
+// cases never imported by anything — have moved to the modules that own those
+// aggregates: modules/expenses, modules/purchases and modules/debts.

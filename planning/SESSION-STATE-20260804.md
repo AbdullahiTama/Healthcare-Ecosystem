@@ -12,6 +12,10 @@ replacement for either.
 
 ## 1. Repository-seam rollout (the architecture workstream)
 
+> **Updated 2026-08-05:** `debts` + `purchases` have since been migrated as the
+> next unit. See §7 at the bottom for that pass; the table below is superseded
+> by it.
+
 **5 of 24 modules are on the seam. 16 have nothing at all.**
 
 | Status | Modules |
@@ -138,3 +142,51 @@ project in the org, "Care hub" / `xerpyovjxhwoawzzfkne`, is INACTIVE — never
 target it. The Supabase MCP connector needs re-authorizing each session; complete
 the OAuth link promptly, as it has expired mid-flow several times in this
 engagement.
+
+---
+
+## 7. Next unit completed — `debts` + `purchases` (2026-08-05)
+
+**7 of 24 modules are now on the seam. 15 have nothing at all.**
+
+| Status | Modules |
+|---|---|
+| Fully off `services/supabase` | `inventory`, `expenses`, `clients`, `debts`, `purchases` |
+| Own aggregate on the seam, cross-aggregate residual (flagged in-file) | `orders`, `pos` |
+| Untouched | `appointments`, `carefind`, `consultation` (3 files), `dashboard-home`, `demand`, `live-activity`, `locations`, `messages`, `referral-agent`, `reports`, `settings`, `staff`, `stock`, `territories`, `warehouses` |
+
+Scope was confirmed up front as **full retirement**: rather than leave the old
+functions in place for the two modules outside this unit that called them,
+`POS.jsx` (debt calls) and `Reports.jsx` (purchases read) were repointed at the
+new repositories, so `getDebts`/`addDebt`/`updateDebt`/`recordUnderpayment` and
+`getPurchases`/`addPurchase`/`updatePurchase` are **deleted** from
+`services/supabase.js` outright. That is what let `updateDebt` — the last
+id-only PATCH on a money table — actually be scoped, instead of being scoped in
+one place and left unscoped in another.
+
+What landed:
+- `modules/debts/repositories` (15 tests) and `modules/purchases/repositories`
+  (6 tests). Suite is **136 tests**, up from 115.
+- `recordUnderpayment` moved onto the debt aggregate, contract unchanged.
+- `debtRepository`/`purchaseRepository` removed from `inventory/repositories`,
+  which now holds only the product aggregate.
+- `findOpenBySource` replaces the fetch-all-debts-and-scan-in-JS lookup that
+  POS and Purchases had each written separately.
+
+One deliberate call worth knowing about: `findOpenBySource` filters business,
+source and source_ref in the query but keeps the `status !== 'paid'` test in
+JavaScript. `status=neq.paid` in PostgREST drops NULL-status rows, which the
+code it replaces matched — and a debt missed there stays outstanding after its
+sale or purchase is marked paid. Every write path in the app sets a status, but
+the schema does not guarantee one, so this was not worth assuming. Regression
+test covers it.
+
+**Recommended next unit:** `reports` + `settings`, or `appointments`. `reports`
+is now a single-file module reading three aggregates it does not own (sales,
+expenses, purchases) — two of which are already on the seam — so it is mostly a
+matter of repointing, and it would retire `getSales`/`getExpenses` the same way
+this unit retired the debts and purchases functions.
+
+Also newly flagged (not fixed, deliberately out of scope): `getClients` is still
+a shared `services/supabase` read used by `Debts.jsx` and `POS.jsx` even though
+`clients` owns a repository with the identical query.

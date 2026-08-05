@@ -169,10 +169,10 @@ export async function addAppointment(data) { return sbFetch('appointments', { me
 export async function updateAppointment(id, data) { return sbFetch('appointments?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteAppointment(id) { return sbFetch('appointments?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
 
-// DEBTS
-export async function getDebts(businessId) { return sbFetch('debts?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addDebt(data) { return sbFetch('debts', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateDebt(id, data) { return sbFetch('debts?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+// DEBTS — moved to modules/debts/repositories. `updateDebt` was the last
+// id-only PATCH on a money table; it is scoped by business_id there. Its three
+// callers (Debts, POS's credit collection, Purchases' mark-paid) all use the
+// repository now, so nothing is left here to be reused unscoped.
 
 // CLIENT HISTORY — moved to modules/clients/repositories, which additionally
 // scopes each read by business_id (these filtered on client_id alone).
@@ -221,41 +221,15 @@ export async function getRequisitions(businessId) { return sbFetch('requisitions
 export async function addRequisition(data) { return sbFetch('requisitions', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateRequisition(id, data) { return sbFetch('requisitions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
-// The "an underpaid sale or purchase automatically creates a debt" rule —
-// previously reimplemented independently at all 3 of its call sites (POS.jsx's
-// charge() and chargeCredit(), Purchases.jsx's save()), which had already
-// drifted (POS always sent due_date '', Purchases sent form.dueDate). One
-// definition now, callers pass what varies. Never throws — a failed debt
-// write must not undo an already-completed sale or purchase (same contract
-// as notify(), and fixes a latent bug in Purchases.jsx's save(), where an
-// addDebt failure used to surface as a false "Error saving purchase").
-export async function recordUnderpayment({ businessId, direction, partyName, amount, amountPaid, dueDate = '', description, source, sourceRef, clientId = null }) {
-  const balance = amount - amountPaid
-  if (balance <= 0) return null
-  try {
-    return await addDebt({
-      business_id: businessId,
-      client_id: clientId,
-      direction,
-      party_name: partyName,
-      amount,
-      amount_paid: amountPaid,
-      balance,
-      due_date: dueDate,
-      status: 'pending',
-      description,
-      source,
-      source_ref: sourceRef,
-    })
-  } catch (e) {
-    return null
-  }
-}
+// `recordUnderpayment` (the "an underpaid sale or purchase automatically
+// creates a debt" rule) moved to modules/debts/repositories — it is a
+// debt-domain rule, and its callers in POS and Purchases now reach it there.
+// Its contract is unchanged: it never throws, because a failed debt write must
+// not undo an already-completed sale or purchase.
 
-// PURCHASES
-export async function getPurchases(businessId) { return sbFetch('purchases?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addPurchase(data) { return sbFetch('purchases', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updatePurchase(id, data) { return sbFetch('purchases?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+// PURCHASES — moved to modules/purchases/repositories, which scopes the update
+// by business_id (it was an id-only PATCH here). Reports reads purchases
+// through that repository too, so there is no second copy of the query.
 
 // PATIENTS (hospital)
 export async function getPatients(businessId, opts = {}) {

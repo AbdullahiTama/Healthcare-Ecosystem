@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
-import { getSales, getExpenses, getPurchases } from '../../services/supabase'
+import { purchaseRepository } from '../purchases/repositories'
+// Cross-aggregate reads owned by modules that have not adopted the repository
+// seam yet (sales live with POS, expenses with the expenses module).
+import { getSales, getExpenses } from '../../services/supabase'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Loading, useToast, Toast } from '../../components/ui'
@@ -21,7 +24,7 @@ export default function Reports({ brand, role, perms }) {
   async function load() {
     setLoading(true)
     try {
-      const [s, e, p] = await Promise.all([getSales(brand.id), getExpenses(brand.id), getPurchases(brand.id)])
+      const [s, e, p] = await Promise.all([getSales(brand.id), getExpenses(brand.id), purchaseRepository.getAll(brand.id)])
       setSales(s || []); setExpenses(e || []); setPurchases(p || [])
     } catch (e) {}
     setLoading(false)

@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Landmark, Truck, ShoppingCart, Pencil, Search, UserCheck } from 'lucide-react'
-import { getDebts, addDebt, updateDebt, getClients } from '../../services/supabase'
+import { debtRepository } from './repositories'
+// Cross-aggregate read: the client list belongs to the clients module, which
+// exposes it through its own repository. `getClients` is still the shared
+// services/supabase read used by POS too — repoint it when that call is
+// consolidated; it is unrelated to this module's own aggregate.
+import { getClients } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -43,7 +48,7 @@ export default function Debts({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const d = await getDebts(brand.id); setDebts(d || []) } catch (e) {}
+    try { const d = await debtRepository.getAll(brand.id); setDebts(d || []) } catch (e) {}
     setLoading(false)
   }
 
@@ -53,8 +58,7 @@ export default function Debts({ brand, role, perms }) {
     try {
       const amt = parseFloat(form.amount) || 0
       const paid = parseFloat(form.amountPaid) || 0
-      await addDebt({
-        business_id: brand.id,
+      await debtRepository.create(brand.id, {
         client_id: form.client_id || null,
         direction: form.direction || 'owes_us',
         party_name: form.party,
@@ -73,7 +77,7 @@ export default function Debts({ brand, role, perms }) {
 
   async function markPaid(debt) {
     try {
-      await updateDebt(debt.id, { amount_paid: debt.amount, balance: 0, status: 'paid' })
+      await debtRepository.update(debt.id, brand.id, { amount_paid: debt.amount, balance: 0, status: 'paid' })
       load(); showToast('Marked as paid!', { type: 'success' })
     } catch (e) { showToast('Could not mark as paid. Please try again.', { type: 'error' }) }
   }

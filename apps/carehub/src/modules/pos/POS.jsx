@@ -5,9 +5,13 @@ import {
   DollarSign, Repeat, Divide, Search, Package, Clipboard,
 } from 'lucide-react'
 import { saleRepository } from './repositories'
+// Credit sales raise and settle debts. That aggregate belongs to the debts
+// module, so its repository is used here rather than a second copy of the
+// query shape living in POS.
+import { debtRepository } from '../debts/repositories'
 // Cross-aggregate reads/writes owned by modules that have not adopted the
-// repository seam yet (settings, clients, consultations, debts).
-import { getSettings, recordUnderpayment, updateDebt, getClients, getLatestConsultation, getDebts } from '../../services/supabase'
+// repository seam yet (settings, clients, consultations).
+import { getSettings, getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
@@ -191,7 +195,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     // AUTO-CREATE DEBT if amount paid is less than total
     if (balance > 0 && brand?.id) {
       const isWalkIn = clientName === 'Walk-in'
-      await recordUnderpayment({
+      await debtRepository.recordUnderpayment({
         businessId: brand.id,
         direction: 'owes_us',
         clientId,
@@ -241,7 +245,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     await finishResumedSale()
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
     if (balance > 0 && brand?.id) {
-      await recordUnderpayment({
+      await debtRepository.recordUnderpayment({
         businessId: brand.id,
         direction: 'owes_us',
         clientId,
@@ -311,12 +315,13 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     const newPaid = (sale.amount_paid || 0) + parseFloat(amount)
     const newBalance = sale.total - newPaid
     await saleRepository.update(sale.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
-    // AUTO-UPDATE matching debt
+    // AUTO-UPDATE matching debt. The lookup lives in the debt repository —
+    // Purchases' mark-paid needs the same one, and both used to fetch every
+    // debt in the business and scan it here.
     try {
-      const debts = await getDebts(brand.id)
-      const matchDebt = debts.find(d => d.source === 'credit_sale' && d.source_ref === sale.txn_no && d.status !== 'paid')
+      const matchDebt = await debtRepository.findOpenBySource('credit_sale', sale.txn_no, brand.id)
       if (matchDebt) {
-        await updateDebt(matchDebt.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), status: newBalance <= 0 ? 'paid' : 'pending' })
+        await debtRepository.update(matchDebt.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), status: newBalance <= 0 ? 'paid' : 'pending' })
       }
     } catch (e) {}
     showToast('Payment collected!', { type: 'success' })

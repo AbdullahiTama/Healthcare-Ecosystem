@@ -10,6 +10,10 @@
 // `eq.` filters, `in.(...)` id lists, `select`/`order` (ignored for matching),
 // and the GET / POST / PATCH / DELETE verbs. It is intentionally NOT a full
 // PostgREST — only what the repositories actually use.
+//
+// `order` is parsed but not applied: rows come back in insertion order. Tests
+// that care which row a repository picks out of several matches should assert
+// against the real ordering elsewhere, not rely on this adapter for it.
 export function createInMemoryClient(seed = {}) {
   const db = {}
   for (const [table, rows] of Object.entries(seed)) db[table] = rows.map((r) => ({ ...r }))

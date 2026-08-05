@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Truck, CreditCard, Hourglass, Search, Plus, X } from 'lucide-react'
-import { getPurchases, addPurchase, updatePurchase, recordUnderpayment, updateDebt, getDebts } from '../../services/supabase'
+import { purchaseRepository } from './repositories'
 // Product writes go through the inventory seam: replenishment must be atomic
 // now that sales decrement stock server-side (C5/C12).
 import { productRepository } from '../inventory/repositories'
+// Recording a purchase composes three aggregates: the purchase record (above),
+// inventory replenishment, and the debt raised by any shortfall. Each is owned
+// by its own module's repository rather than re-derived here.
+import { debtRepository } from '../debts/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { findDuplicate } from '../../lib/productMatches'
 import { PRODUCT_CATS } from '../../config/constants'
@@ -47,7 +51,7 @@ export default function Purchases({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const p = await getPurchases(brand.id); setPurchases(p || []) } catch (e) {}
+    try { const p = await purchaseRepository.getAll(brand.id); setPurchases(p || []) } catch (e) {}
     setLoading(false)
   }
 
@@ -64,8 +68,7 @@ export default function Purchases({ brand, role, perms }) {
       const balance = total - paid
       const totalQty = validItems.reduce((s, i) => s + parseInt(i.qty), 0)
       const productNames = validItems.map(i => i.name.trim())
-      const purchase = await addPurchase({
-        business_id: brand.id,
+      const purchase = await purchaseRepository.create(brand.id, {
         supplier_name: form.supplier,
         product_name: productNames.join(', '),
         quantity: totalQty,
@@ -120,7 +123,7 @@ export default function Purchases({ brand, role, perms }) {
 
       // AUTO-CREATE DEBT: if there is a balance, create a "We Owe" debt automatically
       if (balance > 0) {
-        await recordUnderpayment({
+        await debtRepository.recordUnderpayment({
           businessId: brand.id,
           direction: 'we_owe',
           partyName: form.supplier,
@@ -147,13 +150,14 @@ export default function Purchases({ brand, role, perms }) {
 
   async function markPaid(p) {
     try {
-      await updatePurchase(p.id, { amount_paid: p.total_cost, balance: 0, status: 'paid' })
-      // AUTO-UPDATE DEBT: find matching debt and mark as paid
+      await purchaseRepository.update(p.id, brand.id, { amount_paid: p.total_cost, balance: 0, status: 'paid' })
+      // AUTO-UPDATE DEBT: settle the debt this purchase raised, if any. The
+      // lookup lives in the debt repository — POS's credit collection needs the
+      // same one, and the two used to scan every debt in the business by hand.
       try {
-        const debts = await getDebts(brand.id)
-        const matchDebt = debts.find(d => d.source === 'purchase' && d.source_ref === p.id && d.status !== 'paid')
+        const matchDebt = await debtRepository.findOpenBySource('purchase', p.id, brand.id)
         if (matchDebt) {
-          await updateDebt(matchDebt.id, { amount_paid: p.total_cost, balance: 0, status: 'paid' })
+          await debtRepository.update(matchDebt.id, brand.id, { amount_paid: p.total_cost, balance: 0, status: 'paid' })
         }
       } catch (e) {}
       load(); showToast('Marked as paid! Debt updated automatically.', { type: 'success' })
