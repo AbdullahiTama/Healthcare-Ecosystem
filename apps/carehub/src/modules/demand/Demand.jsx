@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  ClipboardList, PackageX, MessageSquare, FileText, Plus, Printer, CheckCircle, Search, X,
+  ClipboardList, PackageX, MessageSquare, FileText, Plus, Printer, CheckCircle, Search, X, Zap,
 } from 'lucide-react'
 import {
   getOutOfStock, addOutOfStock, updateOutOfStock,
@@ -8,19 +8,27 @@ import {
   getRequisitions, addRequisition, updateRequisition,
   getClients,
 } from '../../services/supabase'
-import { fmt, todayDate, nowStr } from '../../lib/utils'
+import { fmt, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
 
-const blankItem = () => ({ product_name: '', quantity: '', cost: '', unit: 'unit' })
+// Stable identity for list rows — index keys would remount inputs when rows
+// are added/removed (and lose focus), so every generated row carries a _uid.
+let uidSeed = 0
+const uid = () => 'itm-' + Date.now().toString(36) + '-' + (++uidSeed)
+
+const blankItem = () => ({ _uid: uid(), product_name: '', quantity: '', cost: '', unit: 'unit' })
 
 const TABS = [
   ['out', PackageX, 'Out of Stock'],
   ['requests', MessageSquare, 'Customer Requests'],
   ['reqs', FileText, 'Requisitions'],
 ]
+
+const normName = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ')
+const parseQty = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isFinite(n) ? n : 0 }
 
 export default function Demand({ brand, role, perms, products }) {
   const [tab, setTab] = useState('out')
@@ -30,10 +38,15 @@ export default function Demand({ brand, role, perms, products }) {
   const [requisitions, setRequisitions] = useState([])
   const [clients, setClients] = useState([])
 
-  // Out-of-stock form
+  // Out-of-stock form (manual)
   const [showOut, setShowOut] = useState(false)
   const [outForm, setOutForm] = useState({ product_name: '' })
   const [savingOut, setSavingOut] = useState(false)
+
+  // Out-of-stock generation from inventory
+  const [showGen, setShowGen] = useState(false)
+  const [genRows, setGenRows] = useState([])
+  const [savingGen, setSavingGen] = useState(false)
 
   // Customer request form
   const [showReq, setShowReq] = useState(false)
@@ -51,7 +64,6 @@ export default function Demand({ brand, role, perms, products }) {
   useEffect(() => {
     let live = true
     getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
-    getOutOfStock(brand.id).then(list => { if (live) setOutItems(list || []) }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
 
@@ -73,11 +85,14 @@ export default function Demand({ brand, role, perms, products }) {
     if (!outForm.product_name.trim()) { showToast('Enter the product name.', { type: 'warning' }); return }
     setSavingOut(true)
     try {
-      const match = products.find(p => p.name.toLowerCase() === outForm.product_name.trim().toLowerCase())
+      const match = products.find(p => normName(p.name) === normName(outForm.product_name))
       await addOutOfStock({
         business_id: brand.id,
         product_id: match?.id || null,
         product_name: outForm.product_name.trim(),
+        quantity_needed: outForm.quantity_needed || '',
+        target_price: outForm.target_price ? parseFloat(outForm.target_price) : null,
+        supplier_notes: outForm.supplier_notes || '',
         notes: outForm.notes || '',
         created_by: role || null,
       })
@@ -85,6 +100,54 @@ export default function Demand({ brand, role, perms, products }) {
       setOutForm({ product_name: '' }); setShowOut(false); load()
     } catch (e) { showToast('Could not save. Please try again.', { type: 'error' }) }
     setSavingOut(false)
+  }
+
+  // Generate out-of-stock rows straight from inventory (stock <= 0), skipping
+  // products that already have an open entry.
+  function openGenerate() {
+    const logged = new Set(
+      outItems
+        .filter(i => i.status !== 'fulfilled')
+        .map(i => i.product_id || 'p:' + normName(i.product_name))
+    )
+    const rows = (products || [])
+      .filter(p => (p.category || '') !== 'Services' && Number(p.stock) <= 0)
+      .filter(p => !logged.has(p.id))
+      .map(p => ({
+        _uid: uid(), product_id: p.id, product_name: p.name || '',
+        quantity_needed: '', target_price: '', supplier_notes: '', notes: '',
+      }))
+    if (rows.length === 0) { showToast('No new out-of-stock items in inventory.', { type: 'info' }); return }
+    setGenRows(rows)
+    setShowGen(true)
+  }
+
+  const setGenRow = (u, patch) => setGenRows(rows => rows.map(r => (r._uid === u ? { ...r, ...patch } : r)))
+
+  async function saveGenerated() {
+    const valid = genRows.filter(r => r.product_name.trim())
+    if (valid.length === 0) { showToast('No valid items to log.', { type: 'warning' }); return }
+    setSavingGen(true)
+    let saved = 0
+    for (const r of valid) {
+      try {
+        await addOutOfStock({
+          business_id: brand.id,
+          product_id: r.product_id || null,
+          product_name: r.product_name.trim(),
+          quantity_needed: r.quantity_needed || '',
+          target_price: r.target_price ? parseFloat(r.target_price) : null,
+          supplier_notes: r.supplier_notes || '',
+          notes: r.notes || '',
+          created_by: role || null,
+        })
+        saved++
+      } catch (e) {}
+    }
+    setSavingGen(false)
+    setShowGen(false)
+    load()
+    showToast(saved > 0 ? saved + ' out-of-stock item(s) logged!' : 'Could not save items. Please try again.', { type: saved > 0 ? 'success' : 'error' })
   }
 
   async function fulfillOut(item) {
@@ -130,7 +193,32 @@ export default function Demand({ brand, role, perms, products }) {
 
   // ---- Requisitions ----
   const validReqItems = reqsForm.items.filter(i => i.product_name.trim() && (parseFloat(i.cost) > 0))
-  const reqTotal = validReqItems.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * parseFloat(i.cost), 0)
+  const reqTotal = validReqItems.reduce((s, i) => s + (parseQty(i.quantity) * parseFloat(i.cost)), 0)
+
+  // Merge open out-of-stock entries + open customer requests into one list of
+  // requisition lines, with duplicate products combined (quantities summed,
+  // target price carried over when present). Editing happens in the modal.
+  function openGenerateRequisition() {
+    const map = new Map()
+    const add = (name, qtyText, cost) => {
+      const key = normName(name)
+      if (!key) return
+      const cur = map.get(key) || { product_name: name.trim(), quantity: 0, cost: '', unit: 'unit' }
+      cur.quantity += parseQty(qtyText)
+      if (cost) cur.cost = String(cost)
+      map.set(key, cur)
+    }
+    outItems.filter(i => i.status !== 'fulfilled').forEach(i => add(i.product_name, i.quantity_needed, i.target_price))
+    requests.filter(r => r.status !== 'fulfilled').forEach(r => add(r.product_name, r.quantity, ''))
+    const items = [...map.values()].map(i => ({
+      _uid: uid(), product_name: i.product_name,
+      quantity: i.quantity > 0 ? String(i.quantity) : '',
+      cost: i.cost, unit: i.unit,
+    }))
+    if (items.length === 0) { showToast('Nothing open to order — log out-of-stock items or customer requests first.', { type: 'info' }); return }
+    setReqsForm({ supplier: '', items, notes: '' })
+    setShowReqs(true)
+  }
 
   async function saveReqs() {
     if (!reqsForm.supplier?.trim()) { showToast('Enter the supplier name.', { type: 'warning' }); return }
@@ -140,9 +228,8 @@ export default function Demand({ brand, role, perms, products }) {
       await addRequisition({
         business_id: brand.id,
         supplier_name: reqsForm.supplier.trim(),
-        items: JSON.stringify(validReqItems.map(i => ({ product_name: i.product_name.trim(), quantity: i.quantity, cost: i.cost, unit: i.unit || 'unit' }))),
-        total: reqTotal,
-        notes: reqsForm.notes || '',
+        note: reqsForm.notes || '',
+        items: validReqItems.map(i => ({ product_name: i.product_name.trim(), quantity: i.quantity || '', cost: i.cost || 0, unit: i.unit || 'unit' })),
       })
       showToast('Requisition saved! Print or mark as sent when ready.', { type: 'success' })
       setReqsForm({ items: [blankItem()] }); setShowReqs(false); load()
@@ -158,16 +245,20 @@ export default function Demand({ brand, role, perms, products }) {
     } catch (e) { showToast('Could not update. Please try again.', { type: 'error' }) }
   }
 
+  // `items` is an array from the normalized read; legacy string payloads
+  // (pre-fix saves) are parsed defensively.
+  const reqItemsOf = r => (Array.isArray(r?.items) ? r.items : (() => { try { return JSON.parse(r?.items || '[]') } catch (e) { return [] } })())
+  const reqTotalOf = r => reqItemsOf(r).reduce((s, i) => s + (parseQty(i.quantity) * (parseFloat(i.cost) || 0)), 0)
+
   function printRequisition(r) {
-    let items = []
-    try { items = JSON.parse(r.items || '[]') } catch (e) {}
+    const items = reqItemsOf(r)
     const rows = items.map((i, idx) => (
       '<tr>' +
       '<td>' + (idx + 1) + '</td>' +
       '<td>' + (i.product_name || '') + '</td>' +
       '<td>' + (i.quantity || '') + ' ' + (i.unit || '') + '</td>' +
       '<td align="right">' + fmt(i.cost || 0) + '</td>' +
-      '<td align="right">' + fmt((parseFloat(i.quantity) || 0) * (parseFloat(i.cost) || 0)) + '</td>' +
+      '<td align="right">' + fmt((parseQty(i.quantity)) * (parseFloat(i.cost) || 0)) + '</td>' +
       '</tr>'
     )).join('')
     const w = window.open('', '_blank', 'width=760,height=600')
@@ -188,8 +279,8 @@ export default function Demand({ brand, role, perms, products }) {
       '<table><thead><tr><th>#</th><th>Product</th><th>Quantity</th><th align="right">Unit Cost</th><th align="right">Total</th></tr></thead><tbody>' +
       rows +
       '</tbody></table>' +
-      '<div class="total">Grand Total: ' + fmt(r.total || 0) + '</div>' +
-      (r.notes ? '<div class="notes">Notes: ' + r.notes + '</div>' : '') +
+      '<div class="total">Grand Total: ' + fmt(reqTotalOf(r)) + '</div>' +
+      (r.note ? '<div class="notes">Notes: ' + r.note + '</div>' : '') +
       '<div class="print"><em>Generated by CareHub</em></div>' +
       '<script>window.onload = function(){ window.print() }</script>' +
       '</body></html>'
@@ -201,10 +292,18 @@ export default function Demand({ brand, role, perms, products }) {
   const openOut = outItems.filter(i => i.status !== 'fulfilled').length
   const openReq = requests.filter(r => r.status !== 'fulfilled').length
   const draftReqs = requisitions.filter(r => r.status !== 'sent').length
+  const totalOrdered = requisitions.reduce((s, r) => s + reqTotalOf(r), 0)
+
+  const sectionBtn = tab === 'reqs' ? '+ New Requisition' : tab === 'requests' ? '+ Log Request' : '+ Log Item'
+  const sectionExtra = tab === 'out'
+    ? { label: 'Generate Out-of-Stock', icon: <Zap size={13} />, onClick: openGenerate }
+    : tab === 'reqs'
+      ? { label: 'Generate Requisition', icon: <Zap size={13} />, onClick: openGenerateRequisition }
+      : null
 
   return (
     <div>
-      <SectionHead title='Demand' sub='Out-of-stock book, customer requests and supplier requisitions' btn={tab === 'reqs' ? '+ New Requisition' : tab === 'requests' ? '+ Log Request' : '+ Log Item'} onBtn={() => { if (tab === 'reqs') setShowReqs(true); else if (tab === 'requests') setShowReq(true); else setShowOut(true) }} />
+      <SectionHead title='Demand' sub='Out-of-stock book, customer requests and supplier requisitions' btn={sectionBtn} extraBtn={sectionExtra} onBtn={() => { if (tab === 'reqs') setShowReqs(true); else if (tab === 'requests') setShowReq(true); else setShowOut(true) }} />
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {TABS.map(([key, Icon, label]) => {
@@ -232,7 +331,7 @@ export default function Demand({ brand, role, perms, products }) {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: `1px solid ${border}`, background: theme.gray50 }}>
-                      {['Product', 'Notes', 'Logged By', 'Logged', 'Status', 'Action'].map(h => (
+                      {['Product', 'Qty Needed', 'Target Price', 'Notes', 'Logged By', 'Logged', 'Status', 'Action'].map(h => (
                         <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -241,7 +340,9 @@ export default function Demand({ brand, role, perms, products }) {
                     {outItems.map(i => (
                       <tr key={i.id} style={{ borderBottom: `1px solid ${gray100}`, background: i.status !== 'fulfilled' ? '#fff8f3' : 'white' }}>
                         <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>{i.product_name}</td>
-                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{i.notes || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.quantity_needed || '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray600 }}>{i.target_price ? fmt(i.target_price) : '—'}</td>
+                        <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '160px' }}>{i.supplier_notes || i.notes || '—'}</td>
                         <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{i.created_by || '—'}</td>
                         <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{i.created_at?.slice(0, 10) || '—'}</td>
                         <td style={{ padding: '12px 14px' }}><Pill label={i.status} type={i.status === 'fulfilled' ? 'green' : 'red'} /></td>
@@ -305,7 +406,7 @@ export default function Demand({ brand, role, perms, products }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
             <StatCard icon={<FileText />} label='Drafts' value={draftReqs} />
             <StatCard icon={<CheckCircle />} label='Sent to Supplier' value={requisitions.length - draftReqs} />
-            <StatCard icon={<ClipboardList />} label='Total Ordered' value={fmt(requisitions.reduce((s, r) => s + (r.total || 0), 0))} />
+            <StatCard icon={<ClipboardList />} label='Total Ordered' value={fmt(totalOrdered)} />
           </div>
           {loading ? <Loading /> : requisitions.length === 0 ? (
             <Empty icon={<FileText size={40} />} message='No requisitions yet' action='+ New Requisition' onAction={() => setShowReqs(true)} />
@@ -322,8 +423,7 @@ export default function Demand({ brand, role, perms, products }) {
                   </thead>
                   <tbody>
                     {requisitions.map(r => {
-                      let items = []
-                      try { items = JSON.parse(r.items || '[]') } catch (e) {}
+                      const items = reqItemsOf(r)
                       return (
                         <tr key={r.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                           <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>
@@ -331,7 +431,7 @@ export default function Demand({ brand, role, perms, products }) {
                             <div style={{ fontWeight: '400', fontSize: '11px', color: gray400, marginTop: '2px' }}>{items.map(i => i.product_name).join(', ')}</div>
                           </td>
                           <td style={{ padding: '12px 14px', fontSize: '13px', color: gray600 }}>{items.length} item(s)</td>
-                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(r.total || 0)}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(reqTotalOf(r))}</td>
                           <td style={{ padding: '12px 14px' }}><Pill label={r.status} type={r.status === 'sent' ? 'green' : 'amber'} /></td>
                           <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{r.created_at?.slice(0, 10) || '—'}</td>
                           <td style={{ padding: '12px 14px' }}>
@@ -366,7 +466,49 @@ export default function Demand({ brand, role, perms, products }) {
               </datalist>
             </div>
           </div>
-          <Textarea label='Notes (optional)' value={outForm.notes} onChange={v => setOutForm(p => ({ ...p, notes: v }))} placeholder='Size, brand or what customers need...' rows={2} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Inp label='Quantity Needed' value={outForm.quantity_needed} onChange={v => setOutForm(p => ({ ...p, quantity_needed: v }))} placeholder='e.g. 20 packs' />
+            <Inp label='Target Price (₦, optional)' value={outForm.target_price} onChange={v => setOutForm(p => ({ ...p, target_price: v }))} type='number' placeholder='0' />
+          </div>
+          <Textarea label='Supplier Notes (optional)' value={outForm.supplier_notes} onChange={v => setOutForm(p => ({ ...p, supplier_notes: v }))} placeholder='Preferred supplier, brand, size...' rows={2} />
+          <Textarea label='Notes (optional)' value={outForm.notes} onChange={v => setOutForm(p => ({ ...p, notes: v }))} placeholder='Why it is out, when it ran out...' rows={2} />
+        </div>
+      </Modal>
+
+      {/* Generate out-of-stock from inventory */}
+      <Modal show={showGen} onClose={() => setShowGen(false)} title={'Generate Out-of-Stock (' + genRows.length + ' item' + (genRows.length === 1 ? '' : 's') + ')'} wide
+        footer={<><GhostBtn onClick={() => setShowGen(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveGenerated} style={{ flex: 1, padding: '12px' }}>{savingGen ? 'Logging...' : 'Log All Items'}</TealBtn></>}>
+        <div style={{ padding: '10px 14px', borderRadius: theme.radius.md, background: bg, fontSize: '12px', color: gray600, marginBottom: '14px' }}>
+          Pulled from inventory where stock is 0. Products with an open entry are skipped. Edit any row before logging.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '46vh', overflowY: 'auto' }}>
+          {genRows.map(r => (
+            <div key={r._uid} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '4px' }}>Product</div>
+                  <input value={r.product_name} onChange={e => setGenRow(r._uid, { product_name: e.target.value })} placeholder='Product name'
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                </div>
+                <button onClick={() => setGenRows(rows => rows.filter(x => x._uid !== r._uid))} aria-label={'Remove ' + (r.product_name || 'item')}
+                  style={{ width: '34px', height: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer', marginTop: '18px' }}>
+                  <X size={16} />
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                <input value={r.quantity_needed} onChange={e => setGenRow(r._uid, { quantity_needed: e.target.value })} placeholder='Quantity needed e.g. 20 packs' aria-label='Quantity needed'
+                  style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                <input value={r.target_price} onChange={e => setGenRow(r._uid, { target_price: e.target.value })} placeholder='Target price (₦)' aria-label='Target price'
+                  style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                <input value={r.supplier_notes} onChange={e => setGenRow(r._uid, { supplier_notes: e.target.value })} placeholder='Supplier notes' aria-label='Supplier notes'
+                  style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+                <input value={r.notes} onChange={e => setGenRow(r._uid, { notes: e.target.value })} placeholder='Notes' aria-label='Notes'
+                  style={{ padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
+              </div>
+            </div>
+          ))}
         </div>
       </Modal>
 
@@ -395,7 +537,7 @@ export default function Demand({ brand, role, perms, products }) {
       </Modal>
 
       {/* New requisition */}
-      <Modal show={showReqs} onClose={() => { setShowReqs(false); setReqsForm({ items: [blankItem()] }) }} title='New Requisition'
+      <Modal show={showReqs} onClose={() => { setShowReqs(false); setReqsForm({ items: [blankItem()] }) }} title='New Requisition' wide
         footer={<><GhostBtn onClick={() => { setShowReqs(false); setReqsForm({ items: [blankItem()] }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveReqs} style={{ flex: 1, padding: '12px' }}>{savingReqs ? 'Saving...' : 'Save Requisition'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Inp label='Supplier Name *' value={reqsForm.supplier} onChange={v => setReqsForm(p => ({ ...p, supplier: v }))} placeholder='e.g. MedSupply Ltd' required />
@@ -404,27 +546,27 @@ export default function Demand({ brand, role, perms, products }) {
               <span style={{ fontSize: '12px', fontWeight: '700', color: gray500 }}>ITEMS TO ORDER *</span>
               <button onClick={() => setReqsForm(p => ({ ...p, items: [...p.items, blankItem()] }))} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealMist, color: tealDeep, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}><Plus size={13} /> Add item</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {reqsForm.items.map((item, i) => {
-                const sub = (parseFloat(item.quantity) || 0) * (parseFloat(item.cost) || 0)
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '40vh', overflowY: 'auto' }}>
+              {reqsForm.items.map(item => {
+                const sub = (parseQty(item.quantity)) * (parseFloat(item.cost) || 0)
                 return (
-                  <div key={i} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}>
+                  <div key={item._uid} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: bg }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input value={item.product_name} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, product_name: e.target.value } : it) }))} placeholder='Product name e.g. Paracetamol 500mg'
+                      <input value={item.product_name} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, product_name: e.target.value } : it) }))} placeholder='Product name e.g. Paracetamol 500mg'
                         style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-                      <input value={item.quantity} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it) }))} placeholder='Qty'
+                      <input value={item.quantity} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, quantity: e.target.value } : it) }))} placeholder='Qty'
                         aria-label='Quantity'
                         style={{ width: '64px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-                      <input value={item.cost} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, cost: e.target.value } : it) }))} placeholder='Cost ₦'
+                      <input value={item.cost} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, cost: e.target.value } : it) }))} placeholder='Cost ₦'
                         aria-label='Unit cost'
                         style={{ width: '96px', padding: '9px 10px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', color: navy, background: 'white' }} />
-                      <button onClick={() => setReqsForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }))} aria-label={'Remove ' + (item.product_name || 'item')}
+                      <button onClick={() => setReqsForm(p => ({ ...p, items: p.items.filter(it => it._uid !== item._uid) }))} aria-label={'Remove ' + (item.product_name || 'item')}
                         style={{ width: '34px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: theme.radius.md, border: 'none', background: 'transparent', color: gray400, cursor: 'pointer' }}>
                         <X size={16} />
                       </button>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginTop: '8px' }}>
-                      <input value={item.unit} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, unit: e.target.value } : it) }))} placeholder='unit'
+                      <input value={item.unit} onChange={e => setReqsForm(p => ({ ...p, items: p.items.map(it => it._uid === item._uid ? { ...it, unit: e.target.value } : it) }))} placeholder='unit'
                         aria-label='Unit label'
                         style={{ width: '110px', padding: '6px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }} />
                       <span style={{ fontSize: '12px', fontWeight: '700', color: sub > 0 ? tealDeep : gray400 }}>{sub > 0 ? 'Subtotal: ' + fmt(sub) : '—'}</span>

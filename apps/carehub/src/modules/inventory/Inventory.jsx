@@ -615,7 +615,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
-  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
+  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
@@ -638,9 +638,17 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
       return
     }
     setSaving(true)
-    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, ...restForm } = form
+    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, show_price: _sp, ...restForm } = form
     const saleData = hasSaleFields
-      ? { sale_type: form.sale_type || 'retail', price_unit: form.price_unit || null, min_purchase: form.min_purchase ? Number(form.min_purchase) : null }
+      ? {
+          sale_type: form.sale_type || 'retail',
+          price_unit: form.price_unit || null,
+          min_purchase: form.min_purchase ? Number(form.min_purchase) : null,
+          // show_price was previously never written by CareHub, so every
+          // listed product was priced publicly with no opt-out. Written only
+          // when actually listed; a stale value is preserved while unlisted.
+          ...(listedOnCareFind ? { show_price: form.show_price !== false } : {}),
+        }
       : {}
     await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines' })
     setSaving(false)
@@ -699,6 +707,9 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           </div>
         )}
         <Toggle label='List on CareFind' desc='Show this product publicly on CareFind so patients can search for it' value={form.list_on_carefind !== false} onChange={v => f('list_on_carefind', v)} />
+        {!isService && form.list_on_carefind !== false && (
+          <Toggle label='Show price on CareFind' desc="Buyers see the selling price in search results. Turn off to show 'Ask for price' instead." value={form.show_price !== false} onChange={v => f('show_price', v)} />
+        )}
       </div>
     </Modal>
   )

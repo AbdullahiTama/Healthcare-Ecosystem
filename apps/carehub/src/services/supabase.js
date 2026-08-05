@@ -222,8 +222,27 @@ export async function getCustomerRequests(businessId) { return sbFetch('customer
 export async function addCustomerRequest(data) { return sbFetch('customer_requests', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateCustomerRequest(id, data) { return sbFetch('customer_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
-export async function getRequisitions(businessId) { return sbFetch('requisitions?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addRequisition(data) { return sbFetch('requisitions', { method: 'POST', body: JSON.stringify(data) }) }
+// REQUISITIONS — lines live in `requisition_items` (normalized), not a JSON
+// column on `requisitions` (the live table has `note` only; the old payload
+// failed every save with 42703). The parent + its lines are written atomically
+// by the `create_requisition` RPC (SECURITY INVOKER, tenant-checked by RLS).
+export async function getRequisitions(businessId) {
+  const reqs = await sbFetch('requisitions?business_id=eq.' + businessId + '&order=created_at.desc&select=*')
+  const list = reqs || []
+  const ids = list.map(r => r.id)
+  if (ids.length === 0) return list
+  const items = await sbFetch('requisition_items?requisition_id=in.(' + ids.join(',') + ')&select=*')
+  const byReq = {}
+  ;(items || []).forEach(it => { (byReq[it.requisition_id] = byReq[it.requisition_id] || []).push(it) })
+  return list.map(r => ({ ...r, items: byReq[r.id] || [] }))
+}
+export async function addRequisition({ business_id, supplier_name, note, items }) {
+  return sbFetch('rpc/create_requisition', {
+    method: 'POST',
+    body: JSON.stringify({ p_business_id: business_id, p_supplier_name: supplier_name, p_note: note || null, p_items: items || [] }),
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
+  })
+}
 export async function updateRequisition(id, data) { return sbFetch('requisitions?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
 // `recordUnderpayment` (the "an underpaid sale or purchase automatically

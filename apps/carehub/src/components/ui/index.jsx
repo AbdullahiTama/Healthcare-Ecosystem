@@ -219,9 +219,17 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
 // — backdrop click and Escape are disabled, only the explicit footer actions can
 // close it (docs/design/SCREEN_PATTERNS.md pattern 27's rule for irreversible-
 // action modals; mirrors apps/carefind/src/components/ui/index.jsx's Modal).
+// `onClose` is kept in a ref so the focus-trap below only ever re-runs when the
+// modal's open state actually changes. Every call site passes an inline arrow
+// (new reference per render), so without this the effect would tear down and
+// re-arm itself on every parent re-render — its cleanup would steal focus back
+// to the trigger button on each keystroke, destroying the user's caret and, on
+// mobile, dismissing the keyboard after every character.
 export function Modal({ show, onClose, title, children, footer, wide, sheet, preventBackdropClose, hideCloseButton }) {
   const cardRef = useRef(null)
   const triggerRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose })
 
   useEffect(() => {
     if (!show) return
@@ -233,7 +241,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
     firstFocusable?.focus()
 
     function onKeyDown(e) {
-      if (e.key === 'Escape' && !preventBackdropClose) { onClose?.(); return }
+      if (e.key === 'Escape' && !preventBackdropClose) { onCloseRef.current?.(); return }
       if (e.key !== 'Tab') return
       const items = Array.from(focusable() || [])
       if (items.length === 0) return
@@ -247,7 +255,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
       document.removeEventListener('keydown', onKeyDown)
       triggerRef.current?.focus?.()
     }
-  }, [show, onClose, preventBackdropClose])
+  }, [show, preventBackdropClose])
 
   if (!show) return null
   return (

@@ -1,3 +1,13 @@
+// Nav icons are lucide-react component references (ICONS.md's "one outline
+// icon set" rule) — Sidebar.jsx renders each as <Icon size={16} />, not a
+// string.
+import {
+  Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
+  Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
+  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
+  ClipboardList,
+} from 'lucide-react'
+
 export const ROLES = {
   Owner: {
     nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
@@ -168,82 +178,105 @@ export function can(role, action, customRoles = {}) {
   return getPerms(role, customRoles)[action] || false
 }
 
-// Nav icons are lucide-react component references (ICONS.md's "one outline
-// icon set" rule) — Sidebar.jsx renders each as <Icon size={16} />, not a
-// string. This was the last emoji-driven config in CareHub's primary chrome;
-// migrating it (rather than leaving it emoji while Sidebar.jsx itself moved
-// to the design system) is what closes out that gap.
-import {
-  Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
-  Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
-  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
-  ClipboardList,
-} from 'lucide-react'
+// ── Module registry ───────────────────────────────────────────────────────────
+// Single source of truth for which modules exist and which business types may
+// use them. Everything that lists modules — the sidebar, the route guards and
+// the Roles & Permissions editor in Staff — derives from this one table, so a
+// module can never be offered in one surface and missing in another, and a
+// start-up business type can never see another vertical's modules.
+//
+// Flow: Business Type → Module Registry → Available Modules → Role Editor.
+// A module's `types` array is the gate; `labelByType` lets one module present
+// differently per vertical (the same clients table is "Clients" at a pharmacy
+// and "Patients" at a hospital). NAV_ORDER below only expresses the per-vertical
+// ordering, which predates the registry and must not be silently reshuffled.
+const ALL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness', 'hospital', 'manufacturer_importer', 'wholesale']
+const RETAIL_TYPES = ['skincare', 'pharmacy', 'dental', 'optical', 'wellness']
+const HOSPITAL_TYPES = ['hospital']
+const ENTERPRISE_TYPES = ['manufacturer_importer', 'wholesale']
+const CONSULT_TYPES = ['skincare', 'pharmacy']
 
-export const ALL_NAV_DEFAULT = [
-  ['dashboard', Home, 'Dashboard'],
-  ['pos', ShoppingCart, 'POS / Sales'],
-  ['inventory', Package, 'Inventory'],
-  ['clients', Users, 'Clients'],
-  ['appointments', Calendar, 'Appointments'],
-  ['consultation', Clipboard, 'Consultations'],
-  ['expenses', Receipt, 'Expenses'],
-  ['debts', Landmark, 'Debts'],
-  ['purchases', Truck, 'Purchases'],
-  ['demand', ClipboardList, 'Demand'],
-  ['carefind', Search, 'CareFind Profile'],
-  ['locations', Building2, 'Locations'],
-  ['staff', User, 'Staff'],
-  ['reports', BarChart2, 'Reports'],
-  ['settings', Settings, 'Settings'],
-]
+export const MODULES = {
+  dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES },
+  pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES },
+  inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES },
+  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' } },
+  appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES },
+  consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES },
+  expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES },
+  debts: { label: 'Debts', icon: Landmark, types: ALL_TYPES },
+  purchases: { label: 'Purchases', icon: Truck, types: ALL_TYPES },
+  demand: { label: 'Demand', icon: ClipboardList, types: ALL_TYPES },
+  carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES },
+  locations: { label: 'Locations', icon: Building2, types: ALL_TYPES },
+  staff: { label: 'Staff', icon: User, types: ALL_TYPES },
+  reports: { label: 'Reports', icon: BarChart2, types: ALL_TYPES },
+  settings: { label: 'Settings', icon: Settings, types: ALL_TYPES },
+  reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES },
+  triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES },
+  doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES },
+  rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES },
+  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES },
+  imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES },
+  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES },
+  orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES },
+  warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES },
+  stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES },
+  territories: { label: 'Territories', icon: Map, types: ENTERPRISE_TYPES },
+  messages: { label: 'Correspondence', icon: Mail, types: ENTERPRISE_TYPES },
+}
 
-export const ALL_NAV_HOSPITAL = [
-  ['dashboard', Home, 'Dashboard'],
-  ['reception', UserCheck, 'Reception'],
-  ['triage', Activity, 'Triage'],
-  ['doctor', Stethoscope, 'Doctor'],
-  ['rx_inbox', Pill, 'Rx Inbox'],
-  ['lab', Microscope, 'Laboratory'],
-  ['imaging', Scan, 'Imaging'],
-  ['pos', ShoppingCart, 'POS / Sales'],
-  ['inventory', Package, 'Inventory'],
-  ['clients', Users, 'Patients'],
-  ['expenses', Receipt, 'Expenses'],
-  ['debts', Landmark, 'Debts'],
-  ['purchases', Truck, 'Purchases'],
-  ['demand', ClipboardList, 'Demand'],
-  ['carefind', Search, 'CareFind Profile'],
-  ['locations', Building2, 'Locations'],
-  ['staff', User, 'Staff'],
-  ['reports', BarChart2, 'Reports'],
-  ['settings', Settings, 'Settings'],
-]
+// Per-vertical ordering. Kept separate from the registry because the three
+// legacy nav lists ordered their modules differently and nothing should
+// depend on a reorder happening silently.
+const NAV_ORDER = {
+  default: ['dashboard', 'pos', 'inventory', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
+  hospital: ['dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
+  enterprise: ['dashboard', 'activity', 'orders', 'warehouses', 'stock', 'staff', 'territories', 'messages', 'reports', 'carefind', 'settings'],
+}
 
-// Manufacturer / Importer / Wholesale — dedicated warehouse & hierarchy system
-export const ALL_NAV_ENTERPRISE = [
-  ['dashboard', Home, 'Dashboard'],
-  ['activity', Radio, 'Live Field Activity'],
-  ['orders', FileText, 'Orders & LPO'],
-  ['warehouses', Factory, 'Warehouses & Branches'],
-  ['stock', Boxes, 'Stock & Batches'],
-  ['staff', Users, 'Sales Team'],
-  ['territories', Map, 'Territories'],
-  ['messages', Mail, 'Correspondence'],
-  ['reports', BarChart2, 'Reports'],
-  ['carefind', Search, 'CareFind Profile'],
-  ['settings', Settings, 'Settings'],
-]
+function familyOf(businessType) {
+  if (businessType === 'hospital') return 'hospital'
+  if (businessType === 'manufacturer_importer' || businessType === 'wholesale') return 'enterprise'
+  return 'default'
+}
+
+function labelFor(module, businessType) {
+  return (module.labelByType && module.labelByType[businessType]) || module.label
+}
+
+// The modules a business type may use, as [id, icon, label] tuples in that
+// vertical's order. This is the single gate every nav-building consumer uses.
+export function getModulesForType(businessType) {
+  const family = familyOf(businessType)
+  return NAV_ORDER[family]
+    .filter(id => MODULES[id].types.includes(businessType))
+    .map(id => [id, MODULES[id].icon, labelFor(MODULES[id], businessType)])
+}
+
+export const ALL_NAV_DEFAULT = NAV_ORDER.default.map(id => [id, MODULES[id].icon, MODULES[id].label])
+export const ALL_NAV_HOSPITAL = NAV_ORDER.hospital.map(id => [id, MODULES[id].icon, MODULES[id].label])
+export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.map(id => [id, MODULES[id].icon, MODULES[id].label])
 
 export function getNavItems(role, businessType, customRoles = {}) {
   const perms = getPerms(role, customRoles)
-  let all = ALL_NAV_DEFAULT
-  if (businessType === 'hospital') all = ALL_NAV_HOSPITAL
-  if (businessType === 'manufacturer_importer' || businessType === 'wholesale') all = ALL_NAV_ENTERPRISE
-  // Consultation forms are a skincare + pharmacy module — hide for every other
-  // business type even though several presets grant the route.
-  if (businessType !== 'skincare' && businessType !== 'pharmacy') all = all.filter(i => i[0] !== 'consultation')
-  return all.filter(item => perms.nav.includes(item[0]))
+  return getModulesForType(businessType).filter(item => perms.nav.includes(item[0]))
 }
 
 export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier', 'Nurse', 'Doctor', 'Lab Technician']
+
+// Preset roles offered when adding/editing staff, scoped to the business type so
+// a pharmacy is never offered Doctor/Lab Technician and a hospital is never
+// offered Pharmacist/Therapist — an invalid assignment that another vertical's
+// module gate would silently neutralise. Enterprise businesses type their own.
+export const ROLES_FOR_TYPE = {
+  hospital: ['Owner', 'Manager', 'Receptionist', 'Nurse', 'Doctor', 'Lab Technician', 'Cashier'],
+  retail: ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier'],
+  enterprise: [],
+}
+
+export function rolesForType(businessType) {
+  if (businessType === 'hospital') return ROLES_FOR_TYPE.hospital
+  if (businessType === 'manufacturer_importer' || businessType === 'wholesale') return ROLES_FOR_TYPE.enterprise
+  return ROLES_FOR_TYPE.retail
+}

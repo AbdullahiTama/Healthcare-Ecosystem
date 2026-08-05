@@ -6,6 +6,11 @@ import {
   getPerms,
   can,
   getNavItems,
+  getModulesForType,
+  rolesForType,
+  ALL_NAV_DEFAULT,
+  ALL_NAV_HOSPITAL,
+  ALL_NAV_ENTERPRISE,
   ROLE_LIST,
 } from '../permissions.js'
 
@@ -147,5 +152,68 @@ describe('getNavItems by business type', () => {
       expect(nav).toContain('stock')
       expect(nav).not.toContain('dashboards')
     }
+  })
+})
+
+describe('module registry (business type → modules)', () => {
+  it('never offers another vertical\'s modules to a business type', () => {
+    const ids = (type) => getModulesForType(type).map(([id]) => id)
+    // Retail never sees hospital or enterprise modules.
+    for (const type of ['skincare', 'pharmacy', 'dental', 'optical', 'wellness']) {
+      expect(ids(type)).not.toContain('reception')
+      expect(ids(type)).not.toContain('lab')
+      expect(ids(type)).not.toContain('warehouses')
+      expect(ids(type)).not.toContain('orders')
+      expect(ids(type)).not.toContain('stock')
+    }
+    // Hospital never sees retail-only modules (appointments) or enterprise ones.
+    expect(ids('hospital')).not.toContain('appointments')
+    expect(ids('hospital')).not.toContain('warehouses')
+    expect(ids('hospital')).not.toContain('orders')
+    // Enterprise never sees retail or hospital modules.
+    for (const type of ['manufacturer_importer', 'wholesale']) {
+      expect(ids(type)).not.toContain('appointments')
+      expect(ids(type)).not.toContain('consultation')
+      expect(ids(type)).not.toContain('pos')
+      expect(ids(type)).not.toContain('inventory')
+      expect(ids(type)).not.toContain('doctor')
+      expect(ids(type)).not.toContain('reception')
+    }
+  })
+
+  it('keeps consultation a skincare+pharmacy-only module', () => {
+    const ids = (type) => getModulesForType(type).map(([id]) => id)
+    expect(ids('skincare')).toContain('consultation')
+    expect(ids('pharmacy')).toContain('consultation')
+    expect(ids('dental')).not.toContain('consultation')
+    expect(ids('hospital')).not.toContain('consultation')
+  })
+
+  it('labels clients as Patients for hospitals and Clients everywhere else', () => {
+    const tuple = (type) => getModulesForType(type).find(([id]) => id === 'clients')
+    expect(tuple('hospital')[2]).toBe('Patients')
+    expect(tuple('pharmacy')[2]).toBe('Clients')
+  })
+
+  it('produces the same nav tuples the legacy exported lists carried', () => {
+    // Spot-check that the derived exports still match the pre-registry shapes.
+    expect(ALL_NAV_DEFAULT.length).toBe(15)
+    expect(ALL_NAV_HOSPITAL.length).toBe(19)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(11)
+    expect(ALL_NAV_DEFAULT[1]).toEqual(['pos', expect.anything(), 'POS / Sales'])
+  })
+
+  it('scopes preset roles offered to staff by business type', () => {
+    expect(rolesForType('pharmacy')).not.toContain('Doctor')
+    expect(rolesForType('pharmacy')).not.toContain('Lab Technician')
+    expect(rolesForType('pharmacy')).not.toContain('Nurse')
+    expect(rolesForType('pharmacy')).toContain('Pharmacist')
+    expect(rolesForType('pharmacy')).toContain('Therapist')
+    expect(rolesForType('hospital')).not.toContain('Pharmacist')
+    expect(rolesForType('hospital')).not.toContain('Therapist')
+    expect(rolesForType('hospital')).toContain('Doctor')
+    expect(rolesForType('hospital')).toContain('Lab Technician')
+    expect(rolesForType('wholesale')).toEqual([])
+    expect(rolesForType('manufacturer_importer')).toEqual([])
   })
 })

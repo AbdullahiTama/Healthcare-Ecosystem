@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
 import { staffRepository } from './repositories'
 import { emailStaffWelcome } from '../../lib/email'
-import { ROLE_LIST, ALL_NAV_DEFAULT, ALL_NAV_HOSPITAL, ALL_NAV_ENTERPRISE } from '../../lib/permissions'
+import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -21,6 +21,12 @@ export default function Staff({ brand, role, perms }) {
   const [roleDeleteTarget, setRoleDeleteTarget] = useState(null)
   const [roleEditorOpen, setRoleEditorOpen] = useState(false)
   const [editingRole, setEditingRole] = useState(null)
+  // "Edit role" on a staff row: roles are otherwise immutable after creation,
+  // and the FK-backed delete is blocked for anyone with usage history — so a
+  // mis-assigned role used to be permanent.
+  const [editTarget, setEditTarget] = useState(null)
+  const [editRole, setEditRole] = useState('')
+  const [savingRoleEdit, setSavingRoleEdit] = useState(false)
   const [roleForm, setRoleForm] = useState({ name: '', label: '', nav: [], flags: {} })
   const [savingRole, setSavingRole] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
@@ -51,11 +57,15 @@ export default function Staff({ brand, role, perms }) {
   // Every role already used at this company — becomes the suggestion list,
   // so the company's own hierarchy naturally builds itself as they add people.
   const usedRoles = [...new Set(staff.map(s => s.role).filter(Boolean))]
-  // Role picker = preset roles + business-defined custom roles.
+  // Role picker = preset roles valid for this business type + business-defined
+  // custom roles. A pharmacy is never offered Doctor or Lab Technician, and a
+  // hospital is never offered Pharmacist or Therapist.
   const customRoleNames = roles.map(r => r.name)
-  const roleOptions = [...ROLE_LIST, ...customRoleNames]
-
-  const ALL_NAV_UNION = [...new Map([...ALL_NAV_DEFAULT, ...ALL_NAV_HOSPITAL, ...ALL_NAV_ENTERPRISE].map(i => [i[0], i])).values()]
+  const roleOptions = [...rolesForType(bType), ...customRoleNames]
+  // Modules the Roles & Permissions editor may offer: only what this business
+  // type can actually use, straight from the registry.
+  const typeModules = getModulesForType(bType || 'skincare')
+  const typeModuleIds = typeModules.map(m => m[0])
 
   const FLAG_META = [
     ['canEditPrice', 'Edit prices', 'Can change selling prices in Inventory and POS.'],
@@ -84,11 +94,14 @@ export default function Staff({ brand, role, perms }) {
   async function saveRole() {
     if (!roleForm.name.trim()) { showToast('Give the role a name.', { type: 'warning' }); return }
     setSavingRole(true)
+    // Modules outside this business type's registry are meaningless (another
+    // vertical's gate would neutralise them) — never persist them.
+    const nav = roleForm.nav.filter(k => typeModuleIds.includes(k))
     const payload = {
       business_id: brand.id,
       name: roleForm.name.trim(),
       permissions: {
-        nav: roleForm.nav,
+        nav: nav.length > 0 ? nav : ['dashboard'],
         label: roleForm.label.trim() || roleForm.name.trim(),
         canEditPrice: !!roleForm.flags.canEditPrice,
         canEditStock: !!roleForm.flags.canEditStock,
@@ -158,6 +171,27 @@ export default function Staff({ brand, role, perms }) {
 
   async function toggleCareFind(s) {
     try { await staffRepository.update(s.id, brand.id, { show_on_carefind: !s.show_on_carefind }); load(); showToast(!s.show_on_carefind ? 'Now visible on CareFind' : 'Hidden from CareFind', { type: 'success' }) } catch (e) { showToast('Could not update CareFind visibility. Please try again.', { type: 'error' }) }
+  }
+
+  function openRoleEdit(s) { setEditTarget(s); setEditRole(s.role); setShowAdd(false) }
+
+  async function saveRoleEdit() {
+    if (!editRole.trim()) { showToast('Choose a role.', { type: 'warning' }); return }
+    const s = editTarget
+    // Locking the Owner row out of Owner is a permanent lockout: demoting it
+    // removes canManageStaff, so nobody could ever change it back.
+    if (s?.role === 'Owner' && editRole !== 'Owner') { showToast('The Owner role cannot be demoted here — you would lose access.', { type: 'warning' }); return }
+    setSavingRoleEdit(true)
+    try {
+      const updates = { role: editRole.trim() }
+      // If the CareFind title was auto-derived from the old role, keep it in
+      // sync so the public listing doesn't show a stale title after a change.
+      if (s?.public_title && s.public_title === s.role) updates.public_title = editRole.trim()
+      await staffRepository.update(s.id, brand.id, updates)
+      showToast('Role updated! New access applies immediately.', { type: 'success' })
+      setEditTarget(null); load()
+    } catch (e) { showToast('Could not update this role. Please try again.', { type: 'error' }) }
+    setSavingRoleEdit(false)
   }
 
   function askDelete(s) { setDeleteTarget(s) }
@@ -256,6 +290,10 @@ export default function Staff({ brand, role, perms }) {
               </div>
               {isOwner && (
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={() => openRoleEdit(s)}
+                    style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                    Edit role
+                  </button>
                   <button onClick={() => toggleCareFind(s)}
                     style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.show_on_carefind ? warning : tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                     {s.show_on_carefind ? 'Hide from CareFind' : 'Show on CareFind'}
@@ -327,6 +365,42 @@ export default function Staff({ brand, role, perms }) {
         </div>
       </Modal>
 
+            <Modal show={!!editTarget} onClose={() => setEditTarget(null)} title={'Edit role — ' + (editTarget?.full_name || 'Staff member')}
+        footer={<><GhostBtn onClick={() => setEditTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRoleEdit} style={{ flex: 1, padding: '12px' }}>{savingRoleEdit ? 'Saving...' : 'Save Role'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {isEnterprise ? (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Role *</div>
+              <input
+                list='enterprise-role-suggestions'
+                value={editRole}
+                onChange={e => setEditRole(e.target.value)}
+                placeholder='e.g. Regional Manager, Medical Rep — type your own'
+                style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box', color: navy, outline: 'none' }}
+              />
+              <datalist id='enterprise-role-suggestions'>
+                {usedRoles.map(r => <option key={r} value={r} />)}
+              </datalist>
+            </div>
+          ) : (
+            <div>
+              {/* A legacy assignment outside this type's preset list (e.g. a
+                  Doctor created before the picker was type-scoped) must still
+                  render, so it is appended rather than silently blanked. */}
+              <Sel label='Role *' value={editRole} onChange={setEditRole} options={roleOptions.includes(editRole) ? roleOptions : [...roleOptions, editRole]} required />
+            </div>
+          )}
+          {editTarget?.role === 'Owner' && (
+            <div style={{ padding: '12px', borderRadius: theme.radius.md, background: warningBg, fontSize: '12px', color: warning, lineHeight: '1.7' }}>
+              <AlertTriangle size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />This is the Owner account. It cannot be changed to another role.
+            </div>
+          )}
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            The new role's access applies to this staff member immediately. If their CareFind title was set from the old role, it is updated to match.
+          </div>
+        </div>
+      </Modal>
+
       {isOwner && (
         <div style={{ marginTop: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -373,7 +447,7 @@ export default function Staff({ brand, role, perms }) {
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Modules this role can open</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: '8px', maxHeight: 220, overflowY: 'auto', padding: '12px', border: `1px solid ${border}`, borderRadius: theme.radius.md }}>
-              {ALL_NAV_UNION.filter(([key]) => brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy' || key !== 'consultation').map(([key, , label]) => (
+              {typeModules.map(([key, , label]) => (
                 <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12.5px', color: navy, cursor: 'pointer' }}>
                   <input type='checkbox' checked={roleForm.nav.includes(key)} onChange={e => setRoleForm(p => ({ ...p, nav: e.target.checked ? [...p.nav, key] : p.nav.filter(k => k !== key) }))} style={{ accentColor: tealDeep }} />
                   {label}

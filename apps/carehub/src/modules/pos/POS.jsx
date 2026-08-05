@@ -43,6 +43,10 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   const [search, setSearch] = useState('')
   const [receipt, setReceipt] = useState(null)
   const [scanning, setScanning] = useState(false)
+  // Out-of-stock products are hidden from the sellable grid; the badge under
+  // the category pills opens a bottom sheet listing them so staff can see what
+  // is unavailable without clogging the counter (mobile-focused issue #5).
+  const [showOutOfStock, setShowOutOfStock] = useState(false)
   const [settings, setSettings] = useState(null)
   const [todaySales, setTodaySales] = useState([])
   const [heldSales, setHeldSales] = useState([])
@@ -70,6 +74,11 @@ export default function POS({ brand, products, setProducts, role, perms }) {
     (filter === 'All' || p.cat === filter) &&
     (p.name.toLowerCase().includes(search.toLowerCase()) || (p.generic_name || p.genericName || '').toLowerCase().includes(search.toLowerCase()))
   )
+  // Services are always sellable; stock goods only when stock > 0. Anything
+  // else is collected for the Out-of-Stock sheet instead of the grid.
+  const isService = p => (p.cat || p.category) === 'Services'
+  const sellable = visible.filter(p => isService(p) || p.stock > 0)
+  const outOfStock = visible.filter(p => !isService(p) && p.stock <= 0)
 
   useEffect(() => {
     if (brand?.id) {
@@ -394,7 +403,10 @@ export default function POS({ brand, products, setProducts, role, perms }) {
               setScanning(false)
               const code = codes[0].rawValue
               const match = products.find(p => p.barcode === code || p.name.toLowerCase().includes(code.toLowerCase()))
-              if (match) { add(match); showToast('Added: ' + match.name, { type: 'success' }) }
+              if (match) {
+                if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
+                add(match); showToast('Added: ' + match.name, { type: 'success' })
+              }
               else { setSearch(code) }
             }
           } catch (e) {}
@@ -403,7 +415,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       }).catch(() => { setScanning(false); showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }) })
     } else {
       const code = prompt('Enter barcode number:')
-      if (code) { const m = products.find(p => p.name.toLowerCase().includes(code.toLowerCase())); if (m) add(m); else setSearch(code) }
+      if (code) { const m = products.find(p => p.name.toLowerCase().includes(code.toLowerCase())); if (m) { if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return } add(m) } else setSearch(code) }
     }
   }
 
@@ -620,6 +632,14 @@ export default function POS({ brand, products, setProducts, role, perms }) {
             })}
           </div>
 
+          {/* Out-of-stock badge — opens the sheet listing unavailable products */}
+          {outOfStock.length > 0 && (
+            <button onClick={() => setShowOutOfStock(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '8px 14px', borderRadius: theme.radius.full, border: `1px solid ${dangerBg}`, background: dangerBg, color: danger, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+              <PackageX size={13} /> Out of Stock ({outOfStock.length})
+            </button>
+          )}
+
           {/* Tabs */}
           <div style={{ marginTop: 12 }}>{tabBar('pos')}</div>
         </div>
@@ -632,26 +652,24 @@ export default function POS({ brand, products, setProducts, role, perms }) {
           </div>
         )}
 
-        {/* Product grid */}
+        {/* Product grid — only sellable items; out-of-stock live in the sheet */}
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start' }}>
-          {visible.length === 0 ? (
+          {sellable.length === 0 ? (
             <div style={{ gridColumn: '1 / -1' }}>
-              <Empty icon={<Search size={40} strokeWidth={1.5} />} message="No products match your search." cause="filtered" />
+              <Empty icon={<Search size={40} strokeWidth={1.5} />} message={outOfStock.length > 0 ? 'All matching products are out of stock.' : 'No products match your search.'} cause="filtered" />
             </div>
-          ) : visible.map(p => {
+          ) : sellable.map(p => {
             const inCart = cart.find(c => c.id === p.id)
             const qty = inCart?.qty || 0
-            const isService = (p.cat || p.category) === 'Services'
-            const out = !isService && p.stock <= 0
-            const low = !isService && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+            const service = isService(p)
+            const low = !service && p.stock > 0 && p.stock <= (p.reorder_level || 5)
             const Icon = productIcon(p)
-            const badge = isService ? { t: 'Service', bg: tealMist, fg: tealDeep }
-              : out ? { t: 'Out', bg: dangerBg, fg: danger }
+            const badge = service ? { t: 'Service', bg: tealMist, fg: tealDeep }
               : low ? { t: p.stock + ' left', bg: warningBg, fg: warning }
               : { t: String(p.stock), bg: gray100, fg: gray500 }
             return (
-              <button key={p.id} onClick={() => !out && add(p)} disabled={out}
-                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 13, cursor: out ? 'not-allowed' : 'pointer', opacity: out ? 0.55 : 1, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
+              <button key={p.id} onClick={() => add(p)}
+                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 13, cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
@@ -797,6 +815,27 @@ export default function POS({ brand, products, setProducts, role, perms }) {
             Cart total: <strong>{fmt(total)}</strong> · {cart.length} item(s) for <strong>{client || 'Walk-in'}</strong>
           </div>
           <Inp label='Note (optional)' value={holdNote} onChange={setHoldNote} placeholder='e.g. Customer coming back in 30 minutes' />
+        </div>
+      </Modal>
+
+      {/* Out-of-stock sheet — read-only list of products hidden from the grid */}
+      <Modal show={showOutOfStock} onClose={() => setShowOutOfStock(false)} title={'Out of stock (' + outOfStock.length + ')'} sheet={isMobile}
+        footer={<GhostBtn onClick={() => setShowOutOfStock(false)} style={{ flex: 1 }}>Close</GhostBtn>}>
+        <div style={{ fontSize: '12.5px', color: gray500, marginBottom: '12px' }}>
+          These products were hidden from the counter. Restock them from Inventory.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {outOfStock.length === 0 ? (
+            <Empty icon={<PackageX size={40} strokeWidth={1.5} />} message="No out-of-stock products" />
+          ) : outOfStock.map(p => (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: 'white' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''}</div>
+              </div>
+              <Pill label='Out of stock' type='red' />
+            </div>
+          ))}
         </div>
       </Modal>
 

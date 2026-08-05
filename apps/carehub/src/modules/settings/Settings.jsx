@@ -8,6 +8,7 @@ import { useAuth } from '../../providers/AuthProvider'
 import { authClient } from '../../lib/authClient'
 import { PLAN_LABELS, PLAN_MONTHLY_NAIRA } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
+import { sbUpload } from '../../services/supabase'
 import { Card, Loading, SectionHead, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, success, warning, bg } = theme
@@ -20,6 +21,7 @@ export default function Settings({ brand, role, perms }) {
   const [loading, setLoading] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [savingBiz, setSavingBiz] = useState(false)
+  const [uploading, setUploading] = useState(null)
   const [savingBooking, setSavingBooking] = useState(false)
   const [renewing, setRenewing] = useState(false)
   const [searchParams] = useSearchParams()
@@ -150,6 +152,28 @@ export default function Settings({ brand, role, perms }) {
   const b = (k, v) => setBizForm(p => ({ ...p, [k]: v }))
   const bk = (k, v) => setBookingForm(p => ({ ...p, [k]: v }))
 
+  // Upload a logo/cover to the public business-assets bucket and drop the
+  // returned URL into the form — the owner still clicks Save to publish.
+  async function uploadImage(kind) {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files && input.files[0]
+      if (!file) return
+      setUploading(kind)
+      try {
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+        const path = 'businesses/' + brand.id + '/' + (kind === 'logo_url' ? 'logo' : 'cover') + '-' + Date.now() + '.' + ext
+        const url = await sbUpload('business-assets', path, file, file.type || 'image/jpeg', 'Image upload failed')
+        b(kind, url)
+        showToast('Image uploaded — click "Save Business Details" to publish it.', { type: 'success' })
+      } catch (e) { showToast('Upload failed — ' + e.message, { type: 'error' }) }
+      setUploading(null)
+    }
+    input.click()
+  }
+
   async function saveBookingSettings() {
     if (!isOwner) { showToast('Only the Owner can change booking settings', { type: 'warning' }); return }
     setSavingBooking(true)
@@ -248,8 +272,18 @@ export default function Settings({ brand, role, perms }) {
           <Inp label='Business Hours' value={bizForm.hours} onChange={v => b('hours', v)} placeholder='e.g. Mon-Sat 8am-8pm' />
           <Inp label='Website / Instagram' value={bizForm.website} onChange={v => b('website', v)} placeholder='@yourbusiness' />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Logo URL' value={bizForm.logo_url} onChange={v => b('logo_url', v)} placeholder='https://yourwebsite.com/logo.png' />
-            <Inp label='Cover Image URL' value={bizForm.cover_url} onChange={v => b('cover_url', v)} placeholder='https://yourwebsite.com/banner.jpg' />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <Inp label='Logo URL' value={bizForm.logo_url} onChange={v => b('logo_url', v)} placeholder='https://yourwebsite.com/logo.png' />
+              <GhostBtn onClick={() => uploadImage('logo_url')} style={{ alignSelf: 'flex-start' }}>
+                {uploading === 'logo_url' ? 'Uploading…' : 'Upload logo'}
+              </GhostBtn>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <Inp label='Cover Image URL' value={bizForm.cover_url} onChange={v => b('cover_url', v)} placeholder='https://yourwebsite.com/banner.jpg' />
+              <GhostBtn onClick={() => uploadImage('cover_url')} style={{ alignSelf: 'flex-start' }}>
+                {uploading === 'cover_url' ? 'Uploading…' : 'Upload cover image'}
+              </GhostBtn>
+            </div>
           </div>
           {bizForm.logo_url && (
             <img src={bizForm.logo_url} alt='Logo preview' style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', border: `1px solid ${border}` }} onError={e => e.target.style.display = 'none'} />
