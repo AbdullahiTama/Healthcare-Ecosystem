@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getMessageThreads, getThreadMessages, getMessageRecipients, getMessageFiles, uploadMessageFile, sendMessage, markMessageRead } from '../../services/supabase'
+import { messageRepository } from './repositories'
 // Cross-aggregate read: messages are sent between staff.
 import { staffRepository } from '../staff/repositories'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
@@ -68,19 +68,19 @@ export default function Messages({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const ths = await getMessageThreads(brand.id)
+      const ths = await messageRepository.getThreads(brand.id)
       const stf = await staffRepository.getAll(brand.id)
       setThreads(ths || [])
       setStaffList(stf || [])
       const ids = (ths || []).map(function (t) { return t.id })
-      const recips = await getMessageRecipients(ids)
+      const recips = await messageRepository.getRecipients(ids)
       const rmap = {}
       ;(recips || []).forEach(function (r) {
         if (!rmap[r.message_id]) rmap[r.message_id] = []
         rmap[r.message_id].push(r)
       })
       setRecipientsByMsg(rmap)
-      const fls = await getMessageFiles(ids)
+      const fls = await messageRepository.getFiles(ids)
       const fmap = {}
       ;(fls || []).forEach(function (f) {
         if (!fmap[f.message_id]) fmap[f.message_id] = []
@@ -160,8 +160,7 @@ export default function Messages({ brand }) {
     for (let i = 0; i < list.length; i++) {
       const f = list[i]
       setUploadStatus('Uploading ' + (i + 1) + ' of ' + list.length + ' — ' + f.name)
-      const url = await uploadMessageFile(f)
-      out.push({ file_name: f.name, file_url: url, file_type: f.type || null, file_size: f.size || null })
+      out.push(await messageRepository.uploadAttachment(f))
     }
     setUploadStatus('')
     return out
@@ -181,15 +180,18 @@ export default function Messages({ brand }) {
         return { staff_id: staffIdFor(id), recipient_name: nameFor(id), kind: 'cc' }
       }))
 
-      await sendMessage({
-        business_id: brand.id,
-        parent_id: null,
-        sender_staff_id: meStaffId,
-        sender_name: meName,
-        sender_title: meTitle,
-        subject: subject.trim(),
-        body: body.trim(),
-      }, recipients, uploaded)
+      await messageRepository.send(brand.id, {
+        message: {
+          parent_id: null,
+          sender_staff_id: meStaffId,
+          sender_name: meName,
+          sender_title: meTitle,
+          subject: subject.trim(),
+          body: body.trim(),
+        },
+        recipients,
+        files: uploaded,
+      })
 
       showToast('Message sent', { type: 'success' })
       setSubject('')
@@ -212,10 +214,10 @@ export default function Messages({ brand }) {
     setReplyBody('')
     setReplyFiles([])
     try {
-      const msgs = await getThreadMessages(t.id)
+      const msgs = await messageRepository.getThread(t.id, brand.id)
       setThreadMsgs(msgs || [])
       const ids = (msgs || []).map(function (m) { return m.id })
-      const recips = await getMessageRecipients(ids)
+      const recips = await messageRepository.getRecipients(ids)
       const rmap = {}
       ;(recips || []).forEach(function (r) {
         if (!rmap[r.message_id]) rmap[r.message_id] = []
@@ -223,7 +225,7 @@ export default function Messages({ brand }) {
       })
       setThreadRecips(rmap)
 
-      const fls = await getMessageFiles(ids)
+      const fls = await messageRepository.getFiles(ids)
       const fmap = {}
       ;(fls || []).forEach(function (f) {
         if (!fmap[f.message_id]) fmap[f.message_id] = []
@@ -235,7 +237,7 @@ export default function Messages({ brand }) {
         return r.staff_id === meStaffId && !r.read_at
       })
       for (let i = 0; i < mine.length; i++) {
-        try { await markMessageRead(mine[i].id) } catch (e) {}
+        try { await messageRepository.markRead(mine[i].id, mine[i].message_id) } catch (e) {}
       }
     } catch (e) {
       showToast('Could not open thread: ' + e.message, { type: 'error' })
@@ -274,15 +276,18 @@ export default function Messages({ brand }) {
         })
       })
 
-      await sendMessage({
-        business_id: brand.id,
-        parent_id: root.id,
-        sender_staff_id: meStaffId,
-        sender_name: meName,
-        sender_title: meTitle,
-        subject: null,
-        body: replyBody.trim(),
-      }, recipients, uploaded)
+      await messageRepository.send(brand.id, {
+        message: {
+          parent_id: root.id,
+          sender_staff_id: meStaffId,
+          sender_name: meName,
+          sender_title: meTitle,
+          subject: null,
+          body: replyBody.trim(),
+        },
+        recipients,
+        files: uploaded,
+      })
 
       showToast('Reply sent', { type: 'success' })
       setReplyBody('')

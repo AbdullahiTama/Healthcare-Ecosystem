@@ -353,60 +353,17 @@ export async function markAllNotificationsRead(businessId, staffId) {
 // Territories page, Orders and LiveActivity — all go through the repository.
 
 // INTERNAL MESSAGES (official correspondence — To, CC, threaded replies, attachments)
-export async function getMessageThreads(businessId) {
-  return sbFetch('internal_messages?business_id=eq.' + businessId + '&parent_id=is.null&order=created_at.desc&select=*')
-}
-export async function getThreadMessages(rootId) {
-  return sbFetch('internal_messages?or=(id.eq.' + rootId + ',parent_id.eq.' + rootId + ')&order=created_at.asc&select=*')
-}
-export async function getMessageRecipients(messageIds) {
-  if (!messageIds || messageIds.length === 0) return []
-  return sbFetch('internal_message_recipients?message_id=in.(' + messageIds.join(',') + ')&select=*')
-}
-export async function getMessageFiles(messageIds) {
-  if (!messageIds || messageIds.length === 0) return []
-  return sbFetch('internal_message_files?message_id=in.(' + messageIds.join(',') + ')&select=*')
-}
-
-export async function uploadMessageFile(file) {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = Date.now() + '-' + Math.floor(Math.random() * 100000) + '-' + safeName
-  return sbUpload('message-files', path, file, file.type || 'application/octet-stream')
-}
-
-export async function sendMessage(message, recipients, files) {
-  const rows = await sbFetch('internal_messages', { method: 'POST', body: JSON.stringify(message) })
-  const saved = Array.isArray(rows) ? rows[0] : rows
-  if (!saved || !saved.id) throw new Error('Message was not saved — no id returned.')
-  if (recipients && recipients.length > 0) {
-    const payload = recipients.map(function (r) { return { ...r, message_id: saved.id } })
-    await sbFetch('internal_message_recipients', { method: 'POST', body: JSON.stringify(payload), prefer: 'return=minimal' })
-  }
-  if (files && files.length > 0) {
-    const filePayload = files.map(function (f) { return { ...f, message_id: saved.id } })
-    await sbFetch('internal_message_files', { method: 'POST', body: JSON.stringify(filePayload), prefer: 'return=minimal' })
-  }
-
-  // Tell everyone on the message that it landed.
-  if (recipients && recipients.length > 0) {
-    const targets = recipients.map(function (r) { return { staffId: r.staff_id } })
-    const subject = message.subject || 'a message'
-    await notify(
-      message.business_id,
-      targets,
-      'message',
-      message.sender_name + ' sent you correspondence',
-      subject,
-      'messages'
-    )
-  }
-
-  return saved
-}
-
-export async function markMessageRead(recipientRowId) {
-  return sbFetch('internal_message_recipients?id=eq.' + recipientRowId, { method: 'PATCH', body: JSON.stringify({ read_at: new Date().toISOString() }), prefer: 'return=minimal' })
-}
+// INTERNAL MESSAGES — moved to modules/messages/repositories, which owns
+// `internal_messages` plus its recipients and files, the multi-table `send`
+// command and the notification fan-out that follows it (the same three
+// injected collaborators `orders` uses: request, upload, notify).
+//
+// Two scoping fixes went with the move: `getThreadMessages(rootId)` matched on
+// `id`/`parent_id` alone with no tenant filter at all — another tenant's root
+// id would have returned their whole conversation — and `markMessageRead(id)`
+// was an id-only PATCH. Both are scoped there; the child tables have no
+// business_id, so their boundary is the parent message, mirroring the live
+// "… via parent message" RLS policies.
 
 // STOCK BATCHES & MOVEMENTS — all moved to modules/stock/repositories, which
 // owns `stock_batches`, the `stock_movements` journal, and the two multi-step
