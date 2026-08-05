@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Plus } from 'lucide-react'
-import { getEnterpriseLocations, addEnterpriseLocation, updateEnterpriseLocation, deleteEnterpriseLocation, getStaff } from '../../services/supabase'
+import { warehouseRepository } from './repositories'
+// Cross-aggregate read: staff belongs to the staff module, which has not
+// adopted the seam yet.
+import { getStaff } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 
@@ -23,7 +26,7 @@ export default function Warehouses({ brand }) {
     if (!brand?.id) return
     setLoading(true)
     try {
-      const [locs, stf] = await Promise.all([getEnterpriseLocations(brand.id), getStaff(brand.id)])
+      const [locs, stf] = await Promise.all([warehouseRepository.getAll(brand.id), getStaff(brand.id)])
       setLocations(locs || [])
       setStaff(stf || [])
     } catch (e) {
@@ -60,8 +63,8 @@ export default function Warehouses({ brand }) {
       showToast('Please enter a name and a location type.', { type: 'warning' })
       return
     }
+    // business_id is stamped by the repository, not assembled here.
     const payload = {
-      business_id: brand.id,
       name: form.name,
       location_type: form.location_type,
       country: form.country || null,
@@ -73,10 +76,10 @@ export default function Warehouses({ brand }) {
     }
     try {
       if (editingId) {
-        await updateEnterpriseLocation(editingId, payload)
+        await warehouseRepository.update(editingId, brand.id, payload)
         showToast('Location updated', { type: 'success' })
       } else {
-        await addEnterpriseLocation(payload)
+        await warehouseRepository.create(brand.id, payload)
         showToast('Location added', { type: 'success' })
       }
       setShowForm(false)
@@ -98,7 +101,7 @@ export default function Warehouses({ brand }) {
   const remove = async () => {
     if (!locationToDelete) return
     try {
-      await deleteEnterpriseLocation(locationToDelete.id)
+      await warehouseRepository.delete(locationToDelete.id, brand.id)
       setLocationToDelete(null)
       showToast('Location deleted', { type: 'success' })
       load()

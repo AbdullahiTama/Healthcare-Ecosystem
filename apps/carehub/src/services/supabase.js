@@ -324,10 +324,14 @@ export async function markAllNotificationsRead(businessId, staffId) {
 }
 
 // ENTERPRISE LOCATIONS
-export async function getEnterpriseLocations(businessId) { return sbFetch('enterprise_locations?business_id=eq.' + businessId + '&order=created_at.asc&select=*') }
-export async function addEnterpriseLocation(data) { return sbFetch('enterprise_locations', { method: 'POST', body: JSON.stringify(data) }) }
-export async function updateEnterpriseLocation(id, data) { return sbFetch('enterprise_locations?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
-export async function deleteEnterpriseLocation(id) { return sbFetch('enterprise_locations?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// ENTERPRISE LOCATIONS — moved to modules/warehouses/repositories, which scopes
+// the update and delete by business_id (both were id-only here). Its three
+// readers — the Warehouses page, Stock (which warehouse a batch sits in) and
+// Orders (which location an order is raised for) — all go through that
+// repository now.
+//
+// Not to be confused with getAllLocations/getBranches/addBranch above: those
+// are the multi-branch `businesses` tree, a different thing entirely.
 
 // STAFF CLAIMS
 export async function getStaffClaims(businessId) {

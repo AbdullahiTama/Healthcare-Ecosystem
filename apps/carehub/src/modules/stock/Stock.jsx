@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { stockRepository } from './repositories'
-// Cross-aggregate reads owned by modules that have not adopted the seam yet
-// (warehouses/locations, and the product catalogue for the receive form).
-import { getEnterpriseLocations, getProducts } from '../../services/supabase'
+// Cross-aggregate read: a batch sits in a warehouse, which the warehouses
+// module owns.
+import { warehouseRepository } from '../warehouses/repositories'
+// Cross-aggregate read owned by a module that has not adopted the seam yet
+// (the product catalogue behind the receive form).
+import { getProducts } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog } from '../../components/ui'
 
@@ -66,7 +69,7 @@ export default function Stock({ brand }) {
     setLoading(true)
     try {
       const b = await stockRepository.getBatches(brand.id)
-      const l = await getEnterpriseLocations(brand.id)
+      const l = await warehouseRepository.getAll(brand.id)
       const p = await getProducts(brand.id)
       setBatches(b || [])
       setLocations(l || [])

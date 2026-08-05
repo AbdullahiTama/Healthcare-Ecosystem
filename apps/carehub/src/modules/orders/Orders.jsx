@@ -3,7 +3,11 @@ import { X, Check } from 'lucide-react'
 import { orderRepository } from './repositories'
 import { productRepository } from '../inventory/repositories'
 // Cross-aggregate reads that belong to other modules' seams (not yet migrated).
-import { getStaff, getTerritories, getEnterpriseLocations } from '../../services/supabase'
+// Cross-aggregate read: an order is raised for a location, which the
+// warehouses module owns.
+import { warehouseRepository } from '../warehouses/repositories'
+// Cross-aggregate reads owned by modules that have not adopted the seam yet.
+import { getStaff, getTerritories } from '../../services/supabase'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
@@ -95,7 +99,7 @@ export default function Orders({ brand }) {
       const s = await getStaff(brand.id)
       const p = await productRepository.getAll(brand.id)
       const t = await getTerritories(brand.id)
-      const l = await getEnterpriseLocations(brand.id)
+      const l = await warehouseRepository.getAll(brand.id)
       setOrders(o || [])
       setStaffList(s || [])
       setProducts(p || [])
