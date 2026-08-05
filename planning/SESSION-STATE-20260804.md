@@ -302,17 +302,72 @@ unit rather than `settings`.
    to undo. Either build the movement-history view (the data is already there
    and complete) or stop writing it — but do not quietly drop the writes, since
    the journal is the only record of who moved or corrected stock.
-2. **The partial-transfer path is not atomic.** Moving *part* of a batch is two
-   writes with no transaction: decrement the source, then insert the destination
-   batch. If the insert fails after the decrement lands, the units are debited
-   from the source and arrive nowhere — **stock silently vanishes**, and the
-   movement row is never written either, so nothing records the loss. Same class
-   as the offline-sync data loss fixed earlier in this rollout. Preserved
-   exactly as found here per commit discipline; the fix is a database function
-   in the shape of C5's `increment_product_stock` and belongs in its own change.
+2. ~~**The partial-transfer path is not atomic.**~~ **FIXED AND APPLIED TO
+   PRODUCTION 2026-08-05 — see §11 below.**
+
+---
+
+## 11. Applied to production — atomic stock transfer and adjustment (2026-08-05)
+
+On explicit authorization, as **tracked** migrations:
+
+| version | name |
+|---|---|
+| 20260805075311 | `atomic_stock_transfer` |
+| 20260805075332 | `atomic_stock_adjustment` |
+| 20260805075408 | `restrict_stock_batch_rpcs_to_authenticated` (ACL follow-up) |
+
+`transfer_stock_batch()` and `adjust_stock_batch()` — both `SECURITY INVOKER`
+with pinned `search_path`, so RLS on `stock_batches`/`stock_movements` keeps
+doing the tenant enforcement and no new SECURITY DEFINER surface exists (the
+pattern that produced C15 and C17). SQL and full notes:
+`apps/carehub/sql/20260805_atomic_stock_transfer.sql`.
+
+**Three defects closed:**
+1. Partial transfer was two client writes with no transaction — a failed
+   destination insert debited the source and lost the stock, with the movement
+   row written last so nothing recorded the loss.
+2. The quantity check ran in JavaScript against a possibly-stale read, so two
+   users could both pass it on the same batch. `SELECT … FOR UPDATE` now
+   serialises them.
+3. `adjust` journalled a client-computed difference, so a stale page could
+   record a change that never happened. Now derived from the locked row.
+
+Plus a data-fidelity fix: the split used to drop `notes`, `cost_price`,
+`selling_price` and `sales_unit` from the destination batch. Measured inert on
+today's data (0 of 1 batch has any of them set) before changing it.
+
+**Verified in production** inside a `DO` block that raised at the end so it
+rolled back — confirmed after: still 1 batch, 0 movements, no residue. The
+sharpest result: an over-transfer was refused with *"You only have **70** units
+in this batch"* — 70, not the stale 100 — which is the race fix demonstrated
+rather than asserted. Advisors identical to the 27-finding baseline; `pg_proc`
+shows exactly one row per name, no sibling overloads.
+
+**The ACL trap bit again, exactly as recorded.** The `REVOKE … FROM PUBLIC` in
+the creating migration did not produce the intended ACL: reading `proacl` back
+showed `anon=X/postgres` on both functions, because Supabase's default
+privileges re-grant EXECUTE at creation time *after* the revoke runs. Third
+migration revoked anon explicitly; re-read confirms
+`postgres | authenticated | service_role`. Never a live hole (INVOKER + no
+`current_business_ids()` for anon ⇒ zero rows), but it is now the **second**
+time this has needed a follow-up migration in this project — C5 was the first.
+Assume it will happen every time and plan for the extra migration.
+
+**Client side:** `modules/stock/repositories` calls the two RPCs. Its tests
+assert the call shape — one write, correct arguments, and the difference
+*absent* from the adjust request — while the transactional behaviour is proven
+by the rolled-back block above rather than faked in the in-memory adapter. Suite
+is **162** (stock's own file went 19 → 17 as those assertions moved into the
+database, where they can actually be proven).
 
 **Recommended next unit: `settings`.** Small and self-contained, and
 `saveBizDetails`'s whitelist question (tracked under Refactoring) can be settled
 at the same time. `warehouses`/`territories` are the alternative — `stock` and
 `orders` both still read `getEnterpriseLocations` from `services/supabase`, so
 migrating warehouses would retire a genuine shared cross-aggregate read.
+
+Still open from §10: **`stock_movements` is written but never read.** Now that
+transfers and adjustments journal atomically, that log is trustworthy for the
+first time — which strengthens the case for building the history view rather
+than dropping it.

@@ -61,118 +61,128 @@ describe('stockRepository', () => {
     })
   })
 
+  // `transfer` and `adjust` are single RPC calls into transfer_stock_batch /
+  // adjust_stock_batch (20260805_atomic_stock_transfer.sql). The splitting,
+  // journalling, row locking and tenant scoping all happen inside one database
+  // transaction, so what is assertable here is the *call* — that the repository
+  // issues exactly one write and hands the database the right arguments, rather
+  // than reassembling a multi-step sequence on the client.
+  //
+  // The transactional behaviour itself was verified against the live database,
+  // inside a DO block that raised at the end so the test rolled back: a 30-of-100
+  // split conserved the total, carried batch_number/expiry/cost_price/sales_unit/
+  // notes onto the destination, journalled one transfer row, refused an
+  // over-transfer against the CURRENT quantity (70, not the stale 100), returned
+  // null cross-tenant, and adjusted 70 -> 64 journalling exactly -6. Re-run the
+  // block in that SQL file's header to re-verify. Faking that logic in the
+  // in-memory adapter would only test the fake.
+  function recording(returns = [null]) {
+    const calls = []
+    const repo = createStockRepository({
+      request: async (path, options) => {
+        calls.push({ path, method: options?.method, body: options?.body ? JSON.parse(options.body) : null })
+        return returns
+      },
+    })
+    return { calls, repo }
+  }
+
+  const aBatch = { id: 'b1', quantity: 100, location_id: WAREHOUSE_1 }
+
   describe('transfer', () => {
-    it('moving the whole batch relocates it rather than splitting', async () => {
-      const { repo, client } = seeded()
-      await repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 100, movedBy: 'Ada' })
-      expect(batch(client, '1')).toMatchObject({ location_id: WAREHOUSE_2, quantity: 100 })
-      // No second batch was created — the same row moved.
-      expect(client.rows('stock_batches').filter((r) => r.product_name === 'Amoxicillin')).toHaveLength(1)
-    })
+    it('issues exactly one RPC call with the tenant, destination and quantity', async () => {
+      const { calls, repo } = recording(['new-batch-id'])
+      const result = await repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: 30, movedBy: 'Ada' })
 
-    it('moving part of the batch splits it, conserving the total', async () => {
-      const { repo, client } = seeded()
-      await repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 30, movedBy: 'Ada' })
-
-      const amox = client.rows('stock_batches').filter((r) => r.product_name === 'Amoxicillin')
-      expect(amox).toHaveLength(2)
-      expect(amox.reduce((s, r) => s + r.quantity, 0)).toBe(100)
-
-      const source = amox.find((r) => r.id === '1')
-      const destination = amox.find((r) => r.id !== '1')
-      expect(source).toMatchObject({ location_id: WAREHOUSE_1, quantity: 70 })
-      expect(destination).toMatchObject({ location_id: WAREHOUSE_2, quantity: 30, business_id: A })
-    })
-
-    it('carries the batch identity onto the split-off batch', async () => {
-      const { repo, client } = seeded()
-      await repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 30, movedBy: 'Ada' })
-      const destination = client.rows('stock_batches').find((r) => r.location_id === WAREHOUSE_2 && r.product_name === 'Amoxicillin')
-      // Expiry and batch number must follow the stock, or the split half
-      // becomes untraceable and never expires.
-      expect(destination).toMatchObject({ batch_number: 'B-01', expiry_date: '2027-01-01', product_id: 'p1' })
-    })
-
-    it('journals the move', async () => {
-      const { repo, client } = seeded()
-      await repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 30, movedBy: 'Ada' })
-      expect(client.rows('stock_movements')[0]).toMatchObject({
-        business_id: A,
-        batch_id: '1',
-        from_location_id: WAREHOUSE_1,
-        to_location_id: WAREHOUSE_2,
-        movement_type: 'transfer',
-        quantity: 30,
-        moved_by: 'Ada',
+      expect(calls).toHaveLength(1) // not a decrement-then-insert sequence
+      expect(calls[0].path).toBe('rpc/transfer_stock_batch')
+      expect(calls[0].method).toBe('POST')
+      expect(calls[0].body).toEqual({
+        p_batch_id: 'b1',
+        p_business_id: A,
+        p_to_location_id: WAREHOUSE_2,
+        p_qty: 30,
+        p_moved_by: 'Ada',
       })
+      // The destination batch id the function returns.
+      expect(result).toBe('new-batch-id')
+    })
+
+    it('coerces a string quantity from the form input', async () => {
+      const { calls, repo } = recording()
+      await repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: '30', movedBy: 'Ada' })
+      expect(calls[0].body.p_qty).toBe(30)
+    })
+
+    it('sends null rather than undefined when nobody is named', async () => {
+      const { calls, repo } = recording()
+      await repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: 5 })
+      expect(calls[0].body.p_moved_by).toBeNull()
+    })
+
+    it('surfaces a null return as null (foreign or deleted batch)', async () => {
+      const { repo } = recording([null])
+      expect(await repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: 5 })).toBeNull()
     })
 
     // These messages are rendered straight into a toast, so they are part of
-    // the contract, not incidental.
-    it('refuses a non-positive quantity without writing anything', async () => {
-      const { repo, client } = seeded()
-      await expect(repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 0 }))
+    // the contract. They fail fast for a better message; the RPC re-checks
+    // against the locked row, which is the authoritative test.
+    it('refuses a non-positive quantity without calling the database', async () => {
+      const { calls, repo } = recording()
+      await expect(repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: 0 }))
         .rejects.toThrow('Enter a quantity greater than zero.')
-      expect(client.rows('stock_movements')).toHaveLength(0)
-      expect(batch(client, '1').quantity).toBe(100)
+      expect(calls).toHaveLength(0)
     })
 
-    it('refuses to move more than the batch holds', async () => {
-      const { repo, client } = seeded()
-      await expect(repo.transfer(A, { batch: batch(client, '1'), toLocationId: WAREHOUSE_2, qty: 101 }))
+    it('refuses to move more than the batch holds, without calling the database', async () => {
+      const { calls, repo } = recording()
+      await expect(repo.transfer(A, { batch: aBatch, toLocationId: WAREHOUSE_2, qty: 101 }))
         .rejects.toThrow('You only have 100 units in this batch.')
-      expect(client.rows('stock_movements')).toHaveLength(0)
-      expect(batch(client, '1').quantity).toBe(100)
-    })
-
-    it('cannot move another tenant batch', async () => {
-      const { repo, client } = seeded()
-      await repo.transfer(A, { batch: batch(client, '9'), toLocationId: WAREHOUSE_2, qty: 7, movedBy: 'Ada' })
-      // The scoped update matched nothing, so B's batch is untouched.
-      expect(batch(client, '9')).toMatchObject({ location_id: 'loc-9', quantity: 7 })
+      expect(calls).toHaveLength(0)
     })
   })
 
   describe('adjust', () => {
-    it('sets the counted quantity and journals the signed difference', async () => {
-      const { repo, client } = seeded()
-      await repo.adjust(A, { batch: batch(client, '1'), newQty: 92, reason: 'Physical count', movedBy: 'Ada' })
-      expect(batch(client, '1').quantity).toBe(92)
-      expect(client.rows('stock_movements')[0]).toMatchObject({
-        business_id: A,
-        batch_id: '1',
-        movement_type: 'adjustment',
-        quantity: -8,
-        reason: 'Physical count',
-        to_location_id: null,
-      })
-    })
+    it('issues exactly one RPC call and does not compute the difference here', async () => {
+      const { calls, repo } = recording([-8])
+      const diff = await repo.adjust(A, { batch: aBatch, newQty: 92, reason: 'Physical count', movedBy: 'Ada' })
 
-    it('journals a positive difference when the count is higher', async () => {
-      const { repo, client } = seeded()
-      await repo.adjust(A, { batch: batch(client, '1'), newQty: 110, movedBy: 'Ada' })
-      expect(client.rows('stock_movements')[0].quantity).toBe(10)
+      expect(calls).toHaveLength(1)
+      expect(calls[0].path).toBe('rpc/adjust_stock_batch')
+      expect(calls[0].body).toEqual({
+        p_batch_id: 'b1',
+        p_business_id: A,
+        p_qty: 92,
+        p_reason: 'Physical count',
+        p_moved_by: 'Ada',
+      })
+      // The difference is absent from the request — the database derives it
+      // from the locked row, so a stale page cannot journal a change that
+      // never happened. It only comes back in the response.
+      expect(calls[0].body).not.toHaveProperty('p_diff')
+      expect(diff).toBe(-8)
     })
 
     it('allows adjusting to zero', async () => {
-      const { repo, client } = seeded()
-      await repo.adjust(A, { batch: batch(client, '1'), newQty: 0, movedBy: 'Ada' })
-      expect(batch(client, '1').quantity).toBe(0)
-      expect(client.rows('stock_movements')[0].quantity).toBe(-100)
+      const { calls, repo } = recording([-100])
+      await repo.adjust(A, { batch: aBatch, newQty: 0, movedBy: 'Ada' })
+      expect(calls).toHaveLength(1)
+      expect(calls[0].body.p_qty).toBe(0)
     })
 
-    it('refuses a negative or non-numeric quantity without writing anything', async () => {
-      const { repo, client } = seeded()
-      await expect(repo.adjust(A, { batch: batch(client, '1'), newQty: -1 })).rejects.toThrow('Enter a valid quantity.')
-      await expect(repo.adjust(A, { batch: batch(client, '1'), newQty: 'abc' })).rejects.toThrow('Enter a valid quantity.')
-      expect(client.rows('stock_movements')).toHaveLength(0)
-      expect(batch(client, '1').quantity).toBe(100)
+    it('coerces a string quantity and nulls an empty reason', async () => {
+      const { calls, repo } = recording()
+      await repo.adjust(A, { batch: aBatch, newQty: '64', reason: '', movedBy: 'Ada' })
+      expect(calls[0].body.p_qty).toBe(64)
+      expect(calls[0].body.p_reason).toBeNull()
     })
 
-    it('cannot adjust another tenant batch', async () => {
-      const { repo, client } = seeded()
-      await repo.adjust(A, { batch: batch(client, '9'), newQty: 999, movedBy: 'Ada' })
-      expect(batch(client, '9').quantity).toBe(7)
+    it('refuses a negative or non-numeric quantity without calling the database', async () => {
+      const { calls, repo } = recording()
+      await expect(repo.adjust(A, { batch: aBatch, newQty: -1 })).rejects.toThrow('Enter a valid quantity.')
+      await expect(repo.adjust(A, { batch: aBatch, newQty: 'abc' })).rejects.toThrow('Enter a valid quantity.')
+      expect(calls).toHaveLength(0)
     })
   })
 
