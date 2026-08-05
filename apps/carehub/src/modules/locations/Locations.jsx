@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { Lock, BarChart2, Building2, DollarSign, Package, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import { useNavigate } from 'react-router-dom'
-import { getAllLocations, addBranch, getSales, getTodaySales, getProducts } from '../../services/supabase'
+// Cross-aggregate read: per-branch takings come from the POS module's sale
+// repository. Each branch is its own business row, so the branch id is what
+// gets passed as the tenant. `getSales` was imported here but never used —
+// dropped rather than repointed.
+import { saleRepository } from '../pos/repositories'
+import { getAllLocations, addBranch, getProducts } from '../../services/supabase'
 import { fmt, todayDate, businessLucideIcon } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -37,7 +42,7 @@ export default function Locations({ brand, role }) {
       for (const loc of (locs || [])) {
         try {
           const [today, products] = await Promise.all([
-            getTodaySales(loc.id),
+            saleRepository.getToday(loc.id),
             getProducts(loc.id),
           ])
           statsData[loc.id] = {

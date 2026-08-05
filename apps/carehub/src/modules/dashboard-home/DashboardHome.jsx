@@ -4,7 +4,12 @@ import {
   BarChart2, Pause, CreditCard, AlertTriangle, Package, Pill, Calendar,
   Plus, FileText, Receipt, CheckCircle, ArrowRight, ShoppingCart,
 } from 'lucide-react'
-import { getTodaySales, getSales, getAppointments } from '../../services/supabase'
+// Cross-aggregate read: the dashboard summarises sales it does not own, so it
+// reads through the POS module's repository rather than a second copy of the
+// query. `getAppointments` still comes from services/supabase — appointments
+// has not adopted the seam yet.
+import { saleRepository } from '../pos/repositories'
+import { getAppointments } from '../../services/supabase'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Avatar, Empty, Loading } from '../../components/ui'
@@ -74,8 +79,8 @@ export default function DashboardHome({ brand, products, role, perms }) {
     if (brand?.id) {
       setLoading(true)
       Promise.all([
-        getTodaySales(brand.id).then(s => setTodaySales(s || [])).catch(() => {}),
-        getSales(brand.id).then(s => setAllSales(s || [])).catch(() => {}),
+        saleRepository.getToday(brand.id).then(s => setTodaySales(s || [])).catch(() => {}),
+        saleRepository.getAll(brand.id).then(s => setAllSales(s || [])).catch(() => {}),
         canSeeAppts ? getAppointments(brand.id).then(a => setAppts(a || [])).catch(() => {}) : Promise.resolve(),
       ]).finally(() => setLoading(false))
     } else {

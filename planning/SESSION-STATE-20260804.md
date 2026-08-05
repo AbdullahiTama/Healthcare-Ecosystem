@@ -181,12 +181,53 @@ sale or purchase is marked paid. Every write path in the app sets a status, but
 the schema does not guarantee one, so this was not worth assuming. Regression
 test covers it.
 
-**Recommended next unit:** `reports` + `settings`, or `appointments`. `reports`
-is now a single-file module reading three aggregates it does not own (sales,
-expenses, purchases) — two of which are already on the seam — so it is mostly a
-matter of repointing, and it would retire `getSales`/`getExpenses` the same way
-this unit retired the debts and purchases functions.
-
 Also newly flagged (not fixed, deliberately out of scope): `getClients` is still
 a shared `services/supabase` read used by `Debts.jsx` and `POS.jsx` even though
 `clients` owns a repository with the identical query.
+
+---
+
+## 8. Next unit completed — `reports` (2026-08-05)
+
+**8 of 24 modules are now on the seam.**
+
+| Status | Modules |
+|---|---|
+| Fully off `services/supabase` | `inventory`, `expenses`, `clients`, `debts`, `purchases`, `reports` |
+| Own aggregate on the seam, cross-aggregate residual (flagged in-file) | `orders`, `pos` |
+| Sales reads repointed only — otherwise unmigrated | `dashboard-home`, `locations` |
+| Untouched | `appointments`, `carefind`, `consultation` (3 files), `demand`, `live-activity`, `messages`, `referral-agent`, `settings`, `staff`, `stock`, `territories`, `warehouses` |
+
+**The architectural point of this one:** `reports` gets **no repository**. It
+owns no table — it is a read-only projection over three aggregates that belong
+to other modules — so it composes `saleRepository`/`expenseRepository`/
+`purchaseRepository` rather than wrapping them. Inventing a `reportRepository`
+would have been an abstraction over nothing and a fourth copy of the same three
+queries. Not every module on the seam needs one; some are consumers.
+
+Retiring `getSales`/`getTodaySales` meant repointing their two other callers, so
+`DashboardHome.jsx` and `Locations.jsx` had their sales reads moved onto the
+repository too. Those two are **not** migrated — everything else in them still
+comes from `services/supabase`.
+
+Found while doing it (both pre-existing, neither a live bug):
+- `Locations.jsx` imported `getSales` and never called it.
+- `addExpense`/`deleteExpense` had been **dead since the expenses migration**.
+  `deleteExpense` was also an id-only DELETE with no business filter — same
+  unscoped-write class as the removed `updateStock`/`updateClient`.
+
+All five functions deleted. No new tests: no new logic was written, and the
+repository methods Reports now calls were already covered. Suite stays at 136.
+
+**`addSale` deliberately kept** in `services/supabase.js`. `PharmacyForm.jsx` is
+its only caller and `saleRepository.create` is not a drop-in replacement — it
+parks failed/offline writes on the offline queue for replay, which is right for
+a till but would silently change behaviour for consultation dispensing. That
+call is for the `consultation` migration to make deliberately.
+
+**Recommended next unit: `appointments`.** It is a self-contained aggregate with
+its own table and a real write surface (`getAppointments`/`addAppointment`/
+`updateAppointment`/`deleteAppointment`, the last two both id-only PATCH/DELETE
+with no business filter — the same class this rollout keeps finding). Unlike
+`reports` it genuinely owns something, so it gets a real repository and real
+tests. `settings` is the smaller alternative.

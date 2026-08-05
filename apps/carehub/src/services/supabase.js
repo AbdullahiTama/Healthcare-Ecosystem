@@ -127,24 +127,23 @@ export async function deleteProductsBulk(ids) {
 }
 
 // SALES
-export async function getSales(businessId, filters = {}) {
-  let query = 'sales?business_id=eq.' + businessId + '&order=created_at.desc&select=*'
-  if (filters.date) query += '&created_at=gte.' + filters.date + 'T00:00:00'
-  if (filters.onHold !== undefined) query += '&is_on_hold=eq.' + filters.onHold
-  if (filters.isCredit !== undefined) query += '&is_credit=eq.' + filters.isCredit
-  return sbFetch(query)
-}
-export async function addSale(data) { return sbFetch('sales', { method: 'POST', body: JSON.stringify(data) }) }
 // NOTE: `updateSale(id, data)` used to live here — a PATCH on the sales table
 // filtered by id alone. POS was its only caller and now goes through
 // modules/pos/repositories, which scopes by business_id too, so it was removed
 // rather than left as an unscoped write on the money table.
-// getSales/getTodaySales/addSale stay: DashboardHome, Reports, Locations and
-// PharmacyForm still import them.
-export async function getTodaySales(businessId) {
-  const today = new Date().toISOString().split('T')[0]
-  return sbFetch('sales?business_id=eq.' + businessId + '&created_at=gte.' + today + 'T00:00:00&is_on_hold=eq.false&order=created_at.desc&select=*')
-}
+//
+// `getSales`/`getTodaySales` have since gone the same way: their readers
+// (Reports, DashboardHome, Locations) call saleRepository.getAll/getToday,
+// which carry the identical query. Locations imported getSales without ever
+// calling it.
+//
+// `addSale` stays. PharmacyForm is its only caller, and saleRepository.create
+// is NOT a drop-in replacement for it: create() parks a failed or offline
+// write on the offline queue for later replay, which is correct for a till but
+// would be a silent behaviour change for consultation dispensing. Route it
+// through the repository when the consultation module adopts the seam and that
+// decision can be made deliberately.
+export async function addSale(data) { return sbFetch('sales', { method: 'POST', body: JSON.stringify(data) }) }
 
 // CLIENTS
 export async function getClients(businessId) { return sbFetch('clients?business_id=eq.' + businessId + '&order=full_name.asc&select=*') }
@@ -158,10 +157,11 @@ export async function searchClients(businessId, query) {
   return sbFetch('clients?business_id=eq.' + businessId + '&full_name=ilike.*' + encodeURIComponent(query) + '*&select=*')
 }
 
-// EXPENSES
-export async function getExpenses(businessId) { return sbFetch('expenses?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addExpense(data) { return sbFetch('expenses', { method: 'POST', body: JSON.stringify(data) }) }
-export async function deleteExpense(id) { return sbFetch('expenses?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+// EXPENSES — all moved to modules/expenses/repositories. `addExpense` and
+// `deleteExpense` had been dead since that migration (Expenses.jsx stopped
+// calling them and nothing else ever did); `getExpenses` outlived it only
+// because Reports still read expenses from here. `deleteExpense` was also an
+// id-only DELETE with no business filter — the repository scopes it.
 
 // APPOINTMENTS
 export async function getAppointments(businessId) { return sbFetch('appointments?business_id=eq.' + businessId + '&order=date.asc&select=*') }
