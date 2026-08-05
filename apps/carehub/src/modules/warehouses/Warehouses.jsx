@@ -101,7 +101,7 @@ export default function Warehouses({ brand }) {
   const remove = async () => {
     if (!locationToDelete) return
     try {
-      await warehouseRepository.delete(locationToDelete.id, brand.id)
+      await warehouseRepository.delete(locationToDelete.id, brand.id, locationToDelete.name)
       setLocationToDelete(null)
       showToast('Location deleted', { type: 'success' })
       load()

@@ -71,6 +71,50 @@ describe('warehouseRepository', () => {
     expect(client.rows('enterprise_locations').map((r) => r.id)).toContain('9')
   })
 
+  // The database refuses to delete a location that is still referenced — four
+  // foreign keys point at this table and none cascade. That refusal is right;
+  // what reached the user was a raw Postgres violation in a toast.
+  describe('delete failure messages', () => {
+    const fkError = (constraint) =>
+      new Error(`Supabase error (409): update or delete on table "enterprise_locations" violates foreign key constraint "${constraint}" on table "x"`)
+
+    const failingWith = (constraint) =>
+      createWarehouseRepository(async () => { throw fkError(constraint) })
+
+    it('explains a location that still holds stock', async () => {
+      await expect(failingWith('stock_batches_location_id_fkey').delete('1', A, 'Ikeja Warehouse'))
+        .rejects.toThrow('"Ikeja Warehouse" still holds stock. Transfer or remove its batches first.')
+    })
+
+    it('explains a location with orders against it', async () => {
+      await expect(failingWith('orders_location_id_fkey').delete('1', A, 'Lagos HQ'))
+        .rejects.toThrow('"Lagos HQ" has orders raised against it.')
+    })
+
+    it('explains a location kept by its movement history', async () => {
+      await expect(failingWith('stock_movements_from_location_id_fkey').delete('1', A, 'Old Depot'))
+        .rejects.toThrow('audit record')
+    })
+
+    it('names the location even when the page passes none', async () => {
+      await expect(failingWith('stock_batches_location_id_fkey').delete('1', A))
+        .rejects.toThrow('"This location" still holds stock')
+    })
+
+    // An unrecognised failure must not be flattened into a confident, wrong
+    // explanation — a network error is not "this location is in use".
+    it('rethrows an unrecognised error untouched', async () => {
+      const repo = createWarehouseRepository(async () => { throw new Error('NetworkError: connection reset') })
+      await expect(repo.delete('1', A, 'Ikeja Warehouse')).rejects.toThrow('NetworkError: connection reset')
+    })
+
+    it('does not interfere with a delete that succeeds', async () => {
+      const { repo, client } = seeded()
+      await repo.delete('2', A, 'Ikeja Warehouse')
+      expect(client.rows('enterprise_locations').map((r) => r.id)).not.toContain('2')
+    })
+  })
+
   it('exports a default warehouseRepository instance', () => {
     for (const m of ['getAll', 'create', 'update', 'delete']) {
       expect(typeof warehouseRepository[m]).toBe('function')

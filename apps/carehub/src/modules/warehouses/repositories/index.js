@@ -1,5 +1,31 @@
 import { sbFetch } from '../../../services/supabase'
 
+// Four tables reference enterprise_locations and none of those foreign keys
+// cascade, so deleting a location that is still in use is refused by the
+// database. That refusal is correct — the problem was the message, which
+// arrived as a raw Postgres foreign-key violation and went straight into a
+// toast.
+//
+// Matching on the constraint name rather than the prose: constraint names are
+// stable schema objects, the wording of the violation is not. `sbFetch`
+// collapses the PostgREST error body down to its `message` string, which is
+// where the constraint name survives.
+const DELETE_BLOCKERS = [
+  ['stock_batches_location_id_fkey', 'still holds stock. Transfer or remove its batches first.'],
+  ['orders_location_id_fkey', 'has orders raised against it. Close or reassign those orders first.'],
+  ['stock_movements_from_location_id_fkey', 'has stock movement history, which is kept as an audit record and cannot be removed.'],
+  ['stock_movements_to_location_id_fkey', 'has stock movement history, which is kept as an audit record and cannot be removed.'],
+  ['enterprise_locations_parent_location_id_fkey', 'has other locations under it. Reassign or delete those first.'],
+]
+
+function describeDeleteFailure(name, error) {
+  const raw = error?.message || ''
+  for (const [constraint, reason] of DELETE_BLOCKERS) {
+    if (raw.includes(constraint)) return new Error(`"${name}" ${reason}`)
+  }
+  return error
+}
+
 // ── Warehouse (enterprise location) repository ────────────────────────────────
 // A deep module over `enterprise_locations` — the warehouses, hubs and regional
 // offices an enterprise business operates. The implementation owns the
@@ -43,19 +69,20 @@ export function createWarehouseRepository(request = sbFetch) {
 
     // Previously an id-only DELETE with no business filter.
     //
-    // Note this can legitimately fail: four tables reference
-    // enterprise_locations (stock_batches.location_id,
-    // stock_movements.from/to_location_id, orders.location_id) and none of
-    // those foreign keys cascade. Deleting a warehouse that still holds stock
-    // or has orders against it raises a foreign-key violation, which is the
-    // correct outcome — the location is still in use. The Warehouses page
-    // guards only against child *locations*; see CODE_AUDIT for the error
-    // message that reaches the user.
-    async delete(locationId, businessId) {
-      return request(`enterprise_locations?id=eq.${locationId}&business_id=eq.${businessId}`, {
-        method: 'DELETE',
-        prefer: 'return=minimal',
-      })
+    // `name` is only used to build a readable failure message. The page already
+    // has the row in hand, so this costs nothing and avoids a lookup here.
+    async delete(locationId, businessId, name = 'This location') {
+      try {
+        return await request(`enterprise_locations?id=eq.${locationId}&business_id=eq.${businessId}`, {
+          method: 'DELETE',
+          prefer: 'return=minimal',
+        })
+      } catch (e) {
+        // The database is the authority on whether a location is still in use;
+        // this only translates its answer. Anything unrecognised is rethrown
+        // untouched rather than being flattened into a wrong explanation.
+        throw describeDeleteFailure(name, e)
+      }
     },
   }
 }
