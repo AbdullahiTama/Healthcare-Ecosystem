@@ -9,9 +9,12 @@ import { saleRepository } from './repositories'
 // module, so its repository is used here rather than a second copy of the
 // query shape living in POS.
 import { debtRepository } from '../debts/repositories'
-// Cross-aggregate reads/writes owned by modules that have not adopted the
-// repository seam yet (settings, clients, consultations).
-import { getSettings, getClients, getLatestConsultation } from '../../services/supabase'
+// Receipt/currency/tax configuration belongs to the settings module; the
+// receipt printer reads it through that module's repository.
+import { settingsRepository } from '../settings/repositories'
+// Cross-aggregate reads owned by modules that have not adopted the repository
+// seam yet (clients, consultations).
+import { getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
@@ -70,7 +73,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
 
   useEffect(() => {
     if (brand?.id) {
-      getSettings(brand.id).then(s => setSettings(s))
+      settingsRepository.get(brand.id).then(s => setSettings(s))
       getClients(brand.id).then(c => setClients(c || [])).catch(() => {})
       loadSalesData()
     }

@@ -361,11 +361,56 @@ by the rolled-back block above rather than faked in the in-memory adapter. Suite
 is **162** (stock's own file went 19 → 17 as those assertions moved into the
 database, where they can actually be proven).
 
-**Recommended next unit: `settings`.** Small and self-contained, and
-`saveBizDetails`'s whitelist question (tracked under Refactoring) can be settled
-at the same time. `warehouses`/`territories` are the alternative — `stock` and
-`orders` both still read `getEnterpriseLocations` from `services/supabase`, so
-migrating warehouses would retire a genuine shared cross-aggregate read.
+---
+
+## 12. Next unit completed — `settings` (2026-08-05), and the critical it uncovered
+
+**12 of 24 modules on the seam.** Suite is **176**, up from 162.
+
+`createSettingsRepository(request = sbFetch)`, 14 tests. `Settings.jsx` imports
+nothing from `services/supabase`; POS's receipt printer reads settings through
+the same repository.
+
+**The upsert became a real one.** `saveSettings` was a read-then-PATCH-or-POST.
+It is now a single request resolved by the database on `business_settings`'
+`UNIQUE (business_id)`. That closes a race where two first-time savers both read
+"no row" and both inserted — the unique constraint meant the loser got a 409, so
+nothing was ever corrupted, but a save failed for no reason the user could act
+on.
+
+**`updateBusiness` deliberately stays in `services/supabase`.** `businesses` has
+no owning module: it is the tenant record, written by this page (profile,
+booking config) and by AdminDashboard (approval status), which is a different
+concern. The settings repository owns only what the Settings *page* may change,
+as an explicit field list rather than "whatever is in the form object".
+
+### C18 — found by picking up this unit
+
+Checking whether the tracked `saveBizDetails` whitelist was worth doing is what
+surfaced **C18: any business owner could make themselves a platform admin with
+one PATCH.** Full write-up in `CODE_AUDIT.md` (Critical) and
+`apps/carehub/sql/20260805_guard_business_privileged_columns.sql`. Short version:
+`businesses`' policy scopes **rows, not columns**, and `is_platform_admin()`
+reads a column its own holder could write. Fixed with a `BEFORE UPDATE` trigger,
+applied to production, verified by re-running the real attack.
+
+**The whitelist is therefore a code-quality item, not the security fix** — a
+client-side list would have stopped nothing, because the attack never went
+through the page. Both are now done, in that order and in separate commits.
+
+Worth generalising: this is the fourth critical in this engagement found
+*incidentally* rather than by hunting (C10, C13, C14, C17 before it). The
+pattern holds — reading code carefully enough to change it is what finds them.
+
+**Recommended next unit: `warehouses`/`territories`.** `stock` and `orders` both
+still read `getEnterpriseLocations` from `services/supabase`, so migrating
+warehouses retires a genuine shared cross-aggregate read rather than just moving
+calls. `staff` is the alternative.
+
+Still open and unchanged: **`stock_movements` is written but never read** (§10),
+and `getClients` remains a shared `services/supabase` read used by `Debts.jsx`,
+`POS.jsx` and `Appointments.jsx` even though `clients` owns a repository with
+the identical query.
 
 Still open from §10: **`stock_movements` is written but never read.** Now that
 transfers and adjustments journal atomically, that log is trustworthy for the

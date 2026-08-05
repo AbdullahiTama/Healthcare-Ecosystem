@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Lock } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { getSettings, saveSettings, updateBusiness } from '../../services/supabase'
+import { settingsRepository } from './repositories'
 import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
@@ -92,7 +92,7 @@ export default function Settings({ brand, role, perms }) {
   async function load() {
     setLoading(true)
     try {
-      const s = await getSettings(brand.id)
+      const s = await settingsRepository.get(brand.id)
       setSettings(s || {})
       setBizForm({
         name: brand.name || '',
@@ -121,7 +121,7 @@ export default function Settings({ brand, role, perms }) {
     if (!isOwner) { showToast('Only the Owner can change settings', { type: 'warning' }); return }
     setSavingSettings(true)
     try {
-      await saveSettings(brand.id, {
+      await settingsRepository.save(brand.id, {
         logo_url: settings.logo_url || '',
         receipt_header: settings.receipt_header || '',
         receipt_footer: settings.receipt_footer || '',
@@ -138,7 +138,9 @@ export default function Settings({ brand, role, perms }) {
     if (!isOwner) { showToast('Only the Owner can update business details', { type: 'warning' }); return }
     setSavingBiz(true)
     try {
-      await updateBusiness(brand.id, bizForm)
+      // The repository copies only the whitelisted profile fields, so a field
+      // added to bizForm for display cannot reach the database by accident.
+      await settingsRepository.saveBusinessProfile(brand.id, bizForm)
       showToast('Business details updated!', { type: 'success' })
     } catch (e) { showToast('Could not update business details. Please try again.', { type: 'error' }) }
     setSavingBiz(false)
@@ -154,10 +156,10 @@ export default function Settings({ brand, role, perms }) {
     try {
       const slots = bookingForm.slotsText.split(',').map(x => x.trim()).filter(Boolean)
       if (bookingForm.enabled && slots.length === 0) { showToast('Add at least one available time slot.', { type: 'warning' }); setSavingBooking(false); return }
-      await updateBusiness(brand.id, {
-        booking_enabled: !!bookingForm.enabled,
-        booking_type: bookingForm.type,
-        booking_slots: slots,
+      await settingsRepository.saveBookingConfig(brand.id, {
+        enabled: bookingForm.enabled,
+        type: bookingForm.type,
+        slots,
       })
       showToast(bookingForm.enabled ? 'Online booking is live on your CareFind profile!' : 'Online booking turned off.', { type: 'success' })
     } catch (e) { showToast('Could not save booking settings. Please try again.', { type: 'error' }) }

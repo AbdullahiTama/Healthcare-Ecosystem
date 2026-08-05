@@ -268,18 +268,12 @@ export async function updateImagingRequest(id, data) { return sbFetch('imaging_r
 export async function getPatientMessages(patientId) { return sbFetch('patient_messages?patient_id=eq.' + patientId + '&order=created_at.asc&select=*') }
 export async function addPatientMessage(data) { return sbFetch('patient_messages', { method: 'POST', body: JSON.stringify(data) }) }
 
-// SETTINGS
-export async function getSettings(businessId) {
-  const r = await sbFetch('business_settings?business_id=eq.' + businessId + '&select=*')
-  return r[0] || null
-}
-export async function saveSettings(businessId, data) {
-  const existing = await getSettings(businessId)
-  if (existing) {
-    return sbFetch('business_settings?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' })
-  }
-  return sbFetch('business_settings', { method: 'POST', body: JSON.stringify({ ...data, business_id: businessId }) })
-}
+// SETTINGS — moved to modules/settings/repositories. `saveSettings` was a
+// read-then-PATCH-or-POST; it is now a single upsert resolved by the database
+// on business_settings' UNIQUE (business_id), which also closes the race where
+// two first-time savers both read "no row" and both inserted (the loser got a
+// 409 — never corrupt, but a save that failed for no actionable reason).
+// Its two callers were Settings.jsx and POS.jsx's receipt printer.
 
 // ADMIN TEAM
 export async function getAdminTeam() { return sbFetch('admin_team?select=*&order=created_at.desc') }
