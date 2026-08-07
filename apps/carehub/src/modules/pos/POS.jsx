@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
@@ -31,7 +31,42 @@ const PAYMENT_METHODS = [
   ['Cash', DollarSign], ['Transfer', Repeat], ['POS', CreditCard], ['Split', Divide], ['Credit', Clock],
 ]
 
-export default function POS({ brand, products, setProducts, role, perms }) {
+// Catches any crash inside the POS page and shows the real error message on
+// screen (in red) instead of a blank white page — added because there's no
+// way to open a browser console on mobile, so a silent crash was impossible
+// to diagnose. Purely a safety net: it doesn't change any POS behavior when
+// nothing is broken.
+class POSErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { console.error('POS crashed:', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 20, fontFamily: 'monospace' }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: '#dc2626', marginBottom: 10 }}>
+            POS page crashed — screenshot this and send it:
+          </div>
+          <div style={{ padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#7f1d1d', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {String(this.state.error?.message || this.state.error)}
+            {this.state.error?.stack ? '\n\n' + this.state.error.stack : ''}
+          </div>
+          <button onClick={() => this.setState({ error: null })}
+            style={{ marginTop: 14, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: 'white', fontWeight: 700 }}>
+            Try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+export default function POS(props) {
+  return <POSErrorBoundary><POSInner {...props} /></POSErrorBoundary>
+}
+
+function POSInner({ brand, products, setProducts, role, perms }) {
   const [view, setView] = useState('pos') // pos | held | recent | credit
   const [cart, setCart] = useState([])
   const [client, setClient] = useState('Walk-in')
@@ -72,7 +107,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat)))]
   const visible = products.filter(p =>
     (filter === 'All' || p.cat === filter) &&
-    (p.name.toLowerCase().includes(search.toLowerCase()) || (p.generic_name || p.genericName || '').toLowerCase().includes(search.toLowerCase()))
+    ((p.name || '').toLowerCase().includes(search.toLowerCase()) || (p.generic_name || p.genericName || '').toLowerCase().includes(search.toLowerCase()))
   )
   // Services are always sellable; stock goods only when stock > 0. Anything
   // else is collected for the Out-of-Stock sheet instead of the grid.
@@ -402,7 +437,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
               stream.getTracks().forEach(t => t.stop())
               setScanning(false)
               const code = codes[0].rawValue
-              const match = products.find(p => p.barcode === code || p.name.toLowerCase().includes(code.toLowerCase()))
+              const match = products.find(p => p.barcode === code || (p.name || '').toLowerCase().includes(code.toLowerCase()))
               if (match) {
                 if (!isService(match) && match.stock <= 0) { showToast(match.name + ' is out of stock.', { type: 'warning' }); return }
                 add(match); showToast('Added: ' + match.name, { type: 'success' })
@@ -415,7 +450,7 @@ export default function POS({ brand, products, setProducts, role, perms }) {
       }).catch(() => { setScanning(false); showToast('Camera access denied. Check your browser permissions and try again.', { type: 'error' }) })
     } else {
       const code = prompt('Enter barcode number:')
-      if (code) { const m = products.find(p => p.name.toLowerCase().includes(code.toLowerCase())); if (m) { if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return } add(m) } else setSearch(code) }
+      if (code) { const m = products.find(p => (p.name || '').toLowerCase().includes(code.toLowerCase())); if (m) { if (!isService(m) && m.stock <= 0) { showToast(m.name + ' is out of stock.', { type: 'warning' }); return } add(m) } else setSearch(code) }
     }
   }
 
