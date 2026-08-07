@@ -16,6 +16,7 @@
 - **Focus must be visible.** A clear focus ring (2px, `teal-600`, sufficient contrast against any background it appears on) on every focusable element, never removed via `outline: none` without a replacement.
 - **CareHub specifically:** given its dense, repeat-use context (Design Principle 13), keyboard shortcuts are a real feature, not an accessibility afterthought — see `NAVIGATION.md` for the shortcut system. Every shortcut-accessible action must also be reachable through the standard tab-and-click path; shortcuts are an acceleration, never the only path.
 - **Modals and drawers trap focus** while open (tab cycles within the modal, doesn't escape to the page behind it) and return focus to the triggering element on close.
+- **On open, a modal's initial focus lands on its first editable field**, never on a close/cancel button — the user can start typing immediately, and any keyboard interaction during the session returns to a field, not to a button nobody clicked. A modal with no fields (e.g. a confirmation dialog) focuses its first button, which is always the safe/default action (Cancel).
 - **Escape key closes** any modal, drawer, dropdown, or popover.
 
 ## Screen readers

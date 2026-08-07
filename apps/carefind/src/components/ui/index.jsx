@@ -266,6 +266,10 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
 // `preventBackdropClose`: for destructive/irreversible content — backdrop
 // click and Escape are disabled, only the explicit footer actions can close it
 // (SCREEN_PATTERNS.md pattern 27's rule for irreversible-action modals).
+// `onClose` is kept in a ref so the focus-trap only re-arms on an open-state
+// change, never on a parent re-render (which would steal focus back on every
+// keystroke). Initial focus lands on the first editable field, never the
+// close/cancel button — typing works immediately on open.
 export function Modal({ show, onClose, title, children, footer, wide, sheet, preventBackdropClose, hideCloseButton }) {
   const cardRef = useRef(null)
   const triggerRef = useRef(null)
@@ -278,8 +282,15 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
     const node = cardRef.current
     const focusable = () => node?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
 
-    const firstFocusable = focusable()?.[0]
-    firstFocusable?.focus()
+    // A modal is opened to type into its fields, not to land focus on its
+    // own close/cancel button. Focus the first editable field (so the user can
+    // start typing immediately — no "click into the input first") and fall
+    // back to the first button only when there are no fields, which keeps
+    // ConfirmDialog's Cancel-default-focused behavior (pattern 29).
+    // preventScroll stops the sheet jolting when the mobile keyboard opens.
+    const editable = () => node?.querySelectorAll('input:not([type="hidden"]), textarea, select, [contenteditable="true"]')
+    const initialFocus = editable()?.[0] || focusable()?.[0]
+    initialFocus?.focus({ preventScroll: true })
 
     function onKeyDown(e) {
       if (e.key === 'Escape' && !preventBackdropClose) { onCloseRef.current?.(); return }
