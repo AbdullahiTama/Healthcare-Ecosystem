@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
-  DollarSign, Repeat, Divide, Search, Package, Clipboard,
+  DollarSign, Repeat, Divide, Search, Package, PackageX, Clipboard,
 } from 'lucide-react'
 import { saleRepository } from './repositories'
 // Credit sales raise and settle debts. That aggregate belongs to the debts
