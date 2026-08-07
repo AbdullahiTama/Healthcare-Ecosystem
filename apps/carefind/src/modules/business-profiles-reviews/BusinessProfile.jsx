@@ -29,8 +29,19 @@ function BookingCard({ biz }) {
   const today = new Date().toISOString().split('T')[0]
   const isToday = date === today
 
+  // booking_slots may arrive as a real array OR as a raw comma-separated
+  // string (CareFind Hub's "Available time slots" field is a plain text
+  // input) — normalize to an array of trimmed, non-empty strings first,
+  // or .filter() below throws on a string and blanks the whole page.
+  const rawSlots = biz.booking_slots
+  const slotList = Array.isArray(rawSlots)
+    ? rawSlots
+    : typeof rawSlots === 'string'
+      ? rawSlots.split(',').map((s) => s.trim()).filter(Boolean)
+      : []
+
   // Drop already-passed times when booking for today
-  const slots = (biz.booking_slots || []).filter((t) => {
+  const slots = slotList.filter((t) => {
     if (!isToday) return true
     const now = new Date()
     const [h, m] = String(t).split(':')
