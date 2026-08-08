@@ -93,10 +93,13 @@ export default function Register() {
       setDone(true)
     } catch (e) {
       // The message names the real cause (e.g. an RLS/permission failure)
-      // instead of blaming the email, which was never checked. sbFetch
-      // formats it as "Supabase error (42501): new row violates row-level
-      // security policy for table "businesses"" — that 42501 is the missing
-      // anon INSERT policy, not a duplicate email.
+      // instead of blaming the email, which was never checked.
+      //
+      // The 42501 this used to surface was NOT a missing anon INSERT policy,
+      // as an earlier note here claimed — that policy exists and passes.
+      // It was the RETURNING clause `return=representation` adds: Postgres
+      // re-checks the new row against the SELECT policy, which only admits
+      // status='active'. Fixed in services/supabase.js's registerBusiness.
       showToast('Registration failed: ' + (e.message || 'Please try again.'), { type: 'error' })
     }
     setSaving(false)

@@ -90,7 +90,17 @@ export async function resolveAccountByEmail(email) {
 
 // BUSINESSES
 export async function getBusinesses() { return sbFetch('businesses?select=*&order=created_at.desc') }
-export async function registerBusiness(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data) }) }
+// return=minimal is required, not an optimisation. Registration runs anonymously
+// (no session exists yet), and PostgreSQL applies the SELECT policy to the new
+// row when an INSERT has a RETURNING clause — which `return=representation`
+// generates. `businesses`' anon SELECT policy is CareFind's public directory,
+// scoped to status='active'; a just-registered row is status='pending', so the
+// RETURNING check fails with 42501 and the whole INSERT rolls back. Asking for
+// no representation keeps the insert clean, and is the right shape anyway: an
+// anonymous caller must not be able to read back a row holding a password.
+// Verified against production — same payload, representation => 42501,
+// minimal => 201. Register.jsx discards the return value.
+export async function registerBusiness(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function updateBusiness(id, data) { return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getBranches(parentId) { return sbFetch('businesses?parent_business_id=eq.' + parentId + '&select=*') }
 export async function addBranch(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data) }) }
@@ -561,8 +571,13 @@ export async function addAgentSupportLog(data) {
 }
 
 // Public application form — anon INSERT policy covers this call.
+// return=minimal for the same reason as registerBusiness above, and here the
+// table is even more clear-cut: agent_applications is a write-only public
+// intake queue with no anon SELECT policy at all, so the RETURNING clause
+// `return=representation` generates can never pass. Verified against
+// production — representation => 42501, minimal => 201.
 export async function submitAgentApplication(data) {
-  return sbFetch('agent_applications', { method: 'POST', body: JSON.stringify(data) })
+  return sbFetch('agent_applications', { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' })
 }
 
 // Admin — application review, agent lifecycle, ledger, payouts, coverage.

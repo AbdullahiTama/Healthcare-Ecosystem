@@ -1,7 +1,42 @@
 -- ============================================================================
 -- PUBLIC FORM SUBMISSIONS BROKEN — anon INSERT policies missing on two tables
 --
--- STATUS: NOT YET APPLIED — run via Supabase SQL editor / psql.
+-- STATUS: SUPERSEDED 2026-08-08 — the diagnosis below is WRONG, and both forms
+--         were still broken after it was written. Kept for the record; do not
+--         rely on its ROOT CAUSE section. Re-running it is harmless.
+--
+-- ⚠ CORRECTION (2026-08-08, re-measured against the live project with the
+--   public anon key). Both INSERT policies now exist and both PASS. The forms
+--   were failing for a different reason entirely, one this file's own
+--   verification steps could not have caught because step 2 below tells you to
+--   probe WITHOUT `Prefer: return=representation`, which is precisely the
+--   header that triggers the bug:
+--
+--     POST /rest/v1/businesses         'Prefer: return=minimal'         -> 201
+--     POST /rest/v1/businesses         'Prefer: return=representation'  -> 42501
+--     POST /rest/v1/agent_applications 'Prefer: return=minimal'         -> 201
+--     POST /rest/v1/agent_applications 'Prefer: return=representation'  -> 42501
+--
+--   `return=representation` makes PostgREST emit INSERT ... RETURNING, and
+--   PostgreSQL applies the **SELECT** policy to the new row whenever an INSERT
+--   has a RETURNING clause. Neither table lets an anonymous caller read the row
+--   it just wrote: `businesses`' only anon SELECT policy is CareFind's public
+--   directory (status='active', while a new signup is status='pending'), and
+--   `agent_applications` is a write-only intake queue with no anon SELECT
+--   policy at all — as this file itself says at line 46. The INSERT succeeds,
+--   the RETURNING check fails, the transaction rolls back, and the client sees
+--   a 42501 that names the INSERT policy and sends you looking here.
+--
+--   Fixed in the client, not the database: registerBusiness() and
+--   submitAgentApplication() now send `Prefer: return=minimal`. Both discard
+--   the response anyway, and an anonymous caller must not be able to read back
+--   a row holding a password. No policy change was needed. See C20 in
+--   planning/CODE_AUDIT.md and the regression test at
+--   apps/carehub/src/services/__tests__/anonymousInserts.test.js.
+--
+--   Lesson worth keeping: reproduce with the request the APP actually sends,
+--   headers included. A hand-rolled curl that differs by one header proved the
+--   opposite of the truth here and cost this bug three days.
 --
 -- SYMPTOM (reported 2026-08-05): the Referral Agent application form and the
 -- business Registration form both fail with "Could not submit" / "Registration
