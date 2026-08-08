@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
 import { staffRepository } from './repositories'
+import { provisionRealAuthAccount } from '../../lib/authClient'
 import { emailStaffWelcome } from '../../lib/email'
 import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -149,6 +150,18 @@ export default function Staff({ brand, role, perms }) {
         show_on_carefind: form.showOnCareFind || false,
         public_title: form.publicTitle || form.role,
       })
+      // The staff ROW is only half an account since C19 closed the
+      // plaintext-password login path: without a real Supabase Auth account
+      // the new staff member can never sign in (proven live — "Invalid
+      // login credentials"). Provision it the same way Register.jsx does for
+      // new businesses: best-effort signUp, never blocks the staff row that
+      // already succeeded, and the new account activates via the
+      // confirmation email like any other signup.
+      let provisioned = false
+      try {
+        const session = await provisionRealAuthAccount(form.email, form.password)
+        provisioned = !!session
+      } catch (e) {}
       // Send welcome email to staff
       try {
         await emailStaffWelcome({
@@ -159,9 +172,16 @@ export default function Staff({ brand, role, perms }) {
           password: form.password,
         })
       } catch (e) {}
-      showToast('Staff member added! Welcome email sent.', { type: 'success' })
+      showToast(provisioned
+        ? 'Staff member added and signed in! Welcome email sent.'
+        : 'Staff member added! They will receive a confirmation email to activate their login.', { type: 'success' })
       setForm({}); setShowAdd(false); load()
-    } catch (e) { showToast('Could not add staff member. Email may already be registered.', { type: 'error' }) }
+    } catch (e) {
+      // The message names the real cause instead of blaming the email, which
+      // was never checked — e.g. "Supabase error (42501)" on an RLS failure
+      // or the actual duplicate key if one exists.
+      showToast('Could not add staff member: ' + (e.message || 'Please try again.'), { type: 'error' })
+    }
     setSaving(false)
   }
 

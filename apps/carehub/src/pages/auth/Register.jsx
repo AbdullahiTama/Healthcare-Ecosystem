@@ -92,7 +92,12 @@ export default function Register() {
       } catch (e) {}
       setDone(true)
     } catch (e) {
-      showToast('Registration failed. This email may already be registered — try logging in instead, or use a different email.', { type: 'error' })
+      // The message names the real cause (e.g. an RLS/permission failure)
+      // instead of blaming the email, which was never checked. sbFetch
+      // formats it as "Supabase error (42501): new row violates row-level
+      // security policy for table "businesses"" — that 42501 is the missing
+      // anon INSERT policy, not a duplicate email.
+      showToast('Registration failed: ' + (e.message || 'Please try again.'), { type: 'error' })
     }
     setSaving(false)
   }
