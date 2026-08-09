@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { Camera, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
+import { Camera, MapPin, AlertTriangle, Plus, X, Loader2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import { SALE_TYPES, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '../utils/marketplace.js'
@@ -28,7 +28,7 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
   const [sellerLocation, setSellerLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction } = useToast()
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => { loadSellerLocation() }, [])
 
@@ -77,13 +77,24 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
     const { error: insErr } = await supabase.from('products').insert(row)
     if (insErr) { setError('Could not add product: ' + insErr.message); setSaving(false); return }
     setSaving(false)
+    showToast('Product added!', { type: 'success' })
+    // Refresh the parent page so the new product appears, then reset the form
+    // so the user can add another product without reopening the modal.
     if (onAdded) onAdded()
-    onClose()
+    resetForm()
+  }
+
+  function resetForm() {
+    setName(''); setPrice(''); setCategory(''); setGenericName(''); setWhatsapp('')
+    setSaleType('retail'); setMinPurchase(''); setPriceUnit('card'); setDescription('')
+    setImage(null); setShowPrice(true); setError('')
   }
 
   const inputStyle = { width: '100%', padding: '11px 13px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }
 
   return (
+    <>
+    <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto', padding: 20, boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -158,13 +169,16 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
             </label>
 
             <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-              {saving ? 'Adding…' : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Plus size={16} aria-hidden="true" /> Add product</span>}
+              {saving
+                ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Loader2 size={16} aria-hidden="true" className="spin" /> Adding…</span>
+                : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Plus size={16} aria-hidden="true" /> Add product</span>}
             </button>
         </div>
       </div>
 
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
+    </>
   )
 }
 
