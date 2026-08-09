@@ -32,6 +32,7 @@ import PlaylistCreate from './modules/playlists/PlaylistCreate.jsx'
 import PlaylistView from './modules/playlists/PlaylistView.jsx'
 import LiveDashboard from './modules/live-streaming/LiveDashboard.jsx'
 import ForBusiness from './modules/marketing/ForBusiness.jsx'
+import About from './modules/marketing/About.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
@@ -48,6 +49,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Routes>
           {/* Public — no login required */}
           <Route path="/" element={<ForBusiness />} />
+          <Route path="/about" element={<About />} />
           <Route path="/feed" element={<Feed />} />
           <Route path="/search" element={<Search />} />
           <Route path="/business/:id" element={<BusinessProfile />} />

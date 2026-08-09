@@ -195,6 +195,8 @@ export default function ForBusiness() {
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>Features</a>
               <a href="#how-it-works" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>How it works</a>
+              <Link to="/about" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+                onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>About</Link>
             </>
           )}
           <button onClick={() => navigate('/login')} className="nav-signin hero-fade" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
@@ -347,6 +349,7 @@ export default function ForBusiness() {
         </div>
         <div style={{ display: 'flex', gap: 20 }}>
           <Link to="/feed" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>Feed</Link>
+          <Link to="/about" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>About</Link>
           <Link to="/claim-business" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>For businesses</Link>
           <a href="#features" style={{ fontSize: 13, fontWeight: 600, color: textMid, textDecoration: 'none' }}>Features</a>
         </div>
