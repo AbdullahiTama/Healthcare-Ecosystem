@@ -109,6 +109,9 @@ export default function Settings({ brand, role, perms }) {
         cover_url: brand.cover_url || '',
         description: brand.description || '',
         visible_on_carefind: brand.visible_on_carefind !== false,
+        show_prices: brand.show_prices !== false,
+        latitude: brand.latitude ?? '',
+        longitude: brand.longitude ?? '',
       })
       setBookingForm({
         enabled: !!brand.booking_enabled,
@@ -142,7 +145,14 @@ export default function Settings({ brand, role, perms }) {
     try {
       // The repository copies only the whitelisted profile fields, so a field
       // added to bizForm for display cannot reach the database by accident.
-      await settingsRepository.saveBusinessProfile(brand.id, bizForm)
+      const payload = {
+        ...bizForm,
+        // GPS fields are numeric in the database — an emptied input must
+        // clear the column, not send an empty string.
+        latitude: bizForm.latitude === '' ? null : (Number(bizForm.latitude) || null),
+        longitude: bizForm.longitude === '' ? null : (Number(bizForm.longitude) || null),
+      }
+      await settingsRepository.saveBusinessProfile(brand.id, payload)
       showToast('Business details updated!', { type: 'success' })
     } catch (e) { showToast('Could not update business details. Please try again.', { type: 'error' }) }
     setSavingBiz(false)
@@ -272,6 +282,13 @@ export default function Settings({ brand, role, perms }) {
           <Inp label='Business Hours' value={bizForm.hours} onChange={v => b('hours', v)} placeholder='e.g. Mon-Sat 8am-8pm' />
           <Inp label='Website / Instagram' value={bizForm.website} onChange={v => b('website', v)} placeholder='@yourbusiness' />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Inp label='GPS Latitude (optional)' value={bizForm.latitude} onChange={v => b('latitude', v)} placeholder='e.g. 6.4474' />
+            <Inp label='GPS Longitude (optional)' value={bizForm.longitude} onChange={v => b('longitude', v)} placeholder='e.g. 3.4359' />
+          </div>
+          <div style={{ fontSize: '12px', color: gray500, padding: '10px 12px', borderRadius: theme.radius.md, background: bg }}>
+            Pin your exact location on the public CareFind map. Find your coordinates on <a href='https://www.google.com/maps' target='_blank' rel='noopener noreferrer' style={{ color: tealDeep, fontWeight: '600' }}>Google Maps</a> — right-click anywhere and copy the numbers.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <Inp label='Logo URL' value={bizForm.logo_url} onChange={v => b('logo_url', v)} placeholder='https://yourwebsite.com/logo.png' />
               <GhostBtn onClick={() => uploadImage('logo_url')} style={{ alignSelf: 'flex-start' }}>
@@ -290,6 +307,7 @@ export default function Settings({ brand, role, perms }) {
           )}
           <Textarea label='About your business' value={bizForm.description || ''} onChange={v => b('description', v)} rows={3} placeholder='Shown on your public CareFind profile — services, specialties, what makes you stand out...' />
           <Toggle label='Listed on CareFind' desc='Allow patients to find your business on the public CareFind platform' value={bizForm.visible_on_carefind !== false} onChange={v => b('visible_on_carefind', v)} />
+          <Toggle label='Show product prices on CareFind' desc='When off, patients see "Ask for price" instead of your product prices' value={bizForm.show_prices !== false} onChange={v => b('show_prices', v)} />
           <TealBtn onClick={saveBizDetails} style={{ alignSelf: 'flex-start', padding: '11px 24px' }}>{savingBiz ? 'Saving...' : 'Save Business Details'}</TealBtn>
         </div>
       </Card>

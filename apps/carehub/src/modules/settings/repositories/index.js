@@ -15,7 +15,7 @@ import { sbFetch } from '../../../services/supabase'
 const BUSINESS_PROFILE_FIELDS = [
   'name', 'phone', 'whatsapp', 'address', 'state', 'city',
   'hours', 'website', 'logo_url', 'cover_url', 'description',
-  'visible_on_carefind',
+  'visible_on_carefind', 'show_prices', 'latitude', 'longitude',
 ]
 
 // ── Settings repository ───────────────────────────────────────────────────────

@@ -1,23 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { Camera, Check, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
+import { Camera, MapPin, AlertTriangle, Plus, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import { SALE_TYPES, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '../utils/marketplace.js'
 import { Toast, useToast } from '../../components/ui'
 
-// Verified sellers list up to 20 products free; 21+ needs a subscription.
-// Non-verified users can only sell by claiming a position at a verified
-// company, and their listings are tagged with that company's name.
-const FREE_LIMIT = 20
-
-// Verified users add products to MedMarket. First 20 free; 21+ needs subscription.
+// Verified sellers list unlimited products on MedMarket. Non-verified users
+// can only sell by claiming a position at a verified company, and their
+// listings are tagged with that company's name.
 function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
   const { user } = useAuth()
   const { coords: geoCoords } = useGeolocation()
-  const [count, setCount] = useState(null)      // how many products they already have
-  const [subscribed, setSubscribed] = useState(false)
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [showPrice, setShowPrice] = useState(true)
@@ -33,34 +28,15 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
   const [sellerLocation, setSellerLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction } = useToast()
 
-  useEffect(() => { loadCount() }, [])
+  useEffect(() => { loadSellerLocation() }, [])
 
-  async function loadCount() {
-    // Count products owned by this user (by owner_id OR any of their
-    // businesses OR the companies they hold an approved position at)
-    const bizIds = [...new Set([
-      ...(businesses || []).map(b => b.id),
-      ...(claimBusinesses || []).map(b => b.id),
-    ])]
-    let q = supabase.from('products').select('id', { count: 'exact', head: true })
-    if (bizIds.length) {
-      q = q.or(`owner_id.eq.${user.id},business_id.in.(${bizIds.join(',')})`)
-    } else {
-      q = q.eq('owner_id', user.id)
-    }
-    const { count: c } = await q
-    setCount(c || 0)
-    // Check subscription
-    const { data: sub } = await supabase.from('product_subscriptions').select('id, active, expires_at').eq('user_id', user.id).eq('active', true).gt('expires_at', new Date().toISOString()).maybeSingle()
-    setSubscribed(!!sub)
-    // Pull seller's location from their profile
+  // Pull seller's location from their profile (shown to buyers as "Listed in …")
+  async function loadSellerLocation() {
     const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).maybeSingle()
     if (prof?.location) setSellerLocation(prof.location)
   }
-
-  const atLimit = count !== null && count >= FREE_LIMIT && !subscribed
 
   async function save() {
     if (!name.trim()) { setError('Product name is required.'); return }
@@ -114,23 +90,8 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.navy }}>Add Product to MedMarket</h3>
           <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
         </div>
-        {count !== null && (
-          <p style={{ margin: '0 0 14px 0', fontSize: 12, color: atLimit ? theme.alert : theme.textMid }}>
-            {subscribed
-              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Check size={13} strokeWidth={3} aria-hidden="true" /> Subscribed: unlimited products</span>
-              : `${count} / ${FREE_LIMIT} free products used`}
-          </p>
-        )}
-
-        {atLimit ? (
-          <div style={{ background: '#fef2f2', border: `1px solid ${theme.alert}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
-            <p style={{ margin: '0 0 6px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>You've used your {FREE_LIMIT} free products</p>
-            <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textMid }}>Subscribe for ₦2,500/month to list unlimited products on CareFind.</p>
-            <button onClick={() => showToast('Subscription coming soon: payment setup in progress.', { type: 'info' })} style={{ padding: '11px 20px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>Subscribe ₦2,500/mo</button>
-          </div>
-        ) : (
-          <div>
-            {error && <p style={{ margin: '0 0 8px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{error}</p>}
+        <div>
+          {error && <p style={{ margin: '0 0 8px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{error}</p>}
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name (brand)" style={inputStyle} />
             <input value={genericName} onChange={(e) => setGenericName(e.target.value)} placeholder="Generic name / composition (e.g. Paracetamol 500mg)" style={inputStyle} />
             <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Helps people find your product by its active ingredient.</p>
@@ -199,8 +160,7 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
             <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
               {saving ? 'Adding…' : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Plus size={16} aria-hidden="true" /> Add product</span>}
             </button>
-          </div>
-        )}
+        </div>
       </div>
 
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />

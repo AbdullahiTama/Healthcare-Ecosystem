@@ -152,11 +152,11 @@ export default function Clients({ brand, role, perms }) {
   }
 
   async function save() {
-    if (!form.fullName || !form.phone) { showToast('Please enter client name and phone number.', { type: 'warning' }); return }
+    if (!form.firstName || !form.lastName || !form.phone) { showToast('Please enter client first name, surname and phone number.', { type: 'warning' }); return }
     setSaving(true)
     try {
       await clientRepository.create(brand.id, {
-        full_name: form.fullName,
+        full_name: [form.firstName, form.lastName].filter(Boolean).map(s => s.trim()).join(' '),
         phone: form.phone,
         email: form.email || '',
         address: form.address || '',
@@ -336,7 +336,10 @@ export default function Clients({ brand, role, perms }) {
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add New Client'
         footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Add Client'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <Inp label='Full Name *' value={form.fullName} onChange={v => f('fullName', v)} placeholder='Client full name' required />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Inp label='First Name *' value={form.firstName} onChange={v => f('firstName', v)} placeholder='e.g. Ada' required />
+            <Inp label='Surname *' value={form.lastName} onChange={v => f('lastName', v)} placeholder='e.g. Okafor' required />
+          </div>
           <Inp label='Phone Number *' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' required />
           <Inp label='Email' value={form.email} onChange={v => f('email', v)} type='email' placeholder='client@email.com' />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

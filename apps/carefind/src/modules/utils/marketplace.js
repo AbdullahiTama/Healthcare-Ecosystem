@@ -17,10 +17,15 @@ export {
 } from '@care-ecosystem/shared-marketplace'
 
 // A product shows its price only when the seller has not turned the
-// price-visibility toggle off (show_price defaults to true) AND a price
-// actually exists. Everything else renders "Ask for price".
+// per-product price-visibility toggle off (show_price defaults to true),
+// the owning business has not hidden all its prices on CareFind
+// (show_prices defaults to true), and a price actually exists. Everything
+// else renders "Ask for price".
 export function canShowPrice(product) {
-  return product && product.show_price !== false && product.price != null
+  return product
+    && product.show_price !== false
+    && product.businesses?.show_prices !== false
+    && product.price != null
 }
 
 // Resolve the best available coordinates for a product listing:

@@ -17,7 +17,7 @@ import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
 
 // Margin applied to newly created products from a purchase so they are
 // immediately sellable (stock is also set). Existing products keep their

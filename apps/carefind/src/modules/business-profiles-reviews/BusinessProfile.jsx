@@ -200,7 +200,7 @@ function BusinessProfile() {
 
     const { data: bizData } = await supabase
       .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind')
+      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude')
       .eq('id', id)
       .maybeSingle()
 
@@ -218,7 +218,7 @@ function BusinessProfile() {
 
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices)')
       .eq('business_id', id)
 
     // list_on_carefind may be NULL on legacy CareHub rows — treat anything but
@@ -301,6 +301,14 @@ function BusinessProfile() {
   // Build a proper wa.me link (handles Nigerian 080... numbers)
   const waLink = whatsappLink(biz.whatsapp, `Hi ${biz.name}, I found you on CareFind.`)
 
+  // Google Maps link for the Directions button: the business-supplied map URL
+  // wins; otherwise fall back to the exact GPS coordinates set in Settings;
+  // without either, the button is not rendered.
+  const mapHref = biz.maps_link
+    || (biz.latitude != null && biz.longitude != null
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.latitude},${biz.longitude}`)}`
+      : null)
+
   // Website field accepts bare domains or handles — normalize to a usable href
   const websiteHref = biz.website && (biz.website.startsWith('http') ? biz.website : 'https://' + biz.website)
 
@@ -355,9 +363,9 @@ function BusinessProfile() {
               <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
             </a>
           )}
-          {biz.maps_link && (
+          {mapHref && (
             <a
-              href={biz.maps_link}
+              href={mapHref}
               target="_blank"
               rel="noreferrer"
               style={{ textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
@@ -452,9 +460,9 @@ function BusinessProfile() {
                   <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
                 </a>
               )}
-              {biz.maps_link && (
+              {mapHref && (
                 <a
-                  href={biz.maps_link}
+                  href={mapHref}
                   target="_blank"
                   rel="noreferrer"
                   style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}

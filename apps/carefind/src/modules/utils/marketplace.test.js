@@ -22,6 +22,12 @@ describe('canShowPrice', () => {
     expect(canShowPrice({ price: 500, show_price: false })).toBe(false)
   })
 
+  it('hides the price when the owning business hides all its prices', () => {
+    expect(canShowPrice({ price: 500, businesses: { show_prices: false } })).toBe(false)
+    expect(canShowPrice({ price: 500, businesses: { show_prices: true } })).toBe(true)
+    expect(canShowPrice({ price: 500, businesses: null })).toBe(true)
+  })
+
   it('hides the price when there is none, regardless of the toggle', () => {
     expect(canShowPrice({ show_price: true })).toBeFalsy()
     expect(canShowPrice(null)).toBeFalsy()
