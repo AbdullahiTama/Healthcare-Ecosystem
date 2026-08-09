@@ -58,7 +58,13 @@ export const Card = forwardRef(function Card({ children, style = {}, onClick, cl
       className={className}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e) } } : undefined}
+      onKeyDown={onClick ? (e) => {
+        // A clickable Card acts like a button for keyboard users — but only
+        // when the Card ITSELF is focused. A keydown bubbling up from a child
+        // input must NOT be prevented, or the spacebar can never be typed into
+        // fields inside the Card (and every Modal wraps its content in one).
+        if ((e.key === 'Enter' || e.key === ' ') && e.currentTarget === e.target) { e.preventDefault(); onClick(e) }
+      } : undefined}
       style={{
         background: theme.cardBg,
         borderRadius: theme.radius.lg,
