@@ -5,12 +5,12 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
-  ClipboardList,
+  ClipboardList, LayoutDashboard,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -198,6 +198,7 @@ const CONSULT_TYPES = ['skincare', 'pharmacy']
 
 export const MODULES = {
   dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES },
+  overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES },
   pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES },
   inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES },
   clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' } },
@@ -230,9 +231,9 @@ export const MODULES = {
 // legacy nav lists ordered their modules differently and nothing should
 // depend on a reorder happening silently.
 const NAV_ORDER = {
-  default: ['dashboard', 'pos', 'inventory', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-  hospital: ['dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-  enterprise: ['dashboard', 'activity', 'orders', 'warehouses', 'stock', 'staff', 'territories', 'messages', 'reports', 'carefind', 'settings'],
+   default: ['overview', 'dashboard', 'pos', 'inventory', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
+   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
+   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'staff', 'territories', 'messages', 'reports', 'carefind', 'settings'],
 }
 
 function familyOf(businessType) {

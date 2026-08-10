@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 // gets passed as the tenant. `getSales` was imported here but never used —
 // dropped rather than repointed.
 import { saleRepository } from '../pos/repositories'
-import { getAllLocations, addBranch, getProducts } from '../../services/supabase'
+import { getAllLocations, addBranch, cloneBranchData, getProducts } from '../../services/supabase'
 import { fmt, todayDate, businessLucideIcon } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -69,7 +69,7 @@ export default function Locations({ brand, role }) {
     }
     setSaving(true)
     try {
-      await addBranch({
+      const created = await addBranch({
         name: brand.name + ' — ' + form.name,
         branch_name: form.name,
         parent_business_id: mainId,
@@ -87,6 +87,11 @@ export default function Locations({ brand, role }) {
         visible_on_carefind: true,
         plan: brand.plan || 'growth',
       })
+      // Clone the parent's master catalog + roles into the new branch so it
+      // opens ready to operate. Never blocks branch creation — a failed clone
+      // still leaves a working (if empty) branch.
+      const newId = Array.isArray(created) ? created[0]?.id : created?.id
+      if (newId) { cloneBranchData(mainId, newId).catch(() => {}) }
       showToast('Branch added successfully!', { type: 'success' })
       setForm({}); setShowAdd(false); load()
     } catch (e) { showToast('Could not add branch. Please try again.', { type: 'error' }) }

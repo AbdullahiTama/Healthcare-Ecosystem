@@ -13,8 +13,13 @@ import { sbFetch } from '../../../services/supabase'
 // That injected transport is the seam — one interface, two adapters.
 export function createProductRepository(request = sbFetch) {
   return {
+    // PostgREST caps responses at 1000 rows by default — a business with more
+    // than 1000 products would silently lose every row past the cap from view,
+    // even though the rows exist. Raising the ceiling to 50000 closes that gap
+    // for any realistic single-tenant catalogue; the UI paginates the result so
+    // rendering thousands of rows never hits the DOM all at once.
     async getAll(businessId) {
-      return request(`products?business_id=eq.${businessId}&order=name.asc&select=*`)
+      return request(`products?business_id=eq.${businessId}&order=name.asc&select=*&limit=50000`)
     },
 
     async getById(productId, businessId) {

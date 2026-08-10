@@ -25,6 +25,17 @@ describe('productRepository', () => {
     expect(rows.some((r) => r.business_id === B)).toBe(false)
   })
 
+  it('getAll requests a raised row limit so large catalogues are not silently truncated at 1000', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path, options) => {
+      calls.push(path)
+      return []
+    })
+    await repo.getAll(A)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toContain('limit=50000')
+  })
+
   it('getById scopes by id AND business, returning null when absent', async () => {
     const { repo } = seeded()
     expect((await repo.getById('1', A)).name).toBe('Paracetamol')

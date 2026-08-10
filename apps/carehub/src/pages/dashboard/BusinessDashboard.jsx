@@ -44,6 +44,7 @@ import RxInbox from './hospital/RxInbox'
 import Lab from './hospital/Lab'
 import Imaging from './hospital/Imaging'
 import Consultation from '../../modules/consultation/Consultation'
+import Overview from '../../modules/overview/Overview'
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory',
@@ -51,6 +52,7 @@ const PAGE_TITLES = {
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
+  overview: 'Overview',
 }
 
 export default function BusinessDashboard() {
@@ -159,6 +161,9 @@ export default function BusinessDashboard() {
         <PlanExpiryBanner brand={brand} />
         <div style={{ flex: 1, overflowY: 'auto', background: theme.bg }}>
           <Routes>
+            {/* Overview renders its own full-bleed header (cross-branch stats),
+                so it skips the generic TopBar — see Overview.jsx. Owner-only. */}
+            <Route path='overview' element={guard('overview', <Overview brand={brand} role={role} perms={perms} />)} />
             {/* Dashboard renders its own full-bleed header (date + branch +
                 sync status + New sale), so it skips the generic TopBar and the
                 standard content padding — see DashboardHome.jsx. */}

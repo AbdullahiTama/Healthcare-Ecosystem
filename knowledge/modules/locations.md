@@ -20,6 +20,11 @@ Single default-exported component. Uses `useAuth()` directly (one of the few das
 
 ## Current State
 Viewing branch locations and adding a new branch are implemented. `getAllLocations`'s three-step sequential query chain was not reviewed for correctness/necessity in depth in prior passes; whether the redundant second `getBusinessById` call in the non-branch case is intentional or avoidable was not resolved.
+## Relationship to Warehouses
 
-## Missing Documentation
-No document describes the intended relationship between this domain and the enterprise-vertical `enterprise_locations` table used by Warehouses — whether "Locations" (branches of a `businesses` row) and "Warehouses" (`enterprise_locations` rows) are meant to be the same concept for different business types, or genuinely separate systems, is not stated anywhere.
+Branches (`businesses.parent_business_id`) and Locations (`enterprise_locations`) are **separate systems that do not interact**:
+
+- **Branches** are business entities — each is a full `businesses` row with isolated inventory, sales, staff, and appointments. The owner manages them from the cross-branch Overview.
+- **Locations** are physical places within one branch (warehouse, showroom, headquarters). Used by Stock, Orders, and Warehouses modules.
+
+A branch (business) may contain multiple locations (places), but the application does not model this hierarchy — they serve different concerns. See ADR-002.

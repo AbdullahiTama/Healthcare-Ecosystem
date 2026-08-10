@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
@@ -39,12 +39,25 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const totalDuplicateItems = duplicateGroups.reduce((s, g) => s + (g.length - 1), 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))]
-  const filtered = products.filter(p => {
+  const filtered = useMemo(() => products.filter(p => {
     const pCat = p.cat || p.category || ''
     const pGeneric = p.generic_name || p.genericName || ''
     return (catFilter === 'All' || pCat === catFilter) &&
       (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
-  })
+  }), [products, catFilter, search])
+
+  // Pagination — 50 rows per page. Reset to page 0 whenever the result set
+  // changes (search, filter, or data reload) so the user never lands on an
+  // empty page that no longer exists.
+  const PAGE_SIZE = 50
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const [page, setPage] = useState(0)
+  const safePage = Math.min(page, pageCount - 1)
+  useEffect(() => { setPage(0) }, [search, catFilter, products.length])
+  const paged = useMemo(
+    () => filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
+    [filtered, safePage],
+  )
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
@@ -402,7 +415,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(p => {
+                {paged.map(p => {
                   const cat = p.cat || p.category || ''
                   const low = cat !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)
                   const out = cat !== 'Services' && p.stock <= 0
@@ -446,8 +459,19 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                   )
                 })}
               </tbody>
-            </table>
+              </table>
           </div>
+          {filtered.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderTop: `1px solid ${border}`, fontSize: '12px', color: gray500 }}>
+              <span>{safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} products</span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
+                  style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: safePage === 0 ? gray100 : 'white', color: safePage === 0 ? gray400 : navy, fontWeight: '700', fontSize: '12px', cursor: safePage === 0 ? 'not-allowed' : 'pointer'}}>Previous</button>
+                <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={safePage >= pageCount - 1}
+                  style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: safePage >= pageCount - 1 ? gray100 : 'white', color: safePage >= pageCount - 1 ? gray400 : navy, fontWeight: '700', fontSize: '12px', cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer'}}>Next</button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
 

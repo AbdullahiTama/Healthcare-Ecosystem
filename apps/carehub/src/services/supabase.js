@@ -103,7 +103,25 @@ export async function getBusinesses() { return sbFetch('businesses?select=*&orde
 export async function registerBusiness(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function updateBusiness(id, data) { return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getBranches(parentId) { return sbFetch('businesses?parent_business_id=eq.' + parentId + '&select=*') }
-export async function addBranch(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data) }) }
+export async function addBranch(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
+// Copies the parent's master-product activations and roles into a newly
+// created branch. Called immediately after addBranch so the branch opens with
+// the catalog, fees, and permission structure already in place. Stock starts at
+// zero — only the activation links are copied, not inventory levels.
+export async function cloneBranchData(parentId, branchId) {
+  // Activate every master product the parent has.
+  const masterRows = await sbFetch(`master_products?business_id=eq.${parentId}&select=id`)
+  if (masterRows && masterRows.length > 0) {
+    const links = masterRows.map(mp => ({ branch_id: branchId, master_product_id: mp.id, active: true }))
+    await sbFetch('branch_products', { method: 'POST', body: JSON.stringify(links), prefer: 'return=minimal' })
+  }
+  // Copy the parent's custom roles.
+  const roles = await sbFetch(`roles?business_id=eq.${parentId}&select=name,permissions`)
+  if (roles && roles.length > 0) {
+    const branchRoles = roles.map(r => ({ business_id: branchId, name: r.name, permissions: r.permissions }))
+    await sbFetch('roles', { method: 'POST', body: JSON.stringify(branchRoles), prefer: 'return=minimal' })
+  }
+}
 export async function getAllLocations(mainBusinessId) {
   const main = await getBusinessById(mainBusinessId)
   if (!main) return []
@@ -132,7 +150,7 @@ export async function getAllLocations(mainBusinessId) {
 // BusinessDashboard's permission bootstrap.
 
 // PRODUCTS
-export async function getProducts(businessId) { return sbFetch('products?business_id=eq.' + businessId + '&order=name.asc&select=*') }
+export async function getProducts(businessId) { return sbFetch('products?business_id=eq.' + businessId + '&order=name.asc&select=*&limit=50000') }
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
