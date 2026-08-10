@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
-  FileUp, CheckCircle, ArrowRight, Clipboard, Plus,
+  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
 } from 'lucide-react'
 import { productRepository } from './repositories'
 import { fmt, todayDate } from '../../lib/utils'
@@ -339,6 +339,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   }
 
   return (
+    <>
+    <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     <div>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Inventory</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Manage products, stock and CareFind listings</div></div>
@@ -515,7 +517,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             <GhostBtn onClick={downloadTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
             {uploadData.length > 0 && (
               <button onClick={importProducts} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
-                {importing ? 'Importing…' : 'Import ' + uploadData.length + ' Products'}
+                {importing
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
+                  : 'Import ' + uploadData.length + ' Products'}
               </button>
             )}
           </div>
@@ -611,6 +615,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
+    </>
   )
 }
 
