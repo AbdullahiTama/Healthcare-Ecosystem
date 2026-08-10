@@ -23,6 +23,9 @@ export const NOTIFICATION_TYPES = {
   CONSULTATION_REQUEST: 'consultation_request',
   WITHDRAWAL_REQUEST: 'withdrawal_request',
   TASK_SUBMISSION: 'task_submission',
+  BOOKING_CREATED: 'booking_created',
+  BOOKING_PAID: 'booking_paid',
+  BOOKING_CONFIRMED: 'booking_confirmed',
 }
 
 // Default human-readable messages per type
@@ -47,6 +50,9 @@ export const DEFAULT_MESSAGES = {
   [NOTIFICATION_TYPES.CONSULTATION_REQUEST]: 'requested a consultation',
   [NOTIFICATION_TYPES.WITHDRAWAL_REQUEST]: 'requested a withdrawal',
   [NOTIFICATION_TYPES.TASK_SUBMISSION]: 'submitted a task',
+  [NOTIFICATION_TYPES.BOOKING_CREATED]: 'New appointment booking',
+  [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
+  [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Your appointment was confirmed',
 }
 
 /**

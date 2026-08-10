@@ -145,4 +145,7 @@ export const careHubMessages = {
   [NOTIFICATION_TYPES.CONSULTATION_REQUEST]: 'requested a consultation',
   [NOTIFICATION_TYPES.WITHDRAWAL_REQUEST]: 'requested a withdrawal',
   [NOTIFICATION_TYPES.TASK_SUBMISSION]: 'submitted a task',
+  [NOTIFICATION_TYPES.BOOKING_CREATED]: 'New appointment booking',
+  [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
+  [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Appointment confirmed',
 }

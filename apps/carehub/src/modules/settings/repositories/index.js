@@ -77,13 +77,18 @@ export function createSettingsRepository(request = sbFetch) {
     // profile. Kept separate from the profile save because it is its own form
     // with its own button, and because `booking_slots` needs parsing the
     // profile fields do not.
-    async saveBookingConfig(businessId, { enabled, type, slots }) {
+    //
+    // Fees are stored in kobo (integer). NULL means "free" — a business can
+    // charge for one appointment type and make the other free.
+    async saveBookingConfig(businessId, { enabled, type, slots, onlineFee, physicalFee }) {
       return request(`businesses?id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           booking_enabled: !!enabled,
           booking_type: type,
           booking_slots: slots,
+          online_consultation_fee: onlineFee,
+          physical_consultation_fee: physicalFee,
         }),
         prefer: 'return=minimal',
       })

@@ -17,7 +17,7 @@ export default function Settings({ brand, role, perms }) {
   const { auth, setAuth } = useAuth()
   const [settings, setSettings] = useState({})
   const [bizForm, setBizForm] = useState({})
-  const [bookingForm, setBookingForm] = useState({ enabled: false, type: 'physical', slotsText: '' })
+  const [bookingForm, setBookingForm] = useState({ enabled: false, type: 'physical', slotsText: '', onlineFee: '', physicalFee: '' })
   const [loading, setLoading] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [savingBiz, setSavingBiz] = useState(false)
@@ -117,6 +117,8 @@ export default function Settings({ brand, role, perms }) {
         enabled: !!brand.booking_enabled,
         type: brand.booking_type || 'physical',
         slotsText: (Array.isArray(brand.booking_slots) ? brand.booking_slots : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00']).join(', '),
+        onlineFee: brand.online_consultation_fee != null ? String(brand.online_consultation_fee) : '',
+        physicalFee: brand.physical_consultation_fee != null ? String(brand.physical_consultation_fee) : '',
       })
     } catch (e) {}
     setLoading(false)
@@ -190,10 +192,15 @@ export default function Settings({ brand, role, perms }) {
     try {
       const slots = bookingForm.slotsText.split(',').map(x => x.trim()).filter(Boolean)
       if (bookingForm.enabled && slots.length === 0) { showToast('Add at least one available time slot.', { type: 'warning' }); setSavingBooking(false); return }
+      // Fees arrive as naira strings from the form; store as kobo (integer).
+      // Blank means "free" — stored as NULL.
+      const toKobo = (v) => { const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : null }
       await settingsRepository.saveBookingConfig(brand.id, {
         enabled: bookingForm.enabled,
         type: bookingForm.type,
         slots,
+        onlineFee: toKobo(bookingForm.onlineFee),
+        physicalFee: toKobo(bookingForm.physicalFee),
       })
       showToast(bookingForm.enabled ? 'Online booking is live on your CareFind profile!' : 'Online booking turned off.', { type: 'success' })
     } catch (e) { showToast('Could not save booking settings. Please try again.', { type: 'error' }) }
@@ -322,8 +329,12 @@ export default function Settings({ brand, role, perms }) {
             <>
               <Sel label='Appointment type' value={bookingForm.type} onChange={v => bk('type', v)} options={[{ value: 'physical', label: 'Physical visits only' }, { value: 'online', label: 'Online (video/phone) only' }, { value: 'both', label: 'Both — let the patient choose' }]} />
               <Inp label='Available time slots (comma-separated, 24h)' value={bookingForm.slotsText} onChange={v => bk('slotsText', v)} placeholder='09:00, 10:00, 11:00, 14:00, 15:00' />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Inp label='Online fee (₦, blank = free)' value={bookingForm.onlineFee} onChange={v => bk('onlineFee', v)} type='number' placeholder='0' />
+                <Inp label='Physical fee (₦, blank = free)' value={bookingForm.physicalFee} onChange={v => bk('physicalFee', v)} type='number' placeholder='0' />
+              </div>
               <div style={{ fontSize: '12px', color: gray500, padding: '10px 12px', borderRadius: theme.radius.md, background: bg }}>
-                Bookings arrive in your <strong>Appointments</strong> page with a <strong>Web</strong> badge, ready for you to confirm or reschedule.
+                Clients pay online at booking time. Leave a fee blank to make that appointment type <strong>free</strong>. Bookings arrive in your <strong>Appointments</strong> page with a <strong>Web</strong> badge, ready for you to confirm.
               </div>
             </>
           )}

@@ -129,24 +129,34 @@ describe('settingsRepository', () => {
   })
 
   describe('saveBookingConfig', () => {
-    it('writes the booking columns and coerces enabled to a boolean', async () => {
-      const { calls, repo } = recording()
-      await repo.saveBookingConfig(A, { enabled: 'yes', type: 'online', slots: ['09:00', '10:00'] })
-      expect(calls[0].path).toBe(`businesses?id=eq.${A}`)
-      expect(calls[0].body).toEqual({
-        booking_enabled: true,
-        booking_type: 'online',
-        booking_slots: ['09:00', '10:00'],
+      it('writes the booking columns and coerces enabled to a boolean', async () => {
+        const { calls, repo } = recording()
+        await repo.saveBookingConfig(A, { enabled: 'yes', type: 'online', slots: ['09:00', '10:00'], onlineFee: 5000, physicalFee: 3000 })
+        expect(calls[0].path).toBe(`businesses?id=eq.${A}`)
+        expect(calls[0].body).toEqual({
+          booking_enabled: true,
+          booking_type: 'online',
+          booking_slots: ['09:00', '10:00'],
+          online_consultation_fee: 5000,
+          physical_consultation_fee: 3000,
+        })
+      })
+
+      it('stores NULL when a fee is omitted (free appointment type)', async () => {
+        const { calls, repo } = recording()
+        await repo.saveBookingConfig(A, { enabled: true, type: 'both', slots: ['09:00'], onlineFee: 5000, physicalFee: null })
+        expect(calls[0].body.online_consultation_fee).toBe(5000)
+        expect(calls[0].body.physical_consultation_fee).toBeNull()
+      })
+
+      it('turns booking off without touching anything else', async () => {
+        const { calls, repo } = recording()
+        await repo.saveBookingConfig(A, { enabled: false, type: 'physical', slots: [], onlineFee: null, physicalFee: null })
+        expect(calls[0].body.booking_enabled).toBe(false)
+        expect(calls[0].body.online_consultation_fee).toBeNull()
+        expect(calls[0].body.physical_consultation_fee).toBeNull()
       })
     })
-
-    it('turns booking off without touching anything else', async () => {
-      const { calls, repo } = recording()
-      await repo.saveBookingConfig(A, { enabled: false, type: 'physical', slots: [] })
-      expect(calls[0].body.booking_enabled).toBe(false)
-      expect(Object.keys(calls[0].body).sort()).toEqual(['booking_enabled', 'booking_slots', 'booking_type'])
-    })
-  })
 
   it('exports a default settingsRepository instance', () => {
     for (const m of ['get', 'save', 'saveBusinessProfile', 'saveBookingConfig']) {

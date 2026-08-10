@@ -71,6 +71,15 @@ describe('appointmentRepository', () => {
     expect(client.rows('appointments').map((r) => r.id)).toContain('9')
   })
 
+  it('create passes through concern and payment fields', async () => {
+    const { repo, client } = seeded()
+    await repo.create(A, { client_name: 'Dami', date: '2026-09-01', time: '11:00', status: 'pending', concern: 'Skin rash', payment_status: 'unpaid', fee_amount: 50000 })
+    const created = client.rows('appointments').find((r) => r.client_name === 'Dami')
+    expect(created.concern).toBe('Skin rash')
+    expect(created.payment_status).toBe('unpaid')
+    expect(created.fee_amount).toBe(50000)
+  })
+
   it('exports a default appointmentRepository instance', () => {
     for (const m of ['getAll', 'create', 'update', 'delete']) {
       expect(typeof appointmentRepository[m]).toBe('function')

@@ -3,7 +3,7 @@ import { Calendar, Hourglass, CheckCircle, Search, Download } from 'lucide-react
 import { appointmentRepository } from './repositories'
 // Cross-aggregate read: the client list belongs to the clients module. Still
 // the shared services/supabase read, used by several unmigrated modules too.
-import { getClients } from '../../services/supabase'
+import { getClients, notify } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
@@ -58,6 +58,7 @@ export default function Appointments({ brand, role, perms }) {
         booking_type: form.bookingType || 'physical',
         source: 'carehub',
         phone: form.phone || '',
+        concern: form.concern || null,
       })
       showToast('Appointment booked!', { type: 'success' })
       setForm({ date: todayDate() }); setShowAdd(false); load()
@@ -79,7 +80,16 @@ export default function Appointments({ brand, role, perms }) {
   }
 
   async function updateStatus(id, status) {
-    try { await appointmentRepository.update(id, brand.id, { status }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+    try {
+      const appt = appointments.find(a => a.id === id)
+      await appointmentRepository.update(id, brand.id, { status })
+      // Surface the acknowledgement to the business owner's notification feed
+      // so it appears alongside booking/payment alerts. Never blocks the action.
+      if (appt && status === 'confirmed') {
+        notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+      }
+      load(); showToast('Status updated!', { type: 'success' })
+    } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
   }
 
   function askDelete(appt) { setDeleteTarget(appt) }
@@ -93,6 +103,9 @@ export default function Appointments({ brand, role, perms }) {
   const filtered = filter === 'all' ? appointments : appointments.filter(a => a.status === filter)
   const todayAppts = appointments.filter(a => a.date === today)
   const pendingCount = appointments.filter(a => a.status === 'pending').length
+  const unpaidCount = appointments.filter(a => a.payment_status === 'unpaid').length
+
+  const feeLabel = (kobo) => kobo != null ? `₦${(kobo / 100).toLocaleString()}` : null
 
   return (
     <div>
@@ -101,6 +114,7 @@ export default function Appointments({ brand, role, perms }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Calendar />} label='Today' value={todayAppts.length} sub={todayAppts.filter(a => a.status === 'confirmed').length + ' confirmed'} />
         <StatCard icon={<Hourglass />} label='Pending' value={pendingCount} alert={pendingCount > 0} />
+        <StatCard icon={<Hourglass />} label='Awaiting payment' value={unpaidCount} alert={unpaidCount > 0} />
         <StatCard icon={<CheckCircle />} label='Total' value={appointments.length} />
       </div>
 
@@ -118,7 +132,7 @@ export default function Appointments({ brand, role, perms }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
-                  {['Client', 'Service', 'Date', 'Time', 'Staff', 'Status', 'Actions'].map(h => (
+                  {['Client', 'Concern', 'Service', 'Date', 'Time', 'Payment', 'Status', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -135,13 +149,21 @@ export default function Appointments({ brand, role, perms }) {
                       </div>
                       <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{a.phone ? a.phone : ''}</div>
                     </td>
+                     <td style={{ padding: '12px 16px', fontSize: '12px', color: gray600, maxWidth: '160px' }}>
+                      {a.concern ? <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.concern}>{a.concern}</span> : <span style={{ color: gray400 }}>—</span>}
+                     </td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{a.service || '—'}</td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '700', color: navy }}>{a.date}</td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{a.time}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray500 }}>{a.staff_name || '—'}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '12px' }}>
+                      {a.payment_status === 'paid' && <Pill label={`Paid ${feeLabel(a.fee_amount)}`} type='green' />}
+                      {a.payment_status === 'unpaid' && <Pill label='Unpaid' type='amber' />}
+                      {a.payment_status === 'refunded' && <Pill label='Refunded' type='red' />}
+                      {!a.payment_status && <span style={{ color: gray400 }}>—</span>}
+                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} />
-                    </td>
+                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
                         {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
@@ -182,6 +204,7 @@ export default function Appointments({ brand, role, perms }) {
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
           </div>
           <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
+          <Textarea label='Client concern' value={form.concern} onChange={v => f('concern', v)} placeholder='What is the client coming in for?' rows={2} />
           <Textarea label='Notes' value={form.notes} onChange={v => f('notes', v)} placeholder='Any special notes or instructions...' rows={2} />
         </div>
       </Modal>
