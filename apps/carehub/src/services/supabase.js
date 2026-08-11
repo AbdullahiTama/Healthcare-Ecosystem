@@ -243,7 +243,7 @@ export async function updateConsultation(id, data) { return sbFetch('consultatio
 // replacement for the paper demand log. Tables from
 // 20260801_customer_and_requisition_modules.sql.
 export async function getOutOfStock(businessId) { return sbFetch('out_of_stock?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }
-export async function addOutOfStock(data) { return sbFetch('out_of_stock', { method: 'POST', body: JSON.stringify(data) }) }
+export async function addOutOfStock(data) { return sbFetch('out_of_stock', { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function updateOutOfStock(id, data) { return sbFetch('out_of_stock?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 
 export async function getCustomerRequests(businessId) { return sbFetch('customer_requests?business_id=eq.' + businessId + '&order=created_at.desc&select=*') }

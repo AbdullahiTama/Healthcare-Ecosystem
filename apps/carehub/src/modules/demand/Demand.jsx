@@ -98,7 +98,7 @@ export default function Demand({ brand, role, perms, products }) {
       })
       showToast('Logged in the out-of-stock book!', { type: 'success' })
       setOutForm({ product_name: '' }); setShowOut(false); load()
-    } catch (e) { showToast('Could not save. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not save. Please try again.', { type: 'error' }) }
     setSavingOut(false)
   }
 
@@ -142,12 +142,12 @@ export default function Demand({ brand, role, perms, products }) {
           created_by: role || null,
         })
         saved++
-      } catch (e) {}
+      } catch (e) { showToast(e.message || 'Could not save items. Please try again.', { type: 'error' }) }
     }
     setSavingGen(false)
     setShowGen(false)
     load()
-    showToast(saved > 0 ? saved + ' out-of-stock item(s) logged!' : 'Could not save items. Please try again.', { type: saved > 0 ? 'success' : 'error' })
+    if (saved > 0) showToast(saved + ' out-of-stock item(s) logged!', { type: 'success' })
   }
 
   async function fulfillOut(item) {
