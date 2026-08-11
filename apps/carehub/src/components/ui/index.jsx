@@ -147,8 +147,11 @@ export function RedBtn({ children, onClick, style = {}, disabled, type = 'button
 
 // ── SECTION HEAD ─────────────────────────────────────────────────────────────
 // `extraBtn`: an optional secondary button rendered beside the primary one
-// (e.g. "Export CSV") — { label, icon, onClick }.
-export function SectionHead({ title, sub, btn, onBtn, extraBtn }) {
+// (e.g. "Export CSV") — { label, icon, onClick }. `extraBtns` renders a whole
+// row of them with the same style, for pages that offer several secondary
+// actions (Clients: Export CSV + Upload CSV).
+export function SectionHead({ title, sub, btn, onBtn, extraBtn, extraBtns }) {
+  const secondaries = extraBtns || (extraBtn ? [extraBtn] : [])
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: theme.space[10], flexWrap: 'wrap', gap: theme.space[6] }}>
       <div>
@@ -156,11 +159,11 @@ export function SectionHead({ title, sub, btn, onBtn, extraBtn }) {
         {sub && <div style={{ fontSize: theme.type.body.size, color: theme.textLight, marginTop: 3 }}>{sub}</div>}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {extraBtn && (
-          <button onClick={extraBtn.onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', color: theme.textDark, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-            {extraBtn.icon} {extraBtn.label}
+        {secondaries.map((b) => (
+          <button key={b.label} onClick={b.onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', color: theme.textDark, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            {b.icon} {b.label}
           </button>
-        )}
+        ))}
         {btn && <TealBtn onClick={onBtn}>{btn}</TealBtn>}
       </div>
     </div>

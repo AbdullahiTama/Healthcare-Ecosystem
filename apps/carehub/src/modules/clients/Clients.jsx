@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Users, UserPlus, DollarSign, Search, Download, ShoppingCart, Calendar, Landmark, Clipboard, History } from 'lucide-react'
+import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { clientRepository } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
@@ -7,7 +7,7 @@ import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
 
-const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, success } = theme
+const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
 
 const HISTORY_TABS = [
   ['timeline', History, 'Timeline'],
@@ -111,6 +111,12 @@ export default function Clients({ brand, role, perms }) {
   const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  // Bulk upload state — mirrors the Inventory CSV flow (download template,
+  // fill in Excel, save as CSV, upload here).
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadData, setUploadData] = useState([])
+  const [uploadError, setUploadError] = useState('')
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => { load() }, [brand?.id])
 
@@ -183,6 +189,105 @@ export default function Clients({ brand, role, perms }) {
     const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients.csv'; a.click()
     URL.revokeObjectURL(url)
     showToast('Clients exported as CSV!', { type: 'success' })
+  }
+
+  // ── Bulk upload (CSV) ───────────────────────────────────────────────────────
+  // Mirrors the Inventory product upload: download a template, fill it in
+  // Excel, save as CSV, upload here. Phone number is the dedupe key — the
+  // point of the feature is importing an existing customer/patient database
+  // without creating duplicates.
+  const normPhone = (p) => String(p || '').replace(/[^0-9]/g, '')
+
+  function downloadClientTemplate() {
+    const rows = [
+      ['First Name', 'Last Name', 'Phone', 'Email', 'Gender', 'Date of Birth', 'Address', 'Notes'],
+      ['Ada', 'Okafor', '08012345678', 'ada@email.com', 'Female', '1990-05-12', '12 Broad Street, Lagos', 'VIP customer'],
+      ['Musa', 'Bello', '08098765432', '', 'Male', '1985-01-30', '', ''],
+    ]
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Clients_Template.csv'; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })
+  }
+
+  function handleClientFileUpload(e) {
+    const file = e.target.files[0]; if (!file) return
+    setUploadError(''); setUploadData([])
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const lines = ev.target.result.split('\n').filter(l => l.trim())
+        if (lines.length < 2) { setUploadError('File is empty or has no clients.'); return }
+        const parsed = lines.slice(1).map(line => {
+          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
+          if (!cols[0] && !cols[1] && !cols[2]) return null
+          const firstName = cols[0] || ''
+          const lastName = cols[1] || ''
+          return {
+            full_name: [firstName, lastName].filter(Boolean).join(' '),
+            phone: cols[2] || '',
+            email: cols[3] || '',
+            gender: cols[4] || '',
+            date_of_birth: cols[5] || '',
+            address: cols[6] || '',
+            notes: cols[7] || '',
+          }
+        }).filter(Boolean)
+        if (parsed.length === 0) { setUploadError('No valid clients found.'); return }
+        setUploadData(parsed)
+      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
+
+  async function importClients() {
+    if (uploadData.length === 0) return
+    setImporting(true)
+    showToast('Importing ' + uploadData.length + ' clients…', { type: 'info' })
+    const existingPhones = new Set(clients.map(c => normPhone(c.phone)))
+    const fresh = []
+    let skipped = 0
+    let invalid = 0
+    const invalidNames = []
+    for (const c of uploadData) {
+      if (!normPhone(c.phone)) {
+        invalid++
+        if (invalidNames.length < 5) invalidNames.push((c.full_name || 'Unknown') + ' (no phone)')
+        continue
+      }
+      if (existingPhones.has(normPhone(c.phone))) { skipped++; continue }
+      existingPhones.add(normPhone(c.phone))
+      fresh.push({
+        full_name: c.full_name || c.phone,
+        phone: c.phone,
+        email: c.email || '',
+        address: c.address || '',
+        date_of_birth: c.date_of_birth || '',
+        gender: c.gender || '',
+        notes: c.notes || '',
+        total_spend: 0,
+        visit_count: 0,
+      })
+    }
+    const { added, failed } = await clientRepository.createMany(brand.id, fresh)
+    await load()
+    setUploadData([])
+    setShowUpload(false)
+    setImporting(false)
+    const parts = [added + ' imported']
+    if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
+    if (invalid > 0) parts.push(invalid + ' invalid')
+    if (failed.length > 0) parts.push(failed.length + ' failed')
+    const summary = parts.join(' · ')
+    if (failed.length > 0) {
+      showToast(summary + ': ' + failed.slice(0, 3).map(x => x.full_name + ' (' + x.message + ')').join(', '), { type: 'warning' })
+    } else if (invalid > 0) {
+      showToast(summary + ': ' + invalidNames.join(', '), { type: 'warning' })
+    } else {
+      showToast(summary + '!', { type: 'success' })
+    }
   }
 
   // Exports whatever the client-detail History tab is currently showing
@@ -292,8 +397,14 @@ export default function Clients({ brand, role, perms }) {
   const totalSpend = clients.reduce((s, c) => s + (c.total_spend || 0), 0)
 
   return (
+    <>
+    <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     <div>
-      <SectionHead title='Clients' sub='All your client and patient records' btn='+ Add Client' onBtn={() => setShowAdd(true)} extraBtn={{ label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv }} />
+      <SectionHead title='Clients' sub='All your client and patient records' btn='+ Add Client' onBtn={() => setShowAdd(true)}
+        extraBtns={[
+          { label: 'Upload CSV', icon: <Upload size={14} />, onClick: () => setShowUpload(true) },
+          { label: 'Export CSV', icon: <Download size={14} />, onClick: exportCsv },
+        ]} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Users />} label='Total Clients' value={clients.length} />
@@ -493,7 +604,63 @@ export default function Clients({ brand, role, perms }) {
         )}
       </Modal>
 
+      {/* Upload Clients from Excel / CSV — same flow as the Inventory upload */}
+      <Modal show={showUpload} onClose={() => { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Clients from Excel / CSV'>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
+            1. Tap <strong>Download Template</strong><br />
+            2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
+            3. Fill in your existing clients / patients row by row<br />
+            4. Save as <strong>CSV</strong><br />
+            5. Upload here — clients are matched by <strong>phone number</strong>, so repeat customers from the file are skipped, not duplicated
+          </div>
+          <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
+            <div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}>Tap to select CSV file</div>
+            <input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleClientFileUpload} style={{ display: 'none' }} />
+          </label>
+          {uploadError && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}><AlertTriangle size={15} /> {uploadError}</div>}
+          {uploadData.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}>
+                <CheckCircle size={15} /> {uploadData.length} clients in file
+                {uploadData.filter(c => !normPhone(c.phone)).length > 0 && (
+                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadData.filter(c => !normPhone(c.phone)).length} missing a phone (will be skipped)</span>
+                )}
+              </div>
+              <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}>
+                {uploadData.map((c, i) => {
+                  const missingPhone = !normPhone(c.phone)
+                  const isDupe = clients.some(x => normPhone(x.phone) === normPhone(c.phone))
+                  return (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${gray100}`, fontSize: '12px', background: missingPhone || isDupe ? warningBg : 'transparent' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: missingPhone || isDupe ? warning : navy }}>
+                        {(missingPhone || isDupe) && <AlertTriangle size={12} />}{c.full_name || '(no name)'}
+                      </span>
+                      <span style={{ color: missingPhone || isDupe ? warning : gray500 }}>
+                        {missingPhone ? 'No phone' : isDupe ? 'Already exists' : c.phone + (c.gender ? ' · ' + c.gender : '')}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <GhostBtn onClick={downloadClientTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
+            {uploadData.length > 0 && (
+              <button onClick={importClients} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
+                {importing
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
+                  : 'Import ' + uploadData.length + ' Clients'}
+              </button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>
+    </>
   )
 }

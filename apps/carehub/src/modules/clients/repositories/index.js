@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Client repository ─────────────────────────────────────────────────────────
 // A deep module over the `clients` aggregate and the per-client history the
@@ -17,16 +18,44 @@ import { sbFetch } from '../../../services/supabase'
 // PostgREST-backed sbFetch (the default below); tests bind an in-memory adapter.
 // That injected transport is the seam — one interface, two adapters.
 export function createClientRepository(request = sbFetch) {
+  // Detached (no `this`), so callers can pass it around — the codebase rule:
+  // "No `this` anywhere in here: callers routinely detach these methods."
+  const create = async (businessId, client) =>
+    request('clients', {
+      method: 'POST',
+      body: JSON.stringify({ ...client, business_id: businessId }),
+    })
+
   return {
+    // Paged like every tenant collection: PostgREST clamps responses to
+    // db-max-rows (1000), so an unlimitable query would silently drop clients
+    // past the cap — the bulk CSV upload makes a >1000-client list realistic.
+    // `id.asc` pins the order so pages cannot shift rows.
     async getAll(businessId) {
-      return request(`clients?business_id=eq.${businessId}&order=full_name.asc&select=*`)
+      return pagedQuery(request, `clients?business_id=eq.${businessId}&order=full_name.asc,id.asc&select=*`)
     },
 
     async create(businessId, client) {
-      return request('clients', {
-        method: 'POST',
-        body: JSON.stringify({ ...client, business_id: businessId }),
-      })
+      return create(businessId, client)
+    },
+
+    // Bulk import (CSV upload): many creates in safe-sized parallel batches,
+    // with per-row error capture so one bad row can never sink the whole file.
+    // Returns { added, failed: [{ full_name, message }] } — the page reports
+    // the counts and the first few failures, exactly like the product import.
+    async createMany(businessId, clients, batchSize = 20) {
+      let added = 0
+      const failed = []
+      for (let i = 0; i < clients.length; i += batchSize) {
+        const batch = clients.slice(i, i + batchSize)
+        const results = await Promise.all(batch.map(c =>
+          create(businessId, c)
+            .then(() => true)
+            .catch(err => ({ full_name: c.full_name || 'Unknown', message: err.message || 'error' }))
+        ))
+        results.forEach(r => { if (r === true) added++; else failed.push(r) })
+      }
+      return { added, failed }
     },
 
     // No UI calls this yet — it replaces a dead `updateClient` in

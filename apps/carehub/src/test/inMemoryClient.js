@@ -8,9 +8,11 @@
 //
 // It understands exactly the PostgREST path shapes the repositories emit:
 // `eq.` / `neq.` / `is.null`, the range operators `gte.` `lte.` `gt.` `lt.`,
-// `in.(...)` lists, flat `or=(a.eq.1,b.eq.2)`, `select`/`order`/`limit`
-// (ignored for matching), and the GET / POST / PATCH / DELETE verbs. It is
-// intentionally NOT a full PostgREST — only what the repositories actually use.
+// `in.(...)` lists, flat `or=(a.eq.1,b.eq.2)`, `select`/`order`/`limit`/`offset`
+// (ignored for matching; `limit`/`offset` ARE applied to GET results so
+// offset-paging repositories behave like they do against real PostgREST), and
+// the GET / POST / PATCH / DELETE verbs. It is intentionally NOT a full
+// PostgREST — only what the repositories actually use.
 //
 // Anything else THROWS rather than being ignored. That matters: an earlier
 // version silently skipped filters it did not recognise, so a repository query
@@ -24,6 +26,9 @@ export function createInMemoryClient(seed = {}) {
   const db = {}
   for (const [table, rows] of Object.entries(seed)) db[table] = rows.map((r) => ({ ...r }))
   let autoId = 1000
+  // Every GET that carries an offset param is logged per table, so tests can
+  // assert the exact paging sequence a repository issued.
+  const pageLog = {}
 
   const parse = (path) => {
     const [table, query = ''] = path.split('?')
@@ -52,7 +57,7 @@ export function createInMemoryClient(seed = {}) {
 
   const matches = (row, params) => {
     for (const [key, val] of params.entries()) {
-      if (key === 'select' || key === 'order' || key === 'limit') continue
+      if (key === 'select' || key === 'order' || key === 'limit' || key === 'offset') continue
 
       // `or=(a.eq.1,b.eq.2)` — the flat form the repositories emit. Nested
       // and()/or() is not supported; nothing here produces it.
@@ -79,7 +84,16 @@ export function createInMemoryClient(seed = {}) {
     const method = options.method || 'GET'
     const { table, params } = parse(path)
     db[table] = db[table] || []
-    if (method === 'GET') return db[table].filter((r) => matches(r, params)).map((r) => ({ ...r }))
+    if (method === 'GET') {
+      let rows = db[table].filter((r) => matches(r, params))
+      // offset/limit ARE applied here — that is what makes the pagedQuery
+      // loop in repositories testable. Without them, a getAll that pages
+      // until a short page would get every row on every call and never stop.
+      const offset = params.get('offset') ? parseInt(params.get('offset'), 10) : 0
+      const limit = params.get('limit') ? parseInt(params.get('limit'), 10) : rows.length
+      if (params.get('offset')) (pageLog[table] = pageLog[table] || []).push(offset)
+      return rows.slice(offset, offset + limit).map((r) => ({ ...r }))
+    }
     if (method === 'POST') {
       const body = JSON.parse(options.body)
       const rows = (Array.isArray(body) ? body : [body]).map((r) => ({ id: r.id ?? ++autoId, ...r }))
@@ -101,5 +115,7 @@ export function createInMemoryClient(seed = {}) {
 
   // Inspection helper for assertions — returns a copy of a table's rows.
   request.rows = (table) => (db[table] || []).map((r) => ({ ...r }))
+  // Inspection helper — the offsets of every paged GET on a table, in order.
+  request.pages = (table) => [...(pageLog[table] || [])]
   return request
 }

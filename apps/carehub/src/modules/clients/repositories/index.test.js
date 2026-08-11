@@ -25,10 +25,65 @@ describe('clientRepository', () => {
     expect(rows.map((r) => r.full_name)).toEqual(['Ada'])
   })
 
+  // Same server-side clamp as products: PostgREST returns at most 1000 rows
+  // per request, so a >1000-client list (the bulk CSV upload makes that
+  // realistic) must be fetched by offset-paging until the last short page.
+  it('getAll pages past 1000 clients without dropping any', async () => {
+    const client = createInMemoryClient({
+      clients: Array.from({ length: 2500 }, (_, i) => ({ id: 'c' + i, business_id: A, full_name: 'Client ' + i })),
+    })
+    const repo = createClientRepository(client)
+    const rows = await repo.getAll(A)
+    expect(rows).toHaveLength(2500)
+    expect(rows.every((r) => r.business_id === A)).toBe(true)
+    expect(client.pages('clients')).toEqual([0, 1000, 2000])
+  })
+
   it('create stamps the tenant onto the new row', async () => {
     const { repo, client } = build()
     await repo.create(A, { full_name: 'Ada', phone: '0800' })
     expect(client.rows('clients')[0]).toMatchObject({ full_name: 'Ada', business_id: A })
+  })
+
+  // ── Bulk import ─────────────────────────────────────────────────────────────
+  it('createMany inserts every row with the tenant stamped', async () => {
+    const { repo, client } = build()
+    const rows = Array.from({ length: 45 }, (_, i) => ({ full_name: 'Client ' + i, phone: '080' + i }))
+    const result = await repo.createMany(A, rows)
+
+    expect(result.added).toBe(45)
+    expect(result.failed).toEqual([])
+    const stored = client.rows('clients')
+    expect(stored).toHaveLength(45)
+    expect(stored.every((r) => r.business_id === A)).toBe(true)
+    expect(stored.every((r) => r.phone.startsWith('080'))).toBe(true)
+  })
+
+  // One bad row must never sink the whole file: the failing create is captured
+  // with its name and message, and every other row still lands.
+  it('createMany captures per-row failures without losing the rest', async () => {
+    const rejecting = createInMemoryClient()
+    const failingRepo = createClientRepository(async (path, options) => {
+      const body = JSON.parse(options.body)
+      if (body.phone === '080-BAD') throw new Error('duplicate key')
+      return rejecting(path, options)
+    })
+    const result = await failingRepo.createMany(A, [
+      { full_name: 'Good One', phone: '0801' },
+      { full_name: 'Bad Row', phone: '080-BAD' },
+      { full_name: 'Good Two', phone: '0802' },
+    ])
+
+    expect(result.added).toBe(2)
+    expect(result.failed).toEqual([{ full_name: 'Bad Row', message: 'duplicate key' }])
+    expect(rejecting.rows('clients')).toHaveLength(2)
+  })
+
+  it('createMany is a no-op for an empty list', async () => {
+    const { repo, client } = build()
+    const result = await repo.createMany(A, [])
+    expect(result).toEqual({ added: 0, failed: [] })
+    expect(client.rows('clients')).toHaveLength(0)
   })
 
   it('update is scoped to the tenant', async () => {

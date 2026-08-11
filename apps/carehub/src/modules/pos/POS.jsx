@@ -143,6 +143,17 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   }
   const rmv = id => setCart(cart.filter(c => c.id !== id))
   const setQty = (id, v) => { const n = parseInt(v) || 0; if (n <= 0) rmv(id); else setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c)) }
+  // One-off unit-price override for a single sale — the vendor can charge a
+  // different price for a particular customer without touching the catalog
+  // price (which stays in the product's own record). Clearing the field or
+  // typing an invalid value falls back to the catalog price, so a line can
+  // never be silently zeroed. The override travels into the sale's items JSON,
+  // so receipts, reports and debts all reflect what was actually charged.
+  const setPrice = (id, v) => {
+    const n = parseFloat(v)
+    const fallback = products.find(p => p.id === id)?.price || 0
+    setCart(cart.map(c => c.id === id ? { ...c, price: isNaN(n) || n <= 0 ? fallback : n } : c))
+  }
 
   const sub = cart.reduce((s, c) => s + c.price * c.qty, 0)
   const discAmt = disc ? (discPct ? Math.round(sub * parseFloat(disc) / 100) : parseFloat(disc) || 0) : 0
@@ -742,12 +753,25 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 160 }}>
               <Empty icon={<ShoppingCart size={40} strokeWidth={1.5} />} message="Cart is empty" action="Tap a product to add it" />
             </div>
-          ) : cart.map(item => (
+          ) : cart.map(item => {
+            // The catalog price this line was added at — the baseline shown
+            // next to a one-off override (item.price !== catalogPrice).
+            const catalogPrice = products.find(p => p.id === item.id)?.price ?? item.price
+            return (
             <div key={item.id} style={{ padding: '12px 16px', borderBottom: `1px solid ${gray100}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                  <div style={{ fontSize: 11.5, color: gray400, marginTop: 1 }}>{fmt(item.price)} each</div>
+                  {perms?.canEditPrice ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <input type='number' min='0' step='any' value={item.price} onChange={e => setPrice(item.id, e.target.value)}
+                        aria-label={'Unit price for ' + item.name}
+                        style={{ width: 84, padding: '3px 6px', borderRadius: theme.radius.sm, border: `1px solid ${item.price !== catalogPrice ? tealDeep : border}`, fontSize: 11.5, fontWeight: 700, outline: 'none', color: navy, background: item.price !== catalogPrice ? tealMist : 'white', textAlign: 'right', boxSizing: 'border-box' }} />
+                      {item.price !== catalogPrice && <span style={{ fontSize: 10.5, color: gray400, whiteSpace: 'nowrap' }}>was {fmt(catalogPrice)}</span>}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: gray400, marginTop: 1 }}>{fmt(item.price)} each</div>
+                  )}
                 </div>
                 <div style={{ fontWeight: 800, fontSize: 13, color: navy, flexShrink: 0 }}>{fmt(item.price * item.qty)}</div>
               </div>
@@ -760,7 +784,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 <button onClick={() => rmv(item.id)} aria-label='Remove item' style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', color: gray400, background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}><Trash2 size={14} /></button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Totals + payment + actions */}
