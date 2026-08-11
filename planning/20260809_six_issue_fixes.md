@@ -61,15 +61,23 @@ Validation requires first name, surname and phone.
   `planning/CODE_AUDIT.md`), not introduced here.
 
 ## Not done — Issue 2 (requisition / out-of-stock save) needs a manual DB apply
-The client already posts correctly-named RPC params
-(`p_business_id, p_supplier_name, p_note, p_items` — `supabase.js:252`);
-`apps/carehub/sql/20260805_requisition_lines_normalized.sql` defines a
-`create_requisition(...)` whose signature matches exactly, plus the four
-normalized `requisition_items` columns and the out-of-stock columns
-(`quantity_needed, target_price, supplier_notes`). The migration was never
-applied to the live DB, which is why save fails. No client change is needed —
-apply the SQL in the Supabase editor and run the probe block at lines 92-101.
-`CODE_AUDIT.md` updated to reflect this.
+**CORRECTED 2026-08-11.** The earlier record ("the 20260805 migration was never
+applied, so the columns don't exist live") was re-probed against production and
+was wrong in the useful direction: the live `out_of_stock` table exists but was
+created by a hand-rolled DDL that matches none of the tracked migrations — it is
+missing `product_id`, `notes`, `created_by`, `fulfilled_at` (all of which the app
+writes) and has `quantity_needed` as `integer` instead of `text`. Every
+out-of-stock save fails with `PGRST204: Could not find the 'created_by' column`.
+`requisition_items` already has its four line columns; what is missing there is
+the FK, the index, and the `create_requisition` RPC (probed: PGRST202), which is
+why requisition save fails.
+Fix written, needs a live SQL-editor apply:
+`apps/carehub/sql/20260811_align_out_of_stock_schema.sql` — adds the four
+missing `out_of_stock` columns, casts `quantity_needed` to `text`, adds the
+`requisition_items` FK + index, and creates `create_requisition(...)`
+(`SECURITY INVOKER`, pinned `search_path`). No client change is needed — apply
+the SQL in the Supabase editor and run the probe block at the bottom of the
+file. `CODE_AUDIT.md` updated to reflect this.
 
 Also applied today (separate, earlier session): CareFind public `About` page
 — `apps/carefind/src/modules/marketing/About.jsx`, route in `main.jsx`,
