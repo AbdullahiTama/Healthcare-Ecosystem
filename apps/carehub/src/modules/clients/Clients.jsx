@@ -7,7 +7,7 @@ import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
 
-const { tealDeep, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
 
 const HISTORY_TABS = [
   ['timeline', History, 'Timeline'],
