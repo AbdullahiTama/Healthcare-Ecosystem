@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from './_lib/paystack.js'
 import { creditTopup } from './_lib/paystackCredit.js'
+import { settleConsultationPayment } from './_lib/consultationSettle.js'
 
 // Single Paystack webhook for all apps — register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
@@ -86,6 +87,20 @@ async function handleTransferFailed(reference) {
   return { received: true }
 }
 
+// ── Consultation handler (CareFind professional consultation booking) ──────
+// Races verify-consultation-payment.js on the same reference; the RPC claims
+// the reference atomically so only one caller can ever settle the booking.
+async function handleConsultation(metadata, reference, amount) {
+  if (metadata?.purpose !== 'consultation') return null
+
+  return settleConsultationPayment(supabase, {
+    patientId: metadata.user_id,
+    professionalId: metadata.professional_id,
+    nairaAmount: Math.round(amount / 100),
+    reference,
+  }).then((result) => ({ settled: true, ...result }))
+}
+
 // ── CareHub plan renewal handler ──────────────────────────────────────────
 async function handlePlanPayment(metadata, reference, amount) {
   if (!metadata?.business_id || !metadata?.months) return null
@@ -142,6 +157,10 @@ export default async function handler(req, res) {
 
     // Try subscription first (has explicit purpose flag)
     let result = await handleSubscription(metadata, reference, amount)
+    if (result) return res.status(200).json(result)
+
+    // Try consultation booking (has its own purpose flag)
+    result = await handleConsultation(metadata, reference, amount)
     if (result) return res.status(200).json(result)
 
     // Try CareHub plan payment (has business_id)

@@ -45,7 +45,7 @@ function ProfessionalMonetization() {
         supabase.from('profiles').select('*').eq('id', user.id).single(),
         supabase.from('subscriptions').select('*').eq('professional_id', user.id).maybeSingle(),
         supabase.from('user_subscriptions').select('id, subscriber_id, started_at, status, profiles(full_name, display_name)').eq('professional_id', user.id).eq('status', 'active'),
-        supabase.from('consultations').select('*').eq('professional_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('professional_consultations').select('*').eq('professional_id', user.id).order('created_at', { ascending: false }),
         supabase.from('tasks').select('*').eq('status', 'open').order('created_at', { ascending: false }),
         supabase.from('task_submissions').select('*, tasks(title, compensation)').eq('professional_id', user.id),
         supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle(),
@@ -55,6 +55,12 @@ function ProfessionalMonetization() {
       setSubscription(subRes.data)
       setSubscribers(subscribersRes.data || [])
       setConsultations(consultRes.data || [])
+      const setupRow = (consultRes.data || []).find(c => c.status === 'setup')
+      if (setupRow) {
+        setConsultFee(setupRow.fee?.toString() || '')
+        setConsultType(setupRow.type || 'text')
+        setConsultNotes(setupRow.notes || '')
+      }
       setTasks(tasksRes.data || [])
       setSubmissions(submissionsRes.data || [])
       setWallet(walletRes.data)
@@ -84,15 +90,21 @@ function ProfessionalMonetization() {
   async function submitConsultationSetup() {
     if (!consultFee || parseInt(consultFee) < 100) return
     setSaving(true)
-    await supabase.from('consultations').insert({
+    const { error } = await supabase.from('professional_consultations').upsert({
       professional_id: user.id,
       patient_id: user.id,
       type: consultType,
       fee: parseInt(consultFee),
       notes: consultNotes,
       status: 'setup',
-    })
+    }, { onConflict: 'professional_id' })
     setSaving(false)
+    if (error) {
+      showToast(`Could not save: ${error.message}`, { type: 'error' })
+      return
+    }
+    const { data } = await supabase.from('professional_consultations').select('*').eq('professional_id', user.id).order('created_at', { ascending: false })
+    setConsultations(data || [])
     showToast('Consultation profile saved! Patients can now book you.', { type: 'success' })
   }
 

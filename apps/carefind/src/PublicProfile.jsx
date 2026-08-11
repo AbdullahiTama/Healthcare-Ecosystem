@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, BadgeCheck, Check, ChevronRight, Film, Link2, Lock, MapPin,
+  ArrowLeft, BadgeCheck, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
   MessageSquare, Repeat2, Star, User, X,
 } from 'lucide-react'
 import { supabase } from './config/supabaseClient'
@@ -15,6 +15,10 @@ import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
+import {
+  coinsForConsultation, fetchConsultationOffer, hasBookedConsultation,
+  bookConsultationWithPaystackFallback, settleConsultationCardPayment,
+} from './modules/subscriptions-monetization/consultations.js'
 import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
@@ -48,6 +52,10 @@ function PublicProfile() {
   const [subActive, setSubActive] = useState(false)
   const [subInfo, setSubInfo] = useState(null)
   const [subscribing, setSubscribing] = useState(false)
+  const [consultOffer, setConsultOffer] = useState(null)
+  const [consultBooked, setConsultBooked] = useState(false)
+  const [confirmConsultOpen, setConfirmConsultOpen] = useState(false)
+  const [bookingConsult, setBookingConsult] = useState(false)
   const [openPost, setOpenPost] = useState(null)
   const [confirmSubOpen, setConfirmSubOpen] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
@@ -105,6 +113,33 @@ function PublicProfile() {
       await loadUserReviews()
       await refreshAccess()
 
+      const offer = await fetchConsultationOffer(id)
+      setConsultOffer(offer)
+
+      let booked = false
+      if (user && user.id !== id) {
+        booked = await hasBookedConsultation(user.id, id)
+
+        // Resume a card booking that bounced back from Paystack: settle it
+        // server-side (idempotent against the webhook), then refresh state.
+        try {
+          const pendingRaw = sessionStorage.getItem('cf_consult_pending')
+          if (pendingRaw) {
+            const pending = JSON.parse(pendingRaw)
+            sessionStorage.removeItem('cf_consult_pending')
+            if (pending.professionalId === id && pending.reference) {
+              const settleRes = await settleConsultationCardPayment(user.id, id, pending.reference)
+              if (settleRes.ok && !settleRes.alreadyProcessed && !settleRes.alreadyBooked) {
+                booked = await hasBookedConsultation(user.id, id)
+                notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
+                showToast('Consultation booked! The professional has been notified.', { type: 'success' })
+              }
+            }
+          }
+        } catch (e) { /* malformed pending marker — ignore */ }
+      }
+      setConsultBooked(booked)
+
       if (user) {
         const { data: followData } = await supabase.from('follows').select('id').eq('follower_id', user.id).eq('following_id', id).maybeSingle()
         setIsFollowing(!!followData)
@@ -147,6 +182,38 @@ function PublicProfile() {
     await cancelAutoRenew(user.id, id)
     await refreshAccess()
     showToast("Auto-renew turned off. You'll keep access until your current period ends.", { type: 'info' })
+  }
+
+  function handleBookConsultation() {
+    if (!user) { navigate('/login'); return }
+    setConfirmConsultOpen(true)
+  }
+
+  async function confirmBookConsultation() {
+    setConfirmConsultOpen(false)
+    setBookingConsult(true)
+    const res = await bookConsultationWithPaystackFallback(user.id, id, `${window.location.origin}/u/${id}`)
+    if (res.paystackUrl) {
+      sessionStorage.setItem('cf_consult_pending', JSON.stringify({ professionalId: id, reference: res.reference }))
+      window.location.href = res.paystackUrl
+      return
+    }
+    setBookingConsult(false)
+    if (res.insufficient) {
+      showToast('Not enough CareCoins to book. Top up your wallet to continue.', { type: 'warning', actionLabel: 'Top up', onAction: () => navigate('/wallet') })
+      return
+    }
+    if (res.error) { showToast('Could not book: ' + res.error, { type: 'error' }); return }
+    if (res.alreadyBooked) {
+      setConsultBooked(true)
+      showToast('You already have a booking with this professional.', { type: 'info' })
+      return
+    }
+    if (res.ok) {
+      setConsultBooked(true)
+      notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
+      showToast('Consultation booked! The professional has been notified.', { type: 'success' })
+    }
   }
 
   async function loadUserReviews() {
@@ -547,6 +614,39 @@ function PublicProfile() {
       <div style={isMobile ? { padding: '0 16px 16px 16px' } : {}}>
         {isMobile && identityBlock('hero')}
 
+        {/* Consultation offer — the professional's bookable service */}
+        {!isOwnProfile && consultOffer && consultOffer.fee > 0 && (
+          <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: 16, padding: 14, background: theme.tealMist, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 800, color: theme.tealDeep, background: '#fff', padding: '4px 10px', borderRadius: theme.radius.full }}>
+                <CalendarDays size={12} aria-hidden="true" /> {consultOffer.type} consultation
+              </span>
+            </div>
+            <p style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 900, color: theme.navy }}>
+              ₦{Number(consultOffer.fee).toLocaleString()}
+              <span style={{ fontSize: 12, fontWeight: 600, color: theme.textLight }}> ≈ {coinsForConsultation(consultOffer.fee)} CareCoins</span>
+            </p>
+            {consultOffer.notes && <p style={{ margin: '0 0 12px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}>{consultOffer.notes}</p>}
+            {consultBooked ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fff', borderRadius: 12 }}>
+                <Check size={16} color={theme.success} strokeWidth={3} aria-hidden="true" />
+                <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>Consultation booked</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleBookConsultation}
+                disabled={bookingConsult}
+                style={{
+                  width: '100%', padding: 12, background: theme.tealDeep, color: '#fff',
+                  border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, fontFamily: theme.fontFamily, cursor: 'pointer',
+                }}
+              >
+                {bookingConsult ? 'Booking…' : <><Coins size={15} style={{ verticalAlign: '-2px', marginRight: 6 }} aria-hidden="true" />Book Consultation</>}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Content tabs */}
         <div role="group" aria-label="Profile sections" className="cf-hscroll" style={{ display: 'flex', borderBottom: `1px solid ${theme.gray200}`, marginBottom: 14, WebkitOverflowScrolling: 'touch' }}>
           {[['posts', 'Posts', MessageSquare], ['reposts', 'Reposts', Repeat2], ['playlists', 'Playlists', Film], ['reviews', 'Reviews', Star]].map(([key, label, Icon]) => (
@@ -747,6 +847,15 @@ function PublicProfile() {
         </div>
       )}
 
+      <ConfirmDialog
+        show={confirmConsultOpen}
+        onClose={() => setConfirmConsultOpen(false)}
+        onConfirm={confirmBookConsultation}
+        title="Book this consultation?"
+        consequence={`You'll be charged ${coinsForConsultation(consultOffer?.fee)} CareCoin${coinsForConsultation(consultOffer?.fee) === 1 ? '' : 's'} (₦${Number(consultOffer?.fee || 0).toLocaleString()}) from your CareCoins wallet for a ${consultOffer?.type || 'text'} consultation with ${displayName}. Paid directly by card if your wallet balance is low.`}
+        confirmLabel="Book & Pay"
+        danger={false}
+      />
       <ConfirmDialog
         show={confirmSubOpen}
         onClose={() => setConfirmSubOpen(false)}

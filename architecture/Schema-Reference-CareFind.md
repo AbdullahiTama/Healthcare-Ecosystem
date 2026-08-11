@@ -129,7 +129,8 @@ Two parallel, seemingly redundant systems exist side by side — `live_shows`/`l
 | `promotions` | `title!`, `image_url`, `link_url`, `expires_at` | Admin-managed banner/promo slots |
 | `playlists` | `owner_id!` (FK `profiles`), `title!`, `description`, `cover_url` | — |
 | `playlist_parts` | `playlist_id!` (FK `playlists`), `position=0`, `title`, `kind='text'`, `content`, `media_url` | — |
-| `consultations` | — | **Not a CareFind table** despite CareFind code referencing it — see `Schema-Reference-CareHub.md` §3 and `Technical-Debt.md` C8/C13. Included here only as a pointer: CareFind's `AdminPanel.jsx` and `ProfessionalMonetization.jsx` both touch this table, and both touchpoints are confirmed broken (wrong/missing columns), independent of RLS. |
+| `consultations` | — | **Not a CareFind table** despite CareFind code historically referencing it — see `Schema-Reference-CareHub.md` §3 and `Technical-Debt.md` C8/C13. CareFind's professional consultation booking now uses its own table below; no CareFind code touches `consultations` any more (C13 resolved 2026-08-11). |
+| `professional_consultations` | `professional_id`/`patient_id` (FK `profiles`), `type='text'`, `fee` (naira), `notes`, `status='setup'` (offer) / `'paid'` (booking), `created_at` | CareFind's paid-consultation-booking table (`20260811_professional_consultations.sql`). One `status='setup'` offer per professional and one `status='paid'` booking per (professional, patient) pair, enforced by partial unique indexes. Money moves only through `pay_professional_consultation` (authenticated, atomic wallet debit/credit) and `settle_consultation_payment` (service_role-only, card path, reference-claimed) — see `planning/20260811_carefind_consultation_booking.md` |
 
 ---
 

@@ -32,6 +32,7 @@ export const NOTIF_MESSAGES = {
   repost: 'reposted your post',
   mention: 'mentioned you',
   live: 'is live now',
+  consultation: 'booked a consultation with you',
   news_like: 'liked your article',
   news_comment: 'commented on your article',
   product_available: 'a product you wanted is now available',
