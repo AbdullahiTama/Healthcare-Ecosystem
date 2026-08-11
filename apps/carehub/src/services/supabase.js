@@ -109,11 +109,20 @@ export async function addBranch(data) { return sbFetch('businesses', { method: '
 // the catalog, fees, and permission structure already in place. Stock starts at
 // zero — only the activation links are copied, not inventory levels.
 export async function cloneBranchData(parentId, branchId) {
-  // Activate every master product the parent has.
+  // Activate every master product the parent has, via the RPC — a raw
+  // branch_products insert would create an orphan link with no sellable row in
+  // the branch's own products table (what Inventory/POS actually read), and
+  // was silently failing under RLS anyway. The RPC materialises each product
+  // row at stock 0, which is exactly the "opens ready to operate, stock at
+  // zero" contract the Locations page promises.
   const masterRows = await sbFetch(`master_products?business_id=eq.${parentId}&select=id`)
   if (masterRows && masterRows.length > 0) {
-    const links = masterRows.map(mp => ({ branch_id: branchId, master_product_id: mp.id, active: true }))
-    await sbFetch('branch_products', { method: 'POST', body: JSON.stringify(links), prefer: 'return=minimal' })
+    await Promise.all(masterRows.map(mp =>
+      sbFetch('rpc/activate_branch_product', {
+        method: 'POST',
+        body: JSON.stringify({ p_branch_id: branchId, p_master_product_id: mp.id, p_override_price: null }),
+      }).catch(() => {})
+    ))
   }
   // Copy the parent's custom roles.
   const roles = await sbFetch(`roles?business_id=eq.${parentId}&select=name,permissions`)

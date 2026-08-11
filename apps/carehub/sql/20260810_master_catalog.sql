@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS master_products (
   name text NOT NULL,
   description text DEFAULT '',
   category text DEFAULT '',
-  default_price integer NOT NULL DEFAULT 0, -- kobo
+  -- NGN, same unit as products.price everywhere in the app (the original
+  -- draft said "kobo" — that would have made an activated product sell for
+  -- 1/100 of its master price, so it is corrected here before apply).
+  default_price integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -32,12 +35,17 @@ CREATE INDEX IF NOT EXISTS idx_master_products_business ON master_products(busin
 -- Which branches carry which master products, with optional local price
 -- override. Stock continues to live in the branch's own `products` table —
 -- this table is the activation link + override layer only.
+--
+-- CASCADE on the link: removing a master product must remove its activation
+-- links, or the owner would be stuck with a foreign-key error per branch.
+-- Branch `products` rows are deliberately NOT touched — a branch keeps selling
+-- (and reporting) whatever stock it has; it just stops receiving pushes.
 CREATE TABLE IF NOT EXISTS branch_products (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   branch_id uuid NOT NULL REFERENCES businesses(id),
-  master_product_id uuid NOT NULL REFERENCES master_products(id),
+  master_product_id uuid NOT NULL REFERENCES master_products(id) ON DELETE CASCADE,
   active boolean NOT NULL DEFAULT true,
-  override_price integer, -- kobo; NULL = inherit master default_price
+  override_price integer, -- NGN; NULL = inherit master default_price
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (branch_id, master_product_id)
 );

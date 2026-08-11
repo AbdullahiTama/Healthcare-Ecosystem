@@ -31,6 +31,7 @@ import Reports from '../../modules/reports/Reports'
 import Settings from '../../modules/settings/Settings'
 import CareFind from '../../modules/carefind/CareFind'
 import Locations from '../../modules/locations/Locations'
+import MasterCatalog from '../../modules/master-catalog/MasterCatalog'
 import Warehouses from '../../modules/warehouses/Warehouses'
 import Territories from '../../modules/territories/Territories'
 import Messages from '../../modules/messages/Messages'
@@ -47,7 +48,7 @@ import Consultation from '../../modules/consultation/Consultation'
 import Overview from '../../modules/overview/Overview'
 
 const PAGE_TITLES = {
-  dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory',
+  dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog',
   clients: 'Clients', appointments: 'Appointments', consultation: 'Consultations',
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Reports', settings: 'Settings', carefind: 'CareFind Profile',
@@ -182,6 +183,7 @@ export default function BusinessDashboard() {
             <Route path='settings' element={guard('settings', <><TopBar title='Settings' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Settings {...pageProps} /></div></>)} />
             <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
             <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
+            <Route path='mastercatalog' element={guard('mastercatalog', <><TopBar title='Master Catalog' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MasterCatalog {...pageProps} /></div></>)} />
             <Route path='warehouses' element={bareGuard('warehouses', <Warehouses {...pageProps} />)} />
             <Route path='territories' element={bareGuard('territories', <Territories {...pageProps} />)} />
             <Route path='messages' element={bareGuard('messages', <Messages {...pageProps} />)} />

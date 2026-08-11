@@ -32,4 +32,8 @@ An owner-initiated move of stock between two branches. Starts as `pending`; the 
 
 ### Clone from Template
 
-When a new branch is created, it inherits the parent's master-product activations and custom roles. Stock starts at zero. This lets a new branch open ready to operate.
+When a new branch is created, it inherits the parent's master-product activations and custom roles. Stock starts at zero. Each activation runs through `activate_branch_product`, which also materialises the branch's own sellable `products` row — a branch_products link without one would be an orphan the POS could not sell. This lets a new branch open ready to operate.
+
+### Master Catalog UI
+
+The owner-side screen (`modules/master-catalog`) listing `master_products` with a per-branch activation matrix. Add/edit/delete run through the repository; activate/deactivate/push run as database RPCs (`activate_branch_product`, `deactivate_branch_product`, `push_master_product`) so the branch's `products` row and the `branch_products` link can never drift apart. Requires migrations `20260810_master_catalog.sql` + `20260811_master_catalog_ops.sql` (NOT YET APPLIED).
