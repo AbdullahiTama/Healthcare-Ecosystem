@@ -233,7 +233,7 @@ export default function Demand({ brand, role, perms, products }) {
       })
       showToast('Requisition saved! Print or mark as sent when ready.', { type: 'success' })
       setReqsForm({ items: [blankItem()] }); setShowReqs(false); load()
-    } catch (e) { showToast('Could not save requisition. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not save requisition. Please try again.', { type: 'error' }) }
     setSavingReqs(false)
   }
 
