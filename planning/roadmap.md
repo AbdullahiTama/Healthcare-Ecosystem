@@ -24,6 +24,7 @@
 - Complete missing business modules
 - Improve reporting
 - Improve CareFind integration
+  - ✅ Consultation & appointment payments: CareCoin/card payment, 20% commission split, business wallets + payout rail, soft release on completion (ADR-005, migration `20260811_business_wallets_and_booking_payments.sql`)
 - Improve performance
 
 ---

@@ -119,6 +119,8 @@ export default function Settings({ brand, role, perms }) {
         slotsText: (Array.isArray(brand.booking_slots) ? brand.booking_slots : ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00']).join(', '),
         onlineFee: brand.online_consultation_fee != null ? String(brand.online_consultation_fee) : '',
         physicalFee: brand.physical_consultation_fee != null ? String(brand.physical_consultation_fee) : '',
+        consultationMedium: brand.consultation_medium || 'whatsapp',
+        consultationMediumLink: brand.consultation_medium_link || '',
       })
     } catch (e) {}
     setLoading(false)
@@ -201,6 +203,8 @@ export default function Settings({ brand, role, perms }) {
         slots,
         onlineFee: toKobo(bookingForm.onlineFee),
         physicalFee: toKobo(bookingForm.physicalFee),
+        consultationMedium: bookingForm.consultationMedium,
+        consultationMediumLink: bookingForm.consultationMediumLink,
       })
       showToast(bookingForm.enabled ? 'Online booking is live on your CareFind profile!' : 'Online booking turned off.', { type: 'success' })
     } catch (e) { showToast('Could not save booking settings. Please try again.', { type: 'error' }) }
@@ -333,8 +337,12 @@ export default function Settings({ brand, role, perms }) {
                 <Inp label='Online fee (₦, blank = free)' value={bookingForm.onlineFee} onChange={v => bk('onlineFee', v)} type='number' placeholder='0' />
                 <Inp label='Physical fee (₦, blank = free)' value={bookingForm.physicalFee} onChange={v => bk('physicalFee', v)} type='number' placeholder='0' />
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Sel label='Consultation medium' value={bookingForm.consultationMedium || 'whatsapp'} onChange={v => bk('consultationMedium', v)} options={[{ value: 'whatsapp', label: 'WhatsApp' }, { value: 'zoom', label: 'Zoom' }, { value: 'google_meet', label: 'Google Meet' }, { value: 'phone', label: 'Phone call' }, { value: 'other', label: 'Other' }]} />
+                <Inp label='Medium link / ID' value={bookingForm.consultationMediumLink || ''} onChange={v => bk('consultationMediumLink', v)} placeholder='Link, meeting ID, or number' />
+              </div>
               <div style={{ fontSize: '12px', color: gray500, padding: '10px 12px', borderRadius: theme.radius.md, background: bg }}>
-                Clients pay online at booking time. Leave a fee blank to make that appointment type <strong>free</strong>. Bookings arrive in your <strong>Appointments</strong> page with a <strong>Web</strong> badge, ready for you to confirm.
+                Clients pay online at booking time. Leave a fee blank to make that appointment type <strong>free</strong>. Bookings arrive in your <strong>Appointments</strong> page with a <strong>Web</strong> badge, ready for you to confirm. The consultation medium is shared with the client on online bookings.
               </div>
             </>
           )}

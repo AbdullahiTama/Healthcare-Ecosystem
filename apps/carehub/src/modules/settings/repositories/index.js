@@ -79,8 +79,10 @@ export function createSettingsRepository(request = sbFetch) {
     // profile fields do not.
     //
     // Fees are stored in kobo (integer). NULL means "free" — a business can
-    // charge for one appointment type and make the other free.
-    async saveBookingConfig(businessId, { enabled, type, slots, onlineFee, physicalFee }) {
+    // charge for one appointment type and make the other free. The consultation
+    // medium (ADR-005) is the default channel online consultations happen on;
+    // it is snapshotted onto each appointment at booking time.
+    async saveBookingConfig(businessId, { enabled, type, slots, onlineFee, physicalFee, consultationMedium, consultationMediumLink }) {
       return request(`businesses?id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -89,6 +91,8 @@ export function createSettingsRepository(request = sbFetch) {
           booking_slots: slots,
           online_consultation_fee: onlineFee,
           physical_consultation_fee: physicalFee,
+          consultation_medium: consultationMedium || null,
+          consultation_medium_link: consultationMediumLink || null,
         }),
         prefer: 'return=minimal',
       })

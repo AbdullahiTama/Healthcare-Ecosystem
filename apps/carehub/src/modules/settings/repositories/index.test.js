@@ -139,7 +139,16 @@ describe('settingsRepository', () => {
           booking_slots: ['09:00', '10:00'],
           online_consultation_fee: 5000,
           physical_consultation_fee: 3000,
+          consultation_medium: null,
+          consultation_medium_link: null,
         })
+      })
+
+      it('writes the consultation medium default (ADR-005)', async () => {
+        const { calls, repo } = recording()
+        await repo.saveBookingConfig(A, { enabled: true, type: 'online', slots: ['09:00'], onlineFee: 5000, physicalFee: null, consultationMedium: 'zoom', consultationMediumLink: 'https://zoom.us/j/123' })
+        expect(calls[0].body.consultation_medium).toBe('zoom')
+        expect(calls[0].body.consultation_medium_link).toBe('https://zoom.us/j/123')
       })
 
       it('stores NULL when a fee is omitted (free appointment type)', async () => {

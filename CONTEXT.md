@@ -37,3 +37,11 @@ When a new branch is created, it inherits the parent's master-product activation
 ### Master Catalog UI
 
 The owner-side screen (`modules/master-catalog`) listing `master_products` with a per-branch activation matrix. Add/edit/delete run through the repository; activate/deactivate/push run as database RPCs (`activate_branch_product`, `deactivate_branch_product`, `push_master_product`) so the branch's `products` row and the `branch_products` link can never drift apart. Requires migrations `20260810_master_catalog.sql` + `20260811_master_catalog_ops.sql` (NOT YET APPLIED).
+
+### Business Wallet
+
+Per-business ledger (`business_wallets`) holding naira in kobo across `held_balance` and `available_balance`. CareFind-paid bookings credit the business 80% as **held**; marking the appointment `completed` releases it to **available** via a trigger, opening a 72-hour `dispute_until` window. Withdrawals (`request_business_withdrawal` + `initiate-business-withdrawal.js`) move from available only. Every movement is an immutable ledger row: `business_wallet_transactions` for the business side (`booking_credit`, `release`, `refund`, `withdrawal`) and `platform_transactions` for the platform's 20% (`commission`). Requires migration `20260811_business_wallets_and_booking_payments.sql` (NOT YET APPLIED) and ADR-005.
+
+### Consultation Medium
+
+The business's default contact channel for online consultations (WhatsApp, Zoom, Google Meet, phone), set in CareHub settings and snapshotted onto each appointment as `consultation_medium` + `consultation_medium_link`. The vendor can override the link when confirming.

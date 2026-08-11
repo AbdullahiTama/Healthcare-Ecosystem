@@ -18,9 +18,11 @@ import { Card, Pill, TealBtn, Inp, Textarea, Loading, Empty, StarPicker, Stars, 
 
 function BookingCard({ biz }) {
   const toast = useToast()
+  const { user } = useAuth()
   const [date, setDate] = useState('')
   const [slot, setSlot] = useState('')
   const [apptType, setApptType] = useState(biz.booking_type === 'online' ? 'online' : 'physical')
+  const [payMethod, setPayMethod] = useState(user ? 'coins' : 'card')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [booking, setBooking] = useState(false)
@@ -28,6 +30,10 @@ function BookingCard({ biz }) {
 
   const today = new Date().toISOString().split('T')[0]
   const isToday = date === today
+
+  // ADR-005: CareCoins price for this appointment type, for display only.
+  const feeKobo = apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee
+  const coinCost = feeKobo ? Math.ceil(feeKobo / 20000) : 0
 
   // booking_slots may arrive as a real array OR as a raw comma-separated
   // string (CareFind Hub's "Available time slots" field is a plain text
@@ -48,6 +54,17 @@ function BookingCard({ biz }) {
     return Number(h) * 60 + Number(m) > now.getHours() * 60 + now.getMinutes()
   })
 
+  async function payWithCredits(appointmentId) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('not-signed-in')
+    const res = await fetch('/api/booking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'pay-credits', appointment_id: appointmentId }),
+    })
+    return res
+  }
+
   async function submitBooking(e) {
     e.preventDefault()
     if (!date || !slot || !name.trim() || !phone.trim()) return
@@ -67,12 +84,31 @@ function BookingCard({ biz }) {
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.ok) {
-        setDone(true)
-        toast.show('Request sent — the business will confirm your appointment.')
-      } else {
+      if (!res.ok) {
         toast.show(data.error || 'Could not send booking request.')
+        return
       }
+
+      // Paid booking: settle immediately with CareCoins, or hand off to the
+      // Paystack checkout. "Pay at the business" keeps the request as-is.
+      if (data.paymentRequired && payMethod === 'coins') {
+        const payRes = await payWithCredits(data.id)
+        const payData = await payRes.json().catch(() => ({}))
+        if (!payRes.ok) {
+          toast.show(payData.error || 'Could not complete payment.')
+          return
+        }
+        setDone(true)
+        toast.show('Booking paid with your CareCoins — the business will confirm.')
+        return
+      }
+      if (data.paymentRequired && payMethod === 'card' && data.authorization_url) {
+        window.location.href = data.authorization_url
+        return
+      }
+
+      setDone(true)
+      toast.show('Request sent — the business will confirm your appointment.')
     } catch (err) {
       console.error('Booking error:', err)
       toast.show('Could not send booking request.')
@@ -143,6 +179,23 @@ function BookingCard({ biz }) {
                   {t === 'physical' ? 'Visit in person' : 'Online visit'}
                 </button>
               ))}
+            </div>
+          )}
+
+          {feeKobo > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {user ? (
+                <>
+                  <button type="button" onClick={() => setPayMethod('coins')} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid', borderColor: payMethod === 'coins' ? theme.tealDeep : theme.border, background: payMethod === 'coins' ? theme.tealMist : '#fff', color: payMethod === 'coins' ? theme.tealDeep : theme.textMid, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                    Pay with CareCoins ({coinCost} coins)
+                  </button>
+                  <button type="button" onClick={() => setPayMethod('card')} style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid', borderColor: payMethod === 'card' ? theme.tealDeep : theme.border, background: payMethod === 'card' ? theme.tealMist : '#fff', color: payMethod === 'card' ? theme.tealDeep : theme.textMid, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                    Pay with card
+                  </button>
+                </>
+              ) : (
+                <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600 }}>₦{(feeKobo / 100).toLocaleString()} — you'll pay securely by card after booking.</span>
+              )}
             </div>
           )}
 

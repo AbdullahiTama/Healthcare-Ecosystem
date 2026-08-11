@@ -49,11 +49,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Payment amount does not match the booking fee' })
   }
 
-  // Mark paid.
-  await supabase
-    .from('appointments')
-    .update({ payment_status: 'paid' })
-    .eq('id', appt.id)
+  // Mark paid AND settle the business wallet (80% held) + book the platform's
+  // 20% commission. Atomic in the settle_card_booking RPC; a second call for
+  // the same reference is a no-op.
+  const { data: settleResult, error: settleError } = await supabase.rpc('settle_card_booking', {
+    p_appointment_id: appt.id,
+    p_reference: reference,
+  })
+  if (settleError) return res.status(500).json({ error: settleError.message })
+  if (settleResult !== 'ok' && settleResult !== 'already_paid') {
+    return res.status(400).json({ error: settleResult || 'Could not settle payment' })
+  }
 
   // Notify the business that payment landed.
   await supabase.from('staff_notifications').insert({
@@ -62,7 +68,7 @@ export default async function handler(req, res) {
     is_owner: true,
     kind: 'booking_paid',
     title: `Payment received — ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} · ₦${(appt.fee_amount / 100).toLocaleString()}`,
+    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
     link: '/dashboard/appointments',
     read_at: null,
   })

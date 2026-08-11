@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { paystackFetch } from './_lib/paystack.js'
+import { verifyUser } from './_lib/verifyUser.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
     // 1. Business must exist, be active, publicly listed and accept bookings.
     const { data: business, error: bizErr } = await supabase
       .from('businesses')
-      .select('id, name, status, visible_on_carefind, booking_enabled, booking_type, booking_slots, online_consultation_fee, physical_consultation_fee')
+      .select('id, name, status, visible_on_carefind, booking_enabled, booking_type, booking_slots, online_consultation_fee, physical_consultation_fee, consultation_medium, consultation_medium_link')
       .eq('id', businessId)
       .maybeSingle()
     if (bizErr || !business) return res.status(404).json({ error: 'Business not found' })
@@ -110,6 +111,10 @@ export default async function handler(req, res) {
         concern: (concern || '').trim() || null,
         payment_status: hasFee ? 'unpaid' : null,
         fee_amount: hasFee ? feeKobo : null,
+        // ADR-005: snapshot the business's default consultation medium at
+        // booking time; the vendor can override it when confirming.
+        consultation_medium: business.consultation_medium || null,
+        consultation_medium_link: business.consultation_medium_link || null,
       })
       .select('id')
       .single()
@@ -117,7 +122,11 @@ export default async function handler(req, res) {
 
     // 8. If there is a fee, initiate Paystack and return the payment URL.
     if (hasFee) {
+      // A stable reference is set now (not after Paystack succeeds) so the
+      // booking is payable by CareCoins later even if the Paystack checkout
+      // is skipped — pay_booking_with_credits is idempotent on this reference.
       const reference = `bk_${appointment.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
+      await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
       try {
         const data = await paystackFetch('/transaction/initialize', {
           method: 'POST',
@@ -134,8 +143,6 @@ export default async function handler(req, res) {
         if (!data.status) {
           return res.status(400).json({ error: data.message || 'Could not start payment' })
         }
-        // Store the reference so verify can match it back.
-        await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
         return res.status(200).json({
           success: true,
           id: appointment.id,
@@ -153,6 +160,55 @@ export default async function handler(req, res) {
     await notifyBusiness(businessId, appointment.id, clientName, wantType, date, time)
 
     return res.status(201).json({ success: true, id: appointment.id, paymentRequired: false })
+  }
+
+  if (action === 'pay-credits') {
+    // CareCoin payment for an existing CareFind booking. Requires a signed-in
+    // user — the coins come out of their own wallet. The atomic settle lives in
+    // pay_booking_with_credits (SECURITY DEFINER, service-role only); this
+    // endpoint only identifies the user and surfaces friendly errors.
+    const user = await verifyUser(supabase, req)
+    if (!user) return res.status(401).json({ error: 'Sign in to pay with your CareCoins' })
+
+    const { appointment_id: appointmentId } = req.body || {}
+    if (!appointmentId) return res.status(400).json({ error: 'Missing appointment id' })
+
+    const { data: appt, error: apptErr } = await supabase
+      .from('appointments')
+      .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, payment_reference, source')
+      .eq('id', appointmentId)
+      .maybeSingle()
+    if (apptErr || !appt) return res.status(404).json({ error: 'Booking not found' })
+    if (appt.source !== 'carefind') return res.status(400).json({ error: 'This booking is not payable online' })
+    if (appt.payment_status === 'paid' || appt.payment_status === 'refunded') {
+      return res.status(200).json({ success: true, id: appt.id, alreadyPaid: true })
+    }
+    if (!appt.fee_amount || appt.fee_amount <= 0) return res.status(400).json({ error: 'This booking is free' })
+
+    const coins = Math.ceil(appt.fee_amount / 20000)
+    const { data: wallet } = await supabase
+      .from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+    if (!wallet || (wallet.balance || 0) < coins) {
+      return res.status(400).json({
+        error: `Not enough CareCoins — this booking costs ${coins} CareCoins.`,
+        coins,
+        balance: wallet?.balance || 0,
+      })
+    }
+
+    const { data: result, error: rpcError } = await supabase.rpc('pay_booking_with_credits', {
+      p_user_id: user.id,
+      p_appointment_id: appt.id,
+    })
+    if (rpcError) return res.status(500).json({ error: rpcError.message })
+    if (result !== 'ok') {
+      return res.status(400).json({
+        error: result === 'insufficient' ? 'Not enough CareCoins' : result === 'already_paid' ? 'Booking already paid' : 'Could not complete payment',
+      })
+    }
+
+    await notifyBusiness(appt.business_id, appt.id, appt.client_name, appt.booking_type, appt.date, appt.time)
+    return res.status(200).json({ success: true, id: appt.id, coins })
   }
 
   return res.status(400).json({ error: 'Unknown action' })
