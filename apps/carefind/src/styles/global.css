@@ -1,0 +1,279 @@
+/* Global tokens and resets for CareFind.
+   Mirrors apps/carefind/src/styles/theme.js — kept in sync by hand, since the
+   app is inline-style-driven and theme.js is the source of truth for JS.
+   This file exists only for what inline styles cannot express: CSS variables
+   for use in the few places that need real CSS (keyframes, media queries,
+   pseudo-classes), plus the resets and animations documented in
+   docs/design/MOTION.md and docs/design/ACCESSIBILITY.md. */
+
+:root {
+  /* Brand */
+  --teal-600: #0E6F5A;
+  --teal-500: #1A8A72;
+  --navy-900: #0B4A3E;
+  --navy-800: #155A4B;
+  --teal-mist: #E3EEE8;
+
+  /* Neutrals */
+  --bg-page: #F7F5EF;
+  --gray-50: #F7F5EF;
+  --gray-100: #F0EEE5;
+  --gray-200: #E7E4D9;
+  --gray-300: #D4D0C5;
+  --gray-400: #9AA69F;
+  --gray-500: #8B978F;
+  --gray-600: #3C4B44;
+  --gray-900: #182722;
+
+  /* Semantic */
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --info: #2563eb;
+  --info-bg: #eff6ff;
+  --purple: #7c3aed;
+
+  /* Spacing (SPACING.md) */
+  --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
+  --space-5: 10px; --space-6: 12px; --space-7: 14px; --space-8: 16px;
+  --space-9: 18px; --space-10: 20px; --space-11: 24px; --space-12: 32px;
+
+  /* Radius */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px; --radius-full: 9999px;
+
+  /* Elevation — deep-teal-based, never pure black */
+  --elevation-1: 0 1px 4px rgba(11,74,62,0.05);
+  --elevation-2: 0 4px 16px rgba(11,74,62,0.08);
+  --elevation-3: 0 8px 24px rgba(11,74,62,0.12);
+  --elevation-4: 0 20px 48px rgba(11,74,62,0.18);
+
+  /* Motion (MOTION.md — nothing exceeds ~320ms) */
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-display: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── Base reset ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  color: var(--navy-900);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
+   @font-face only, never preloaded — see apps/carehub/src/styles/global.css
+   for the full rationale. Same self-hosted files, shared token. */
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/lora-latin.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/lora-latin-ext.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+20A0-20AB, U+20AD-20C0;
+}
+
+/* ── Focus visibility (ACCESSIBILITY.md — every interactive element needs a
+   visible focus state; mouse clicks should not show a focus ring, keyboard
+   navigation should) ─────────────────────────────────────────────────────── */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Horizontal rails ─────────────────────────────────────────────────────
+   Tab rows, story rails and card strips scroll by swipe/trackpad. A visible
+   scrollbar track under them reads as a broken layout rather than an
+   affordance, so it's hidden — the content still scrolls, and keyboard users
+   reach the items via normal tab order, not the bar. */
+.cf-hscroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cf-hscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Engagement bar ────────────────────────────────────────────────────────
+   The like/comment/share row under a post or an article. Defined once, here,
+   because the shape is fixed across every surface that carries authored
+   content (the feed, news articles) — the target a user reaches for must not
+   move between screens. Reading actions group left, keeping/supporting group
+   right; the caller supplies only the buttons and their colours. */
+.cf-eng-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cf-eng-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cf-eng-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-fast) var(--ease-out), transform var(--motion-fast) var(--ease-out);
+}
+
+.cf-eng-item span {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cf-eng-item:hover {
+  background: var(--gray-50);
+}
+
+.cf-eng-item:active {
+  transform: scale(0.94);
+}
+
+.cf-eng-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* Composer / long-form text inputs */
+.cf-composer-input::placeholder {
+  color: var(--gray-400);
+}
+
+.cf-composer-input:focus {
+  background: var(--gray-50);
+  border-color: var(--teal-600);
+  box-shadow: 0 0 0 3px rgba(14, 111, 90, 0.1);
+}
+
+/* ── Loading motion (MOTION.md) ──────────────────────────────────────────── */
+
+/* Skeleton: slow, subtle opacity pulse — never a fast attention-grabbing sweep */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.cf-skeleton {
+  background: var(--gray-200);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+/* Spinner: button-level / short indeterminate waits only */
+@keyframes cf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cf-spinner {
+  animation: cf-spin 0.7s linear infinite;
+}
+
+/* Toast enter */
+@keyframes cf-toast-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.cf-toast {
+  animation: cf-toast-in var(--motion-base) var(--ease-out);
+}
+
+/* Modal / sheet enter */
+@keyframes cf-sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes cf-dialog-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cf-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cf-sheet-enter {
+  animation: cf-sheet-in var(--motion-slow) var(--ease-out);
+}
+
+.cf-dialog-enter {
+  animation: cf-dialog-in var(--motion-slow) var(--ease-out);
+}
+
+.cf-backdrop-enter {
+  animation: cf-backdrop-in var(--motion-base) var(--ease-out);
+}
+
+/* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
+@media (prefers-reduced-motion: reduce) {
+  .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .cf-eng-item {
+    transition: none;
+  }
+  .cf-eng-item:active {
+    transform: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,512 @@
+import { useState, useEffect } from 'react'
+import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
+import { staffRepository } from './repositories'
+import { provisionRealAuthAccount } from '../../lib/authClient'
+import { emailStaffWelcome } from '../../lib/email'
+import { rolesForType, getModulesForType } from '../../lib/permissions'
+import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
+import { theme } from '../../styles/theme'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
+
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
+
+export default function Staff({ brand, role, perms }) {
+  const [staff, setStaff] = useState([])
+  const [claims, setClaims] = useState([])
+  const [roles, setRoles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [roleDeleteTarget, setRoleDeleteTarget] = useState(null)
+  const [roleEditorOpen, setRoleEditorOpen] = useState(false)
+  const [editingRole, setEditingRole] = useState(null)
+  // "Edit role" on a staff row: roles are otherwise immutable after creation,
+  // and the FK-backed delete is blocked for anyone with usage history — so a
+  // mis-assigned role used to be permanent.
+  const [editTarget, setEditTarget] = useState(null)
+  const [editRole, setEditRole] = useState('')
+  const [savingRoleEdit, setSavingRoleEdit] = useState(false)
+  const [roleForm, setRoleForm] = useState({ name: '', label: '', nav: [], flags: {} })
+  const [savingRole, setSavingRole] = useState(false)
+  const { msg, type, actionLabel, onAction, show: showToast } = useToast()
+  const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const isOwner = role === 'Owner'
+  const bType = brand?.business_type || brand?.type
+  const isEnterprise = bType === 'manufacturer_importer' || bType === 'wholesale'
+
+  useEffect(() => { load() }, [brand?.id])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const s = await staffRepository.getAll(brand.id)
+      setStaff(s || [])
+    } catch (e) {}
+    try {
+      const c = await staffRepository.getPendingClaims(brand.id)
+      setClaims(c || [])
+    } catch (e) {}
+    try {
+      const r = await staffRepository.getRoles(brand.id)
+      setRoles(r || [])
+    } catch (e) {}
+    setLoading(false)
+  }
+
+  // Every role already used at this company — becomes the suggestion list,
+  // so the company's own hierarchy naturally builds itself as they add people.
+  const usedRoles = [...new Set(staff.map(s => s.role).filter(Boolean))]
+  // Role picker = preset roles valid for this business type + business-defined
+  // custom roles. A pharmacy is never offered Doctor or Lab Technician, and a
+  // hospital is never offered Pharmacist or Therapist.
+  const customRoleNames = roles.map(r => r.name)
+  const roleOptions = [...rolesForType(bType), ...customRoleNames]
+  // Modules the Roles & Permissions editor may offer: only what this business
+  // type can actually use, straight from the registry.
+  const typeModules = getModulesForType(bType || 'skincare')
+  const typeModuleIds = typeModules.map(m => m[0])
+
+  const FLAG_META = [
+    ['canEditPrice', 'Edit prices', 'Can change selling prices in Inventory and POS.'],
+    ['canEditStock', 'Edit stock', 'Can adjust stock levels and record purchases.'],
+    ['canDelete', 'Delete records', 'Can delete products, sales, clients and other records.'],
+    ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
+    ['canExportReports', 'Export reports', 'Can download/export report data.'],
+    ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
+    ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
+    ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
+    ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
+  ]
+
+  function openRoleEditor(roleRow) {
+    if (roleRow) {
+      const p = roleRow.permissions || {}
+      setEditingRole(roleRow)
+      setRoleForm({ name: roleRow.name, label: p.label || '', nav: Array.isArray(p.nav) ? p.nav : [], flags: { canEditPrice: !!p.canEditPrice, canEditStock: !!p.canEditStock, canDelete: !!p.canDelete, canViewReports: !!p.canViewReports, canExportReports: !!p.canExportReports, canManageStaff: !!p.canManageStaff, canViewFinance: !!p.canViewFinance, canMakeSales: !!p.canMakeSales, canViewSettings: !!p.canViewSettings } })
+    } else {
+      setEditingRole(null)
+      setRoleForm({ name: '', label: '', nav: ['dashboard'], flags: { canViewReports: false, canMakeSales: false } })
+    }
+    setRoleEditorOpen(true)
+  }
+
+  async function saveRole() {
+    if (!roleForm.name.trim()) { showToast('Give the role a name.', { type: 'warning' }); return }
+    setSavingRole(true)
+    // Modules outside this business type's registry are meaningless (another
+    // vertical's gate would neutralise them) — never persist them.
+    const nav = roleForm.nav.filter(k => typeModuleIds.includes(k))
+    const payload = {
+      business_id: brand.id,
+      name: roleForm.name.trim(),
+      permissions: {
+        nav: nav.length > 0 ? nav : ['dashboard'],
+        label: roleForm.label.trim() || roleForm.name.trim(),
+        canEditPrice: !!roleForm.flags.canEditPrice,
+        canEditStock: !!roleForm.flags.canEditStock,
+        canDelete: !!roleForm.flags.canDelete,
+        canViewReports: !!roleForm.flags.canViewReports,
+        canExportReports: !!roleForm.flags.canExportReports,
+        canManageStaff: !!roleForm.flags.canManageStaff,
+        canViewFinance: !!roleForm.flags.canViewFinance,
+        canMakeSales: !!roleForm.flags.canMakeSales,
+        canViewSettings: !!roleForm.flags.canViewSettings,
+      },
+    }
+    try {
+      if (editingRole) await staffRepository.updateRole(editingRole.id, brand.id, payload)
+      else await staffRepository.createRole(brand.id, payload)
+      showToast(editingRole ? 'Role updated!' : 'Role created!', { type: 'success' })
+      setRoleEditorOpen(false)
+      load()
+    } catch (e) { showToast('Could not save this role. Please try again.', { type: 'error' }) }
+    setSavingRole(false)
+  }
+
+  async function handleDeleteRole() {
+    const id = roleDeleteTarget?.id
+    setRoleDeleteTarget(null)
+    try { await staffRepository.deleteRole(id, brand.id); load(); showToast('Role deleted.', { type: 'success' }) } catch (e) { showToast('Could not delete this role. Please try again.', { type: 'error' }) }
+  }
+
+  async function save() {
+    if (!form.fullName || !form.email || !form.password || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
+    const limit = planLimitsFor(brand?.plan).maxStaff
+    if (staff.length >= limit) {
+      showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} staff. Upgrade your plan in Settings to add more.`, { type: 'warning' })
+      return
+    }
+    setSaving(true)
+    try {
+      await staffRepository.create(brand.id, {
+        full_name: form.fullName,
+        email: form.email.toLowerCase(),
+        password: form.password,
+        role: form.role,
+        phone: form.phone || '',
+        status: 'active',
+        show_on_carefind: form.showOnCareFind || false,
+        public_title: form.publicTitle || form.role,
+      })
+      // The staff ROW is only half an account since C19 closed the
+      // plaintext-password login path: without a real Supabase Auth account
+      // the new staff member can never sign in (proven live — "Invalid
+      // login credentials"). Provision it the same way Register.jsx does for
+      // new businesses: best-effort signUp, never blocks the staff row that
+      // already succeeded, and the new account activates via the
+      // confirmation email like any other signup.
+      let provisioned = false
+      try {
+        const session = await provisionRealAuthAccount(form.email, form.password)
+        provisioned = !!session
+      } catch (e) {}
+      // Send welcome email to staff
+      try {
+        await emailStaffWelcome({
+          staffName: form.fullName,
+          staffEmail: form.email,
+          businessName: brand.name,
+          role: form.role,
+          password: form.password,
+        })
+      } catch (e) {}
+      showToast(provisioned
+        ? 'Staff member added and signed in! Welcome email sent.'
+        : 'Staff member added! They will receive a confirmation email to activate their login.', { type: 'success' })
+      setForm({}); setShowAdd(false); load()
+    } catch (e) {
+      // The message names the real cause instead of blaming the email, which
+      // was never checked — e.g. "Supabase error (42501)" on an RLS failure
+      // or the actual duplicate key if one exists.
+      showToast('Could not add staff member: ' + (e.message || 'Please try again.'), { type: 'error' })
+    }
+    setSaving(false)
+  }
+
+  async function toggleStatus(s) {
+    try { await staffRepository.update(s.id, brand.id, { status: s.status === 'active' ? 'inactive' : 'active' }); load(); showToast('Status updated!', { type: 'success' }) } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+  }
+
+  async function toggleCareFind(s) {
+    try { await staffRepository.update(s.id, brand.id, { show_on_carefind: !s.show_on_carefind }); load(); showToast(!s.show_on_carefind ? 'Now visible on CareFind' : 'Hidden from CareFind', { type: 'success' }) } catch (e) { showToast('Could not update CareFind visibility. Please try again.', { type: 'error' }) }
+  }
+
+  function openRoleEdit(s) { setEditTarget(s); setEditRole(s.role); setShowAdd(false) }
+
+  async function saveRoleEdit() {
+    if (!editRole.trim()) { showToast('Choose a role.', { type: 'warning' }); return }
+    const s = editTarget
+    // Locking the Owner row out of Owner is a permanent lockout: demoting it
+    // removes canManageStaff, so nobody could ever change it back.
+    if (s?.role === 'Owner' && editRole !== 'Owner') { showToast('The Owner role cannot be demoted here — you would lose access.', { type: 'warning' }); return }
+    setSavingRoleEdit(true)
+    try {
+      const updates = { role: editRole.trim() }
+      // If the CareFind title was auto-derived from the old role, keep it in
+      // sync so the public listing doesn't show a stale title after a change.
+      if (s?.public_title && s.public_title === s.role) updates.public_title = editRole.trim()
+      await staffRepository.update(s.id, brand.id, updates)
+      showToast('Role updated! New access applies immediately.', { type: 'success' })
+      setEditTarget(null); load()
+    } catch (e) { showToast('Could not update this role. Please try again.', { type: 'error' }) }
+    setSavingRoleEdit(false)
+  }
+
+  function askDelete(s) { setDeleteTarget(s) }
+  async function handleDelete() {
+    const id = deleteTarget?.id
+    setDeleteTarget(null)
+    // Fifteen tables reference `staff` and none of those foreign keys cascade,
+    // so anyone who has actually used the system cannot be deleted. The
+    // repository turns that refusal into a reason worth reading — usually
+    // "deactivate instead" — so it is surfaced rather than replaced with a
+    // generic retry message the user cannot act on.
+    try {
+      await staffRepository.delete(id, brand.id, deleteTarget?.full_name)
+      load()
+      showToast('Staff member removed.', { type: 'success' })
+    } catch (e) { showToast(e.message || 'Could not remove staff member. Please try again.', { type: 'error' }) }
+  }
+
+  async function handleApproveClaim(claimId) {
+    try { await staffRepository.decideClaim(claimId, 'approved'); load(); showToast('Claim approved!', { type: 'success' }) } catch (e) { showToast('Could not approve this claim. Please try again.', { type: 'error' }) }
+  }
+
+  async function handleRejectClaim(claimId) {
+    try { await staffRepository.decideClaim(claimId, 'rejected'); load(); showToast('Claim rejected.', { type: 'info' }) } catch (e) { showToast('Could not reject this claim. Please try again.', { type: 'error' }) }
+  }
+
+  const roleColor = r => ({ Owner: 'purple', Manager: 'blue', Doctor: 'teal', Pharmacist: 'teal', Nurse: 'teal' }[r] || 'gray')
+
+  return (
+    <div>
+      <SectionHead title={isEnterprise ? 'Sales Team' : 'Staff Management'} sub='Manage your team and their access levels'
+        btn={isOwner ? '+ Add Staff Member' : undefined} onBtn={isOwner ? () => setShowAdd(true) : undefined} />
+
+      {!isOwner && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, marginBottom: '20px', fontSize: '13px', color: warning }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} /> Only the business Owner can add or remove staff members.
+        </div>
+      )}
+
+      {isOwner && claims.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '800', color: navy, marginBottom: '10px' }}>
+            <Bell size={14} /> Pending CareFind claims ({claims.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {claims.map(c => (
+              <Card key={c.id} style={{ padding: '14px', border: `1px solid ${warning}`, background: warningBg }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{c.staff?.full_name}</div>
+                    <div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>
+                      wants to claim <strong>{c.staff?.public_title || 'their position'}</strong> on CareFind
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => handleApproveClaim(c.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 14px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                      <Check size={13} /> Approve
+                    </button>
+                    <button onClick={() => handleRejectClaim(c.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '8px 14px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                      <X size={13} /> Reject
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '14px', marginBottom: '20px' }}>
+        <StatCard icon={<User />} label='Total Staff' value={staff.length} />
+        <StatCard icon={<CheckCircle />} label='Active' value={staff.filter(s => s.status === 'active').length} />
+        <StatCard icon={<Pause />} label='Inactive' value={staff.filter(s => s.status !== 'active').length} />
+      </div>
+
+      {loading ? <Loading /> : staff.length === 0 ? (
+        <Empty icon={<User size={40} />} message='No staff added yet' action={isOwner ? '+ Add Staff Member' : undefined} onAction={() => setShowAdd(true)} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {staff.map(s => (
+            <Card key={s.id} style={{ padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <Avatar name={s.full_name} size={44} />
+                <div>
+                  <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{s.full_name}</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.email}{s.phone ? ' · ' + s.phone : ''}</div>
+                  {s.public_title && <div style={{ fontSize: '12px', color: tealDeep, fontWeight: '600', marginTop: '2px' }}>{s.public_title}</div>}
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <Pill label={s.role} type={roleColor(s.role)} />
+                    <Pill label={s.status === 'active' ? 'Active' : 'Inactive'} type={s.status === 'active' ? 'green' : 'gray'} />
+                    {s.show_on_carefind && <Pill label='On CareFind' type='teal' />}
+                  </div>
+                </div>
+              </div>
+              {isOwner && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={() => openRoleEdit(s)}
+                    style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                    Edit role
+                  </button>
+                  <button onClick={() => toggleCareFind(s)}
+                    style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.show_on_carefind ? warning : tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                    {s.show_on_carefind ? 'Hide from CareFind' : 'Show on CareFind'}
+                  </button>
+                  <button onClick={() => toggleStatus(s)}
+                    style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: s.status === 'active' ? warning : success, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                    {s.status === 'active' ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <RedBtn onClick={() => askDelete(s)} style={{ padding: '6px 12px' }}>Remove</RedBtn>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add Staff Member'
+        footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Add Staff'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Inp label='Full Name *' value={form.fullName} onChange={v => f('fullName', v)} placeholder='Staff full name' required />
+          <Inp label='Email Address *' value={form.email} onChange={v => f('email', v)} type='email' placeholder='staff@yourbusiness.ng' required />
+          <Inp label='Phone Number' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
+
+          {isEnterprise ? (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Role *</div>
+              <input
+                list='enterprise-role-suggestions'
+                value={form.role || ''}
+                onChange={e => f('role', e.target.value)}
+                placeholder='e.g. Regional Manager, Medical Rep — type your own'
+                style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box', color: navy, outline: 'none' }}
+              />
+              <datalist id='enterprise-role-suggestions'>
+                {usedRoles.map(r => <option key={r} value={r} />)}
+              </datalist>
+              <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>
+                {usedRoles.length > 0 ? 'Start typing to reuse a role you\'ve already created, or type a new one.' : 'Type any role name — your team structure is entirely up to you.'}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <Sel label='Role *' value={form.role} onChange={v => f('role', v)} options={roleOptions} required />
+              {customRoleNames.length > 0 && <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>Custom roles appear alongside the presets — manage them in Roles &amp; Permissions below.</div>}
+            </div>
+          )}
+
+          <Inp label='Password *' value={form.password} onChange={v => f('password', v)} type='password' placeholder='Set a password for them' required />
+
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}` }}>
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type='checkbox' checked={form.showOnCareFind || false} onChange={e => f('showOnCareFind', e.target.checked)} style={{ marginTop: '2px', accentColor: tealDeep }} />
+              <span>
+                <div style={{ fontWeight: '700', fontSize: '13px', color: navy }}>Show this person on CareFind</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>They can claim this position on CareFind and post, respond to reviews, and add products on the company's behalf.</div>
+              </span>
+            </label>
+            {form.showOnCareFind && (
+              <div style={{ marginTop: '10px' }}>
+                <Inp label='Public Title' value={form.publicTitle} onChange={v => f('publicTitle', v)} placeholder='e.g. Regional Manager (defaults to their role if left blank)' />
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            Staff log in with their email and this password. They will only see pages their role allows.
+            <br /><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> <strong>Only Owner role</strong> can edit stock prices and delete records.</span>
+          </div>
+        </div>
+      </Modal>
+
+            <Modal show={!!editTarget} onClose={() => setEditTarget(null)} title={'Edit role — ' + (editTarget?.full_name || 'Staff member')}
+        footer={<><GhostBtn onClick={() => setEditTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRoleEdit} style={{ flex: 1, padding: '12px' }}>{savingRoleEdit ? 'Saving...' : 'Save Role'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {isEnterprise ? (
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Role *</div>
+              <input
+                list='enterprise-role-suggestions'
+                value={editRole}
+                onChange={e => setEditRole(e.target.value)}
+                placeholder='e.g. Regional Manager, Medical Rep — type your own'
+                style={{ width: '100%', minHeight: 44, padding: '9px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box', color: navy, outline: 'none' }}
+              />
+              <datalist id='enterprise-role-suggestions'>
+                {usedRoles.map(r => <option key={r} value={r} />)}
+              </datalist>
+            </div>
+          ) : (
+            <div>
+              {/* A legacy assignment outside this type's preset list (e.g. a
+                  Doctor created before the picker was type-scoped) must still
+                  render, so it is appended rather than silently blanked. */}
+              <Sel label='Role *' value={editRole} onChange={setEditRole} options={roleOptions.includes(editRole) ? roleOptions : [...roleOptions, editRole]} required />
+            </div>
+          )}
+          {editTarget?.role === 'Owner' && (
+            <div style={{ padding: '12px', borderRadius: theme.radius.md, background: warningBg, fontSize: '12px', color: warning, lineHeight: '1.7' }}>
+              <AlertTriangle size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />This is the Owner account. It cannot be changed to another role.
+            </div>
+          )}
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            The new role's access applies to this staff member immediately. If their CareFind title was set from the old role, it is updated to match.
+          </div>
+        </div>
+      </Modal>
+
+      {isOwner && (
+        <div style={{ marginTop: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={17} color={navy} />
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: '800', color: navy }}>Roles &amp; Permissions</div>
+                <div style={{ fontSize: '12px', color: gray500 }}>Define your own roles with exactly the modules and actions each one can use</div>
+              </div>
+            </div>
+            <TealBtn onClick={() => openRoleEditor(null)} style={{ padding: '10px 16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Plus size={14} /> New Role</TealBtn>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {roles.length === 0 && (
+              <Card style={{ padding: '16px', fontSize: '13px', color: gray500 }}>No custom roles yet. Preset roles (Owner, Manager, Pharmacist…) are always available — create your first custom role to tailor access.</Card>
+            )}
+            {roles.map(r => {
+              const p = r.permissions || {}
+              const navCount = Array.isArray(p.nav) ? p.nav.length : 0
+              const flagCount = FLAG_META.filter(([k]) => p[k]).length
+              return (
+                <Card key={r.id} style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{r.name}</div>
+                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{p.label || r.name} · {navCount} modules · {flagCount} actions</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => openRoleEditor(r)} style={{ padding: '7px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: 'white', color: tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Edit</button>
+                    <RedBtn onClick={() => setRoleDeleteTarget(r)} style={{ padding: '6px 12px' }}>Delete</RedBtn>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <Modal show={roleEditorOpen} onClose={() => setRoleEditorOpen(false)} title={editingRole ? 'Edit Role' : 'Create Custom Role'}
+        footer={<><GhostBtn onClick={() => setRoleEditorOpen(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRole} style={{ flex: 1, padding: '12px' }}>{savingRole ? 'Saving...' : 'Save Role'}</TealBtn></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Inp label='Role Name *' value={roleForm.name} onChange={v => setRoleForm(p => ({ ...p, name: v }))} placeholder='e.g. Regional Manager, Lab Supervisor' required />
+          <Inp label='Display Label (optional)' value={roleForm.label} onChange={v => setRoleForm(p => ({ ...p, label: v }))} placeholder='Shown in the app if you want a friendlier label' />
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Modules this role can open</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: '8px', maxHeight: 220, overflowY: 'auto', padding: '12px', border: `1px solid ${border}`, borderRadius: theme.radius.md }}>
+              {typeModules.map(([key, , label]) => (
+                <label key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12.5px', color: navy, cursor: 'pointer' }}>
+                  <input type='checkbox' checked={roleForm.nav.includes(key)} onChange={e => setRoleForm(p => ({ ...p, nav: e.target.checked ? [...p.nav, key] : p.nav.filter(k => k !== key) }))} style={{ accentColor: tealDeep }} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Actions</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {FLAG_META.map(([key, label, desc]) => (
+                <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                  <input type='checkbox' checked={!!roleForm.flags[key]} onChange={e => setRoleForm(p => ({ ...p, flags: { ...p.flags, [key]: e.target.checked } }))} style={{ marginTop: '2px', accentColor: tealDeep }} />
+                  <span>
+                    <div style={{ fontWeight: '700', fontSize: '12.5px', color: navy }}>{label}</div>
+                    <div style={{ fontSize: '11.5px', color: gray500 }}>{desc}</div>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            Staff assigned this role see only the modules and actions you check. Roles apply immediately to everyone already using them.
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog show={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
+        title='Remove this staff member?'
+        consequence={`This permanently deletes ${deleteTarget?.full_name || 'this staff member'}'s account and revokes their login access immediately. This cannot be undone — you'll need to add them again from scratch if you change your mind.`}
+        confirmLabel='Remove' />
+
+      <ConfirmDialog show={!!roleDeleteTarget} onClose={() => setRoleDeleteTarget(null)} onConfirm={handleDeleteRole}
+        title='Delete this role?'
+        consequence={`Staff currently assigned the "${roleDeleteTarget?.name || 'custom'}" role will lose their custom access and fall back to the default staff permissions until you assign them another role.`}
+        confirmLabel='Delete Role' />
+
+      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+    </div>
+  )
+}

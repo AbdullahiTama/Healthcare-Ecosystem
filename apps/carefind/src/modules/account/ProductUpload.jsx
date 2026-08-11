@@ -1,0 +1,185 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../config/supabaseClient'
+import { useAuth } from '../../providers/AuthContext'
+import { Camera, MapPin, AlertTriangle, Plus, X, Loader2 } from 'lucide-react'
+import { theme } from '../../styles/theme'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import { SALE_TYPES, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '../utils/marketplace.js'
+import { Toast, useToast } from '../../components/ui'
+
+// Verified sellers list unlimited products on MedMarket. Non-verified users
+// can only sell by claiming a position at a verified company, and their
+// listings are tagged with that company's name.
+function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
+  const { user } = useAuth()
+  const { coords: geoCoords } = useGeolocation()
+  const [name, setName] = useState('')
+  const [price, setPrice] = useState('')
+  const [showPrice, setShowPrice] = useState(true)
+  const [category, setCategory] = useState('')
+  const [genericName, setGenericName] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [saleType, setSaleType] = useState('retail')
+  const [minPurchase, setMinPurchase] = useState('')
+  const [priceUnit, setPriceUnit] = useState('card')
+  const [description, setDescription] = useState('')
+  const [bizId, setBizId] = useState(businesses && businesses[0] ? businesses[0].id : '')
+  const [image, setImage] = useState(null)
+  const [sellerLocation, setSellerLocation] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  useEffect(() => { loadSellerLocation() }, [])
+
+  // Pull seller's location from their profile (shown to buyers as "Listed in …")
+  async function loadSellerLocation() {
+    const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).maybeSingle()
+    if (prof?.location) setSellerLocation(prof.location)
+  }
+
+  async function save() {
+    if (!name.trim()) { setError('Product name is required.'); return }
+    if (showPrice && (!price || isNaN(Number(price)))) { setError('Enter a valid price, or turn the price toggle off to show "Ask for price".'); return }
+    if (showPrice && !priceUnit) { setError('Choose a unit under "Price is per".'); return }
+    if (showPrice && priceUnit && !isUnitValidForSaleType(priceUnit, saleType)) {
+      setError(saleUnitError(priceUnit, saleType))
+      return
+    }
+    setSaving(true); setError('')
+    let imageUrl = null
+    if (image) {
+      const ext = image.name.split('.').pop()
+      const path = `product-${user.id}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('product-images').upload(path, image)
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path)
+        imageUrl = urlData.publicUrl
+      }
+    }
+    const row = {
+      name: name.trim(), price: showPrice ? (Number(price) || 0) : null,
+      show_price: showPrice,
+      latitude: geoCoords?.lat ?? null,
+      longitude: geoCoords?.lng ?? null,
+      category: category.trim() || null,
+      generic_name: genericName.trim() || null,
+      whatsapp: whatsapp.trim() || null,
+      sale_type: saleType,
+      min_purchase: minPurchase ? Number(minPurchase) : null,
+      price_unit: priceUnit,
+      seller_location: sellerLocation || null,
+      description: description.trim() || null, list_on_carefind: true,
+      image_url: imageUrl,
+    }
+    if (bizId) row.business_id = bizId
+    else row.owner_id = user.id
+    const { error: insErr } = await supabase.from('products').insert(row)
+    if (insErr) { setError('Could not add product: ' + insErr.message); setSaving(false); return }
+    setSaving(false)
+    showToast('Product added!', { type: 'success' })
+    // Refresh the parent page so the new product appears, then reset the form
+    // so the user can add another product without reopening the modal.
+    if (onAdded) onAdded()
+    resetForm()
+  }
+
+  function resetForm() {
+    setName(''); setPrice(''); setCategory(''); setGenericName(''); setWhatsapp('')
+    setSaleType('retail'); setMinPurchase(''); setPriceUnit('card'); setDescription('')
+    setImage(null); setShowPrice(true); setError('')
+  }
+
+  const inputStyle = { width: '100%', padding: '11px 13px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 10 }
+
+  return (
+    <>
+    <style>{`.spin{animation:spin 0.8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto', padding: 20, boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.navy }}>Add Product to MedMarket</h3>
+          <button onClick={onClose} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
+        </div>
+        <div>
+          {error && <p style={{ margin: '0 0 8px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{error}</p>}
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name (brand)" style={inputStyle} />
+            <input value={genericName} onChange={(e) => setGenericName(e.target.value)} placeholder="Generic name / composition (e.g. Paracetamol 500mg)" style={inputStyle} />
+            <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Helps people find your product by its active ingredient.</p>
+            {sellerLocation
+              ? <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: theme.tealDeep, fontWeight: 600 }}><MapPin size={12} aria-hidden="true" /> Listed in {sellerLocation} (from your profile)</p>
+              : <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: theme.warning }}><AlertTriangle size={12} aria-hidden="true" /> Add a location to your profile so buyers know where you are.</p>}
+
+            {/* Price visibility toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '11px 13px', border: `1px solid ${theme.border}`, borderRadius: 10, marginBottom: 10, background: showPrice ? '#fff' : theme.bg }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.navy }}>Show price on listing</p>
+                <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{showPrice ? 'Buyers see the price' : 'Buyers see "Ask for price" instead'}</p>
+              </div>
+              <button
+                onClick={() => setShowPrice(!showPrice)}
+                role="switch"
+                aria-checked={showPrice}
+                aria-label="Show price on listing"
+                style={{ flexShrink: 0, width: 46, height: 26, borderRadius: 20, border: 'none', cursor: 'pointer', padding: 0, background: showPrice ? theme.tealDeep : theme.gray300, transition: 'background 0.2s ease' }}
+              >
+                <span style={{ display: 'block', width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)', marginLeft: showPrice ? 22 : 2, transition: 'margin-left 0.2s ease' }} />
+              </button>
+            </div>
+            {showPrice && <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price (₦)" inputMode="numeric" style={inputStyle} />}
+            {!showPrice && <p style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.textMid }}>You can still send the price privately when buyers message you on WhatsApp.</p>}
+
+            {/* Retail, Wholesale or Distributor */}
+            <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Sale type</p>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {SALE_TYPES.map(t => (
+                <button key={t} onClick={() => { setSaleType(t); if (!isUnitValidForSaleType(priceUnit, t)) setPriceUnit('') }} style={{ flex: 1, padding: 10, borderRadius: 10, border: 'none', fontWeight: 800, fontSize: 13, textTransform: 'capitalize', background: saleType === t ? theme.tealDeep : theme.bg, color: saleType === t ? '#fff' : theme.textMid }}>{t}</button>
+              ))}
+            </div>
+
+            {/* Price per unit — only the units allowed for the chosen sale type */}
+            <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>Price is per</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {unitsForSaleType(saleType).map(u => (
+                <button key={u} onClick={() => setPriceUnit(u)} style={{ padding: '7px 12px', borderRadius: 10, border: 'none', fontWeight: 700, fontSize: 12, textTransform: 'capitalize', background: priceUnit === u ? theme.tealDeep : theme.bg, color: priceUnit === u ? '#fff' : theme.textMid }}>{u}</button>
+              ))}
+            </div>
+
+            {/* Minimum purchase */}
+            <input value={minPurchase} onChange={(e) => setMinPurchase(e.target.value)} placeholder={`Minimum purchase (e.g. 5 ${priceUnit}s)`} inputMode="numeric" style={inputStyle} />
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (e.g. Skincare, Antibiotics)" style={inputStyle} />
+            <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp number (e.g. 08012345678)" inputMode="tel" style={inputStyle} />
+            <p style={{ margin: '-4px 0 10px 0', fontSize: 10.5, color: theme.textLight }}>Buyers can message you directly on WhatsApp about this product.</p>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" rows={3} style={{ ...inputStyle, resize: 'none' }} />
+
+            {(businesses && businesses.length > 0) || (claimBusinesses && claimBusinesses.length > 0) ? (
+              <>
+                <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase' }}>List under</p>
+                <select value={bizId} onChange={(e) => setBizId(e.target.value)} style={inputStyle}>
+                  {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  {(claimBusinesses || []).map(b => <option key={b.id} value={b.id}>{b.name} (your position)</option>)}
+                  <option value="">My personal account</option>
+                </select>
+              </>
+            ) : null}
+
+            <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 14 }}>
+              <Camera size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />{image ? image.name.slice(0, 24) : 'Add product photo (optional)'}
+              <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
+            </label>
+
+            <button onClick={save} disabled={saving} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+              {saving
+                ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Loader2 size={16} aria-hidden="true" className="spin" /> Adding…</span>
+                : <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}><Plus size={16} aria-hidden="true" /> Add product</span>}
+            </button>
+        </div>
+      </div>
+
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+    </div>
+    </>
+  )
+}
+
+export default ProductUpload
