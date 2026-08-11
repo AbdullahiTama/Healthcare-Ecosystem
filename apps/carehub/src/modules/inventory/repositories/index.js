@@ -1,4 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
+import { pagedQuery } from '../../../lib/pagedQuery'
 
 // ── Product repository ────────────────────────────────────────────────────────
 // A deep module over the `products` / `stock_batches` tables. Its interface is
@@ -13,13 +14,15 @@ import { sbFetch } from '../../../services/supabase'
 // That injected transport is the seam — one interface, two adapters.
 export function createProductRepository(request = sbFetch) {
   return {
-    // PostgREST caps responses at 1000 rows by default — a business with more
-    // than 1000 products would silently lose every row past the cap from view,
-    // even though the rows exist. Raising the ceiling to 50000 closes that gap
-    // for any realistic single-tenant catalogue; the UI paginates the result so
-    // rendering thousands of rows never hits the DOM all at once.
+    // PostgREST clamps every response to db-max-rows (1000 on this project —
+    // proven live 2026-08-11: a `limit=50000` request for products came back
+    // `Content-Range: 0-999/12276`, so 11,276 rows were unreachable through a
+    // single query, which is why uploaded products past 1000 never appeared).
+    // A raised limit cannot help; the rows are fetched by offset-paging until
+    // the last short page. `id.asc` pins the order so pages cannot shift rows.
+    // The UI paginates the returned array for rendering.
     async getAll(businessId) {
-      return request(`products?business_id=eq.${businessId}&order=name.asc&select=*&limit=50000`)
+      return pagedQuery(request, `products?business_id=eq.${businessId}&order=name.asc,id.asc&select=*`)
     },
 
     async getById(productId, businessId) {

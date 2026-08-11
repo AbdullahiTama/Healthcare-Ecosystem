@@ -25,15 +25,42 @@ describe('productRepository', () => {
     expect(rows.some((r) => r.business_id === B)).toBe(false)
   })
 
-  it('getAll requests a raised row limit so large catalogues are not silently truncated at 1000', async () => {
+  // ── Paging past the server-side 1000-row clamp (db-max-rows) ───────────────
+  // PostgREST clamps EVERY response to 1000 rows — a raised client limit
+  // (the old limit=50000) changes nothing, proven against the live project.
+  // getAll must page with offset until a short page. These tests exercise the
+  // loop through the in-memory adapter, which now applies offset/limit.
+  it('getAll pages through the 1000-row clamp, issuing offset requests until the last short page', async () => {
+    const client = createInMemoryClient({
+      products: Array.from({ length: 2500 }, (_, i) => ({ id: 'p' + i, business_id: A, name: 'Product ' + i, stock: 0 })),
+    })
+    const repo = createProductRepository(client)
+    const rows = await repo.getAll(A)
+    expect(rows).toHaveLength(2500)
+    expect(rows.every((r) => r.business_id === A)).toBe(true)
+    // three full pages of 1000 plus the short tail page
+    expect(client.pages('products')).toEqual([0, 1000, 2000])
+  })
+
+  it('getAll stops after one request when the catalogue fits on a page', async () => {
     const calls = []
-    const repo = createProductRepository(async (path, options) => {
+    const repo = createProductRepository(async (path) => {
       calls.push(path)
       return []
     })
     await repo.getAll(A)
     expect(calls).toHaveLength(1)
-    expect(calls[0]).toContain('limit=50000')
+    expect(calls[0]).toContain('limit=1000&offset=0')
+  })
+
+  it('getAll requests a stable order so offset pages cannot shift rows', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path) => {
+      calls.push(path)
+      return []
+    })
+    await repo.getAll(A)
+    expect(calls[0]).toContain('order=name.asc,id.asc')
   })
 
   it('getById scopes by id AND business, returning null when absent', async () => {

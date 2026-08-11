@@ -1,5 +1,6 @@
 import { authClient } from '../lib/authClient.js'
 import { SB_URL, SB_KEY } from '../config/supabase.js'
+import { pagedQuery } from '../lib/pagedQuery.js'
 
 // C10 fix: forward the real logged-in session's token when one exists, so
 // auth.uid()/auth.email() populate in Postgres (required for RLS, see
@@ -159,7 +160,11 @@ export async function getAllLocations(mainBusinessId) {
 // BusinessDashboard's permission bootstrap.
 
 // PRODUCTS
-export async function getProducts(businessId) { return sbFetch('products?business_id=eq.' + businessId + '&order=name.asc&select=*&limit=50000') }
+// `limit=50000` does NOT bypass PostgREST's server-side db-max-rows clamp
+// (1000 on this project — proven live 2026-08-11: `Content-Range: 0-999/12276`
+// on a limit=50000 request). Only offset-paging through the clamp reaches
+// every row, so the products/clients collection reads below page through it.
+export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
@@ -188,7 +193,7 @@ export async function deleteProductsBulk(ids) {
 export async function addSale(data) { return sbFetch('sales', { method: 'POST', body: JSON.stringify(data) }) }
 
 // CLIENTS
-export async function getClients(businessId) { return sbFetch('clients?business_id=eq.' + businessId + '&order=full_name.asc&select=*') }
+export async function getClients(businessId) { return pagedQuery(sbFetch, 'clients?business_id=eq.' + businessId + '&order=full_name.asc,id.asc&select=*') }
 export async function addClient(data) { return sbFetch('clients', { method: 'POST', body: JSON.stringify(data) }) }
 // NOTE: `updateClient(id, data)` used to live here. It PATCHed `clients?id=eq.`
 // with no business filter and had zero callers app-wide — same unscoped-write
