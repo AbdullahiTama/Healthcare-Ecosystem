@@ -28,8 +28,7 @@ update public.stories
   where is_platform = true and "position" is null;
 
 create index if not exists stories_position_idx
-  on public.stories ("position" asc nulls last, view_count desc, created_at desc)
-  where expires_at > now();
+  on public.stories ("position" asc nulls last, view_count desc, created_at desc);
 
 -- -----------------------------------------------------------------------------
 -- #7 Feed search: generated tsvector over content + posted_as_name, with a
