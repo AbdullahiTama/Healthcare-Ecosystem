@@ -68,13 +68,16 @@ function Stories() {
     setLoadingStories(true)
     const { data } = await supabase
       .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, profiles(full_name, display_name, is_verified)')
+      .select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, position, profiles(full_name, display_name, is_verified)')
       .eq('is_platform', true)
       .gt('expires_at', new Date().toISOString())
 
     const list = data || []
-    // Rank by views (desc), then newest
+    // Rank by explicit position first (nulls last), then views (desc), then newest
     list.sort((a, b) => {
+      const pa = a.position ?? Infinity
+      const pb = b.position ?? Infinity
+      if (pa !== pb) return pa - pb
       if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
       return new Date(b.created_at) - new Date(a.created_at)
     })
@@ -174,7 +177,7 @@ function Stories() {
       <style>{`@keyframes cf-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); } 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0); } }`}</style>
       {/* Story row */}
       <div className="cf-hscroll" style={{
-        display: 'flex', gap: 14, padding: '4px 2px 2px',
+        display: 'flex', alignItems: 'flex-start', gap: 14, padding: '4px 2px 2px',
         marginTop: 16, marginBottom: 4, WebkitOverflowScrolling: 'touch',
       }}>
         {/* LIVE show indicator (first) */}

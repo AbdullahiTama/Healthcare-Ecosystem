@@ -100,6 +100,15 @@ function Feed() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
 
+  // #6 "New posts" pill: a realtime INSERT on posts bumps this counter; the
+  // pill shows how many unseen posts are waiting. Clicking refreshes + clears.
+  const [newPostsCount, setNewPostsCount] = useState(0)
+  // #10a Pull-to-refresh: engaged only while the feed is scrolled to the top.
+  const PULL_THRESHOLD = 70
+  const pullStartY = useRef(0)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [pullRefreshing, setPullRefreshing] = useState(false)
+
   // One pill per post, never two. `text` posts deliberately have no pill : 
   // labelling the default kind adds noise without adding information.
   const POST_KIND = {
@@ -205,6 +214,7 @@ function Feed() {
 
   async function loadFeed() {
     setLoading(true)
+    setNewPostsCount(0)
     const { data: postData, error } = await supabase
       .from('posts')
       .select('id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title')
@@ -344,6 +354,10 @@ function Feed() {
             setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
           }
         }
+      )
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'posts' },
+        () => { setNewPostsCount(c => c + 1) }
       )
       .subscribe()
 
@@ -822,6 +836,34 @@ function Feed() {
   }
 
   const { isMobile } = useBreakpoint()
+
+  // #10a Pull-to-refresh. Only engages when the feed is scrolled to the very
+  // top, so it never fights normal scrolling. Distance is damped (x0.5) and
+  // capped so a long swipe can't yank the page.
+  function pullStart(e) {
+    if (pullRefreshing) return
+    pullStartY.current = (window.scrollY || document.documentElement.scrollTop || 0) <= 0
+      ? e.touches[0].clientY
+      : 0
+  }
+  function pullMove(e) {
+    if (pullRefreshing || !pullStartY.current) return
+    const delta = e.touches[0].clientY - pullStartY.current
+    if (delta > 0 && (window.scrollY || document.documentElement.scrollTop || 0) <= 0) {
+      setPullDistance(Math.min(delta * 0.5, 90))
+    }
+  }
+  function pullEnd() {
+    if (pullRefreshing) return
+    if (pullDistance > PULL_THRESHOLD) {
+      setPullRefreshing(true)
+      setPullDistance(0)
+      loadFeed().finally(() => setPullRefreshing(false))
+    } else {
+      setPullDistance(0)
+    }
+    pullStartY.current = 0
+  }
 
   // Desktop right sidebar's "Trending": derived from posts already loaded
   // by loadFeed() above, not a new query. No engagement data yet (e.g. right
@@ -1465,7 +1507,42 @@ function Feed() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* #6 "New posts" pill — sticky, centred above the list. Clicking it
+          scrolls to top and refreshes the feed (which clears the counter). */}
+      {newPostsCount > 0 && !loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', top: 8, zIndex: 5, marginBottom: -4 }}>
+          <button
+            onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); loadFeed() }}
+            style={{
+              background: theme.tealDeep, color: '#fff', border: 'none', cursor: 'pointer',
+              fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 999,
+              boxShadow: theme.elevation[2], display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <ChevronRight size={15} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true" />
+            {newPostsCount} new {newPostsCount === 1 ? 'post' : 'posts'}
+          </button>
+        </div>
+      )}
+
+      {/* #10a Pull-to-refresh affordance: a small tag that follows the pull
+          distance, then a spinner state while refreshing. */}
+      <div style={{ position: 'sticky', top: 0, height: 0, zIndex: 4, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+        {pullRefreshing ? (
+          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 999, boxShadow: theme.elevation[2] }}>Refreshing…</span>
+        ) : pullDistance > 4 ? (
+          <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 999, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
+            {pullDistance > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
+          </span>
+        ) : null}
+      </div>
+
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        onTouchStart={pullStart}
+        onTouchMove={pullMove}
+        onTouchEnd={pullEnd}
+      >
         {feedTab !== 'series' && visiblePosts.map((post) => (
           <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
             {/* Card header: identity left, one kind pill + overflow menu right.
