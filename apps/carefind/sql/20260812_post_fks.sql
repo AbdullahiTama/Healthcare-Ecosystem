@@ -1,23 +1,18 @@
 -- #10b Feed integrity: every interaction table should point at posts(id) with
 -- a real foreign key so deleting a post can't leave orphan rows. Authored from
 -- the column names the app already queries (post_comments.post_id,
--- post_reposts.post_id, saved_posts.post_id, post_reactions.post_id). Wrapped
--- in DO blocks so re-running the migration is safe.
+-- saved_posts.post_id, post_reactions.post_id). Wrapped in DO blocks so
+-- re-running the migration is safe.
+--
+-- Note: reposts are NOT a separate table — they're rows in `posts` whose
+-- content begins with REPOST_MARK (see postDisplay.jsx). There is no
+-- post_reposts table, so no FK is added for it.
 
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'fk_post_comments_post') then
     alter table public.post_comments
       add constraint fk_post_comments_post
-      foreign key (post_id) references public.posts(id) on delete cascade;
-  end if;
-end $$;
-
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'fk_post_reposts_post') then
-    alter table public.post_reposts
-      add constraint fk_post_reposts_post
       foreign key (post_id) references public.posts(id) on delete cascade;
   end if;
 end $$;
@@ -42,6 +37,5 @@ end $$;
 
 -- Indexes so the cascade + per-post lookups stay cheap.
 create index if not exists post_comments_post_id_idx on public.post_comments (post_id);
-create index if not exists post_reposts_post_id_idx on public.post_reposts (post_id);
 create index if not exists saved_posts_post_id_idx on public.saved_posts (post_id);
 create index if not exists post_reactions_post_id_idx on public.post_reactions (post_id);
