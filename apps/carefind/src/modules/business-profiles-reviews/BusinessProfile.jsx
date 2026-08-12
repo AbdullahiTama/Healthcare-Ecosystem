@@ -3,14 +3,14 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  ArrowLeft, BadgeCheck, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle,
+  ArrowLeft, BadgeCheck, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle, Phone,
   Pill as PillIcon, Smile, Sparkles, Star, Store,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { canShowPrice, distanceLabel, whatsappLink } from '../utils/marketplace'
+import { canShowPrice, distanceLabel, whatsappLink, telLink } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
@@ -353,6 +353,7 @@ function BusinessProfile() {
 
   // Build a proper wa.me link (handles Nigerian 080... numbers)
   const waLink = whatsappLink(biz.whatsapp, `Hi ${biz.name}, I found you on CareFind.`)
+  const callLink = telLink(biz.phone)
 
   // Google Maps link for the Directions button: the business-supplied map URL
   // wins; otherwise fall back to the exact GPS coordinates set in Settings;
@@ -407,14 +408,24 @@ function BusinessProfile() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {waLink && (
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noreferrer"
-              style={{ textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-            >
-              <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-            </a>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noreferrer"
+                style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+              >
+                <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
+              </a>
+              {callLink && (
+                <a
+                  href={callLink}
+                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+                >
+                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
+                </a>
+              )}
+            </div>
           )}
           {mapHref && (
             <a
@@ -511,6 +522,14 @@ function BusinessProfile() {
                   style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
                 >
                   <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
+                </a>
+              )}
+              {callLink && (
+                <a
+                  href={callLink}
+                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
+                >
+                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
                 </a>
               )}
               {mapHref && (

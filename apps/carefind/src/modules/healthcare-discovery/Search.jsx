@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Pill as PillIcon,
+  BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
   SearchX, ShoppingBag, Sparkles, Star, Stethoscope,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -13,8 +13,8 @@ import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
-import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, productCoords, haversineMeters, whatsappLink } from '../utils/marketplace.js'
-import { attachOwnerProfiles, sellerName, sellerContact } from '../utils/sellerLookup.js'
+import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
+import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
 // Nigerian states offered as autocomplete suggestions. The location filter
 // itself is a free-text field so it works globally (any city, region or
@@ -117,7 +117,7 @@ const distanceMeters = (p, u) => {
   // pending or suspended business must not appear in the public directory
   // even though registration sets visible_on_carefind optimistically.
   const businessesQuery = (q, st) => {
-    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp')
+    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp, phone, latitude, longitude')
       .eq('visible_on_carefind', true)
       .eq('status', 'active')
     // A facility query is usually a name, a kind ("pharmacy", "lab"), or a
@@ -170,10 +170,18 @@ const distanceMeters = (p, u) => {
     }
     else if (tab === 'businesses') {
       const { data } = await businessesQuery(q, stateFilter).range(0, 39)
-      setBusinesses(data || [])
+      let list = (data || [])
+      // Nearest first when the user asked for "Near me" and we have their
+      // location — businesses without coordinates sort to the end.
+      if (nearMe && userCoords) list = [...list].sort((a, b) => {
+        const da = (a.latitude != null && a.longitude != null) ? haversineMeters(a.latitude, a.longitude, userCoords.lat, userCoords.lng) : Infinity
+        const db = (b.latitude != null && b.longitude != null) ? haversineMeters(b.latitude, b.longitude, userCoords.lat, userCoords.lng) : Infinity
+        return da - db
+      })
+      setBusinesses(list)
       setBizHasMore((data || []).length === 40)
       setProducts([]); setProfessionals([])
-      resultCount = (data || []).length
+      resultCount = list.length
     }
     else if (tab === 'professionals') {
       let pf = supabase.from('profiles').select('id, full_name, display_name, verification_label, specialty, location, is_verified').eq('is_verified', true)
@@ -364,6 +372,7 @@ const distanceMeters = (p, u) => {
           // WhatsApp: product's own number, else the business's number (CareHub
           // inventory), else the owner profile's phone (standalone CareFind seller).
           const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
+          const callLink = telLink(sellerPhone(p))
           return (
             <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, marginBottom: 8 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -434,29 +443,68 @@ const distanceMeters = (p, u) => {
                   {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
                 </div>
               )}
-              {waLink && (
-                <a href={waLink} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
-                  <MessageCircle size={16} aria-hidden="true" /> Message on WhatsApp
-                </a>
+              {(waLink || callLink) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  {waLink && (
+                    <a href={waLink} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                      <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                    </a>
+                  )}
+                  {callLink && (
+                    <a href={callLink} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                      <Phone size={16} aria-hidden="true" /> Call
+                    </a>
+                  )}
+                </div>
               )}
             </Card>
           )
         })}
 
-        {businesses.map((b, idx) => (
-          <Link key={b.id} className="mm-card" to={`/business/${b.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg }}>
-            <div style={{ width: 46, height: 46, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
-              {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={20} aria-hidden="true" />)}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
-              <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
-              <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
-                <Star size={11} aria-hidden="true" /> See profile &amp; reviews <ChevronRight size={11} aria-hidden="true" />
-              </p>
-            </div>
-          </Link>
-        ))}
+        {businesses.map((b, idx) => {
+          const bizWa = whatsappLink(b.whatsapp, `Hi, I'm interested in ${b.name} on CareFind.`)
+          const bizCall = telLink(b.phone)
+          return (
+          <div key={b.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg }}>
+            <Link to={`/business/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12 }}>
+              <div style={{ width: 46, height: 46, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
+                {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={20} aria-hidden="true" />)}
+              </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
+                <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
+                {(() => {
+                  const dist = (b.latitude != null && b.longitude != null && userCoords)
+                    ? formatDistance(haversineMeters(b.latitude, b.longitude, userCoords.lat, userCoords.lng))
+                    : null
+                  return dist ? (
+                    <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}>
+                      <MapPin size={11} aria-hidden="true" /> {dist}
+                    </p>
+                  ) : null
+                })()}
+                <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
+                  <Star size={11} aria-hidden="true" /> See profile &amp; reviews <ChevronRight size={11} aria-hidden="true" />
+                </p>
+              </div>
+            </Link>
+            {(bizWa || bizCall) && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                {bizWa && (
+                  <a href={bizWa} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                    <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                  </a>
+                )}
+                {bizCall && (
+                  <a href={bizCall} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                    <Phone size={16} aria-hidden="true" /> Call
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+          )
+        })}
 
         {professionals.map((pr, idx) => (
           <Link key={pr.id} className="mm-card" to={`/u/${pr.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg, alignItems: 'center' }}>

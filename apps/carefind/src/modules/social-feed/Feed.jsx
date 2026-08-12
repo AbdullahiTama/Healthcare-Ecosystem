@@ -29,6 +29,7 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import { shareOrCopy } from '../../utils/share.js'
+import { toShareText } from '../../utils/formatShare.js'
 import { CommentThread } from './components/CommentThread.jsx'
 import PostMenu from './PostMenu.jsx'
 import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
@@ -780,7 +781,9 @@ function Feed() {
   }
 
   async function sharePost(post) {
-    const result = await shareOrCopy({ title: 'CareFind', text: post.content })
+    const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
+    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
+    const result = await shareOrCopy({ title: 'CareFind', text, url: window.location.href })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
   }

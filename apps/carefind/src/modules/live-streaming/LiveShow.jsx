@@ -15,6 +15,8 @@ import BottomNav from '../../components/BottomNav.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading, Toast, useToast } from '../../components/ui'
+import { shareOrCopy } from '../../utils/share.js'
+import { toShareText } from '../../utils/formatShare.js'
 
 function LiveShow() {
   const { id } = useParams()
@@ -167,18 +169,10 @@ function LiveShow() {
   async function shareLive() {
     setShareCount(c => c + 1)
     supabase.from('live_shares').insert({ show_id: id, user_id: user?.id || null })
-    const shareData = { title: show?.title || 'CareFind Live', text: 'Watch this live on CareFind', url: window.location.href }
-    if (navigator.share) {
-      try { await navigator.share(shareData) } catch (e) {}
-    } else {
-      // Fallback: copy link to clipboard
-      try {
-        await navigator.clipboard.writeText(window.location.href)
-        showToast('Live link copied! Share it anywhere.', { type: 'success' })
-      } catch (e) {
-        showToast(`Could not copy the link automatically: ${window.location.href}`, { type: 'error', duration: 6000 })
-      }
-    }
+    const text = toShareText(show?.title ? `Watch ${show.title} live on CareFind` : 'Watch this live on CareFind')
+    const result = await shareOrCopy({ title: show?.title || 'CareFind Live', text, url: window.location.href })
+    if (result === 'copied') showToast('Live link copied! Share it anywhere.', { type: 'success' })
+    else if (result === 'failed') showToast("This browser won't let us share or copy from here.", { type: 'error' })
   }
 
   async function repostLive() {

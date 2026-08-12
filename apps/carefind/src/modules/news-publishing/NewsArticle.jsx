@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { ArrowLeft, BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { shareOrCopy } from '../../utils/share.js'
+import { toShareText } from '../../utils/formatShare.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -31,35 +32,49 @@ function NewsArticle() {
   const [commentDraft, setCommentDraft] = useState('')
   const [gifting, setGifting] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
+  const [error, setError] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const { data } = await supabase
-        .from('news')
-        .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles(full_name, display_name, verification_label, is_verified)')
-        .eq('id', id)
-        .maybeSingle()
-      setArticle(data || null)
-      if (data) supabase.rpc('increment_news_view', { news_id: data.id })
+      setError(false)
+      try {
+        const { data, error: readErr } = await supabase
+          .from('news')
+          .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles(full_name, display_name, verification_label, is_verified)')
+          .eq('id', id)
+          .maybeSingle()
+        if (cancelled) return
+        if (readErr) throw readErr
+        setArticle(data || null)
+        // Fire-and-forget view counter — never let it block or blank the page.
+        if (data) supabase.rpc('increment_news_view', { news_id: data.id }).catch(() => {})
 
-      // A few more approved stories to show at the bottom
-      const { data: moreData } = await supabase
-        .from('news')
-        .select('id, headline, hero_image_url, published_at, created_at')
-        .eq('status', 'approved')
-        .neq('id', id)
-        .order('published_at', { ascending: false })
-        .limit(4)
-      setMore(moreData || [])
-      setLoading(false)
-      window.scrollTo(0, 0)
+        // A few more approved stories to show at the bottom
+        const { data: moreData, error: moreErr } = await supabase
+          .from('news')
+          .select('id, headline, hero_image_url, published_at, created_at')
+          .eq('status', 'approved')
+          .neq('id', id)
+          .order('published_at', { ascending: false })
+          .limit(4)
+        if (moreErr) throw moreErr
+        if (!cancelled) setMore(moreData || [])
+        setLoading(false)
+        window.scrollTo(0, 0)
 
-      // Engagement data
-      loadEngagement()
+        // Engagement data
+        loadEngagement()
+      } catch (e) {
+        console.error('News article load failed:', e)
+        if (!cancelled) { setError(true); setLoading(false) }
+      }
     }
     load()
-  }, [id])
+    return () => { cancelled = true }
+  }, [id, retryKey])
 
   async function loadEngagement() {
     const [likeRes, commentRes] = await Promise.all([
@@ -80,7 +95,8 @@ function NewsArticle() {
   // Same fallback as the feed's share (utils/share.js): Web Share where it
   // exists, clipboard everywhere else, and the user is told which happened.
   async function shareArticle() {
-    const result = await shareOrCopy({ title: article.headline, text: article.headline })
+    const text = article.subtitle ? `${article.headline} — ${toShareText(article.subtitle)}` : article.headline
+    const result = await shareOrCopy({ title: article.headline, text, url: `${window.location.origin}/news/${article.id}` })
     if (result === 'copied') setShareMsg('Link copied — paste it anywhere to share.')
     if (result === 'failed') setShareMsg("This browser won't let us share or copy from here.")
     if (result === 'copied' || result === 'failed') setTimeout(() => setShareMsg(''), 4000)
@@ -150,6 +166,22 @@ function NewsArticle() {
   }
 
   if (loading) return <Loading />
+
+  if (error) {
+    const errContent = (
+      <div style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: '60px 20px', textAlign: 'center' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Couldn't open this article</h3>
+        <p style={{ fontSize: 13, color: theme.textLight, margin: '0 0 16px 0' }}>Something went wrong while loading it. Please try again.</p>
+        <button onClick={() => setRetryKey(k => k + 1)} style={{ padding: '10px 20px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Retry</button>
+      </div>
+    )
+    if (isMobile) return errContent
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+        {errContent}
+      </AppShell>
+    )
+  }
 
   if (!article || article.status !== 'approved') {
     const notFoundContent = (
@@ -260,7 +292,11 @@ function NewsArticle() {
       {/* Body */}
       <div style={{ padding: '0 18px' }}>
         <div style={{ fontSize: 17, lineHeight: 1.7, color: '#1f2937' }}>
-          <ArticleEditor value={article.body} readOnly />
+          {article.body ? (
+            <ArticleEditor value={article.body} readOnly />
+          ) : (
+            <p style={{ color: theme.textLight, fontStyle: 'italic' }}>No article content is available yet.</p>
+          )}
         </div>
       </div>
 
