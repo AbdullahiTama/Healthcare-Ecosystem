@@ -304,6 +304,8 @@ function SkincareDetail({ d, g, recProducts }) {
         <DRow label='Fitzpatrick' value={as.fitzpatrick} />
         <DRow label='Treatment Recommended' value={as.treatment_recommended} />
         <DRow label='Homecare Plan' value={as.homecare_plan} />
+        <DRow label='Facial / Other Care Recommendations' value={as.facial_care_recommendations} />
+        <DRow label='Instructions' value={as.instructions} />
       </DSec>
 
       <ProductSection recProducts={recProducts} />

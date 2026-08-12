@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { theme } from '../../styles/theme'
 import { Card, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
-import { Chips, Pills, YesNo, SectionCard } from './formParts'
+import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
 import { getClients, addClient, addConsultation, addSale } from '../../services/supabase'
 import { genId } from '../../lib/utils'
 
@@ -91,14 +91,12 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
     medReview: { ...p.medReview, rows: p.medReview.rows.filter((_, idx) => idx !== i) },
   }))
 
-  const toggleProduct = (id) => setForm(p => {
-    const prod = stockProducts.find(x => x.id === id)
-    if (!prod) return p
+  const toggleProduct = (prod) => setForm(p => {
     const cur = p.assessment.products
-    const exists = cur.find(x => x.id === id)
+    const exists = cur.find(x => x.id === prod.id)
     const products = exists
-      ? cur.filter(x => x.id !== id)
-      : [...cur, { id, name: prod.name, price: prod.price || 0, qty: 1 }]
+      ? cur.filter(x => x.id !== prod.id)
+      : [...cur, { id: prod.id, name: prod.name, price: prod.price || 0, qty: 1 }]
     return { ...p, assessment: { ...p.assessment, products } }
   })
   const setProductQty = (id, qty) => setForm(p => ({
@@ -377,8 +375,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
               {stockProducts.length === 0 ? (
                 <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet — add them in Inventory.</div>
               ) : (
-                <Chips options={stockProducts.map(p => p.id)} selected={form.assessment.products.map(p => p.id)} onToggle={toggleProduct}
-                  customLabel={id => stockProducts.find(p => p.id === id)?.name} />
+                <ProductSearchPicker businessId={brand.id} selectedIds={form.assessment.products.map(p => p.id)} onToggle={toggleProduct} placeholder='Search products to dispense or recommend...' />
               )}
             </div>
             {form.assessment.products.length > 0 && (
@@ -388,6 +385,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
                     <span style={{ flex: 1, fontWeight: 700, fontSize: 12.5, color: navy }}>{p.name}</span>
                     <span style={{ fontSize: 11, color: gray400 }}>₦{Number(p.price || 0).toLocaleString()}</span>
                     <Inp label='' type='number' value={p.qty} onChange={v => setProductQty(p.id, v)} style={{ width: 64 }} aria-label={'Quantity of ' + p.name} />
+                    <button type="button" onClick={() => toggleProduct(p)} aria-label={'Remove ' + p.name} style={{ border: 'none', background: 'none', color: danger, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>×</button>
                   </div>
                 ))}
               </div>

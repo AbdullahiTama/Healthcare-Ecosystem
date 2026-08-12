@@ -2,8 +2,10 @@
 // Chips = multi-select; Pills = single-select; YesNo = yes/no pair; SectionCard
 // = the standard form card with title/hint. All accessible (aria-pressed).
 
+import { useState, useEffect, useRef } from 'react'
 import { theme } from '../../styles/theme'
-import { Card } from '../../components/ui'
+import { Card, Inp, Loading } from '../../components/ui'
+import { searchProducts } from '../../services/supabase'
 
 const { tealDeep, navy, gray600, gray400, border, bg } = theme
 
@@ -62,5 +64,64 @@ export function SectionCard({ title, hint, children }) {
       {hint && <div style={{ fontSize: 12, color: gray400, marginBottom: 12 }}>{hint}</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
     </Card>
+  )
+}
+
+// Searchable product selector — replaces rendering the entire catalog as chips.
+// Queries products by name (debounced, server-side) so large catalogs stay
+// usable. `onToggle` receives the full product object so each form can keep
+// its own selection shape (skincare: {id,name}; pharmacy: {id,name,price,qty}).
+export function ProductSearchPicker({ businessId, selectedIds = [], onToggle, placeholder = 'Search products...' }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [notFound, setNotFound] = useState(false)
+  const timer = useRef(null)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setResults([]); setNotFound(false); setLoading(false)
+      return
+    }
+    setLoading(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(async () => {
+      try {
+        const data = await searchProducts(businessId, q)
+        setResults(data || [])
+        setNotFound((data || []).length === 0)
+      } catch (e) {
+        console.error('Product search error:', e)
+        setResults([]); setNotFound(false)
+      } finally {
+        setLoading(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer.current)
+  }, [query, businessId])
+
+  const visible = results.filter(p => !selectedIds.includes(p.id))
+
+  return (
+    <div>
+      <Inp label='' value={query} onChange={setQuery} placeholder={placeholder} aria-label={placeholder} />
+      {loading && <div style={{ marginTop: 8 }}><Loading /></div>}
+      {!loading && query.trim().length >= 2 && notFound && (
+        <div style={{ fontSize: 12, color: gray400, marginTop: 8 }}>No products match "{query.trim()}".</div>
+      )}
+      {!loading && visible.length > 0 && (
+        <div style={{ marginTop: 8, maxHeight: 224, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: 6, background: '#fff' }}>
+          {visible.map(p => (
+            <button key={p.id} type="button" onClick={() => onToggle(p)}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}
+              aria-label={'Add ' + p.name}>
+              <span style={{ fontWeight: 700, fontSize: 12.5, color: navy }}>{p.name}</span>
+              {p.price != null && <span style={{ fontSize: 11, color: gray400 }}>₦{Number(p.price || 0).toLocaleString()}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

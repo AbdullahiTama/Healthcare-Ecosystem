@@ -138,6 +138,8 @@ export function printConsultation(c, brand) {
       ['Skin Type', as.skin_type], ['Skin Condition', as.skin_condition],
       ['Fitzpatrick Skin Type', as.fitzpatrick], ['Treatment Recommended', as.treatment_recommended],
       ['Homecare Plan', as.homecare_plan],
+      ['Facial / Other Care Recommendations', as.facial_care_recommendations],
+      ['Instructions', as.instructions],
     ]) +
 
     '<div class="sec"><h3>Products Recommended</h3>' +

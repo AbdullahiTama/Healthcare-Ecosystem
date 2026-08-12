@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { theme } from '../../styles/theme'
 import { Card, Inp, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
-import { Chips, Pills, YesNo, SectionCard } from './formParts'
+import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
 import { getClients, addClient, addConsultation } from '../../services/supabase'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, bg } = theme
@@ -41,7 +41,7 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
     lifestyle: { water: '', sleep: '', stress: '', smoker: '', sunscreen_frequency: '' },
     female: { pregnant: '', contraceptives: '' },
     consent: { agreed: false, date: today() },
-    assessment: { skin_type: '', skin_condition: '', fitzpatrick: '', treatment_recommended: '', products_recommended: [], homecare_plan: '', therapist_name: staffName || '', therapist_signature: '' },
+    assessment: { skin_type: '', skin_condition: '', fitzpatrick: '', treatment_recommended: '', products_recommended: [], homecare_plan: '', facial_care_recommendations: '', instructions: '', therapist_name: staffName || '', therapist_signature: '' },
   }))
 
   const set = (section, key, value) => setForm(p => ({ ...p, [section]: { ...p[section], [key]: value } }))
@@ -61,7 +61,6 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
       : []
   }, [allClients, clientSearch])
 
-  const productOptions = useMemo(() => products.map(p => ({ id: p.id, name: p.name })), [products])
   const recProductIds = form.assessment.products_recommended
 
   async function saveQuickAdd() {
@@ -96,7 +95,7 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
         consultation_date: form.date,
         consultation_type: 'skincare',
         provider_name: form.assessment.therapist_name,
-        recommended_products: recProductIds.map(id => productOptions.find(p => p.id === id)).filter(Boolean),
+        recommended_products: recProductIds.map(id => { const p = products.find(x => x.id === id); return p ? { id: p.id, name: p.name } : null }).filter(Boolean),
         data: {
           client_info: { full_name: client.full_name, ...form.clientInfo },
           emergency_contact: form.emergency,
@@ -296,14 +295,29 @@ export default function ConsultationForm({ brand, products = [], staffName = '',
             <Inp label="Treatment recommended" value={form.assessment.treatment_recommended} onChange={v => set('assessment', 'treatment_recommended', v)} placeholder="e.g. Chemical peel series + prescription products" />
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Products recommended</div>
-              {productOptions.length === 0 ? (
+              {products.length === 0 ? (
                 <div style={{ fontSize: 12, color: gray400 }}>No products in your catalog yet — add them in Inventory.</div>
               ) : (
-                <Chips options={productOptions.map(p => p.id)} selected={recProductIds} onToggle={id => toggle('assessment', 'products_recommended', id)}
-                  customLabel={id => productOptions.find(p => p.id === id)?.name} />
+                <ProductSearchPicker businessId={brand.id} selectedIds={recProductIds} onToggle={prod => toggle('assessment', 'products_recommended', prod.id)} placeholder='Search products to recommend...' />
+              )}
+              {recProductIds.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                  {recProductIds.map(id => {
+                    const p = products.find(x => x.id === id)
+                    if (!p) return null
+                    return (
+                      <button key={id} type="button" onClick={() => toggle('assessment', 'products_recommended', id)} aria-label={'Remove ' + p.name}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: theme.radius.full, border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        {p.name} <span style={{ fontSize: 13, lineHeight: 1 }}>×</span>
+                      </button>
+                    )
+                  })}
+                </div>
               )}
             </div>
             <Textarea label="Homecare plan" value={form.assessment.homecare_plan} onChange={v => set('assessment', 'homecare_plan', v)} rows={3} placeholder="What the client should do at home — morning / evening routine, SPF..." />
+            <Textarea label="Facial / other care recommendations" value={form.assessment.facial_care_recommendations} onChange={v => set('assessment', 'facial_care_recommendations', v)} rows={3} placeholder="Specific facials or other care services recommended (e.g. hydrafacial, LED therapy)..." />
+            <Textarea label="Instructions" value={form.assessment.instructions} onChange={v => set('assessment', 'instructions', v)} rows={3} placeholder="Aftercare instructions, precautions, when to return..." />
             <SignaturePad ref={therapistPad} label="Therapist signature" height={130} />
           </SectionCard>
 
