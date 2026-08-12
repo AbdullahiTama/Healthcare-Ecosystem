@@ -13,15 +13,22 @@ begin;
 -- Platform stories lead (position 0); user stories keep NULL (sort last),
 -- preserving the existing "by views" behaviour for them.
 -- -----------------------------------------------------------------------------
-alter table public.stories
-  add column if not exists position integer;
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'stories' and column_name = 'position'
+  ) then
+    alter table public.stories add column "position" integer;
+  end if;
+end $$;
 
 update public.stories
-  set position = 0
-  where is_platform = true and position is null;
+  set "position" = 0
+  where is_platform = true and "position" is null;
 
 create index if not exists stories_position_idx
-  on public.stories (position asc nulls last, view_count desc, created_at desc)
+  on public.stories ("position" asc nulls last, view_count desc, created_at desc)
   where expires_at > now();
 
 -- -----------------------------------------------------------------------------
