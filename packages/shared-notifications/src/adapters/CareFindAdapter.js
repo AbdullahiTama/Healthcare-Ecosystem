@@ -1,12 +1,25 @@
 import { createClient } from '@supabase/supabase-js'
 import { NOTIFICATION_TYPES, DEFAULT_MESSAGES } from '../index'
 
-const supabaseUrl = 'https://szdybxmgmhndoytqanfb.supabase.co'
-const supabaseAnonKey = 'sb_publishable_xEs5f4L6qSxqXikPZM06SQ_TKy4UNFz'
+// Credentials come from env/config — the consuming app's Vite build inlines
+// VITE_* vars, so staging/prod can differ and the key can rotate without a
+// code deploy. The client itself is created lazily on first use so merely
+// constructing the repository (e.g. to map rows) never requires live keys.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+function createSupabaseClient() {
+  return createClient(supabaseUrl, supabaseAnonKey)
+}
 
 export class CareFindNotificationRepository {
   constructor() {
-    this.supabase = createClient(supabaseUrl, supabaseAnonKey)
+    this._supabase = null
+  }
+
+  get supabase() {
+    if (!this._supabase) this._supabase = createSupabaseClient()
+    return this._supabase
   }
 
   async create(payload) {

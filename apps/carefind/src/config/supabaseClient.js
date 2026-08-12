@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = 'https://szdybxmgmhndoytqanfb.supabase.co'
-const supabaseAnonKey = 'sb_publishable_xEs5f4L6qSxqXikPZM06SQ_TKy4UNFz'
+// Credentials come from env/config (apps/carefind/.env) so staging and
+// production can differ and the key can be rotated without a code deploy.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)

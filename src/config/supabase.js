@@ -2,5 +2,9 @@
 // redeclared identically in lib/supabase.js, lib/authClient.js and
 // lib/realtime.js — consolidated here so credential rotation only needs to
 // happen in one place.
-export const SB_URL = 'https://szdybxmgmhndoytqanfb.supabase.co'
-export const SB_KEY = 'sb_publishable_xEs5f4L6qSxqXikPZM06SQ_TKy4UNFz'
+//
+// Credentials now come from env/config instead of being hardcoded, so staging
+// and production can differ and the key can be rotated without a code deploy.
+// Vite inlines VITE_* env vars at build time from ./.env.
+export const SB_URL = import.meta.env.VITE_SUPABASE_URL
+export const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
