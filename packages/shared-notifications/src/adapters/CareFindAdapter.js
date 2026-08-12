@@ -9,6 +9,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 function createSupabaseClient() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase credentials missing: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY ' +
+      'must be set in the consuming app\'s environment.'
+    )
+  }
   return createClient(supabaseUrl, supabaseAnonKey)
 }
 
