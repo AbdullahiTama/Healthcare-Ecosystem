@@ -37,6 +37,30 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
 import RightSidebar from '../../components/layout/RightSidebar.jsx'
 
+// #7 Feed search. Prefers the tsvector index; if the migration hasn't been
+// applied yet (search_vector missing), it falls back to a substring scan so
+// search degrades gracefully instead of erroring.
+async function searchPosts(query, { limit = 30 } = {}) {
+  const q = (query || '').trim()
+  if (!q) return []
+  const cols = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
+  const { data, error } = await supabase
+    .from('posts')
+    .select(cols)
+    .textSearch('search_vector', q, { type: 'plain', config: 'english' })
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (!error && data) return data
+  // Fallback for pre-migration databases
+  const { data: fb } = await supabase
+    .from('posts')
+    .select(cols)
+    .or(`content.ilike.%${q}%,posted_as_name.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  return fb || []
+}
+
 function Feed() {
   const { user } = useAuth()
   const [posts, setPosts] = useState([])
@@ -99,6 +123,12 @@ function Feed() {
   const [liveSessions, setLiveSessions] = useState([])
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
+
+  // #7 In-feed post search. feedResults is null when not searching, so the
+  // feed renders the normal ranked list; otherwise it renders search hits.
+  const [feedQuery, setFeedQuery] = useState('')
+  const [feedResults, setFeedResults] = useState(null)
+  const [feedSearching, setFeedSearching] = useState(false)
 
   // #6 "New posts" pill: a realtime INSERT on posts bumps this counter; the
   // pill shows how many unseen posts are waiting. Clicking refreshes + clears.
@@ -212,6 +242,66 @@ function Feed() {
     setCanGoLive(!!(data && data.is_verified))
   }
 
+  // Shared by loadFeed() and in-feed search(): fetch reactions/profiles/
+  // comment counts for a set of posts and store the ranked result.
+  async function enrichAndSetPosts(postData) {
+    const postIds = (postData || []).map((p) => p.id)
+    if (postIds.length === 0) {
+      setPosts([])
+      setReactions([])
+      setProfiles({})
+      setCommentCounts({})
+      return
+    }
+
+    const { data: reactionData } = await supabase
+      .from('post_reactions')
+      .select('id, post_id, user_id')
+      .in('post_id', postIds)
+    setReactions(reactionData || [])
+
+    const userIds = [...new Set((postData || []).map((p) => p.user_id))]
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url')
+      .in('id', userIds)
+
+    const profileMap = {}
+    ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
+    setProfiles(profileMap)
+
+    // Comment counts for all loaded posts (for ranking)
+    const { data: commentRows } = await supabase
+      .from('post_comments')
+      .select('post_id')
+      .in('post_id', postIds)
+    const cCounts = {}
+    ;(commentRows || []).forEach((row) => { cCounts[row.post_id] = (cCounts[row.post_id] || 0) + 1 })
+    setCommentCounts(cCounts)
+
+    // Like counts per post
+    const lCounts = {}
+    ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
+
+    // Score & rank: favor popular, strong verified boost, gentle recency
+    const scored = (postData || []).map((p) => {
+      const likes = lCounts[p.id] || 0
+      const comments = cCounts[p.id] || 0
+      const verified = profileMap[p.user_id]?.is_verified ? 1 : 0
+      const ageHours = (Date.now() - new Date(p.created_at)) / 3600000
+      let recency = 0
+      if (ageHours < 1) recency = 15
+      else if (ageHours < 6) recency = 10
+      else if (ageHours < 24) recency = 6
+      else if (ageHours < 72) recency = 3
+      else if (ageHours < 168) recency = 1
+      const score = (likes * 3) + (comments * 5) + (verified * 25) + recency
+      return { ...p, _score: score }
+    })
+    scored.sort((a, b) => b._score - a._score || new Date(b.created_at) - new Date(a.created_at))
+    setPosts(scored)
+  }
+
   async function loadFeed() {
     setLoading(true)
     setNewPostsCount(0)
@@ -228,89 +318,37 @@ function Feed() {
       return
     }
 
+    await enrichAndSetPosts(postData)
+
+    // Count a view for each post shown (fire and forget)
+    ;(postData || []).forEach((p) => { supabase.rpc('increment_post_view', { post_id: p.id }) })
+
+    const userIds = [...new Set((postData || []).map((p) => p.user_id))]
     const postIds = (postData || []).map((p) => p.id)
 
-    if (postIds.length > 0) {
-      const { data: reactionData } = await supabase
-        .from('post_reactions')
-        .select('id, post_id, user_id')
+    const { data: followData } = await supabase
+      .from('follows')
+      .select('id, follower_id, following_id')
+      .in('following_id', userIds)
+    setFollows(followData || [])
+
+    if (user) {
+      const { data: savedData } = await supabase
+        .from('saved_posts')
+        .select('id, post_id')
+        .eq('user_id', user.id)
         .in('post_id', postIds)
-      setReactions(reactionData || [])
+      setSavedPosts(savedData || [])
 
-      const userIds = [...new Set((postData || []).map((p) => p.user_id))]
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url')
-        .in('id', userIds)
-
-      const profileMap = {}
-      ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
-      setProfiles(profileMap)
-
-      // Comment counts for all loaded posts (for ranking)
-      const { data: commentRows } = await supabase
-        .from('post_comments')
-        .select('post_id')
-        .in('post_id', postIds)
-      const cCounts = {}
-      ;(commentRows || []).forEach((row) => { cCounts[row.post_id] = (cCounts[row.post_id] || 0) + 1 })
-      setCommentCounts(cCounts)
-
-      // Like counts per post
-      const lCounts = {}
-      ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
-
-      // Score & rank: favor popular, strong verified boost, gentle recency
-      const scored = (postData || []).map((p) => {
-        const likes = lCounts[p.id] || 0
-        const comments = cCounts[p.id] || 0
-        const verified = profileMap[p.user_id]?.is_verified ? 1 : 0
-        const ageHours = (Date.now() - new Date(p.created_at)) / 3600000
-        let recency = 0
-        if (ageHours < 1) recency = 15
-        else if (ageHours < 6) recency = 10
-        else if (ageHours < 24) recency = 6
-        else if (ageHours < 72) recency = 3
-        else if (ageHours < 168) recency = 1
-        const score = (likes * 3) + (comments * 5) + (verified * 25) + recency
-        return { ...p, _score: score }
-      })
-      scored.sort((a, b) => b._score - a._score || new Date(b.created_at) - new Date(a.created_at))
-      setPosts(scored)
-
-      // Count a view for each post shown (fire and forget)
-      scored.forEach((p) => { supabase.rpc('increment_post_view', { post_id: p.id }) })
-
-      const { data: followData } = await supabase
-        .from('follows')
-        .select('id, follower_id, following_id')
-        .in('following_id', userIds)
-      setFollows(followData || [])
-
-      if (user) {
-        const { data: savedData } = await supabase
-          .from('saved_posts')
-          .select('id, post_id')
-          .eq('user_id', user.id)
-          .in('post_id', postIds)
-        setSavedPosts(savedData || [])
-
-        const { data: subData } = await supabase
-          .from('user_subscriptions')
-          .select('professional_id')
-          .eq('subscriber_id', user.id)
-          .eq('status', 'active')
-        setUserSubscriptions((subData || []).map(s => s.professional_id))
-      } else {
-        setSavedPosts([])
-        setUserSubscriptions([])
-      }
+      const { data: subData } = await supabase
+        .from('user_subscriptions')
+        .select('professional_id')
+        .eq('subscriber_id', user.id)
+        .eq('status', 'active')
+      setUserSubscriptions((subData || []).map(s => s.professional_id))
     } else {
-      setPosts([])
-      setReactions([])
-      setProfiles({})
-      setFollows([])
       setSavedPosts([])
+      setUserSubscriptions([])
     }
 
     setLoading(false)
@@ -326,6 +364,26 @@ function Feed() {
     loadSeries()
     loadLiveSessions()
   }, [user])
+
+  // #7 In-feed search: debounced. While a query is present, feedResults is
+  // non-null and the list renders search hits instead of the ranked feed.
+  useEffect(() => {
+    const q = feedQuery.trim()
+    if (!q) {
+      if (feedResults !== null) { setFeedResults(null); loadFeed() }
+      return
+    }
+    const t = setTimeout(() => { runFeedSearch(q) }, 350)
+    return () => clearTimeout(t)
+  }, [feedQuery])
+
+  async function runFeedSearch(q) {
+    setFeedSearching(true)
+    const data = await searchPosts(q)
+    await enrichAndSetPosts(data)
+    setFeedResults(data)
+    setFeedSearching(false)
+  }
 
   openCommentsRef.current = openComments
 
@@ -655,6 +713,10 @@ function Feed() {
     }
     return p.post_type === feedTab
   })
+
+  // When searching, ignore the tab filter and show the raw search hits.
+  const isSearching = feedResults !== null
+  const displayPosts = isSearching ? posts : visiblePosts
 
   function likeCount(postId) {
     return reactions.filter((r) => r.post_id === postId).length
@@ -1000,6 +1062,37 @@ function Feed() {
           }}>Watch</span>
         </Link>
       )}
+
+      {/* #7 In-feed post search. Distinct from the provider/business search
+          in the app bar: this filters the posts themselves. */}
+      <div style={{ marginTop: 14, marginBottom: 2 }}>
+        <div style={{ position: 'relative' }}>
+          <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.gray400, pointerEvents: 'none' }} aria-hidden="true" />
+          <input
+            type="search"
+            value={feedQuery}
+            onChange={(e) => setFeedQuery(e.target.value)}
+            placeholder="Search posts…"
+            aria-label="Search posts"
+            style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: 12, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+          />
+          {feedQuery && (
+            <button
+              type="button"
+              onClick={() => { setFeedQuery(''); setFeedResults(null); loadFeed() }}
+              aria-label="Clear search"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {isSearching && (
+          <p style={{ margin: '8px 2px 0', fontSize: 11.5, color: theme.textLight }}>
+            {feedSearching ? 'Searching…' : `${displayPosts.length} result${displayPosts.length === 1 ? '' : 's'} for “${feedQuery.trim()}”`}
+          </p>
+        )}
+      </div>
 
       {/* Stories row */}
       <Stories />
@@ -1458,7 +1551,7 @@ function Feed() {
           <CardSkeleton />
         </div>
       )}
-      {!loading && feedTab !== 'series' && visiblePosts.length === 0 && (
+      {!loading && feedTab !== 'series' && !isSearching && visiblePosts.length === 0 && (
         <Empty
           icon={<Sprout size={44} color={theme.gray300} strokeWidth={1.5} />}
           message={
@@ -1470,6 +1563,22 @@ function Feed() {
                 {feedTab === 'foryou' ? 'Be the first to share something with the community'
                   : feedTab === 'following' ? 'Follow a few people and their posts land here'
                   : 'Tap + to make the first one'}
+              </div>
+            </>
+          }
+        />
+      )}
+
+      {!loading && isSearching && displayPosts.length === 0 && (
+        <Empty
+          icon={<SearchIcon size={44} color={theme.gray300} strokeWidth={1.5} />}
+          message={
+            <>
+              <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
+                No posts match “{feedQuery.trim()}”
+              </div>
+              <div style={{ fontSize: 13, color: theme.textLight }}>
+                Try a different word, or clear the search to see the full feed.
               </div>
             </>
           }
@@ -1543,7 +1652,7 @@ function Feed() {
         onTouchMove={pullMove}
         onTouchEnd={pullEnd}
       >
-        {feedTab !== 'series' && visiblePosts.map((post) => (
+        {feedTab !== 'series' && displayPosts.map((post) => (
           <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
             {/* Card header: identity left, one kind pill + overflow menu right.
                 Identity reads name → verified badge → handle → credential →
