@@ -1,6 +1,11 @@
 // The on-screen Voice Card / Visual Post.
 // The gradients here are deliberately identical to the ones in voiceCard.js,
 // so the exported PNG/video looks exactly like what the user sees on screen.
+// A card's optional video clip plays through VideoPlayer, so it autoplays
+// only while the card is actually in the viewport (and gets a poster,
+// loading and error states) instead of every card decoding at once.
+
+import VideoPlayer from '../components/VideoPlayer.jsx'
 
 export const CARD_TEMPLATES = {
   'teal-depth': {
@@ -56,13 +61,11 @@ function VisualCard({ templateKey = 'teal-depth', content = '', preview = false,
       }}
     >
       {!imageUrl && videoUrl && (
-        <video
+        <VideoPlayer
           src={videoUrl}
-          autoPlay
-          loop
-          muted
-          playsInline
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          ariaLabel="Voice card clip"
+          poster={null}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         />
       )}
 

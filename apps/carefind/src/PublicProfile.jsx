@@ -20,6 +20,7 @@ import {
   bookConsultationWithPaystackFallback, settleConsultationCardPayment,
 } from './modules/subscriptions-monetization/consultations.js'
 import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
+import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
 import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 
@@ -40,6 +41,7 @@ function PublicProfile() {
 
   // Stories for this profile
   const [userStories, setUserStories] = useState([])
+  const [viewedStoryIds, setViewedStoryIds] = useState(() => new Set())
   const [viewerIndex, setViewerIndex] = useState(null)
   const [progress, setProgress] = useState(0)
   const [activeTab, setActiveTab] = useState('posts')
@@ -109,6 +111,17 @@ function PublicProfile() {
       setPostCount(postData.data?.length || 0)
       setUserStories(storyData.data || [])
       setPlaylists(playlistData.data || [])
+
+      // Which of this profile's stories the CURRENT viewer has already seen
+      // (RLS scopes the query to the viewer's own story_views rows) — this is
+      // what greys the ring out once every story has been watched.
+      const stories = storyData.data || []
+      if (user && stories.length) {
+        const seen = await fetchViewedStoryIds(supabase, stories.map((s) => s.id))
+        setViewedStoryIds(seen)
+      } else {
+        setViewedStoryIds(new Set())
+      }
 
       await loadUserReviews()
       await refreshAccess()
@@ -261,7 +274,19 @@ function PublicProfile() {
     if (viewerIndex === null) return
     setProgress(0)
     const st = userStories[viewerIndex]
-    if (st) supabase.rpc('increment_story_view', { story_id: st.id })
+    if (st) {
+      supabase.rpc('increment_story_view', { story_id: st.id })
+      // Watching a story marks it seen for this viewer (idempotent — the DB
+      // dedupes on the composite key), so the profile ring greys out once
+      // everything has been watched.
+      markStoriesViewed(supabase, { storyIds: [st.id], userId: user?.id })
+      setViewedStoryIds((prev) => {
+        if (prev.has(st.id)) return prev
+        const next = new Set(prev)
+        next.add(st.id)
+        return next
+      })
+    }
     const start = Date.now()
     timerRef.current = setInterval(() => {
       const elapsed = Date.now() - start
@@ -364,6 +389,10 @@ function PublicProfile() {
   const displayName = profile.full_name || profile.display_name || 'CareFind User'
   const isOwnProfile = user?.id === id
   const hasStory = userStories.length > 0
+  // The ring greys out once THIS viewer has watched every story — the
+  // Instagram "all caught up" state. Own stories and logged-out visitors
+  // always show the teal ring.
+  const allSeen = !isOwnProfile && hasStory && userStories.every((s) => viewedStoryIds.has(s.id))
   const avgReviewRating = userReviews.length
     ? userReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / userReviews.length
     : 0
@@ -458,7 +487,7 @@ function PublicProfile() {
 
     const ringStyle = {
       width: size, height: size, borderRadius: '50%', padding: ringPad,
-      background: hasStory ? theme.tealDeep : 'transparent',
+      background: hasStory ? (allSeen ? theme.gray300 : theme.tealDeep) : 'transparent',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       border: 'none', boxSizing: 'border-box', ...style,
     }
