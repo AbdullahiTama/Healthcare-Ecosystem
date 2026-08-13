@@ -33,12 +33,25 @@ CareFind's one user-identity table — `id` is a real Supabase Auth UUID (`auth.
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `posts` | `user_id!` (FK `profiles`), `content!`, `post_type='text'`, `image_url`, `audio_url`, `video_url`, `rating`, `is_premium=false`, `subscriber_only=false`, `preview_text`, `posting_as_business_id` (FK `businesses`), `posted_as_type`/`posted_as_id`/`posted_as_name`/`posted_as_title`, `live_session_id` (FK `live_sessions`), `view_count=0`, `theme` | The richest single table in CareFind — supports posting as a business (`posting_as_business_id`) or under an arbitrary claimed identity (`posted_as_*`, not FK-enforced — no constraint ties `posted_as_id` to anything). `increment_post_view` RPC bumps `view_count` rather than a raw UPDATE. |
+| `posts` | `user_id!` (FK `profiles`), `content!`, `post_type='text'`, `image_url`, `audio_url`, `video_url`, `rating`, `is_premium=false`, `subscriber_only=false`, `preview_text`, `posting_as_business_id` (FK `businesses`), `posted_as_type`/`posted_as_id`/`posted_as_name`/`posted_as_title`, `live_session_id` (FK `live_sessions`), `view_count=0`, `theme`, `repost_count=0`, `repost_of` (FK `posts`, nullable, on delete cascade) | The richest single table in CareFind — supports posting as a business (`posting_as_business_id`) or under an arbitrary claimed identity (`posted_as_*`, not FK-enforced — no constraint ties `posted_as_id` to anything). `increment_post_view` RPC bumps `view_count` rather than a raw UPDATE. `repost_count` is maintained by the `maintain_post_repost_count` trigger on `post_reposts`; `repost_of` links a 🔁-marked repost post back to its source (added `20260813_post_reposts.sql`). |
 | `post_comments` | `post_id!` (FK `posts`), `user_id!`, `content!`, `posting_as_business_id` (FK `businesses`) | — |
-| `post_reactions` | `post_id!` (FK `posts`), `user_id!`, `reaction_type='like'` | One row per (user, post) in practice, not DB-enforced (no unique constraint found) |
-| `saved_posts` | `user_id!`, `post_id!` (FK `posts`) | — |
+| `post_reactions` | `post_id!` (FK `posts`), `user_id!`, `reaction_type='like'` | One row per (user, post), now DB-enforced by the `post_reactions_user_post_uniq` unique index on `(post_id, user_id)` (added `20260813_post_engagement_uniqueness.sql`) |
+| `saved_posts` | `user_id!`, `post_id!` (FK `posts`) | One row per (user, post), now DB-enforced by the `saved_posts_user_post_uniq` unique index on `(post_id, user_id)` (added `20260813_post_engagement_uniqueness.sql`) |
+| `post_reposts` | `id!` (PK), `post_id!` (FK `posts`, cascade), `user_id!` (FK `profiles`, cascade), `created_at` | The machine-readable repost record. `post_id` is the SOURCE post. Unique `post_reposts_user_post_uniq` on `(post_id, user_id)` makes a double-tap idempotent. Public-read / self-write RLS (follows shape). Insert/delete trigger `maintain_post_repost_count` keeps `posts.repost_count` in sync (added `20260813_post_reposts.sql`) |
+| `post_shares` | `id!` (PK), `post_id!` (FK `posts`, cascade), `user_id` (FK `profiles`, nullable), `platform`, `created_at` | Best-effort share tracking (fire-and-forget from `sharePost`). Unique `post_shares_user_post_platform_uniq` on `(post_id, user_id, platform)` dedupes repeat shares for signed-in users; `user_id = NULL` rows (anonymous shares) are allowed and not deduplicated. Public-read / self-or-anon-write RLS (added `20260813_post_shares_and_gifts.sql`) |
+| `feed_config` | `user_id!` (FK `profiles`, cascade), `key!`, `value`, `updated_at` | Per-user feed preferences (key/value). RLS: owner-only read/write (added `20260813_feed_persistence.sql`) |
+| `seen_posts` | `user_id!` (FK `profiles`, cascade), `post_id!` (FK `posts`, cascade), `seen_at` | Read receipt — one row per (user, post), PK on the pair. RLS: owner-only (added `20260813_feed_persistence.sql`) |
 | `follows` | `follower_id!`, `following_id!` | Both `uuid`, no FK constraint found to `profiles` on either — referential integrity here is app-enforced only |
 | `reports` | `reporter_id!`, `post_id!` (FK `posts`), `reason!`, `status='pending'` | Moderation queue, read by `AdminPanel.jsx`'s "Admin read reports" policy (see C14 in `Technical-Debt.md` — that policy is `qual:true`, not a real admin check) |
+
+RPCs added by the 2026-08-13 phase:
+
+| RPC | Signature → Returns | Notes |
+|---|---|---|
+| `read_posts_all` | `(p_post_ids uuid[]) → void` | Marks a batch of posts as seen for `auth.uid()`. Plain invoker — the `seen_posts` INSERT policy authorises each row; `ON CONFLICT DO NOTHING` keeps first `seen_at` |
+| `post_gift_stats` | `(p_post_id uuid) → (gift_count bigint, total_coins numeric)` | Per-post gift totals. SECURITY DEFINER, defensive: returns zeros if `gifts` is missing or lacks the assumed `post_id`/`coins` columns (its live schema can't be verified from the repo). Authenticated only |
+| `post_gift_stats_batch` | `(p_post_ids uuid[]) → (post_id uuid, gift_count bigint, total_coins numeric)` | Same totals for a whole feed page in one call. Authenticated only |
+| `increment_post_view` | (pre-existing) | Bumps `posts.view_count` |
 
 ---
 
