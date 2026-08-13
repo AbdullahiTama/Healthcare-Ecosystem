@@ -45,3 +45,9 @@ export function sellerName(p) {
 export function sellerContact(p) {
   return p?.whatsapp || p?.businesses?.whatsapp || p?._owner?.phone || null
 }
+
+// Best direct phone for a product (for a Call button): the business's phone,
+// then the owner profile's phone, then the product's own if present.
+export function sellerPhone(p) {
+  return p?.businesses?.phone || p?._owner?.phone || p?.phone || null
+}

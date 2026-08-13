@@ -83,3 +83,15 @@ export function whatsappLink(contact, message) {
   else if (!num.startsWith('234')) num = '234' + num
   return `https://wa.me/${num}?text=${encodeURIComponent(message)}`
 }
+
+// Normalise any phone/WhatsApp contact into a `tel:` deep link, handling
+// Nigerian 080… numbers the same way whatsappLink does. Returns null when
+// there is no contact so a Call button can be hidden.
+export function telLink(contact) {
+  if (!contact) return null
+  let num = String(contact).replace(/\D/g, '')
+  if (!num) return null
+  if (num.startsWith('0')) num = '234' + num.slice(1)
+  else if (!num.startsWith('234')) num = '234' + num
+  return `tel:+${num}`
+}
