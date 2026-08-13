@@ -16,20 +16,20 @@
 //   - GET routes (banks, admin-setup) get req.query parsed from the URL.
 export const config = { api: { bodyParser: false } }
 
-import adminAuthHandler from './admin-auth.js'
-import adminSetupHandler from './admin-setup.js'
-import banksHandler from './banks.js'
-import bookingHandler from './booking.js'
-import chargeConsultationHandler from './charge-consultation.js'
-import chargeSubscriptionHandler from './charge-subscription.js'
-import createSubaccountHandler from './create-subaccount.js'
-import initiatePaymentHandler from './initiate-payment.js'
-import initiateWithdrawalHandler from './initiate-withdrawal.js'
-import paystackWebhookHandler from './paystack-webhook.js'
-import verifyBookingPaymentHandler from './verify-booking-payment.js'
-import verifyConsultationPaymentHandler from './verify-consultation-payment.js'
-import verifyPaymentHandler from './verify-payment.js'
-import verifySubscriptionPaymentHandler from './verify-subscription-payment.js'
+import adminAuthHandler from './_handlers/admin-auth.js'
+import adminSetupHandler from './_handlers/admin-setup.js'
+import banksHandler from './_handlers/banks.js'
+import bookingHandler from './_handlers/booking.js'
+import chargeConsultationHandler from './_handlers/charge-consultation.js'
+import chargeSubscriptionHandler from './_handlers/charge-subscription.js'
+import createSubaccountHandler from './_handlers/create-subaccount.js'
+import initiatePaymentHandler from './_handlers/initiate-payment.js'
+import initiateWithdrawalHandler from './_handlers/initiate-withdrawal.js'
+import paystackWebhookHandler from './_handlers/paystack-webhook.js'
+import verifyBookingPaymentHandler from './_handlers/verify-booking-payment.js'
+import verifyConsultationPaymentHandler from './_handlers/verify-consultation-payment.js'
+import verifyPaymentHandler from './_handlers/verify-payment.js'
+import verifySubscriptionPaymentHandler from './_handlers/verify-subscription-payment.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
