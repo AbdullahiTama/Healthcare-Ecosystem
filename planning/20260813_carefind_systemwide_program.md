@@ -203,7 +203,7 @@ Three priorities, in order:
 | 5 | Stories + video | ✅ done (code + tests) — `story_views` SQL not yet applied to live DB |
 | 6 | Personalized feed | ✅ done (code + tests) — `feed_engine` SQL applied to live DB |
 | 7 | Staged content distribution | ✅ done (code + tests) — `content_distribution_experiments` SQL applied to live DB |
-| 8 | Testing, security, performance, regression review | 🔶 partial |
+| 8 | Testing, security, performance, regression review | ✅ done — final report in `planning/20260813_carefind_final_report.md` |
 
 ---
 
@@ -250,7 +250,7 @@ Three priorities, in order:
 | I — Personalized feed | ✅ code complete (needs `20260813_feed_engine.sql` applied) | pure engine `social-feed/feedEngine.js` (multi-signal weighted score + 6 candidate pools + diversity caps + `normalizeRegion`/`regionsOverlap`); `Feed.jsx` wired (config from `feed_ranking_config`/`candidate_generation_pools`, engine context built in `enrichAndSetPosts`); **Nearby** tab (region-text view, `rankNearby`) + **Medical** tab (server-filtered: verified pros + active pharmacy/hospital facilities, disambiguation banner); `feedEngine.test.js` (17); admin editor `admin/FeedRankingConfig.jsx` mounted in AdminPanel overview (weights/diversity editable via `set_feed_ranking_config` RPC gated on `profiles.is_admin`) |
 | Staged rollout | ✅ complete | `content_distribution_experiments` (kill switch + rollout % + A/B variants + config overrides) + append-only `distribution_experiment_events` (feed_view/engage/report, no SELECT policy) + `log_distribution_event` (INVOKER, pins auth.uid()) + `distribution_experiment_stats`/`set_distribution_experiment` (SECURITY DEFINER, `profiles.is_admin`-gated); pure resolver `social-feed/distributionExperiments.js` (deterministic bucketing, `resolveExperiment`, `applyExperimentConfig`); Feed.jsx applies treatment config to For You + logs metrics; AdminPanel `DistributionExperiments.jsx` kill-switch/rollout card; `distributionExperiments.test.js` (26); SQL applied to live DB (verified) |
 | Feed persistence | ✅ done | `sql/20260813_feed_persistence.sql` (`seen_posts`, `feed_config`, read-all) |
-| Phase 8 tests | 🔶 partial | engagement/followers/news/marketplace/stories/video/feed-engine covered; rollout/race-conditions not |
+| Phase 8 tests | ✅ done | engagement/followers/news/marketplace/stories/video/feed-engine/rollout covered (208 CareFind + 285 CareHub, clean builds); race-conditions now covered by `social-feed/raceConditions.test.js` (8) |
 
 ---
 
@@ -267,7 +267,15 @@ The **SQL is written but NOT applied to the live DB.** Apply + verify before fur
 3. Smoke-test engagement + feed flows in the app against the live DB.
 
 ### Then pick the next phase
-- **Phase 8 — Acceptance matrix:** complete remaining tests + final report.
+- **Phase 8 — Acceptance matrix:** complete remaining tests + final report. ✅ shipped — see `planning/20260813_carefind_final_report.md`.
+
+### Phase 8 shipped (2026-08-13)
+- **Race-condition regression suite** `social-feed/raceConditions.test.js` (8): double-tap like/save → 23505 read-back reconciliation (one row, never two); like→unlike→re-like ends with exactly one fresh row; repost reference idempotent under double-tap; undo-repost twice is a safe no-op; view recording fires one RPC per post per session. Documents the repost double-tap feed-post edge as an accepted risk.
+- **Regression pass**: CareFind **208** tests (20 files) + CareHub **285** tests (25 files), both apps build clean. Rollout coverage lands via `distributionExperiments.test.js` (26) from Phase 7.
+- **Final report** `planning/20260813_carefind_final_report.md`: §14 acceptance matrix (19/20 verified; feed-load audit pending instrumentation), key decisions, risks (repost double-tap edge, optimistic toggle thrash, staged experiments intentionally OFF, pre-existing C2/C20/CareHub-chunk), performance evidence (batch profile fetch, gift-stats RPC, deduped views), live metrics snapshot, and a **go-live recommendation**: approve; run the #19 live load/fps audit, enable `foryou_engine_v1` at 10% after, purge legacy plaintext password columns.
+
+### Program complete
+Phases 0–8 all done. Live DB carries every program migration; staged rollout is OFF pending the go-live checklist.
 
 ### Phase 7 shipped (code complete)
 - Staged content distribution: `content_distribution_experiments` (key, kill-switch `enabled`, `rollout_pct`, `variant`, `config` overrides, `start_at`/`end_at` window) + append-only `distribution_experiment_events` (event_type feed_view/engage/report, post_id, created_at; NO SELECT policy — aggregates only via admin RPC).
