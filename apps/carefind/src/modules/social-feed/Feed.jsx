@@ -1275,55 +1275,68 @@ function Feed() {
   // source carries a real count. Undoing removes both (undoRepost). Optimistic
   // like the other toggles; if the feed-post write fails, the reference is
   // taken back too and the UI rolls to the pre-tap state.
+  //
+  // In-flight guard: a double-tap in one render tick would otherwise run the
+  // whole async toggle twice. The DB index posts_user_repost_uniq already
+  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
+  // 23505), but the guard stops the second write from being issued at all —
+  // and stops an in-flight repost from being "undone" by a stale second tap.
+  const repostInFlight = useRef(new Set())
   async function toggleRepost(post) {
     if (!user) return
-    const existing = repostedPosts.find((r) => r.post_id === post.id)
+    if (repostInFlight.current.has(post.id)) return
+    repostInFlight.current.add(post.id)
+    try {
+      const existing = repostedPosts.find((r) => r.post_id === post.id)
 
-    if (existing) {
-      const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
-      setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
-      if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
+      if (existing) {
+        const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
+        setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
+        if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
 
-      const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
-      if (postsDelete?.error || refDelete?.error) {
-        setRepostedPosts((prev) => [...prev, existing])
-        if (repostPost) setPosts((prev) => [repostPost, ...prev])
-        toast.show('Could not undo repost right now.', { type: 'error' })
+        const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
+        if (postsDelete?.error || refDelete?.error) {
+          setRepostedPosts((prev) => [...prev, existing])
+          if (repostPost) setPosts((prev) => [repostPost, ...prev])
+          toast.show('Could not undo repost right now.', { type: 'error' })
+        }
+        return
       }
-      return
+
+      const tempRepostPost = {
+        id: `temp_repost_${Date.now()}`,
+        user_id: user.id,
+        content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
+        post_type: 'text',
+        image_url: post.image_url || null,
+        subscriber_only: post.subscriber_only || false,
+        is_premium: post.is_premium || false,
+        repost_of: post.id,
+        created_at: new Date().toISOString(),
+        view_count: 0,
+      }
+      const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
+      setRepostedPosts((prev) => [...prev, tempRepostRef])
+      setPosts((prev) => [tempRepostPost, ...prev])
+
+      const { ref, repostPost } = await writeRepost(supabase, { user, post })
+
+      if (repostPost.error || !repostPost.data) {
+        // Feed post failed: take the reference back so the source count doesn't
+        // claim a repost that is not visible anywhere.
+        if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
+        setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
+        setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
+        toast.show('Could not repost right now.', { type: 'error' })
+        return
+      }
+
+      // Swap temp rows for the real ones so un-repost has valid ids to delete.
+      setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
+      setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
+    } finally {
+      repostInFlight.current.delete(post.id)
     }
-
-    const tempRepostPost = {
-      id: `temp_repost_${Date.now()}`,
-      user_id: user.id,
-      content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
-      post_type: 'text',
-      image_url: post.image_url || null,
-      subscriber_only: post.subscriber_only || false,
-      is_premium: post.is_premium || false,
-      repost_of: post.id,
-      created_at: new Date().toISOString(),
-      view_count: 0,
-    }
-    const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
-    setRepostedPosts((prev) => [...prev, tempRepostRef])
-    setPosts((prev) => [tempRepostPost, ...prev])
-
-    const { ref, repostPost } = await writeRepost(supabase, { user, post })
-
-    if (repostPost.error || !repostPost.data) {
-      // Feed post failed: take the reference back so the source count doesn't
-      // claim a repost that is not visible anywhere.
-      if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
-      setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
-      setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
-      toast.show('Could not repost right now.', { type: 'error' })
-      return
-    }
-
-    // Swap temp rows for the real ones so un-repost has valid ids to delete.
-    setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
-    setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
   }
 
   function formatCount(n) {

@@ -125,19 +125,19 @@ describe('toggle thrash: like → unlike → re-like', () => {
 })
 
 describe('repost under double-tap', () => {
-  it('the post_reposts reference is idempotent — a repeat tap resolves, never duplicates', async () => {
+  it('both writes reconcile to ONE reference AND one 🔁 feed post', async () => {
     // A double-tap in one render tick runs writeRepost twice. The first writes
-    // ref1 + its feed post; the second hits 23505 on the reference and reads
-    // the winner back instead of erroring — so the reference table (what
-    // repost_count and the Reposts tab read) stays single-row. Each tap still
-    // writes its own feed post, the documented edge: two identical 🔁 posts
-    // are harmless to counts and resolved by the next reload, but flagged in
-    // the Phase 8 report.
+    // ref1 + its feed post; the second hits 23505 on the reference AND on the
+    // feed post (posts_user_repost_uniq from
+    // 20260813_reposts_unique_per_user.sql) and reads the winner back for both
+    // — so no twin 🔁 post is ever published. Feed.jsx toggleRepost also has an
+    // in-flight guard, but the DB index is the authority this test drives.
     supabase.push({ data: { id: 'ref1', post_id: 'p1', user_id: 'u1' }, error: null })
     supabase.push({ data: { id: 'rp1', user_id: 'u1', content: '🔁 X', repost_of: 'p1' }, error: null })
     supabase.push({ data: null, error: conflict })
     supabase.push({ data: { id: 'ref1', post_id: 'p1', user_id: 'u1' }, error: null })
-    supabase.push({ data: { id: 'rp2', user_id: 'u1', content: '🔁 X', repost_of: 'p1' }, error: null })
+    supabase.push({ data: null, error: conflict })
+    supabase.push({ data: { id: 'rp1', user_id: 'u1', content: '🔁 X', repost_of: 'p1' }, error: null })
 
     const post = { id: 'p1', content: 'X', image_url: null }
     const first = await writeRepost(supabase, { user: { id: 'u1' }, post })
@@ -145,10 +145,16 @@ describe('repost under double-tap', () => {
 
     expect(first.ref.error).toBeNull()
     expect(second.ref.error).toBeNull()
+    expect(first.repostPost.error).toBeNull()
+    expect(second.repostPost.error).toBeNull()
     expect(first.ref.data.id).toBe('ref1')
     expect(second.ref.data.id).toBe('ref1')
-    // ref insert → ref read-back (23505 path) → two feed-post inserts.
-    expect(supabase.calls).toEqual(['from:post_reposts', 'from:posts', 'from:post_reposts', 'from:post_reposts', 'from:posts'])
+    // Both halves of the second write reconcile to the FIRST write's rows —
+    // no twin post. Call order: ref insert → posts insert → ref 23505 read-back
+    // → posts 23505 read-back.
+    expect(first.repostPost.data.id).toBe('rp1')
+    expect(second.repostPost.data.id).toBe('rp1')
+    expect(supabase.calls).toEqual(['from:post_reposts', 'from:posts', 'from:post_reposts', 'from:post_reposts', 'from:posts', 'from:posts'])
   })
 })
 

@@ -36,22 +36,26 @@ export async function insertRowResolvingConflict(supabase, table, row, conflictC
 // The subscriber_only/is_premium flags are carried across so a repost of a
 // locked post stays locked for everyone who wasn't already entitled.
 // Returns { ref, repostPost } where each is the { data, error } of its write.
+//
+// The feed-post half is also sent through insertRowResolvingConflict (on
+// ['user_id', 'repost_of']): posts_user_repost_uniq
+// (20260813_reposts_unique_per_user.sql) makes one 🔁 feed post per
+// (user, source) a DB guarantee, so a second write in the same render tick —
+// or from a stale tab — hits 23505 and resolves to the existing post instead
+// of publishing a twin. Feed.jsx toggleRepost also guards in-flight, so the
+// DB index is the authority and the client just avoids the wasted write.
 export async function writeRepost(supabase, { user, post }) {
   const repostContent = `🔁 ${post.content || ''}`.replace(/\s+/g, ' ').trim()
   const ref = await insertRowResolvingConflict(supabase, 'post_reposts', { post_id: post.id, user_id: user.id }, ['post_id', 'user_id'])
-  const repostPost = await supabase
-    .from('posts')
-    .insert({
-      user_id: user.id,
-      content: repostContent,
-      post_type: 'text',
-      image_url: post.image_url || null,
-      subscriber_only: post.subscriber_only || false,
-      is_premium: post.is_premium || false,
-      repost_of: post.id,
-    })
-    .select()
-    .maybeSingle()
+  const repostPost = await insertRowResolvingConflict(supabase, 'posts', {
+    user_id: user.id,
+    content: repostContent,
+    post_type: 'text',
+    image_url: post.image_url || null,
+    subscriber_only: post.subscriber_only || false,
+    is_premium: post.is_premium || false,
+    repost_of: post.id,
+  }, ['user_id', 'repost_of'])
   return { ref, repostPost }
 }
 

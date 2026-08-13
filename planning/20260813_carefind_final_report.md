@@ -53,10 +53,13 @@ and build clean.**
 
 ## 4. Risks & open items
 
-- **Repost double-tap in one render tick** can publish two identical 🔁 feed
-  posts (references are deduped; counts correct). Low severity, self-heals on
-  reload. Recommended follow-up: `UNIQUE (user_id, repost_of)` on `posts` or
-  an in-flight guard in `toggleRepost`.
+- **Repost double-tap in one render tick** ~~can publish two identical 🔁 feed
+  posts~~ — **FIXED 2026-08-13 after the report**: `posts_user_repost_uniq` (partial
+  unique index on `posts (user_id, repost_of) where repost_of is not null`,
+  `20260813_reposts_unique_per_user.sql`, applied to the live DB) makes the DB the
+  idempotency authority; `writeRepost` now reconciles the posts 23505 via
+  `insertRowResolvingConflict` and `toggleRepost` has an in-flight guard. The
+  race test now asserts one ref AND one 🔁 feed post.
 - **Optimistic toggle thrash** (tap like, then unlike before the first write
   resolves) may leave the button state momentarily stale; the DB is the source
   of truth and reloads reconcile. Cosmetic only.
