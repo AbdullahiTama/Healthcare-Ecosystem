@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { BadgeCheck, UserX, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar, Empty, Toast, useToast } from '../../components/ui'
+import { fetchFollowList } from './followers'
 
 // Bottom sheet listing a profile's followers or following. Privacy: profiles
 // with show_followers = false do not appear in the list unless the viewer is
@@ -26,17 +27,11 @@ function FollowersSheet({ profileId, kind, count, onClose, onCountChange }) {
       setLoading(true); setError('')
       try {
         const isFollowers = kind === 'followers'
-        let q = supabase
-          .from('follows')
-          .select(
-            isFollowers
-              ? 'follower_id, follower:follower_id(id, full_name, display_name, is_verified, avatar_url, show_followers)'
-              : 'following_id, following:following_id(id, full_name, display_name, is_verified, avatar_url, show_followers)'
-          )
-          .eq(isFollowers ? 'following_id' : 'follower_id', profileId)
-          .order('created_at', { ascending: false })
-          .limit(200)
-        const { data, error: err } = await q
+        // Ordered by created_at when the 20260813 migration has added it,
+        // falling back to unordered when it hasn't (see followers.js) — the
+        // permanent "Could not load this list." error was the ordered query
+        // failing on databases without the column.
+        const { data, error: err } = await fetchFollowList({ supabase, profileId, kind })
         if (err) throw err
 
         let list = (data || [])
