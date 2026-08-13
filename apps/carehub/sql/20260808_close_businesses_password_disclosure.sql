@@ -1,10 +1,15 @@
 -- ============================================================================
 -- C20 — CRITICAL: every business owner's login password is readable by anyone
 --
--- STATUS: NOT YET APPLIED. Requires the Supabase MCP connector (or SQL editor)
---         pointed at the LIVE project szdybxmgmhndoytqanfb. Must be applied
---         TOGETHER with the client change described in §4 — either half alone
---         breaks CareHub's login screen.
+-- STATUS: APPLIED to live project szdybxmgmhndoytqanfb on 2026-08-13 via the
+--         Supabase MCP connector, together with a follow-up hardening migration
+--         `20260813_legacy_login_business_deterministic` (RPC now resolves the
+--         non-NULL-password row deterministically, since branches no longer
+--         inherit a plaintext copy) and the client change described in §4.
+--         Verified behaviourally: `select=email,password` and `select=*` both
+--         return 42501; the CareFind directory select returns 200; a wrong-
+--         password RPC call returns []; `pg_proc.proacl` re-read clean. CareHub
+--         285 tests + build pass. See planning/CODE_AUDIT.md C20 (RESOLVED).
 --
 -- FOUND 2026-08-08 while diagnosing the broken registration form. Not hunted
 -- for; the registration probe needed an anon read of `businesses` and the

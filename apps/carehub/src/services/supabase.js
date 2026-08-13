@@ -54,22 +54,40 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
 }
 
 // AUTH
+// C20: anon lost SELECT on businesses.password (migration
+// 20260808_close_businesses_password_disclosure.sql), so the legacy plaintext
+// check can no longer filter on password via PostgREST. It now runs through
+// legacy_login_business, a SECURITY DEFINER RPC that compares the password
+// server-side and returns a safe row (no credential material, cannot enumerate).
 export async function loginBusiness(email, password) {
-  const r = await sbFetch('businesses?email=eq.' + encodeURIComponent(email) + '&password=eq.' + encodeURIComponent(password) + '&select=*')
+  const r = await sbFetch('rpc/legacy_login_business', {
+    method: 'POST',
+    body: JSON.stringify({ p_email: email.toLowerCase(), p_password: password }),
+  })
   return r[0] || null
 }
 export async function loginStaff(email, password) {
   const r = await sbFetch('staff?email=eq.' + encodeURIComponent(email) + '&password=eq.' + encodeURIComponent(password) + '&status=eq.active&select=*')
   return r[0] || null
 }
+// C20: `select=*` on businesses now fails for anon (password + is_platform_admin
+// are revoked), so every businesses read that can run without a session must
+// request an explicit safe column list. getBusinessById is anon-reachable
+// (Login.jsx:67, the staff-login branch, before any session exists), so it
+// excludes both sensitive columns. getBusinessByEmail is only ever called with
+// a real session (authenticated retains is_platform_admin), but it still must
+// not ask for password.
+const BUSINESS_PUBLIC_COLUMNS = 'id,name,owner,email,phone,whatsapp,address,state,city,business_type,hours,maps_link,lat,lng,website,status,visible_on_carefind,created_at,parent_business_id,branch_name,plan,cover_url,enterprise_type,plan_expires_at,location_label,show_price_on_carefind,logo_url,description,latitude,longitude,booking_enabled,booking_type,booking_slots,referring_agent_id,referral_code_used,show_prices,online_consultation_fee,physical_consultation_fee,branch_depth_limit,consultation_medium,consultation_medium_link'
 export async function getBusinessById(id) {
-  const r = await sbFetch('businesses?id=eq.' + id + '&select=*')
+  const r = await sbFetch('businesses?id=eq.' + id + '&select=' + BUSINESS_PUBLIC_COLUMNS)
   return r[0] || null
 }
 // Used once a real Supabase Auth session exists — looks up the matching
-// business/staff row by email instead of re-checking a password.
+// business/staff row by email instead of re-checking a password. Callers read
+// is_platform_admin off the result (Login.jsx:32, App.jsx:71), so it is
+// included here; password never is.
 export async function getBusinessByEmail(email) {
-  const r = await sbFetch('businesses?email=eq.' + encodeURIComponent(email) + '&select=*')
+  const r = await sbFetch('businesses?email=eq.' + encodeURIComponent(email) + '&select=' + BUSINESS_PUBLIC_COLUMNS + ',is_platform_admin')
   return r[0] || null
 }
 export async function getStaffByEmail(email) {

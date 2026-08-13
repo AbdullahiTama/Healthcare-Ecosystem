@@ -75,7 +75,10 @@ export default function Locations({ brand, role }) {
         parent_business_id: mainId,
         owner: brand.owner,
         email: brand.email,
-        password: brand.password,
+        // C20: brand.password no longer exists (anon lost it; it is never
+        // returned by the client reads). Branches get no password — legacy
+        // login for a branch's shared email resolves through the parent row,
+        // and the RPC prefers a non-NULL-password row deterministically.
         phone: form.phone || brand.phone,
         whatsapp: form.whatsapp || brand.whatsapp,
         address: form.address,
