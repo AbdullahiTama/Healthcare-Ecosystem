@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
-import { provisionRealAuthAccount } from '../../lib/authClient'
 import { emailAdminNewRegistration } from '../../lib/email'
 import { Card, Inp, Sel, TealBtn, DarkBtn, GhostBtn, Toggle, useToast, Toast, Logo } from '../../components/ui/index'
 import { DARK, businessName } from '../../lib/utils'
@@ -71,15 +70,14 @@ export default function Register() {
         lat: parseFloat(data.lat) || 0,
         lng: parseFloat(data.lng) || 0,
         website: data.website || '',
-        status: 'pending',
         visible_on_carefind: data.visibleOnCareFind !== false,
-        plan: 'basic',
         referral_code_used: refCode || null,
       })
-      // New accounts get a real Supabase Auth account from day one — best-effort,
-      // never blocks registration if it fails (falls back to the legacy login path,
-      // same as any pre-existing account).
-      provisionRealAuthAccount(ownerEmail, data.password)
+      // The register_business RPC mints the owner's CONFIRMED Supabase Auth
+      // account in the same transaction that creates the pending business row —
+      // there is no separate provisioning step any more (businesses.password
+      // was dropped in C2). New owners can sign in immediately and see the
+      // honest pending state.
       // Send email notification to admin
       try {
         await emailAdminNewRegistration({
@@ -92,14 +90,10 @@ export default function Register() {
       } catch (e) {}
       setDone(true)
     } catch (e) {
-      // The message names the real cause (e.g. an RLS/permission failure)
-      // instead of blaming the email, which was never checked.
-      //
-      // The 42501 this used to surface was NOT a missing anon INSERT policy,
-      // as an earlier note here claimed — that policy exists and passes.
-      // It was the RETURNING clause `return=representation` adds: Postgres
-      // re-checks the new row against the SELECT policy, which only admits
-      // status='active'. Fixed in services/supabase.js's registerBusiness.
+      // The message names the real cause instead of blaming the email, which
+      // was never checked. The register_business RPC rejects with readable
+      // errors (invalid email, short password, or "An account with this email
+      // already exists. Please sign in instead."), which surface as-is here.
       showToast('Registration failed: ' + (e.message || 'Please try again.'), { type: 'error' })
     }
     setSaving(false)

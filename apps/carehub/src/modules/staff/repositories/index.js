@@ -45,14 +45,14 @@ const DELETE_BLOCKERS = [
 //                   the boundary. Documented at the method rather than left to
 //                   look like an oversight.
 //
-// NOT here on purpose: `loginStaff` / `getStaffByEmail`. Those read `staff`
-// before any session exists, as part of authentication, which is a different
-// concern from staff management and cannot use a business-scoped repository —
-// there is no business yet. They stay in services/supabase.js. (Both are in
-// fact now unreachable-by-RLS as anon, since C19 restored scoping on `staff`;
-// all 12 active staff have real auth accounts so nothing depends on them. See
-// CODE_AUDIT — they are also the last readers of the plaintext password
-// columns tracked as C2.)
+// NOT here on purpose: staff *authentication*. Since C2 dropped staff.password
+// (20260813_purge_plaintext_password_columns.sql) there is no credential check
+// left — login goes through Supabase Auth, and the only auth-adjacent reads
+// are `getStaffByEmail` (resolve the session's email to a row, post-login) and
+// `provisionStaffAuth` (Staff.jsx mints the new member's auth account), both of
+// which stay in services/supabase.js. Neither can use a business-scoped
+// repository: the former runs from Login.jsx before any business context
+// exists, and the latter is a single server-side RPC.
 export function createStaffRepository(request = sbFetch) {
   return {
     // ── Staff ────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
 import { staffRepository } from './repositories'
-import { provisionRealAuthAccount } from '../../lib/authClient'
+import { provisionStaffAuth } from '../../services/supabase'
 import { emailStaffWelcome } from '../../lib/email'
 import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -133,35 +133,31 @@ export default function Staff({ brand, role, perms }) {
 
   async function save() {
     if (!form.fullName || !form.email || !form.password || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
+    if (form.password.length < 6) { showToast('Password must be at least 6 characters.', { type: 'warning' }); return }
     const limit = planLimitsFor(brand?.plan).maxStaff
     if (staff.length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} staff. Upgrade your plan in Settings to add more.`, { type: 'warning' })
       return
     }
     setSaving(true)
+    let createdStaffId = null
     try {
-      await staffRepository.create(brand.id, {
+      const created = await staffRepository.create(brand.id, {
         full_name: form.fullName,
         email: form.email.toLowerCase(),
-        password: form.password,
         role: form.role,
         phone: form.phone || '',
         status: 'active',
         show_on_carefind: form.showOnCareFind || false,
         public_title: form.publicTitle || form.role,
       })
-      // The staff ROW is only half an account since C19 closed the
-      // plaintext-password login path: without a real Supabase Auth account
-      // the new staff member can never sign in (proven live — "Invalid
-      // login credentials"). Provision it the same way Register.jsx does for
-      // new businesses: best-effort signUp, never blocks the staff row that
-      // already succeeded, and the new account activates via the
-      // confirmation email like any other signup.
-      let provisioned = false
-      try {
-        const session = await provisionRealAuthAccount(form.email, form.password)
-        provisioned = !!session
-      } catch (e) {}
+      createdStaffId = Array.isArray(created) ? created[0]?.id : created?.id
+      // The staff ROW is only half an account since C2 dropped staff.password:
+      // its login lives in Supabase Auth, minted by provisionStaffAuth (which
+      // verifies this caller owns the business). If provisioning fails, the row
+      // would have no way to sign in, so it is rolled back rather than left
+      // behind as a member who can never log in.
+      await provisionStaffAuth(brand.id, form.email.toLowerCase(), form.password)
       // Send welcome email to staff
       try {
         await emailStaffWelcome({
@@ -172,11 +168,12 @@ export default function Staff({ brand, role, perms }) {
           password: form.password,
         })
       } catch (e) {}
-      showToast(provisioned
-        ? 'Staff member added and signed in! Welcome email sent.'
-        : 'Staff member added! They will receive a confirmation email to activate their login.', { type: 'success' })
+      showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
       setForm({}); setShowAdd(false); load()
     } catch (e) {
+      // Undo the just-created staff row if the auth provisioning failed, so we
+      // never leave a staff member with a row but no login account.
+      if (createdStaffId) { try { await staffRepository.delete(createdStaffId, brand.id, form.fullName) } catch (e2) {} }
       // The message names the real cause instead of blaming the email, which
       // was never checked — e.g. "Supabase error (42501)" on an RLS failure
       // or the actual duplicate key if one exists.

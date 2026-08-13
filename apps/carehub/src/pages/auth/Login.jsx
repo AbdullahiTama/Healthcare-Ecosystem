@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, Plus } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
-import { loginBusiness, loginStaff, getBusinessById, resolveAccountByEmail } from '../../services/supabase'
-import { authClient, provisionRealAuthAccount } from '../../lib/authClient'
+import { resolveAccountByEmail } from '../../services/supabase'
+import { authClient } from '../../lib/authClient'
 import { Card, TealBtn, Logo } from '../../components/ui/index'
 import { theme } from '../../styles/theme'
 
@@ -23,56 +23,33 @@ export default function Login() {
     setLoading(true); setErr('')
     const normalizedEmail = email.toLowerCase()
 
-    // 1. Already-migrated accounts: a real Supabase Auth session is the source of truth.
+    // C2: the plaintext password columns and legacy_login_business are gone, so
+    // a real Supabase Auth session is the only way in. Every legacy account was
+    // backfilled to a confirmed auth user (2026-08-02, then 2026-08-13 for the
+    // 10 stragglers), and register_business/provision_staff_auth mint confirmed
+    // users for new accounts — so a successful sign-in here is authoritative.
     try {
       const { data, error } = await authClient.auth.signInWithPassword({ email: normalizedEmail, password: pass })
-      if (data?.session && !error) {
-        const account = await resolveAccountByEmail(normalizedEmail)
-        if (account) {
-          if (account.biz.is_platform_admin) {
-            login(account.biz, null, { isAdmin: true, role: 'SuperAdmin' })
-            navigate('/admin')
-            return
-          }
-          if (account.biz.status === 'pending') { setErr('Your account is pending admin approval. You will be notified once approved.'); setLoading(false); return }
-          if (account.biz.status === 'suspended') { setErr('Your account has been suspended. Contact support@carehub.ng'); setLoading(false); return }
-          login(account.biz, account.staff)
-          navigate('/dashboard/dashboard')
-          return
-        }
-        // Real session but no matching business/staff row — fall through to the legacy path as a safety net.
-      }
-    } catch (e) { /* not migrated yet, wrong password, or unconfirmed email — fall through to legacy check */ }
-
-    // 2. Not yet migrated: legacy plaintext check, still the source of truth until every account has logged in once.
-    try {
-      const biz = await loginBusiness(normalizedEmail, pass)
-      if (biz) {
-        if (biz.is_platform_admin) {
-          await provisionRealAuthAccount(normalizedEmail, pass)
-          login(biz, null, { isAdmin: true, role: 'SuperAdmin' })
-          navigate('/admin')
-          return
-        }
-        if (biz.status === 'pending') { setErr('Your account is pending admin approval. You will be notified once approved.'); setLoading(false); return }
-        if (biz.status === 'suspended') { setErr('Your account has been suspended. Contact support@carehub.ng'); setLoading(false); return }
-        await provisionRealAuthAccount(normalizedEmail, pass)
-        login(biz, null)
-        navigate('/dashboard/dashboard')
+      if (!data?.session || error) {
+        setErr('Incorrect email or password. Please try again.')
+        setLoading(false)
         return
       }
-      // Staff member
-      const staff = await loginStaff(normalizedEmail, pass)
-      if (staff) {
-        const biz2 = await getBusinessById(staff.business_id)
-        if (biz2) {
-          await provisionRealAuthAccount(normalizedEmail, pass)
-          login(biz2, staff)
-          navigate('/dashboard/dashboard')
-          return
-        }
+      const account = await resolveAccountByEmail(normalizedEmail)
+      if (!account) {
+        setErr('No CareHub business or staff account matches this email.')
+        setLoading(false)
+        return
       }
-      setErr('Incorrect email or password. Please try again.')
+      if (account.biz.is_platform_admin) {
+        login(account.biz, null, { isAdmin: true, role: 'SuperAdmin' })
+        navigate('/admin')
+        return
+      }
+      if (account.biz.status === 'pending') { setErr('Your account is pending admin approval. You will be notified once approved.'); setLoading(false); return }
+      if (account.biz.status === 'suspended') { setErr('Your account has been suspended. Contact support@carehub.ng'); setLoading(false); return }
+      login(account.biz, account.staff)
+      navigate('/dashboard/dashboard')
     } catch (e) {
       setErr('Connection error. Check your internet and try again.')
     }

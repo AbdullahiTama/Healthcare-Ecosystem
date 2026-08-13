@@ -54,22 +54,13 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
 }
 
 // AUTH
-// C20: anon lost SELECT on businesses.password (migration
-// 20260808_close_businesses_password_disclosure.sql), so the legacy plaintext
-// check can no longer filter on password via PostgREST. It now runs through
-// legacy_login_business, a SECURITY DEFINER RPC that compares the password
-// server-side and returns a safe row (no credential material, cannot enumerate).
-export async function loginBusiness(email, password) {
-  const r = await sbFetch('rpc/legacy_login_business', {
-    method: 'POST',
-    body: JSON.stringify({ p_email: email.toLowerCase(), p_password: password }),
-  })
-  return r[0] || null
-}
-export async function loginStaff(email, password) {
-  const r = await sbFetch('staff?email=eq.' + encodeURIComponent(email) + '&password=eq.' + encodeURIComponent(password) + '&status=eq.active&select=*')
-  return r[0] || null
-}
+// C2 (20260813_purge_plaintext_password_columns.sql) dropped businesses.password
+// and staff.password, and with them legacy_login_business and the client's
+// plaintext login path (loginBusiness/loginStaff). Every account now logs in
+// through Supabase Auth: legacy rows were backfilled to confirmed auth users,
+// and new accounts get one minted at registration. Login.jsx signs in with
+// authClient.auth.signInWithPassword, then resolveAccountByEmail below maps the
+// session's email to its business/staff row.
 // C20: `select=*` on businesses now fails for anon (password + is_platform_admin
 // are revoked), so every businesses read that can run without a session must
 // request an explicit safe column list. getBusinessById is anon-reachable
@@ -94,8 +85,22 @@ export async function getStaffByEmail(email) {
   const r = await sbFetch('staff?email=eq.' + encodeURIComponent(email) + '&status=eq.active&select=*')
   return r[0] || null
 }
+// Staff.jsx's "add member" auth half, since staff.password was dropped (C2):
+// the provision_staff_auth RPC (SECURITY DEFINER, authenticated-only) verifies
+// the caller owns the business, then mints a CONFIRMED Supabase Auth user for
+// the staff member (or links + confirms an existing account, never overwriting
+// its password) and stamps staff.auth_user_id. Returns the auth user id —
+// unwrapped the same way as the other scalar RPCs below (activate/deactivate/
+// push_master_product), because PostgREST may return a bare value or an array.
+export async function provisionStaffAuth(businessId, email, password) {
+  const rows = await sbFetch('rpc/provision_staff_auth', {
+    method: 'POST',
+    body: JSON.stringify({ p_business_id: businessId, p_email: email.toLowerCase(), p_password: password }),
+  })
+  return Array.isArray(rows) ? rows[0] : rows
+}
 // Looks up which business/staff row a given email belongs to, once we already
-// know (via a real session or a legacy password match) that the email is legitimate.
+// know (via a real session) that the email is legitimate.
 export async function resolveAccountByEmail(email) {
   const biz = await getBusinessByEmail(email)
   if (biz) return { biz, staff: null }
@@ -109,17 +114,23 @@ export async function resolveAccountByEmail(email) {
 
 // BUSINESSES
 export async function getBusinesses() { return sbFetch('businesses?select=*&order=created_at.desc') }
-// return=minimal is required, not an optimisation. Registration runs anonymously
-// (no session exists yet), and PostgreSQL applies the SELECT policy to the new
-// row when an INSERT has a RETURNING clause — which `return=representation`
-// generates. `businesses`' anon SELECT policy is CareFind's public directory,
-// scoped to status='active'; a just-registered row is status='pending', so the
-// RETURNING check fails with 42501 and the whole INSERT rolls back. Asking for
-// no representation keeps the insert clean, and is the right shape anyway: an
-// anonymous caller must not be able to read back a row holding a password.
-// Verified against production — same payload, representation => 42501,
-// minimal => 201. Register.jsx discards the return value.
-export async function registerBusiness(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+// Registration is an RPC, not an INSERT — businesses.password is gone (C2) and
+// register_business is the only way to create a business. It runs as SECURITY
+// DEFINER so an anon caller can do the two-phase (mint auth user + insert row)
+// atomically, and it FORCES status='pending' / is_platform_admin=false /
+// parent_business_id=null / plan='basic' regardless of what the payload claims
+// — the row it returns has no credential material. p_password is sent as a
+// separate argument and consumed by the RPC (it bcrypts it into auth.users);
+// it is never written to a table column. Returns the new business id,
+// unwrapped like the scalar RPCs.
+export async function registerBusiness(data) {
+  const { password, ...p_business } = data
+  const rows = await sbFetch('rpc/register_business', {
+    method: 'POST',
+    body: JSON.stringify({ p_business, p_password: password }),
+  })
+  return Array.isArray(rows) ? rows[0] : rows
+}
 export async function updateBusiness(id, data) { return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getBranches(parentId) { return sbFetch('businesses?parent_business_id=eq.' + parentId + '&select=*') }
 export async function addBranch(data) { return sbFetch('businesses', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
@@ -165,9 +176,11 @@ export async function getAllLocations(mainBusinessId) {
 // page, Orders, Warehouses, Territories, LiveActivity and Messages — all go
 // through that repository now.
 //
-// `loginStaff` and `getStaffByEmail` above deliberately stay: they read `staff`
-// before any session exists, as part of authentication, which cannot use a
-// business-scoped repository because there is no business yet.
+// `loginStaff` is gone (staff.password was dropped in C2). `getStaffByEmail`
+// stays: it resolves the session's email to a staff row after authentication,
+// which is a lookup, not a credential check, and cannot use a business-scoped
+// repository because Login.jsx calls it before any business context exists.
+// `provisionStaffAuth` above covers the new-staff auth half of the Staff page.
 
 // CUSTOM ROLES (the `roles` table — business-defined roles with a
 // permissions.jsonb matching lib/permissions.js's preset shapes)

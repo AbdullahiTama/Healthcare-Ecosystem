@@ -22,22 +22,30 @@ beforeEach(() => {
 
 const preferOf = (call) => call.options.headers.Prefer
 
-// ── Regression: anonymous INSERTs must not ask for a representation ──────────
+// ── Regression: anonymous public forms must not leak or fail on the row they
+// write ────────────────────────────────────────────────────────────────────────
 //
-// PostgreSQL applies the SELECT policy to the new row whenever an INSERT
-// carries a RETURNING clause, which `Prefer: return=representation` makes
-// PostgREST generate. Neither of these tables lets an anonymous caller read
-// the row it just wrote — `businesses`' only anon SELECT policy is CareFind's
-// public directory (status='active', while a new signup is 'pending'), and
-// `agent_applications` is a write-only intake queue with no anon SELECT policy
-// at all. Asking for a representation therefore fails the whole INSERT with
-// 42501, which is what broke both public forms in production.
-describe('anonymous public-form inserts', () => {
-  it('registerBusiness asks for no representation', async () => {
-    await registerBusiness({ name: 'HealthPlus', email: 'owner@example.com', status: 'pending' })
+// `registerBusiness` moved to the register_business RPC in C2: the businesses
+// password column is gone, and the RPC (SECURITY DEFINER, anon-executable)
+// mints the confirmed auth user + pending row atomically, forcing the
+// privileged defaults server-side. It returns a scalar business id, not a row.
+// `agent_applications` remains a write-only anon INSERT with no anon SELECT
+// policy at all, so it must keep return=minimal — asking for a representation
+// fails the whole INSERT with 42501, which is what broke that public form.
+describe('anonymous public-form registration', () => {
+  it('registerBusiness posts to the register_business RPC, password as a separate arg', async () => {
+    await registerBusiness({ name: 'HealthPlus', email: 'owner@example.com', password: 'secret123' })
     expect(calls).toHaveLength(1)
     expect(calls[0].options.method).toBe('POST')
-    expect(preferOf(calls[0])).toBe('return=minimal')
+    expect(calls[0].url).toContain('rpc/register_business')
+    const body = JSON.parse(calls[0].options.body)
+    expect(body.p_business).toEqual({ name: 'HealthPlus', email: 'owner@example.com' })
+    expect(body.p_password).toBe('secret123')
+    expect(body.p_business).not.toHaveProperty('password')
+  })
+
+  it('registerBusiness resolves the RPC result rather than throwing on an empty body', async () => {
+    await expect(registerBusiness({ name: 'HealthPlus', email: 'o@example.com', password: 'secret123' })).resolves.toBeUndefined()
   })
 
   it('submitAgentApplication asks for no representation', async () => {
@@ -45,10 +53,6 @@ describe('anonymous public-form inserts', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].options.method).toBe('POST')
     expect(preferOf(calls[0])).toBe('return=minimal')
-  })
-
-  it('returns an empty result rather than throwing on PostgREST 201 + empty body', async () => {
-    await expect(registerBusiness({ name: 'HealthPlus' })).resolves.toEqual([])
   })
 
   // Guards the other half: return=minimal is only correct where the caller

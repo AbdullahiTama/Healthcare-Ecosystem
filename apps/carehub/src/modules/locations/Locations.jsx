@@ -75,10 +75,11 @@ export default function Locations({ brand, role }) {
         parent_business_id: mainId,
         owner: brand.owner,
         email: brand.email,
-        // C20: brand.password no longer exists (anon lost it; it is never
-        // returned by the client reads). Branches get no password — legacy
-        // login for a branch's shared email resolves through the parent row,
-        // and the RPC prefers a non-NULL-password row deterministically.
+        // C2: businesses.password no longer exists (dropped in
+        // 20260813_purge_plaintext_password_columns.sql), and the legacy login
+        // path is gone with it. Branches get no password — a branch shares the
+        // owner's account, and Login.jsx resolves the shared email to the
+        // parent business row.
         phone: form.phone || brand.phone,
         whatsapp: form.whatsapp || brand.whatsapp,
         address: form.address,
