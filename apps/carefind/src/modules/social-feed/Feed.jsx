@@ -3,13 +3,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
-  Lock, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
+  Lock, MapPin, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
   Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
-  Trash2, Trees, Unlock, Waves, X, Flag,
+  Stethoscope, Trash2, Trees, Unlock, Waves, X, Flag,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder } from './engagement'
+import {
+  MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
+  buildInterestProfile, rankForYou, rankByScore, rankNearby,
+} from './feedEngine'
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
@@ -97,6 +101,14 @@ function Feed() {
   // reposted), and per-post gift totals surfaced by the batch stats RPC.
   const [repostedPosts, setRepostedPosts] = useState([])
   const [giftStats, setGiftStats] = useState({})
+  // Phase 6 personalized feed: resolved ranking config (weights/diversity),
+  // pool limits, the viewer's region tokens, and the medical-author sets the
+  // Medical tab + ranking boosts rely on. All default to safe fallbacks so a
+  // missing migration can never break the feed.
+  const [rankConfig, setRankConfig] = useState({ weights: DEFAULT_RANKING_CONFIG.weights, diversity: DEFAULT_RANKING_CONFIG.diversity })
+  const [poolsConfig, setPoolsConfig] = useState(DEFAULT_POOLS)
+  const [myRegion, setMyRegion] = useState([])
+  const [medicalContext, setMedicalContext] = useState({ verifiedIds: [], medicalBizIds: [] })
   const [platformLive, setPlatformLive] = useState(null)
   const [myAvatar, setMyAvatar] = useState(null)
   const [seriesList, setSeriesList] = useState([])
@@ -200,11 +212,14 @@ function Feed() {
   const FEED_TABS = [
     ['foryou', 'For you'],
     ['following', 'Following'],
+    ['nearby', 'Nearby'],
+    ['medical', 'Medical'],
     ['question', 'Questions'],
     ['article', 'Articles'],
     ['visual', 'Voice'],
     ['review', 'Reviews'],
     ['series', 'Series'],
+    ['video', 'Videos'],
   ]
 
   const themeLabels = {
@@ -268,7 +283,7 @@ function Feed() {
 
   // Shared by loadFeed() and in-feed search(): fetch reactions/profiles/
   // comment counts for a set of posts and store the ranked result.
-  async function enrichAndSetPosts(postData, seenIds = new Set()) {
+  async function enrichAndSetPosts(postData) {
     const postIds = (postData || []).map((p) => p.id)
     if (postIds.length === 0) {
       setPosts([])
@@ -297,11 +312,11 @@ function Feed() {
 
     // Gift totals for the whole page in one RPC; skipped (no state change) if
     // the RPC isn't available.
+    let giftTotals = {}
     try {
       const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: postIds })
-      const stats = {}
-      ;(giftRows || []).forEach((r) => { stats[r.post_id] = { gift_count: r.gift_count, total_coins: r.total_coins } })
-      setGiftStats(stats)
+      giftRows?.forEach((r) => { giftTotals[r.post_id] = { gift_count: r.gift_count, total_coins: r.total_coins } })
+      setGiftStats(giftTotals)
     } catch (e) {
       console.warn('gift stats unavailable:', e)
     }
@@ -309,7 +324,7 @@ function Feed() {
     const userIds = [...new Set((postData || []).map((p) => p.user_id))]
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url')
+      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country')
       .in('id', userIds)
 
     const profileMap = {}
@@ -319,7 +334,7 @@ function Feed() {
     // Comment counts for all loaded posts (for ranking)
     const { data: commentRows } = await supabase
       .from('post_comments')
-      .select('post_id')
+      .select('post_id, user_id')
       .in('post_id', postIds)
     const cCounts = {}
     ;(commentRows || []).forEach((row) => { cCounts[row.post_id] = (cCounts[row.post_id] || 0) + 1 })
@@ -329,42 +344,117 @@ function Feed() {
     const lCounts = {}
     ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
 
-    // Score & rank: favor popular, strong verified boost, gentle recency
-    const scored = (postData || []).map((p) => {
-      const likes = lCounts[p.id] || 0
-      const comments = cCounts[p.id] || 0
-      const verified = profileMap[p.user_id]?.is_verified ? 1 : 0
-      const ageHours = (Date.now() - new Date(p.created_at)) / 3600000
-      let recency = 0
-      if (ageHours < 1) recency = 15
-      else if (ageHours < 6) recency = 10
-      else if (ageHours < 24) recency = 6
-      else if (ageHours < 72) recency = 3
-      else if (ageHours < 168) recency = 1
-      const score = (likes * 3) + (comments * 5) + (verified * 25) + recency + (seenIds.has(p.id) ? 0 : 2)
-      return { ...p, _score: score }
+    // Phase 6 engine inputs: share/save totals, posted-as facility rows and
+    // the viewer's own engagement (follows, saves, subscriptions) — the raw
+    // material for the affinity and implicit-interest signals. All fire
+    // together; each table is query-1 for this batch.
+    const postedAsIds = [...new Set((postData || []).map((p) => p.posted_as_id).filter(Boolean))]
+    const [shareRows, saveRows, bizRows, followRows, mySavedRows, mySubRows] = await Promise.all([
+      supabase.from('post_shares').select('post_id').in('post_id', postIds),
+      supabase.from('saved_posts').select('post_id').in('post_id', postIds),
+      supabase.from('businesses')
+        .select('id, business_type, status, city, state, location_label')
+        .in('id', postedAsIds),
+      supabase.from('follows').select('id, follower_id, following_id').in('following_id', userIds),
+      user ? supabase.from('saved_posts').select('post_id').eq('user_id', user.id).in('post_id', postIds) : null,
+      user ? supabase.from('user_subscriptions').select('professional_id').eq('subscriber_id', user.id).eq('status', 'active') : null,
+    ])
+    const sCounts = {}
+    ;(shareRows?.data || []).forEach((r) => { sCounts[r.post_id] = (sCounts[r.post_id] || 0) + 1 })
+    const saveCounts = {}
+    ;(saveRows?.data || []).forEach((r) => { saveCounts[r.post_id] = (saveCounts[r.post_id] || 0) + 1 })
+    const businessMap = {}
+    ;(bizRows?.data || []).forEach((b) => { businessMap[b.id] = b })
+    const followRowsArr = followRows?.data || []
+    setFollows(followRowsArr)
+    setSavedPosts(mySavedRows?.data || [])
+    setUserSubscriptions((mySubRows?.data || []).map((s) => s.professional_id))
+
+    // The viewer's own signals (vs. the page-wide counts above).
+    const viewerReactionIds = new Set((reactionData || []).filter((r) => r.user_id === user?.id).map((r) => r.post_id))
+    const viewerCommentIds = new Set((commentRows || []).filter((c) => c.user_id === user?.id).map((c) => c.post_id))
+    const viewerSaveIds = new Set((mySavedRows?.data || []).map((s) => s.post_id))
+    const followedIds = new Set(followRowsArr.filter((f) => f.follower_id === user?.id).map((f) => f.following_id))
+
+    const postMap = {}
+    ;(postData || []).forEach((p) => { postMap[p.id] = p })
+    const interest = buildInterestProfile({
+      postMap,
+      authorProfiles: profileMap,
+      viewer: {
+        reactedPostIds: viewerReactionIds,
+        commentedPostIds: viewerCommentIds,
+        savedPostIds: viewerSaveIds,
+        followedProfileIds: followedIds,
+        subscriptionProfileIds: new Set((mySubRows?.data || []).map((s) => s.professional_id)),
+      },
     })
-    scored.sort((a, b) => b._score - a._score || new Date(b.created_at) - new Date(a.created_at))
-    setPosts(scored)
+
+    // The engine context — every pure signal the ranking reads. `myRegion` is
+    // the viewer's normalized location (empty when they haven't set one).
+    const context = {
+      lCounts, cCounts, sCounts, saveCounts, giftStats: giftTotals,
+      follows: followedIds, viewerReactionIds, viewerCommentIds, viewerSaveIds,
+      profiles: profileMap, businesses: businessMap, interest,
+      viewerRegion: myRegion, now: Date.now(),
+    }
+
+    // For You goes through the full pipeline (pools + diversity). Nearby is a
+    // dedicated region view. Every other tab keeps the plain weighted score —
+    // diversity caps must never hide posts a reader explicitly asked for.
+    const byScore = rankByScore({ posts: postData, context, weights: rankConfig.weights })
+    let ranked
+    if (feedTab === 'foryou') {
+      ranked = rankForYou({ posts: postData, context, weights: rankConfig.weights, diversity: rankConfig.diversity, pools: poolsConfig })
+    } else if (feedTab === 'nearby') {
+      ranked = rankNearby(byScore, context)
+    } else {
+      ranked = byScore
+    }
+    setPosts(ranked)
   }
 
   async function loadFeed() {
     setLoading(true)
     setNewPostsCount(0)
-    let { data: postData, error } = await supabase
+    // Video / Medical tabs are dedicated server queries (real clips; medical
+    // authors only), NOT slices of the shared latest-50 feed — a tab that
+    // depends on a sparse column or an author-class filter could otherwise
+    // look empty by chance, and Medical must never mix general content.
+    let query = supabase
       .from('posts')
       .select(POST_FEED_COLS)
       .order('created_at', { ascending: false })
       .limit(50)
+    if (feedTab === 'video') query = query.not('video_url', 'is', null)
+    if (feedTab === 'medical') {
+      const { verifiedIds, medicalBizIds } = medicalContext
+      const ors = []
+      if (verifiedIds.length) ors.push(`user_id.in.(${verifiedIds.join(',')})`)
+      if (medicalBizIds.length) ors.push(`posted_as_id.in.(${medicalBizIds.join(',')})`)
+      if (ors.length) query = query.or(ors.join(','))
+      else query = query.eq('id', '00000000-0000-0000-0000-000000000000') // empty set
+    }
+    let { data: postData, error } = await query
 
     // Pre-20260813-reposts migration: the repost columns don't exist, so retry
     // with the older column set rather than breaking the whole feed.
     if (error) {
-      const fb = await supabase
+      let fbq = supabase
         .from('posts')
         .select(POST_FEED_COLS_FALLBACK)
         .order('created_at', { ascending: false })
         .limit(50)
+      if (feedTab === 'video') fbq = fbq.not('video_url', 'is', null)
+      if (feedTab === 'medical') {
+        const { verifiedIds, medicalBizIds } = medicalContext
+        const ors = []
+        if (verifiedIds.length) ors.push(`user_id.in.(${verifiedIds.join(',')})`)
+        if (medicalBizIds.length) ors.push(`posted_as_id.in.(${medicalBizIds.join(',')})`)
+        if (ors.length) fbq = fbq.or(ors.join(','))
+        else fbq = fbq.eq('id', '00000000-0000-0000-0000-000000000000')
+      }
+      const fb = await fbq
       postData = fb.data
       error = fb.error
     }
@@ -378,25 +468,18 @@ function Feed() {
 
     const postIds = (postData || []).map((p) => p.id)
 
-    // Read receipts: rank unseen posts slightly higher, then mark this batch
-    // as read so a refresh doesn't re-boost the same 50. Requires the
-    // 20260813 feed-persistence migration; if it isn't applied, both calls
-    // degrade to no-ops (ranked without the boost, view counts still fire).
+    // enrichAndSetPosts builds the engine context and ranks (For You:
+    // pools + diversity; Nearby: region view; others: plain weighted score).
+    // Read receipts then mark this batch read so the next refresh doesn't
+    // treat the same 50 as new. Requires the 20260813 feed-persistence
+    // migration; if it isn't applied the RPC degrades to a no-op.
+    await enrichAndSetPosts(postData)
     if (user) {
-      const { data: seenData } = await supabase
-        .from('seen_posts')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .in('post_id', postIds)
-      const seen = new Set((seenData || []).map((s) => s.post_id))
-      await enrichAndSetPosts(postData, seen)
       try {
         await supabase.rpc('read_posts_all', { p_post_ids: postIds })
       } catch (e) {
         console.warn('read_posts_all failed (migration not applied?):', e)
       }
-    } else {
-      await enrichAndSetPosts(postData)
     }
 
     // Record a view for each post shown — once per session, fire and forget.
@@ -405,33 +488,6 @@ function Feed() {
     // increment_post_view kept counting every refresh, which is exactly the
     // inflation §7 forbids).
     ;(postData || []).forEach((p) => { recordFeedView.record(p.id) })
-
-    const userIds = [...new Set((postData || []).map((p) => p.user_id))]
-
-    const { data: followData } = await supabase
-      .from('follows')
-      .select('id, follower_id, following_id')
-      .in('following_id', userIds)
-    setFollows(followData || [])
-
-    if (user) {
-      const { data: savedData } = await supabase
-        .from('saved_posts')
-        .select('id, post_id')
-        .eq('user_id', user.id)
-        .in('post_id', postIds)
-      setSavedPosts(savedData || [])
-
-      const { data: subData } = await supabase
-        .from('user_subscriptions')
-        .select('professional_id')
-        .eq('subscriber_id', user.id)
-        .eq('status', 'active')
-      setUserSubscriptions((subData || []).map(s => s.professional_id))
-    } else {
-      setSavedPosts([])
-      setUserSubscriptions([])
-    }
 
     setLoading(false)
   }
@@ -446,6 +502,43 @@ function Feed() {
     loadSeries()
     loadLiveSessions()
   }, [user])
+
+  // Phase 6: load the personalized-feed config (weights, pools) and the
+  // signals the engine needs that aren't part of the posts query — the
+  // viewer's region (Nearby tab + location signal) and the current sets of
+  // verified professionals and active medical facilities (Medical tab). The
+  // 20260813_feed_engine migration makes the config real; without it every
+  // read degrades to the built-in defaults and the feed still ranks.
+  async function loadEngineConfig() {
+    const { data: rows } = await supabase.from('feed_ranking_config').select('key, value')
+    if (rows && rows.length) {
+      const byKey = {}
+      rows.forEach((r) => { byKey[r.key] = r.value })
+      setRankConfig({
+        weights: { ...DEFAULT_RANKING_CONFIG.weights, ...(byKey.weights || {}) },
+        diversity: { ...DEFAULT_RANKING_CONFIG.diversity, ...(byKey.diversity || {}) },
+      })
+    }
+    const { data: poolRows } = await supabase.from('candidate_generation_pools').select('pool, enabled, priority, limit_count')
+    if (poolRows && poolRows.length) {
+      const next = {}
+      poolRows.forEach((r) => { next[r.pool] = { enabled: r.enabled !== false, priority: r.priority, limitCount: r.limit_count } })
+      setPoolsConfig({ ...DEFAULT_POOLS, ...next })
+    }
+    if (user) {
+      const { data: me } = await supabase.from('profiles').select('location, country').eq('id', user.id).maybeSingle()
+      if (me) setMyRegion(normalizeRegion(`${me.location || ''} ${me.country || ''}`))
+    }
+    const [{ data: vp }, { data: mb }] = await Promise.all([
+      supabase.from('profiles').select('id').eq('is_verified', true),
+      supabase.from('businesses').select('id').in('business_type', MEDICAL_BUSINESS_TYPES).eq('status', 'active'),
+    ])
+    setMedicalContext({
+      verifiedIds: (vp || []).map((r) => r.id),
+      medicalBizIds: (mb || []).map((r) => r.id),
+    })
+  }
+  useEffect(() => { loadEngineConfig() }, [user])
 
   // Persisted feed-tab preference (feed_config): load the stored tab once per
   // user, and only save after it has been applied so the mount default
@@ -476,6 +569,20 @@ function Feed() {
       .then(() => {})
       .catch(() => {})
   }, [user, feedTab])
+
+  // Video / Nearby / Medical are dedicated server queries (real clips; region
+  // view; medical authors only), not slices of the shared 50-post feed —
+  // otherwise a tab that depends on a sparse column or an author-class filter
+  // could look empty by chance. Entering any of them refetches its batch;
+  // leaving them restores the normal feed so the other tabs never inherit the
+  // filtered list.
+  const prevTabRef = useRef(feedTab)
+  useEffect(() => {
+    const prev = prevTabRef.current
+    prevTabRef.current = feedTab
+    const dedicated = ['video', 'nearby', 'medical']
+    if (dedicated.includes(feedTab) || dedicated.includes(prev)) loadFeed()
+  }, [feedTab])
 
   // #7 In-feed search: debounced. While a query is present, feedResults is
   // non-null and the list renders search hits instead of the ranked feed.
@@ -823,6 +930,10 @@ function Feed() {
       if (!user) return false
       return follows.some((f) => f.follower_id === user.id && f.following_id === p.user_id)
     }
+    // Nearby and Medical are dedicated loadFeed queries — the posts state is
+    // already exactly that tab's set, so nothing further is sliced out here.
+    if (feedTab === 'nearby' || feedTab === 'medical') return true
+    if (feedTab === 'video') return !!p.video_url
     return p.post_type === feedTab
   })
 
@@ -1792,15 +1903,28 @@ function Feed() {
       )}
       {!loading && feedTab !== 'series' && !isSearching && visiblePosts.length === 0 && (
         <Empty
-          icon={<Sprout size={44} color={theme.gray300} strokeWidth={1.5} />}
+          icon={feedTab === 'video'
+            ? <Film size={44} color={theme.gray300} strokeWidth={1.5} />
+            : feedTab === 'medical'
+              ? <Stethoscope size={44} color={theme.gray300} strokeWidth={1.5} />
+              : feedTab === 'nearby'
+                ? <MapPin size={44} color={theme.gray300} strokeWidth={1.5} />
+                : <Sprout size={44} color={theme.gray300} strokeWidth={1.5} />}
           message={
             <>
               <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
-                {feedTab === 'following' ? 'Nothing from people you follow' : 'Nothing here yet'}
+                {feedTab === 'following' ? 'Nothing from people you follow'
+                  : feedTab === 'video' ? 'No videos yet'
+                  : feedTab === 'medical' ? 'No medical posts yet'
+                  : feedTab === 'nearby' ? 'No posts near you yet'
+                  : 'Nothing here yet'}
               </div>
               <div style={{ fontSize: 13, color: theme.textLight }}>
                 {feedTab === 'foryou' ? 'Be the first to share something with the community'
                   : feedTab === 'following' ? 'Follow a few people and their posts land here'
+                  : feedTab === 'video' ? 'Voice cards with a clip show up here'
+                  : feedTab === 'medical' ? 'Posts from verified professionals and approved facilities appear here'
+                  : feedTab === 'nearby' ? (myRegion.length ? 'New posts from your area will appear here' : 'Set your location on your profile to see posts near you')
                   : 'Tap + to make the first one'}
               </div>
             </>
@@ -1891,6 +2015,18 @@ function Feed() {
         onTouchMove={pullMove}
         onTouchEnd={pullEnd}
       >
+        {/* AC-14 disambiguation: the Medical tab is professional-only, never a
+            mixed slice of general content. The query itself is server-filtered
+            (loadFeed .or(user_id in verified, posted_as_id in medical biz)); the
+            banner makes the rule explicit to the reader. */}
+        {feedTab === 'medical' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: 12 }}>
+            <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
+              Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
+            </span>
+          </div>
+        )}
         {feedTab !== 'series' && displayPosts.map((post) => (
           <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
             {/* Card header: identity left, one kind pill + overflow menu right.

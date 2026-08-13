@@ -200,8 +200,8 @@ Three priorities, in order:
 | 2 | Existing bug fixes | ✅ done (news, followers, engagement, sharing, reposts) |
 | 3 | MedMarket | ✅ done (distance + contact; geospatial skip documented) |
 | 4 | Engagement platform | ✅ done (SQL + JS + tests) — **SQL not yet applied to live DB** |
-| 5 | Stories + video | 🔶 partial — stories exist but not per spec; real video not done |
-| 6 | Personalized feed | 🔶 partial — heuristic score only; no candidate pools/multi-signal |
+| 5 | Stories + video | ✅ done (code + tests) — `story_views` SQL not yet applied to live DB |
+| 6 | Personalized feed | ✅ done (code + tests) — `feed_engine` SQL not yet applied to live DB |
 | 7 | Staged content distribution | ❌ not started |
 | 8 | Testing, security, performance, regression review | 🔶 partial |
 
@@ -244,34 +244,43 @@ Three priorities, in order:
 | D — Engagement | ✅ SQL+JS+tests written | `sql/20260813_post_engagement_uniqueness.sql`, `post_reposts.sql`, `post_shares_and_gifts.sql`, `post_view_events.sql`, `apply_engagement_phase.sql`; `utils/` + `social-feed/` |
 | E — Clean sharing | ✅ central formatter + fallback | `utils/formatShare.js` (`toShareText`), `utils/share.js` (`shareOrCopy`) |
 | F — Followers/Following | ✅ root cause fixed (missing `created_at`, missing FKs) | `sql/20260813_follows_created_at.sql`, `20260813_follows_profiles_fks.sql`, `social-feed/followers.js` + `followers.test.js` |
-| G — Stories | ❌ not per spec | circle below stats (`account/Profile.jsx:496–555`); single-story viewer; no sequential playback / seen / expiry UI |
-| H — Real video posts | ❌ not per spec | upload + `VisualCard` video exist; no `<video>` autoplay/pause via IntersectionObserver, no poster/player states |
-| Video tab | ❌ missing | `FEED_TABS` = `foryou`, `following` only (`social-feed/Feed.jsx:200`) |
-| I — Personalized feed | 🔶 heuristic only | scoring in `Feed.jsx` (likes·3, comments·5, verified·25, recency, seen-boost); no candidate pools, no location/interest/provider-affinity signals, no configurable weights |
+| G — Stories | ✅ done (code + tests; seen/unseen needs `story_views` migration applied) | circle at top of own profile (`account/Profile.jsx`) + sequential viewer with progress bars; feed rail (`Stories.jsx`) + `PublicProfile.jsx` already sequential; seen/unseen ring via `social-feed/storyViews.js` (`fetchViewedStoryIds`/`markStoriesViewed`) + `sql/20260813_story_views.sql` |
+| H — Real video posts | ✅ done (code + tests) | `components/VideoPlayer.jsx` (IntersectionObserver 0.35, reduced-motion, loading/error/retry, manual play overlay) wired into `utils/VisualCard.jsx` for `visual` posts with `video_url` |
+| Video tab | ✅ done (code) | 5th `Videos` tab in `social-feed/Feed.jsx` (`FEED_TABS`), video-aware `loadFeed` (`.not('video_url','is',null)` + fallback), tab-transition refetch, `visiblePosts` video branch, empty state |
+| I — Personalized feed | ✅ code complete (needs `20260813_feed_engine.sql` applied) | pure engine `social-feed/feedEngine.js` (multi-signal weighted score + 6 candidate pools + diversity caps + `normalizeRegion`/`regionsOverlap`); `Feed.jsx` wired (config from `feed_ranking_config`/`candidate_generation_pools`, engine context built in `enrichAndSetPosts`); **Nearby** tab (region-text view, `rankNearby`) + **Medical** tab (server-filtered: verified pros + active pharmacy/hospital facilities, disambiguation banner); `feedEngine.test.js` (17); admin editor `admin/FeedRankingConfig.jsx` mounted in AdminPanel overview (weights/diversity editable via `set_feed_ranking_config` RPC gated on `profiles.is_admin`) |
 | Staged rollout | ❌ missing | no `content_distribution_experiments` table/code |
 | Feed persistence | ✅ done | `sql/20260813_feed_persistence.sql` (`seen_posts`, `feed_config`, read-all) |
-| Phase 8 tests | 🔶 partial | engagement/followers/news/marketplace covered; stories/video/personalization/rollout/race-conditions not |
+| Phase 8 tests | 🔶 partial | engagement/followers/news/marketplace/stories/video/feed-engine covered; rollout/race-conditions not |
 
 ---
 
 ## 16. How to Continue (next steps)
 
 ### Blocking item first
-The **SQL is written but NOT applied to the live DB.** Apply + verify before any further code work:
+The **SQL is written but NOT applied to the live DB.** Apply + verify before further code work:
 
 1. Finish Supabase MCP setup (`.opencode/opencode.json` configured; user still needs to
    close the session → `opencode mcp auth supabase` → restart).
 2. Apply the phase-4 migrations in order (or run `apps/carefind/sql/apply_engagement_phase.sql`),
-   then run security/performance advisors to confirm RLS on every new table.
-3. Smoke-test engagement flows in the app against the live DB.
+   then apply `apps/carefind/sql/20260813_feed_engine.sql` (feed ranking config, candidate pools,
+   `set_feed_ranking_config` RPC), then run security/performance advisors to confirm RLS on every new table.
+3. Smoke-test engagement + feed flows in the app against the live DB.
 
 ### Then pick the next phase
-- **Phase 5 — Stories + video:** move story circle to top of profile with sequential
-  playback + seen/expiry; build real `<video>` player with IntersectionObserver.
-- **Phase 5 — Video tab:** add 5th tab.
-- **Phase 6 — Personalized feed:** candidate pools + configurable multi-signal ranking + Medical tab.
 - **Phase 7 — Staged rollout:** `content_distribution_experiments`.
 - **Phase 8 — Acceptance matrix:** complete remaining tests + final report.
+
+### Phase 6 shipped (code complete)
+- Personalized feed: pure `feedEngine.js` — weighted signals (engagement, recency, affinity, provider authority, location, medical relevance, interests), min-max normalization, recency half-life 168h, 6 priority-ordered candidate pools, per-pool limits, diversity caps (maxPerAuthor 3 / maxPerType 5) on For You only.
+- Nearby tab: region-token matching (text location/country; haversine skipped — 0 profiles have lat/lng). Medical tab: server-filtered `.or(user_id in verified, posted_as_id in medical biz)` — never mixed; banner + empty state.
+- Admin editor: `admin/FeedRankingConfig.jsx` reads config publicly, edits weights/diversity via `set_feed_ranking_config` SECURITY DEFINER RPC gated on `profiles.is_admin`; non-admins get read-only + SQL hint.
+- Tests: `feedEngine.test.js` (17) — full suite 174 passing, build clean.
+- Migration `apps/carefind/sql/20260813_feed_engine.sql` written, **not yet applied**.
+
+### Phase 5 shipped (code complete)
+- Stories: own profile rail moved above Stats + sequential viewer; `storyViews.js` seen/unseen wired into `PublicProfile.jsx` ring. Apply `sql/20260813_story_views.sql` to enable seen/unseen.
+- Real video: `VideoPlayer.jsx` + `VisualCard` wiring; `Videos` 5th tab with server-filtered load.
+- Tests: `storyViews.test.js` (6), `VideoPlayer.test.jsx` (5) — full suite 157 passing, build clean.
 
 ---
 
