@@ -131,9 +131,9 @@ Three priorities, in order:
 
 ## 6. Staged Content Rollout
 
-- `content_distribution_experiments` table: progressive rollout %, metrics tracking.
-- Rollout gates + kill switches; staged/A-B groups.
-- Metric collection: engagement, retention, spam reports.
+- `content_distribution_experiments` table: progressive rollout %, metrics tracking. ✅ implemented (Phase 7)
+- Rollout gates + kill switches; staged/A-B groups. ✅ deterministic client-side bucketing (no assignment table)
+- Metric collection: engagement, retention, spam reports. ✅ append-only `distribution_experiment_events` via `log_distribution_event`
 
 ---
 
@@ -201,8 +201,8 @@ Three priorities, in order:
 | 3 | MedMarket | ✅ done (distance + contact; geospatial skip documented) |
 | 4 | Engagement platform | ✅ done (SQL + JS + tests) — **SQL not yet applied to live DB** |
 | 5 | Stories + video | ✅ done (code + tests) — `story_views` SQL not yet applied to live DB |
-| 6 | Personalized feed | ✅ done (code + tests) — `feed_engine` SQL not yet applied to live DB |
-| 7 | Staged content distribution | ❌ not started |
+| 6 | Personalized feed | ✅ done (code + tests) — `feed_engine` SQL applied to live DB |
+| 7 | Staged content distribution | ✅ done (code + tests) — `content_distribution_experiments` SQL applied to live DB |
 | 8 | Testing, security, performance, regression review | 🔶 partial |
 
 ---
@@ -248,7 +248,7 @@ Three priorities, in order:
 | H — Real video posts | ✅ done (code + tests) | `components/VideoPlayer.jsx` (IntersectionObserver 0.35, reduced-motion, loading/error/retry, manual play overlay) wired into `utils/VisualCard.jsx` for `visual` posts with `video_url` |
 | Video tab | ✅ done (code) | 5th `Videos` tab in `social-feed/Feed.jsx` (`FEED_TABS`), video-aware `loadFeed` (`.not('video_url','is',null)` + fallback), tab-transition refetch, `visiblePosts` video branch, empty state |
 | I — Personalized feed | ✅ code complete (needs `20260813_feed_engine.sql` applied) | pure engine `social-feed/feedEngine.js` (multi-signal weighted score + 6 candidate pools + diversity caps + `normalizeRegion`/`regionsOverlap`); `Feed.jsx` wired (config from `feed_ranking_config`/`candidate_generation_pools`, engine context built in `enrichAndSetPosts`); **Nearby** tab (region-text view, `rankNearby`) + **Medical** tab (server-filtered: verified pros + active pharmacy/hospital facilities, disambiguation banner); `feedEngine.test.js` (17); admin editor `admin/FeedRankingConfig.jsx` mounted in AdminPanel overview (weights/diversity editable via `set_feed_ranking_config` RPC gated on `profiles.is_admin`) |
-| Staged rollout | ❌ missing | no `content_distribution_experiments` table/code |
+| Staged rollout | ✅ complete | `content_distribution_experiments` (kill switch + rollout % + A/B variants + config overrides) + append-only `distribution_experiment_events` (feed_view/engage/report, no SELECT policy) + `log_distribution_event` (INVOKER, pins auth.uid()) + `distribution_experiment_stats`/`set_distribution_experiment` (SECURITY DEFINER, `profiles.is_admin`-gated); pure resolver `social-feed/distributionExperiments.js` (deterministic bucketing, `resolveExperiment`, `applyExperimentConfig`); Feed.jsx applies treatment config to For You + logs metrics; AdminPanel `DistributionExperiments.jsx` kill-switch/rollout card; `distributionExperiments.test.js` (26); SQL applied to live DB (verified) |
 | Feed persistence | ✅ done | `sql/20260813_feed_persistence.sql` (`seen_posts`, `feed_config`, read-all) |
 | Phase 8 tests | 🔶 partial | engagement/followers/news/marketplace/stories/video/feed-engine covered; rollout/race-conditions not |
 
@@ -267,8 +267,15 @@ The **SQL is written but NOT applied to the live DB.** Apply + verify before fur
 3. Smoke-test engagement + feed flows in the app against the live DB.
 
 ### Then pick the next phase
-- **Phase 7 — Staged rollout:** `content_distribution_experiments`.
 - **Phase 8 — Acceptance matrix:** complete remaining tests + final report.
+
+### Phase 7 shipped (code complete)
+- Staged content distribution: `content_distribution_experiments` (key, kill-switch `enabled`, `rollout_pct`, `variant`, `config` overrides, `start_at`/`end_at` window) + append-only `distribution_experiment_events` (event_type feed_view/engage/report, post_id, created_at; NO SELECT policy — aggregates only via admin RPC).
+- Client: pure `distributionExperiments.js` — deterministic FNV-1a bucketing (avalanched) so a reader keeps their group across sessions; `resolveExperiment` (control vs treatment, window + kill switch + rollout gates); `applyExperimentConfig` (field-level merge over base weights/diversity/pools); `logExperimentEvent` (fire-and-forget, no-op when un-staged).
+- Feed.jsx: For You applies treatment config; logs `feed_view` once/session (retention), `engage` on like/save/share, `report` — tagged with the reader's variant (control included, for valid A/B).
+- Admin editor: `admin/DistributionExperiments.jsx` — kill-switch toggle + rollout slider per experiment + per-variant metric counts; edits via `set_distribution_experiment`, stats via `distribution_experiment_stats`, both gated on `profiles.is_admin`.
+- Tests: `distributionExperiments.test.js` (26) — full suite 200 passing, build clean.
+- Migration `apps/carefind/sql/20260813_content_distribution_experiments.sql` written **and applied to the live DB** (verified: seed row off, events table empty, RLS + admin-gated RPCs live; advisors show no new findings beyond the intentional SECURITY DEFINER `is_admin`-gated pattern).
 
 ### Phase 6 shipped (code complete)
 - Personalized feed: pure `feedEngine.js` — weighted signals (engagement, recency, affinity, provider authority, location, medical relevance, interests), min-max normalization, recency half-life 168h, 6 priority-ordered candidate pools, per-pool limits, diversity caps (maxPerAuthor 3 / maxPerType 5) on For You only.

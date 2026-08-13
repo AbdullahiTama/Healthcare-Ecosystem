@@ -10,6 +10,7 @@ import {
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder } from './engagement'
+import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
   buildInterestProfile, rankForYou, rankByScore, rankNearby,
@@ -109,6 +110,11 @@ function Feed() {
   const [poolsConfig, setPoolsConfig] = useState(DEFAULT_POOLS)
   const [myRegion, setMyRegion] = useState([])
   const [medicalContext, setMedicalContext] = useState({ verifiedIds: [], medicalBizIds: [] })
+  // Phase 7 staged rollout: the reader's resolved experiment group (null when
+  // nothing is staged, so the feed and metrics stay inert). The feed_view
+  // guard logs one retention event per session per experiment.
+  const [activeExperiment, setActiveExperiment] = useState(null)
+  const feedViewLoggedRef = useRef({})
   const [platformLive, setPlatformLive] = useState(null)
   const [myAvatar, setMyAvatar] = useState(null)
   const [seriesList, setSeriesList] = useState([])
@@ -399,13 +405,25 @@ function Feed() {
       viewerRegion: myRegion, now: Date.now(),
     }
 
-    // For You goes through the full pipeline (pools + diversity). Nearby is a
-    // dedicated region view. Every other tab keeps the plain weighted score —
-    // diversity caps must never hide posts a reader explicitly asked for.
+    // For You goes through the full pipeline (pools + diversity), with any
+    // staged-rollout treatment overrides merged over the base config. Nearby
+    // is a dedicated region view. Every other tab keeps the plain weighted
+    // score — diversity caps must never hide posts a reader explicitly asked
+    // for, and experiments never touch those explicit views.
     const byScore = rankByScore({ posts: postData, context, weights: rankConfig.weights })
     let ranked
     if (feedTab === 'foryou') {
-      ranked = rankForYou({ posts: postData, context, weights: rankConfig.weights, diversity: rankConfig.diversity, pools: poolsConfig })
+      const effective = applyExperimentConfig({
+        base: { weights: rankConfig.weights, diversity: rankConfig.diversity, pools: poolsConfig },
+        experiment: activeExperiment,
+      })
+      ranked = rankForYou({
+        posts: postData,
+        context,
+        weights: effective.weights,
+        diversity: effective.diversity,
+        pools: effective.pools,
+      })
     } else if (feedTab === 'nearby') {
       ranked = rankNearby(byScore, context)
     } else {
@@ -537,8 +555,49 @@ function Feed() {
       verifiedIds: (vp || []).map((r) => r.id),
       medicalBizIds: (mb || []).map((r) => r.id),
     })
+
+    // Phase 7: resolve the reader's staged-rollout group (deterministic bucket
+    // over user/session id). No experiment staged ⇒ null ⇒ the feed uses the
+    // base config and logs no metrics. When the reader lands in the treatment
+    // group the For You ranking must apply its config, so reload the current
+    // feed once the group is known (experiments are off by default; this only
+    // costs a refetch while one is actually staged).
+    const { data: expRows } = await supabase
+      .from('content_distribution_experiments')
+      .select('key, label, enabled, rollout_pct, variant, config, start_at, end_at')
+    setActiveExperiment(resolveExperiment({
+      experiments: expRows || [],
+      userId: user?.id || null,
+      sessionId: recordFeedView.sessionId,
+    }))
   }
   useEffect(() => { loadEngineConfig() }, [user])
+
+  // Phase 7: the reader's experiment group is known only after loadEngineConfig
+  // resolves it, and the ranking must apply the treatment's config from the
+  // first treatment-group render. Reloading via an effect (rather than calling
+  // loadFeed() inside loadEngineConfig) runs AFTER the state commits, so the
+  // reload's closure sees the fresh activeExperiment. Experiments are off by
+  // default — this only costs a refetch while one is actually staged.
+  useEffect(() => {
+    if (activeExperiment?.treatment) loadFeed()
+  }, [activeExperiment])
+
+  // Phase 7 retention signal: one feed_view per session per staged experiment,
+  // tagged with the reader's variant — control included, which is what makes
+  // the A/B comparison valid. A dedicated effect (not loadFeed) means control
+  // users, who never trigger the treatment reload, still log theirs. Fire and
+  // forget; the metric write can never fail the feed.
+  useEffect(() => {
+    if (activeExperiment && feedTab === 'foryou' && !feedViewLoggedRef.current[activeExperiment.key]) {
+      feedViewLoggedRef.current[activeExperiment.key] = true
+      logExperimentEvent(supabase, {
+        experimentKey: activeExperiment.key,
+        variant: activeExperiment.variant,
+        eventType: 'feed_view',
+      }).catch(() => {})
+    }
+  }, [activeExperiment, feedTab])
 
   // Persisted feed-tab preference (feed_config): load the stored tab once per
   // user, and only save after it has been applied so the mount default
@@ -1002,6 +1061,15 @@ function Feed() {
     // Swap the temp row for the real one so an unlike has a valid id to delete.
     setReactions((prev) => prev.map((r) => (r.id === tempReaction.id ? data : r)))
 
+    if (activeExperiment) {
+      logExperimentEvent(supabase, {
+        experimentKey: activeExperiment.key,
+        variant: activeExperiment.variant,
+        eventType: 'engage',
+        postId,
+      }).catch(() => {})
+    }
+
     const post = posts.find((p) => p.id === postId)
     if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
   }
@@ -1092,6 +1160,16 @@ function Feed() {
 
     setReportedPosts((prev) => [...prev, postId])
     toast.show('Thanks: our team will review this post.', { type: 'success' })
+
+    // Phase 7 spam signal, tagged with the reader's staged-rollout group.
+    if (activeExperiment) {
+      logExperimentEvent(supabase, {
+        experimentKey: activeExperiment.key,
+        variant: activeExperiment.variant,
+        eventType: 'report',
+        postId,
+      }).catch(() => {})
+    }
   }
 
   // Prefer the thread we've actually loaded (it reflects a just-added or
@@ -1115,6 +1193,14 @@ function Feed() {
     // index makes repeat shares idempotent for signed-in users. Anonymous
     // shares are recorded without a user_id.
     if (result === 'shared' || result === 'copied') {
+      if (activeExperiment) {
+        logExperimentEvent(supabase, {
+          experimentKey: activeExperiment.key,
+          variant: activeExperiment.variant,
+          eventType: 'engage',
+          postId: post.id,
+        }).catch(() => {})
+      }
       try {
         await supabase.from('post_shares').insert({
           post_id: post.id,
@@ -1164,6 +1250,14 @@ function Feed() {
       toast.show('Could not save right now.', { type: 'error' })
     } else {
       setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
+      if (activeExperiment) {
+        logExperimentEvent(supabase, {
+          experimentKey: activeExperiment.key,
+          variant: activeExperiment.variant,
+          eventType: 'engage',
+          postId,
+        }).catch(() => {})
+      }
     }
   }
 

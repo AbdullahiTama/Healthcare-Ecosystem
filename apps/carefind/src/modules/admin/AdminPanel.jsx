@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import FeedRankingConfig from './FeedRankingConfig.jsx'
+import DistributionExperiments from './DistributionExperiments.jsx'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
@@ -858,6 +859,7 @@ export default function AdminPanel() {
               ))}
             </div>
             <FeedRankingConfig />
+            <DistributionExperiments />
             <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 14, background: theme.cardBg, marginTop: 4 }}>
               <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>📅 Filter by Date</p>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
