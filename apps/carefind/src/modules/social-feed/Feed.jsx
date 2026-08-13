@@ -4,11 +4,12 @@ import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
   Lock, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
-  Plus, Radio, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
+  Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
   Trash2, Trees, Unlock, Waves, X, Flag,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder } from './engagement'
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
@@ -43,23 +44,39 @@ import RightSidebar from '../../components/layout/RightSidebar.jsx'
 async function searchPosts(query, { limit = 30 } = {}) {
   const q = (query || '').trim()
   if (!q) return []
-  const cols = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
   const { data, error } = await supabase
     .from('posts')
-    .select(cols)
+    .select(POST_FEED_COLS)
     .textSearch('search_vector', q, { type: 'plain', config: 'english' })
     .order('created_at', { ascending: false })
     .limit(limit)
   if (!error && data) return data
-  // Fallback for pre-migration databases
+  // Fallback for pre-migration databases (no search_vector and/or no repost
+  // columns yet): substring scan over the older column set.
   const { data: fb } = await supabase
     .from('posts')
-    .select(cols)
+    .select(POST_FEED_COLS_FALLBACK)
     .or(`content.ilike.%${q}%,posted_as_name.ilike.%${q}%`)
     .order('created_at', { ascending: false })
     .limit(limit)
   return fb || []
 }
+
+// The columns the feed reads. repost_of/repost_count need the 20260813
+// reposts migration; until it's applied they don't exist, so loadFeed and
+// searchPosts fall back to the older set (same graceful-degradation pattern
+// as the search_vector fallback above) instead of breaking the feed.
+const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
+const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
+
+// Explicit view-event mechanism (engagement spec §7): each qualifying view
+// writes a post_view_events row and the DB bumps posts.view_count via
+// trigger. createViewRecorder counts a post once per app load — a re-render,
+// StrictMode double-effect, tab switch or pull-to-refresh cannot inflate it,
+// while a fresh page load (new session) still records a repeat view. The DB
+// enforces the same dedup with a unique index, so even a missed client guard
+// can't double-count.
+const recordFeedView = createViewRecorder(supabase)
 
 function Feed() {
   const { user } = useAuth()
@@ -73,6 +90,13 @@ function Feed() {
   const navigate = useNavigate()
   const [showDraw, setShowDraw] = useState(false)
   const [feedTab, setFeedTab] = useState('foryou')
+  // Guards the feed_config tab save until the saved value has been loaded,
+  // so the mount-default 'foryou' never overwrites the stored preference.
+  const feedConfigLoadedRef = useRef(false)
+  // This user's post_reposts rows for the loaded posts (the source posts they
+  // reposted), and per-post gift totals surfaced by the batch stats RPC.
+  const [repostedPosts, setRepostedPosts] = useState([])
+  const [giftStats, setGiftStats] = useState({})
   const [platformLive, setPlatformLive] = useState(null)
   const [myAvatar, setMyAvatar] = useState(null)
   const [seriesList, setSeriesList] = useState([])
@@ -244,7 +268,7 @@ function Feed() {
 
   // Shared by loadFeed() and in-feed search(): fetch reactions/profiles/
   // comment counts for a set of posts and store the ranked result.
-  async function enrichAndSetPosts(postData) {
+  async function enrichAndSetPosts(postData, seenIds = new Set()) {
     const postIds = (postData || []).map((p) => p.id)
     if (postIds.length === 0) {
       setPosts([])
@@ -259,6 +283,28 @@ function Feed() {
       .select('id, post_id, user_id')
       .in('post_id', postIds)
     setReactions(reactionData || [])
+
+    // This user's reposts of the loaded posts, so repost buttons light up
+    // across both the feed and in-feed search.
+    if (user) {
+      const { data: repostData } = await supabase
+        .from('post_reposts')
+        .select('id, post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds)
+      setRepostedPosts(repostData || [])
+    }
+
+    // Gift totals for the whole page in one RPC; skipped (no state change) if
+    // the RPC isn't available.
+    try {
+      const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: postIds })
+      const stats = {}
+      ;(giftRows || []).forEach((r) => { stats[r.post_id] = { gift_count: r.gift_count, total_coins: r.total_coins } })
+      setGiftStats(stats)
+    } catch (e) {
+      console.warn('gift stats unavailable:', e)
+    }
 
     const userIds = [...new Set((postData || []).map((p) => p.user_id))]
     const { data: profileData } = await supabase
@@ -295,7 +341,7 @@ function Feed() {
       else if (ageHours < 24) recency = 6
       else if (ageHours < 72) recency = 3
       else if (ageHours < 168) recency = 1
-      const score = (likes * 3) + (comments * 5) + (verified * 25) + recency
+      const score = (likes * 3) + (comments * 5) + (verified * 25) + recency + (seenIds.has(p.id) ? 0 : 2)
       return { ...p, _score: score }
     })
     scored.sort((a, b) => b._score - a._score || new Date(b.created_at) - new Date(a.created_at))
@@ -305,11 +351,23 @@ function Feed() {
   async function loadFeed() {
     setLoading(true)
     setNewPostsCount(0)
-    const { data: postData, error } = await supabase
+    let { data: postData, error } = await supabase
       .from('posts')
-      .select('id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title')
+      .select(POST_FEED_COLS)
       .order('created_at', { ascending: false })
       .limit(50)
+
+    // Pre-20260813-reposts migration: the repost columns don't exist, so retry
+    // with the older column set rather than breaking the whole feed.
+    if (error) {
+      const fb = await supabase
+        .from('posts')
+        .select(POST_FEED_COLS_FALLBACK)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      postData = fb.data
+      error = fb.error
+    }
 
     if (error) {
       console.error('Feed load error:', error)
@@ -318,13 +376,37 @@ function Feed() {
       return
     }
 
-    await enrichAndSetPosts(postData)
+    const postIds = (postData || []).map((p) => p.id)
 
-    // Count a view for each post shown (fire and forget)
-    ;(postData || []).forEach((p) => { supabase.rpc('increment_post_view', { post_id: p.id }) })
+    // Read receipts: rank unseen posts slightly higher, then mark this batch
+    // as read so a refresh doesn't re-boost the same 50. Requires the
+    // 20260813 feed-persistence migration; if it isn't applied, both calls
+    // degrade to no-ops (ranked without the boost, view counts still fire).
+    if (user) {
+      const { data: seenData } = await supabase
+        .from('seen_posts')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds)
+      const seen = new Set((seenData || []).map((s) => s.post_id))
+      await enrichAndSetPosts(postData, seen)
+      try {
+        await supabase.rpc('read_posts_all', { p_post_ids: postIds })
+      } catch (e) {
+        console.warn('read_posts_all failed (migration not applied?):', e)
+      }
+    } else {
+      await enrichAndSetPosts(postData)
+    }
+
+    // Record a view for each post shown — once per session, fire and forget.
+    // record_post_view needs the 20260813 post_view_events migration; until
+    // it's applied the RPC is missing and this degrades to a no-op (the old
+    // increment_post_view kept counting every refresh, which is exactly the
+    // inflation §7 forbids).
+    ;(postData || []).forEach((p) => { recordFeedView.record(p.id) })
 
     const userIds = [...new Set((postData || []).map((p) => p.user_id))]
-    const postIds = (postData || []).map((p) => p.id)
 
     const { data: followData } = await supabase
       .from('follows')
@@ -364,6 +446,36 @@ function Feed() {
     loadSeries()
     loadLiveSessions()
   }, [user])
+
+  // Persisted feed-tab preference (feed_config): load the stored tab once per
+  // user, and only save after it has been applied so the mount default
+  // 'foryou' never overwrites it. Requires the 20260813 feed-persistence
+  // migration; without it the reads/writes fail silently and the tab just
+  // isn't remembered across visits.
+  useEffect(() => {
+    if (!user) { feedConfigLoadedRef.current = true; return }
+    supabase
+      .from('feed_config')
+      .select('value')
+      .eq('user_id', user.id)
+      .eq('key', 'feed_tab')
+      .maybeSingle()
+      .then(({ data }) => {
+        feedConfigLoadedRef.current = true
+        const saved = data?.value
+        if (saved && FEED_TABS.some(([key]) => key === saved)) setFeedTab(saved)
+      })
+      .catch(() => { feedConfigLoadedRef.current = true })
+  }, [user])
+
+  useEffect(() => {
+    if (!user || !feedConfigLoadedRef.current) return
+    supabase
+      .from('feed_config')
+      .upsert({ user_id: user.id, key: 'feed_tab', value: feedTab })
+      .then(() => {})
+      .catch(() => {})
+  }, [user, feedTab])
 
   // #7 In-feed search: debounced. While a query is present, feedResults is
   // non-null and the list renders search hits instead of the ranked feed.
@@ -745,18 +857,42 @@ function Feed() {
     if (!user) return
     const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
 
-    // Optimistic update: instant UI response
+    // Optimistic update: instant UI response. Both writes are reconciled
+    // against the DB: the insert returns the real row (so an unlike has a
+    // valid id to delete), a failed write rolls the UI back, and a fast
+    // double-tap hitting the post_reactions_user_post_uniq index reads the
+    // existing row instead of leaving a phantom temp id. Without this, a
+    // silently failed insert made the like vanish on the next feed reload.
     if (existing) {
       setReactions((prev) => prev.filter((r) => r.id !== existing.id))
-      supabase.from('post_reactions').delete().eq('id', existing.id)
-    } else {
-      const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
-      setReactions((prev) => [...prev, tempReaction])
-      supabase.from('post_reactions').insert({ post_id: postId, user_id: user.id, reaction_type: 'like' })
-      // Notify the post author
-      const post = posts.find((p) => p.id === postId)
-      if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
+      const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
+      if (error) {
+        setReactions((prev) => [...prev, existing])
+        toast.show('Could not unlike right now.', { type: 'error' })
+      }
+      return
     }
+
+    const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
+    setReactions((prev) => [...prev, tempReaction])
+    const { data, error } = await insertRowResolvingConflict(
+      supabase,
+      'post_reactions',
+      { post_id: postId, user_id: user.id, reaction_type: 'like' },
+      ['post_id', 'user_id'],
+    )
+
+    if (error) {
+      setReactions((prev) => prev.filter((r) => r.id !== tempReaction.id))
+      toast.show('Could not like right now.', { type: 'error' })
+      return
+    }
+
+    // Swap the temp row for the real one so an unlike has a valid id to delete.
+    setReactions((prev) => prev.map((r) => (r.id === tempReaction.id ? data : r)))
+
+    const post = posts.find((p) => p.id === postId)
+    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
   }
 
   async function toggleComments(postId) {
@@ -862,6 +998,23 @@ function Feed() {
     const result = await shareOrCopy({ title: 'CareFind', text, url: window.location.href })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
+
+    // Best-effort share tracking so a post's share count is real rather than
+    // vanished. One row per (post, user, platform): the post_shares unique
+    // index makes repeat shares idempotent for signed-in users. Anonymous
+    // shares are recorded without a user_id.
+    if (result === 'shared' || result === 'copied') {
+      try {
+        await supabase.from('post_shares').insert({
+          post_id: post.id,
+          user_id: user ? user.id : null,
+          platform: result === 'copied' ? 'copy' : 'web',
+        })
+      } catch (e) {
+        // Tracking is never allowed to fail the share the user just did.
+        console.warn('Share tracking write failed:', e)
+      }
+    }
   }
 
   function isSaved(postId) {
@@ -872,14 +1025,100 @@ function Feed() {
     if (!user) return
     const existing = savedPosts.find((s) => s.post_id === postId)
 
+    // Optimistic update with the same reconciliation as toggleLike: the
+    // insert returns the real row, failures roll back, and a double-tap
+    // hitting saved_posts_user_post_uniq resolves to the existing row so the
+    // save survives a reload.
     if (existing) {
       setSavedPosts((prev) => prev.filter((s) => s.post_id !== postId))
-      supabase.from('saved_posts').delete().eq('id', existing.id)
-    } else {
-      const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
-      setSavedPosts((prev) => [...prev, temp])
-      supabase.from('saved_posts').insert({ user_id: user.id, post_id: postId })
+      const { error } = await supabase.from('saved_posts').delete().eq('id', existing.id)
+      if (error) {
+        setSavedPosts((prev) => [...prev, existing])
+        toast.show('Could not unsave right now.', { type: 'error' })
+      }
+      return
     }
+
+    const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
+    setSavedPosts((prev) => [...prev, temp])
+    const { data, error } = await insertRowResolvingConflict(
+      supabase,
+      'saved_posts',
+      { user_id: user.id, post_id: postId },
+      ['post_id', 'user_id'],
+    )
+
+    if (error) {
+      setSavedPosts((prev) => prev.filter((s) => s.id !== temp.id))
+      toast.show('Could not save right now.', { type: 'error' })
+    } else {
+      setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
+    }
+  }
+
+  function userHasReposted(postId) {
+    if (!user) return false
+    return repostedPosts.some((r) => r.post_id === postId)
+  }
+
+  function giftCount(postId) {
+    return giftStats[postId]?.gift_count || 0
+  }
+
+  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
+  // post_reposts reference (writeRepost), so followers see the repost and the
+  // source carries a real count. Undoing removes both (undoRepost). Optimistic
+  // like the other toggles; if the feed-post write fails, the reference is
+  // taken back too and the UI rolls to the pre-tap state.
+  async function toggleRepost(post) {
+    if (!user) return
+    const existing = repostedPosts.find((r) => r.post_id === post.id)
+
+    if (existing) {
+      const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
+      setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
+      if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
+
+      const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
+      if (postsDelete?.error || refDelete?.error) {
+        setRepostedPosts((prev) => [...prev, existing])
+        if (repostPost) setPosts((prev) => [repostPost, ...prev])
+        toast.show('Could not undo repost right now.', { type: 'error' })
+      }
+      return
+    }
+
+    const tempRepostPost = {
+      id: `temp_repost_${Date.now()}`,
+      user_id: user.id,
+      content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
+      post_type: 'text',
+      image_url: post.image_url || null,
+      subscriber_only: post.subscriber_only || false,
+      is_premium: post.is_premium || false,
+      repost_of: post.id,
+      created_at: new Date().toISOString(),
+      view_count: 0,
+    }
+    const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
+    setRepostedPosts((prev) => [...prev, tempRepostRef])
+    setPosts((prev) => [tempRepostPost, ...prev])
+
+    const { ref, repostPost } = await writeRepost(supabase, { user, post })
+
+    if (repostPost.error || !repostPost.data) {
+      // Feed post failed: take the reference back so the source count doesn't
+      // claim a repost that is not visible anywhere.
+      if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
+      setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
+      setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
+      toast.show('Could not repost right now.', { type: 'error' })
+      return
+    }
+
+    // Swap temp rows for the real ones so un-repost has valid ids to delete.
+    setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
+    setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
   }
 
   function formatCount(n) {
@@ -1107,7 +1346,7 @@ function Feed() {
           </div>
           <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
             {latestNews.map((n) => (
-              <Link key={n.id} to="/news" style={{ flexShrink: 0, width: 190, textDecoration: 'none', color: 'inherit' }}>
+              <Link key={n.id} to={`/news/${n.id}`} style={{ flexShrink: 0, width: 190, textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, overflow: 'hidden', background: theme.cardBg }}>
                   <div style={{
                     height: 100, background: n.hero_image_url ? `url(${n.hero_image_url})` : theme.navy,
@@ -1913,6 +2152,23 @@ function Feed() {
                   <Share2 size={18} aria-hidden="true" />
                   <span>Share</span>
                 </button>
+
+                {/* Repost: hidden on reposts themselves — a repost of a
+                    repost would fan out the same content twice. */}
+                {!post.repost_of && (
+                  <button
+                    className="cf-eng-item"
+                    onClick={() => (user ? toggleRepost(post) : navigate('/login'))}
+                    aria-pressed={userHasReposted(post.id)}
+                    aria-label={userHasReposted(post.id) ? 'Undo repost' : 'Repost this post'}
+                    style={{ color: userHasReposted(post.id) ? theme.tealDeep : theme.gray500 }}
+                  >
+                    <Repeat2 size={18} aria-hidden="true" />
+                    {post.repost_count > 0 && (
+                      <span>{formatCount(post.repost_count)} {post.repost_count === 1 ? 'repost' : 'reposts'}</span>
+                    )}
+                  </button>
+                )}
               </div>
 
               <div className="cf-eng-group">
@@ -1930,6 +2186,9 @@ function Feed() {
                   style={{ color: theme.tealDeep }}
                 >
                   <Gift size={18} aria-hidden="true" />
+                  {giftCount(post.id) > 0 && (
+                    <span>{formatCount(giftCount(post.id))}</span>
+                  )}
                 </button>
 
                 {/* Save */}
@@ -2031,7 +2290,19 @@ function Feed() {
         <GiftPanel
           postId={giftingPost.postId}
           recipientId={giftingPost.authorId}
-          onClose={() => setGiftingPost(null)}
+          onClose={() => {
+            const { postId } = giftingPost
+            setGiftingPost(null)
+            // Reflect a just-sent gift in the card's count.
+            supabase
+              .rpc('post_gift_stats', { p_post_id: postId })
+              .then(({ data }) => {
+                if (data?.gift_count != null) {
+                  setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                }
+              })
+              .catch(() => {})
+          }}
         />
       )}
 
