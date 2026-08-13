@@ -7,3 +7,6 @@ dist/
 .vercel
 .env*
 !.env.example
+
+# Local Supabase MCP auth cache (tokens)
+.opencode/supabase-auth.json
