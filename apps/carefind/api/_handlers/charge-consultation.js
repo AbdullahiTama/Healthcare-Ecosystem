@@ -1,7 +1,7 @@
 ﻿import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from './_lib/verifyUser.js'
-import { paystackFetch } from './_lib/paystack.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 // Initializes a Paystack transaction for a professional consultation.
 // Called when a patient wants to book a consultation but doesn't have enough

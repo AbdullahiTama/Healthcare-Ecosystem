@@ -1,8 +1,8 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { verifyUser } from './_lib/verifyUser.js'
-import { paystackFetch } from './_lib/paystack.js'
-import { TOPUP_PACKAGES } from './_lib/topupPackages.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { paystackFetch } from '../_lib/paystack.js'
+import { TOPUP_PACKAGES } from '../_lib/topupPackages.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

@@ -1,7 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from './_lib/verifyUser.js'
-import { paystackFetch } from './_lib/paystack.js'
-import { settleConsultationPayment } from './_lib/consultationSettle.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { paystackFetch } from '../_lib/paystack.js'
+import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 
 // Called when the user is redirected back from Paystack after booking a
 // consultation by card. Verifies the payment with Paystack, then settles the

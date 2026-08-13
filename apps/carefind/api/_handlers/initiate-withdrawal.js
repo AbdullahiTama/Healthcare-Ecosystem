@@ -1,6 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from './_lib/verifyUser.js'
-import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from './_lib/paystackTransfer.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from '../_lib/paystackTransfer.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

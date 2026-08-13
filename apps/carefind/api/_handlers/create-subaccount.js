@@ -1,6 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from './_lib/verifyUser.js'
-import { paystackFetch } from './_lib/paystack.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 // Creates a Paystack subaccount for a verified professional so payments
 // (subscriptions, tips, consultations) can be split between the platform

@@ -1,8 +1,8 @@
 ﻿import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { getPaystackSecretKey } from './_lib/paystack.js'
-import { creditTopup } from './_lib/paystackCredit.js'
-import { settleConsultationPayment } from './_lib/consultationSettle.js'
+import { getPaystackSecretKey } from '../_lib/paystack.js'
+import { creditTopup } from '../_lib/paystackCredit.js'
+import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 
 // Single Paystack webhook for all apps ΓÇö register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,

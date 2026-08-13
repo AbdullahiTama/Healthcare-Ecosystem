@@ -1,7 +1,7 @@
 ﻿// Proxies Paystack's banks list so the client doesn't need the secret key.
 // Cached server-side for 5 minutes so we're not hitting Paystack on every
 // dropdown open ΓÇö Paystack's bank list rarely changes.
-import { paystackFetch } from './_lib/paystack.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 let cached = null
 let cachedAt = 0

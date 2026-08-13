@@ -1,6 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from './_lib/verifyUser.js'
-import { paystackFetch } from './_lib/paystack.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 // Called when the user is redirected back from Paystack after subscribing
 // directly via card. Verifies the payment with Paystack, then creates the
