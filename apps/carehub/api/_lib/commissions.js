@@ -1,4 +1,4 @@
-import { REFERRAL_RATES, ACCRUED_WHILE_INACTIVE } from '../src/lib/referral_program.js'
+import { REFERRAL_RATES, ACCRUED_WHILE_INACTIVE } from '../../src/lib/referral_program.js'
 
 // CareHub Referral Agent — server-side commission job (the money path).
 //
