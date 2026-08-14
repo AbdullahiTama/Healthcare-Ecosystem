@@ -78,10 +78,12 @@ Frontend: COMPLETE
 - Tests: new `CommentThread.test.jsx` (2 cases — top-level `onCommentAdded` and reply `parentId`); ErrorBoundary suite hardened with per-test `cleanup()` to stop single-fork DOM leakage. Social-feed + news + marketplace + ErrorBoundary suites 120/120; full suite 230/231 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 5 — CLEAN SHARE FORMATTING
-Status: NOT STARTED
+Status: COMPLETE (2026-08-14)
 Backend: COMPLETE
-Frontend: PARTIAL (JSON array leak for article posts)
-Next action: extend `toShareText` to unwrap blocks arrays; add tests
+Frontend: COMPLETE
+- `toShareText` now unwraps article-style JSON block arrays (`[{type, content}, …]`) into readable words — text/heading/quote blocks yield their content, drawing/image/voice map to short labels — so sharing an article post no longer leaks raw JSON.
+- Also accepts an already-parsed block array, and strips article highlight markers (`==#hex|text==`, `==text==`) alongside the existing markdown cleaning.
+- Tests: new `src/utils/share.test.js` (14 cases — toShareText objects/arrays/highlights/truncation/fallback + shareOrCopy share/copy/dismiss/fail). Full suite 244/245 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 6 — FOLLOWERS / FOLLOWING
 Status: VERIFIED DONE (no changes planned unless tests reveal issues)

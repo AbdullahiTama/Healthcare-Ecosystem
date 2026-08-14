@@ -183,3 +183,36 @@ isolation). Production build clean.
 
 **Known limitations / next:** Feature 5 (Clean Share Formatting — `toShareText`
 must unwrap article JSON block arrays).
+
+---
+
+## 2026-08-14 — Feature 5 (Clean Share Formatting)
+
+**What:**
+- Article posts store `content` as a JSON array of blocks (`[{type, content}, …]`).
+  `toShareText` only unwrapped JSON *objects*, so sharing an article leaked raw
+  JSON ("`[{\"type\":\"text\",\"content\":...`") over WhatsApp/clipboard.
+- `toShareText` now unwraps JSON block arrays using the same vocabulary as
+  `previewText` (text/heading/quote → content, drawing → ✏️ drawing, image →
+  🖼 image, voice → 🎙 voice note), accepts an already-parsed array, and strips
+  article highlight markers (`==#hex|text==`, `==text==`) on top of the existing
+  markdown cleaning.
+- Added `src/utils/share.test.js` covering the formatter (objects, block arrays,
+  already-parsed arrays, highlights, truncation, JSON-parse fallback) and
+  `shareOrCopy` (share / copy / dismiss / fail).
+
+**Why:** Audit found the central share formatter produced clean text for JSON
+objects but dumped raw block JSON for article posts, with no tests at all on
+`formatShare.js` or `share.js`.
+
+**Affected files:**
+- `apps/carefind/src/utils/formatShare.js` (block-array unwrap, highlight strip)
+- `apps/carefind/src/utils/share.test.js` (new, 14)
+
+**Tests performed:** full suite 244/245 pass in forks mode — the single failure
+is the same pre-existing `VideoPlayer` timing flake (passes in isolation).
+Production build clean.
+
+**Known limitations / next:** Feature 6 was audited DONE (followers/following
+verified). Moving to Feature 7 (Gifting — recipient notification added in F4;
+remaining: wallet-deduction verification + gift tests).
