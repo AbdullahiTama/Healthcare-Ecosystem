@@ -45,7 +45,7 @@ function DrugProfile() {
     // Pull BOTH pathways: CareHub inventory (business_id) and CareFind uploads (owner_id)
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, lat, lng, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
       .ilike('name', `%${decodedName}%`)
       .eq('list_on_carefind', true)
 

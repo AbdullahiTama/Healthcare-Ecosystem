@@ -271,7 +271,7 @@ function BusinessProfile() {
 
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, lat, lng, businesses(show_prices, latitude, longitude, lat, lng)')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices, latitude, longitude, lat, lng)')
       .eq('business_id', id)
 
     // list_on_carefind may be NULL on legacy CareHub rows — treat anything but

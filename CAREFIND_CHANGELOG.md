@@ -5,6 +5,30 @@ Do not erase previous history.
 
 ---
 
+## 2026-08-14 — Production hotfix: products 400 on `lat`/`lng`
+
+**What:** All four marketplace product queries returned `400 Bad Request` in
+production (`products?select=...lat,lng...`). PostgREST rejects a `select` that
+references a non-existent column, and the `products` table has
+`latitude`/`longitude` but **no `lat`/`lng` columns** (businesses has both
+naming conventions; products does not).
+
+**Fix:** dropped `lat, lng` from the products `select` at every site, keeping
+the columns that actually exist. Distance still resolves because
+`coordsFrom` (src/modules/utils/marketplace.js) reads `latitude`/`longitude`
+first and falls back to the nested `businesses` coords:
+- `src/modules/healthcare-discovery/Search.jsx` — featured fallback rail + product search query.
+- `src/modules/business-profiles-reviews/BusinessProfile.jsx` — business products.
+- `src/modules/healthcare-discovery/DrugProfile.jsx` — drug detail sellers.
+
+**Why:** Live feed of `400` errors on the products endpoints; product search,
+featured rail and drug/business product lists were all broken.
+
+**Tests performed:** full suite 256/257 pass (only the pre-existing VideoPlayer
+timing flake, passes in isolation). Production build clean.
+
+---
+
 ## 2026-08-14 — Production hotfix: `.catch` on postgrest builders
 
 **What:** Fixed a production crash — `TypeError: ... .catch is not a function`

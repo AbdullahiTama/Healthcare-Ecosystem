@@ -102,7 +102,7 @@ const distanceMeters = (p, u) => {
     // Fallback: auto-pull products if no active promotions
     const { data: prods } = await supabase
       .from('products')
-      .select('id, name, emoji, price, show_price, latitude, longitude, lat, lng, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
+      .select('id, name, emoji, price, show_price, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
       .order('created_at', { ascending: false })
       .limit(14)
     setFeatured((prods || []).filter(p => p.list_on_carefind !== false))
@@ -152,7 +152,7 @@ const distanceMeters = (p, u) => {
     let resultCount = 0
 
     if (tab === 'products') {
-      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, lat, lng, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, latitude, longitude, lat, lng, show_prices)')
+      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, latitude, longitude, lat, lng, show_prices)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
       // The sale-type (Retail/Wholesale/Distributor) filter must run server-side,
       // before limit(), not on the fetched batch: the products table holds many
