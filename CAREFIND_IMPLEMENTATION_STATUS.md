@@ -117,4 +117,11 @@ Frontend: COMPLETE
 - Tests: `VideoPlayer.test.jsx` (5) already covers the player; full suite 256/257 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 10 — PERSONALIZED FEED + PROGRESSIVE DISTRIBUTION
-Status: VERIFIED DONE (caveats documented; no changes unless required)
+Status: COMPLETE (2026-08-14)
+Backend: COMPLETE
+Frontend: COMPLETE
+- Verified end-to-end: `feedEngine.js` (multi-signal weighted score + 6 candidate pools + diversity caps + `normalizeRegion`/`regionsOverlap`) is wired into `Feed.jsx` — the For You tab runs the full pipeline via `enrichAndSetPosts`, pull-to-refresh refetches, config comes from `feed_ranking_config` + `candidate_generation_pools`.
+- Live DB verified: `feed_ranking_config`, `candidate_generation_pools`, `content_distribution_experiments`, `distribution_experiment_events`, `feed_config` tables all exist; read RLS correct; `set_feed_ranking_config` is SECURITY DEFINER, checks `profiles.is_admin`, and is executable by `authenticated` only (no anon/public) — admin config editing is properly gated. Admin `FeedRankingConfig.jsx` editor mounted in AdminPanel.
+- Staged rollout verified: `resolveExperiment` buckets the reader deterministically; treatment-group users get a one-time refetch with the treatment config; control + treatment both log `feed_view` events to `distribution_experiment_events` (fire-and-forget). Persisted feed-tab preference via `feed_config`.
+- Tests: `feedEngine.test.js` 17/17 pass. Full suite 256/257 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
+- Documented caveats (accepted, not regressions): engine ranks the newest-50 candidate pool only; Nearby matching is text-token based (no coordinate distance in the ranking).

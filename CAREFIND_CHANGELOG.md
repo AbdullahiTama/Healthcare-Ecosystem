@@ -346,3 +346,50 @@ Production build clean.
 **Known limitations / next:** Features 1–9 verified complete. Next: Feature 10
 (Personalized Feed — audited DONE with documented caveats; verify, then close
 the program).
+
+---
+
+## 2026-08-14 — Feature 10 (Personalized Feed) + Program Close
+
+**What:**
+- Verified the personalized-feed journey end-to-end. `feedEngine.js`
+  (multi-signal weighted score, 6 candidate pools, diversity caps,
+  `normalizeRegion`/`regionsOverlap`) is wired into `Feed.jsx`; the For You tab
+  runs the full pipeline inside `enrichAndSetPosts`, pull-to-refresh refetches,
+  and the config is read from `feed_ranking_config` + `candidate_generation_pools`.
+- **Live DB verified:** `feed_ranking_config`, `candidate_generation_pools`,
+  `content_distribution_experiments`, `distribution_experiment_events` and
+  `feed_config` all exist with read RLS. `set_feed_ranking_config` (used by the
+  admin `FeedRankingConfig.jsx` editor) is SECURITY DEFINER, checks
+  `profiles.is_admin`, and is executable by `authenticated` only — no anon or
+  public exposure.
+- Staged rollout verified: `resolveExperiment` deterministically buckets the
+  reader; treatment-group users get one refetch applying the treatment config;
+  control and treatment both log `feed_view` events to
+  `distribution_experiment_events` (fire-and-forget). Persisted feed-tab
+  preference reads/writes `feed_config` per user.
+
+**Why:** Feature 10 was audited DONE with documented caveats; this pass verifies
+it against live and closes the 10-feature program with all journeys verified.
+
+**Affected files:** none (verification only — no code change required).
+
+**Tests performed:** `feedEngine.test.js` 17/17 pass. Full suite 256/257 in
+forks mode — the single failure is the same pre-existing `VideoPlayer` timing
+flake (passes in isolation). Production build clean.
+
+**Program close (2026-08-14):** all 10 CareFind features are COMPLETE and
+verified:
+- **F1–F3** committed `2069527`; **F4** `53d46b9`; **F5** `e68036b`;
+  **F6** verified (no changes); **F7** `0f9e198` (recreated `send_gift` RPC in
+  repo + applied live); **F8** `7bba5b4` (shared StoryViewer, 3 duplications
+  removed); **F9** `2b2206b` (`video_url` DDL tracked + index applied live);
+  **F10** verified (no changes).
+- Two critical live-DB gaps were found and fixed this program: the missing
+  `send_gift` RPC (gifting silently broken) and the untracked `video_url` DDL.
+- Known accepted limitations, documented in `CAREFIND_IMPLEMENTATION_STATUS.md`:
+  MedMarket search uses browser geolocation only (no search-location coords);
+  feed engine ranks the newest-50 candidate pool; Nearby is text-token based;
+  `video_url` has no CHECK constraint by design (legacy rows); pre-existing
+  advisor WARNs (multiple permissive policies / duplicate indexes) remain open
+  and are out of scope for this program.
