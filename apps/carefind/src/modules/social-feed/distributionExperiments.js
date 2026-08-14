@@ -104,10 +104,12 @@ export function applyExperimentConfig({ base, experiment }) {
 // No experiment key/variant ⇒ no-op, so an un-staged feed logs nothing.
 export function logExperimentEvent(client, { experimentKey, variant, eventType, postId }) {
   if (!experimentKey || !variant) return Promise.resolve()
-  return client.rpc('log_distribution_event', {
+  // Promise.resolve() turns the thenable postgrest builder into a real
+  // Promise so callers may `.catch()` it (builders have no `.catch`).
+  return Promise.resolve(client.rpc('log_distribution_event', {
     p_experiment_key: experimentKey,
     p_variant: variant,
     p_event_type: eventType,
     p_post_id: postId || null,
-  })
+  }))
 }

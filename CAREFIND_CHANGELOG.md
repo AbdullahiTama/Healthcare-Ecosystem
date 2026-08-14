@@ -5,6 +5,31 @@ Do not erase previous history.
 
 ---
 
+## 2026-08-14 — Production hotfix: `.catch` on postgrest builders
+
+**What:** Fixed a production crash — `TypeError: ... .catch is not a function`
+thrown at feed load. supabase-js `PostgrestBuilder` implements `.then()` only;
+chaining `.catch()` directly on a builder (e.g. `supabase.rpc(...).catch(...)`)
+threw on every affected path.
+
+**Fix:** wrapped the thenable builders in a real Promise (`.then(() => {}).catch(...)`
+or `Promise.resolve(builder)`) at every site:
+- `src/modules/social-feed/engagement.js` — `record_post_view` (module-level feed
+  view recorder; this was the feed-route crash, one RPC per post in the batch).
+- `src/modules/social-feed/distributionExperiments.js` — `logExperimentEvent`
+  now returns `Promise.resolve(client.rpc(...))`, fixing all 5 `.catch()` call
+  sites in `Feed.jsx` (feed_view, engage, report, share events) in one place.
+- `src/modules/account/Profile.jsx` — `increment_story_view`.
+- `src/modules/news-publishing/NewsArticle.jsx` — `increment_news_view`.
+
+**Why:** The feed crash was reported live; view counting, experiment metrics and
+story/news view counters all silently used the same unsafe pattern.
+
+**Tests performed:** full suite 256/257 pass (only the pre-existing VideoPlayer
+timing flake, passes in isolation). Production build clean.
+
+---
+
 ## 2026-08-14 — Phase 0: Current state audit
 
 **What:** Audited the entire CareFind repo (frontend + backend + SQL + tests)

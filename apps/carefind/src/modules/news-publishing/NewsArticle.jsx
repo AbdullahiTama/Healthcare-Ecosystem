@@ -50,7 +50,7 @@ function NewsArticle() {
         if (readErr) throw readErr
         setArticle(data || null)
         // Fire-and-forget view counter — never let it block or blank the page.
-        if (data) supabase.rpc('increment_news_view', { news_id: data.id }).catch(() => {})
+        if (data) supabase.rpc('increment_news_view', { news_id: data.id }).then(() => {}).catch(() => {})
 
         // A few more approved stories to show at the bottom
         const { data: moreData, error: moreErr } = await supabase

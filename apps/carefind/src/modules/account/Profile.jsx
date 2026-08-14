@@ -190,7 +190,7 @@ function Profile() {
   useEffect(() => {
     if (viewerIndex === null) return
     const st = myStories[viewerIndex]
-    if (st) supabase.rpc('increment_story_view', { story_id: st.id }).catch(() => {})
+    if (st) supabase.rpc('increment_story_view', { story_id: st.id }).then(() => {}).catch(() => {})
   }, [viewerIndex])
 
   function closeStoryViewer() {

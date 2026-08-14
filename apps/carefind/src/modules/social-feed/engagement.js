@@ -99,7 +99,7 @@ export function createViewRecorder(supabase) {
     record(postId) {
       if (fired.has(postId)) return false
       fired.add(postId)
-      supabase.rpc('record_post_view', { p_post_id: postId, p_session_id: sessionId }).catch(() => {})
+      supabase.rpc('record_post_view', { p_post_id: postId, p_session_id: sessionId }).then(() => {}).catch(() => {})
       return true
     },
     has(postId) {
