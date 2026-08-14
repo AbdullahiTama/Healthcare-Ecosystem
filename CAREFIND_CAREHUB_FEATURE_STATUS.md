@@ -33,12 +33,23 @@ FEATURE 2 — CAREHUB REQUISITION SAVE
 Surface:             CareHub
 Supporting surface:  —
 
-Frontend:    AUDITED (Demand.jsx form + addRequisition → create_requisition RPC)
-Backend:     AUDITED (create_requisition RPC verified live, granted to authenticated)
-Database:    AUDITED (requisitions + requisition_items, quantity=text live)
-Integration: AUDITED
-Testing:     NOT RUN
-Status:      AUDITED
+Frontend:    COMPLETE
+Backend:     COMPLETE (create_requisition RPC atomic parent+lines)
+Database:    COMPLETE (quantity=text, note, RLS business-scoped — verified live)
+Integration: COMPLETE
+Testing:     PASSED (CareHub 288/288; build clean)
+Status:      COMPLETE
+
+Verified end-to-end:
+- addRequisition → POST /rest/v1/rpc/create_requisition with the exact payload
+  the RPC expects (p_business_id, p_supplier_name, p_note, p_items).
+- RPC is SECURITY INVOKER + pinned search_path; parent + items insert
+  atomically in one function call (proven by transactional test + rollback).
+- requisitions / requisition_items / staff all carry business-scoped RLS
+  (ALL policies via current_business_ids()) so the RPC cannot cross tenants.
+- requester preserved: RPC now sets requisitions.created_by from the logged-in
+  staff full_name (auth.uid() join); "Raised by" column is no longer empty.
+- Frontend surfaces the real server error (never suppresses) and reloads.
 ```
 
 ```

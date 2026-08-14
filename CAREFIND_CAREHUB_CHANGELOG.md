@@ -95,3 +95,35 @@ verified.
 **Known limitations:** Fee visibility still depends on a business having
 configured fees; businesses with NULL fees are legitimately free and show no
 payment option.
+
+---
+
+## 2026-08-14 — Feature 2: CareHub Requisition Save
+
+**Root cause (pre-existing, DB-side):** earlier requisition saves failed with a
+400 because `requisition_items.quantity` was `numeric` while the app posts free
+text ("20 packs"), and there was no atomic save path. This was already fixed
+live in prior work: `quantity` is now `text`, and `create_requisition` exists
+(atomic parent + lines, SECURITY INVOKER, pinned `search_path`, granted to
+`authenticated`). Verified the frontend posts the exact payload the RPC
+expects, and the RPC executes atomically (transactional test + rollback left no
+trace).
+
+**Frontend changes:** none required — `Demand.jsx` `saveReqs()` → `addRequisition()`
+calls the RPC with the correct body, shows the real server error, and reloads.
+
+**Backend changes:**
+- `apps/carehub/sql/20260814_requisition_preserve_requester.sql` (new, applied
+  live) — the RPC now also sets `requisitions.created_by` from the logged-in
+  staff member's `full_name` (via `auth.uid()` + `staff.auth_user_id`). Before
+  this, every requisition's "Raised by" was empty despite the column existing.
+
+**Database:** `create_requisition` recreated live with the requester lookup;
+RLS on `requisitions`, `requisition_items` (via parent) and `staff` all
+business-scoped — a member cannot create a requisition for another business.
+
+**Authentication/RLS:** unchanged — SECURITY INVOKER, tenant checked by RLS on
+both the parent and lines; the requester lookup is scoped to the caller's own
+business.
+
+**Tests:** CareHub suite 288/288 pass; production build clean.
