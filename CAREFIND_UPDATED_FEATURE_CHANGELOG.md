@@ -197,3 +197,41 @@ candidate pools, diversity caps and staged rollout experiments.
 - Live table/policy/RPC inspection against the project DB.
 - `feedEngine.test.js` 17/17 and `distributionExperiments.test.js` 26/26
   pass (43 total). Full CareFind suite 266/266; production build clean.
+
+---
+
+## 2026-08-14 — Feature 7: Markdown Rendering
+
+**What:** Render standard Markdown as formatted content in post and comment
+bodies instead of raw asterisks/hashes.
+
+**Audit findings:**
+- Feed post bodies, comment/reply bodies, saved-post cards and the profile post
+  modals all rendered content as plain text (`whiteSpace: pre-wrap`), so
+  `**bold**`, `*italic*`, `# heading`, lists, inline code and `[link](url)`
+  appeared literally. Only the article-specific `renderArticleHtml` knew any
+  markup; the composer toolbar writes a separate `{b}..{/b}` /
+  `{h:yellow}..{/h}` / `{c:red}..{/c}` bracket-marker syntax.
+
+**Changes:**
+- `apps/carefind/src/modules/social-feed/markdown.jsx` (new): a small,
+  dependency-free `renderMarkdown(text)` that returns React nodes for bold,
+  italic, inline code, links, headings `#..######`, unordered/ordered lists,
+  blockquotes, code fences and `<br/>`-preserved line breaks.
+  - Security: no `dangerouslySetInnerHTML` with user input — every string
+    renders as a React text node (auto-escaped), and link hrefs are sanitised
+    to `http(s)://` / `mailto:` / `tel:` / `/relative` / `#` so `javascript:`
+    never becomes an anchor.
+  - Compat: the legacy bracket-marker syntax is rendered too, so composer
+    toolbar content keeps its styling on these surfaces.
+- Wired into: `Feed.jsx` (post body), `CommentThread.jsx` (comment + reply
+  bodies), `SavedPosts.jsx` (saved-post cards), and the post detail modals in
+  `Profile.jsx` + `PublicProfile.jsx`. Article/premium posts keep their
+  `ArticleEditor`/`renderArticleHtml` path; visual cards keep their layout.
+
+**Verification:**
+- `markdown.test.jsx` (14 cases): bold/italic/code, http/mailto/relative
+  links, `javascript:` link rejection, HTML escaping, headings, ul/ol,
+  blockquote, code fence, `<br/>` line breaks, legacy markers, null/blank.
+- Full CareFind suite 280/280 passes; `npm run build` clean (only the usual
+  chunk-size warning).

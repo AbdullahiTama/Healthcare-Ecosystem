@@ -13,7 +13,8 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { renderRichText, stripMarkers, previewText } from '../social-feed/richText.jsx'
+import { stripMarkers, previewText } from '../social-feed/richText.jsx'
+import { renderMarkdown } from '../social-feed/markdown.jsx'
 import ProductUpload from './ProductUpload.jsx'
 import FollowersSheet from '../social-feed/FollowersSheet.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
@@ -928,7 +929,7 @@ function Profile() {
             </div>
             {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
             {openPost.post_type && openPost.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{openPost.post_type}</span>}
-            <p style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText(withoutRepostMark(openPost.content)))}</p>
+            <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>
             <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? new Date(openPost.created_at).toLocaleDateString() : ''}</p>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { supabase } from '../../../config/supabaseClient'
 import { useAuth } from '../../../providers/AuthContext'
 import { notify } from '../../../services/notify.js'
 import { commentRepository } from '../repositories'
+import { renderMarkdown } from '../markdown.jsx'
 import { Avatar, TealBtn } from '../../../components/ui'
 import { theme } from '../../../styles/theme'
 import { Pencil, Trash2, X, BadgeCheck } from 'lucide-react'
@@ -141,7 +142,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                       @{parentName}
                     </span>
                   )}
-                  <p style={{ margin: depth > 0 ? '0 0 2px' : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{comment.content}</p>
+                  <div style={{ margin: depth > 0 ? '0 0 2px' : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{renderMarkdown(comment.content)}</div>
                 </div>
               )}
             </div>

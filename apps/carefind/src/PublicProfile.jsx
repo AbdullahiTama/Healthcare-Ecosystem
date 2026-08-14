@@ -13,7 +13,8 @@ import AppShell from './components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from './components/layout/SidebarSection.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
-import { previewText, renderRichText } from './modules/social-feed/richText.jsx'
+import { previewText } from './modules/social-feed/richText.jsx'
+import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 import {
   coinsForConsultation, fetchConsultationOffer, hasBookedConsultation,
@@ -809,7 +810,7 @@ function PublicProfile() {
                 <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
               </div>
             )}
-            {openPost.post_type !== 'visual' && <p style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{renderRichText(previewText(withoutRepostMark(openPost.content)))}</p>}
+            {openPost.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>}
             <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
           </div>
         </div>

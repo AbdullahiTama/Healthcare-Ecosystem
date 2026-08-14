@@ -24,7 +24,7 @@ list; nothing is assumed missing or complete.
 | 4 | Profile Stories | COMPLETE | No gaps found. `stories` + `story_views` tables exist with RLS and the `increment_story_view` RPC is live; story rails (own profile composer, public profile seen-ring, feed rail) all use the shared `StoryViewer` with expiry filtering and seen tracking. |
 | 5 | Video Feed | COMPLETE | No gaps found. `posts.video_url` column + `posts_video_feed_idx` partial index live; DDL now tracked in repo; `VideoPlayer.jsx` real playback with IntersectionObserver play/pause, reduced-motion handling, loading/error/retry; Videos tab in `FEED_TABS` with server-side filter + empty state. |
 | 6 | Personalized Feed | COMPLETE | No gaps found. `feedEngine.js` multi-signal pipeline (pools + diversity) wired into the For You tab with pull-to-refresh; all 5 feed tables live with correct RLS; `set_feed_ranking_config` SECURITY DEFINER admin-gated (authenticated only); admin editor mounted; 43 engine/experiment tests pass. |
-| 7 | Markdown Rendering | NOT AUDITED | — |
+| 7 | Markdown Rendering | PARTIAL | Feed posts, comments/replies, saved posts and the profile post modals render Markdown as raw text (`**bold**`, `# heading`, lists, links show literally). No renderer existed for these surfaces (only the article-specific `renderArticleHtml`). |
 | 8 | Wallet Withdrawal Banks + Security | NOT AUDITED | — |
 | 9 | Comment Likes, Replies + Mentions | NOT AUDITED | — |
 | 10 | Role-Specific Professional Verification Badges | NOT AUDITED | — |
@@ -199,7 +199,35 @@ Auth/RLS: COMPLETE
 
 ## FEATURE 7 — MARKDOWN RENDERING
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-14)
+Frontend: COMPLETE
+Backend: n/a (pure client renderer; content stays stored as plain text)
+- Audit: feed post bodies, comment/reply bodies, saved-post cards and the
+  profile post modals rendered Markdown as raw text — `**bold**`, `*italic*`,
+  `# heading`, `- list`, `` `code` ``, `[link](url)` all showed literally as
+  asterisks/hashes. Only the article-specific `renderArticleHtml` knew any
+  markup, and the composer's toolbar writes a separate bracket-marker syntax
+  (`{b}..{/b}`, `{h:yellow}..{/h}`, `{c:red}..{/c}`).
+- New `modules/social-feed/markdown.jsx` — a small dependency-free renderer
+  that turns Markdown into React nodes (bold, italic, inline code, links,
+  headings `#..######`, unordered/ordered lists, blockquotes, code fences,
+  `<br/>`-preserved line breaks).
+  - **Security:** input is never injected as HTML — every string becomes a
+    React text node (auto-escaped), so `<script>` etc. can't run, and link
+    hrefs are sanitised to `http(s)://`, `mailto:`, `tel:`, `/relative` or
+    `#` — `javascript:` never reaches an anchor.
+  - **Composer compatibility:** the legacy bracket-marker syntax is rendered
+    too, so content written with the toolbar keeps its styling on these
+    surfaces.
+- Wired into: feed post body (`Feed.jsx`), comment + reply bodies
+  (`CommentThread.jsx`), saved-post cards (`SavedPosts.jsx`), and the post
+  detail modals (`Profile.jsx`, `PublicProfile.jsx`). Article/premium posts
+  keep their dedicated `ArticleEditor`/`renderArticleHtml` path; visual cards
+  keep their card layout.
+- Tests: new `markdown.test.jsx` (14 cases — bold/italic/code, http/mailto/
+  relative links, `javascript:` link rejection, HTML escaping, headings, ul/ol,
+  blockquote, code fence, `<br/>` line breaks, legacy markers, null/blank).
+  Full CareFind suite 280/280 passes; production build clean.
 
 ## FEATURE 8 — WALLET WITHDRAWAL BANKS + SECURITY
 

@@ -18,6 +18,7 @@ import {
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
+import { renderMarkdown } from './markdown.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
@@ -2383,7 +2384,9 @@ function Feed() {
                     <ArticleEditor value={post.content} readOnly />
                   </div>
                 ) : (
-                  <p style={{ margin: '8px 0 10px 0', whiteSpace: 'pre-wrap', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>{post.content}</p>
+                  <div style={{ margin: '8px 0 10px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>
+                    {renderMarkdown(post.content)}
+                  </div>
                 )}
                 {post.image_url && post.post_type !== 'visual' && (
                   <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: 12, marginBottom: 8 }} />

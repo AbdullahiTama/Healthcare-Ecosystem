@@ -8,6 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { renderArticleHtml } from '../news-publishing/articleFormat'
+import { renderMarkdown } from './markdown.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Avatar, Card, CardSkeleton, Empty } from '../../components/ui'
 
@@ -197,7 +198,7 @@ function SavedPosts() {
                   dangerouslySetInnerHTML={{ __html: renderArticleHtml(post.content) }}
                 />
               ) : (
-                <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14.5, color: theme.textMid, lineHeight: 1.6 }}>{post.content}</p>
+                <div style={{ margin: 0, fontSize: 14.5, color: theme.textMid, lineHeight: 1.6 }}>{renderMarkdown(post.content)}</div>
               )}
             </Card>
           ))}
