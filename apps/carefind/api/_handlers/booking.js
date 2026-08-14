@@ -128,6 +128,12 @@ export default async function handler(req, res) {
       const reference = `bk_${appointment.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
       await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
       try {
+        // Callback returns the client to the business page with the opaque
+        // reference; BookingCard verifies the payment before showing a
+        // confirmation. The amount is set server-side only.
+        const host = req.headers['x-forwarded-host'] || req.headers.host || ''
+        const proto = req.headers['x-forwarded-proto'] || 'https'
+        const origin = host ? `${proto}://${host}` : ''
         const data = await paystackFetch('/transaction/initialize', {
           method: 'POST',
           body: JSON.stringify({
@@ -137,6 +143,7 @@ export default async function handler(req, res) {
             amount: feeKobo,
             reference,
             currency: 'NGN',
+            callback_url: `${origin}/business/${businessId}?reference=${reference}`,
             metadata: { appointment_id: appointment.id, business_id: businessId, booking_type: wantType },
           }),
         })

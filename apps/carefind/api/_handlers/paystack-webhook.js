@@ -102,6 +102,47 @@ async function handleConsultation(metadata, reference, amount) {
 }
 
 // ΓöÇΓöÇ CareHub plan renewal handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Booking handler (CareFind business-profile appointment, card paid) ──
+// Races verify-booking-payment.js on the same appointment; settle_card_booking
+// is SECURITY DEFINER and idempotent (returns 'already_paid' for a repeat), so
+// whichever caller arrives first settles, and the other is a safe no-op. This
+// is the async backup for clients who pay but abandon the Paystack return URL.
+async function handleBooking(metadata, reference, amount) {
+  if (!metadata?.appointment_id) return null
+
+  const { data: appt } = await supabase
+    .from('appointments')
+    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status')
+    .eq('id', metadata.appointment_id)
+    .maybeSingle()
+  if (!appt) return null
+
+  // Cross-check the Paystack amount against the stored fee before settling.
+  if (appt.fee_amount == null || amount !== appt.fee_amount) return null
+
+  const { data: result, error } = await supabase.rpc('settle_card_booking', {
+    p_appointment_id: appt.id,
+    p_reference: reference,
+  })
+  if (error) return null
+  if (result !== 'ok' && result !== 'already_paid') return null
+  if (result === 'already_paid') return { alreadyProcessed: true }
+
+  // Notify the business that payment landed (mirror of verify-booking-payment.js).
+  await supabase.from('staff_notifications').insert({
+    business_id: appt.business_id,
+    staff_id: null,
+    is_owner: true,
+    kind: 'booking_paid',
+    title: `Payment received — ${appt.client_name}`,
+    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
+    link: '/dashboard/appointments',
+    read_at: null,
+  })
+
+  return { settled: true }
+}
+
 async function handlePlanPayment(metadata, reference, amount) {
   if (!metadata?.business_id || !metadata?.months) return null
 
@@ -161,6 +202,10 @@ export default async function handler(req, res) {
 
     // Try consultation booking (has its own purpose flag)
     result = await handleConsultation(metadata, reference, amount)
+    if (result) return res.status(200).json(result)
+
+    // Try CareFind appointment booking (has appointment_id in metadata)
+    result = await handleBooking(metadata, reference, amount)
     if (result) return res.status(200).json(result)
 
     // Try CareHub plan payment (has business_id)

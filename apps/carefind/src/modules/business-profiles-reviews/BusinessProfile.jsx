@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
@@ -19,6 +19,7 @@ import { Card, Pill, TealBtn, Inp, Textarea, Loading, Empty, StarPicker, Stars, 
 function BookingCard({ biz }) {
   const toast = useToast()
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const [date, setDate] = useState('')
   const [slot, setSlot] = useState('')
   const [apptType, setApptType] = useState(biz.booking_type === 'online' ? 'online' : 'physical')
@@ -27,6 +28,42 @@ function BookingCard({ biz }) {
   const [phone, setPhone] = useState('')
   const [booking, setBooking] = useState(false)
   const [done, setDone] = useState(false)
+
+  // Return from Paystack: the client was redirected here after paying for this
+  // booking. Verify server-side (amount, appointment, Paystack status) and only
+  // then show the confirmation — a "confirmed" state must never be shown for an
+  // unverified payment.
+  useEffect(() => {
+    const ref = searchParams.get('reference') || searchParams.get('trxref')
+    if (!ref) return
+    let cancelled = false
+    async function handleReturn() {
+      try {
+        const res = await fetch('/api/verify-booking-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reference: ref }),
+        })
+        const data = await res.json().catch(() => ({}))
+        window.history.replaceState({}, '', window.location.pathname)
+        if (!cancelled) {
+          if (!res.ok) {
+            toast.show(data.error || 'Could not confirm your payment. If you were charged, keep your reference and contact support.', { type: 'error' })
+            return
+          }
+          setDone(true)
+          toast.show('Payment confirmed — the business will confirm your appointment.', { type: 'success' })
+        }
+      } catch (err) {
+        if (!cancelled) {
+          window.history.replaceState({}, '', window.location.pathname)
+          toast.show('Could not confirm payment. If you were charged, keep your reference and contact support.', { type: 'error' })
+        }
+      }
+    }
+    handleReturn()
+    return () => { cancelled = true }
+  }, [searchParams])
 
   const today = new Date().toISOString().split('T')[0]
   const isToday = date === today
@@ -253,7 +290,7 @@ function BusinessProfile() {
 
     const { data: bizData } = await supabase
       .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude, lat, lng')
+      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude, lat, lng, online_consultation_fee, physical_consultation_fee')
       .eq('id', id)
       .maybeSingle()
 
