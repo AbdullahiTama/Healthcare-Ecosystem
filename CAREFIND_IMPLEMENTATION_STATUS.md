@@ -56,9 +56,14 @@ Frontend: COMPLETE
 - Tests: `telLink` fully covered (null, 080 rewrite, bare digits, international passthrough, formatting-strip). 34/34 marketplace tests pass; production build clean.
 
 ## FEATURE 3 — NEWS ARTICLE DETAIL
-Status: NOT STARTED
-Frontend: BROKEN (blank page on malformed article body)
-Next action: guard `ArticleEditor.jsx:422` non-string content; harden `renderArticleHtml`; add route ErrorBoundary; update tests
+Status: COMPLETE (2026-08-14)
+Frontend: COMPLETE
+- Root cause fixed: `renderArticleHtml(b.content)` threw `TypeError` on non-string block content (`.split` on null/object) and, with no ErrorBoundary, unmounted the whole app → blank page.
+- `renderArticleHtml` now coerces any content to a string defensively and never throws (malformed block renders as an empty paragraph).
+- `ArticleEditor.parseBlocks` now normalizes every block: non-string `content` is coerced, drawing/text types are validated, already-parsed array/object values are handled, and null values fall back to an empty text block.
+- `DrawingBlock` canvas operations all guard against a null 2d context (was crashing in canvas-less environments).
+- Added route-level `ErrorBoundary` (`src/components/ErrorBoundary.jsx`) wrapping all routes in `main.jsx` — a crash in any section shows a friendly fallback with Try again / Go to feed instead of a white page.
+- Tests: `articleFormat.test.js` (+3 defensive cases → 11), new `articleEditor.test.jsx` (6 regression cases rendering the REAL editor against malformed bodies), new `ErrorBoundary.test.jsx` (3 cases). News-publishing suite 22/22 pass; production build clean.
 
 ## FEATURE 4 — POST ENGAGEMENT SYSTEM
 Status: NOT STARTED

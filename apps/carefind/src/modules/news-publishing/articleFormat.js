@@ -34,8 +34,15 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
 }
 
+// Render article markup to safe HTML. Content may come from a variety of
+// legacy shapes (plain text, JSON block strings, or — in the worst case —
+// null/object block content), so it is coerced to a string defensively.
+// Never throws: a malformed block renders as an empty paragraph, it must not
+// blank the page.
 export function renderArticleHtml(content) {
-  const paragraphs = content.split(/\n\s*\n/)
+  if (content == null) return '<p></p>'
+  const text = typeof content === 'string' ? content : String(content)
+  const paragraphs = text.split(/\n\s*\n/)
   return paragraphs
     .map((para) => {
       let safe = escapeHtml(para.trim())

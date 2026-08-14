@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './styles/global.css'
 import { AuthProvider } from './providers/AuthContext.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
 import Search from './modules/healthcare-discovery/Search.jsx'
@@ -46,7 +47,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
           {/* Public — no login required */}
           <Route path="/" element={<ForBusiness />} />
           <Route path="/about" element={<About />} />
@@ -86,6 +88,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
   </React.StrictMode>,

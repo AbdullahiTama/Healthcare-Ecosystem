@@ -70,4 +70,17 @@ describe('renderArticleHtml', () => {
   it('supports highlight without a color', () => {
     expect(renderArticleHtml('==plain==')).toContain('<mark>plain</mark>')
   })
+
+  it('never throws on null, undefined or non-string content', () => {
+    expect(renderArticleHtml(null)).toBe('<p></p>')
+    expect(renderArticleHtml(undefined)).toBe('<p></p>')
+    expect(renderArticleHtml('')).toBe('<p></p>')
+    expect(() => renderArticleHtml({ id: 'x', type: 'text' })).not.toThrow()
+    expect(() => renderArticleHtml(['a', 'b'])).not.toThrow()
+  })
+
+  it('coerces non-string content to a safe rendered paragraph', () => {
+    expect(() => renderArticleHtml({ id: 'x', content: '**hi**' })).not.toThrow()
+    expect(renderArticleHtml(42)).toBe('<p>42</p>')
+  })
 })

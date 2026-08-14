@@ -29,6 +29,7 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
+    if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     strokes.forEach(stroke => {
       if (!stroke.points || stroke.points.length < 2) return
@@ -60,7 +61,8 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
       canvas.height = 220 * dpr
       canvas.style.width = rect.width + 'px'
       canvas.style.height = '220px'
-      canvas.getContext('2d').scale(dpr, dpr)
+      const cctx = canvas.getContext('2d')
+      if (cctx) cctx.scale(dpr, dpr)
       redraw(block.strokes || [])
     }
     resize()
@@ -83,7 +85,8 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
     const pt = getPoint(e)
     lastPoint.current = pt
     currentStroke.current = [pt]
-    const ctx = canvasRef.current.getContext('2d')
+    const ctx = canvasRef.current && canvasRef.current.getContext('2d')
+    if (!ctx) return
     ctx.beginPath()
     ctx.arc(pt.x, pt.y, (tool === 'eraser' ? penSize * 3 : penSize) / 2, 0, Math.PI * 2)
     ctx.fillStyle = penColor
@@ -96,7 +99,8 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
     if (!isDrawing || readOnly) return
     e.preventDefault(); e.stopPropagation()
     const pt = getPoint(e)
-    const ctx = canvasRef.current.getContext('2d')
+    const ctx = canvasRef.current && canvasRef.current.getContext('2d')
+    if (!ctx) return
     ctx.beginPath()
     ctx.strokeStyle = penColor
     ctx.lineWidth = tool === 'eraser' ? penSize * 4 : penSize
@@ -142,7 +146,11 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
     const newHistory = [...history.slice(0, historyIdx + 1), newStrokes]
     setHistory(newHistory); setHistoryIdx(newHistory.length - 1)
     onChange({ ...block, strokes: newStrokes, labels })
-    canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    const canvas = canvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
   }
 
   function addLabel() {
@@ -349,18 +357,33 @@ function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
 //  Main Article Editor
 // ─────────────────────────────────────────────
 export default function ArticleEditor({ value, onChange, readOnly = false }) {
-  // Parse blocks from string value or use default
-  const parseBlocks = (val) => {
-    if (!val) return [{ id: uid(), type: 'text', content: '' }]
-    try {
-      const parsed = JSON.parse(val)
-      if (Array.isArray(parsed) && parsed[0]?.type) return parsed
-    } catch {}
-    // Legacy plain text — wrap in single text block
-    return [{ id: uid(), type: 'text', content: val }]
+  const uid = () => Math.random().toString(36).slice(2)
+
+  // Guard a raw block so renderArticleHtml never receives a non-string.
+  const normalizeBlock = (b) => {
+    if (!b || typeof b !== 'object') return { id: uid(), type: 'text', content: b == null ? '' : String(b) }
+    return {
+      ...b,
+      id: b.id || uid(),
+      type: b.type === 'drawing' ? 'drawing' : 'text',
+      content: typeof b.content === 'string' ? b.content : (b.content == null ? '' : String(b.content)),
+    }
   }
 
-  const uid = () => Math.random().toString(36).slice(2)
+  // Parse blocks from a string value, an already-parsed array, or plain text.
+  const parseBlocks = (val) => {
+    if (!val) return [{ id: uid(), type: 'text', content: '' }]
+    let parsed = val
+    if (typeof val === 'string') {
+      try {
+        parsed = JSON.parse(val)
+      } catch {}
+    }
+    if (Array.isArray(parsed)) return parsed.map(normalizeBlock)
+    // Legacy plain text (or a stringified object) — wrap in a single text block
+    return [normalizeBlock({ type: 'text', content: typeof val === 'string' ? val : String(val) })]
+  }
+
   const [blocks, setBlocks] = useState(() => parseBlocks(value))
   const [highlightColor, setHighlightColor] = useState('#fde68a')
   const [activeBlockId, setActiveBlockId] = useState(blocks[0]?.id)

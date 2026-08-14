@@ -103,3 +103,43 @@ Full suite 217/218 pass in forks mode — the single failure is a pre-existing
 changes. Production build clean (`vite build`).
 
 **Known limitations / next:** Feature 3 (News Article Detail blank page).
+
+---
+
+## 2026-08-14 — Feature 3 (News Article Detail)
+
+**What:**
+- Fixed the blank-page bug. Root cause: `renderArticleHtml(b.content)` in
+  `ArticleEditor.jsx` called `.split()` on block content that was not a string
+  (null, object, etc.) → `TypeError` → and because the app had NO ErrorBoundary,
+  the entire React tree unmounted → white page on any malformed article body.
+- `renderArticleHtml` is now defensive: null → empty paragraph, non-string →
+  coerced via `String()`, never throws.
+- `ArticleEditor.parseBlocks` normalizes every block before render: coerces
+  non-string `content`, validates type, accepts already-parsed arrays/objects,
+  and falls back to an empty text block for null values.
+- `DrawingBlock`'s canvas code all guards against a null 2d context (resize,
+  startDraw, draw, clearCanvas) — previously it crashed in canvas-less
+  environments.
+- Added `src/components/ErrorBoundary.jsx` and wrapped all routes in
+  `main.jsx`. Any runtime crash now renders a friendly fallback with
+  "Try again" and "Go to feed" instead of a blank page.
+
+**Why:** Audit found the article detail page could blank the whole app on a
+malformed body; tests mocked `ArticleEditor` so the crash shipped undetected.
+
+**Affected files:**
+- `apps/carefind/src/modules/news-publishing/articleFormat.js` (defensive coercion)
+- `apps/carefind/src/modules/news-publishing/ArticleEditor.jsx` (normalizeBlock/parseBlocks, canvas guards)
+- `apps/carefind/src/components/ErrorBoundary.jsx` (new)
+- `apps/carefind/src/main.jsx` (wrap routes)
+- `apps/carefind/src/modules/news-publishing/articleFormat.test.js` (+3)
+- `apps/carefind/src/modules/news-publishing/articleEditor.test.jsx` (new, 6 — renders real editor)
+- `apps/carefind/src/components/ErrorBoundary.test.jsx` (new, 3)
+
+**Tests performed:** news-publishing suite 22/22 pass (articleFormat 11,
+articleEditor regression 6, newsArticle 5). ErrorBoundary 3/3 pass. Production
+build clean.
+
+**Known limitations / next:** Feature 4 (Post Engagement: display share + save
+counts, wire comment notification).
