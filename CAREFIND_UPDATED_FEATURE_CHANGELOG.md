@@ -103,3 +103,35 @@ other targets receive the actual media, not just the caption.
   clipboard; `mediaToFile` returns null for missing/bad fetch, builds a File
   with the URL-derived name/type, and falls back on fetch throw.
 - Full CareFind suite 266/266 passes; `npm run build` clean.
+
+---
+
+## 2026-08-14 — Feature 4: Profile Stories
+
+**What:** Users post 24-hour stories with text/image and a coloured background;
+viewers see a seen/unseen ring; views are tracked.
+
+**Audit findings:**
+- The feature was already implemented end-to-end — verified, not re-worked.
+- `Profile.jsx` has the story rail + composer (`storyComposer`,
+  `setSTitle`/`setSBody`/`setSBg`/`setSImage`); `PublicProfile.jsx` renders the
+  rail with per-user seen ring (`allSeen` = own-story check + every story in
+  `viewedStoryIds`); feed rail `Stories.jsx` filters `expires_at > now()`,
+  drives the shared `StoryViewer` and fires `increment_story_view`.
+- Live DB: `stories` (18 rows) + `story_views` tables with RLS; policies limit
+  read to active stories and write to the story's own user (`is_platform =
+  false` guard on insert); `story_views` only the viewer. `increment_story_view`
+  RPC exists (SECURITY INVOKER).
+- `storyViews.js` `fetchViewedStoryIds` / `markStoriesViewed` persist seen state
+  (upsert on `story_id, user_id`).
+
+**Changes:** none required.
+
+**Verification:**
+- Live RLS policy dump + RPC inspection against the project DB.
+- `StoryViewer.test.jsx` covers the shared viewer (title/body/header render,
+  single `onViewStory` call per watched story, navigation, close).
+- Full CareFind suite 266/266 passes; `npm run build` clean.
+- Note: `increment_story_view` carries the same pre-existing
+  `function_search_path_mutable` WARN as the other `increment_*` RPCs — left
+  unchanged for consistency.

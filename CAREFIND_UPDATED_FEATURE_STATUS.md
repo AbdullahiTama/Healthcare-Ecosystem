@@ -21,7 +21,7 @@ list; nothing is assumed missing or complete.
 | 1 | Products WhatsApp + Call | PARTIAL | All CareFind buyer surfaces already render WhatsApp **and** Call (Search product cards, DrugProfile seller cards, BusinessProfile). **Gap: the CareHub CareFind module "public view" preview renders WhatsApp only — no Call button.** |
 | 2 | News Engagement | PARTIAL | Article page has full engagement (like/comment/save/share/gift/views) and the Notifications UI already supports `news_like`/`news_comment` types — but **neither is ever fired**: `toggleLike`/`addComment` never call `notify()`, so article authors get no notifications. |
 | 3 | Media Attachments in Sharing | PARTIAL | `sharePost` shares only text + the feed URL — the post's `image_url`/`video_url` are never attached. `shareOrCopy` supports the Web Share API but never passes `files`, so a WhatsApp share of a visual/video post sends just the caption, not the media. |
-| 4 | Profile Stories | NOT AUDITED | — |
+| 4 | Profile Stories | COMPLETE | No gaps found. `stories` + `story_views` tables exist with RLS and the `increment_story_view` RPC is live; story rails (own profile composer, public profile seen-ring, feed rail) all use the shared `StoryViewer` with expiry filtering and seen tracking. |
 | 5 | Video Feed | NOT AUDITED | — |
 | 6 | Personalized Feed | NOT AUDITED | — |
 | 7 | Markdown Rendering | NOT AUDITED | — |
@@ -99,7 +99,33 @@ Backend: n/a (pure client share enhancement)
 
 ## FEATURE 4 — PROFILE STORIES
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (verified 2026-08-14 — no code changes required)
+Frontend: COMPLETE
+Backend: COMPLETE
+Database: COMPLETE
+Auth/RLS: COMPLETE
+- Audit confirmed the full story feature was already implemented end-to-end;
+  the "updated pending issue" was verified, not re-worked.
+- Frontend: story rail + composer inside `Profile.jsx` (`storyComposer`,
+  `setSTitle`/`setSBody`/`setSBg`/`setSImage`); `PublicProfile.jsx` renders the
+  rail with per-user seen tracking (`viewedStoryIds`, `allSeen` ring logic =
+  `!isOwnProfile && hasStory && userStories.every(s => viewedStoryIds.has(s.id))`);
+  the feed rail (`Stories.jsx`) fetches active stories
+  (`.gt('expires_at', now)`), drives the shared `StoryViewer` and fires the
+  `increment_story_view` RPC as the viewer advances.
+- Database (verified live): `stories` (18 rows) and `story_views` tables exist
+  with RLS enabled; policies — stories readable by all while active
+  (`expires_at > now()`), insertable/deletable only by their own user
+  (insert with check `user_id = auth.uid() AND is_platform = false`), and
+  `story_views` insertable/readable only by the viewer.
+- RPC: `increment_story_view(story_id uuid)` exists (SECURITY INVOKER).
+- Persistence/state: `storyViews.js` `fetchViewedStoryIds` / `markStoriesViewed`
+  (upsert on `story_id, user_id`); ring greys out once every story is watched.
+- Tests: `StoryViewer.test.jsx` covers the shared sequential viewer (renders
+  title/body/header, `onViewStory` per watched story, navigation/close).
+- Note: `increment_story_view` (like the other `increment_*` RPCs) carries a
+  pre-existing `function_search_path_mutable` WARN advisor lint — consistent
+  with the rest of the codebase, not introduced here, and left unchanged.
 
 ## FEATURE 5 — VIDEO FEED
 
