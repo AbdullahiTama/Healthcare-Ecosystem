@@ -58,7 +58,7 @@ function News() {
     setLoading(true)
     const { data } = await supabase
       .from('news')
-      .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles(full_name, display_name)')
+      .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
       .eq('status', 'approved')
       .order('published_at', { ascending: false })
       .limit(40)

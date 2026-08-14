@@ -5,6 +5,27 @@ Do not erase previous history.
 
 ---
 
+## 2026-08-14 — Production hotfix: ambiguous news→profiles embed (PGRST201)
+
+**What:** News article load failed with `PGRST201` — "Could not embed because
+more than one relationship was found for 'news' and 'profiles'." The `news`
+table has two foreign keys on `author_id` → `profiles(id)`:
+`fk_news_author` (ON DELETE CASCADE, NOT VALID) and `news_author_id_fkey`
+(ON DELETE SET NULL), so PostgREST cannot pick an embed automatically.
+
+**Fix:** disambiguated the embed with the constraint hint
+`profiles!news_author_id_fkey` in the two queries that join news→profiles:
+- `src/modules/news-publishing/News.jsx` — article list (author name).
+- `src/modules/news-publishing/NewsArticle.jsx` — article detail (author info).
+
+**Why:** Live `PGRST201` on news load; both the news feed and article pages
+were broken.
+
+**Tests performed:** full suite 256/257 pass (only the pre-existing VideoPlayer
+timing flake, passes in isolation). Production build clean.
+
+---
+
 ## 2026-08-14 — Production hotfix: products 400 on `lat`/`lng`
 
 **What:** All four marketplace product queries returned `400 Bad Request` in

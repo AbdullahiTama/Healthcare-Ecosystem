@@ -43,7 +43,7 @@ function NewsArticle() {
       try {
         const { data, error: readErr } = await supabase
           .from('news')
-          .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles(full_name, display_name, verification_label, is_verified)')
+          .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles!news_author_id_fkey(full_name, display_name, verification_label, is_verified)')
           .eq('id', id)
           .maybeSingle()
         if (cancelled) return
