@@ -235,3 +235,52 @@ bodies instead of raw asterisks/hashes.
   blockquote, code fence, `<br/>` line breaks, legacy markers, null/blank.
 - Full CareFind suite 280/280 passes; `npm run build` clean (only the usual
   chunk-size warning).
+---
+
+## 2026-08-14 - Feature 8: Wallet Withdrawal Banks + Security
+
+**What:** Withdraw CareCoins to a bank account via a bank dropdown, with the
+withdrawal request hardened so identity is server-verified and the target
+account is verified before any money moves.
+
+**Audit findings:**
+- The flow was already largely built and secure: Wallet.jsx withdraw tab with
+  Paystack-backed bank dropdown (/api/banks, 5-min cache), POST-only handler
+  with server-verified user + balance/Paystack checks, atomic RPC, RLS enabled
+  on withdrawal_requests with no direct policies, admin list/approve/reject
+  behind pi/admin-auth.js.
+- **Gap 1 (bug):** equest_withdrawal derived identity from uth.uid(), but
+  the only caller (initiate-withdrawal.js) invokes it through a **service-role**
+  client. Service-role JWTs carry no sub claim, so uth.uid() was always
+  null and the RPC returned 
+ot_logged_in on every call - the wallet was
+  never debited and no request row was ever created, despite the handler's
+  comment assuming the deduction happened. The RPC was also EXECUTE-granted to
+  PUBLIC (the C15/C17 dangerous default).
+- **Gap 2 (security):** the typed account name was trusted as-is. A mistyped
+  account number with a mismatched name would route money to the wrong account.
+
+**Changes:**
+- pps/carefind/sql/20260814_request_withdrawal_user_id_and_account_verify.sql
+  (new, applied to live DB): equest_withdrawal(uuid, integer, text, text,
+  text) now takes server-verified p_user_id; EXECUTE revoked from
+  PUBLIC/anon/authenticated, granted to postgres/service_role only.
+  Leftover PUBLIC-executable (integer, text, text, text) overload dropped
+  (the exact leftover-overload failure mode C15/C17 documented).
+- pps/carefind/api/_lib/paystackTransfer.js: new esolveAccount() (Paystack
+  /bank/resolve) and 
+ormalizeAccountName() pure helper.
+- pps/carefind/api/_handlers/initiate-withdrawal.js: passes p_user_id:
+  user.id, resolves the account name before creating the Paystack recipient,
+  and rejects the request if the typed name does not match the account number.
+- pps/carefind/src/test/payments/transfer.test.js: +4 
+ormalizeAccountName
+  cases (now 10/10).
+
+**Verification:**
+- Live DB: only equest_withdrawal(uuid,integer,text,text,text) remains,
+  proacl {postgres=X/postgres,service_role=X/postgres}.
+- Full CareFind suite 284/284 passes; 
+ode --check clean on the handler and
+  lib; 
+pm run build clean (only the usual chunk-size warning).

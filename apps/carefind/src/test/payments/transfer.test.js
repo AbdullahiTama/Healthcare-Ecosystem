@@ -11,6 +11,10 @@ function computePayout(coins, coinValueNaira, feeRate) {
   return Math.floor(nairaAmount * (1 - feeRate))
 }
 
+function normalizeAccountName(name) {
+  return (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 const COIN_VALUE_NAIRA = 200
 const TRANSFER_FEE_RATE = 0.2
 
@@ -42,6 +46,25 @@ describe('transfer utilities', () => {
 
     it('rounds down to nearest naira', () => {
       expect(computePayout(7, COIN_VALUE_NAIRA, TRANSFER_FEE_RATE)).toBe(1120)
+    })
+  })
+
+  describe('normalizeAccountName', () => {
+    it('lower-cases and trims', () => {
+      expect(normalizeAccountName('  Amara Nwachukwu ')).toBe('amara nwachukwu')
+    })
+
+    it('collapses repeated whitespace', () => {
+      expect(normalizeAccountName('Amara   Nwachukwu')).toBe('amara nwachukwu')
+    })
+
+    it('treats casing differences as equal', () => {
+      expect(normalizeAccountName('AMARA NWACHUKWU')).toBe(normalizeAccountName('amara nwachukwu'))
+    })
+
+    it('returns empty string for blank input', () => {
+      expect(normalizeAccountName('')).toBe('')
+      expect(normalizeAccountName(undefined)).toBe('')
     })
   })
 })

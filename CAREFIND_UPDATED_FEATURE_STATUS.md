@@ -25,7 +25,7 @@ list; nothing is assumed missing or complete.
 | 5 | Video Feed | COMPLETE | No gaps found. `posts.video_url` column + `posts_video_feed_idx` partial index live; DDL now tracked in repo; `VideoPlayer.jsx` real playback with IntersectionObserver play/pause, reduced-motion handling, loading/error/retry; Videos tab in `FEED_TABS` with server-side filter + empty state. |
 | 6 | Personalized Feed | COMPLETE | No gaps found. `feedEngine.js` multi-signal pipeline (pools + diversity) wired into the For You tab with pull-to-refresh; all 5 feed tables live with correct RLS; `set_feed_ranking_config` SECURITY DEFINER admin-gated (authenticated only); admin editor mounted; 43 engine/experiment tests pass. |
 | 7 | Markdown Rendering | PARTIAL | Feed posts, comments/replies, saved posts and the profile post modals render Markdown as raw text (`**bold**`, `# heading`, lists, links show literally). No renderer existed for these surfaces (only the article-specific `renderArticleHtml`). |
-| 8 | Wallet Withdrawal Banks + Security | NOT AUDITED | — |
+| 8 | Wallet Withdrawal Banks + Security | COMPLETE | Two gaps found and fixed: (1) `request_withdrawal` RPC derived identity from `auth.uid()` but is only called by the service-role handler, so `auth.uid()` was always null and withdrawals never debited the wallet or created a request — reworked to take server-verified `p_user_id`, EXECUTE revoked from PUBLIC/anon/authenticated, leftover PUBLIC-executable overload dropped; (2) no account-name verification — added Paystack `/bank/resolve` check so the typed name must match the account number before any transfer. |
 | 9 | Comment Likes, Replies + Mentions | NOT AUDITED | — |
 | 10 | Role-Specific Professional Verification Badges | NOT AUDITED | — |
 
@@ -231,7 +231,14 @@ Backend: n/a (pure client renderer; content stays stored as plain text)
 
 ## FEATURE 8 — WALLET WITHDRAWAL BANKS + SECURITY
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-14)
+
+Verified end-to-end:
+- **Frontend** — Wallet.jsx withdraw tab: bank dropdown fed by `/api/banks` (Paystack proxy, 5-min cache), amount gated at 5 CareCoins / balance, account number + name fields, submitting/error/success toasts, wallet + history refresh after a successful request.
+- **Backend** — `api/_handlers/initiate-withdrawal.js`: POST-only, server-verified user (`verifyUser`), input validation, wallet-balance check, Paystack balance pre-check, then Paystack recipient + transfer; updates the request with `paystack_reference`/`transfer_code`/`recipient_code`.
+- **Database** — `request_withdrawal(uuid, integer, text, text, text)` SECURITY DEFINER, `search_path=public`, atomic row-locked debit + request insert + ledger row; `EXECUTE` for `postgres`/`service_role` only. `withdrawal_requests` has RLS enabled with no direct policies (service-role/RPC-only access). Admin list/approve/reject behind `api/admin-auth.js`.
+- **Security fixes shipped** — identity now passed as server-verified `p_user_id` (the RPC previously read `auth.uid()` which is always null under the service-role caller, so withdrawals never completed); account name verified against the account number via Paystack `/bank/resolve` before any transfer.
+- **Tests** — `transfer.test.js` 10/10 (added `normalizeAccountName`); full suite 284/284; `vite build` clean.
 
 ## FEATURE 9 — COMMENT LIKES, REPLIES + MENTIONS
 

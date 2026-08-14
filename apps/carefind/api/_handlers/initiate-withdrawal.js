@@ -1,6 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from '../_lib/paystackTransfer.js'
+import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -48,20 +48,40 @@ export default async function handler(req, res) {
   const reference = transferReference(user.id)
 
   try {
+    // Verify the typed account name actually belongs to the account number.
+    // A typo'd account number with a mismatched name would otherwise route
+    // money to the wrong account via Paystack's transfer recipient.
+    let resolved
+    try {
+      resolved = await resolveAccount({ bankCode, accountNumber })
+    } catch (err) {
+      return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+    }
+    if (!resolved || !resolved.accountName) {
+      return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+    }
+    const submitted = normalizeAccountName(accountName)
+    const resolvedName = normalizeAccountName(resolved.accountName)
+    if (!submitted || submitted !== resolvedName) {
+      return res.status(400).json({ error: 'Account name does not match the account number. Use the name registered with your bank.' })
+    }
+    const verifiedAccountName = resolved.accountName
+
     // Create or reuse Paystack transfer recipient
     const recipientCode = await createTransferRecipient({
       bankCode,
       accountNumber,
-      accountName,
+      accountName: verifiedAccountName,
       userId: user.id,
     })
 
     // Deduct coins and record the withdrawal request (atomic via RPC)
     const { data: requestResult, error: requestError } = await supabase.rpc('request_withdrawal', {
+      p_user_id: user.id,
       p_amount: coins,
       p_bank_name: bankName,
       p_account_number: accountNumber,
-      p_account_name: accountName,
+      p_account_name: verifiedAccountName,
     })
 
     if (requestError || requestResult !== 'ok') {

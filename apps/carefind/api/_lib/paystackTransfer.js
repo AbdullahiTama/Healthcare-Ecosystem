@@ -56,6 +56,33 @@ export async function verifyTransfer(transferCode) {
   return { status: data.data.status, recipientCode: data.data.recipient.code }
 }
 
+// Resolve the account holder name for a bank/account-number pair via
+// Paystack's /bank/resolve. Used to verify the user-typed account name
+// actually belongs to the account number before any transfer is initiated,
+// so a typo can't route money to the wrong account.
+export async function resolveAccount({ bankCode, accountNumber }) {
+  const data = await paystackFetch('/bank/resolve', {
+    method: 'POST',
+    body: JSON.stringify({
+      bank_code: bankCode,
+      account_number: accountNumber,
+    }),
+  })
+
+  if (!data.status) {
+    throw new Error(data.message || 'Could not verify account')
+  }
+
+  return { accountName: data.data.account_name, accountNumber: data.data.account_number }
+}
+
+// Normalise an account name for comparison: trim, collapse whitespace,
+// lower-case. Paystack may return a name with slightly different casing or
+// spacing than what the user typed, so the two are compared after this.
+export function normalizeAccountName(name) {
+  return (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 // Check Paystack balance (to verify we have enough before attempting a transfer).
 export async function checkBalance() {
   const data = await paystackFetch('/balance')
