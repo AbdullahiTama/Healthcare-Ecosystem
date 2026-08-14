@@ -107,7 +107,14 @@ Frontend: COMPLETE
 - Tests: new `StoryViewer.test.jsx` (8 cases — render, onViewStory once, auto-advance with fake timers, next/prev zones, close, out-of-range renders nothing, image story, last-story advance). Full suite 256/257 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 9 — VIDEO FEED
-Status: VERIFIED DONE (track `video_url` DDL if feasible)
+Status: COMPLETE (2026-08-14)
+Backend: COMPLETE
+Frontend: COMPLETE
+- Verified the full journey: real `<video>` playback via `VideoPlayer.jsx` (IntersectionObserver play/pause at ~35% viewport, visibilitychange handling, reduced-motion manual play, loading/error/retry states, aria-labels), wired into `VisualCard.jsx` and the composer (video posts write `video_url`).
+- **Closed the DDL gap:** `posts.video_url` existed in the live database but its DDL was never tracked in the repo. Added `20260814_posts_video_url_ddl.sql` (idempotent `add column if not exists` + partial `posts_video_feed_idx` on `(created_at desc) where video_url is not null` to serve the Videos-tab filter `.not('video_url','is',null)`). Applied to live; index verified.
+- Verified the 5th **Videos** tab in `Feed.jsx`: `FEED_TABS` includes `['video', 'Videos']`, `loadFeed` filters `.not('video_url','is',null)`, `visiblePosts` shows only video posts, empty state present.
+- Advisor run after the migration: no new findings (all WARNs are pre-existing multiple-policy / duplicate-index entries).
+- Tests: `VideoPlayer.test.jsx` (5) already covers the player; full suite 256/257 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 10 — PERSONALIZED FEED + PROGRESSIVE DISTRIBUTION
 Status: VERIFIED DONE (caveats documented; no changes unless required)

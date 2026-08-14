@@ -308,3 +308,41 @@ Production build clean.
 **Known limitations / next:** Features 1–8 verified complete. Next: Feature 9
 (Video Feed — `video_url` DDL is untracked; add the DDL to the repo if
 feasible).
+
+---
+
+## 2026-08-14 — Feature 9 (Video Feed)
+
+**What:**
+- Verified the video journey end-to-end. `VideoPlayer.jsx` is a real `<video>`
+  element with IntersectionObserver autoplay/pause (~35% viewport threshold),
+  `visibilitychange` handling for hidden tabs, reduced-motion users getting a
+  manual play affordance, loading/error/retry states, and aria-labels. It is
+  wired into `VisualCard.jsx`, the composer (visual posts write `video_url`),
+  and the **Videos** tab — the 5th `FEED_TABS` entry — whose `loadFeed`
+  filters `.not('video_url','is',null)` and whose `visiblePosts` keeps only
+  video posts with an empty state.
+- **Closed the DDL gap.** `posts.video_url` existed in the live database but
+  was never tracked in the repo (the column shipped before the SQL was
+  versioned). Added `apps/carefind/sql/20260814_posts_video_url_ddl.sql` —
+  idempotent `add column if not exists video_url text` plus a partial index
+  `posts_video_feed_idx (created_at desc) where video_url is not null` so the
+  Videos-tab filter reads only video posts in order without a full scan.
+  Applied to live and verified the index exists.
+- Security/perf check: advisor run after the migration showed no new findings
+  — every WARN is a pre-existing multiple-permissive-policy or duplicate-index
+  entry unrelated to this change.
+
+**Why:** The audit marked F9 DONE but flagged `video_url` DDL as untracked —
+any fresh environment could not reproduce the video schema from the repo.
+
+**Affected files:**
+- `apps/carefind/sql/20260814_posts_video_url_ddl.sql` (new — tracked DDL + partial index, applied to live)
+
+**Tests performed:** full suite 256/257 pass in forks mode — the single failure
+is the same pre-existing `VideoPlayer` timing flake (passes in isolation).
+Production build clean.
+
+**Known limitations / next:** Features 1–9 verified complete. Next: Feature 10
+(Personalized Feed — audited DONE with documented caveats; verify, then close
+the program).
