@@ -89,10 +89,13 @@ Frontend: COMPLETE
 Status: VERIFIED DONE (no changes planned unless tests reveal issues)
 
 ## FEATURE 7 — GIFTING
-Status: NOT STARTED
-Backend: COMPLETE (send_gift RPC)
-Frontend: MOSTLY COMPLETE
-Next action: recipient notification; add gift tests
+Status: COMPLETE (2026-08-14)
+Backend: COMPLETE
+Frontend: COMPLETE
+- **Critical gap found during verification:** the `send_gift` RPC no longer exists in the live database (only `pay_creator_subscription` survived the C15/C16 hardening), so gifting was silently broken. Recreated as a safe SECURITY DEFINER RPC and applied to live via `apps/carefind/sql/20260814_recreate_send_gift_rpc.sql`.
+- `send_gift(p_recipient, p_coins, p_gift_type, p_gift_emoji, p_post_id default null, p_live_session_id default null)`: sender is always `auth.uid()` (never caller-supplied), self-gifting blocked, sender wallet row-locked, debits sender / credits recipient, writes one `gifts` row + two `transactions` rows (`gift_sent` negative / `gift_received` positive) sharing a `gift_<uuid>` reference. Returns `'ok' | 'insufficient' | 'unauthorized' | 'self'`. Revoked from `public`/`anon`, granted to `authenticated` only — verified live (proacl has no anon exposure; unauth call returns `'unauthorized'`).
+- Recipient `notify()` (`type: gift`) added to `GiftPanel` in Feature 4 and verified.
+- Tests: new `GiftPanel.test.jsx` (4 cases — correct `send_gift` args, recipient notified on success, no notify on failure, blocked when wallet insufficient). Full suite 248/249 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 8 — PROFILE STORIES
 Status: VERIFIED DONE (no changes planned)

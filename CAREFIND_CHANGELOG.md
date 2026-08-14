@@ -216,3 +216,51 @@ Production build clean.
 **Known limitations / next:** Feature 6 was audited DONE (followers/following
 verified). Moving to Feature 7 (Gifting — recipient notification added in F4;
 remaining: wallet-deduction verification + gift tests).
+
+---
+
+## 2026-08-14 — Feature 7 (Gifting)
+
+**What:**
+- **Critical gap found during verification:** the `send_gift` RPC no longer
+  exists in the live database. The C15/C16 hardening dropped the vulnerable
+  caller-supplied-sender overloads and applied a safe `auth.uid()`-based
+  replacement directly to the live DB, but it was never saved back into the
+  repo — and only `pay_creator_subscription` survived. Gifting has been silently
+  broken since ~July (the 9 rows in `gifts` all predate the loss).
+- Recreated the RPC in `apps/carefind/sql/20260814_recreate_send_gift_rpc.sql`
+  and applied it to live. `send_gift(p_recipient, p_coins, p_gift_type,
+  p_gift_emoji, p_post_id default null, p_live_session_id default null)`:
+  - SECURITY DEFINER; sender is always `auth.uid()` (never caller-supplied).
+  - Self-gifting blocked (`'self'`), returns `'ok' | 'insufficient' |
+    'unauthorized' | 'self'`.
+  - Row-locks the sender wallet, debits sender, credits recipient, writes one
+    `gifts` row + two `transactions` rows (`gift_sent` negative /
+    `gift_received` positive) sharing a single `gift_<uuid>` reference — safe
+    because the `transactions` unique indexes are partial (topup +
+    consultation_payment only), so no C16 collision regression.
+  - Revoked from `public`/`anon`, granted to `authenticated` only. Verified live:
+    `prosecdef=true`, proacl has no anon exposure, and an unauthenticated call
+    returns `'unauthorized'`. Security advisors show no new findings.
+- Verified the client path: `GiftPanel` and `LiveSession` call `send_gift` with
+  the correct parameter names; wallet display uses the real `wallets.balance`
+  from an exact-count query; ledger types `gift_sent`/`gift_received` match what
+  `Wallet.jsx` renders.
+- Tests: new `GiftPanel.test.jsx` (4 cases — correct `send_gift` args, recipient
+  notified on success, no notify on failure, blocked when the wallet can't cover
+  the gift), with per-test `cleanup()` to stop single-fork DOM leakage.
+
+**Why:** Feature 7 required wallet-deduction verification; verifying it against
+live surfaced the missing RPC. Recreating it is both the fix and the regression
+guard for gifting.
+
+**Affected files:**
+- `apps/carefind/sql/20260814_recreate_send_gift_rpc.sql` (new — RPC recreated in repo + applied to live)
+- `apps/carefind/src/modules/subscriptions-monetization/GiftPanel.test.jsx` (new, 4)
+
+**Tests performed:** full suite 248/249 pass in forks mode — the single failure
+is the same pre-existing `VideoPlayer` timing flake (passes in isolation).
+Production build clean.
+
+**Known limitations / next:** Features 1–7 verified complete. Next: Feature 8
+(Profile Stories — auto-advance gap + re-engagement).
