@@ -58,12 +58,36 @@ FEATURE 3 — CAREHUB POS EDIT PRICE
 Surface:             CareHub
 Supporting surface:  —
 
-Frontend:    AUDITED (POS.jsx setPrice exists, gated by perms.canEditPrice)
-Backend:     AUDITED (no server-side price authorization — gap)
-Database:    AUDITED (price stored per-line in sales.items JSONB)
-Integration: AUDITED (receipt uses sale-line price)
-Testing:     NOT RUN
-Status:      AUDITED
+Frontend:    COMPLETE (POS.jsx setPrice gated by perms.canEditPrice; save failures surfaced)
+Backend:     COMPLETE (guard_sale_item_prices BEFORE INSERT trigger on sales — live)
+Database:    COMPLETE (price authorized per-line vs catalog; stock untouched on rejection)
+Integration: COMPLETE (receipt uses sale-line price; rejected offline sales re-sync visibly)
+Testing:     PASSED (CareHub 291/291; build clean; 4 live auth scenarios verified)
+Status:      COMPLETE
+
+What was fixed:
+- Gap: any authenticated business member could POST crafted items prices to
+  /rest/v1/sales, bypassing the UI's canEditPrice gate. No server-side check.
+- Added guard_sale_item_prices() (SECURITY INVOKER, pinned search_path) +
+  BEFORE INSERT trigger on sales. Trusted callers pass through (postgres,
+  service_role, supabase_admin, supabase_auth_admin, is_platform_admin()).
+  Role resolution mirrors the frontend: business owner by email → 'Owner';
+  else active staff by auth_user_id OR email → staff.role; a custom roles row
+  for that business (permissions->>'canEditPrice'='true') wins, else
+  role='Owner' may override. Negative prices → check_violation; unknown
+  product ids are skipped (mirrors the stock trigger's never-lose-a-sale
+  policy). A rejected INSERT aborts before the AFTER INSERT stock trigger, so
+  blocked sales do not decrement inventory.
+- Frontend contract: saleRepository.create rethrows "Supabase error (4xx)"
+  instead of parking server rejections in the offline queue; syncQueued()
+  returns { synced, rejected }. POS.saveSale/charge/chargeCredit/holdSale
+  surface the server message (toast) and keep the cart intact; charge paths
+  now save the sale BEFORE writing the receipt. Dashboard sync warns when
+  server-refused offline sales remain.
+- Verified live (rolled-back transactions): Pharmacist override rejected
+  42501 "Price override not allowed…", catalog price allowed, Owner override
+  allowed, custom roles row granting canEditPrice allowed, negative price
+  rejected 23514, unknown product id allowed. Advisors: no new findings.
 ```
 
 ```

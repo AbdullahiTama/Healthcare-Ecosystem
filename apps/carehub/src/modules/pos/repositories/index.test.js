@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createSaleRepository, createMemoryOfflineQueue } from './index.js'
+import { createSaleRepository, createMemoryOfflineQueue, isServerRejection } from './index.js'
 import { createInMemoryClient } from '../../../test/inMemoryClient.js'
 
 const A = 'biz-A'
@@ -88,6 +88,28 @@ describe('saleRepository', () => {
     expect(offline.all()[0]).toMatchObject({ txn_no: 'TXN-1' })
   })
 
+  // The server refused this sale (e.g. guard_sale_item_prices rejected an
+  // unauthorized price override): parking it would retry forever, so it is
+  // rethrown for the cashier to see instead of queued.
+  it('create rethrows a server rejection instead of queueing the sale', async () => {
+    const offline = createMemoryOfflineQueue()
+    const repo = createSaleRepository({
+      request: async () => { throw new Error('Supabase error (403): Price override not allowed: "Drug A" is priced at 500 but was recorded at 50.') },
+      offline,
+      isOnline: () => true,
+    })
+
+    await expect(repo.create(A, { txn_no: 'TXN-1', total: 500 })).rejects.toThrow(/Price override not allowed/)
+    expect(offline.all()).toHaveLength(0)
+  })
+
+  it('isServerRejection only matches client-side HTTP rejections', () => {
+    expect(isServerRejection(new Error('Supabase error (403): denied'))).toBe(true)
+    expect(isServerRejection(new Error('Supabase error (400): bad payload'))).toBe(true)
+    expect(isServerRejection(new Error('Supabase error (500): server hiccup'))).toBe(false)
+    expect(isServerRejection(new Error('network down'))).toBe(false)
+  })
+
   it('update is scoped to the tenant', async () => {
     const { repo, client } = build({
       seed: {
@@ -109,9 +131,10 @@ describe('saleRepository', () => {
     const { repo, client, offline } = build({
       queued: [{ txn_no: 'TXN-1', total: 100 }, { txn_no: 'TXN-2', total: 200 }],
     })
-    const count = await repo.syncQueued(A)
+    const result = await repo.syncQueued(A)
 
-    expect(count).toBe(2)
+    expect(result.synced).toBe(2)
+    expect(result.rejected).toHaveLength(0)
     expect(client.rows('sales').map((s) => s.txn_no).sort()).toEqual(['TXN-1', 'TXN-2'])
     // the internal queue id is stripped before the row is written
     expect(client.rows('sales').every((s) => s._offline_id === undefined)).toBe(true)
@@ -139,12 +162,43 @@ describe('saleRepository', () => {
       isOnline: () => true,
     })
 
-    const count = await repo.syncQueued(A)
+    const result = await repo.syncQueued(A)
 
-    expect(count).toBe(2)
+    expect(result.synced).toBe(2)
     expect(written.map((r) => r.txn_no)).toEqual(['TXN-ok-1', 'TXN-ok-2'])
     // the rejected sale is still queued, and will be retried
     expect(offline.all().map((s) => s.txn_no)).toEqual(['TXN-bad'])
+  })
+
+  // A server-refused sale (4xx) is permanent: it is reported to the caller
+  // and kept in the queue (never dropped), so it can be resolved rather than
+  // silently retried forever.
+  it('syncQueued reports a server-refused sale and keeps it queued', async () => {
+    const offline = createMemoryOfflineQueue([
+      { txn_no: 'TXN-ok', total: 100 },
+      { txn_no: 'TXN-blocked', total: 200 },
+    ])
+    const written = []
+    const repo = createSaleRepository({
+      request: async (path, options) => {
+        const row = JSON.parse(options.body)
+        if (row.txn_no === 'TXN-blocked') throw new Error('Supabase error (403): Price override not allowed: "Drug A" is priced at 500 but was recorded at 50.')
+        written.push(row)
+        return [row]
+      },
+      offline,
+      isOnline: () => true,
+    })
+
+    const result = await repo.syncQueued(A)
+
+    expect(result.synced).toBe(1)
+    expect(result.rejected).toHaveLength(1)
+    expect(result.rejected[0].txn_no).toBe('TXN-blocked')
+    expect(result.rejected[0].error).toMatch(/Price override not allowed/)
+    // the blocked sale is never dropped — it stays queued for the cashier
+    expect(offline.all().map((s) => s.txn_no)).toEqual(['TXN-blocked'])
+    expect(written.map((r) => r.txn_no)).toEqual(['TXN-ok'])
   })
 
   it('syncQueued leaves the queue intact when every sale fails', async () => {
@@ -154,13 +208,15 @@ describe('saleRepository', () => {
       offline,
       isOnline: () => true,
     })
-    expect(await repo.syncQueued(A)).toBe(0)
+    const result = await repo.syncQueued(A)
+    expect(result.synced).toBe(0)
     expect(offline.all()).toHaveLength(2)
   })
 
   it('syncQueued is a no-op while offline, so the queue survives', async () => {
     const { repo, client, offline } = build({ online: false, queued: [{ txn_no: 'TXN-1' }] })
-    expect(await repo.syncQueued(A)).toBe(0)
+    const result = await repo.syncQueued(A)
+    expect(result.synced).toBe(0)
     expect(client.rows('sales')).toHaveLength(0)
     expect(offline.all()).toHaveLength(1)
   })

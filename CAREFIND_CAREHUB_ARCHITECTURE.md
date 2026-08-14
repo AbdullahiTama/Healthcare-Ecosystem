@@ -61,3 +61,10 @@ project via PostgREST (RLS-protected). Both have `api/` (serverless) and
 - Business-scoped policies on `clients`, `requisitions`, `requisition_items`, `sales`, `appointments`, etc.
 - Payment RPCs (`settle_card_booking`, `pay_booking_with_credits`, `pay_professional_consultation`, `settle_consultation_payment`) are SECURITY DEFINER, revoked from anon/authenticated (service-role only) — clients reach them via serverless handlers.
 - `create_requisition` is SECURITY INVOKER, granted to `authenticated` (RLS applies as caller).
+- `guard_sale_item_prices` (BEFORE INSERT on `sales`) is SECURITY INVOKER with a
+  pinned `search_path` — adds per-line price authorization on top of RLS:
+  price overrides require the frontend-mirrored `canEditPrice` permission
+  (business owner, or a custom `roles` row granting it); trusted roles
+  (`postgres`, `service_role`, `supabase_admin`, `supabase_auth_admin`,
+  `is_platform_admin()`) pass through. A rejected sale aborts before the AFTER
+  INSERT stock trigger, so inventory is never decremented for blocked sales.

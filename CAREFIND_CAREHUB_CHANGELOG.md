@@ -127,3 +127,60 @@ both the parent and lines; the requester lookup is scoped to the caller's own
 business.
 
 **Tests:** CareHub suite 288/288 pass; production build clean.
+
+---
+
+## 2026-08-14 — Feature 3: CareHub POS Edit Price
+
+**Issue (audit gap):** the POS UI gates price overrides behind
+`perms.canEditPrice` (Owner only by default), but there was **no server-side
+price authorization** — any authenticated business member could POST crafted
+`items` prices straight to `/rest/v1/sales` and record a sale below catalog
+price (or negative), bypassing the UI gate entirely.
+
+**Database changes (new, applied live):**
+- `apps/carehub/sql/20260814_guard_sale_item_prices.sql` — `guard_sale_item_prices()`
+  (SECURITY INVOKER, pinned `search_path = public`) + `BEFORE INSERT` trigger
+  on `sales`. Trusted roles pass through (`postgres`, `service_role`,
+  `supabase_admin`, `supabase_auth_admin`, `is_platform_admin()`). For
+  everyone else it resolves the caller exactly like the frontend: business
+  owner by email → `'Owner'`; else active staff by `auth_user_id` OR email →
+  `staff.role`; a custom `roles` row for that business
+  (`permissions->>'canEditPrice' = 'true'`) wins, otherwise only
+  `role = 'Owner'` may override the catalog price. Negative prices raise
+  `check_violation`; unknown product ids are skipped (mirrors the stock
+  trigger's never-lose-a-sale policy). Because the trigger is BEFORE INSERT,
+  a rejected sale aborts before the AFTER INSERT stock trigger runs — blocked
+  sales do not decrement inventory.
+
+**Frontend changes:**
+- `apps/carehub/src/modules/pos/repositories/index.js` — `isServerRejection(e)`
+  matches `Supabase error (4xx)`; `create()` rethrows server rejections instead
+  of silently queueing them; `syncQueued()` now returns `{ synced, rejected }`
+  (was a count) so refused offline sales are visible.
+- `apps/carehub/src/modules/pos/POS.jsx` — `cleanServerError` helper; `saveSale()`
+  toasts the server message then rethrows; `charge()`/`chargeCredit()` save the
+  sale BEFORE writing the receipt (previously the receipt rendered then the
+  save could fail silently); `holdSale()` keeps the cart intact on rejection.
+- `apps/carehub/src/pages/dashboard/BusinessDashboard.jsx` — both `syncQueued`
+  callers use the new contract and warn when server-refused offline sales
+  remain after a sync.
+
+**Authentication/RLS:** trigger is SECURITY INVOKER — the PostgREST caller's
+own RLS still governs row visibility; the trigger only adds per-line price
+authorization. Trusted service roles are unaffected.
+
+**Tests:** CareHub suite 291/291 pass (3 new: create rethrows 4xx without
+queueing, syncQueued reports rejected, isServerRejection matching); production
+build clean.
+
+**Manual verification (live, rolled-back transactions):** (1) Pharmacist
+(no canEditPrice) override price 50 vs catalog 10500 → rejected 42501
+`Price override not allowed: "NAN 1  4OOG" is priced at 10500 but was recorded
+at 50…`; (2) same Pharmacist at catalog price 10500 → allowed; (3) Owner
+(`john71688@gmail.com`) override → allowed; (4) custom `roles` row named
+`Pharmacist` with `canEditPrice: true` → override allowed (custom role
+precedence proven); (5) negative price → rejected 23514 `Invalid sale price`;
+(6) line with an unknown product id → allowed and skipped. No test rows left
+behind; security advisors report no new findings (trigger absent from
+`function_search_path_mutable` / SECURITY DEFINER lints).

@@ -56,6 +56,8 @@ const PAGE_TITLES = {
   overview: 'Overview',
 }
 
+const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
+
 export default function BusinessDashboard() {
   const { auth, logout } = useAuth()
   const brand = auth?.brand
@@ -101,7 +103,10 @@ export default function BusinessDashboard() {
     if (!brand?.id) return
     loadProducts()
     if (navigator.onLine) {
-      saleRepository.syncQueued(brand.id).then(n => { if (n > 0) showToast(n + ' offline sale(s) synced!') })
+      saleRepository.syncQueued(brand.id).then(r => {
+        if (r.synced > 0) showToast(r.synced + ' offline sale(s) synced!')
+        if (r.rejected.length > 0) showToast(r.rejected.length + ' queued sale(s) were blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
+      }).catch(() => {})
     }
   }, [brand?.id])
 
@@ -123,8 +128,12 @@ export default function BusinessDashboard() {
 
   const handleSync = async () => {
     setSyncing(true)
-    const n = await saleRepository.syncQueued(brand?.id)
-    showToast(n > 0 ? n + ' sale(s) synced!' : 'All sales already synced.')
+    const r = await saleRepository.syncQueued(brand?.id)
+    if (r.rejected.length > 0) {
+      showToast((r.synced > 0 ? r.synced + ' sale(s) synced. ' : '') + r.rejected.length + ' sale(s) blocked by the server: ' + shortReason(r.rejected[0].error), { type: 'warning' })
+    } else {
+      showToast(r.synced > 0 ? r.synced + ' sale(s) synced!' : 'All sales already synced.')
+    }
     setSyncing(false)
   }
 

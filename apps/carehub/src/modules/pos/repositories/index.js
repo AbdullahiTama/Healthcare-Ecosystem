@@ -48,6 +48,18 @@ export function createMemoryOfflineQueue(initial = []) {
   }
 }
 
+// Distinguishes a server REJECTION from a transient failure. sbFetch throws
+// `Supabase error (403): ...` when PostgREST answers with an HTTP error; a
+// 4xx (RLS violation, the guard_sale_item_prices price guard, a malformed
+// payload) means "this sale will never be accepted as-is", while a 5xx or a
+// network failure is worth retrying. The offline queue exists for transient
+// failures — a permanently-rejected sale must surface to the cashier instead
+// of parking in the queue and retrying forever.
+export function isServerRejection(e) {
+  const m = e && typeof e.message === 'string' && e.message.match(/Supabase error \(([45]\d{2})\)/)
+  return !!(m && Number(m[1]) < 500)
+}
+
 // ── Sale repository ───────────────────────────────────────────────────────────
 // A deep module over the `sales` table plus the offline queue that backs it.
 // Callers issue one intent — "record this sale" — and never decide for
@@ -87,6 +99,13 @@ export function createSaleRepository({
     //   queued: false            — written to the database
     //   queued: true, 'offline'  — no connection, parked for later replay
     //   queued: true, 'error'    — the write failed, parked rather than lost
+    //
+    // A server REJECTION (4xx — e.g. the guard_sale_item_prices trigger
+    // refusing an unauthorized price override) is neither of those: the
+    // database refused this sale, so it must not be parked for replay (it
+    // would be refused again forever) nor silently dropped. It is rethrown so
+    // the page can show the real reason to the cashier. Only transient
+    // failures (network, 5xx) park the sale.
     async create(businessId, sale) {
       const row = { ...sale, business_id: businessId }
       if (!isOnline()) {
@@ -97,6 +116,7 @@ export function createSaleRepository({
         const rows = await request('sales', { method: 'POST', body: JSON.stringify(row) })
         return { queued: false, sale: Array.isArray(rows) ? rows[0] : rows }
       } catch (e) {
+        if (isServerRejection(e)) throw e
         // A sale is money that already changed hands — never drop it because
         // the write failed.
         offline.push(row)
@@ -120,7 +140,12 @@ export function createSaleRepository({
     },
 
     // Replays queued sales and returns how many landed. Called on dashboard
-    // mount and from the manual Sync button.
+    // mount and from the manual Sync button. Returns { synced, rejected }:
+    //   synced    — how many reached the database
+    //   rejected  — [{ txn_no, error }] for sales the SERVER refused (4xx).
+    // A server-refused sale would fail every retry, but it is never dropped —
+    // it stays in the queue and is reported so the cashier can resolve it
+    // (re-record at the authorized price, or grant the permission).
     //
     // Only the sales that actually synced are removed. The previous
     // implementation cleared the whole queue whenever at least one succeeded,
@@ -128,11 +153,12 @@ export function createSaleRepository({
     // the two that never reached the database. Failures stay queued and are
     // retried on the next sync.
     async syncQueued(businessId) {
-      if (!isOnline()) return 0
+      if (!isOnline()) return { synced: 0, rejected: [] }
       const queue = offline.all()
-      if (!queue.length) return 0
+      if (!queue.length) return { synced: 0, rejected: [] }
 
       const unsynced = []
+      const rejected = []
       let count = 0
       for (const sale of queue) {
         try {
@@ -140,11 +166,12 @@ export function createSaleRepository({
           await request('sales', { method: 'POST', body: JSON.stringify({ ...data, business_id: businessId }) })
           count++
         } catch (e) {
+          if (isServerRejection(e)) rejected.push({ txn_no: sale.txn_no, error: e.message })
           unsynced.push(sale)
         }
       }
       if (count > 0) offline.replace(unsynced)
-      return count
+      return { synced: count, rejected }
     },
   }
 }

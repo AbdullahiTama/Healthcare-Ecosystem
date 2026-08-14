@@ -27,6 +27,11 @@ const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border
 // system (matches the dashboard template's icon-tile treatment).
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
 
+// Strips the transport prefix off a server error so the cashier sees the
+// actual reason ("Price override not allowed: ...") instead of the raw
+// "Supabase error (403): ..." wrapper.
+const cleanServerError = (e) => String(e?.message || e).replace(/^Supabase error \(\d{3}\):\s*/, '')
+
 const PAYMENT_METHODS = [
   ['Cash', DollarSign], ['Transfer', Repeat], ['POS', CreditCard], ['Split', Divide], ['Credit', Clock],
 ]
@@ -194,12 +199,23 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // The repository decides whether the sale reaches the database or the offline
   // queue; the page only reports what happened. A queued-on-error sale stays
   // silent, exactly as before — the cashier is told nothing failed because
-  // nothing was lost.
+  // nothing was lost. But when the SERVER rejects the sale (e.g. the
+  // guard_sale_item_prices trigger refuses an unauthorized price override),
+  // the repository rethrows: the sale must not be parked in the offline queue
+  // (it would never sync) nor silently swallowed — the cashier sees the real
+  // reason and can act on it.
   async function saveSale(saleData) {
-    const { queued, reason } = await saleRepository.create(brand.id, saleData)
-    if (queued && reason === 'offline') {
+    let result
+    try {
+      result = await saleRepository.create(brand.id, saleData)
+    } catch (e) {
+      showToast(cleanServerError(e), { type: 'error' })
+      throw e
+    }
+    if (result.queued && result.reason === 'offline') {
       showToast('Sale saved offline — will sync when connected', { type: 'info' })
     }
+    return result
   }
 
   async function charge() {
@@ -242,12 +258,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       balance,
     }
 
+    // The sale must be recorded BEFORE the UI advances: if the server rejects
+    // it (guard_sale_item_prices — an unauthorized price override), saveSale
+    // throws, so the receipt never shows, product state never decrements and
+    // no debt is created for a sale that did not happen.
+    await saveSale(saleData)
     setReceipt(receiptData)
     setProducts(prev => prev.map(p => {
       const s = cart.find(c => c.id === p.id)
       return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p
     }))
-    await saveSale(saleData)
     await finishResumedSale()
 
     // AUTO-CREATE DEBT if amount paid is less than total
@@ -293,13 +313,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       is_credit: true,
       is_on_hold: false,
     }
+    // Record before advancing the UI — a server rejection (price guard)
+    // must not show a receipt, decrement stock state or open a debt for a
+    // sale that did not happen.
+    await saveSale(saleData)
     setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
     // `p.cat` was always undefined here — the column is `category` (Inventory
     // strips `cat` on write), so Services lines were decremented on this path
     // but not in charge(). Both now agree, and both are display-only: the
     // authoritative decrement is the sale_stock_movement trigger.
     setProducts(prev => prev.map(p => { const s = cart.find(c => c.id === p.id); return s && (p.cat || p.category) !== 'Services' ? { ...p, stock: Math.max(0, p.stock - s.qty) } : p }))
-    await saveSale(saleData)
     await finishResumedSale()
     // AUTO-CREATE DEBT: credit sale automatically appears in debts as "Owes Us"
     if (balance > 0 && brand?.id) {
@@ -321,20 +344,27 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   async function holdSale() {
     if (!cart.length) return
     const txnNo = genId('HLD')
-    await saveSale({
-      txn_no: txnNo,
-      client_name: client || 'Walk-in',
-      items: JSON.stringify(cart),
-      subtotal: sub,
-      discount: discAmt,
-      total,
-      payment_method: 'On Hold',
-      amount_paid: 0,
-      balance: total,
-      is_credit: false,
-      is_on_hold: true,
-      notes: holdNote,
-    })
+    // A held sale is validated at insert like any other: if the server
+    // rejects it (price guard), saveSale already toasted the reason — keep the
+    // cart and the modal intact instead of clearing them.
+    try {
+      await saveSale({
+        txn_no: txnNo,
+        client_name: client || 'Walk-in',
+        items: JSON.stringify(cart),
+        subtotal: sub,
+        discount: discAmt,
+        total,
+        payment_method: 'On Hold',
+        amount_paid: 0,
+        balance: total,
+        is_credit: false,
+        is_on_hold: true,
+        notes: holdNote,
+      })
+    } catch (e) {
+      return
+    }
     showToast('Sale held — resume it from Held Sales', { type: 'success' })
     setShowHoldModal(false)
     setCart([])
