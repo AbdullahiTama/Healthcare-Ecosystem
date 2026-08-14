@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -21,6 +21,7 @@ import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/sub
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
 import { Card, CardSkeleton, Empty, Stars, Toast, useToast } from '../../components/ui'
 import { PostTileGrid, isRepost, withoutRepostMark } from '../social-feed/postDisplay.jsx'
+import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 
 function Profile() {
   const { user, signOut } = useAuth()
@@ -69,9 +70,6 @@ function Profile() {
   // Sequential story viewer over myStories (Phase 5): progress bars + tap
   // zones instead of the old one-story-at-a-time viewer.
   const [viewerIndex, setViewerIndex] = useState(null)
-  const [progress, setProgress] = useState(0)
-  const STORY_DURATION = 6000
-  const storyTimerRef = useRef(null)
   const [productUpload, setProductUpload] = useState(false)
   const [sheetKind, setSheetKind] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
@@ -191,28 +189,15 @@ function Profile() {
   // the PublicProfile viewer so the same interaction works everywhere.
   useEffect(() => {
     if (viewerIndex === null) return
-    setProgress(0)
     const st = myStories[viewerIndex]
     if (st) supabase.rpc('increment_story_view', { story_id: st.id }).catch(() => {})
-    const start = Date.now()
-    storyTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - start
-      const pct = Math.min(100, (elapsed / STORY_DURATION) * 100)
-      setProgress(pct)
-      if (pct >= 100) { clearInterval(storyTimerRef.current); goNextStory() }
-    }, 50)
-    return () => clearInterval(storyTimerRef.current)
   }, [viewerIndex])
 
   function closeStoryViewer() {
     setViewerIndex(null)
-    if (storyTimerRef.current) clearInterval(storyTimerRef.current)
   }
-  function goNextStory() {
-    setViewerIndex((prev) => (prev === null ? null : prev + 1 >= myStories.length ? null : prev + 1))
-  }
-  function goPrevStory() {
-    setViewerIndex((prev) => (prev === null ? null : prev - 1 < 0 ? 0 : prev - 1))
+  function navigateMyStory(next) {
+    setViewerIndex(next === null || next < 0 || next >= myStories.length ? null : next)
   }
 
   function timeAgo(dateStr) {
@@ -979,55 +964,23 @@ function Profile() {
 
       {/* Story viewer — sequential playback with progress bars (Phase 5) */}
       {viewerIndex !== null && myStories[viewerIndex] && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: '#000', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', gap: 4, padding: '10px 10px 0', zIndex: 2 }}>
-            {myStories.map((_, i) => (
-              <div key={i} style={{ flex: 1, height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 3, background: '#fff',
-                  width: i < viewerIndex ? '100%' : i === viewerIndex ? `${progress}%` : '0%',
-                  transition: i === viewerIndex ? 'width 0.05s linear' : 'none',
-                }} />
+        <StoryViewer
+          stories={myStories}
+          index={viewerIndex}
+          onNavigate={navigateMyStory}
+          onClose={closeStoryViewer}
+          renderHeader={(s) => (
+            <>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
+                {(s.title?.[0] || (displayLabel?.[0] ?? '?')).toUpperCase()}
               </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', zIndex: 2 }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
-              {(myStories[viewerIndex].title?.[0] || (displayLabel?.[0] ?? '?')).toUpperCase()}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{displayLabel}</p>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(myStories[viewerIndex].created_at)}</p>
-            </div>
-            <button onClick={closeStoryViewer} aria-label="Close story" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}>
-              <X size={24} aria-hidden="true" />
-            </button>
-          </div>
-
-          <div style={{ flex: 1, position: 'relative' }}>
-            <div onClick={goPrevStory} aria-label="Previous story" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '35%', zIndex: 2 }} />
-            <div onClick={goNextStory} aria-label="Next story" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '35%', zIndex: 2 }} />
-
-            {myStories[viewerIndex].image_url ? (
-              <div style={{ width: '100%', height: '100%', background: `url(${myStories[viewerIndex].image_url})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', background: myStories[viewerIndex].bg_color || theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 30, boxSizing: 'border-box' }}>
-                <div style={{ textAlign: 'center', maxWidth: 340 }}>
-                  {myStories[viewerIndex].title && <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 900, margin: '0 0 14px 0', lineHeight: 1.2 }}>{myStories[viewerIndex].title}</h2>}
-                  {myStories[viewerIndex].body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{myStories[viewerIndex].body}</p>}
-                </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{displayLabel}</p>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(s.created_at)}</p>
               </div>
-            )}
-
-            {myStories[viewerIndex].image_url && (myStories[viewerIndex].title || myStories[viewerIndex].body) && (
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, padding: '40px 20px 24px', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))' }}>
-                {myStories[viewerIndex].title && <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 900, margin: '0 0 6px 0' }}>{myStories[viewerIndex].title}</h2>}
-                {myStories[viewerIndex].body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 14, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{myStories[viewerIndex].body}</p>}
-              </div>
-            )}
-          </div>
-        </div>
+            </>
+          )}
+        />
       )}
 
       {productUpload && (

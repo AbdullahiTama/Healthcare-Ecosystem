@@ -98,7 +98,13 @@ Frontend: COMPLETE
 - Tests: new `GiftPanel.test.jsx` (4 cases — correct `send_gift` args, recipient notified on success, no notify on failure, blocked when wallet insufficient). Full suite 248/249 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 8 — PROFILE STORIES
-Status: VERIFIED DONE (no changes planned)
+Status: COMPLETE (2026-08-14)
+Backend: COMPLETE
+Frontend: COMPLETE
+- Verified the whole journey end-to-end: story circle rail at the top of the own profile (`Profile.jsx`), the public profile (`PublicProfile.jsx`) and the feed (`Stories.jsx`); sequential playback with progress bars; auto-advance; tap next/previous zones; expiry (`expires_at > now()`) enforced on every load; seen/unseen ring on `PublicProfile` via `storyViews.js`.
+- Live DB verified: `stories` and `story_views` tables exist; RLS correct (readers/inserters scoped to the viewer's own rows on `story_views`, platform/user story policies present); `increment_story_view` RPC exists. The `20260813_story_views.sql` migration is tracked in the repo.
+- **Consolidated the 3 duplicated full-screen viewers** (previously ~90 lines of identical timer/progress/tap-zone code inlined in `Stories.jsx`, `Profile.jsx` and `PublicProfile.jsx`) into a shared `StoryViewer` component that owns the auto-advance timer, progress bars, tap zones, content layout and close button. Each profile passes its own header via `renderHeader`; per-story side effects (view counting, seen marking) stay in each caller via `onViewStory`/an effect keyed on the index. No behaviour change.
+- Tests: new `StoryViewer.test.jsx` (8 cases — render, onViewStory once, auto-advance with fake timers, next/prev zones, close, out-of-range renders nothing, image story, last-story advance). Full suite 256/257 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 9 — VIDEO FEED
 Status: VERIFIED DONE (track `video_url` DDL if feasible)

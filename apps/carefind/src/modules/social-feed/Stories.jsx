@@ -1,10 +1,11 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
 import { CalendarClock, Image as ImageIcon, Radio, Sparkles, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Loading, Toast, useToast } from '../../components/ui'
+import { Toast, useToast } from '../../components/ui'
+import StoryViewer from './components/StoryViewer.jsx'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
@@ -13,7 +14,6 @@ function Stories() {
   const [stories, setStories] = useState([])
   const [viewerIndex, setViewerIndex] = useState(null)
   const [loadingStories, setLoadingStories] = useState(true)
-  const [progress, setProgress] = useState(0)
   const [canPost, setCanPost] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
   const [sTitle, setSTitle] = useState('')
@@ -23,10 +23,7 @@ function Stories() {
   const [posting, setPosting] = useState(false)
   const [liveShow, setLiveShow] = useState(null)
   const [upcomingShow, setUpcomingShow] = useState(null)
-  const timerRef = useRef(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-
-  const STORY_DURATION = 6000
 
   useEffect(() => {
     loadStories()
@@ -87,25 +84,13 @@ function Stories() {
 
   useEffect(() => {
     if (viewerIndex === null) return
-    setProgress(0)
     const st = stories[viewerIndex]
     if (st) supabase.rpc('increment_story_view', { story_id: st.id })
-    const start = Date.now()
-    timerRef.current = setInterval(() => {
-      const elapsed = Date.now() - start
-      const pct = Math.min(100, (elapsed / STORY_DURATION) * 100)
-      setProgress(pct)
-      if (pct >= 100) { clearInterval(timerRef.current); goNext() }
-    }, 50)
-    return () => clearInterval(timerRef.current)
   }, [viewerIndex])
 
-  function closeViewer() { setViewerIndex(null); if (timerRef.current) clearInterval(timerRef.current) }
-  function goNext() {
-    setViewerIndex((prev) => (prev === null ? null : prev + 1 >= stories.length ? null : prev + 1))
-  }
-  function goPrev() {
-    setViewerIndex((prev) => (prev === null ? null : prev - 1 < 0 ? 0 : prev - 1))
+  function closeViewer() { setViewerIndex(null) }
+  function navigateStory(next) {
+    setViewerIndex(next === null || next < 0 || next >= stories.length ? null : next)
   }
 
   function storyLabel(s) {
@@ -248,52 +233,26 @@ function Stories() {
 
       {/* Full-screen viewer */}
       {viewerIndex !== null && stories[viewerIndex] && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: '#000', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', gap: 4, padding: '10px 10px 0' }}>
-            {stories.map((_, i) => (
-              <div key={i} style={{ flex: 1, height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.3)', overflow: 'hidden' }}>
-                <div style={{ height: '100%', borderRadius: 3, background: '#fff', width: i < viewerIndex ? '100%' : i === viewerIndex ? `${progress}%` : '0%', transition: i === viewerIndex ? 'width 0.05s linear' : 'none' }} />
+        <StoryViewer
+          stories={stories}
+          index={viewerIndex}
+          onNavigate={navigateStory}
+          onClose={closeViewer}
+          renderHeader={(s, { onClose }) => (
+            <>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: s.is_platform ? theme.warning : theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
+                {storyInitial(s)}
               </div>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px' }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: stories[viewerIndex].is_platform ? theme.warning : theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>
-              {storyInitial(stories[viewerIndex])}
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>
-                {stories[viewerIndex].is_platform && <Sparkles size={13} color={theme.warning} aria-hidden="true" />}
-                {storyLabel(stories[viewerIndex])}
-              </p>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(stories[viewerIndex].created_at)}</p>
-            </div>
-            <button onClick={closeViewer} aria-label="Close story" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }}><X size={24} aria-hidden="true" /></button>
-          </div>
-
-          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div onClick={goPrev} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '35%', zIndex: 2 }} />
-            <div onClick={goNext} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '35%', zIndex: 2 }} />
-
-            {stories[viewerIndex].image_url ? (
-              <div style={{ width: '100%', height: '100%', background: `url(${stories[viewerIndex].image_url})`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', background: stories[viewerIndex].bg_color || theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 30, boxSizing: 'border-box' }}>
-                <div style={{ textAlign: 'center', maxWidth: 340 }}>
-                  {stories[viewerIndex].title && <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 900, margin: '0 0 14px 0', lineHeight: 1.2 }}>{stories[viewerIndex].title}</h2>}
-                  {stories[viewerIndex].body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{stories[viewerIndex].body}</p>}
-                </div>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>
+                  {s.is_platform && <Sparkles size={13} color={theme.warning} aria-hidden="true" />}
+                  {storyLabel(s)}
+                </p>
+                <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{timeAgo(s.created_at)}</p>
               </div>
-            )}
-
-            {stories[viewerIndex].image_url && (stories[viewerIndex].title || stories[viewerIndex].body) && (
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, padding: '40px 20px 24px', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))' }}>
-                {stories[viewerIndex].title && <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 900, margin: '0 0 6px 0' }}>{stories[viewerIndex].title}</h2>}
-                {stories[viewerIndex].body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 14, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{stories[viewerIndex].body}</p>}
-              </div>
-            )}
-          </div>
-        </div>
+            </>
+          )}
+        />
       )}
 
       {/* User composer */}

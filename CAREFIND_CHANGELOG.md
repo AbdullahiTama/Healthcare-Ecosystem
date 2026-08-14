@@ -264,3 +264,47 @@ Production build clean.
 
 **Known limitations / next:** Features 1–7 verified complete. Next: Feature 8
 (Profile Stories — auto-advance gap + re-engagement).
+
+---
+
+## 2026-08-14 — Feature 8 (Profile Stories)
+
+**What:**
+- Verified the full story journey end-to-end. The circle rail renders at the
+  top of the own profile (`Profile.jsx`), the public profile (`PublicProfile.jsx`)
+  and the feed (`Stories.jsx`); playback is sequential with progress bars,
+  auto-advance, and tap next/previous zones; expired stories are excluded on
+  every load (`.gt('expires_at', …)`); `PublicProfile` greys its ring out once
+  the viewer has seen every story (via `storyViews.js`).
+- **Live DB verified:** `stories` and `story_views` tables exist; RLS is correct
+  (`story_views` reads/inserts scoped to `user_id = auth.uid()`; `stories`
+  insert restricted to the owner with `is_platform = false`); the
+  `increment_story_view` RPC exists and is callable. The
+  `20260813_story_views.sql` migration is tracked in the repo.
+- **Removed the 3 duplicated viewers.** The full-screen viewer — ~90 lines of
+  identical timer/progress/tap-zone/content JSX — was inlined three times.
+  Extracted a shared `StoryViewer` component
+  (`src/modules/social-feed/components/StoryViewer.jsx`) that owns the
+  auto-advance timer, progress bars, tap zones, content layout and close
+  button. Each caller supplies its header via `renderHeader` and keeps its own
+  per-story side effects (view counting, seen marking) keyed on the index.
+  Behaviour is unchanged; the duplication is gone.
+
+**Why:** The audit marked F8 DONE but noted "3 duplicated viewers (cosmetic)" —
+triplicated logic of exactly the kind the engineering standard forbids. The
+feature itself needed verification against live before signing off.
+
+**Affected files:**
+- `apps/carefind/src/modules/social-feed/components/StoryViewer.jsx` (new — shared viewer)
+- `apps/carefind/src/modules/social-feed/components/StoryViewer.test.jsx` (new, 8)
+- `apps/carefind/src/modules/social-feed/Stories.jsx` (use shared viewer)
+- `apps/carefind/src/modules/account/Profile.jsx` (use shared viewer)
+- `apps/carefind/src/PublicProfile.jsx` (use shared viewer)
+
+**Tests performed:** full suite 256/257 pass in forks mode — the single failure
+is the same pre-existing `VideoPlayer` timing flake (passes in isolation).
+Production build clean.
+
+**Known limitations / next:** Features 1–8 verified complete. Next: Feature 9
+(Video Feed — `video_url` DDL is untracked; add the DDL to the repo if
+feasible).
