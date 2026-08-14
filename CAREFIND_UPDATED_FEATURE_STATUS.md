@@ -22,7 +22,7 @@ list; nothing is assumed missing or complete.
 | 2 | News Engagement | PARTIAL | Article page has full engagement (like/comment/save/share/gift/views) and the Notifications UI already supports `news_like`/`news_comment` types — but **neither is ever fired**: `toggleLike`/`addComment` never call `notify()`, so article authors get no notifications. |
 | 3 | Media Attachments in Sharing | PARTIAL | `sharePost` shares only text + the feed URL — the post's `image_url`/`video_url` are never attached. `shareOrCopy` supports the Web Share API but never passes `files`, so a WhatsApp share of a visual/video post sends just the caption, not the media. |
 | 4 | Profile Stories | COMPLETE | No gaps found. `stories` + `story_views` tables exist with RLS and the `increment_story_view` RPC is live; story rails (own profile composer, public profile seen-ring, feed rail) all use the shared `StoryViewer` with expiry filtering and seen tracking. |
-| 5 | Video Feed | NOT AUDITED | — |
+| 5 | Video Feed | COMPLETE | No gaps found. `posts.video_url` column + `posts_video_feed_idx` partial index live; DDL now tracked in repo; `VideoPlayer.jsx` real playback with IntersectionObserver play/pause, reduced-motion handling, loading/error/retry; Videos tab in `FEED_TABS` with server-side filter + empty state. |
 | 6 | Personalized Feed | NOT AUDITED | — |
 | 7 | Markdown Rendering | NOT AUDITED | — |
 | 8 | Wallet Withdrawal Banks + Security | NOT AUDITED | — |
@@ -129,7 +129,33 @@ Auth/RLS: COMPLETE
 
 ## FEATURE 5 — VIDEO FEED
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (verified 2026-08-14 — no code changes required)
+Frontend: COMPLETE
+Backend: COMPLETE
+Database: COMPLETE
+- Audit confirmed the video journey is fully implemented end-to-end; the
+  "updated pending issue" was verified, not re-worked.
+- Frontend: `VideoPlayer.jsx` renders a real `<video>` element that autoplays
+  muted only while on screen — IntersectionObserver (~35% viewport threshold)
+  plays/pauses as cards scroll, `visibilitychange` pauses in hidden tabs,
+  reduced-motion users get a manual play affordance, and loading/error/retry
+  states render instead of a blank hole (aria-labels included). Wired into
+  `VisualCard.jsx` (`videoUrl` prop) and the composer (visual posts write
+  `video_url`).
+- Feed: the **Videos** tab (`FEED_TABS` entry `['video', 'Videos']`) runs a
+  dedicated server query — `loadFeed` filters `.not('video_url','is',null)`
+  (with the pre-repost-columns fallback) — and `visiblePosts` keeps only video
+  posts; empty state "No videos yet" present.
+- Database (verified live): `posts.video_url` column exists (1 col) and the
+  `posts_video_feed_idx` partial index on `(created_at desc) where video_url is
+  not null` exists. DDL now tracked in the repo:
+  `apps/carefind/sql/20260814_posts_video_url_ddl.sql` (idempotent add-column +
+  partial index) — the historical untracked-DDL gap is closed.
+- Tests: `VideoPlayer.test.jsx` (5 cases) covers the player; full CareFind
+  suite 266/266 passes; production build clean.
+- Advisor run after the DDL migration showed no new findings (all WARNs are
+  pre-existing multiple-policy / duplicate-index entries unrelated to this
+  change).
 
 ## FEATURE 6 — PERSONALIZED FEED
 

@@ -135,3 +135,33 @@ viewers see a seen/unseen ring; views are tracked.
 - Note: `increment_story_view` carries the same pre-existing
   `function_search_path_mutable` WARN as the other `increment_*` RPCs — left
   unchanged for consistency.
+
+---
+
+## 2026-08-14 — Feature 5: Video Feed
+
+**What:** Users watch real video posts in a dedicated Videos tab — autoplay on
+scroll, no jank, graceful failure states.
+
+**Audit findings:**
+- The feature was already implemented end-to-end — verified, not re-worked.
+- `VideoPlayer.jsx` is a real `<video>` element with IntersectionObserver
+  autoplay/pause (~35% viewport threshold), `visibilitychange` handling for
+  hidden tabs, reduced-motion manual play, loading/error/retry states and
+  aria-labels. Wired into `VisualCard.jsx` and the composer (visual posts
+  write `video_url`).
+- The **Videos** tab is in `FEED_TABS` (`['video', 'Videos']`); `loadFeed`
+  filters `.not('video_url','is',null)` server-side (with the older-column
+  fallback), `visiblePosts` keeps only video posts, empty state present.
+- Live DB: `posts.video_url` column and the `posts_video_feed_idx` partial
+  index (`created_at desc where video_url is not null`) both exist; the DDL is
+  now tracked in the repo (`apps/carefind/sql/20260814_posts_video_url_ddl.sql`)
+  — the historical untracked-DDL caveat is closed.
+
+**Changes:** none required.
+
+**Verification:**
+- Live column + index inspection against the project DB.
+- `VideoPlayer.test.jsx` (5 cases) covers the player.
+- Full CareFind suite 266/266 passes; `npm run build` clean.
+- Advisor run after the DDL migration showed no new findings.
