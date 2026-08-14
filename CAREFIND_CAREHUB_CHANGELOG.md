@@ -184,3 +184,55 @@ precedence proven); (5) negative price → rejected 23514 `Invalid sale price`;
 (6) line with an unknown product id → allowed and skipped. No test rows left
 behind; security advisors report no new findings (trigger absent from
 `function_search_path_mutable` / SECURITY DEFINER lints).
+
+---
+
+## 2026-08-14 — Feature 4: CareHub Patient/Client Bulk Upload
+
+**Issue (audit gap):** the CSV upload's dedupe by phone number was enforced
+only in React — a `Set` of normalized phones built from whatever `getAll()`
+had just loaded. The `clients` table had no unique constraint, so a duplicate
+could still land via a concurrent upload, a single add between load and
+import, or any direct POST to `/rest/v1/clients`. The template's promise —
+"repeat customers are skipped, not duplicated" — was never enforced where the
+server could see it.
+
+**Database changes (new, applied live):**
+- `apps/carehub/sql/20260814_clients_phone_unique.sql` —
+  `clients_phone_unique_per_business`, a partial `UNIQUE` index on
+  `(business_id, regexp_replace(phone, '[^0-9]', '', 'g')) WHERE phone IS
+  NOT NULL AND btrim(phone) <> ''`. It mirrors the page's `normPhone`
+  exactly, so a row the app skips as a duplicate is exactly a row the server
+  rejects (23505 / 409). It is **per business** (the same phone in two
+  businesses still yields two clients — an upload is a per-business import),
+  and **blank/null phones are excluded** (a no-phone row can never collide
+  with a real phone). A partial predicate is only expressible as an index,
+  not a table constraint; PostgREST reports it as a 409 either way. No RLS or
+  function changes — a plain index adds no policy surface.
+
+**Frontend changes:**
+- `apps/carehub/src/modules/clients/repositories/index.js` — `isDuplicateError(e)`
+  recognises the PostgREST duplicate shape; `createMany()` now returns
+  `{ added, skipped, failed }` and classifies a server duplicate as `skipped`
+  (the template's own language) rather than a raw constraint failure.
+- `apps/carehub/src/modules/clients/Clients.jsx` — `importClients()` merges
+  the server-side `skipped` count into the summary (covers the race window);
+  `save()` surfaces "A client with this phone number already exists." instead
+  of the generic "Could not save client."
+
+**Authentication/RLS:** unchanged — `clients of own business` (ALL via
+`current_business_ids()`) still governs who can insert; the index only
+enforces "one normalized phone per business" on top of it. `global_client_id`
+remains unused (cross-business identity is a separate feature, documented in
+the migration header).
+
+**Tests:** CareHub suite 293/293 pass (2 new: createMany counts a server
+duplicate as skipped not failed; isDuplicateError matching). Build clean.
+
+**Manual verification (live, rolled-back transactions):** (1) authenticated
+Pharmacist inserts a client with an existing phone in the same business →
+rejected 23505; (2) same phone in a formatting variant (`0902-524-9323`) →
+rejected (normalization matches the app); (3) fresh phone → allowed; (4)
+blank phone → allowed (partial index excludes it); (5) same phone for a
+different business → allowed (per-business uniqueness). No probe rows left
+behind; security advisors identical to baseline.

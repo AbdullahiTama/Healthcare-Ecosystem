@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Users, UserPlus, DollarSign, Search, Download, Upload, ShoppingCart, Calendar, Landmark, Clipboard, History, FileUp, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { clientRepository } from './repositories'
+import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -174,7 +174,7 @@ export default function Clients({ brand, role, perms }) {
       })
       showToast('Client added!', { type: 'success' })
       setForm({}); setShowAdd(false); load()
-    } catch (e) { showToast('Could not save client. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(isDuplicateError(e) ? 'A client with this phone number already exists.' : 'Could not save client. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
 
@@ -271,11 +271,15 @@ export default function Clients({ brand, role, perms }) {
         visit_count: 0,
       })
     }
-    const { added, failed } = await clientRepository.createMany(brand.id, fresh)
+    // Server-side duplicates (a phone added after the list loaded — concurrent
+    // upload, a single add, a direct API write) are rejected by the unique
+    // index and counted as skipped here, not as failures.
+    const { added, skipped: serverSkipped, failed } = await clientRepository.createMany(brand.id, fresh)
     await load()
     setUploadData([])
     setShowUpload(false)
     setImporting(false)
+    skipped += serverSkipped
     const parts = [added + ' imported']
     if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
     if (invalid > 0) parts.push(invalid + ' invalid')

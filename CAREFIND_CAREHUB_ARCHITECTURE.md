@@ -68,3 +68,8 @@ project via PostgREST (RLS-protected). Both have `api/` (serverless) and
   (`postgres`, `service_role`, `supabase_admin`, `supabase_auth_admin`,
   `is_platform_admin()`) pass through. A rejected sale aborts before the AFTER
   INSERT stock trigger, so inventory is never decremented for blocked sales.
+- `clients_phone_unique_per_business` (partial UNIQUE index) makes the
+  database the authority on "one normalized phone per business" — the bulk
+  upload's client-side dedupe is a fast-path, not the enforcement. Index
+  normalizes with the same `[^0-9]` strip as the app's `normPhone`, is scoped
+  per `business_id`, and excludes null/blank phones.

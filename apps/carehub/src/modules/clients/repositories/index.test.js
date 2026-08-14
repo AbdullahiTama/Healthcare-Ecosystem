@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createClientRepository } from './index.js'
+import { createClientRepository, isDuplicateError } from './index.js'
 import { createInMemoryClient } from '../../../test/inMemoryClient.js'
 
 const A = 'biz-A'
@@ -82,8 +82,40 @@ describe('clientRepository', () => {
   it('createMany is a no-op for an empty list', async () => {
     const { repo, client } = build()
     const result = await repo.createMany(A, [])
-    expect(result).toEqual({ added: 0, failed: [] })
+    expect(result).toEqual({ added: 0, skipped: 0, failed: [] })
     expect(client.rows('clients')).toHaveLength(0)
+  })
+
+  // The unique index (clients_phone_unique_per_business) turns a duplicate
+  // phone into a server rejection, not a queueable failure — the bulk import
+  // must report it as "skipped" so the template's "repeat customers are
+  // skipped, not duplicated" promise holds even when the duplicate appeared
+  // after the page loaded.
+  it('createMany counts a server duplicate as skipped, not failed', async () => {
+    const rejecting = createInMemoryClient()
+    const failingRepo = createClientRepository(async (path, options) => {
+      const body = JSON.parse(options.body)
+      if (body.phone === '080-DUP') throw new Error('Supabase error (409): duplicate key value violates unique constraint "clients_phone_unique_per_business"')
+      return rejecting(path, options)
+    })
+    const result = await failingRepo.createMany(A, [
+      { full_name: 'Fresh', phone: '0801' },
+      { full_name: 'Already There', phone: '080-DUP' },
+      { full_name: 'Another Fresh', phone: '0802' },
+    ])
+
+    expect(result.added).toBe(2)
+    expect(result.skipped).toBe(1)
+    expect(result.failed).toEqual([])
+    expect(rejecting.rows('clients')).toHaveLength(2)
+  })
+
+  it('isDuplicateError matches a 409 duplicate and rejects transient failures', () => {
+    expect(isDuplicateError(new Error('Supabase error (409): duplicate key value violates unique constraint "x"'))).toBe(true)
+    expect(isDuplicateError(new Error('duplicate key value violates unique constraint "x"'))).toBe(true)
+    expect(isDuplicateError(new Error('Supabase error (500): Internal Server Error'))).toBe(false)
+    expect(isDuplicateError(new Error('Failed to fetch'))).toBe(false)
+    expect(isDuplicateError(new Error('Supabase error (403): permission denied'))).toBe(false)
   })
 
   it('update is scoped to the tenant', async () => {

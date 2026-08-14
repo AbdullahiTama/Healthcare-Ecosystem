@@ -96,12 +96,36 @@ FEATURE 4 — CAREHUB PATIENT/CLIENT BULK UPLOAD
 Surface:             CareHub
 Supporting surface:  —
 
-Frontend:    AUDITED (Clients.jsx CSV import + template exists)
-Backend:     AUDITED (createMany batch insert via repository, tenant-stamped)
-Database:    AUDITED (clients table, RLS business-scoped, no unique constraint)
-Integration: AUDITED
-Testing:     NOT RUN
-Status:      AUDITED
+Frontend:    COMPLETE (Clients.jsx CSV import + template; import summary merged with server skips)
+Backend:     COMPLETE (createMany batch insert, tenant-stamped, returns {added, skipped, failed})
+Database:    COMPLETE (clients_phone_unique_per_business partial unique index — live)
+Integration: COMPLETE (single-add and bulk paths surface server duplicates honestly)
+Testing:     PASSED (CareHub 293/293; build clean; 5 live DB scenarios verified)
+Status:      COMPLETE
+
+What was fixed:
+- Gap: phone-number dedupe was client-side only (a React Set built from the
+  loaded list), so a concurrent upload, a single add between load and import,
+  or a direct POST to /rest/v1/clients could create duplicate clients. The
+  template's promise — "repeat customers are skipped, not duplicated" — was
+  not enforced anywhere the server could see.
+- Added clients_phone_unique_per_business, a partial UNIQUE index on
+  (business_id, regexp_replace(phone,'[^0-9]','','g')) excluding null/blank
+  phones. Mirrors the app's normPhone exactly, so a row the app would skip is
+  exactly a row the server rejects (23505 / 409); per-business (same phone in
+  different businesses is allowed); blank phones never collide.
+- createMany now returns { added, skipped, failed }: a server duplicate is
+  classified skipped (the template's own language) instead of surfacing a raw
+  constraint error; importClients merges that into the summary count.
+- Single-add save() now says "A client with this phone number already
+  exists." instead of the generic failure message.
+- global_client_id exists and is indexed but remains unused — wiring it is a
+  separate cross-business identity feature, out of scope here.
+
+Verified live (rolled-back transactions): duplicate exact phone rejected
+23505; formatting variant (0902-524-9323) rejected (normalization matches the
+app); fresh phone allowed; blank phone allowed; same phone in a different
+business allowed. Advisors: no new findings.
 ```
 
 ```

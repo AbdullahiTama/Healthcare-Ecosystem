@@ -1,6 +1,20 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 
+// The `clients` table carries a partial unique index on the normalized phone
+// per business (clients_phone_unique_per_business, mirrored from the page's
+// normPhone helper). A violation surfaces through sbFetch as a PostgREST 409
+// whose message carries Postgres' "duplicate key value violates unique
+// constraint". Recognising that shape lets the bulk import honour the
+// template's promise — repeat customers are "skipped, not duplicated" — even
+// when the duplicate was created after the page loaded (concurrent import,
+// single add between load and import, or a direct API write). Everything else
+// (5xx, network) stays a genuine failure.
+export function isDuplicateError(e) {
+  return e && typeof e.message === 'string' &&
+    (/Supabase error \(409\)/.test(e.message) || /duplicate key value violates unique constraint/i.test(e.message))
+}
+
 // ── Client repository ─────────────────────────────────────────────────────────
 // A deep module over the `clients` aggregate and the per-client history the
 // client detail view is built from. Its interface is small (getAll/create/
@@ -41,21 +55,35 @@ export function createClientRepository(request = sbFetch) {
 
     // Bulk import (CSV upload): many creates in safe-sized parallel batches,
     // with per-row error capture so one bad row can never sink the whole file.
-    // Returns { added, failed: [{ full_name, message }] } — the page reports
-    // the counts and the first few failures, exactly like the product import.
+    // Returns { added, skipped, failed }:
+    //   added    — rows written to the database
+    //   skipped  — rows the SERVER refused as duplicate phones (the unique
+    //              index), reported so the page can say "skipped, not
+    //              duplicated" — the template's own promise — rather than
+    //              surfacing a raw constraint error.
+    //   failed   — [{ full_name, message }] for every other kind of write
+    //              failure. The page reports the counts and the first few.
     async createMany(businessId, clients, batchSize = 20) {
       let added = 0
+      let skipped = 0
       const failed = []
       for (let i = 0; i < clients.length; i += batchSize) {
         const batch = clients.slice(i, i + batchSize)
         const results = await Promise.all(batch.map(c =>
           create(businessId, c)
             .then(() => true)
-            .catch(err => ({ full_name: c.full_name || 'Unknown', message: err.message || 'error' }))
+            .catch(err => {
+              if (isDuplicateError(err)) return 'skipped'
+              return { full_name: c.full_name || 'Unknown', message: err.message || 'error' }
+            })
         ))
-        results.forEach(r => { if (r === true) added++; else failed.push(r) })
+        results.forEach(r => {
+          if (r === true) added++
+          else if (r === 'skipped') skipped++
+          else failed.push(r)
+        })
       }
-      return { added, failed }
+      return { added, skipped, failed }
     },
 
     // No UI calls this yet — it replaces a dead `updateClient` in
