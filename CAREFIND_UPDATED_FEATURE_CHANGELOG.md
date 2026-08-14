@@ -69,3 +69,37 @@ and a Call deep link.
   commenting triggers `news_comment` for the author (comments panel opened
   first, `waitFor` on the async notify).
 - Full CareFind suite 259/259 passes; `npm run build` clean.
+
+---
+
+## 2026-08-14 — Feature 3: Media Attachments in Sharing
+
+**What:** Attach a post's media (image/video) to its share so WhatsApp and
+other targets receive the actual media, not just the caption.
+
+**Audit findings:**
+- `Feed.jsx` `sharePost` shared only `{ title, text, url }`. The post's
+  `image_url`/`video_url` (selected in `POST_FEED_COLS`) were never attached,
+  so sharing a visual/video post sent only the caption text + the feed URL.
+- `shareOrCopy` supported `navigator.share` + clipboard fallback but never
+  passed files.
+
+**Changes:**
+- `apps/carefind/src/utils/share.js`:
+  - `shareOrCopy` now accepts `files` (passed to `navigator.share` behind a
+    `navigator.canShare({ files })` guard) and `mediaUrl` (appended to the
+    clipboard text). When files can't be shared, the Web Share call is skipped
+    so the media link lands on the clipboard instead of being dropped.
+  - New `mediaToFile(url)`: fetches a media URL into a `File` (name derived
+    from the URL), returns null on any failure so media attach never blocks
+    the text share.
+- `apps/carefind/src/modules/social-feed/Feed.jsx` `sharePost`: resolves
+  `post.image_url || post.video_url`, builds a `File` via `mediaToFile`, and
+  passes `files` + `mediaUrl` to `shareOrCopy`.
+
+**Verification:**
+- `share.test.js` +7 cases: files passed to share when `canShare` accepts;
+  files omitted + clipboard fallback when rejected; media URL appended to
+  clipboard; `mediaToFile` returns null for missing/bad fetch, builds a File
+  with the URL-derived name/type, and falls back on fetch throw.
+- Full CareFind suite 266/266 passes; `npm run build` clean.

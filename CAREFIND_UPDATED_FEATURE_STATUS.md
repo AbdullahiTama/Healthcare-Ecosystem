@@ -20,7 +20,7 @@ list; nothing is assumed missing or complete.
 |---|---|---|---|
 | 1 | Products WhatsApp + Call | PARTIAL | All CareFind buyer surfaces already render WhatsApp **and** Call (Search product cards, DrugProfile seller cards, BusinessProfile). **Gap: the CareHub CareFind module "public view" preview renders WhatsApp only — no Call button.** |
 | 2 | News Engagement | PARTIAL | Article page has full engagement (like/comment/save/share/gift/views) and the Notifications UI already supports `news_like`/`news_comment` types — but **neither is ever fired**: `toggleLike`/`addComment` never call `notify()`, so article authors get no notifications. |
-| 3 | Media Attachments in Sharing | NOT AUDITED | — |
+| 3 | Media Attachments in Sharing | PARTIAL | `sharePost` shares only text + the feed URL — the post's `image_url`/`video_url` are never attached. `shareOrCopy` supports the Web Share API but never passes `files`, so a WhatsApp share of a visual/video post sends just the caption, not the media. |
 | 4 | Profile Stories | NOT AUDITED | — |
 | 5 | Video Feed | NOT AUDITED | — |
 | 6 | Personalized Feed | NOT AUDITED | — |
@@ -75,7 +75,27 @@ Backend: n/a (types `news_like`/`news_comment` already exist in
 
 ## FEATURE 3 — MEDIA ATTACHMENTS IN SHARING
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-14)
+Frontend: COMPLETE
+Backend: n/a (pure client share enhancement)
+- Audit: `sharePost` (`Feed.jsx`) shared only `{ title, text, url }`; a post's
+  `image_url`/`video_url` were never included, so WhatsApp shares of a
+  visual/video post carried just the caption + the feed URL.
+- `utils/share.js`: `shareOrCopy` now accepts `files` (real File objects,
+  handed to the Web Share API on capable browsers via an explicit
+  `navigator.canShare` guard — when files can't be shared the whole share is
+  skipped so the media link reaches the clipboard) and `mediaUrl` (appended
+  to the clipboard text so recipients always get the media link).
+- `utils/share.js`: new `mediaToFile(url)` — fetches a media URL into a `File`
+  (name derived from the URL), returns null on any CORS/HTTP failure so an
+  attachment is always best-effort and never blocks the text share.
+- `Feed.jsx` `sharePost`: resolves the post's media (`image_url || video_url`),
+  builds a `File` via `mediaToFile`, and passes `files` + `mediaUrl` to
+  `shareOrCopy`.
+- Tests: `share.test.js` +7 cases (files passed to share when canShare accepts;
+  files omitted + clipboard fallback when rejected; media URL appended to
+  clipboard; `mediaToFile` null for missing/bad fetch, File build with name/
+  type, and throw fallback). Full suite 266/266; production build clean.
 
 ## FEATURE 4 — PROFILE STORIES
 

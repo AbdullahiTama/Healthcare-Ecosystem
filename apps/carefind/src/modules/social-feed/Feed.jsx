@@ -34,7 +34,7 @@ import { loadActiveCreatorIds, coinsToNaira } from '../subscriptions-monetizatio
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
-import { shareOrCopy } from '../../utils/share.js'
+import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { CommentThread } from './components/CommentThread.jsx'
 import PostMenu from './PostMenu.jsx'
@@ -1204,7 +1204,12 @@ function Feed() {
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
     const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
-    const result = await shareOrCopy({ title: 'CareFind', text, url: window.location.href })
+    // Attach the post's media (image/video) to the share where the browser
+    // supports it; the URL is still appended to the clipboard fallback so
+    // WhatsApp recipients always get the media, never just the caption.
+    const mediaUrl = post.image_url || post.video_url || null
+    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
+    const result = await shareOrCopy({ title: 'CareFind', text, url: window.location.href, files: file ? [file] : undefined, mediaUrl })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
 

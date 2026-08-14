@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { toShareText } from './formatShare.js'
-import { shareOrCopy } from './share.js'
+import { shareOrCopy, mediaToFile } from './share.js'
 
 describe('toShareText', () => {
   it('returns empty string for null/undefined', () => {
@@ -60,6 +60,10 @@ describe('toShareText', () => {
 })
 
 describe('shareOrCopy', () => {
+  beforeEach(() => {
+    Object.assign(global.navigator, { share: undefined, canShare: undefined, clipboard: undefined })
+  })
+
   it('returns failed when neither navigator.share nor clipboard exists', async () => {
     expect(await shareOrCopy({ text: 'hi', url: 'http://x.test' })).toBe('failed')
   })
@@ -82,5 +86,64 @@ describe('shareOrCopy', () => {
     const share = vi.fn().mockRejectedValue({ name: 'AbortError' })
     Object.assign(global.navigator, { share, clipboard: { writeText: vi.fn() } })
     expect(await shareOrCopy({ title: 't', text: 'hi', url: 'http://x.test' })).toBe('dismissed')
+  })
+
+  it('passes files to navigator.share when canShare accepts them', async () => {
+    const share = vi.fn().mockResolvedValue()
+    const file = new File(['x'], 'pic.jpg', { type: 'image/jpeg' })
+    Object.assign(global.navigator, {
+      share,
+      canShare: vi.fn(() => true),
+      clipboard: { writeText: vi.fn() },
+    })
+    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('shared')
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [file] }))
+  })
+
+  it('omits files when canShare rejects them and falls back to clipboard', async () => {
+    const share = vi.fn()
+    const clipboard = vi.fn().mockResolvedValue()
+    const file = new File(['x'], 'pic.jpg', { type: 'image/jpeg' })
+    Object.assign(global.navigator, {
+      share,
+      canShare: vi.fn(() => false),
+      clipboard: { writeText: clipboard },
+    })
+    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('copied')
+    expect(share).not.toHaveBeenCalled()
+    expect(clipboard).toHaveBeenCalled()
+  })
+
+  it('appends the media URL to clipboard text so recipients still get the media', async () => {
+    const clipboard = vi.fn().mockResolvedValue()
+    Object.assign(global.navigator, { share: undefined, clipboard: { writeText: clipboard } })
+    await shareOrCopy({ text: 'hi', url: 'http://x.test', mediaUrl: 'http://x.test/pic.jpg' })
+    expect(clipboard).toHaveBeenCalledWith('hi\n\nhttp://x.test\n\nhttp://x.test/pic.jpg')
+  })
+})
+
+describe('mediaToFile', () => {
+  it('returns null for no URL or a failed fetch', async () => {
+    expect(await mediaToFile(null)).toBeNull()
+    expect(await mediaToFile('')).toBeNull()
+  })
+
+  it('returns null when the fetch response is not ok', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false })
+    expect(await mediaToFile('http://x.test/pic.jpg')).toBeNull()
+  })
+
+  it('builds a File from a fetched blob, deriving the name from the URL', async () => {
+    const blob = new Blob(['img'], { type: 'image/jpeg' })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, blob: async () => blob })
+    const file = await mediaToFile('http://x.test/uploads/pic.jpg?token=abc')
+    expect(file).toBeInstanceOf(File)
+    expect(file.name).toBe('pic.jpg')
+    expect(file.type).toBe('image/jpeg')
+  })
+
+  it('returns null when fetch throws (CORS etc.)', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    expect(await mediaToFile('http://x.test/pic.jpg')).toBeNull()
   })
 })
