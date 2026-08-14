@@ -41,3 +41,31 @@ and a Call deep link.
 - Manual checks: preview renders both links when `brand.whatsapp` and
   `brand.phone` are set; each link hides itself when its number is missing;
   `wa.me` and `tel:` hrefs normalise Nigerian numbers identically to CareFind.
+
+---
+
+## 2026-08-14 — Feature 2: News Engagement (author notifications)
+
+**What:** Notify an article's author when a reader likes or comments on it.
+
+**Audit findings:**
+- `NewsArticle.jsx` already provides the full engagement surface (like,
+  comment, save, share, gift, view count, comments panel).
+- `services/notify.js` already defines `news_like` and `news_comment`
+  messages, and `Notifications.jsx` already renders both kinds with icons —
+  but **nothing ever sent them**: `toggleLike` and `addComment` never called
+  `notify()`, so authors were never told.
+
+**Changes:**
+- `apps/carefind/src/modules/news-publishing/NewsArticle.jsx`: import `notify`
+  from `services/notify.js`; `toggleLike` fires type `news_like` on a new like
+  (author recipient, link `/news/:id`, postId set); `addComment` fires type
+  `news_comment` after a successful comment insert. `notify()` already skips
+  self-notifications (recipient === actor) and never blocks the main action.
+
+**Verification:**
+- `newsArticle.test.jsx` extended to 7 cases (+2): a logged-in reader liking
+  the article triggers `news_like` for the author; a logged-in reader
+  commenting triggers `news_comment` for the author (comments panel opened
+  first, `waitFor` on the async notify).
+- Full CareFind suite 259/259 passes; `npm run build` clean.

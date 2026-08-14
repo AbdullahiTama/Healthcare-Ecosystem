@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { notify } from '../../services/notify.js'
 import { ArrowLeft, BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { shareOrCopy } from '../../utils/share.js'
@@ -110,6 +111,8 @@ function NewsArticle() {
     } else {
       setLikes(prev => [...prev, { id: `t${Date.now()}`, user_id: user.id }])
       await supabase.from('news_reactions').insert({ news_id: id, user_id: user.id })
+      // Tell the author someone liked their article (never fires for self-likes).
+      notify({ recipientId: article.author_id, actorId: user.id, type: 'news_like', message: 'liked your article', link: `/news/${article.id}`, postId: article.id })
     }
   }
 
@@ -132,6 +135,8 @@ function NewsArticle() {
       setCommentDraft('')
       const { data } = await supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified)').eq('news_id', id).order('created_at', { ascending: true })
       setComments(data || [])
+      // Tell the author someone commented on their article (never self-notifies).
+      notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
     }
   }
 

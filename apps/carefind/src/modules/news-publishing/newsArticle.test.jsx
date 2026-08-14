@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import NewsArticle from './NewsArticle.jsx'
 
@@ -29,7 +29,10 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('../../config/supabaseClient', () => ({ supabase: h.ctrl }))
-vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: null }) }))
+const auth = vi.hoisted(() => ({ user: null }))
+vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
+const notifyMock = vi.hoisted(() => vi.fn())
+vi.mock('../../services/notify.js', () => ({ notify: notifyMock }))
 vi.mock('../../hooks/useBreakpoint', () => ({ useBreakpoint: () => ({ isMobile: true }) }))
 vi.mock('../../hooks/useHeaderIdentity', () => ({ useHeaderIdentity: () => ({ myUsername: '', myAvatar: null, unreadNotifs: 0 }) }))
 vi.mock('../../components/layout/AppShell.jsx', () => ({ default: ({ children }) => <div>{children}</div> }))
@@ -70,6 +73,8 @@ beforeEach(() => {
   h.ctrl.queue.length = 0
   h.ctrl.rpc.mockClear()
   h.ctrl.from.mockClear()
+  notifyMock.mockClear()
+  auth.user = null
   window.scrollTo = vi.fn()
 })
 
@@ -136,5 +141,55 @@ describe('NewsArticle route /news/:id', () => {
     renderArticle('art-1')
 
     expect(await screen.findByText('Test headline on malaria')).toBeInTheDocument()
+  })
+
+  it('notifies the author when a logged-in reader likes the article', async () => {
+    auth.user = { id: 'reader-1' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ data: [], error: null }) // reactions
+    h.ctrl.push({ data: [], error: null }) // comments
+    h.ctrl.push({ data: null, error: null }) // saved_news
+
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+
+    fireEvent.click(screen.getByRole('button', { name: /like this article/i }))
+
+    await waitFor(() => expect(notifyMock).toHaveBeenCalledWith({
+      recipientId: 'u1',
+      actorId: 'reader-1',
+      type: 'news_like',
+      message: 'liked your article',
+      link: '/news/art-1',
+      postId: 'art-1',
+    }))
+  })
+
+  it('notifies the author when a logged-in reader comments on the article', async () => {
+    auth.user = { id: 'reader-2' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ data: [], error: null }) // reactions
+    h.ctrl.push({ data: [], error: null }) // comments
+    h.ctrl.push({ data: null, error: null }) // saved_news
+
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+
+    // Open the comments panel first — it is collapsed by default.
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+
+    fireEvent.change(screen.getByPlaceholderText('Add a comment…'), { target: { value: 'Great read!' } })
+    fireEvent.click(screen.getByRole('button', { name: /post/i }))
+
+    await waitFor(() => expect(notifyMock).toHaveBeenCalledWith({
+      recipientId: 'u1',
+      actorId: 'reader-2',
+      type: 'news_comment',
+      message: 'commented on your article',
+      link: '/news/art-1',
+      postId: 'art-1',
+    }))
   })
 })

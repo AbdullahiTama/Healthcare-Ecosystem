@@ -19,7 +19,7 @@ list; nothing is assumed missing or complete.
 | # | Feature | Audit verdict | Gaps found |
 |---|---|---|---|
 | 1 | Products WhatsApp + Call | PARTIAL | All CareFind buyer surfaces already render WhatsApp **and** Call (Search product cards, DrugProfile seller cards, BusinessProfile). **Gap: the CareHub CareFind module "public view" preview renders WhatsApp only — no Call button.** |
-| 2 | News Engagement | NOT AUDITED | — |
+| 2 | News Engagement | PARTIAL | Article page has full engagement (like/comment/save/share/gift/views) and the Notifications UI already supports `news_like`/`news_comment` types — but **neither is ever fired**: `toggleLike`/`addComment` never call `notify()`, so article authors get no notifications. |
 | 3 | Media Attachments in Sharing | NOT AUDITED | — |
 | 4 | Profile Stories | NOT AUDITED | — |
 | 5 | Video Feed | NOT AUDITED | — |
@@ -57,7 +57,21 @@ Shared: COMPLETE
 
 ## FEATURE 2 — NEWS ENGAGEMENT
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-14)
+Frontend: COMPLETE
+Backend: n/a (types `news_like`/`news_comment` already exist in
+`services/notify.js` and render in `Notifications.jsx`)
+- Audit confirmed the article page already has the full engagement surface
+  (like, comment, save, share, gift, view count, comments panel). The gap was
+  purely the **notification side**: `news_like` and `news_comment` types
+  existed in `notify.js` and `Notifications.jsx` but were never sent.
+- `NewsArticle.toggleLike` now calls `notify()` with type `news_like` on a
+  new like (author recipient, never self-notifies).
+- `NewsArticle.addComment` now calls `notify()` with type `news_comment` after
+  a successful comment insert.
+- Tests: `newsArticle.test.jsx` +2 cases (like notifies author, comment
+  notifies author) using an explicit logged-in reader and a `notify` mock.
+  Full CareFind suite 259/259; production build clean.
 
 ## FEATURE 3 — MEDIA ATTACHMENTS IN SHARING
 
