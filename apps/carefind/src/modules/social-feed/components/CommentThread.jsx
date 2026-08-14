@@ -12,7 +12,7 @@ function getCommentName(comment) {
   return comment.profiles?.full_name || comment.profiles?.display_name || 'CareFind User'
 }
 
-export function CommentThread({ postId, user, comments, onCommentsChange, editingComment, setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts, myUsername, myAvatar }) {
+export function CommentThread({ postId, user, comments, onCommentsChange, editingComment, setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts, myUsername, myAvatar, onCommentAdded }) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleAddComment = useCallback(async (parentId, overrideText) => {
@@ -35,11 +35,14 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
 
         const fresh = await commentRepository.getComments(postId)
         onCommentsChange(fresh)
+        // Tell the parent a comment (or reply) landed so it can notify the
+        // post author (and, for a reply, the comment author). Fire-and-forget.
+        if (onCommentAdded) onCommentAdded({ postId, parentId })
       }
     } finally {
       setIsLoading(false)
     }
-  }, [postId, user, commentDrafts, onCommentsChange, setCommentDrafts, setReplyingTo])
+  }, [postId, user, commentDrafts, onCommentsChange, setCommentDrafts, setReplyingTo, onCommentAdded])
 
   const handleEditComment = useCallback(async (commentId, newContent) => {
     if (!newContent.trim()) return

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { notify } from '../../services/notify.js'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -106,6 +107,17 @@ function GiftPanel({ postId, recipientId, onClose }) {
     }
 
     setWallet((prev) => ({ ...prev, balance: (prev?.balance || 0) - selected.coins }))
+    // Tell the recipient they received a gift. Fire-and-forget — a failed
+    // notification must never look like a failed gift (the RPC already
+    // moved the coins).
+    notify({
+      recipientId,
+      actorId: user.id,
+      type: 'gift',
+      message: `sent you a ${selected.emoji} ${selected.name} gift`,
+      link: postId ? `/feed` : `/u/${recipientId}`,
+      postId,
+    })
     setAnimation(selected)
     setSending(false)
   }

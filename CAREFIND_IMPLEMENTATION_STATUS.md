@@ -66,10 +66,16 @@ Frontend: COMPLETE
 - Tests: `articleFormat.test.js` (+3 defensive cases → 11), new `articleEditor.test.jsx` (6 regression cases rendering the REAL editor against malformed bodies), new `ErrorBoundary.test.jsx` (3 cases). News-publishing suite 22/22 pass; production build clean.
 
 ## FEATURE 4 — POST ENGAGEMENT SYSTEM
-Status: NOT STARTED
+Status: COMPLETE (2026-08-14)
 Backend: COMPLETE
-Frontend: MOSTLY COMPLETE
-Next action: display share + save counts on cards; wire comment notification
+Frontend: COMPLETE
+- Share count now displayed on cards (button label `formatCount(shareCount(post.id))` when > 0, else "Share").
+- Save count now displayed on cards (same pattern via `saveCount(post.id)`).
+- `enrichAndSetPosts` stores the per-post share/save counts (previously computed for the ranking engine but never surfaced).
+- `sharePost` and `toggleSave` optimistically bump/rollback the displayed counts so the UI never fakes a count the DB didn't record.
+- Comment notifications wired end-to-end: `CommentThread` fires `onCommentAdded({ postId, parentId })` after a successful insert; `Feed.handleCommentAdded` notifies the post author (`type: comment`) and, for replies, the parent comment author (`type: reply`).
+- Gift recipient notification added in `GiftPanel` (`type: gift`, fire-and-forget after `send_gift` succeeds).
+- Tests: new `CommentThread.test.jsx` (2 cases — top-level `onCommentAdded` and reply `parentId`); ErrorBoundary suite hardened with per-test `cleanup()` to stop single-fork DOM leakage. Social-feed + news + marketplace + ErrorBoundary suites 120/120; full suite 230/231 (only the pre-existing VideoPlayer timing flake, passes in isolation). Production build clean.
 
 ## FEATURE 5 — CLEAN SHARE FORMATTING
 Status: NOT STARTED

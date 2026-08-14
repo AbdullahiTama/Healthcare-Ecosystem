@@ -1,0 +1,97 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useState } from 'react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+
+const mockSupabase = vi.hoisted(() => {
+  const ctrl = { comments: [] }
+  const query = () => {
+    const q = {}
+    q.select = vi.fn(() => q)
+    q.order = vi.fn(() => q)
+    q.eq = vi.fn(() => q)
+    q.in = vi.fn(() => q)
+    q.single = vi.fn(() => q)
+    q.insert = vi.fn(() => q)
+    q.update = vi.fn(() => q)
+    q.delete = vi.fn(() => q)
+    q.then = (resolve) => resolve({ data: ctrl.comments, error: null })
+    return q
+  }
+  return {
+    ctrl,
+    from: vi.fn(() => query()),
+    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })),
+  }
+})
+
+vi.mock('../../../config/supabaseClient', () => ({ supabase: mockSupabase }))
+vi.mock('../../../providers/AuthContext', () => ({ useAuth: () => ({ user: { id: 'user1', email: 'a@b.c' } }) }))
+vi.mock('../../../services/notify.js', () => ({ notify: vi.fn() }))
+vi.mock('../../../components/ui', () => ({
+  Avatar: () => <span data-testid="avatar" />,
+  TealBtn: ({ children, ...rest }) => <button {...rest}>{children}</button>,
+}))
+
+const supabase = (await import('../../../config/supabaseClient')).supabase
+const notify = (await import('../../../services/notify.js')).notify
+
+import { CommentThread } from './CommentThread.jsx'
+
+function renderThread({ onCommentAdded, comments = [] } = {}) {
+  return render(
+    <MemoryRouter><HarnessWith comments={comments} onCommentAdded={onCommentAdded} /></MemoryRouter>
+  )
+}
+
+describe('CommentThread (Feature 4 — comment notifications)', () => {
+  beforeEach(() => {
+    mockSupabase.ctrl.comments = [{ id: 'c1', content: 'new comment', user_id: 'user1', created_at: new Date().toISOString(), parent_id: null, profiles: {} }]
+    notify.mockClear()
+    supabase.from.mockClear()
+  })
+
+  it('calls onCommentAdded with postId after a top-level comment lands', async () => {
+    const onCommentAdded = vi.fn()
+    renderThread({ onCommentAdded })
+
+    fireEvent.change(screen.getByPlaceholderText('Add a comment'), { target: { value: 'new comment' } })
+    fireEvent.click(screen.getByRole('button', { name: /post/i }))
+
+    await waitFor(() => expect(onCommentAdded).toHaveBeenCalledWith({ postId: 'post1', parentId: null }))
+  })
+
+  it('calls onCommentAdded with parentId when replying to a comment', async () => {
+    const onCommentAdded = vi.fn()
+    const comment = { id: 'c1', content: 'parent comment', user_id: 'user2', created_at: new Date().toISOString(), parent_id: null, profiles: {} }
+    mockSupabase.ctrl.comments = [comment]
+    renderThread({ onCommentAdded, comments: [comment] })
+
+    fireEvent.click(screen.getByRole('button', { name: /reply/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Write a reply/), { target: { value: 'my reply' } })
+    fireEvent.keyDown(screen.getByPlaceholderText(/Write a reply/), { key: 'Enter' })
+
+    await waitFor(() => expect(onCommentAdded).toHaveBeenCalledWith({ postId: 'post1', parentId: 'c1' }))
+  })
+})
+
+function HarnessWith({ comments, onCommentAdded }) {
+  const [drafts, setDrafts] = useState({})
+  const [replyingTo, setReplyingTo] = useState(null)
+  const props = {
+    postId: 'post1',
+    user: { id: 'user1', email: 'a@b.c' },
+    comments,
+    onCommentsChange: vi.fn(),
+    editingComment: null,
+    setEditingComment: vi.fn(),
+    replyingTo,
+    setReplyingTo,
+    commentDrafts: drafts,
+    setCommentDrafts: setDrafts,
+    myUsername: 'me',
+    myAvatar: null,
+    onCommentAdded,
+  }
+  return <CommentThread {...props} />
+}

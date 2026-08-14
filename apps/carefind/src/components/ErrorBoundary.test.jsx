@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import ErrorBoundary from './ErrorBoundary.jsx'
 
 const Boom = () => { throw new Error('boom') }
@@ -10,6 +10,11 @@ beforeAll(() => {
 })
 afterAll(() => {
   vi.restoreAllMocks()
+})
+// Explicitly reset the DOM between tests. A crashed boundary can otherwise
+// leave its fallback mounted in single-fork runs, leaking into the next test.
+afterEach(() => {
+  cleanup()
 })
 
 describe('ErrorBoundary', () => {

@@ -159,6 +159,11 @@ function Feed() {
   const [canGoLive, setCanGoLive] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [commentCounts, setCommentCounts] = useState({})
+  // Per-post share and save totals: the same numbers the ranking engine
+  // reads (sCounts/saveCounts), promoted to state so the engagement bar can
+  // display them on each card.
+  const [shareCounts, setShareCounts] = useState({})
+  const [saveCounts, setSaveCounts] = useState({})
   const [latestNews, setLatestNews] = useState([])
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showGoLive, setShowGoLive] = useState(false)
@@ -369,6 +374,8 @@ function Feed() {
     ;(shareRows?.data || []).forEach((r) => { sCounts[r.post_id] = (sCounts[r.post_id] || 0) + 1 })
     const saveCounts = {}
     ;(saveRows?.data || []).forEach((r) => { saveCounts[r.post_id] = (saveCounts[r.post_id] || 0) + 1 })
+    setShareCounts(sCounts)
+    setSaveCounts(saveCounts)
     const businessMap = {}
     ;(bizRows?.data || []).forEach((b) => { businessMap[b.id] = b })
     const followRowsArr = followRows?.data || []
@@ -1092,6 +1099,19 @@ function Feed() {
     if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
   }
 
+  // Called when CommentThread successfully adds a comment or a reply. A top-
+  // level comment notifies the post author; a reply additionally notifies the
+  // author of the comment being replied to. Fire-and-forget either way.
+  function handleCommentAdded({ postId, parentId }) {
+    handleNotifyComment(postId)
+    if (parentId) {
+      const parent = (comments[postId] || []).find((c) => c.id === parentId)
+      if (parent && parent.user_id !== user.id) {
+        notify({ recipientId: parent.user_id, actorId: user.id, type: 'reply', message: 'replied to your comment', link: '/feed', postId })
+      }
+    }
+  }
+
   function isFollowing(authorId) {
     if (!user) return false
     return follows.some((f) => f.follower_id === user.id && f.following_id === authorId)
@@ -1207,6 +1227,9 @@ function Feed() {
           user_id: user ? user.id : null,
           platform: result === 'copied' ? 'copy' : 'web',
         })
+        // Reflect the just-recorded share in the card's count so it doesn't
+        // wait for the next feed reload to appear.
+        setShareCounts((prev) => ({ ...prev, [post.id]: (prev[post.id] || 0) + 1 }))
       } catch (e) {
         // Tracking is never allowed to fail the share the user just did.
         console.warn('Share tracking write failed:', e)
@@ -1228,9 +1251,11 @@ function Feed() {
     // save survives a reload.
     if (existing) {
       setSavedPosts((prev) => prev.filter((s) => s.post_id !== postId))
+      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
       const { error } = await supabase.from('saved_posts').delete().eq('id', existing.id)
       if (error) {
         setSavedPosts((prev) => [...prev, existing])
+        setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
         toast.show('Could not unsave right now.', { type: 'error' })
       }
       return
@@ -1238,6 +1263,7 @@ function Feed() {
 
     const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
     setSavedPosts((prev) => [...prev, temp])
+    setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
     const { data, error } = await insertRowResolvingConflict(
       supabase,
       'saved_posts',
@@ -1247,6 +1273,7 @@ function Feed() {
 
     if (error) {
       setSavedPosts((prev) => prev.filter((s) => s.id !== temp.id))
+      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
       toast.show('Could not save right now.', { type: 'error' })
     } else {
       setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
@@ -1268,6 +1295,14 @@ function Feed() {
 
   function giftCount(postId) {
     return giftStats[postId]?.gift_count || 0
+  }
+
+  function shareCount(postId) {
+    return shareCounts[postId] || 0
+  }
+
+  function saveCount(postId) {
+    return saveCounts[postId] || 0
   }
 
   // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
@@ -2393,7 +2428,7 @@ function Feed() {
                 {/* Share */}
                 <button className="cf-eng-item" onClick={() => sharePost(post)} aria-label="Share this post" style={{ color: theme.gray500 }}>
                   <Share2 size={18} aria-hidden="true" />
-                  <span>Share</span>
+                  <span>{shareCount(post.id) > 0 ? formatCount(shareCount(post.id)) : 'Share'}</span>
                 </button>
 
                 {/* Repost: hidden on reposts themselves — a repost of a
@@ -2443,6 +2478,9 @@ function Feed() {
                   style={{ color: isSaved(post.id) ? theme.tealDeep : theme.gray500 }}
                 >
                   <Bookmark size={18} aria-hidden="true" fill={isSaved(post.id) ? theme.tealDeep : 'none'} />
+                  {saveCount(post.id) > 0 && (
+                    <span>{formatCount(saveCount(post.id))}</span>
+                  )}
                 </button>
               </div>
             </div>
@@ -2461,6 +2499,7 @@ function Feed() {
                 setCommentDrafts={setCommentDrafts}
                 myUsername={myUsername}
                 myAvatar={myAvatar}
+                onCommentAdded={handleCommentAdded}
               />
             )}
           </Card>

@@ -143,3 +143,43 @@ build clean.
 
 **Known limitations / next:** Feature 4 (Post Engagement: display share + save
 counts, wire comment notification).
+
+---
+
+## 2026-08-14 — Feature 4 (Post Engagement)
+
+**What:**
+- Share and save counts now show on feed cards. `enrichAndSetPosts` stores the
+  per-post `shareCounts` / `saveCounts` (they were computed for the ranking
+  engine but never surfaced), and the Share / Save buttons render
+  `formatCount(...)` when non-zero.
+- `sharePost` and `toggleSave` optimistically bump (or roll back) the displayed
+  counts only after the DB insert succeeds — the UI never shows a count the
+  database did not record.
+- Comment notifications are now sent end-to-end. `CommentThread` fires
+  `onCommentAdded({ postId, parentId })` after a successful comment insert;
+  `Feed.handleCommentAdded` notifies the post author (`type: comment`, via the
+  previously dead `handleNotifyComment`) and, for replies, the parent comment
+  author (`type: reply`).
+- `GiftPanel` now notifies the gift recipient (`type: gift`) after `send_gift`
+  succeeds — fire-and-forget so a failed notification can never look like a
+  failed gift (the RPC already moved the coins).
+
+**Why:** Audit found every engagement action was real and persistent, but the
+share/save counters were invisible and comment + gift notifications were never
+sent despite the `notify()` service and message map already existing.
+
+**Affected files:**
+- `apps/carefind/src/modules/social-feed/Feed.jsx` (counts state, Share/Save labels, `handleCommentAdded`)
+- `apps/carefind/src/modules/social-feed/components/CommentThread.jsx` (`onCommentAdded` callback)
+- `apps/carefind/src/modules/subscriptions-monetization/GiftPanel.jsx` (recipient notify)
+- `apps/carefind/src/modules/social-feed/components/CommentThread.test.jsx` (new, 2)
+- `apps/carefind/src/components/ErrorBoundary.test.jsx` (per-test `cleanup()` hardening)
+
+**Tests performed:** social-feed + news-publishing + marketplace + ErrorBoundary
+120/120 pass (CommentThread 2 new). Full suite 230/231 in forks mode — the single
+failure is the same pre-existing `VideoPlayer` timing flake (passes in
+isolation). Production build clean.
+
+**Known limitations / next:** Feature 5 (Clean Share Formatting — `toShareText`
+must unwrap article JSON block arrays).
