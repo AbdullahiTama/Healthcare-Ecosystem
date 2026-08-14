@@ -1,8 +1,9 @@
-import { Search, XCircle, EyeOff, Clock, MessageCircle, Check, Package, Clipboard } from 'lucide-react'
+import { Search, XCircle, EyeOff, Clock, MessageCircle, Phone, Check, Package, Clipboard } from 'lucide-react'
 import { fmt, businessLucideIcon, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Toggle } from '../../components/ui'
 import { updateProduct } from '../../services/supabase'
+import { whatsappLink, telLink } from '@care-ecosystem/shared-marketplace'
 
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
@@ -12,7 +13,8 @@ export default function CareFind({ brand, products, setProducts, loadProducts })
   const listed = products.filter(p => p.list_on_carefind !== false && p.stock > 0)
   const unlisted = products.filter(p => p.list_on_carefind === false)
   const outOfStock = products.filter(p => p.list_on_carefind !== false && p.stock <= 0)
-  const waLink = 'https://wa.me/' + ((brand?.whatsapp || '').replace(/[^0-9]/g, '') || '')
+  const waLink = whatsappLink(brand?.whatsapp, `Hi ${brand?.name}, I found you on CareFind.`)
+  const callLink = telLink(brand?.phone)
 
   async function toggleCareFind(product) {
     try {
@@ -52,6 +54,7 @@ export default function CareFind({ brand, products, setProducts, loadProducts })
         <div style={{ padding: '16px', display: 'flex', gap: '12px', flexWrap: 'wrap', borderBottom: `1px solid ${border}` }}>
           {brand?.hours && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: gray600 }}><Clock size={12} /> {brand.hours}</span>}
           {brand?.whatsapp && <a href={waLink} target='_blank' rel='noreferrer' style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: success, textDecoration: 'none', fontWeight: '700' }}><MessageCircle size={12} /> WhatsApp: {brand.whatsapp}</a>}
+          {brand?.phone && <a href={callLink} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: tealDeep, textDecoration: 'none', fontWeight: '700' }}><Phone size={12} /> Call: {brand.phone}</a>}
           {(brand?.visible_on_carefind !== false) ? <Pill label={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Check size={10} /> Live on CareFind</span>} type='green' /> : <Pill label='Not Listed' type='red' />}
         </div>
         {listed.length === 0 ? (

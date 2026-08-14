@@ -51,6 +51,13 @@ changes. This mirrors the audited state as of 2026-08-14.
   `seen_posts`, `feed_config`.
 - **Marketplace/business:** `businesses` (phone, whatsapp, latitude,
   longitude), `products`, `profiles`. Businesses shared with CareHub.
+- **Shared package `@care-ecosystem/shared-marketplace`:** single source for
+  sale types/units (`SALE_TYPES`, `UNITS_BY_SALE_TYPE`, `unitLabel`,
+  `saleUnitError`) **and** contact deep links (`whatsappLink`, `telLink`, with
+  Nigerian `080→+234` normalisation). CareFind re-exports both sets from
+  `modules/utils/marketplace.js`; the CareHub `CareFind.jsx` preview builds
+  its WhatsApp/Call links from the same package, so the normalisation lives in
+  exactly one place.
 - **Indexes:** every FK indexed; unique indexes are the idempotency authority
   (e.g. `post_reactions_user_post_uniq`, `posts_user_repost_uniq`).
 

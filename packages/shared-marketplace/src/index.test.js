@@ -8,6 +8,8 @@ import {
   isUnitValidForSaleType,
   unitLabel,
   saleUnitError,
+  whatsappLink,
+  telLink,
 } from './index.js'
 
 describe('shared marketplace rules', () => {
@@ -50,5 +52,38 @@ describe('shared marketplace rules', () => {
   it('produces the exact blocking error message', () => {
     expect(saleUnitError('carton', 'retail')).toBe('Carton is not valid for Retail.')
     expect(saleUnitError('card', 'distributor')).toBe('Card is not valid for Distributor.')
+  })
+
+  it('whatsappLink returns null without a contact', () => {
+    expect(whatsappLink(null, 'hi')).toBeNull()
+    expect(whatsappLink('', 'hi')).toBeNull()
+  })
+
+  it('whatsappLink normalises Nigerian 080 and 234 numbers', () => {
+    expect(whatsappLink('08012345678', 'Hello')).toBe('https://wa.me/2348012345678?text=Hello')
+    expect(whatsappLink('2348012345678', 'hi')).toBe('https://wa.me/2348012345678?text=hi')
+    expect(whatsappLink('+2348012345678', 'hi')).toBe('https://wa.me/2348012345678?text=hi')
+    expect(whatsappLink('8012345678', 'hi')).toBe('https://wa.me/2348012345678?text=hi')
+  })
+
+  it('whatsappLink encodes the message', () => {
+    expect(whatsappLink('08012345678', 'Hi "Pharmacy", price?')).toBe('https://wa.me/2348012345678?text=Hi%20%22Pharmacy%22%2C%20price%3F')
+  })
+
+  it('telLink returns null without a contact', () => {
+    expect(telLink(null)).toBeNull()
+    expect(telLink('')).toBeNull()
+    expect(telLink('   ')).toBeNull()
+  })
+
+  it('telLink normalises Nigerian numbers like whatsappLink', () => {
+    expect(telLink('08012345678')).toBe('tel:+2348012345678')
+    expect(telLink('2348012345678')).toBe('tel:+2348012345678')
+    expect(telLink('+2348012345678')).toBe('tel:+2348012345678')
+    expect(telLink('8012345678')).toBe('tel:+2348012345678')
+  })
+
+  it('telLink strips formatting from numbers', () => {
+    expect(telLink('+234 (801) 234-5678')).toBe('tel:+2348012345678')
   })
 })

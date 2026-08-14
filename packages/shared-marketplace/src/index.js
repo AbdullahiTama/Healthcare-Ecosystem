@@ -55,3 +55,33 @@ export function saleUnitError(unit, saleType) {
   const s = SALE_TYPE_LABELS[saleType] || saleType || 'that sale type'
   return `${u} is not valid for ${s}.`
 }
+
+// Normalise a contact number into the international format used by every deep
+// link in the ecosystem. Nigerian 080… numbers become 234…; +234 and bare 234
+// are kept. Returns null for empty input so callers can hide the button.
+function normalizeContact(contact) {
+  if (!contact) return null
+  let num = String(contact).replace(/\D/g, '')
+  if (!num) return null
+  if (num.startsWith('0')) num = '234' + num.slice(1)
+  else if (!num.startsWith('234')) num = '234' + num
+  return num
+}
+
+// Build a wa.me deep link from any phone/WhatsApp contact. The single place
+// the ecosystem builds WhatsApp links (CareFind Search/DrugProfile/BusinessProfile,
+// CareHub CareFind module preview). Returns null when there is no contact.
+export function whatsappLink(contact, message) {
+  const num = normalizeContact(contact)
+  if (!num) return null
+  return `https://wa.me/${num}?text=${encodeURIComponent(message)}`
+}
+
+// Normalise any phone/WhatsApp contact into a `tel:` deep link, handling
+// Nigerian 080… numbers the same way whatsappLink does. Returns null when
+// there is no contact so a Call button can be hidden.
+export function telLink(contact) {
+  const num = normalizeContact(contact)
+  if (!num) return null
+  return `tel:+${num}`
+}

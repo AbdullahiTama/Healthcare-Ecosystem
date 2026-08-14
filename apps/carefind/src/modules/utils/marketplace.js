@@ -16,6 +16,12 @@ export {
   saleUnitError,
 } from '@care-ecosystem/shared-marketplace'
 
+// Contact deep links (WhatsApp / tel) also live in the shared package — the
+// CareHub CareFind module preview builds the same links, so the Nigerian
+// number normalisation stays in one place. Re-exported here so existing buyer
+// views keep their `whatsappLink`/`telLink` import paths.
+export { whatsappLink, telLink } from '@care-ecosystem/shared-marketplace'
+
 // A product shows its price only when the seller has not turned the
 // per-product price-visibility toggle off (show_price defaults to true),
 // the owning business has not hidden all its prices on CareFind
@@ -84,29 +90,4 @@ export function distanceLabel(product, userCoords) {
 export function saleTypeColor(type) {
   if (type === 'wholesale' || type === 'distributor') return '#7c3aed'
   return '#0E6F5A'
-}
-
-// Build a wa.me deep link from any phone/WhatsApp contact, handling Nigerian
-// 080… numbers. Returns null when there is no contact. The single place the
-// ecosystem builds WhatsApp links (Search, DrugProfile, BusinessProfile
-// previously each hand-rolled a copy).
-export function whatsappLink(contact, message) {
-  if (!contact) return null
-  let num = String(contact).replace(/\D/g, '')
-  if (!num) return null
-  if (num.startsWith('0')) num = '234' + num.slice(1)
-  else if (!num.startsWith('234')) num = '234' + num
-  return `https://wa.me/${num}?text=${encodeURIComponent(message)}`
-}
-
-// Normalise any phone/WhatsApp contact into a `tel:` deep link, handling
-// Nigerian 080… numbers the same way whatsappLink does. Returns null when
-// there is no contact so a Call button can be hidden.
-export function telLink(contact) {
-  if (!contact) return null
-  let num = String(contact).replace(/\D/g, '')
-  if (!num) return null
-  if (num.startsWith('0')) num = '234' + num.slice(1)
-  else if (!num.startsWith('234')) num = '234' + num
-  return `tel:+${num}`
 }
