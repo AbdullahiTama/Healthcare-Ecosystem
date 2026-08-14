@@ -164,6 +164,26 @@ Live verification (rolled-back transactions): receipt_width column exists with
 default '80'; '58' accepted; '45' rejected 23514 by the CHECK constraint; no
 rows leaked. Advisors: no new findings.
 
+## BUGFIX 2026-08-14 — Admin/Owner full access restored (POS denial)
+
+```
+Issue:    Owner of an enterprise business (manufacturer_importer/wholesale)
+          was denied POS access; a custom role named "Owner" could also strip
+          the business admin's full access.
+Cause:    (1) getModulesForType filtered by legacy NAV_ORDER per vertical, and
+          NAV_ORDER.enterprise omitted pos/inventory/clients despite the module
+          registry's ALL_TYPES gate; (2) getPerms let a custom "Owner" role
+          override the preset Owner (DEFAULT_STAFF_PERMS has no pos).
+Fix:      getModulesForType now gates on the registry types array (NAV_ORDER
+          orders only); getPerms returns ROLES.Owner unconditionally for Owner;
+          Staff.jsx rejects creating/renaming a custom role to "Owner".
+Result:   Owner (business admin) always has full access to every module their
+          business type supports — POS included at enterprise businesses.
+          Staff access unchanged: staff only see modules their assigned role
+          grants.
+Testing:  PASSED (306/306; build clean)
+```
+
 ## Cross-app security (final gate)
 - [ ] CareFind clients cannot access CareHub internal functionality
 - [ ] CareHub users only manage authorized businesses/locations

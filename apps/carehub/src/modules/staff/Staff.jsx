@@ -94,6 +94,10 @@ export default function Staff({ brand, role, perms }) {
 
   async function saveRole() {
     if (!roleForm.name.trim()) { showToast('Give the role a name.', { type: 'warning' }); return }
+    // "Owner" is reserved for the business admin — getPerms always resolves it to
+    // the full-access preset, so a custom role by that name could never take
+    // effect and would only mislead (issue: admin was locked out of POS).
+    if (roleForm.name.trim().toLowerCase() === 'owner') { showToast('"Owner" is reserved for the business admin — pick a different name.', { type: 'warning' }); return }
     setSavingRole(true)
     // Modules outside this business type's registry are meaningless (another
     // vertical's gate would neutralise them) — never persist them.

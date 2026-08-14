@@ -168,8 +168,12 @@ export function buildCustomPerms(permissions) {
 
 // customRoles: map of role name → permissions.jsonb (loaded from the `roles`
 // table by BusinessDashboard/Staff). Custom role names override presets, so a
-// business can redefine e.g. "Manager" or invent "Regional Manager".
+// business can redefine e.g. "Manager" or invent "Regional Manager". The Owner
+// is the one exception: it is the business admin and must always keep full
+// access, so a custom role named "Owner" (or any other custom-role row) can
+// never narrow it.
 export function getPerms(role, customRoles = {}) {
+  if (role === 'Owner') return ROLES.Owner
   if (customRoles[role]) return buildCustomPerms(customRoles[role])
   return ROLES[role] || DEFAULT_STAFF_PERMS
 }
@@ -247,13 +251,19 @@ function labelFor(module, businessType) {
   return (module.labelByType && module.labelByType[businessType]) || module.label
 }
 
-// The modules a business type may use, as [id, icon, label] tuples in that
-// vertical's order. This is the single gate every nav-building consumer uses.
+// The modules a business type may use, as [id, icon, label] tuples. The
+// registry's `types` array is the gate (MODULES[id].types.includes(businessType)),
+// so every module a business type is allowed to use is offered — even when the
+// legacy per-vertical NAV_ORDER list predates the registry and omits it (e.g.
+// `pos`/`inventory` for enterprise verticals). NAV_ORDER only supplies ordering:
+// the family's list first, then any remaining allowed modules in default order,
+// so the Owner of an enterprise business can reach POS instead of being silently
+// locked out by an ordering list that never mentioned it.
 export function getModulesForType(businessType) {
   const family = familyOf(businessType)
-  return NAV_ORDER[family]
-    .filter(id => MODULES[id].types.includes(businessType))
-    .map(id => [id, MODULES[id].icon, labelFor(MODULES[id], businessType)])
+  const ordered = NAV_ORDER[family].filter(id => MODULES[id].types.includes(businessType))
+  const rest = NAV_ORDER.default.filter(id => !ordered.includes(id) && MODULES[id].types.includes(businessType))
+  return [...ordered, ...rest].map(id => [id, MODULES[id].icon, labelFor(MODULES[id], businessType)])
 }
 
 export const ALL_NAV_DEFAULT = NAV_ORDER.default.map(id => [id, MODULES[id].icon, MODULES[id].label])

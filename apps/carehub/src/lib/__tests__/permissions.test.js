@@ -105,8 +105,15 @@ describe('custom roles (the `roles` table)', () => {
   })
 
   it('uses the predefined nav list when a custom role specifies no nav', () => {
-    const customRoles = { Owner: { canMakeSales: true } }
-    expect(getPerms('Owner', customRoles).nav).toEqual(DEFAULT_STAFF_PERMS.nav)
+    const customRoles = { 'Regional Manager': { canMakeSales: true } }
+    expect(getPerms('Regional Manager', customRoles).nav).toEqual(DEFAULT_STAFF_PERMS.nav)
+  })
+
+  it('never lets a custom role named Owner narrow the business admin', () => {
+    const customRoles = { Owner: { canMakeSales: false, canManageStaff: false, nav: ['dashboard'] } }
+    const perms = getPerms('Owner', customRoles)
+    expect(perms.canManageStaff).toBe(true)
+    expect(perms.nav).toEqual(ROLES.Owner.nav)
   })
 
   it('can() reads a single permission for a role', () => {
@@ -170,14 +177,18 @@ describe('module registry (business type → modules)', () => {
     expect(ids('hospital')).not.toContain('appointments')
     expect(ids('hospital')).not.toContain('warehouses')
     expect(ids('hospital')).not.toContain('orders')
-    // Enterprise never sees retail or hospital modules.
+    // Enterprise never sees retail-only or hospital modules — but it does get
+    // the generic ALL_TYPES modules (pos, inventory, clients, expenses...), which
+    // the registry gate allows for every vertical, even though the legacy
+    // enterprise NAV_ORDER predates the registry and omitted them.
     for (const type of ['manufacturer_importer', 'wholesale']) {
       expect(ids(type)).not.toContain('appointments')
       expect(ids(type)).not.toContain('consultation')
-      expect(ids(type)).not.toContain('pos')
-      expect(ids(type)).not.toContain('inventory')
       expect(ids(type)).not.toContain('doctor')
       expect(ids(type)).not.toContain('reception')
+      expect(ids(type)).toContain('pos')
+      expect(ids(type)).toContain('inventory')
+      expect(ids(type)).toContain('clients')
     }
   })
 

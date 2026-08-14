@@ -290,3 +290,44 @@ tax on/off, cash change, credit rows, split rows, sale date). Build clean.
 column present with default '80'; inserting '58' accepted; inserting '45'
 rejected 23514 by the CHECK constraint; no probe rows left behind; security
 advisors identical to baseline.
+
+## 2026-08-14 -- Fix: admin/Owner locked out of POS (enterprise + custom-role)
+
+**Issue (owner report):** "for the pos i have been denied access the admin
+should have access for all functionalities in the dashboard but he can give the
+staff roles for every staff of the business" -- reproduced on the Carefind
+pharmaceutical account, a `manufacturer_importer` business. Two code paths
+could deny an Owner POS access:
+
+1. `getModulesForType` filtered by the legacy per-vertical `NAV_ORDER`
+   lists. `NAV_ORDER.enterprise` predates the module registry and omits
+   `pos`/`inventory`/`clients`/etc., so an enterprise business never even
+   *offered* POS -- the sidebar and route guard redirected the Owner away from
+   `/pos` even though `MODULES.pos.types = ALL_TYPES` (the registry's gate)
+   says every vertical may use it.
+2. `getPerms` let a custom role named `"Owner"` override the preset Owner
+   role (falling back to `DEFAULT_STAFF_PERMS.nav` -- no POS, no staff, no
+   settings). Nothing in Staff prevented creating such a role, so an admin could
+   silently strip their own full access.
+
+**Frontend changes** (`apps/carehub/src/lib/permissions.js`):
+- `getModulesForType` now uses the registry's `types` array as the gate and
+  `NAV_ORDER` only for ordering (family list first, then any remaining allowed
+  modules in default order). Enterprise businesses now offer POS, Inventory,
+  Clients, Expenses, Debts, Purchases, Demand, Locations alongside their
+  warehouse/territory/order pipeline.
+- `getPerms` now returns `ROLES.Owner` unconditionally for the Owner role --
+  a custom role named "Owner" can never narrow the business admin.
+- `apps/carehub/src/modules/staff/Staff.jsx` -- `saveRole` rejects
+  creating/renaming a custom role to "Owner" (reserved for the business admin).
+
+**Tests:** 306/306 pass. Updated `permissions.test.js` (enterprise now
+includes pos/inventory/clients; new test pins that a custom "Owner" role cannot
+narrow the admin). Build clean.
+
+**Verification:** `getNavItems('Owner','manufacturer_importer')` now includes
+`pos` (+ inventory, clients, expenses, debts, purchases, demand, locations);
+`getPerms('Owner',{Owner:{nav:['dashboard'],canManageStaff:false}}).nav` still
+includes `pos`. Staff roles unchanged -- a staff member only sees modules
+their assigned role grants; the Owner (business admin) always sees everything
+their business type supports.
