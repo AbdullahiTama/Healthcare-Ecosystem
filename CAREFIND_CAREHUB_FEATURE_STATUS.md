@@ -134,13 +134,35 @@ FEATURE 5 — CAREHUB RECEIPT SIZE + CLARITY
 Surface:             CareHub POS
 Supporting surface:  —
 
-Frontend:    AUDITED (POS.jsx printReceipt, window.open/document.write)
+Frontend:    COMPLETE (POS.jsx printReceipt delegates to a pure buildReceiptHtml module)
 Backend:     —
-Database:    —
-Integration: AUDITED (uses sale-line price; gaps: no @page/width/escaping/credit reprint data)
-Testing:     NOT RUN
-Status:      AUDITED
+Database:    COMPLETE (business_settings.receipt_width, 58/80mm CHECK, default '80')
+Integration: COMPLETE (receipt prints at 58/80mm, escapes all user text, shows credit/split/cash reprint data, uses sale date, optional display-only tax line)
+Testing:     PASSED (receiptPrint 12 tests; suite 305/305; build clean)
+Status:      COMPLETE
 ```
+
+What was fixed
+- Receipt sizing: `@page { size: Xmm auto }` + body width driven by the new
+  `business_settings.receipt_width` setting ('58' portable / '80' counter),
+  selectable on Settings → Receipt Customization.
+- Escaping: `printReceipt` now assembles its HTML through a pure, testable
+  `buildReceiptHtml` (modules/pos/receiptPrint.js). Every user-entered value —
+  business name/address/phone, client, product names, receipt header/footer,
+  refund policy, logo URL — passes through the shared `esc` helper; markup in
+  any of those fields can no longer inject into the printed page.
+- Reprint completeness: the Recent Sales "Reprint" button now reconstructs the
+  full receipt — split payment amounts, cash given/change, credit amount
+  paid/balance — instead of a `cashGiven: 0` stub, and uses the sale's
+  `created_at` as the receipt date rather than the print time.
+- Tax (display-only): when `tax_rate` is set, the receipt shows a computed
+  `Tax (X%)` line (total × rate) and a `Total incl. tax` row. The stored sale
+  total and the amount charged are unchanged — the line is for the customer's
+  information only.
+
+Live verification (rolled-back transactions): receipt_width column exists with
+default '80'; '58' accepted; '45' rejected 23514 by the CHECK constraint; no
+rows leaked. Advisors: no new findings.
 
 ## Cross-app security (final gate)
 - [ ] CareFind clients cannot access CareHub internal functionality

@@ -4,7 +4,8 @@
 // escaping (the requisition printer does not escape; user-entered text must
 // never be injected raw).
 
-export const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+import { esc } from '../../lib/escape.js'
+export { esc }
 
 export const t = (v) => {
   if (Array.isArray(v)) return v.filter(Boolean).map(esc).join(', ')

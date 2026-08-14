@@ -16,6 +16,7 @@ import { settingsRepository } from '../settings/repositories'
 // seam yet (clients, consultations).
 import { getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
+import { buildReceiptHtml } from './receiptPrint'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -256,6 +257,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       cashGiven: parseFloat(cash) || 0,
       splitAmounts: method === 'Split' ? { ...splitAmounts } : null,
       balance,
+      amtPaid,
+      date: new Date().toISOString(),
     }
 
     // The sale must be recorded BEFORE the UI advances: if the server rejects
@@ -317,7 +320,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     // must not show a receipt, decrement stock state or open a debt for a
     // sale that did not happen.
     await saveSale(saleData)
-    setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance })
+    setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance, date: new Date().toISOString() })
     // `p.cat` was always undefined here — the column is `category` (Inventory
     // strips `cat` on write), so Services lines were decremented on this path
     // but not in charge(). Both now agree, and both are display-only: the
@@ -419,44 +422,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
 
   function printReceipt(r) {
-    const biz = brand
-    const s = settings || {}
     const w = window.open('', '_blank', 'width=400,height=700')
-    const items = r.items || []
-    w.document.write(`<!DOCTYPE html><html><head><title>Receipt</title><style>
-      *{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New',monospace}
-      body{padding:20px;max-width:320px;margin:auto}
-      .c{text-align:center}.b{font-weight:bold}
-      hr{border:none;border-top:1px dashed #999;margin:8px 0}
-      .r{display:flex;justify-content:space-between;margin:3px 0;font-size:12px}
-      .logo{font-size:28px;margin-bottom:4px}
-    </style></head><body>
-      <div class="c">
-        ${s.logo_url ? '<img src="' + s.logo_url + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;margin-bottom:8px" />' : '<div class="logo">🏥</div>'}
-        <div class="b" style="font-size:16px">${biz?.name || 'CareHub'}</div>
-        ${biz?.address ? '<div style="font-size:11px;color:#666;margin-top:2px">' + biz.address + '</div>' : ''}
-        ${biz?.phone ? '<div style="font-size:11px;color:#666">' + biz.phone + '</div>' : ''}
-        ${biz?.whatsapp ? '<div style="font-size:11px;color:#666">WhatsApp: ' + biz.whatsapp + '</div>' : ''}
-        ${s.receipt_header ? '<div style="font-size:11px;margin-top:4px;font-style:italic">' + s.receipt_header + '</div>' : ''}
-      </div>
-      <hr/>
-      <div class="r"><span>Receipt:</span><span>${r.id}</span></div>
-      <div class="r"><span>Date:</span><span>${nowStr()}</span></div>
-      <div class="r"><span>Client:</span><span>${r.client}</span></div>
-      <hr/>
-      ${items.map(i => `<div style="margin-bottom:6px"><div class="b" style="font-size:12px">${i.emoji || ''} ${i.name}</div><div class="r" style="color:#666"><span>${i.qty} x ${fmt(i.price)}</span><span>${fmt(i.price * i.qty)}</span></div></div>`).join('')}
-      <hr/>
-      <div class="r"><span>Subtotal</span><span>${fmt(r.subtotal)}</span></div>
-      ${r.disc > 0 ? '<div class="r" style="color:green"><span>Discount</span><span>-' + fmt(r.disc) + '</span></div>' : ''}
-      <div class="r b" style="font-size:15px"><span>TOTAL</span><span>${fmt(r.total)}</span></div>
-      <div class="r"><span>Payment</span><span>${r.method}</span></div>
-      ${r.method === 'Cash' && r.cashGiven ? '<div class="r"><span>Cash Given</span><span>' + fmt(r.cashGiven) + '</span></div><div class="r" style="color:green"><span>Change</span><span>' + fmt(r.cashGiven - r.total) + '</span></div>' : ''}
-      ${r.method === 'Credit' ? '<div class="r" style="color:orange"><span>Amount Paid</span><span>' + fmt(r.amtPaid) + '</span></div><div class="r" style="color:red"><span>Balance Owed</span><span>' + fmt(r.balance) + '</span></div>' : ''}
-      ${r.splitAmounts ? '<div style="font-size:11px;margin-top:4px">' + Object.entries(r.splitAmounts).filter(([, v]) => parseFloat(v) > 0).map(([k, v]) => k + ': ' + fmt(parseFloat(v))).join(' | ') + '</div>' : ''}
-      <hr/>
-      ${s.refund_policy ? '<div style="font-size:10px;color:#666;margin-bottom:6px;text-align:center">' + s.refund_policy + '</div><hr/>' : ''}
-      <div class="c" style="font-size:11px;color:#999;margin-top:8px">${s.receipt_footer || 'Thank you for your patronage!'}</div>
-    </body></html>`)
+    w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {} }))
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 400)
   }
@@ -632,7 +599,22 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                     {s.is_credit && <Pill label='Credit' type='amber' />}
                   </div>
                   <button onClick={() => {
-                    const receiptData = { id: s.txn_no, client: s.client_name, items, subtotal: s.subtotal, disc: s.discount, total: s.total, method: s.payment_method, cashGiven: 0 }
+                    let splitAmounts = null
+                    try { splitAmounts = typeof s.payment_split === 'string' ? JSON.parse(s.payment_split) : s.payment_split || null } catch (e) { splitAmounts = null }
+                    const receiptData = {
+                      id: s.txn_no,
+                      client: s.client_name,
+                      items,
+                      subtotal: s.subtotal,
+                      disc: s.discount,
+                      total: s.total,
+                      method: s.payment_method,
+                      cashGiven: s.payment_method === 'Cash' && Number(s.amount_paid) >= Number(s.total) ? (Number(s.amount_paid) || 0) : 0,
+                      amtPaid: s.amount_paid,
+                      balance: s.balance,
+                      splitAmounts: s.payment_method === 'Split' ? splitAmounts : null,
+                      date: s.created_at,
+                    }
                     printReceipt(receiptData)
                   }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>
                     <Printer size={12} /> Reprint

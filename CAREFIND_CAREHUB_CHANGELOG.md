@@ -236,3 +236,57 @@ rejected (normalization matches the app); (3) fresh phone → allowed; (4)
 blank phone → allowed (partial index excludes it); (5) same phone for a
 different business → allowed (per-business uniqueness). No probe rows left
 behind; security advisors identical to baseline.
+
+## 2026-08-14 — Feature 5: CareHub Receipt Size + Clarity
+
+**Issue (audit gap):** `printReceipt` in `POS.jsx` opened a print window and
+`document.write`-ed raw user-entered text into a `max-width:320px` template with
+no `@page` rule. Five gaps: (1) no 58/80mm width configuration; (2) no HTML
+escaping — a product, client, business or settings field containing markup
+would render as HTML on the printed page; (3) the Recent Sales "Reprint" button
+passed a stub (`cashGiven: 0`, no split/credit amounts), so a reprinted receipt
+lost payment detail; (4) the date was the *print* time, not the sale time; (5)
+`tax_rate` was configurable in Settings but never appeared on a receipt.
+
+**Database changes (new, applied live):**
+- `apps/carehub/sql/20260814_receipt_width.sql` — `business_settings.receipt_width`
+  (`text`, `NOT NULL DEFAULT '80'`, `CHECK (receipt_width IN ('58','80'))`). New
+  rows default to 80mm; a Settings selector persists the choice through the
+  existing merge-duplicates upsert (no repository change needed — `save()` posts
+  the whole object and the column is in the row).
+
+**Frontend changes:**
+- `apps/carehub/src/lib/escape.js` — shared `esc` HTML-escaping helper,
+  extracted from `consultationPrint.js` (which now imports and re-exports it, so
+  its public API and tests are unchanged). The receipt printer uses the same
+  helper rather than a second copy.
+- `apps/carehub/src/modules/pos/receiptPrint.js` — pure, unit-testable
+  `buildReceiptHtml({ receipt, business, settings })` that owns all receipt
+  string assembly: `@page { size: Xmm auto }` + body width keyed off
+  `settings.receipt_width`; `esc` on every user-entered value (business
+  name/address/phone/whatsapp, client, product names, receipt header/footer,
+  refund policy, logo URL); display-only `Tax (X%)` = total × rate plus a
+  `Total incl. tax` row when `tax_rate > 0`; cash given/change, credit amount
+  paid/balance owed, and split payment rows; the sale date via `fmtReceiptDate`.
+- `apps/carehub/src/modules/pos/POS.jsx` — `printReceipt` delegates to
+  `buildReceiptHtml` (the `window.open`/`print` shell stays in the page);
+  `charge()` and `chargeCredit()` stamp `date` onto their receipt; the Recent
+  Sales reprint reconstructs the full data — `splitAmounts` parsed from the
+  `payment_split` JSONB, `cashGiven`/`amtPaid`/`balance`, and the sale's
+  `created_at` as the date.
+- `apps/carehub/src/modules/settings/Settings.jsx` — "Receipt Paper Width"
+  selector (80mm counter / 58mm portable) persisted via `saveReceiptSettings`.
+
+**Tax decision:** per the owner, the tax line is display-only. `computeTax`
+returns total × rate and the receipt shows it plus a tax-inclusive total, but
+the stored sale total and the amount charged are unchanged. The 12 new tests
+pin this behaviour (tax line present at rate 7.5, absent at 0).
+
+**Tests:** CareHub suite 305/305 pass (12 new in `receiptPrint.test.js` —
+escaping of business/client/product/header/footer/refund/logo, @page 58 vs 80,
+tax on/off, cash change, credit rows, split rows, sale date). Build clean.
+
+**Manual verification (live, rolled-back transactions):** `receipt_width`
+column present with default '80'; inserting '58' accepted; inserting '45'
+rejected 23514 by the CHECK constraint; no probe rows left behind; security
+advisors identical to baseline.

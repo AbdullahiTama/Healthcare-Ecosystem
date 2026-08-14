@@ -34,7 +34,7 @@ project via PostgREST (RLS-protected). Both have `api/` (serverless) and
 - `src/modules/appointments/` — appointment scheduling + **payment states** (unpaid/paid/pending)
 - `src/modules/clients/` — **patients/clients records** (canonical entity: `clients` table)
 - `src/modules/demand/` — **requisitions** (supplier orders), out-of-stock, customer requests
-- `src/modules/pos/` — **POS / sales / receipt printing** (`POS.jsx`, `printReceipt`)
+- `src/modules/pos/` — **POS / sales / receipt printing** (`POS.jsx`, `receiptPrint.js` — pure `buildReceiptHtml`, shared `esc` from `lib/escape.js`)
 - `src/modules/inventory/`, `master-catalog/`, `stock/`, `purchases/`, `warehouses/`, `orders/`, `debts/`, `expenses/`, `reports/`, `settings/`, `staff/`, `locations/`, `overview/`, `dashboard-home/`, `live-activity/`, `messages/`, `consultation/`, `territories/`, `carefind/`, `referral-agent/`
 - `api/` — 3 handlers: `initiate-business-withdrawal.js`, `initiate-plan-payment.js`, `verify-plan-payment.js` (+ `_lib/`)
 

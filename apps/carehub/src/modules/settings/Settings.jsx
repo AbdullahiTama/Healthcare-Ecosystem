@@ -136,6 +136,7 @@ export default function Settings({ brand, role, perms }) {
         receipt_footer: settings.receipt_footer || '',
         refund_policy: settings.refund_policy || '',
         currency: settings.currency || 'NGN',
+        receipt_width: settings.receipt_width || '80',
         tax_rate: parseFloat(settings.tax_rate) || 0,
       })
       showToast('Settings saved!', { type: 'success' })
@@ -366,6 +367,7 @@ export default function Settings({ brand, role, perms }) {
           <Textarea label='Refund / Return Policy' value={settings.refund_policy} onChange={v => s('refund_policy', v)} placeholder='e.g. No refund on dispensed medicines. Report issues within 24 hours.' rows={3} />
           <Textarea label='Receipt Footer Message' value={settings.receipt_footer} onChange={v => s('receipt_footer', v)} placeholder='e.g. Thank you for choosing us! Your health is our priority.' rows={2} />
           <Inp label='Tax Rate (%)' value={settings.tax_rate} onChange={v => s('tax_rate', v)} type='number' placeholder='0 (leave blank if no tax)' />
+          <Sel label='Receipt Paper Width' value={settings.receipt_width || '80'} onChange={v => s('receipt_width', v)} options={[{ value: '80', label: '80mm — counter printer' }, { value: '58', label: '58mm — portable printer' }]} />
         </div>
 
         {/* Preview */}
