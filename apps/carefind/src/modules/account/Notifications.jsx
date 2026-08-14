@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, BadgeCheck, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
+  ArrowLeft, AtSign, BadgeCheck, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -21,7 +21,9 @@ const NOTIFICATION_KIND = {
   news_like:         { Icon: Heart,         tint: theme.danger },
   comment:           { Icon: MessageCircle, tint: theme.info },
   news_comment:      { Icon: MessageCircle, tint: theme.info },
+  comment_like:      { Icon: Heart,         tint: theme.danger },
   reply:             { Icon: Reply,         tint: theme.info },
+  mention:           { Icon: AtSign,        tint: theme.tealDeep },
   gift:              { Icon: Gift,          tint: theme.tealDeep },
   follow:            { Icon: UserPlus,      tint: theme.tealDeep },
   profile_view:      { Icon: UserPlus,      tint: theme.gray500 },

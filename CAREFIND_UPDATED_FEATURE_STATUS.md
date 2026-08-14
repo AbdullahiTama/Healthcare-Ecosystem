@@ -242,7 +242,26 @@ Verified end-to-end:
 
 ## FEATURE 9 — COMMENT LIKES, REPLIES + MENTIONS
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-15)
+Frontend: COMPLETE
+Backend: COMPLETE
+- **Comment likes** — `post_comment_likes` table (comment_id, user_id, unique
+  index, FK cascade, RLS: read-all / insert-own / delete-own), heart toggle in
+  `CommentThread.jsx` with count, and a `comment_like` notification to the
+  comment author (new icon/colour in `Notifications.jsx`).
+- **@mentions** — `extractMentions` (dependency-free `mentions.js`, bounded by
+  non-username chars, requires ≥1 letter so `@10`/`a@b.com` never match),
+  resolved to user ids via `commentRepository.resolveMentions` (case-insensitive
+  display_name match) and stored on the row at insert time
+  (`post_comments.mentions` jsonb, default `'[]'`). `renderMarkdown` now accepts
+  a mentions map and renders known `@username` as a profile link (`/u/:id`);
+  each mentioned user gets a `mention` notification.
+- **DB migration** — `apps/carefind/sql/20260814_comment_likes_and_mentions.sql`
+  applied to production (verified: `post_comment_likes` present with the three
+  policies, `post_comments.mentions` column present with `'[]'` default).
+- **Tests** — new `mentions.test.js` (5 cases) + markdown mention-linking cases
+  + repository tests for `resolveMentions`/`addCommentLike`/`removeCommentLike`
+  and the `mentions` insert payload; full suite 297/297; `vite build` clean.
 
 ## FEATURE 10 — ROLE-SPECIFIC PROFESSIONAL VERIFICATION BADGES
 

@@ -12,11 +12,15 @@
 // relative paths — javascript: and friends never reach an anchor.
 
 import { theme } from '../../styles/theme'
+import { Link } from 'react-router-dom'
 
 const HIGHLIGHTS = { yellow: '#fef08a', green: '#bbf7d0', pink: '#fbcfe8', blue: '#bfdbfe' }
 const TEXTCOLORS = { red: '#dc2626', blue: '#2563eb', green: '#16a34a' }
 
 const HEADING_SIZES = [22, 19, 17, 15.5, 14.5, 13.5]
+
+// Username chars for @mention linking (mirrors mentions.js).
+const MENTION_AT = /^@([A-Za-z0-9_.-]+)/
 
 function sanitizeHref(raw) {
   const href = String(raw || '').trim()
@@ -26,8 +30,10 @@ function sanitizeHref(raw) {
 
 // Parse a run of inline text (a single line / list item / quote line) into
 // React nodes. Plain characters are accumulated and flushed as one string so
-// React never warns about missing keys on bare text.
-function renderInline(text, keyPrefix = '') {
+// React never warns about missing keys on bare text. `mentions` is an optional
+// map of lower-cased @username -> user id; matched tokens render as profile
+// links (used by comments, which store resolved mentions at insert time).
+function renderInline(text, keyPrefix = '', mentions = null) {
   if (!text) return []
   const out = []
   let rest = text
@@ -52,15 +58,28 @@ function renderInline(text, keyPrefix = '') {
       rest = rest.slice(m[0].length)
       continue
     }
+    if (mentions && (m = rest.match(MENTION_AT))) {
+      const userId = mentions[m[1].toLowerCase()]
+      if (userId) {
+        flush()
+        out.push(
+          <Link key={keyPrefix + out.length} to={`/u/${userId}`} style={{ color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>
+            {m[0]}
+          </Link>,
+        )
+        rest = rest.slice(m[0].length)
+        continue
+      }
+    }
     if ((m = rest.match(/^\*\*([^*\n]+)\*\*/))) {
       flush()
-      out.push(<strong key={keyPrefix + out.length}>{renderInline(m[1], `${keyPrefix}${out.length}_`)}</strong>)
+      out.push(<strong key={keyPrefix + out.length}>{renderInline(m[1], `${keyPrefix}${out.length}_`, mentions)}</strong>)
       rest = rest.slice(m[0].length)
       continue
     }
     if ((m = rest.match(/^\*([^*\n]+)\*/))) {
       flush()
-      out.push(<em key={keyPrefix + out.length}>{renderInline(m[1], `${keyPrefix}${out.length}_`)}</em>)
+      out.push(<em key={keyPrefix + out.length}>{renderInline(m[1], `${keyPrefix}${out.length}_`, mentions)}</em>)
       rest = rest.slice(m[0].length)
       continue
     }
@@ -69,7 +88,7 @@ function renderInline(text, keyPrefix = '') {
       const href = sanitizeHref(m[2])
       out.push(
         href
-          ? <a key={keyPrefix + out.length} href={href} target="_blank" rel="noopener noreferrer" style={{ color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', wordBreak: 'break-word' }}>{renderInline(m[1], `${keyPrefix}${out.length}_`)}</a>
+          ? <a key={keyPrefix + out.length} href={href} target="_blank" rel="noopener noreferrer" style={{ color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', wordBreak: 'break-word' }}>{renderInline(m[1], `${keyPrefix}${out.length}_`, mentions)}</a>
           : <span key={keyPrefix + out.length}>{m[0]}</span>,
       )
       rest = rest.slice(m[0].length)
@@ -83,13 +102,13 @@ function renderInline(text, keyPrefix = '') {
       if (type === 'h') {
         out.push(
           <mark key={keyPrefix + out.length} style={{ background: HIGHLIGHTS[colorName] || '#fef08a', color: '#1a1a1a', padding: '0 2px', borderRadius: 3 }}>
-            {renderInline(inner, `${keyPrefix}${out.length}_`)}
+            {renderInline(inner, `${keyPrefix}${out.length}_`, mentions)}
           </mark>,
         )
       } else {
         out.push(
           <span key={keyPrefix + out.length} style={{ color: TEXTCOLORS[colorName] || '#dc2626', fontWeight: 600 }}>
-            {renderInline(inner, `${keyPrefix}${out.length}_`)}
+            {renderInline(inner, `${keyPrefix}${out.length}_`, mentions)}
           </span>,
         )
       }
@@ -108,7 +127,7 @@ function renderInline(text, keyPrefix = '') {
       }[tag]
       out.push(
         <span key={keyPrefix + out.length} style={style}>
-          {renderInline(inner, `${keyPrefix}${out.length}_`)}
+          {renderInline(inner, `${keyPrefix}${out.length}_`, mentions)}
         </span>,
       )
       rest = rest.slice(m[0].length)
@@ -123,7 +142,8 @@ function renderInline(text, keyPrefix = '') {
 
 // Render Markdown text into a list of block-level React nodes.
 // Returns null for empty/blank input so callers can render nothing.
-export function renderMarkdown(text) {
+// `options.mentions` maps lower-cased @username -> user id for linking.
+export function renderMarkdown(text, options = {}) {
   if (text == null) return null
   const source = String(text)
   if (!source.trim()) return null
@@ -131,6 +151,7 @@ export function renderMarkdown(text) {
   const blocks = []
   let i = 0
   let key = 0
+  const mentions = options.mentions || null
 
   while (i < lines.length) {
     const line = lines[i]
@@ -159,7 +180,7 @@ export function renderMarkdown(text) {
       const level = h[1].length
       blocks.push(
         <div key={key++} style={{ fontSize: HEADING_SIZES[level - 1], fontWeight: 800, color: theme.navy, margin: '6px 0 4px' }}>
-          {renderInline(h[2], `${key}_`)}
+          {renderInline(h[2], `${key}_`, mentions)}
         </div>,
       )
       i++
@@ -176,7 +197,7 @@ export function renderMarkdown(text) {
       blocks.push(
         <blockquote key={key++} style={{ borderLeft: `3px solid ${theme.tealDeep}44`, margin: '6px 0', paddingLeft: 10, color: theme.textLight }}>
           {quote.map((q, qi) => (
-            <div key={qi}>{renderInline(q, `${key}_${qi}_`)}</div>
+            <div key={qi}>{renderInline(q, `${key}_${qi}_`, mentions)}</div>
           ))}
         </blockquote>,
       )
@@ -195,7 +216,7 @@ export function renderMarkdown(text) {
       blocks.push(
         <ul key={key++} style={{ margin: '4px 0', paddingLeft: 22 }}>
           {items.map((it, ii) => (
-            <li key={ii} style={{ margin: '2px 0' }}>{renderInline(it, `${key}_${ii}_`)}</li>
+            <li key={ii} style={{ margin: '2px 0' }}>{renderInline(it, `${key}_${ii}_`, mentions)}</li>
           ))}
         </ul>,
       )
@@ -214,7 +235,7 @@ export function renderMarkdown(text) {
       blocks.push(
         <ol key={key++} style={{ margin: '4px 0', paddingLeft: 22 }}>
           {items.map((it, ii) => (
-            <li key={ii} style={{ margin: '2px 0' }}>{renderInline(it, `${key}_${ii}_`)}</li>
+            <li key={ii} style={{ margin: '2px 0' }}>{renderInline(it, `${key}_${ii}_`, mentions)}</li>
           ))}
         </ol>,
       )
@@ -240,7 +261,7 @@ export function renderMarkdown(text) {
     blocks.push(
       <p key={key++} style={{ margin: 0 }}>
         {para.flatMap((pl, pi) => {
-          const nodes = renderInline(pl, `${key}_${pi}_`)
+          const nodes = renderInline(pl, `${key}_${pi}_`, mentions)
           return pi === 0 ? nodes : [<br key={`${key}_br${pi}`} />, ...nodes]
         })}
       </p>,

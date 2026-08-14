@@ -5,12 +5,20 @@ import { useAuth } from '../../../providers/AuthContext'
 import { notify } from '../../../services/notify.js'
 import { commentRepository } from '../repositories'
 import { renderMarkdown } from '../markdown.jsx'
+import { extractMentions } from '../mentions.js'
 import { Avatar, TealBtn } from '../../../components/ui'
 import { theme } from '../../../styles/theme'
-import { Pencil, Trash2, X, BadgeCheck } from 'lucide-react'
+import { Heart, Pencil, Trash2, X, BadgeCheck } from 'lucide-react'
 
 function getCommentName(comment) {
   return comment.profiles?.full_name || comment.profiles?.display_name || 'CareFind User'
+}
+
+// Build the @username -> user id map used to link mentions in a comment body.
+function mentionsMap(comment) {
+  const map = {}
+  ;(comment.mentions || []).forEach(m => { map[String(m.username).toLowerCase()] = m.user_id })
+  return map
 }
 
 export function CommentThread({ postId, user, comments, onCommentsChange, editingComment, setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts, myUsername, myAvatar, onCommentAdded }) {
@@ -22,7 +30,9 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
 
     setIsLoading(true)
     try {
-      const newComment = await commentRepository.addComment(postId, user.id, text, parentId)
+      const usernames = extractMentions(text)
+      const mentions = usernames.length ? await commentRepository.resolveMentions(usernames) : []
+      const newComment = await commentRepository.addComment(postId, user.id, text, parentId, mentions)
       if (newComment) {
         setCommentDrafts(prev => {
           const cleared = { ...prev, [postId]: '' }
@@ -39,11 +49,38 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
         // Tell the parent a comment (or reply) landed so it can notify the
         // post author (and, for a reply, the comment author). Fire-and-forget.
         if (onCommentAdded) onCommentAdded({ postId, parentId })
+        // Notify everyone mentioned (@username) in the comment. Fire-and-forget;
+        // notify() already skips notifying yourself.
+        mentions.forEach(m => {
+          if (m.user_id !== user.id) {
+            notify({ recipientId: m.user_id, actorId: user.id, type: 'mention', message: 'mentioned you in a comment', link: '/feed', postId })
+          }
+        })
       }
     } finally {
       setIsLoading(false)
     }
   }, [postId, user, commentDrafts, onCommentsChange, setCommentDrafts, setReplyingTo, onCommentAdded])
+
+  const handleToggleCommentLike = useCallback(async (comment) => {
+    if (!user) return
+    const likedByMe = (comment.post_comment_likes || []).some(l => l.user_id === user.id)
+    try {
+      if (likedByMe) {
+        await commentRepository.removeCommentLike(comment.id, user.id)
+      } else {
+        await commentRepository.addCommentLike(comment.id, user.id)
+        // Notify the comment author that their comment was liked. Fire-and-forget.
+        if (comment.user_id !== user.id) {
+          notify({ recipientId: comment.user_id, actorId: user.id, type: 'comment_like', message: 'liked your comment', link: '/feed', postId })
+        }
+      }
+      const fresh = await commentRepository.getComments(postId)
+      onCommentsChange(fresh)
+    } catch (e) {
+      notify('Could not update like right now.', { type: 'error' })
+    }
+  }, [postId, user, onCommentsChange])
 
   const handleEditComment = useCallback(async (commentId, newContent) => {
     if (!newContent.trim()) return
@@ -142,17 +179,27 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                       @{parentName}
                     </span>
                   )}
-                  <div style={{ margin: depth > 0 ? '0 0 2px' : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{renderMarkdown(comment.content)}</div>
+                  <div style={{ margin: depth > 0 ? '0 0 2px' : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{renderMarkdown(comment.content, { mentions: mentionsMap(comment) })}</div>
                 </div>
               )}
             </div>
             {user && (
-              <button
-                onClick={() => setReplyingTo(replyingTo?.commentId === comment.id && replyingTo?.postId === postId ? null : { commentId: comment.id, postId: postId })}
-                style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: theme.textLight, cursor: 'pointer', padding: '4px 4px 0' }}
-              >
-                Reply
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 4px 0 0' }}>
+                <button
+                  onClick={() => handleToggleCommentLike(comment)}
+                  aria-label={(comment.post_comment_likes || []).some(l => l.user_id === user.id) ? 'Unlike this comment' : 'Like this comment'}
+                  style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '4px 4px 0', display: 'inline-flex', alignItems: 'center', gap: 4, color: (comment.post_comment_likes || []).some(l => l.user_id === user.id) ? theme.alert : theme.textLight }}
+                >
+                  <Heart size={11} fill={(comment.post_comment_likes || []).some(l => l.user_id === user.id) ? theme.alert : 'none'} />
+                  {(comment.post_comment_likes || []).length > 0 && <span>{comment.post_comment_likes.length}</span>}
+                </button>
+                <button
+                  onClick={() => setReplyingTo(replyingTo?.commentId === comment.id && replyingTo?.postId === postId ? null : { commentId: comment.id, postId: postId })}
+                  style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: theme.textLight, cursor: 'pointer', padding: '4px 4px 0' }}
+                >
+                  Reply
+                </button>
+              </div>
             )}
             {replyingTo?.commentId === comment.id && replyingTo?.postId === postId && (
               <div style={{ marginTop: 6, marginLeft: 4 }}>

@@ -11,7 +11,9 @@ const mockSupabase = vi.hoisted(() => {
     q.range = vi.fn(() => q)
     q.eq = vi.fn(() => q)
     q.in = vi.fn(() => q)
+    q.or = vi.fn(() => q)
     q.single = vi.fn(() => q)
+    q.maybeSingle = vi.fn(() => q)
     q.insert = vi.fn(() => q)
     q.update = vi.fn(() => q)
     q.delete = vi.fn(() => q)
@@ -127,12 +129,17 @@ describe('commentRepository', () => {
 
   it('addComment sends no parent_id for a top-level comment', async () => {
     await commentRepository.addComment('p1', 'u1', 'hello')
-    expect(supabase.from().insert).toHaveBeenCalledWith({ post_id: 'p1', user_id: 'u1', content: 'hello' })
+    expect(supabase.from().insert).toHaveBeenCalledWith({ post_id: 'p1', user_id: 'u1', content: 'hello', mentions: [] })
   })
 
   it('addComment includes parent_id when replying', async () => {
     await commentRepository.addComment('p1', 'u1', 'hello', 'c9')
-    expect(supabase.from().insert).toHaveBeenCalledWith({ post_id: 'p1', user_id: 'u1', content: 'hello', parent_id: 'c9' })
+    expect(supabase.from().insert).toHaveBeenCalledWith({ post_id: 'p1', user_id: 'u1', content: 'hello', parent_id: 'c9', mentions: [] })
+  })
+
+  it('addComment stores resolved mentions on the row', async () => {
+    await commentRepository.addComment('p1', 'u1', 'hello', null, [{ username: 'DrAda', user_id: 'u9' }])
+    expect(supabase.from().insert).toHaveBeenCalledWith({ post_id: 'p1', user_id: 'u1', content: 'hello', mentions: [{ username: 'DrAda', user_id: 'u9' }] })
   })
 
   it('updateComment trims the content before saving', async () => {
@@ -145,6 +152,31 @@ describe('commentRepository', () => {
   it('deleteComment only deletes the caller’s own comment', async () => {
     await commentRepository.deleteComment('c1', 'u1')
     expect(supabase.from().delete().eq).toHaveBeenCalledWith('id', 'c1')
+    expect(supabase.from().delete().eq().eq).toHaveBeenCalledWith('user_id', 'u1')
+  })
+
+  it('resolveMentions matches display_name case-insensitively', async () => {
+    mockSupabase.queryData = [{ id: 'u9', display_name: 'DrAda' }]
+    const mentions = await commentRepository.resolveMentions(['drada', 'ghost'])
+    expect(supabase.from).toHaveBeenCalledWith('profiles')
+    expect(supabase.from().select().or).toHaveBeenCalledWith('display_name.ilike.drada,display_name.ilike.ghost')
+    expect(mentions).toEqual([{ username: 'DrAda', user_id: 'u9' }])
+    mockSupabase.queryData = []
+  })
+
+  it('resolveMentions returns [] for no usernames', async () => {
+    await expect(commentRepository.resolveMentions([])).resolves.toEqual([])
+  })
+
+  it('addCommentLike inserts a like for the caller', async () => {
+    await commentRepository.addCommentLike('c1', 'u1')
+    expect(supabase.from).toHaveBeenCalledWith('post_comment_likes')
+    expect(supabase.from().insert).toHaveBeenCalledWith({ comment_id: 'c1', user_id: 'u1' })
+  })
+
+  it('removeCommentLike only removes the caller’s own like', async () => {
+    await commentRepository.removeCommentLike('c1', 'u1')
+    expect(supabase.from().delete().eq).toHaveBeenCalledWith('comment_id', 'c1')
     expect(supabase.from().delete().eq().eq).toHaveBeenCalledWith('user_id', 'u1')
   })
 })

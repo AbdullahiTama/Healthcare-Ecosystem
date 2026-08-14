@@ -25,6 +25,7 @@ export async function notify({ recipientId, actorId, type, message, link = null,
 export const NOTIF_MESSAGES = {
   like: 'liked your post',
   comment: 'commented on your post',
+  comment_like: 'liked your comment',
   reply: 'replied to you',
   gift: 'sent you a gift',
   follow: 'started following you',

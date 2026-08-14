@@ -683,7 +683,7 @@ function Feed() {
           if (openCommentsRef.current[newComment.post_id]) {
             supabase
               .from('post_comments')
-              .select('id, content, created_at, user_id, parent_id, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url)')
+              .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
               .eq('id', newComment.id)
               .single()
               .then(({ data }) => {
@@ -1088,7 +1088,7 @@ function Feed() {
     if (!openComments[postId] && !comments[postId]) {
       const { data } = await supabase
         .from('post_comments')
-        .select('id, content, created_at, user_id, parent_id, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url)')
+        .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
       setComments(prev => ({ ...prev, [postId]: data || [] }))

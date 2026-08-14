@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { renderMarkdown } from './markdown.jsx'
 
 // Renders markdown nodes to a DOM text/html snapshot for assertions.
@@ -87,5 +88,25 @@ describe('renderMarkdown (Feature 7 — markdown in post + comment bodies)', () 
     expect(html('{b}bold{/b}')).toContain('bold')
     expect(html('{h:yellow}hi{/h}')).toContain('hi')
     expect(html('{c:red}red{/c}')).toContain('red')
+  })
+
+  it('links @mentions to the profile when a mentions map is provided', () => {
+    const out = renderMarkdown('hi @DrAda', { mentions: { drada: 'u9' } })
+    const { container } = render(<MemoryRouter><div>{out}</div></MemoryRouter>)
+    const link = container.querySelector('a')
+    expect(link).not.toBeNull()
+    expect(link.getAttribute('href')).toBe('/u/u9')
+    expect(link.textContent).toBe('@DrAda')
+  })
+
+  it('leaves @mentions as plain text when the user is unknown', () => {
+    const out = renderMarkdown('hi @ghost', { mentions: { drada: 'u9' } })
+    const { container } = render(<MemoryRouter><div>{out}</div></MemoryRouter>)
+    expect(container.querySelector('a')).toBeNull()
+    expect(container.textContent).toContain('@ghost')
+  })
+
+  it('keeps @mention text plain when no mentions map is passed', () => {
+    expect(html('hi @DrAda')).not.toContain('<a ')
   })
 })
