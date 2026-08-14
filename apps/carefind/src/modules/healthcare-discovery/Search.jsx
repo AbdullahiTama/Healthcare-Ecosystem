@@ -13,7 +13,7 @@ import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
-import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
+import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
 // Nigerian states offered as autocomplete suggestions. The location filter
@@ -102,7 +102,7 @@ const distanceMeters = (p, u) => {
     // Fallback: auto-pull products if no active promotions
     const { data: prods } = await supabase
       .from('products')
-      .select('id, name, emoji, price, show_price, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude, show_prices)')
+      .select('id, name, emoji, price, show_price, latitude, longitude, lat, lng, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
       .order('created_at', { ascending: false })
       .limit(14)
     setFeatured((prods || []).filter(p => p.list_on_carefind !== false))
@@ -117,7 +117,7 @@ const distanceMeters = (p, u) => {
   // pending or suspended business must not appear in the public directory
   // even though registration sets visible_on_carefind optimistically.
   const businessesQuery = (q, st) => {
-    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp, phone, latitude, longitude')
+    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp, phone, latitude, longitude, lat, lng')
       .eq('visible_on_carefind', true)
       .eq('status', 'active')
     // A facility query is usually a name, a kind ("pharmacy", "lab"), or a
@@ -131,7 +131,17 @@ const distanceMeters = (p, u) => {
   async function loadMoreBusinesses() {
     const offset = businesses.length
     const { data } = await businessesQuery(query.trim(), stateFilter).range(offset, offset + 39)
-    setBusinesses(prev => [...prev, ...(data || [])])
+    let merged = [...businesses, ...(data || [])]
+    // "Near me" must keep the whole merged list nearest-first, not just the
+    // first page — otherwise page 2+ appends break the ordering.
+    if (nearMe && userCoords) {
+      merged = [...merged].sort((a, b) => {
+        const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
+        const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
+        return da - db
+      })
+    }
+    setBusinesses(merged)
     setBizHasMore((data || []).length === 40)
   }
 
@@ -142,7 +152,7 @@ const distanceMeters = (p, u) => {
     let resultCount = 0
 
     if (tab === 'products') {
-      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, latitude, longitude, show_prices)')
+      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, lat, lng, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, latitude, longitude, lat, lng, show_prices)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
       // The sale-type (Retail/Wholesale/Distributor) filter must run server-side,
       // before limit(), not on the fetched batch: the products table holds many
@@ -174,8 +184,8 @@ const distanceMeters = (p, u) => {
       // Nearest first when the user asked for "Near me" and we have their
       // location — businesses without coordinates sort to the end.
       if (nearMe && userCoords) list = [...list].sort((a, b) => {
-        const da = (a.latitude != null && a.longitude != null) ? haversineMeters(a.latitude, a.longitude, userCoords.lat, userCoords.lng) : Infinity
-        const db = (b.latitude != null && b.longitude != null) ? haversineMeters(b.latitude, b.longitude, userCoords.lat, userCoords.lng) : Infinity
+        const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
+        const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
         return da - db
       })
       setBusinesses(list)
@@ -332,9 +342,17 @@ const distanceMeters = (p, u) => {
                       }}><PillIcon size={22} aria-hidden="true" /></div>
                       <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
                       {canShowPrice(p)
-                        ? <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                        ?                       <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                         : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
                       <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
+                      {(() => {
+                        const dist = distanceLabel(p, userCoords)
+                        return dist ? (
+                          <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: theme.tealDeep, fontWeight: 700 }}>
+                            <MapPin size={10} aria-hidden="true" /> {dist}
+                          </p>
+                        ) : null
+                      })()}
                     </Card>
                   </Link>
                 )
@@ -474,8 +492,9 @@ const distanceMeters = (p, u) => {
                 <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
                 <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
                 {(() => {
-                  const dist = (b.latitude != null && b.longitude != null && userCoords)
-                    ? formatDistance(haversineMeters(b.latitude, b.longitude, userCoords.lat, userCoords.lng))
+                  const bc = businessCoords(b)
+                  const dist = (bc && userCoords)
+                    ? formatDistance(haversineMeters(bc.lat, bc.lng, userCoords.lat, userCoords.lng))
                     : null
                   return dist ? (
                     <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}>

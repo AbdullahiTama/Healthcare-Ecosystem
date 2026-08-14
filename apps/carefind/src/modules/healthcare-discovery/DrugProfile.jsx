@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  AlertTriangle, BadgeCheck, CheckCircle2, MapPin, MessageCircle, Pill as PillIcon,
+  AlertTriangle, BadgeCheck, CheckCircle2, MapPin, MessageCircle, Phone, Pill as PillIcon,
   Sparkles, Star, ThumbsDown, ThumbsUp,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -16,8 +16,8 @@ import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
-import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink } from '../utils/marketplace.js'
-import { attachOwnerProfiles, sellerName, sellerContact } from '../utils/sellerLookup.js'
+import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
 function DrugProfile() {
   const { name } = useParams()
@@ -45,7 +45,7 @@ function DrugProfile() {
     // Pull BOTH pathways: CareHub inventory (business_id) and CareFind uploads (owner_id)
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, show_prices)')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, lat, lng, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
       .ilike('name', `%${decodedName}%`)
       .eq('list_on_carefind', true)
 
@@ -436,16 +436,33 @@ function DrugProfile() {
                   </div>
                 )}
 
-                {wa && (
-                  <a
-                    href={wa}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ display: 'inline-block', padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
-                  >
-                    <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-                  </a>
-                )}
+                {(() => {
+                  const wa = waLinkFor(p)
+                  const call = telLink(sellerPhone(p))
+                  if (!wa && !call) return null
+                  return (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {wa && (
+                        <a
+                          href={wa}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
+                        >
+                          <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                        </a>
+                      )}
+                      {call && (
+                        <a
+                          href={call}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
+                        >
+                          <Phone size={16} aria-hidden="true" /> Call
+                        </a>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}

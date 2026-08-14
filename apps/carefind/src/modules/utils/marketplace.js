@@ -28,17 +28,32 @@ export function canShowPrice(product) {
     && product.price != null
 }
 
-// Resolve the best available coordinates for a product listing:
-// product own lat/lng first, then its business, then nothing.
-export function productCoords(product) {
-  if (product && product.latitude != null && product.longitude != null) {
-    return { lat: product.latitude, lng: product.longitude }
+// Resolve coordinates from either naming convention. The CareHub registration
+// and settings flows write `lat`/`lng`; CareFind reads `latitude`/`longitude`
+// elsewhere. Live DB has lat/lng populated (22 rows) and latitude/longitude
+// always null, so coalesce both to keep distance working regardless of writer.
+export function coordsFrom(row) {
+  if (!row) return null
+  if (row.latitude != null && row.longitude != null) {
+    return { lat: row.latitude, lng: row.longitude }
   }
-  const biz = product?.businesses
-  if (biz && biz.latitude != null && biz.longitude != null) {
-    return { lat: biz.latitude, lng: biz.longitude }
+  if (row.lat != null && row.lng != null) {
+    return { lat: row.lat, lng: row.lng }
   }
   return null
+}
+
+// Resolve the best available coordinates for a business (or any geocoded row).
+export function businessCoords(biz) {
+  return coordsFrom(biz)
+}
+
+// Resolve the best available coordinates for a product listing:
+// product own coordinates first, then its business, then nothing.
+export function productCoords(product) {
+  const own = coordsFrom(product)
+  if (own) return own
+  return coordsFrom(product?.businesses)
 }
 
 // Haversine distance in metres between two coordinates.
@@ -53,11 +68,11 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
   return 2 * R * Math.asin(Math.sqrt(a))
 }
 
-// "820 m away" under 1 km, "2.4 km away" beyond.
+// "850m away" under 1 km, "2.3km away" beyond.
 export function formatDistance(meters) {
   if (meters == null || !isFinite(meters)) return null
-  if (meters < 1000) return `${Math.round(meters)} m away`
-  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km away`
+  if (meters < 1000) return `${Math.round(meters)}m away`
+  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)}km away`
 }
 
 export function distanceLabel(product, userCoords) {

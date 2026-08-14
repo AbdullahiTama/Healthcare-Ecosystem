@@ -1,15 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
   canShowPrice,
+  coordsFrom,
+  businessCoords,
   productCoords,
   haversineMeters,
   formatDistance,
   distanceLabel,
-saleTypeColor,
+  saleTypeColor,
   SALE_TYPES,
   unitsForSaleType,
   isUnitValidForSaleType,
   whatsappLink,
+  telLink,
 } from './marketplace.js'
 
 describe('canShowPrice', () => {
@@ -36,19 +39,50 @@ describe('canShowPrice', () => {
 })
 
 describe('productCoords', () => {
-  it('prefers the product’s own coordinates', () => {
+  it('prefers the product’s own coordinates (latitude/longitude)', () => {
     expect(productCoords({ latitude: 6.5, longitude: 3.3, businesses: { latitude: 1, longitude: 1 } }))
       .toEqual({ lat: 6.5, lng: 3.3 })
   })
 
-  it('falls back to the business coordinates', () => {
+  it('prefers the product’s own coordinates (lat/lng naming)', () => {
+    expect(productCoords({ lat: 6.5, lng: 3.3, businesses: { lat: 1, lng: 1 } }))
+      .toEqual({ lat: 6.5, lng: 3.3 })
+  })
+
+  it('falls back to the business coordinates (latitude/longitude)', () => {
     expect(productCoords({ latitude: null, longitude: null, businesses: { latitude: 9.0, longitude: 7.5 } }))
+      .toEqual({ lat: 9.0, lng: 7.5 })
+  })
+
+  it('falls back to the business coordinates (lat/lng naming — live DB shape)', () => {
+    expect(productCoords({ latitude: null, longitude: null, businesses: { lat: 9.0, lng: 7.5 } }))
       .toEqual({ lat: 9.0, lng: 7.5 })
   })
 
   it('returns null when neither product nor business has coordinates', () => {
     expect(productCoords({})).toBeNull()
     expect(productCoords(null)).toBeNull()
+  })
+})
+
+describe('coordsFrom / businessCoords', () => {
+  it('coalesces lat/lng into the canonical shape', () => {
+    expect(coordsFrom({ lat: 6.1, lng: 3.4 })).toEqual({ lat: 6.1, lng: 3.4 })
+    expect(coordsFrom({ latitude: 6.1, longitude: 3.4 })).toEqual({ lat: 6.1, lng: 3.4 })
+    expect(coordsFrom({ lat: 6.1, lng: 3.4, latitude: 7.7, longitude: 4.5 })).toEqual({ lat: 7.7, lng: 4.5 })
+  })
+
+  it('prefers latitude/longitude over lat/lng when both are present', () => {
+    expect(coordsFrom({ lat: 6.1, lng: 3.4, latitude: 9.9, longitude: 8.8 }))
+      .toEqual({ lat: 9.9, lng: 8.8 })
+  })
+
+  it('returns null for rows without usable coordinates', () => {
+    expect(coordsFrom({})).toBeNull()
+    expect(coordsFrom(null)).toBeNull()
+    expect(coordsFrom({ lat: null, lng: null })).toBeNull()
+    expect(businessCoords({ lat: 6.5, lng: 3.4 })).toEqual({ lat: 6.5, lng: 3.4 })
+    expect(businessCoords(null)).toBeNull()
   })
 })
 
@@ -71,17 +105,18 @@ describe('haversineMeters', () => {
 })
 
 describe('formatDistance', () => {
-  it('formats sub-kilometre distances in metres', () => {
-    expect(formatDistance(820)).toBe('820 m away')
-    expect(formatDistance(0)).toBe('0 m away')
+  it('formats sub-kilometre distances in metres without a space', () => {
+    expect(formatDistance(820)).toBe('820m away')
+    expect(formatDistance(0)).toBe('0m away')
   })
 
-  it('formats kilometre distances to one decimal below 10 km', () => {
-    expect(formatDistance(2400)).toBe('2.4 km away')
+  it('formats kilometre distances to one decimal below 10 km without a space', () => {
+    expect(formatDistance(2400)).toBe('2.4km away')
+    expect(formatDistance(850)).toBe('850m away')
   })
 
   it('formats large distances as whole kilometres', () => {
-    expect(formatDistance(15000)).toBe('15 km away')
+    expect(formatDistance(15000)).toBe('15km away')
   })
 
   it('returns null for missing or invalid meters', () => {
@@ -151,5 +186,30 @@ describe('whatsappLink', () => {
   it('encodes the message', () => {
     const link = whatsappLink('08012345678', 'Hi "Pharmacy", price?')
     expect(decodeURIComponent(link)).toContain('Hi "Pharmacy", price?')
+  })
+})
+
+describe('telLink', () => {
+  it('returns null without a contact', () => {
+    expect(telLink(null)).toBeNull()
+    expect(telLink('')).toBeNull()
+    expect(telLink('   ')).toBeNull()
+  })
+
+  it('rewrites Nigerian 080 numbers to +234 tel links', () => {
+    expect(telLink('08012345678')).toBe('tel:+2348012345678')
+  })
+
+  it('rewrites bare digits without a country code', () => {
+    expect(telLink('1234567890')).toBe('tel:+2341234567890')
+  })
+
+  it('leaves an already-international number alone', () => {
+    expect(telLink('+2348012345678')).toBe('tel:+2348012345678')
+    expect(telLink('2348012345678')).toBe('tel:+2348012345678')
+  })
+
+  it('strips formatting characters from the dial string', () => {
+    expect(telLink('+234 (801) 234-5678')).toBe('tel:+2348012345678')
   })
 })

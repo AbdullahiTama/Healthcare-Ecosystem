@@ -10,7 +10,7 @@ import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { canShowPrice, distanceLabel, whatsappLink, telLink } from '../utils/marketplace'
+import { canShowPrice, distanceLabel, whatsappLink, telLink, coordsFrom } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
@@ -253,7 +253,7 @@ function BusinessProfile() {
 
     const { data: bizData } = await supabase
       .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude')
+      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude, lat, lng')
       .eq('id', id)
       .maybeSingle()
 
@@ -271,7 +271,7 @@ function BusinessProfile() {
 
     const { data: productData } = await supabase
       .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices)')
+      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, lat, lng, businesses(show_prices, latitude, longitude, lat, lng)')
       .eq('business_id', id)
 
     // list_on_carefind may be NULL on legacy CareHub rows — treat anything but
@@ -356,11 +356,13 @@ function BusinessProfile() {
   const callLink = telLink(biz.phone)
 
   // Google Maps link for the Directions button: the business-supplied map URL
-  // wins; otherwise fall back to the exact GPS coordinates set in Settings;
+  // wins; otherwise fall back to the exact GPS coordinates set in Settings
+  // (lat/lng is the live shape, latitude/longitude is the legacy shape);
   // without either, the button is not rendered.
+  const bizCoords = coordsFrom(biz)
   const mapHref = biz.maps_link
-    || (biz.latitude != null && biz.longitude != null
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${biz.latitude},${biz.longitude}`)}`
+    || (bizCoords
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${bizCoords.lat},${bizCoords.lng}`)}`
       : null)
 
   // Website field accepts bare domains or handles — normalize to a usable href
