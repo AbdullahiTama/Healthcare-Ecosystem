@@ -165,3 +165,35 @@ scroll, no jank, graceful failure states.
 - `VideoPlayer.test.jsx` (5 cases) covers the player.
 - Full CareFind suite 266/266 passes; `npm run build` clean.
 - Advisor run after the DDL migration showed no new findings.
+
+---
+
+## 2026-08-14 — Feature 6: Personalized Feed
+
+**What:** A For You feed that ranks posts by multi-signal personalization
+(engagement, recency, affinity, authority, medical, interests, location) with
+candidate pools, diversity caps and staged rollout experiments.
+
+**Audit findings:**
+- The feature was already implemented end-to-end — verified, not re-worked.
+- `feedEngine.js` is pure/I/O-free: pools → weighted multi-signal ranking →
+  diversity (maxPerAuthor 3, maxPerType 5) across 6 candidate pools.
+- `Feed.jsx` `enrichAndSetPosts` builds the full engine context (reactions,
+  comments, shares, saves, gifts, follows, subscriptions, interest profile,
+  viewer region) and runs `rankForYou` on the For You tab, `rankNearby` for
+  Nearby, plain weighted score elsewhere; pull-to-refresh refetches through it.
+- Staged rollout: `resolveExperiment` buckets deterministically per
+  user/session; treatment users refetch once with treatment config; both groups
+  log `feed_view` via `logExperimentEvent`.
+- Live DB: all five tables (`feed_ranking_config` 2 rows,
+  `candidate_generation_pools` 6, `content_distribution_experiments` 1,
+  `distribution_experiment_events` 92, `feed_config` 4) exist with correct RLS.
+  `set_feed_ranking_config` is SECURITY DEFINER, checks `profiles.is_admin`,
+  and is authenticated-only. `FeedRankingConfig.jsx` editor mounted in Admin.
+
+**Changes:** none required.
+
+**Verification:**
+- Live table/policy/RPC inspection against the project DB.
+- `feedEngine.test.js` 17/17 and `distributionExperiments.test.js` 26/26
+  pass (43 total). Full CareFind suite 266/266; production build clean.

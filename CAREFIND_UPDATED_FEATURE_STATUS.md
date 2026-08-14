@@ -23,7 +23,7 @@ list; nothing is assumed missing or complete.
 | 3 | Media Attachments in Sharing | PARTIAL | `sharePost` shares only text + the feed URL — the post's `image_url`/`video_url` are never attached. `shareOrCopy` supports the Web Share API but never passes `files`, so a WhatsApp share of a visual/video post sends just the caption, not the media. |
 | 4 | Profile Stories | COMPLETE | No gaps found. `stories` + `story_views` tables exist with RLS and the `increment_story_view` RPC is live; story rails (own profile composer, public profile seen-ring, feed rail) all use the shared `StoryViewer` with expiry filtering and seen tracking. |
 | 5 | Video Feed | COMPLETE | No gaps found. `posts.video_url` column + `posts_video_feed_idx` partial index live; DDL now tracked in repo; `VideoPlayer.jsx` real playback with IntersectionObserver play/pause, reduced-motion handling, loading/error/retry; Videos tab in `FEED_TABS` with server-side filter + empty state. |
-| 6 | Personalized Feed | NOT AUDITED | — |
+| 6 | Personalized Feed | COMPLETE | No gaps found. `feedEngine.js` multi-signal pipeline (pools + diversity) wired into the For You tab with pull-to-refresh; all 5 feed tables live with correct RLS; `set_feed_ranking_config` SECURITY DEFINER admin-gated (authenticated only); admin editor mounted; 43 engine/experiment tests pass. |
 | 7 | Markdown Rendering | NOT AUDITED | — |
 | 8 | Wallet Withdrawal Banks + Security | NOT AUDITED | — |
 | 9 | Comment Likes, Replies + Mentions | NOT AUDITED | — |
@@ -159,7 +159,43 @@ Database: COMPLETE
 
 ## FEATURE 6 — PERSONALIZED FEED
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (verified 2026-08-14 — no code changes required)
+Frontend: COMPLETE
+Backend: COMPLETE
+Database: COMPLETE
+Auth/RLS: COMPLETE
+- Audit confirmed the personalized-feed system is fully implemented and live;
+  the "updated pending issue" was verified, not re-worked.
+- Engine: `feedEngine.js` is pure and I/O-free — candidate pools →
+  multi-signal weighted ranking → diversity caps. Signals (each normalized
+  0..1): engagement (likes·3 + comments·5 + shares·4 + saves·2 + gifts·8 +
+  reposts·6 + views/100), recency (linear decay over a week), affinity
+  (follows the author + the viewer's own direct engagements), authority
+  (verified professional / active business), medical (medical author),
+  interests (implicit profile from what the viewer engages with), location
+  (shared region tokens). Six candidate pools with per-pool caps and
+  `maxPerAuthor 3` / `maxPerType 5` diversity caps.
+- Wiring: `Feed.jsx` `enrichAndSetPosts` builds the full engine context
+  (reactions, comments, shares, saves, gifts, follows, subscriptions, interest
+  profile, viewer region) and runs `rankForYou` (pools + diversity) on the For
+  You tab, `rankNearby` for Nearby, and the plain weighted score for every
+  other explicit tab. Pull-to-refresh refetches through the same pipeline.
+- Staged rollout: `resolveExperiment` buckets the reader deterministically
+  (user + session), treatment users get a one-time refetch with the treatment
+  config, and both groups log `feed_view` events via `logExperimentEvent`.
+- Database (verified live): `feed_ranking_config` (2 rows),
+  `candidate_generation_pools` (6 rows), `content_distribution_experiments`
+  (1 row), `distribution_experiment_events` (92 rows), `feed_config` (4 rows)
+  all exist. RLS: configs readable by everyone, `feed_config` scoped to its
+  own user (SELECT + ALL with `user_id = auth.uid()`), experiment events
+  insertable by self/anon.
+- Admin gating: `set_feed_ranking_config` is SECURITY DEFINER with
+  `search_path = public`, checks `profiles.is_admin` and raises
+  `not_authorized` otherwise, and is granted to `authenticated` only (no
+  anon/public) — config editing is properly admin-only. The
+  `FeedRankingConfig.jsx` editor is mounted in `AdminPanel.jsx`.
+- Tests: `feedEngine.test.js` 17/17, `distributionExperiments.test.js` 26/26
+  — 43/43 pass.
 
 ## FEATURE 7 — MARKDOWN RENDERING
 
