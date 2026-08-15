@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Activity, AlertTriangle, CheckCircle, Bell, Search as SearchIcon } from 'lucide-react'
 import { getPatients, addTriage, updatePatient, getTriage } from '../../../services/supabase'
 import { theme } from '../../../styles/theme'
-import { Card, SectionHead, Inp, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, Pill, useToast, Toast } from '../../../components/ui'
+import { Card, SectionHead, Inp, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray500, gray400, gray100, border, danger, dangerBg, success, warning, warningBg } = theme
 
@@ -16,6 +16,7 @@ function StatusBadge({ status }) {
 export default function Triage({ brand }) {
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -36,8 +37,8 @@ export default function Triage({ brand }) {
       // department; otherwise the at_triage queue as before.
       const q = searchTerm.trim()
       const p = await getPatients(brand.id, { status: q ? undefined : 'at_triage', query: q })
-      setPatients(p || [])
-    } catch (e) {}
+      setPatients(p || []); setLoadError('')
+    } catch (e) { setLoadError('Could not load triage queue. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -116,7 +117,7 @@ export default function Triage({ brand }) {
         <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
           style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
       </div>
-      {loading ? <Loading /> : patients.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : patients.length === 0 ? (
         <Empty icon={<Activity size={40} />} message={searchTerm.trim() ? 'No patients match your search' : 'No patients at triage right now'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

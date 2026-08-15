@@ -19,6 +19,7 @@ export const theme = {
   alert: '#dc2626',
   heroGradient: 'linear-gradient(135deg, #0B4A3E 0%, #155A4B 55%, #0E6F5A 130%)',
   tealGradient: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
+  dangerGradient: 'linear-gradient(135deg, #7F1D1D, #B91C1C)',
 
   // ── Full neutral scale ──────────────────────────────────────────────────────
   gray50: '#F7F5EF',
@@ -41,6 +42,20 @@ export const theme = {
   dangerBg: '#fef2f2',
   infoBg: '#eff6ff',
   tealMist: '#e8f3ee',
+
+  // ── Domain/semantic aliases (COLORS.md — repeated literals centralized so a
+  //    change propagates; also keep foreign palettes (amber/slate) contained
+  //    in the teal/warm-gray system rather than re-typed per screen) ──────────
+  starAmber: '#f5b301',      // review/rating stars (Feed, postDisplay)
+  amberText: '#92400e',      // amber status-pill text (News, AdminPanel)
+  amberBg: '#fef3c7',        // amber status-pill background
+  amberSoft: '#fef9c3',      // soft amber highlight (Feed unclaimed, BusinessProfile sentiment)
+  amberBorder: '#fcd34d',    // amber warning border (Card alert variant)
+  slate: '#0f172a',          // dark slate alias (Feed live-now strip, GiftPanel)
+  slateMuted: '#94a3b8',     // muted slate text (Feed, GiftPanel)
+  greenLive: '#4ade80',      // live status dot (LiveSession)
+  dangerBorder: '#fecaca',   // danger alert border (DrugProfile)
+  alertLight: '#fca5a5',     // light danger tint (LiveSession like button)
 
   // ── Typography scale ────────────────────────────────────────────────────────
   fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',

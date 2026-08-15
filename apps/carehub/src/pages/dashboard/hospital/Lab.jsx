@@ -4,7 +4,7 @@ import { useAuth } from '../../../providers/AuthProvider'
 import { getPatients, updatePatient, getLabRequests, getLabResults, addLabResult, updateLabRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
 import { fmt, todayDate } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, successBg, warning, warningBg, info, infoBg, bg } = theme
 
@@ -35,6 +35,7 @@ export default function Lab({ brand }) {
   const staffName = auth?.staff ? auth.staff.full_name : (auth?.brand?.owner || 'Lab Technician')
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
   const [results, setResults] = useState({})
@@ -48,7 +49,7 @@ export default function Lab({ brand }) {
 
   async function load() {
     setLoading(true)
-    try { const r = await getLabRequests(brand.id); setRequests(r || []) } catch (e) {}
+    try { const r = await getLabRequests(brand.id); setRequests(r || []); setLoadError('') } catch (e) { setLoadError('Could not load lab requests. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -261,7 +262,7 @@ export default function Lab({ brand }) {
         )})}
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         <Empty icon={<Microscope size={40} />} message={tab === 'pending' ? 'No pending lab requests' : 'No completed tests yet'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

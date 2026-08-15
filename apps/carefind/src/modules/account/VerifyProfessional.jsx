@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -135,7 +135,7 @@ function VerifyProfessional() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 50px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Professional Verification</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: 0 }}>
           Get your verified badge. Your specialty will be publicly displayed on all your posts and profile
@@ -149,7 +149,7 @@ function VerifyProfessional() {
             <div style={{ textAlign: 'center', padding: '10px 0' }}>
               <div style={{
                 width: 56, height: 56, borderRadius: 16,
-                background: existingRequest.status === 'approved' ? theme.tealMist : existingRequest.status === 'rejected' ? '#fef2f2' : '#fef3c7',
+                background: existingRequest.status === 'approved' ? theme.tealMist : existingRequest.status === 'rejected' ? theme.dangerBg : theme.amberBg,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
               }}>
                 {existingRequest.status === 'approved'
@@ -218,7 +218,7 @@ function VerifyProfessional() {
                   <div>
                     <label style={{ fontSize: 11.5, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>
                       Specialty / Designation
-                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>· shown publicly on your posts</span>
+                      <span style={{ color: theme.tealDeep, marginLeft: 6, fontSize: 11 }}>Â· shown publicly on your posts</span>
                     </label>
                     <select
                       value={form.profession}
@@ -256,7 +256,7 @@ function VerifyProfessional() {
                       borderRadius: 13, fontWeight: 800, fontSize: 14, boxShadow: '0 3px 8px rgba(15,118,110,0.25)',
                     }}
                   >
-                    Continue →
+                    Continue â†’
                   </button>
                 </div>
               )}
@@ -266,7 +266,7 @@ function VerifyProfessional() {
                   <div style={{ background: theme.tealMist, borderRadius: 12, padding: 12, marginBottom: 4 }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>{form.full_name}</p>
                     <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}><BadgeCheck size={13} aria-hidden="true" /> {form.profession}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} · {form.years_experience}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{form.workplace} Â· {form.years_experience}</p>
                   </div>
 
                   <div>
@@ -284,7 +284,7 @@ function VerifyProfessional() {
                       <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>
                         {fileName || 'Tap to choose a file'}
                       </p>
-                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG · max 5MB</p>
+                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG Â· max 5MB</p>
                       <input
                         type="file"
                         accept="image/*"
@@ -305,7 +305,7 @@ function VerifyProfessional() {
                       onClick={() => setStep(1)}
                       style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 13, fontWeight: 700, fontSize: 13 }}
                     >
-                      ← Back
+                      â† Back
                     </button>
                     <button
                       type="submit"

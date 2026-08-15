@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react'
+﻿import { useState, useEffect, Component } from 'react'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
@@ -23,7 +23,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
-// One icon per product tile — a Clipboard for services, a Package for stock
+// One icon per product tile â€” a Clipboard for services, a Package for stock
 // goods. Replaces the per-product emoji so the counter grid reads as one clean
 // system (matches the dashboard template's icon-tile treatment).
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
@@ -38,7 +38,7 @@ const PAYMENT_METHODS = [
 ]
 
 // Catches any crash inside the POS page and shows the real error message on
-// screen (in red) instead of a blank white page — added because there's no
+// screen (in red) instead of a blank white page â€” added because there's no
 // way to open a browser console on mobile, so a silent crash was impossible
 // to diagnose. Purely a safety net: it doesn't change any POS behavior when
 // nothing is broken.
@@ -50,10 +50,10 @@ class POSErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div style={{ padding: 20, fontFamily: 'monospace' }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: '#dc2626', marginBottom: 10 }}>
-            POS page crashed — screenshot this and send it:
+          <div style={{ fontWeight: 800, fontSize: 16, color: theme.danger, marginBottom: 10 }}>
+            POS page crashed â€” screenshot this and send it:
           </div>
-          <div style={{ padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#7f1d1d', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ padding: 12, background: theme.dangerBg, border: '1px solid #fecaca', borderRadius: 8, color: '#7f1d1d', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {String(this.state.error?.message || this.state.error)}
             {this.state.error?.stack ? '\n\n' + this.state.error.stack : ''}
           </div>
@@ -102,7 +102,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const [holdNote, setHoldNote] = useState('')
   const [showHoldModal, setShowHoldModal] = useState(false)
   const [deleteHeldTarget, setDeleteHeldTarget] = useState(null)
-  // The held-sale row resumed into the current cart, if any — removed (soft
+  // The held-sale row resumed into the current cart, if any â€” removed (soft
   // deleted) the moment this cart is actually charged, so held sales never
   // linger as phantom rows after completion (#17).
   const [resumedSaleId, setResumedSaleId] = useState(null)
@@ -149,7 +149,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   }
   const rmv = id => setCart(cart.filter(c => c.id !== id))
   const setQty = (id, v) => { const n = parseInt(v) || 0; if (n <= 0) rmv(id); else setCart(cart.map(c => c.id === id ? { ...c, qty: n } : c)) }
-  // One-off unit-price override for a single sale — the vendor can charge a
+  // One-off unit-price override for a single sale â€” the vendor can charge a
   // different price for a particular customer without touching the catalog
   // price (which stays in the product's own record). Clearing the field or
   // typing an invalid value falls back to the catalog price, so a line can
@@ -176,7 +176,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // Tags each cart line with whether it was recommended on this client's most
   // recent consultation (source: 'recommended') or sold as a walk-in ('walk-in').
-  // Fail-safe: any error (offline, no client, no consultation) → all walk-in.
+  // Fail-safe: any error (offline, no client, no consultation) â†’ all walk-in.
   async function tagItems(clientId) {
     const recIds = new Set()
     if (clientId) {
@@ -199,11 +199,11 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // The repository decides whether the sale reaches the database or the offline
   // queue; the page only reports what happened. A queued-on-error sale stays
-  // silent, exactly as before — the cashier is told nothing failed because
+  // silent, exactly as before â€” the cashier is told nothing failed because
   // nothing was lost. But when the SERVER rejects the sale (e.g. the
   // guard_sale_item_prices trigger refuses an unauthorized price override),
   // the repository rethrows: the sale must not be parked in the offline queue
-  // (it would never sync) nor silently swallowed — the cashier sees the real
+  // (it would never sync) nor silently swallowed â€” the cashier sees the real
   // reason and can act on it.
   async function saveSale(saleData) {
     let result
@@ -214,7 +214,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       throw e
     }
     if (result.queued && result.reason === 'offline') {
-      showToast('Sale saved offline — will sync when connected', { type: 'info' })
+      showToast('Sale saved offline â€” will sync when connected', { type: 'info' })
     }
     return result
   }
@@ -262,7 +262,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     }
 
     // The sale must be recorded BEFORE the UI advances: if the server rejects
-    // it (guard_sale_item_prices — an unauthorized price override), saveSale
+    // it (guard_sale_item_prices â€” an unauthorized price override), saveSale
     // throws, so the receipt never shows, product state never decrements and
     // no debt is created for a sale that did not happen.
     await saveSale(saleData)
@@ -280,15 +280,15 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         businessId: brand.id,
         direction: 'owes_us',
         clientId,
-        partyName: isWalkIn ? 'Walk-in — ' + txnNo : clientName,
+        partyName: isWalkIn ? 'Walk-in â€” ' + txnNo : clientName,
         amount: total,
         amountPaid: amtPaid,
         description: (isShortfall && !isWalkIn ? 'Shortfall on sale' : isWalkIn ? 'Sale shortfall' : 'Credit sale')
-          + ' — TXN: ' + txnNo + ' | Items: ' + cart.map(i => i.name + ' x' + i.qty).join(', '),
+          + ' â€” TXN: ' + txnNo + ' | Items: ' + cart.map(i => i.name + ' x' + i.qty).join(', '),
         source: 'credit_sale',
         sourceRef: txnNo,
       })
-      if (!isWalkIn) showToast('Sale saved! ₦' + balance.toLocaleString() + ' debt recorded for ' + clientName, { type: 'success' })
+      if (!isWalkIn) showToast('Sale saved! â‚¦' + balance.toLocaleString() + ' debt recorded for ' + clientName, { type: 'success' })
     }
 
     loadSalesData()
@@ -316,12 +316,12 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       is_credit: true,
       is_on_hold: false,
     }
-    // Record before advancing the UI — a server rejection (price guard)
+    // Record before advancing the UI â€” a server rejection (price guard)
     // must not show a receipt, decrement stock state or open a debt for a
     // sale that did not happen.
     await saveSale(saleData)
     setReceipt({ id: txnNo, client: clientName, items, subtotal: sub, disc: discAmt, total, method: 'Credit', amtPaid, balance, date: new Date().toISOString() })
-    // `p.cat` was always undefined here — the column is `category` (Inventory
+    // `p.cat` was always undefined here â€” the column is `category` (Inventory
     // strips `cat` on write), so Services lines were decremented on this path
     // but not in charge(). Both now agree, and both are display-only: the
     // authoritative decrement is the sale_stock_movement trigger.
@@ -336,7 +336,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         partyName: clientName,
         amount: total,
         amountPaid: amtPaid,
-        description: 'Credit sale — TXN: ' + txnNo,
+        description: 'Credit sale â€” TXN: ' + txnNo,
         source: 'credit_sale',
         sourceRef: txnNo,
       })
@@ -348,7 +348,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     if (!cart.length) return
     const txnNo = genId('HLD')
     // A held sale is validated at insert like any other: if the server
-    // rejects it (price guard), saveSale already toasted the reason — keep the
+    // rejects it (price guard), saveSale already toasted the reason â€” keep the
     // cart and the modal intact instead of clearing them.
     try {
       await saveSale({
@@ -368,7 +368,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     } catch (e) {
       return
     }
-    showToast('Sale held — resume it from Held Sales', { type: 'success' })
+    showToast('Sale held â€” resume it from Held Sales', { type: 'success' })
     setShowHoldModal(false)
     setCart([])
     setClient('Walk-in')
@@ -406,7 +406,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     const newPaid = (sale.amount_paid || 0) + parseFloat(amount)
     const newBalance = sale.total - newPaid
     await saleRepository.update(sale.id, brand.id, { amount_paid: newPaid, balance: Math.max(0, newBalance), is_credit: newBalance > 0 })
-    // AUTO-UPDATE matching debt. The lookup lives in the debt repository —
+    // AUTO-UPDATE matching debt. The lookup lives in the debt repository â€”
     // Purchases' mark-paid needs the same one, and both used to fetch every
     // debt in the business and scan it here.
     try {
@@ -462,7 +462,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     }
   }
 
-  // Sell / Held / Recent / Credit tabs — the counter's top-level switch,
+  // Sell / Held / Recent / Credit tabs â€” the counter's top-level switch,
   // shared across all four POS views so the active section is always visible
   // (the dashboard template's tabbed treatment). A plain function, not a
   // component, so it never remounts.
@@ -483,7 +483,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     )
   }
 
-  // ── RECEIPT VIEW ────────────────────────────────────────────────────────────
+  // â”€â”€ RECEIPT VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (receipt) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '20px' }}>
       <Card style={{ width: '100%', maxWidth: '380px', overflow: 'hidden' }}>
@@ -495,7 +495,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         <div style={{ padding: '20px' }}>
           {receipt.items.map((it, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-              <span>{it.emoji || '💊'} {it.name} <span style={{ color: gray400 }}>×{it.qty}</span></span>
+              <span>{it.emoji || 'ðŸ’Š'} {it.name} <span style={{ color: gray400 }}>Ã—{it.qty}</span></span>
               <span style={{ fontWeight: '700' }}>{fmt(it.price * it.qty)}</span>
             </div>
           ))}
@@ -533,13 +533,13 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     </div>
   )
 
-  // ── HELD SALES VIEW ──────────────────────────────────────────────────────────
+  // â”€â”€ HELD SALES VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'held') return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('held')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
         {loadingSales ? (
-          <Loading text="Loading held sales…" />
+          <Loading text="Loading held salesâ€¦" />
         ) : heldSales.length === 0 ? (
           <Empty icon={<Pause size={40} strokeWidth={1.5} />} message="No held sales" />
         ) : heldSales.map(s => {
@@ -549,11 +549,11 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
-                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{items.length} item(s) · {fmt(s.total)}</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{items.length} item(s) Â· {fmt(s.total)}</div>
                   <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
                   {s.notes && <div style={{ fontSize: '12px', color: gray600, marginTop: '4px', fontStyle: 'italic' }}>Note: {s.notes}</div>}
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
+                    {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} Ã—{it.qty}</span>)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
@@ -578,7 +578,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     </div>
   )
 
-  // ── RECENT SALES VIEW ────────────────────────────────────────────────────────
+  // â”€â”€ RECENT SALES VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'recent') return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('recent')}</div>
@@ -590,7 +590,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
                   <div style={{ fontWeight: '700', fontSize: '14px' }}>{s.client_name || 'Walk-in'}</div>
-                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · {items.length} item(s) · {s.payment_method}</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} Â· {items.length} item(s) Â· {s.payment_method}</div>
                   <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -629,7 +629,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     </div>
   )
 
-  // ── CREDIT SALES VIEW ────────────────────────────────────────────────────────
+  // â”€â”€ CREDIT SALES VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === 'credit') return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('credit')}</div>
@@ -641,7 +641,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontWeight: '800', fontSize: '15px' }}>{s.client_name || 'Walk-in'}</div>
-                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · Total: {fmt(s.total)}</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} Â· Total: {fmt(s.total)}</div>
                 <div style={{ fontSize: '12px', color: success, marginTop: '2px' }}>Paid: {fmt(s.amount_paid || 0)}</div>
                 <div style={{ fontSize: '13px', fontWeight: '900', color: danger, marginTop: '2px' }}>Balance: {fmt(s.balance || 0)}</div>
                 <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.split('T')[0]}</div>
@@ -655,7 +655,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     </div>
   )
 
-  // ── MAIN POS VIEW (Sell tab) ──────────────────────────────────────────────
+  // â”€â”€ MAIN POS VIEW (Sell tab) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chargeLabel = !cart.length ? 'Add products' : method === 'Credit' ? 'Record credit sale' : 'Charge ' + fmt(total)
 
   return (
@@ -690,7 +690,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             })}
           </div>
 
-          {/* Out-of-stock badge — opens the sheet listing unavailable products */}
+          {/* Out-of-stock badge â€” opens the sheet listing unavailable products */}
           {outOfStock.length > 0 && (
             <button onClick={() => setShowOutOfStock(true)}
               style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '8px 14px', borderRadius: theme.radius.full, border: `1px solid ${dangerBg}`, background: dangerBg, color: danger, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
@@ -710,7 +710,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           </div>
         )}
 
-        {/* Product grid — only sellable items; out-of-stock live in the sheet */}
+        {/* Product grid â€” only sellable items; out-of-stock live in the sheet */}
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? '14px 16px' : '16px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, alignContent: 'start' }}>
           {sellable.length === 0 ? (
             <div style={{ gridColumn: '1 / -1' }}>
@@ -745,7 +745,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         </div>
       </div>
 
-      {/* Cart panel — "Current sale" */}
+      {/* Cart panel â€” "Current sale" */}
       <div style={{ width: isMobile ? 'auto' : 340, flexShrink: 0, background: 'white', borderLeft: isMobile ? 'none' : `1px solid ${border}`, borderTop: isMobile ? `1px solid ${border}` : 'none', display: 'flex', flexDirection: 'column', ...(isMobile ? {} : { height: '100vh' }) }}>
         {/* Header + client */}
         <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
@@ -766,7 +766,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               <Empty icon={<ShoppingCart size={40} strokeWidth={1.5} />} message="Cart is empty" action="Tap a product to add it" />
             </div>
           ) : cart.map(item => {
-            // The catalog price this line was added at — the baseline shown
+            // The catalog price this line was added at â€” the baseline shown
             // next to a one-off override (item.price !== catalogPrice).
             const catalogPrice = products.find(p => p.id === item.id)?.price ?? item.price
             return (
@@ -805,7 +805,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Discount */}
           <div style={{ display: 'flex', gap: 6 }}>
             <div style={{ display: 'flex', borderRadius: theme.radius.md, border: `1px solid ${border}`, overflow: 'hidden' }}>
-              <button onClick={() => setDiscPct(false)} style={{ padding: '0 11px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 12, background: !discPct ? tealDeep : 'white', color: !discPct ? 'white' : gray500 }}>₦</button>
+              <button onClick={() => setDiscPct(false)} style={{ padding: '0 11px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 12, background: !discPct ? tealDeep : 'white', color: !discPct ? 'white' : gray500 }}>â‚¦</button>
               <button onClick={() => setDiscPct(true)} style={{ padding: '0 11px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: 12, background: discPct ? tealDeep : 'white', color: discPct ? 'white' : gray500 }}>%</button>
             </div>
             <input value={disc} onChange={e => setDisc(e.target.value)} placeholder='Discount'
@@ -815,7 +815,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Summary */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: gray600 }}><span>Subtotal</span><span>{fmt(sub)}</span></div>
-            {discAmt > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: danger }}><span>Discount</span><span>−{fmt(discAmt)}</span></div>}
+            {discAmt > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: danger }}><span>Discount</span><span>âˆ’{fmt(discAmt)}</span></div>}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 2 }}>
               <span style={{ fontSize: 14, fontWeight: 800, color: navy }}>Total</span>
               <span style={{ fontSize: 21, fontWeight: 900, color: navy }}>{fmt(total)}</span>
@@ -838,7 +838,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Method-specific inputs */}
           {method === 'Cash' && (
             <div>
-              <input type='number' value={cash} onChange={e => setCash(e.target.value)} placeholder='Cash given (₦)'
+              <input type='number' value={cash} onChange={e => setCash(e.target.value)} placeholder='Cash given (â‚¦)'
                 style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
               {cash !== '' && <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 5, color: change >= 0 ? theme.success : danger }}>{change >= 0 ? 'Change: ' + fmt(change) : 'Short: ' + fmt(Math.abs(change))}</div>}
             </div>
@@ -859,7 +859,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           )}
           {method === 'Credit' && (
             <div>
-              <input type='number' value={creditAmountPaid} onChange={e => setCreditAmountPaid(e.target.value)} placeholder='Amount paid now (₦)'
+              <input type='number' value={creditAmountPaid} onChange={e => setCreditAmountPaid(e.target.value)} placeholder='Amount paid now (â‚¦)'
                 style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
               {creditAmountPaid !== '' && <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 5, color: danger }}>Balance owed: {fmt(total - (parseFloat(creditAmountPaid) || 0))}</div>}
             </div>
@@ -884,13 +884,13 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         footer={<><GhostBtn onClick={() => setShowHoldModal(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={holdSale} style={{ flex: 1, padding: '12px' }}>Hold sale</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, background: bg, fontSize: '13px', color: gray600 }}>
-            Cart total: <strong>{fmt(total)}</strong> · {cart.length} item(s) for <strong>{client || 'Walk-in'}</strong>
+            Cart total: <strong>{fmt(total)}</strong> Â· {cart.length} item(s) for <strong>{client || 'Walk-in'}</strong>
           </div>
           <Inp label='Note (optional)' value={holdNote} onChange={setHoldNote} placeholder='e.g. Customer coming back in 30 minutes' />
         </div>
       </Modal>
 
-      {/* Out-of-stock sheet — read-only list of products hidden from the grid */}
+      {/* Out-of-stock sheet â€” read-only list of products hidden from the grid */}
       <Modal show={showOutOfStock} onClose={() => setShowOutOfStock(false)} title={'Out of stock (' + outOfStock.length + ')'} sheet={isMobile}
         footer={<GhostBtn onClick={() => setShowOutOfStock(false)} style={{ flex: 1 }}>Close</GhostBtn>}>
         <div style={{ fontSize: '12.5px', color: gray500, marginBottom: '12px' }}>
@@ -903,7 +903,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${gray100}`, background: 'white' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' · reorder at ' + p.reorder_level : ''}</div>
+                <div style={{ fontSize: '11.5px', color: gray400, marginTop: 2 }}>{p.cat || p.category || 'Product'}{p.reorder_level ? ' Â· reorder at ' + p.reorder_level : ''}</div>
               </div>
               <Pill label='Out of stock' type='red' />
             </div>

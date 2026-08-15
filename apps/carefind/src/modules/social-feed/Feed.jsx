@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
@@ -75,9 +75,9 @@ async function searchPosts(query, { limit = 30 } = {}) {
 const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
 const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
 
-// Explicit view-event mechanism (engagement spec §7): each qualifying view
+// Explicit view-event mechanism (engagement spec Â§7): each qualifying view
 // writes a post_view_events row and the DB bumps posts.view_count via
-// trigger. createViewRecorder counts a post once per app load — a re-render,
+// trigger. createViewRecorder counts a post once per app load â€” a re-render,
 // StrictMode double-effect, tab switch or pull-to-refresh cannot inflate it,
 // while a fresh page load (new session) still records a repeat view. The DB
 // enforces the same dedup with a unique index, so even a missed client guard
@@ -357,7 +357,7 @@ function Feed() {
     ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
 
     // Phase 6 engine inputs: share/save totals, posted-as facility rows and
-    // the viewer's own engagement (follows, saves, subscriptions) — the raw
+    // the viewer's own engagement (follows, saves, subscriptions) â€” the raw
     // material for the affinity and implicit-interest signals. All fire
     // together; each table is query-1 for this batch.
     const postedAsIds = [...new Set((postData || []).map((p) => p.posted_as_id).filter(Boolean))]
@@ -404,7 +404,7 @@ function Feed() {
       },
     })
 
-    // The engine context — every pure signal the ranking reads. `myRegion` is
+    // The engine context â€” every pure signal the ranking reads. `myRegion` is
     // the viewer's normalized location (empty when they haven't set one).
     const context = {
       lCounts, cCounts, sCounts, saveCounts, giftStats: giftTotals,
@@ -416,7 +416,7 @@ function Feed() {
     // For You goes through the full pipeline (pools + diversity), with any
     // staged-rollout treatment overrides merged over the base config. Nearby
     // is a dedicated region view. Every other tab keeps the plain weighted
-    // score — diversity caps must never hide posts a reader explicitly asked
+    // score â€” diversity caps must never hide posts a reader explicitly asked
     // for, and experiments never touch those explicit views.
     const byScore = rankByScore({ posts: postData, context, weights: rankConfig.weights })
     let ranked
@@ -444,7 +444,7 @@ function Feed() {
     setLoading(true)
     setNewPostsCount(0)
     // Video / Medical tabs are dedicated server queries (real clips; medical
-    // authors only), NOT slices of the shared latest-50 feed — a tab that
+    // authors only), NOT slices of the shared latest-50 feed â€” a tab that
     // depends on a sparse column or an author-class filter could otherwise
     // look empty by chance, and Medical must never mix general content.
     let query = supabase
@@ -508,11 +508,11 @@ function Feed() {
       }
     }
 
-    // Record a view for each post shown — once per session, fire and forget.
+    // Record a view for each post shown â€” once per session, fire and forget.
     // record_post_view needs the 20260813 post_view_events migration; until
     // it's applied the RPC is missing and this degrades to a no-op (the old
     // increment_post_view kept counting every refresh, which is exactly the
-    // inflation §7 forbids).
+    // inflation Â§7 forbids).
     ;(postData || []).forEach((p) => { recordFeedView.record(p.id) })
 
     setLoading(false)
@@ -530,7 +530,7 @@ function Feed() {
   }, [user])
 
   // Phase 6: load the personalized-feed config (weights, pools) and the
-  // signals the engine needs that aren't part of the posts query — the
+  // signals the engine needs that aren't part of the posts query â€” the
   // viewer's region (Nearby tab + location signal) and the current sets of
   // verified professionals and active medical facilities (Medical tab). The
   // 20260813_feed_engine migration makes the config real; without it every
@@ -565,7 +565,7 @@ function Feed() {
     })
 
     // Phase 7: resolve the reader's staged-rollout group (deterministic bucket
-    // over user/session id). No experiment staged ⇒ null ⇒ the feed uses the
+    // over user/session id). No experiment staged â‡’ null â‡’ the feed uses the
     // base config and logs no metrics. When the reader lands in the treatment
     // group the For You ranking must apply its config, so reload the current
     // feed once the group is known (experiments are off by default; this only
@@ -586,13 +586,13 @@ function Feed() {
   // first treatment-group render. Reloading via an effect (rather than calling
   // loadFeed() inside loadEngineConfig) runs AFTER the state commits, so the
   // reload's closure sees the fresh activeExperiment. Experiments are off by
-  // default — this only costs a refetch while one is actually staged.
+  // default â€” this only costs a refetch while one is actually staged.
   useEffect(() => {
     if (activeExperiment?.treatment) loadFeed()
   }, [activeExperiment])
 
   // Phase 7 retention signal: one feed_view per session per staged experiment,
-  // tagged with the reader's variant — control included, which is what makes
+  // tagged with the reader's variant â€” control included, which is what makes
   // the A/B comparison valid. A dedicated effect (not loadFeed) means control
   // users, who never trigger the treatment reload, still log theirs. Fire and
   // forget; the metric write can never fail the feed.
@@ -638,7 +638,7 @@ function Feed() {
   }, [user, feedTab])
 
   // Video / Nearby / Medical are dedicated server queries (real clips; region
-  // view; medical authors only), not slices of the shared 50-post feed —
+  // view; medical authors only), not slices of the shared 50-post feed â€”
   // otherwise a tab that depends on a sparse column or an author-class filter
   // could look empty by chance. Entering any of them refetches its batch;
   // leaving them restores the normal feed so the other tabs never inherit the
@@ -997,7 +997,7 @@ function Feed() {
       if (!user) return false
       return follows.some((f) => f.follower_id === user.id && f.following_id === p.user_id)
     }
-    // Nearby and Medical are dedicated loadFeed queries — the posts state is
+    // Nearby and Medical are dedicated loadFeed queries â€” the posts state is
     // already exactly that tab's set, so nothing further is sliced out here.
     if (feedTab === 'nearby' || feedTab === 'medical') return true
     if (feedTab === 'video') return !!p.video_url
@@ -1204,7 +1204,7 @@ function Feed() {
 
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
+    const text = author ? `â€œ${toShareText(post.content)}â€ â€” ${author} on CareFind` : toShareText(post.content)
     // Attach the post's media (image/video) to the share where the browser
     // supports it; the URL is still appended to the clipboard fallback so
     // WhatsApp recipients always get the media, never just the caption.
@@ -1311,7 +1311,7 @@ function Feed() {
     return saveCounts[postId] || 0
   }
 
-  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
+  // Classic repost: a ðŸ”-marked post in the reposter's feed PLUS a
   // post_reposts reference (writeRepost), so followers see the repost and the
   // source carries a real count. Undoing removes both (undoRepost). Optimistic
   // like the other toggles; if the feed-post write fails, the reference is
@@ -1319,8 +1319,8 @@ function Feed() {
   //
   // In-flight guard: a double-tap in one render tick would otherwise run the
   // whole async toggle twice. The DB index posts_user_repost_uniq already
-  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
-  // 23505), but the guard stops the second write from being issued at all —
+  // collapses a duplicate ðŸ” post to the existing row (writeRepost reconciles
+  // 23505), but the guard stops the second write from being issued at all â€”
   // and stops an in-flight repost from being "undone" by a stale second tap.
   const repostInFlight = useRef(new Set())
   async function toggleRepost(post) {
@@ -1347,7 +1347,7 @@ function Feed() {
       const tempRepostPost = {
         id: `temp_repost_${Date.now()}`,
         user_id: user.id,
-        content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
+        content: `ðŸ” ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
         post_type: 'text',
         image_url: post.image_url || null,
         subscriber_only: post.subscriber_only || false,
@@ -1445,7 +1445,7 @@ function Feed() {
           padding-right: 6px; padding-top: 4px; color: ${theme.tealDeep};
         }
         .article-body mark {
-          background: #fef9c3; color: #713f12; padding: 1px 4px; border-radius: 4px;
+          background: ${theme.amberSoft}; color: ${theme.amberText}; padding: 1px 4px; border-radius: 4px;
         }
         .article-body strong { font-weight: 800; color: ${theme.navy}; }
       `}</style>
@@ -1461,7 +1461,7 @@ function Feed() {
               <div style={{ position: 'relative', width: '100%', maxWidth: 280 }}>
                 <SearchIcon size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }} />
                 <input
-                  placeholder="Search providers, pharmacies…"
+                  placeholder="Search providers, pharmaciesâ€¦"
                   onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { navigate(`/search?q=${encodeURIComponent(e.target.value.trim())}`) } }}
                   style={{
                     width: '100%', padding: '8px 12px 8px 32px', borderRadius: 20, border: 'none',
@@ -1471,7 +1471,7 @@ function Feed() {
             </div>
 
             <Link to="/notifications" style={{
-              width: 34, height: 34, borderRadius: 11, display: 'flex', alignItems: 'center',
+              width: 34, height: 34, borderRadius: theme.radius.md, display: 'flex', alignItems: 'center',
               justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
               textDecoration: 'none', color: '#fff', position: 'relative',
             }}>
@@ -1479,7 +1479,7 @@ function Feed() {
               {unreadNotifs > 0 && (
                 <span style={{
                   position: 'absolute', top: 3, right: 3, minWidth: 15, height: 15, padding: '0 3px',
-                  borderRadius: 8, background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900,
+                  borderRadius: theme.radius.sm, background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
                   border: `1.5px solid ${theme.navy}`,
                 }}>{unreadNotifs > 99 ? '99+' : unreadNotifs}</span>
@@ -1539,10 +1539,10 @@ function Feed() {
         <Link to={`/live-show/${platformLive.id}`} style={{
           display: 'flex', alignItems: 'center', gap: 11, margin: '12px 0 0',
           padding: '12px 13px', borderRadius: 14, textDecoration: 'none',
-          background: 'linear-gradient(135deg, #7F1D1D, #B91C1C)',
+          background: theme.dangerGradient,
         }}>
           <div style={{
-            width: 38, height: 38, borderRadius: 11, flexShrink: 0, fontSize: 17,
+            width: 38, height: 38, borderRadius: theme.radius.md, flexShrink: 0, fontSize: 17,
             background: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Radio size={20} aria-hidden="true" /></div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1555,8 +1555,8 @@ function Feed() {
             </p>
           </div>
           <span style={{
-            background: '#fff', color: '#B91C1C', fontSize: 11, fontWeight: 900,
-            padding: '7px 13px', borderRadius: 9, flexShrink: 0,
+            background: '#fff', color: theme.danger, fontSize: 11, fontWeight: 900,
+            padding: '7px 13px', borderRadius: theme.radius.md, flexShrink: 0,
           }}>Watch</span>
         </Link>
       )}
@@ -1570,9 +1570,9 @@ function Feed() {
             type="search"
             value={feedQuery}
             onChange={(e) => setFeedQuery(e.target.value)}
-            placeholder="Search posts…"
+            placeholder="Search postsâ€¦"
             aria-label="Search posts"
-            style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: 12, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
           />
           {feedQuery && (
             <button
@@ -1587,7 +1587,7 @@ function Feed() {
         </div>
         {isSearching && (
           <p style={{ margin: '8px 2px 0', fontSize: 11.5, color: theme.textLight }}>
-            {feedSearching ? 'Searching…' : `${displayPosts.length} result${displayPosts.length === 1 ? '' : 's'} for “${feedQuery.trim()}”`}
+            {feedSearching ? 'Searchingâ€¦' : `${displayPosts.length} result${displayPosts.length === 1 ? '' : 's'} for â€œ${feedQuery.trim()}â€`}
           </p>
         )}
       </div>
@@ -1601,7 +1601,7 @@ function Feed() {
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}><Newspaper size={14} aria-hidden="true" /> Latest news</span>
-            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all →</Link>
+            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all â†’</Link>
           </div>
           <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
             {latestNews.map((n) => (
@@ -1638,7 +1638,7 @@ function Feed() {
               <p style={{ margin: '0 0 1px 0', fontSize: 13, fontWeight: 800, color: theme.tealDeep }}>Complete your profile</p>
               <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Add your name, username and phone to get the most out of CareFind</p>
             </div>
-            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>›</span>
+            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>â€º</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBannerDismissed(true) }}
               aria-label="Dismiss"
@@ -1657,13 +1657,13 @@ function Feed() {
           <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4 }}>
             {liveSessions.map(s => (
               <a key={s.id} href={`/live/${s.id}`} style={{ textDecoration: 'none', flexShrink: 0, width: 140 }}>
-                <div style={{ border: '2px solid #dc2626', borderRadius: 14, padding: 10, background: '#fff' }}>
+                <div style={{ border: `2px solid ${theme.danger}`, borderRadius: 14, padding: 10, background: '#fff' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626' }} />
-                    <span style={{ fontSize: 9, fontWeight: 800, color: '#dc2626' }}>LIVE</span>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: theme.danger }} />
+                    <span style={{ fontSize: 9, fontWeight: 800, color: theme.danger }}>LIVE</span>
                   </div>
-                  <p style={{ margin: '0 0 3px', fontSize: 12, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{s.topic?.slice(0, 40)}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: '#94a3b8' }}>{s.profiles?.full_name || s.profiles?.display_name}</p>
+                  <p style={{ margin: '0 0 3px', fontSize: 12, fontWeight: 700, color: theme.slate, lineHeight: 1.3 }}>{s.topic?.slice(0, 40)}</p>
+                  <p style={{ margin: 0, fontSize: 10, color: theme.slateMuted }}>{s.profiles?.full_name || s.profiles?.display_name}</p>
                 </div>
               </a>
             ))}
@@ -1680,10 +1680,10 @@ function Feed() {
             const idn = getActiveIdentity()
             if (!idn) return null
             return (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 12, background: theme.navy, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: theme.radius.md, background: theme.navy, marginBottom: 12 }}>
                 {idn.type === 'staff' ? <Award size={16} aria-hidden="true" /> : <Building2 size={16} aria-hidden="true" />}
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff' }}>
-                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' · ' + idn.businessName : idn.name}
+                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' Â· ' + idn.businessName : idn.name}
                 </p>
               </div>
             )
@@ -1713,7 +1713,7 @@ function Feed() {
               onClick={() => setSubscriberOnly((v) => !v)}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '10px 13px', borderRadius: 12, marginBottom: 12, cursor: 'pointer',
+                padding: '10px 13px', borderRadius: theme.radius.md, marginBottom: 12, cursor: 'pointer',
                 border: subscriberOnly ? 'none' : `1px solid ${theme.border}`,
                 background: subscriberOnly ? theme.navy : theme.bg,
                 color: subscriberOnly ? '#fff' : theme.textMid,
@@ -1736,7 +1736,7 @@ function Feed() {
           )}
 
           {canGoLive && (
-            <Link to="/playlist/create" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 13px', borderRadius: 12, background: theme.navy, color: '#fff', fontSize: 12.5, fontWeight: 800, textDecoration: 'none', marginBottom: 12 }}>
+            <Link to="/playlist/create" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 13px', borderRadius: theme.radius.md, background: theme.navy, color: '#fff', fontSize: 12.5, fontWeight: 800, textDecoration: 'none', marginBottom: 12 }}>
               <Film size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 7 }} />Create a playlist (series)
             </Link>
           )}
@@ -1805,7 +1805,7 @@ function Feed() {
                 }}
               >
                 {uploadingVideo
-                  ? '…'
+                  ? 'â€¦'
                   : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={15} aria-hidden="true" /> {cardVideoPreview ? 'Change clip' : 'Clip'}</span>}
                 <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
@@ -1832,7 +1832,7 @@ function Feed() {
 
           {/* Voice Card: attach a recorded voice */}
           {postType === 'visual' && (
-            <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+            <div style={{ border: `1px dashed ${theme.border}`, borderRadius: theme.radius.md, padding: 12, marginBottom: 10 }}>
               {cardAudio ? (
                 <div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>
@@ -1864,8 +1864,8 @@ function Feed() {
           {postType === 'review' && (
             <div style={{ marginBottom: 10 }}>
               {reviewTarget ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? theme.warningBg : theme.tealMist, borderRadius: 12, padding: '8px 12px' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: reviewTarget.type === 'unclaimed' ? '#a16207' : theme.tealDeep, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: reviewTarget.type === 'unclaimed' ? theme.warningBg : theme.tealMist, borderRadius: theme.radius.md, padding: '8px 12px' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: reviewTarget.type === 'unclaimed' ? theme.amberText : theme.tealDeep, flex: 1 }}>
                     {(reviewTarget.type === 'business' || reviewTarget.entityType === 'business')
                       ? <Building2 size={15} style={{ flexShrink: 0 }} aria-hidden="true" />
                       : <PillIcon size={15} style={{ flexShrink: 0 }} aria-hidden="true" />}
@@ -1903,22 +1903,22 @@ function Feed() {
                     <div style={{ border: `1px solid ${theme.border}`, borderRadius: 10, marginTop: 4, overflow: 'hidden' }}>
                     {reviewSearchResults.map((r) => (
                         r.type === 'unclaimed' ? (
-                          <div key="unclaimed" style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, background: '#fef9c3' }}>
-                            <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: '#a16207', fontWeight: 700 }}>
+                          <div key="unclaimed" style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, background: theme.amberSoft }}>
+                            <p style={{ margin: '0 0 6px 0', fontSize: 12.5, color: theme.amberText, fontWeight: 700 }}>
                               "{r.name}" not found on CareFind: review anyway?
                             </p>
                             <div style={{ display: 'flex', gap: 6 }}>
                               <button
                                 type="button"
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'business' }); setReviewSearchResults([]) }}
-                                style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
+                                style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: theme.radius.sm, fontSize: 12, fontWeight: 700 }}
                               >
                                 <Building2 size={14} aria-hidden="true" /> It's a business
                               </button>
                               <button
                                 type="button"
                                 onClick={() => { setReviewTarget({ ...r, entityType: 'product' }); setReviewSearchResults([]) }}
-                                style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}
+                                style={{ flex: 1, padding: '6px 10px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: theme.radius.sm, fontSize: 12, fontWeight: 700 }}
                               >
                                 <PillIcon size={14} aria-hidden="true" /> It's a medication
                               </button>
@@ -1950,9 +1950,9 @@ function Feed() {
                   type="button"
                   key={n}
                   onClick={() => setPostRating(n)}
-                  style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: n <= postRating ? '#f5b301' : '#ccc' }}
+                  style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: n <= postRating ? theme.starAmber : theme.gray300 }}
                 >
-                  <Star size={24} color={n <= postRating ? '#f5b301' : theme.gray300} fill={n <= postRating ? '#f5b301' : 'none'} aria-hidden="true" />
+                  <Star size={24} color={n <= postRating ? theme.starAmber : theme.gray300} fill={n <= postRating ? theme.starAmber : 'none'} aria-hidden="true" />
                 </button>
               ))}
             </div>
@@ -1975,7 +1975,7 @@ function Feed() {
                   }}
                 />
               </div>
-              <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, textAlign: 'center' }}>
+              <p style={{ fontSize: 11, color: theme.slateMuted, marginTop: 6, textAlign: 'center' }}>
                 Tap the card and type: your text appears live on the card
               </p>
             </div>
@@ -1997,7 +1997,7 @@ function Feed() {
                     'Share a health tip, ask a question...'
                   }
                   rows={3}
-                  style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
                 />
               )}
             </>
@@ -2032,12 +2032,12 @@ function Feed() {
             ) : <span />}
 
             <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ minWidth: 108, flexShrink: 0 }}>
-              {posting ? (uploadingImage ? 'Uploading photo…' : 'Posting…') : 'Post'}
+              {posting ? (uploadingImage ? 'Uploading photoâ€¦' : 'Postingâ€¦') : 'Post'}
             </TealBtn>
           </div>
         </form>
       ) : (
-        <p style={{ color: '#666', fontSize: 14, marginBottom: 20 }}>
+        <p style={{ color: theme.textLight, fontSize: 14, marginBottom: 20 }}>
           <Link to="/login" style={{ color: theme.tealDeep, fontWeight: 600 }}>Log in</Link> to post and join the conversation.
         </p>
       )}
@@ -2086,7 +2086,7 @@ function Feed() {
           message={
             <>
               <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
-                No posts match “{feedQuery.trim()}”
+                No posts match â€œ{feedQuery.trim()}â€
               </div>
               <div style={{ fontSize: 13, color: theme.textLight }}>
                 Try a different word, or clear the search to see the full feed.
@@ -2106,11 +2106,11 @@ function Feed() {
           {seriesList.map((pl) => (
             <Link key={pl.id} to={`/playlist/${pl.id}`} style={{
               display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px',
-              border: `1px solid ${theme.border}`, borderRadius: 16, background: theme.cardBg,
+              border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, background: theme.cardBg,
               textDecoration: 'none',
             }}>
               <div style={{
-                width: 46, height: 46, borderRadius: 12, flexShrink: 0, fontSize: 21,
+                width: 46, height: 46, borderRadius: theme.radius.md, flexShrink: 0, fontSize: 21,
                 background: theme.navy, display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}><Film size={22} aria-hidden="true" /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -2121,13 +2121,13 @@ function Feed() {
                   </p>
                 )}
               </div>
-              <span style={{ color: theme.textLight }}>›</span>
+              <span style={{ color: theme.textLight }}>â€º</span>
             </Link>
           ))}
         </div>
       )}
 
-      {/* #6 "New posts" pill — sticky, centred above the list. Clicking it
+      {/* #6 "New posts" pill â€” sticky, centred above the list. Clicking it
           scrolls to top and refreshes the feed (which clears the counter). */}
       {newPostsCount > 0 && !loading && (
         <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', top: 8, zIndex: 5, marginBottom: -4 }}>
@@ -2135,7 +2135,7 @@ function Feed() {
             onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); loadFeed() }}
             style={{
               background: theme.tealDeep, color: '#fff', border: 'none', cursor: 'pointer',
-              fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 999,
+              fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: theme.radius.md99,
               boxShadow: theme.elevation[2], display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
@@ -2149,9 +2149,9 @@ function Feed() {
           distance, then a spinner state while refreshing. */}
       <div style={{ position: 'sticky', top: 0, height: 0, zIndex: 4, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
         {pullRefreshing ? (
-          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 999, boxShadow: theme.elevation[2] }}>Refreshing…</span>
+          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.md99, boxShadow: theme.elevation[2] }}>Refreshingâ€¦</span>
         ) : pullDistance > 4 ? (
-          <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: 999, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
+          <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.md99, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
             {pullDistance > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
           </span>
         ) : null}
@@ -2168,17 +2168,17 @@ function Feed() {
             (loadFeed .or(user_id in verified, posted_as_id in medical biz)); the
             banner makes the rule explicit to the reader. */}
         {feedTab === 'medical' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md }}>
             <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
             <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
-              Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
+              Medical professionals only â€” posts from verified professionals and approved facilities. General posts are never mixed in here.
             </span>
           </div>
         )}
         {feedTab !== 'series' && displayPosts.map((post) => (
           <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
             {/* Card header: identity left, one kind pill + overflow menu right.
-                Identity reads name → verified badge → handle → credential →
+                Identity reads name â†’ verified badge â†’ handle â†’ credential â†’
                 time, i.e. "who is this, and can I trust them" before anything
                 else (Design Principle 12: trust is a design output). */}
             <div style={{
@@ -2250,7 +2250,7 @@ function Feed() {
                   {post.posted_as_type ? (
                     <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>
                       {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
-                      {' · posted by '}
+                      {' Â· posted by '}
                       {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
                     </span>
                   ) : (
@@ -2294,7 +2294,7 @@ function Feed() {
                   value={editingPost.content}
                   onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
                   rows={3}
-                  style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: 12, fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
                 />
                 <div style={{ display: 'flex', gap: 6 }}>
                   <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
@@ -2332,7 +2332,7 @@ function Feed() {
                     to={`/u/${post.user_id}`}
                     style={{
                       display: 'inline-block', padding: '10px 22px', background: theme.tealDeep,
-                      color: '#fff', borderRadius: 12, fontWeight: 800, fontSize: 13, textDecoration: 'none',
+                      color: '#fff', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none',
                     }}
                   >
                     Subscribe to read
@@ -2359,14 +2359,14 @@ function Feed() {
                   style={{
                     width: '100%', marginTop: 8, padding: '10px 12px',
                     background: theme.navy, color: '#fff', border: 'none',
-                    borderRadius: 12, fontWeight: 800, fontSize: 12.5, cursor: 'pointer',
+                    borderRadius: theme.radius.md, fontWeight: 800, fontSize: 12.5, cursor: 'pointer',
                   }}
                 >
                   {sharingId === post.id
-                    ? 'Preparing…'
+                    ? 'Preparingâ€¦'
                     : post.audio_url && canExportVideo()
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download with voice · share to status</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download card · share to status</span>}
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download with voice Â· share to status</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download card Â· share to status</span>}
                 </button>
               </div>
             ) : (
@@ -2374,7 +2374,7 @@ function Feed() {
                 {post.post_type === 'review' && post.rating && (
                   <p style={{ margin: '8px 0 6px 0', display: 'flex', gap: 1 }}>
                     {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} size={15} color="#f5b301" fill={n <= post.rating ? '#f5b301' : 'none'} aria-hidden="true" />
+                      <Star key={n} size={15} color={theme.starAmber} fill={n <= post.rating ? theme.starAmber : 'none'} aria-hidden="true" />
                     ))}
                   </p>
                 )}
@@ -2389,7 +2389,7 @@ function Feed() {
                   </div>
                 )}
                 {post.image_url && post.post_type !== 'visual' && (
-                  <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: 12, marginBottom: 8 }} />
+                  <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
                 )}
               </>
             )}
@@ -2439,7 +2439,7 @@ function Feed() {
                   <span>{shareCount(post.id) > 0 ? formatCount(shareCount(post.id)) : 'Share'}</span>
                 </button>
 
-                {/* Repost: hidden on reposts themselves — a repost of a
+                {/* Repost: hidden on reposts themselves â€” a repost of a
                     repost would fan out the same content twice. */}
                 {!post.repost_of && (
                   <button
@@ -2526,9 +2526,9 @@ function Feed() {
                   opt.run()
                 }}
                 style={{
-                  position: 'relative', border: `1px solid ${opt.danger ? '#FCA5A5' : theme.border}`,
+                  position: 'relative', border: `1px solid ${opt.danger ? theme.alertLight : theme.border}`,
                   borderRadius: 14, padding: '13px 6px 10px', textAlign: 'center',
-                  background: opt.danger ? '#FEF2F2' : '#fff',
+                  background: opt.danger ? theme.dangerBg : '#fff',
                   opacity: locked ? 0.55 : 1, cursor: 'pointer',
                 }}
               >
@@ -2550,7 +2550,7 @@ function Feed() {
 
         {!canGoLive && (
           <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
-            <BadgeCheck size={12} aria-hidden="true" /> Verified only ·{' '}
+            <BadgeCheck size={12} aria-hidden="true" /> Verified only Â·{' '}
             <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
               Get verified
             </Link>

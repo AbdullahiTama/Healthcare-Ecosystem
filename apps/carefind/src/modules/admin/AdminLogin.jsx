@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { callAdminAuth } from './adminApi'
+import { theme } from '../../styles/theme'
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('')
@@ -60,7 +61,7 @@ export default function AdminLogin() {
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required
                 style={{ width: '100%', padding: 13, fontSize: 14, background: '#0B4A3E', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', outline: 'none', boxSizing: 'border-box' }} />
             </div>
-            {error && <div style={{ background: '#fef2f2', borderRadius: 10, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>⚠️ {error}</p></div>}
+            {error && <div style={{ background: theme.dangerBg, borderRadius: 10, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 13, color: theme.danger, fontWeight: 600 }}>⚠️ {error}</p></div>}
             <button type="submit" disabled={loading} style={{ padding: 14, background: 'linear-gradient(135deg, #1A8A72, #0E6F5A)', color: '#fff', border: 'none', borderRadius: 13, fontWeight: 800, fontSize: 15, marginTop: 4 }}>
               {loading ? 'Signing in...' : 'Sign In to Admin'}
             </button>

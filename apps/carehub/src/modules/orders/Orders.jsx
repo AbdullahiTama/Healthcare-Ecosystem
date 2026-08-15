@@ -8,7 +8,7 @@ import { productRepository } from '../inventory/repositories'
 import { warehouseRepository } from '../warehouses/repositories'
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
-import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
+import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, CardSkeleton } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
@@ -371,7 +371,13 @@ export default function Orders({ brand }) {
         })}
       </div>
 
-      {loading && <Loading text="Loading orders..." />}
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      )}
 
       {!loading && visible.length === 0 && (
         <Card style={{ padding: '32px', textAlign: 'center' }}>

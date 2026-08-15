@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
@@ -13,8 +13,8 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Text
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
-// One lucide icon per product row/tile — Clipboard for services, Package for
-// stock goods — replacing the per-product emoji.
+// One lucide icon per product row/tile â€” Clipboard for services, Package for
+// stock goods â€” replacing the per-product emoji.
 const productIcon = (p) => ((p.cat || p.category) === 'Services' ? Clipboard : Package)
 
 export default function Inventory({ brand, products, setProducts, role, perms, loadProducts }) {
@@ -46,7 +46,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
   }), [products, catFilter, search])
 
-  // Pagination — 50 rows per page. Reset to page 0 whenever the result set
+  // Pagination â€” 50 rows per page. Reset to page 0 whenever the result set
   // changes (search, filter, or data reload) so the user never lands on an
   // empty page that no longer exists.
   const PAGE_SIZE = 50
@@ -77,7 +77,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   async function saveProduct(data, isEdit) {
     try {
       const category = data.cat || data.category || 'Medicines'
-      // Build clean productData — explicitly exclude 'cat' since Supabase only has 'category'
+      // Build clean productData â€” explicitly exclude 'cat' since Supabase only has 'category'
       const { cat, ...rest } = data
       const productData = {
         ...rest,
@@ -89,7 +89,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       if (!isEdit) {
-        // Check for duplicate — but only if name is specific enough (more than 3 chars)
+        // Check for duplicate â€” but only if name is specific enough (more than 3 chars)
         const name = (productData.name || '').trim()
         const generic = (productData.generic_name || '').trim()
         if (name.length > 3) {
@@ -129,7 +129,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         barcode: incoming.barcode || existing.barcode,
         list_on_carefind: incoming.list_on_carefind,
       })
-      showToast('Existing product updated — stock combined!', { type: 'success' })
+      showToast('Existing product updated â€” stock combined!', { type: 'success' })
       setDuplicateWarning(null)
       setShowAdd(false)
       setEditItem(null)
@@ -137,7 +137,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     } catch (e) { showToast('Could not update product. Please try again.', { type: 'error' }) }
   }
 
-  // Merge ALL detected duplicate groups in one go — batched version:
+  // Merge ALL detected duplicate groups in one go â€” batched version:
   // updates and deletes run in safe-sized parallel batches to avoid overwhelming
   // the connection or hitting URL length limits with very large duplicate counts
   async function mergeAllDuplicates() {
@@ -147,7 +147,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       const updates = [] // { id, stock }
 
       for (const group of duplicateGroups) {
-        // Pick the "keeper" — prefer the one with a cost_price set, then the one with more stock, then the first
+        // Pick the "keeper" â€” prefer the one with a cost_price set, then the one with more stock, then the first
         const keeper = [...group].sort((a, b) => {
           const aScore = (a.cost_price > 0 ? 2 : 0) + (a.barcode ? 1 : 0)
           const bScore = (b.cost_price > 0 ? 2 : 0) + (b.barcode ? 1 : 0)
@@ -180,10 +180,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       await reload()
-      showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s) — removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
+      showToast('Cleaned up ' + duplicateGroups.length + ' duplicate group(s) â€” removed ' + idsToDelete.length + ' duplicate item(s)', { type: 'success' })
     } catch (e) {
       console.error('Error during cleanup:', e)
-      showToast('Could not finish cleanup — please try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
+      showToast('Could not finish cleanup â€” please try again. (' + (e.message || 'unknown error') + ')', { type: 'error' })
     }
     setCleaningUp(false)
     setShowCleanup(false)
@@ -247,7 +247,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             reorder_level: parseInt(cols[6]) || 5,
             barcode: cols[7] || '',
             list_on_carefind: (cols[8] || 'yes').toLowerCase() !== 'no',
-            emoji: '💊',
+            emoji: 'ðŸ’Š',
           }
         }).filter(Boolean)
         if (parsed.length === 0) { setUploadError('No valid products found.'); return }
@@ -257,14 +257,14 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     reader.readAsText(file); e.target.value = ''
   }
 
-  // Bulk CSV import — batches parallel inserts (20 at a time) instead of the
+  // Bulk CSV import â€” batches parallel inserts (20 at a time) instead of the
   // old one-await-per-row loop, which took minutes and died on the first
   // network hiccup for 2,000+ product files. Duplicates are skipped up front
   // against the currently-loaded product list.
   async function importProducts() {
     if (uploadData.length === 0) return
     setImporting(true)
-    showToast('Importing ' + uploadData.length + ' products…', { type: 'info' })
+    showToast('Importing ' + uploadData.length + ' productsâ€¦', { type: 'info' })
     let added = 0
     let skipped = 0
     let failed = 0
@@ -287,7 +287,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         reorder_level: parseInt(p.reorder_level) || 5,
         barcode: p.barcode || '',
         list_on_carefind: p.list_on_carefind !== false,
-        emoji: '💊',
+        emoji: 'ðŸ’Š',
         business_id: brand.id,
       })
     }
@@ -312,7 +312,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     const parts = [added + ' imported']
     if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
     if (failed > 0) parts.push(failed + ' failed')
-    const summary = parts.join(' · ')
+    const summary = parts.join(' Â· ')
     if (failed > 0) {
       showToast(summary + (failedNames.length > 0 ? ': ' + failedNames.join(', ') : ''), { type: 'warning' })
     } else {
@@ -379,7 +379,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       {lowStock.length > 0 && (
         <div style={{ marginBottom: '16px', padding: '14px 18px', borderRadius: theme.radius.lg, background: warningBg, border: `1px solid ${warning}`, display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
           <AlertTriangle size={20} color={warning} style={{ flexShrink: 0 }} />
-          <div><div style={{ fontWeight: '700', color: warning, fontSize: '14px' }}>{lowStock.length} item(s) running low</div><div style={{ fontSize: '12px', color: gray500, marginTop: '4px' }}>{lowStock.map(p => p.name).join(' · ')}</div></div>
+          <div><div style={{ fontWeight: '700', color: warning, fontSize: '14px' }}>{lowStock.length} item(s) running low</div><div style={{ fontSize: '12px', color: gray500, marginTop: '4px' }}>{lowStock.map(p => p.name).join(' Â· ')}</div></div>
         </div>
       )}
 
@@ -429,15 +429,15 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                           <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{p.name}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || '—'}</td>
+                      <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || 'â€”'}</td>
                       <td style={{ padding: '12px 14px' }}><Pill label={cat} type='teal' /></td>
                       <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : '—'}</td>
+                      <td style={{ padding: '12px 14px', fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : 'â€”'}</td>
                       <td style={{ padding: '12px 14px', fontSize: '12px', fontWeight: '700', color: margin !== null ? (margin > 30 ? success : warning) : gray400 }}>
-                        {margin !== null ? margin + '%' : '—'}
+                        {margin !== null ? margin + '%' : 'â€”'}
                       </td>
                       <td style={{ padding: '12px 14px', fontSize: '14px', fontWeight: '900', color: out ? danger : low ? warning : navy }}>
-                        {cat === 'Services' ? '∞' : p.stock}
+                        {cat === 'Services' ? 'âˆž' : p.stock}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <button onClick={() => toggleCareFind(p)} aria-label='Toggle CareFind listing'
@@ -463,7 +463,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           </div>
           {filtered.length > PAGE_SIZE && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderTop: `1px solid ${border}`, fontSize: '12px', color: gray500 }}>
-              <span>{safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} products</span>
+              <span>{safePage * PAGE_SIZE + 1}â€“{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} products</span>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
                   style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: safePage === 0 ? gray100 : 'white', color: safePage === 0 ? gray400 : navy, fontWeight: '700', fontSize: '12px', cursor: safePage === 0 ? 'not-allowed' : 'pointer'}}>Previous</button>
@@ -517,7 +517,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px' }}>
                 <CheckCircle size={15} /> {uploadData.length} products in file
                 {uploadData.filter(p => findDuplicate(products, p.name, p.generic_name)).length > 0 && (
-                  <span style={{ color: warning, fontWeight: '600' }}> · {uploadData.filter(p => findDuplicate(products, p.name, p.generic_name)).length} already exist (will be skipped)</span>
+                  <span style={{ color: warning, fontWeight: '600' }}> Â· {uploadData.filter(p => findDuplicate(products, p.name, p.generic_name)).length} already exist (will be skipped)</span>
                 )}
               </div>
               <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${gray100}` }}>
@@ -529,7 +529,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                         {isDupe && <AlertTriangle size={12} />}{p.name}
                       </span>
                       <span style={{ color: isDupe ? warning : gray500 }}>
-                        {isDupe ? 'Already exists' : p.category + ' · ₦' + p.price + ' · ' + p.stock + ' units'}
+                        {isDupe ? 'Already exists' : p.category + ' Â· â‚¦' + p.price + ' Â· ' + p.stock + ' units'}
                       </span>
                     </div>
                   )
@@ -542,7 +542,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             {uploadData.length > 0 && (
               <button onClick={importProducts} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
                 {importing
-                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importingâ€¦</span>
                   : 'Import ' + uploadData.length + ' Products'}
               </button>
             )}
@@ -550,11 +550,11 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       </Modal>
 
-      {/* Clean Up Duplicates Modal — review existing duplicates and merge them */}
+      {/* Clean Up Duplicates Modal â€” review existing duplicates and merge them */}
       <Modal show={showCleanup} onClose={() => setShowCleanup(false)} title='Clean Up Duplicate Products'>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: '#92400e', lineHeight: '1.7' }}>
-            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory — products matching by brand name or generic name. Merging will combine the stock of each group into one product and remove the rest.
+          <div style={{ padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
+            Found <strong>{duplicateGroups.length}</strong> group(s) of duplicate products already in your inventory â€” products matching by brand name or generic name. Merging will combine the stock of each group into one product and remove the rest.
           </div>
 
           <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -563,15 +563,15 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               return (
                 <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: '#fffdf5' }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: warning, marginBottom: '8px' }}>
-                    GROUP {gi + 1} — {group.length} duplicates · will combine to {totalStock} units
+                    GROUP {gi + 1} â€” {group.length} duplicates Â· will combine to {totalStock} units
                   </div>
                   {group.map(p => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: 'white', marginBottom: '4px', fontSize: '12px' }}>
                       <div>
                         <span style={{ fontWeight: '600' }}>{p.name}</span>
-                        {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> · {p.generic_name || p.genericName}</span>}
+                        {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> Â· {p.generic_name || p.genericName}</span>}
                       </div>
-                      <span style={{ color: gray500, fontWeight: '600' }}>{p.stock} units · {fmt(p.price)}</span>
+                      <span style={{ color: gray500, fontWeight: '600' }}>{p.stock} units Â· {fmt(p.price)}</span>
                     </div>
                   ))}
                 </div>
@@ -593,7 +593,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       <Modal show={!!duplicateWarning} onClose={() => setDuplicateWarning(null)} title='Product Already Exists'>
         {duplicateWarning && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: '#92400e', lineHeight: '1.7' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '14px', borderRadius: '12px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
               <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
               <span>A product with this name or generic name is already in your inventory. You can update the existing product instead of creating a duplicate.</span>
             </div>
@@ -613,10 +613,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 <div style={{ fontSize: '10px', fontWeight: '700', color: '#0E6F5A', marginBottom: '6px' }}>YOU'RE ADDING</div>
                 <div style={{ fontWeight: '700', fontSize: '14px' }}>{duplicateWarning.incoming.name}</div>
                 {duplicateWarning.incoming.generic_name && (
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
+                  <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
                 )}
                 <div style={{ fontSize: '13px', fontWeight: '700', color: tealDeep, marginTop: '6px' }}>{fmt(duplicateWarning.incoming.price)}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>+{duplicateWarning.incoming.stock} units</div>
+                <div style={{ fontSize: '12px', color: theme.textFaint }}>+{duplicateWarning.incoming.stock} units</div>
               </div>
             </div>
 
@@ -644,7 +644,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
-  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
+  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: 'ðŸ’Š', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
@@ -691,8 +691,8 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
         <Inp label='Generic / Common Name' value={form.generic_name} onChange={v => f('generic_name', v)} placeholder='e.g. Amoxicillin' />
         <Sel label='Category' value={form.cat} onChange={v => f('cat', v)} options={PRODUCT_CATS} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <Inp label='Selling Price (₦) *' value={form.price} onChange={v => f('price', v)} type='number' placeholder='0' required readOnly={!canEditPrice} />
-          <Inp label='Cost Price (₦)' value={form.cost_price} onChange={v => f('cost_price', v)} type='number' placeholder='0' readOnly={!canEditPrice} />
+          <Inp label='Selling Price (â‚¦) *' value={form.price} onChange={v => f('price', v)} type='number' placeholder='0' required readOnly={!canEditPrice} />
+          <Inp label='Cost Price (â‚¦)' value={form.cost_price} onChange={v => f('cost_price', v)} type='number' placeholder='0' readOnly={!canEditPrice} />
         </div>
         {form.price && form.cost_price && parseFloat(form.price) > 0 && (
           <div style={{ padding: '8px 12px', borderRadius: '8px', background: successBg, fontSize: '12px', color: success, fontWeight: '600' }}>

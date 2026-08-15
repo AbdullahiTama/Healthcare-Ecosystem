@@ -7,7 +7,7 @@ import { getClients, notify, sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, ErrorState, CardSkeleton, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, success } = theme
 
@@ -16,6 +16,7 @@ export default function Appointments({ brand, role, perms }) {
   const [clients, setClients] = useState([])
   const [wallet, setWallet] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [filter, setFilter] = useState('all')
   const [showAdd, setShowAdd] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
@@ -45,7 +46,7 @@ export default function Appointments({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const a = await appointmentRepository.getAll(brand.id); setAppointments(a || []) } catch (e) {}
+    try { const a = await appointmentRepository.getAll(brand.id); setAppointments(a || []); setLoadError('') } catch (e) { setLoadError('Could not load appointments. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -202,7 +203,13 @@ export default function Appointments({ brand, role, perms }) {
         )})}
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      ) : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
         <Empty icon={<Calendar size={40} />} message='No appointments found' action='+ Book Appointment' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>

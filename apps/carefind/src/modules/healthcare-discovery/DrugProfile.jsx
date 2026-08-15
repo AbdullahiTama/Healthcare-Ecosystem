@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -160,7 +160,7 @@ function DrugProfile() {
           background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 28px', borderRadius: theme.radius.xl }),
         }}>
-          {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>}
+          {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Search</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>{decodeURIComponent(name)}</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -222,11 +222,11 @@ function DrugProfile() {
               <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.success }}>{positive.length}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.success, fontWeight: 700 }}>Positive</p>
             </div>
-            <div style={{ flex: 1, background: '#fef9c3', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: theme.amberSoft, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.warning }}>{neutral.length}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.warning, fontWeight: 700 }}>Neutral</p>
             </div>
-            <div style={{ flex: 1, background: '#fef2f2', borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
+            <div style={{ flex: 1, background: theme.dangerBg, borderRadius: 12, padding: '10px 8px', textAlign: 'center' }}>
               <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: theme.alert }}>{negative.length}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: theme.alert, fontWeight: 700 }}>Negative</p>
             </div>
@@ -272,7 +272,7 @@ function DrugProfile() {
               <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.alert }}><AlertTriangle size={13} aria-hidden="true" /> Side effects reported</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.sideEffects.map((s) => (
-                  <span key={s} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
+                  <span key={s} style={{ padding: '3px 10px', background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
                     {s}
                   </span>
                 ))}
@@ -285,7 +285,7 @@ function DrugProfile() {
               <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.success }}><CheckCircle2 size={13} aria-hidden="true" /> Efficacy: positive</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.positive.map((e) => (
-                  <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
+                  <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>â€¢ {e}</p>
                 ))}
               </div>
             </div>
@@ -296,7 +296,7 @@ function DrugProfile() {
               <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.warning }}><AlertTriangle size={13} aria-hidden="true" /> Efficacy: concerns</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {aiInsights.efficacyReports.negative.map((e) => (
-                  <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>• {e}</p>
+                  <p key={e} style={{ margin: 0, fontSize: 12.5, color: theme.textMid }}>â€¢ {e}</p>
                 ))}
               </div>
             </div>
@@ -320,7 +320,7 @@ function DrugProfile() {
               <p style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, color: theme.alert }}><ThumbsDown size={13} aria-hidden="true" /> People also complain</p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {aiInsights.negativeThemes.map((t) => (
-                  <span key={t} style={{ padding: '3px 10px', background: '#fef2f2', border: `1px solid #fecaca`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
+                  <span key={t} style={{ padding: '3px 10px', background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, borderRadius: 20, fontSize: 12, color: theme.alert, fontWeight: 600 }}>
                     {t}
                   </span>
                 ))}
@@ -345,7 +345,7 @@ function DrugProfile() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Search</Link>}
+        {isMobile && <Link to="/search" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Search</Link>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: isMobile ? 14 : 0 }}>
           <span style={{
             width: 48, height: 48, borderRadius: theme.radius.lg, flexShrink: 0,
@@ -363,11 +363,11 @@ function DrugProfile() {
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Sellers</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `₦${lowestPrice.toLocaleString()}` : '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{lowestPrice != null ? `â‚¦${lowestPrice.toLocaleString()}` : 'â€”'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Lowest Price</p>
           </div>
           <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || 'â€”'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
           </div>
         </div>
@@ -394,12 +394,12 @@ function DrugProfile() {
                   <div style={{ flex: 1 }}>
                     {p.business_id ? (
                       <Link to={`/business/${p.business_id}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{seller} ›</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>{seller} â€º</p>
                       </Link>
                     ) : p.owner_id ? (
                       <Link to={`/u/${p.owner_id}`} style={{ textDecoration: 'none' }}>
                         <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>
-                          {seller}{<VerifiedBadge profile={p._owner} size={14} style={{ marginLeft: 3 }} />} ›
+                          {seller}{<VerifiedBadge profile={p._owner} size={14} style={{ marginLeft: 3 }} />} â€º
                         </p>
                       </Link>
                     ) : (
@@ -410,7 +410,7 @@ function DrugProfile() {
                   <div style={{ textAlign: 'right' }}>
                     {canShowPrice(p) ? (
                       <>
-                        <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>₦{p.price?.toLocaleString()}</p>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 900, fontSize: 16, color: theme.tealDeep }}>â‚¦{p.price?.toLocaleString()}</p>
                         {p.price_unit && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>per {p.price_unit}</p>}
                       </>
                     ) : (
@@ -485,7 +485,7 @@ function DrugProfile() {
                 >
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {sellerName(p)}{canShowPrice(p) ? ` — ₦${Number(p.price).toLocaleString()}` : ' — Ask for price'}
+                      {sellerName(p)}{canShowPrice(p) ? ` â€” â‚¦${Number(p.price).toLocaleString()}` : ' â€” Ask for price'}
                     </option>
                   ))}
                 </select>

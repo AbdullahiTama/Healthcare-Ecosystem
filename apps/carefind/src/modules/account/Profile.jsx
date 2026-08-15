@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -325,7 +325,7 @@ function Profile() {
     if (error) { showToast('Could not save price: ' + error.message, { type: 'error' }); return }
     loadProfile()
     showToast(price > 0
-      ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
+      ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (â‚¦${coinsToNaira(price).toLocaleString()}) per month.`
       : 'Subscriptions turned off.', { type: 'success' })
   }
 
@@ -414,7 +414,7 @@ function Profile() {
           {activeStaff ? <Award size={17} aria-hidden="true" /> : <Building2 size={17} aria-hidden="true" />}
           <div style={{ flex: 1 }}>
             <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800 }}>
-              Posting as {activeStaff ? (activeStaff.publicTitle || 'Rep') + ' · ' + activeStaff.businessName : activeBiz.name}
+              Posting as {activeStaff ? (activeStaff.publicTitle || 'Rep') + ' Â· ' + activeStaff.businessName : activeBiz.name}
             </p>
             <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.6)' }}>Your posts, comments & news use this identity</p>
           </div>
@@ -428,7 +428,7 @@ function Profile() {
       <div style={{ position: 'relative', marginBottom: 55 }}>
         <div style={{ height: 120, background: profile?.cover_url ? `url(${profile.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative' }}>
           <label style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(0,0,0,0.4)', color: '#fff', borderRadius: 16, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-            {uploadingCover ? 'Uploading…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Camera size={13} aria-hidden="true" /> Cover</span>}
+            {uploadingCover ? 'Uploadingâ€¦' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Camera size={13} aria-hidden="true" /> Cover</span>}
             <input type="file" accept="image/*" onChange={handleCoverUpload} style={{ display: 'none' }} />
           </label>
         </div>
@@ -452,7 +452,7 @@ function Profile() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
             }}>
-              {uploadingAvatar ? '…' : <Camera size={14} color="#fff" aria-hidden="true" />}
+              {uploadingAvatar ? 'â€¦' : <Camera size={14} color="#fff" aria-hidden="true" />}
               <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Change profile photo</span>
               <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </label>
@@ -477,7 +477,7 @@ function Profile() {
             <p style={{ margin: '-4px 0 0 0', fontSize: 10.5, color: theme.textLight, textAlign: 'right' }}>{bio.length}/160</p>
             <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Website" style={{ padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10 }} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={saveProfile} disabled={saving} style={{ flex: 1, padding: 11, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Saving…' : 'Save'}</button>
+              <button onClick={saveProfile} disabled={saving} style={{ flex: 1, padding: 11, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>{saving ? 'Savingâ€¦' : 'Save'}</button>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: 11, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>Cancel</button>
             </div>
           </div>
@@ -521,7 +521,7 @@ function Profile() {
           </div>
         )}
 
-        {/* My Stories — at the top of the profile, Instagram-style (Phase 5).
+        {/* My Stories â€” at the top of the profile, Instagram-style (Phase 5).
             Add-story first, then live/upcoming shows, then your stories. */}
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
           <button onClick={() => setStoryComposer(true)} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -537,7 +537,7 @@ function Profile() {
                   <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
                     <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Radio size={20} aria-hidden="true" /></div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>â— LIVE</span>
                 </Link>
               )
             }
@@ -636,7 +636,7 @@ function Profile() {
             </div>
             <p style={{ margin: '0 0 10px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>
               {subPrice > 0
-                ? `Subscribers pay ${subPrice} CareCoin${subPrice === 1 ? '' : 's'} (₦${coinsToNaira(subPrice).toLocaleString()}) per month`
+                ? `Subscribers pay ${subPrice} CareCoin${subPrice === 1 ? '' : 's'} (â‚¦${coinsToNaira(subPrice).toLocaleString()}) per month`
                 : 'Subscriptions are off'}
             </p>
             <button
@@ -644,7 +644,7 @@ function Profile() {
               disabled={savingPrice}
               style={{ width: '100%', padding: 11, background: theme.navy, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}
             >
-              {savingPrice ? 'Saving…' : 'Save subscription price'}
+              {savingPrice ? 'Savingâ€¦' : 'Save subscription price'}
             </button>
           </div>
         )}
@@ -664,7 +664,7 @@ function Profile() {
             <p style={{ margin: '0 0 8px 0', fontSize: 11.5, color: theme.textLight, lineHeight: 1.5 }}>
               Verified sellers can list up to 20 products free. You can also sell under a company by getting an approved position there.
             </p>
-            <Link to="/verify" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Get verified →</Link>
+            <Link to="/verify" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Get verified â†’</Link>
           </div>
         )}
 
@@ -672,14 +672,14 @@ function Profile() {
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>My Businesses & Positions</p>
-            <Link to="/business-dashboard" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Manage →</Link>
+            <Link to="/business-dashboard" style={{ fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none' }}>Manage â†’</Link>
           </div>
 
           {!hasAnyIdentity && (
             <div style={{ border: `1px dashed ${theme.border}`, borderRadius: 14, padding: 16, textAlign: 'center' }}>
               <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textLight }}>You don't manage any businesses or positions yet.</p>
-              <Link to="/claim-business" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block', marginBottom: 6 }}>Claim a business →</Link>
-              <Link to="/claim-staff-position" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Claim your position at a company →</Link>
+              <Link to="/claim-business" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block', marginBottom: 6 }}>Claim a business â†’</Link>
+              <Link to="/claim-staff-position" style={{ fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Claim your position at a company â†’</Link>
             </div>
           )}
 
@@ -916,7 +916,7 @@ function Profile() {
           </Link>
         </div>
 
-        <button onClick={handleSignOut} style={{ width: '100%', padding: 13, background: '#fef2f2', color: theme.alert, border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 8 }}>
+        <button onClick={handleSignOut} style={{ width: '100%', padding: 13, background: theme.dangerBg, color: theme.alert, border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 8 }}>
           Sign Out
         </button>
         </>)}
@@ -945,8 +945,8 @@ function Profile() {
               <button onClick={() => setStoryComposer(false)} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
             <div style={{ background: sBg, borderRadius: 14, padding: 20, marginBottom: 12, minHeight: 90 }}>
-              <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Story title…" style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 17, fontWeight: 800, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
-              <textarea value={sBody} onChange={(e) => setSBody(e.target.value)} placeholder="Say something…" rows={2} style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
+              <input value={sTitle} onChange={(e) => setSTitle(e.target.value)} placeholder="Story titleâ€¦" style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 17, fontWeight: 800, outline: 'none', marginBottom: 6, boxSizing: 'border-box' }} />
+              <textarea value={sBody} onChange={(e) => setSBody(e.target.value)} placeholder="Say somethingâ€¦" rows={2} style={{ width: '100%', background: 'none', border: 'none', color: '#fff', fontSize: 14, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
               {['#0E6F5A', '#155A4B', '#be185d', '#0369a1', '#166534', '#b45309'].map(c => (
@@ -958,13 +958,13 @@ function Profile() {
               <input type="file" accept="image/*" onChange={(e) => setSImage(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
             <button onClick={postStory} disabled={postingStory} style={{ width: '100%', padding: 13, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-              {postingStory ? 'Posting…' : 'Post story'}
+              {postingStory ? 'Postingâ€¦' : 'Post story'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Story viewer — sequential playback with progress bars (Phase 5) */}
+      {/* Story viewer â€” sequential playback with progress bars (Phase 5) */}
       {viewerIndex !== null && myStories[viewerIndex] && (
         <StoryViewer
           stories={myStories}

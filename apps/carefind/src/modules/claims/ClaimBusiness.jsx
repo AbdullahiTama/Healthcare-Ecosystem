@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -90,7 +90,7 @@ function ClaimBusiness() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Claim Your Business</h1>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}>
           Search and claim your business listing
@@ -129,7 +129,7 @@ function ClaimBusiness() {
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: theme.navy }}>{c.businesses?.name}</span>
                   <span style={{
                     fontSize: 10.5, fontWeight: 800, padding: '3px 9px', borderRadius: 20, textTransform: 'capitalize',
-                    background: c.status === 'approved' ? theme.tealMist : c.status === 'rejected' ? '#fef2f2' : '#fef3c7',
+                    background: c.status === 'approved' ? theme.tealMist : c.status === 'rejected' ? theme.dangerBg : theme.amberBg,
                     color: c.status === 'approved' ? theme.success : c.status === 'rejected' ? theme.alert : theme.warning,
                   }}>
                     {c.status}
@@ -149,7 +149,7 @@ function ClaimBusiness() {
             <div key={biz.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
               <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{biz.name}</h3>
               <p style={{ margin: '0 0 10px 0', color: theme.textLight, fontSize: 12.5, textTransform: 'capitalize' }}>
-                {biz.business_type} · {biz.city}, {biz.state}
+                {biz.business_type} Â· {biz.city}, {biz.state}
               </p>
               <button
                 onClick={() => handleClaim(biz.id)}

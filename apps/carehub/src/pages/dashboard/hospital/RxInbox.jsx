@@ -3,13 +3,14 @@ import { ArrowLeft, Pill as PillIcon, RefreshCw, Bell, CheckCircle, ClipboardLis
 import { getPrescriptions, updatePrescription, updatePatient } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Pill, TealBtn, GhostBtn, Avatar, Loading, Empty, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, SectionHead, Pill, TealBtn, GhostBtn, Avatar, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, bg } = theme
 
 export default function RxInbox({ brand, products }) {
   const [prescriptions, setPrescriptions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(null)
   const [dispensing, setDispensing] = useState(false)
   const { msg, show: showToast } = useToast()
@@ -17,7 +18,7 @@ export default function RxInbox({ brand, products }) {
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [brand?.id])
 
   async function load() {
-    try { const p = await getPrescriptions(brand.id); setPrescriptions(p || []) } catch (e) {}
+    try { const p = await getPrescriptions(brand.id); setPrescriptions(p || []); setLoadError('') } catch (e) { setLoadError('Could not load prescriptions. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -107,7 +108,7 @@ export default function RxInbox({ brand, products }) {
           <div><div style={{ fontWeight: '700', color: tealDeep, fontSize: '14px' }}>{pending.length} prescription(s) waiting to be dispensed!</div><div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>{pending.map(p => p.patient_name).join(' · ')}</div></div>
         </div>
       )}
-      {loading ? <Loading /> : prescriptions.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : prescriptions.length === 0 ? (
         <Empty icon={<PillIcon size={40} />} message='No prescriptions yet' />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

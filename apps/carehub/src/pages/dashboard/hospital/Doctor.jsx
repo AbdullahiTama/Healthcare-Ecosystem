@@ -4,7 +4,7 @@ import { useAuth } from '../../../providers/AuthProvider'
 import { getPatients, getTriage, addHospitalConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, Pill, useToast, Toast } from '../../../components/ui'
+import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, bg } = theme
 
@@ -13,6 +13,7 @@ export default function Doctor({ brand, products }) {
   const staffName = auth?.staff ? auth.staff.full_name : (auth?.brand?.owner || 'Doctor')
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [selected, setSelected] = useState(null)
   const [triageData, setTriageData] = useState(null)
   const [messages, setMessages] = useState([])
@@ -47,8 +48,8 @@ export default function Doctor({ brand, products }) {
       // EVERY department; otherwise show the at_doctor queue as before.
       const q = searchTerm.trim()
       const p = await getPatients(brand.id, { status: q ? undefined : 'at_doctor', query: q })
-      setPatients(p || [])
-    } catch (e) {}
+      setPatients(p || []); setLoadError('')
+    } catch (e) { setLoadError('Could not load the doctor queue. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -406,7 +407,7 @@ export default function Doctor({ brand, products }) {
         <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder='Search any patient across all departments — name, reg no, phone…'
           style={{ width: '100%', padding: '11px 12px 11px 34px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: navy, fontFamily: theme.fontFamily }} />
       </div>
-      {loading ? <Loading /> : patients.length === 0 ? (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : patients.length === 0 ? (
         <Empty icon={<Stethoscope size={40} />} message={searchTerm.trim() ? 'No patients match your search' : 'No patients waiting for doctor'} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

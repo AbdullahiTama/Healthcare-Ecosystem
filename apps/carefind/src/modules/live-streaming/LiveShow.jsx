@@ -456,7 +456,7 @@ function LiveShow() {
           {topGifters.length > 0 && (
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '8px 8px 4px', flexWrap: 'wrap' }}>
               {topGifters.map((g, i) => (
-                <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, background: '#fef9c3', padding: '2px 8px', borderRadius: 12 }}>
+                <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, background: theme.amberSoft, padding: '2px 8px', borderRadius: 12 }}>
                   <span style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   width: 18, height: 18, borderRadius: '50%', marginRight: 7,

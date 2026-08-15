@@ -51,9 +51,19 @@ export const theme = {
   infoBg: '#eff6ff',
   tealMist: '#E3EEE8',
 
+  // ── Domain/semantic aliases (COLORS.md — repeated literals centralized so a
+  //    change propagates; also keep foreign palettes (amber/slate) contained
+  //    in the teal/warm-gray system rather than re-typed per screen) ──────────
+  amberText: '#92400e',      // amber warning text (Register, Inventory, Admin)
+  amberBorder: '#fcd34d',    // amber warning border (Register, AdminDashboard)
+  amberDeep: '#b45309',      // darker amber emphasis (AdminDashboard)
+  slate: '#0f172a',          // dark slate alias (Register, AdminDashboard)
+  dangerBorder: '#fecaca',   // danger alert border (Login, AgentLogin, POS)
+  textFaint: '#888',         // faint gray text (Register, AdminDashboard, Inventory)
+
   // ── Typography scale (TYPOGRAPHY.md) ────────────────────────────────────────
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  fontMono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontMono: '"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   // Marketing/public pages only (e.g. Landing.jsx) — never dashboard/POS/
   // form/table screens. See TYPOGRAPHY.md's "Display serif" section.
   fontDisplay: '"Lora", Georgia, "Times New Roman", serif',

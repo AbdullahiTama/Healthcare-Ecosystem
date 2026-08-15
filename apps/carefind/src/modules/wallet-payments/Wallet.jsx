@@ -8,7 +8,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint.js'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Inp, Loading, Toast, useToast } from '../../components/ui/index.jsx'
+import { Inp, Toast, useToast, CardSkeleton } from '../../components/ui/index.jsx'
 
 const WITHDRAWAL_FEE_RATE = 0.2
 
@@ -225,7 +225,13 @@ function Wallet() {
   const txKind = (type) => TX_KIND[type] || { Icon: WalletIcon, tint: theme.gray500 }
   const isCredit = (type) => type === 'topup' || type === 'gift_received' || type === 'withdrawal_refund'
 
-  if (authLoading || loading) return <Loading />
+  if (authLoading || loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 20, maxWidth: 520, margin: '0 auto' }}>
+      <CardSkeleton />
+      <CardSkeleton />
+      <CardSkeleton />
+    </div>
+  )
 
   if (!user) {
     return (

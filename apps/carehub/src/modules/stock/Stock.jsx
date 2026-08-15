@@ -8,7 +8,7 @@ import { warehouseRepository } from '../warehouses/repositories'
 // (the product catalogue behind the receive form).
 import { getProducts } from '../../services/supabase'
 import { theme } from '../../styles/theme'
-import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog } from '../../components/ui'
+import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, CardSkeleton } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, warningBg, bg } = theme
 const STATUSES = ['available', 'reserved', 'damaged', 'returned', 'expired']
@@ -258,7 +258,13 @@ export default function Stock({ brand }) {
         </div>
       </div>
 
-      {loading && <div style={{ color: gray500, fontSize: '13px' }}>Loading stock...</div>}
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      )}
 
       {!loading && locations.length === 0 && (
         <Card style={{ padding: '32px', textAlign: 'center' }}>

@@ -9,7 +9,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
-import { Loading } from '../../components/ui'
+import { ErrorState, CardSkeleton } from '../../components/ui'
 
 function News() {
   const { user } = useAuth()
@@ -18,6 +18,7 @@ function News() {
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [composerOpen, setComposerOpen] = useState(false)
   const [canSubmit, setCanSubmit] = useState(false)
 
@@ -56,22 +57,29 @@ function News() {
 
   async function loadNews() {
     setLoading(true)
-    const { data } = await supabase
-      .from('news')
-      .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
-      .eq('status', 'approved')
-      .order('published_at', { ascending: false })
-      .limit(40)
-    setArticles(data || [])
-
-    if (user) {
-      const { data: mine } = await supabase
+    setLoadError('')
+    try {
+      const { data, error } = await supabase
         .from('news')
-        .select('id, headline, status, created_at')
-        .eq('author_id', user.id)
-        .neq('status', 'approved')
-        .order('created_at', { ascending: false })
-      setMyPending(mine || [])
+        .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
+        .eq('status', 'approved')
+        .order('published_at', { ascending: false })
+        .limit(40)
+      if (error) throw error
+      setArticles(data || [])
+
+      if (user) {
+        const { data: mine, error: mineErr } = await supabase
+          .from('news')
+          .select('id, headline, status, created_at')
+          .eq('author_id', user.id)
+          .neq('status', 'approved')
+          .order('created_at', { ascending: false })
+        if (mineErr) throw mineErr
+        setMyPending(mine || [])
+      }
+    } catch (e) {
+      setLoadError('Could not load the newsroom. Check your connection and try again.')
     }
     setLoading(false)
   }
@@ -172,7 +180,7 @@ function News() {
           {myPending.map(m => (
             <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: theme.bg, borderRadius: 10, marginBottom: 6 }}>
               <span style={{ fontSize: 12.5, color: theme.textMid, flex: 1, marginRight: 8 }}>{m.headline}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? '#fef2f2' : '#fef3c7', color: m.status === 'rejected' ? theme.alert : '#92400e' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: m.status === 'rejected' ? theme.alert : theme.amberText }}>
                 {m.status === 'rejected' ? 'Not approved' : 'Under review'}
               </span>
             </div>
@@ -180,8 +188,15 @@ function News() {
         </div>
       )}
 
-      {loading && <Loading />}
-      {!loading && articles.length === 0 && (
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 16px 0' }}>
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      )}
+      {!loading && loadError && <ErrorState message={loadError} onRetry={loadNews} />}
+      {!loading && !loadError && articles.length === 0 && (
         <div style={{ textAlign: 'center', padding: '50px 20px', fontFamily: theme.fontFamily }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Newspaper size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No news yet</h3>

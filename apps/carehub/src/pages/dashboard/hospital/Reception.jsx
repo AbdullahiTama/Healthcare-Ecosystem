@@ -4,7 +4,7 @@ import { getPatients, addPatient, updatePatient } from '../../../services/supaba
 import { todayDate, genId } from '../../../lib/utils'
 import { NIG_STATES } from '../../../config/constants'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, Empty, Pill, useToast, Toast } from '../.././../components/ui'
+import { Card, StatCard, SectionHead, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../.././../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, success, warning, warningBg, info, infoBg } = theme
 
@@ -27,6 +27,7 @@ function StatusBadge({ status }) {
 export default function Reception({ brand }) {
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [view, setView] = useState('list')
   const [form, setForm] = useState({ regDate: todayDate(), regNo: genId('REG') })
   const [saving, setSaving] = useState(false)
@@ -47,8 +48,8 @@ export default function Reception({ brand }) {
     const t = setTimeout(async () => {
       try {
         const p = await getPatients(brand.id, { query: searchTerm.trim(), department: deptFilter || undefined })
-        setPatients(p || [])
-      } catch (e) {}
+        setPatients(p || []); setLoadError('')
+      } catch (e) { setLoadError('Could not load patients. Check your connection and try again.') }
       setSearching(false)
     }, 300)
     return () => { clearTimeout(t); setSearching(false) }
@@ -56,7 +57,7 @@ export default function Reception({ brand }) {
 
   async function load() {
     setLoading(true)
-    try { const p = await getPatients(brand.id); setPatients(p || []) } catch (e) {}
+    try { const p = await getPatients(brand.id); setPatients(p || []); setLoadError('') } catch (e) { setLoadError('Could not load patients. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -157,7 +158,7 @@ export default function Reception({ brand }) {
         <StatCard icon={<ArrowUpRight />} label='Referred Out' value={patients.filter(p => p.status === 'referred').length} />
         <StatCard icon={<Siren />} label='Emergency Transfer' value={patients.filter(p => p.status === 'transferred').length} />
       </div>
-      {loading ? <Loading /> : patients.length === 0 ? <Empty icon={<Users size={40} />} message={searching ? 'Searching…' : searchTerm || deptFilter ? 'No patients match your search' : 'No patients today'} action='+ Register First Patient' onAction={() => setView('new')} /> : (
+      {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : patients.length === 0 ? <Empty icon={<Users size={40} />} message={searching ? 'Searching…' : searchTerm || deptFilter ? 'No patients match your search' : 'No patients today'} action='+ Register First Patient' onAction={() => setView('new')} /> : (
         <Card>
           <div style={{ display: 'flex', gap: '10px', padding: '14px 14px 0 14px', flexWrap: 'wrap' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>

@@ -145,7 +145,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
         <p style={{ color: '#fff', fontWeight: 800, fontSize: 15, textAlign: 'center', margin: '0 0 4px 0' }}>Send a Gift 🎁</p>
         <p style={{ color: '#64748b', fontSize: 12, textAlign: 'center', margin: '0 0 16px 0' }}>Gifts convert to real naira earnings</p>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0f172a', borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: theme.slate, borderRadius: 12, padding: '10px 14px', marginBottom: 16 }}>
           <div>
             <p style={{ margin: 0, fontSize: 10.5, color: '#64748b', fontWeight: 700 }}>YOUR CARECOINS</p>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.tealBright }}>🪙 {wallet?.balance || 0}</p>
@@ -161,14 +161,14 @@ function GiftPanel({ postId, recipientId, onClose }) {
               key={g.name}
               onClick={() => setSelected(g)}
               style={{
-                background: selected.name === g.name ? '#0f2a2a' : '#0f172a',
+                background: selected.name === g.name ? '#0f2a2a' : theme.slate,
                 border: `2px solid ${selected.name === g.name ? theme.tealBright : 'transparent'}`,
                 borderRadius: 14, padding: '10px 6px', display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 4, cursor: 'pointer',
               }}
             >
               <span style={{ fontSize: 26 }}>{g.emoji}</span>
-              <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700 }}>{g.name}</span>
+              <span style={{ color: theme.slateMuted, fontSize: 10, fontWeight: 700 }}>{g.name}</span>
               <span style={{ color: theme.tealBright, fontSize: 11, fontWeight: 900 }}>{g.coins} 🪙</span>
             </button>
           ))}

@@ -10,7 +10,7 @@ import {
 } from '../../services/supabase'
 import { fmt, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, success, bg } = theme
 
@@ -33,6 +33,7 @@ const parseQty = v => { const n = parseFloat(String(v).replace(/,/g, '')); retur
 export default function Demand({ brand, role, perms, products }) {
   const [tab, setTab] = useState('out')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [outItems, setOutItems] = useState([])
   const [requests, setRequests] = useState([])
   const [requisitions, setRequisitions] = useState([])
@@ -75,8 +76,8 @@ export default function Demand({ brand, role, perms, products }) {
         getCustomerRequests(brand.id),
         getRequisitions(brand.id),
       ])
-      setOutItems(o || []); setRequests(r || []); setRequisitions(q || [])
-    } catch (e) {}
+      setOutItems(o || []); setRequests(r || []); setRequisitions(q || []); setLoadError('')
+    } catch (e) { setLoadError('Could not load demand. Check your connection and try again.') }
     setLoading(false)
   }
 
@@ -323,7 +324,7 @@ export default function Demand({ brand, role, perms, products }) {
             <StatCard icon={<PackageX />} label='Open Items' value={openOut} alert={openOut > 0} />
             <StatCard icon={<CheckCircle />} label='Fulfilled' value={outItems.length - openOut} />
           </div>
-          {loading ? <Loading /> : outItems.length === 0 ? (
+          {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : outItems.length === 0 ? (
             <Empty icon={<PackageX size={40} />} message='No out-of-stock items logged' action='+ Log Item' onAction={() => setShowOut(true)} />
           ) : (
             <Card>
@@ -365,7 +366,7 @@ export default function Demand({ brand, role, perms, products }) {
             <StatCard icon={<MessageSquare />} label='Open Requests' value={openReq} alert={openReq > 0} />
             <StatCard icon={<CheckCircle />} label='Fulfilled' value={requests.length - openReq} />
           </div>
-          {loading ? <Loading /> : requests.length === 0 ? (
+          {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : requests.length === 0 ? (
             <Empty icon={<MessageSquare size={40} />} message='No customer requests yet' action='+ Log Request' onAction={() => setShowReq(true)} />
           ) : (
             <Card>
@@ -408,7 +409,7 @@ export default function Demand({ brand, role, perms, products }) {
             <StatCard icon={<CheckCircle />} label='Sent to Supplier' value={requisitions.length - draftReqs} />
             <StatCard icon={<ClipboardList />} label='Total Ordered' value={fmt(totalOrdered)} />
           </div>
-          {loading ? <Loading /> : requisitions.length === 0 ? (
+          {loading ? <Loading /> : loadError ? <ErrorState message={loadError} onRetry={load} /> : requisitions.length === 0 ? (
             <Empty icon={<FileText size={40} />} message='No requisitions yet' action='+ New Requisition' onAction={() => setShowReqs(true)} />
           ) : (
             <Card>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+﻿import { useState, useRef } from 'react'
 import { supabase } from '../config/supabaseClient'
 import { theme } from '../styles/theme'
 
@@ -32,7 +32,7 @@ function VoiceRecorder({ showId, onRecorded, disabled, hq = false }) {
         : { audio: true }
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       // Pick a mime type the browser supports
-      // iOS Safari plays mp4/m4a reliably but struggles with webm — so PREFER mp4.
+      // iOS Safari plays mp4/m4a reliably but struggles with webm â€” so PREFER mp4.
       let mime = ''
       if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4'
       else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm'
@@ -99,15 +99,15 @@ function VoiceRecorder({ showId, onRecorded, disabled, hq = false }) {
       {error && <p style={{ margin: '0 0 6px 0', fontSize: 11, color: theme.alert }}>{error}</p>}
 
       {!previewUrl && !recording && (
-        <button onClick={startRecording} disabled={disabled} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#fef2f2', color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 20, fontWeight: 700, fontSize: 13 }}>
-          🎙 Record voice note
+        <button onClick={startRecording} disabled={disabled} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: theme.dangerBg, color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 20, fontWeight: 700, fontSize: 13 }}>
+          ðŸŽ™ Record voice note
         </button>
       )}
 
       {recording && (
         <button onClick={stopRecording} type="button" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>
           <span style={{ width: 9, height: 9, borderRadius: 2, background: '#fff', display: 'inline-block' }} />
-          Stop · {fmt(seconds)}
+          Stop Â· {fmt(seconds)}
         </button>
       )}
 
@@ -115,7 +115,7 @@ function VoiceRecorder({ showId, onRecorded, disabled, hq = false }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <audio controls src={previewUrl} style={{ height: 36, maxWidth: 180 }} />
           <button onClick={sendVoice} disabled={uploading} type="button" style={{ padding: '7px 14px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 16, fontWeight: 800, fontSize: 12 }}>
-            {uploading ? 'Uploading… please wait' : '📡 Post voice'}
+            {uploading ? 'Uploadingâ€¦ please wait' : 'ðŸ“¡ Post voice'}
           </button>
           <button onClick={discard} type="button" style={{ padding: '7px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>
             Discard

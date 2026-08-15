@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -13,15 +13,15 @@ import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 
 const GIFT_TIERS = [
-  { emoji: '💊', label: 'Pill', coins: 1 },
-  { emoji: '🩺', label: 'Stethoscope', coins: 5 },
-  { emoji: '❤️', label: 'Heart', coins: 10 },
-  { emoji: '⭐', label: 'Star', coins: 20 },
-  { emoji: '🏆', label: 'Trophy', coins: 50 },
-  { emoji: '👑', label: 'Crown', coins: 100 },
+  { emoji: 'ðŸ’Š', label: 'Pill', coins: 1 },
+  { emoji: 'ðŸ©º', label: 'Stethoscope', coins: 5 },
+  { emoji: 'â¤ï¸', label: 'Heart', coins: 10 },
+  { emoji: 'â­', label: 'Star', coins: 20 },
+  { emoji: 'ðŸ†', label: 'Trophy', coins: 50 },
+  { emoji: 'ðŸ‘‘', label: 'Crown', coins: 100 },
 ]
 
-// ── Shared Drawing Board ──────────────────────
+// â”€â”€ Shared Drawing Board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
   const canvasRef = useRef(null)
   const [tool, setTool] = useState('pen')
@@ -121,7 +121,7 @@ function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
       {isHost && (
         <div style={{ background: '#f8fafc', borderBottom: `1px solid ${theme.border}`, padding: '7px 10px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={() => setTool('pen')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'pen' ? theme.tealDeep : theme.bg, color: tool === 'pen' ? '#fff' : theme.textMid }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Pen size={12} aria-hidden="true" /> Pen</span></button>
-          <button onClick={() => setTool('eraser')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'eraser' ? '#fef2f2' : theme.bg, color: tool === 'eraser' ? theme.alert : theme.textMid }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Eraser size={12} aria-hidden="true" /> Erase</span></button>
+          <button onClick={() => setTool('eraser')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'eraser' ? theme.dangerBg : theme.bg, color: tool === 'eraser' ? theme.alert : theme.textMid }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Eraser size={12} aria-hidden="true" /> Erase</span></button>
           <div style={{ display: 'flex', gap: 3 }}>
             {[2,4,7,12].map(s => <button key={s} onClick={() => setSize(s)} style={{ width: s+12, height: s+12, borderRadius: '50%', background: size === s ? theme.tealDeep : '#e2e8f0', border: 'none' }} />)}
           </div>
@@ -146,7 +146,7 @@ function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
   )
 }
 
-// ── Voice Note Recorder ───────────────────────
+// â”€â”€ Voice Note Recorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function VoiceRecorder({ onSend, onError }) {
   const [recording, setRecording] = useState(false)
   const [audioURL, setAudioURL] = useState(null)
@@ -193,7 +193,7 @@ function VoiceRecorder({ onSend, onError }) {
         <>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: theme.alert, animation: 'pulse 1s infinite' }} />
           <span style={{ fontSize: 12, color: theme.alert, fontWeight: 700 }}>{Math.floor(duration/60)}:{String(duration%60).padStart(2,'0')}</span>
-          <button onClick={stopRec} style={{ padding: '6px 14px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⏹ Stop</button>
+          <button onClick={stopRec} style={{ padding: '6px 14px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>â¹ Stop</button>
         </>
       ) : audioURL ? (
         <>
@@ -208,7 +208,7 @@ function VoiceRecorder({ onSend, onError }) {
   )
 }
 
-// ── Main Live Session ─────────────────────────
+// â”€â”€ Main Live Session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function LiveSession() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -330,7 +330,7 @@ export default function LiveSession() {
       payload: { emoji: gift.emoji, label: gift.label, coins: gift.coins, sender: user.email?.split('@')[0] }
     })
 
-    // 7. Log in chat (will be wiped when live ends — that's fine)
+    // 7. Log in chat (will be wiped when live ends â€” that's fine)
     await sendMessage(`sent ${gift.emoji} ${gift.label} (${gift.coins} coins)`, 'gift')
     setGiftPanel(false)
   }
@@ -376,7 +376,7 @@ export default function LiveSession() {
     await ensureProfile(user)
     await supabase.from('posts').insert({
       user_id: user.id,
-      content: `🔴 Live Session ended\n\n📌 Topic: ${session.topic}\n⏱️ Duration: ${duration} min\n🎁 Gifts received: ${totalGifts}\n👥 Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
+      content: `ðŸ”´ Live Session ended\n\nðŸ“Œ Topic: ${session.topic}\nâ±ï¸ Duration: ${duration} min\nðŸŽ Gifts received: ${totalGifts}\nðŸ‘¥ Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
       post_type: 'text',
       expires_at: expiresAt,
     })
@@ -404,12 +404,12 @@ export default function LiveSession() {
         ...(isMobile ? { position: 'sticky', top: 0, zIndex: 50 } : { borderRadius: theme.radius.xl, marginBottom: 16 }),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          {isMobile && <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>←</Link>}
+          {isMobile && <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>â†</Link>}
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: session.status === 'live' ? '#4ade80' : '#94a3b8', animation: session.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
-              <span style={{ fontSize: 11, fontWeight: 800, color: session.status === 'live' ? '#4ade80' : 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{session.status === 'live' ? 'LIVE' : 'ENDED'}</span>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>· {viewers} watching</span>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: session.status === 'live' ? theme.greenLive : theme.slateMuted, animation: session.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
+              <span style={{ fontSize: 11, fontWeight: 800, color: session.status === 'live' ? theme.greenLive : 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{session.status === 'live' ? 'LIVE' : 'ENDED'}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Â· {viewers} watching</span>
             </div>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{session.topic}</p>
           </div>
@@ -449,7 +449,7 @@ export default function LiveSession() {
 
         {/* Action bar */}
         <div style={{ display: 'flex', gap: 10, padding: '10px 0', alignItems: 'center' }}>
-          <button onClick={tapLike} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: liked ? '#fef2f2' : theme.bg, border: `1px solid ${liked ? '#fca5a5' : theme.border}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: liked ? theme.alert : theme.textMid }}>
+          <button onClick={tapLike} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: liked ? theme.dangerBg : theme.bg, border: `1px solid ${liked ? theme.alertLight : theme.border}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: liked ? theme.alert : theme.textMid }}>
             <Heart size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />Like
           </button>
           <button onClick={() => setGiftPanel(!giftPanel)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 14px', background: theme.tealMist, border: `1px solid ${theme.tealDeep}`, borderRadius: 20, fontSize: 13, fontWeight: 700, color: theme.tealDeep }}>

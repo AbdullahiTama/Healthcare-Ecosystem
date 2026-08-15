@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
@@ -10,7 +10,7 @@ import { theme } from '../../styles/theme'
 
 const { tealDeep, fontDisplay, bg, navy, gray600, gray400, border } = theme
 
-// Lucide icons per business type — replaces the emoji glyphs on the auth
+// Lucide icons per business type â€” replaces the emoji glyphs on the auth
 // screens (config/constants.js's BUSINESS_TYPES still carries emojis for the
 // rest of the app until that wider migration lands). Building2 is the fallback
 // for an unset type (e.g. a deep link straight into the wizard).
@@ -22,7 +22,7 @@ const bizIcon = (id) => BIZ_ICONS[id] || Building2
 
 // Cream-filled field variants for the wizard, so inputs read against the white
 // card the same way the Login screen's do. Defined at module scope (not inside
-// the component) so their identity is stable across renders — otherwise every
+// the component) so their identity is stable across renders â€” otherwise every
 // keystroke would remount the field and drop focus.
 const CInp = (props) => <Inp fill={bg} {...props} />
 const CSel = (props) => <Sel fill={bg} {...props} />
@@ -34,9 +34,9 @@ export default function Register() {
   const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  // Referral agent attribution — `?ref=CODE` on the register URL. The client
+  // Referral agent attribution â€” `?ref=CODE` on the register URL. The client
   // never sends an agent id; the DB `apply_referring_agent()` trigger resolves
-  // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md §2).
+  // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md Â§2).
   const refCode = new URLSearchParams(location.search).get('ref') || ''
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const STEPS = ['Business Info', 'Contact & Location', 'Owner Info', 'Account', 'Review']
@@ -74,7 +74,7 @@ export default function Register() {
         referral_code_used: refCode || null,
       })
       // The register_business RPC mints the owner's CONFIRMED Supabase Auth
-      // account in the same transaction that creates the pending business row —
+      // account in the same transaction that creates the pending business row â€”
       // there is no separate provisioning step any more (businesses.password
       // was dropped in C2). New owners can sign in immediately and see the
       // honest pending state.
@@ -122,7 +122,7 @@ export default function Register() {
     </div>
   )
 
-  // Step 0 — type selection
+  // Step 0 â€” type selection
   if (step === 0) return (
     <div style={{ minHeight: '100vh', background: bg, padding: '32px 20px' }}>
       <div style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -159,7 +159,7 @@ export default function Register() {
               {(() => { const Icon = bizIcon(data.businessType); return <Icon size={17} color={tealDeep} strokeWidth={2} style={{ flexShrink: 0 }} /> })()}
               Register {businessName(data.businessType)}
             </div>
-            <div style={{ fontSize: '12px', color: gray400, marginTop: '1px' }}>Step {step} of {STEPS.length} · {STEPS[step - 1]}</div>
+            <div style={{ fontSize: '12px', color: gray400, marginTop: '1px' }}>Step {step} of {STEPS.length} Â· {STEPS[step - 1]}</div>
           </div>
         </div>
         <div style={{ height: '6px', background: border, borderRadius: theme.radius.full, overflow: 'hidden', marginBottom: '20px' }}>
@@ -177,7 +177,7 @@ export default function Register() {
           )}
           {step === 1 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>Business Information</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Business Information</div>
               <CInp label='Business Name' value={data.businessName} onChange={v => f('businessName', v)} placeholder='e.g. HealthPlus Pharmacy Ikeja' required />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <CSel label='State' value={data.state} onChange={v => f('state', v)} options={NIG_STATES} />
@@ -193,7 +193,7 @@ export default function Register() {
           )}
           {step === 2 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>Contact & Location for CareFind</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Contact & Location for CareFind</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: '#FDFBF7', border: '1px solid #e5e7eb', fontSize: '12px', color: '#0E6F5A', lineHeight: '1.6' }}>
                 <Search size={13} /> This info will show on CareFind so patients can find and contact your business
               </div>
@@ -209,7 +209,7 @@ export default function Register() {
           )}
           {step === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>Owner / Administrator</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Owner / Administrator</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <CInp label='First Name' value={data.firstName} onChange={v => f('firstName', v)} placeholder='e.g. Chidinma' required />
                 <CInp label='Last Name' value={data.lastName} onChange={v => f('lastName', v)} placeholder='e.g. Eze' required />
@@ -222,10 +222,10 @@ export default function Register() {
           )}
           {step === 4 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a' }}>Create Your Password</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Create Your Password</div>
               <div style={{ padding: '12px', borderRadius: '10px', background: '#FDFBF7', border: '1px solid #e5e7eb' }}>
-                <div style={{ fontSize: '11px', color: '#888' }}>Login email:</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a', marginTop: '2px' }}>{data.ownerEmail || '—'}</div>
+                <div style={{ fontSize: '11px', color: theme.textFaint }}>Login email:</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || 'â€”'}</div>
               </div>
               <CInp label='Password' value={data.password} onChange={v => f('password', v)} type='password' placeholder='Create a strong password' required />
               <CInp label='Confirm Password' value={data.confirmPassword} onChange={v => f('confirmPassword', v)} type='password' placeholder='Repeat your password' required />
@@ -235,7 +235,7 @@ export default function Register() {
                 </div>
               )}
               <div style={{ padding: '14px', borderRadius: '12px', background: '#FDFBF7', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div><div style={{ fontWeight: '800', color: '#0f172a' }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>All features + CareFind listing</div></div>
+                <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
                 <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: '#0E6F5A' }}>Free</div><div style={{ fontSize: '11px', color: '#bbb' }}>for now</div></div>
               </div>
               <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', alignItems: 'flex-start' }}>
@@ -246,7 +246,7 @@ export default function Register() {
           )}
           {step === 5 && (
             <div>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a', marginBottom: '16px' }}>Review & Submit</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate, marginBottom: '16px' }}>Review & Submit</div>
               <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #f0f0f0' }}>
                 {[
                   ['Business Type', businessName(data.businessType)],
@@ -259,11 +259,11 @@ export default function Register() {
                   ['CareFind', data.visibleOnCareFind !== false ? 'Yes - Listed publicly' : 'No'],
                 ].filter(([, v]) => v).map(([l, v], i) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? '#fafafa' : 'white', fontSize: '13px' }}>
-                    <span style={{ color: '#888', fontWeight: '600' }}>{l}</span><span style={{ color: '#0f172a' }}>{v}</span>
+                    <span style={{ color: theme.textFaint, fontWeight: '600' }}>{l}</span><span style={{ color: theme.slate }}>{v}</span>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: '16px', padding: '14px', borderRadius: '12px', background: '#fffbeb', border: '1px solid #fcd34d', fontSize: '13px', color: '#92400e', lineHeight: '1.7' }}>
+              <div style={{ marginTop: '16px', padding: '14px', borderRadius: '12px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
                 After submitting, admin will review and approve your account within 24 hours.
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -63,12 +63,12 @@ function ProfessionalDashboard() {
           background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
-          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Professional Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
           <div style={{
-            width: 56, height: 56, borderRadius: 16, background: '#fef3c7', display: 'flex',
+            width: 56, height: 56, borderRadius: 16, background: theme.amberBg, display: 'flex',
             alignItems: 'center', justifyContent: 'center', fontSize: 26, margin: '0 auto 14px auto',
           }}>
             <Stethoscope size={28} aria-hidden="true" />
@@ -105,7 +105,7 @@ function ProfessionalDashboard() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: isMobile ? 14 : 0, marginBottom: 16 }}>
           <h1 style={{ fontSize: 19, fontWeight: 900, margin: 0 }}>{profile.display_name || 'Professional'}</h1>
           <span style={{

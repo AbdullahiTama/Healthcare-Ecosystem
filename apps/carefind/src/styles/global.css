@@ -80,6 +80,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Brand typeface (Geist) ─────────────────────────────────────────────────
+   Self-hosted variable font (single latin file, covers the whole 100–900
+   weight range), OFL-licensed by Vercel — license shipped alongside the
+   font files in public/fonts/OFL-LICENSE.txt. @font-face only, never
+   preloaded: a browser only fetches these files when an element actually
+   rendered on screen uses font-family: var(--font-family). */
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/geist-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/geist-mono-var.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
    @font-face only, never preloaded — see apps/carehub/src/styles/global.css
    for the full rationale. Same self-hosted files, shared token. */
