@@ -59,7 +59,7 @@ Each of these has a dedicated document; this is the rollup, not a replacement.
 
 | Area | State | Primary source |
 |---|---|---|
-| **Security / Auth** | Real Supabase Auth sessions for both products; plaintext password columns fully purged (C2, 2026-08-13); RLS live on all ~90 tables across both products, verified behaviorally (not just by policy count) after two regressions (C14, C19) taught the project not to trust catalog state alone. `admin_users`/`admin_teams` policy cleanup still open. | `planning/REMEDIATION-STATUS.md`, `architecture/Security-Risks.md`, `architecture/Authentication.md` |
+| **Security / Auth** | Real Supabase Auth sessions for both products; plaintext password columns fully purged (C2, 2026-08-13); RLS live on all ~90 tables across both products, verified behaviorally (not just by policy count) after two regressions (C14, C19) taught the project not to trust catalog state alone. `admin_users`/`admin_teams`/`admin_notifications` policy cleanup **closed 2026-08-15** (now deny-all, service-role-only — see CODE_AUDIT.md Critical). | `planning/REMEDIATION-STATUS.md`, `architecture/Security-Risks.md`, `architecture/Authentication.md` |
 | **Multi-tenancy** | `business_id`-scoped RLS is the standard; several aggregates have non-uniform tenancy within themselves (`rep_territories`, `staff_claims` — no direct tenant column, scoped via parent) and this is now a documented, checked-per-table pattern rather than an assumption. | `architecture/Technical-Debt.md` C1/C14/C19; `project-carehub-repository-seam` findings |
 | **Database schema mgmt** | **No formal migration tooling.** 64 `.sql` files live as loose, hand-applied scripts (`apps/carehub/sql/`, `apps/carefind/sql/`), several explicitly marked "not yet applied" in `CODE_AUDIT.md`. No `supabase/migrations` directory, no CLI-tracked history beyond what Supabase's own `supabase_migrations.schema_migrations` records for migrations applied via the MCP tool. This is the single largest structural gap — see §7 Phase 2/6. | `planning/CODE_AUDIT.md` Medium section; `sql/` directory listing |
 | **Transactional integrity** | Fixed where found: atomic stock transfer/adjust (`transfer_stock_batch`/`adjust_stock_batch`, row-locked), atomic sale stock decrement (trigger-based), atomic wallet crediting (`credit_wallet_topup`, reference-uniqueness-guarded). Two known-open gaps: stock backfill was deliberately not attempted (historical data unreliable), and `stock_movements` is written but never read (dead audit trail, needs a product call). | `architecture/Technical-Debt.md` C5/C11/C12/C15/C17 |
@@ -139,10 +139,13 @@ Grounded in what's already chosen and working (don't replace working tools) plus
 Using the brief's P0–P3 scale, mapped onto what's actually open right now (not historical — closed items are excluded; see `planning/CODE_AUDIT.md` for the full historical record).
 
 ### P0 — Critical (fix before anything else)
-1. **Master catalog migrations not applied** (`20260810_master_catalog.sql`, `20260811_master_catalog_ops.sql`) — a shipped UI (Master Catalog page, branch-clone RPC) is calling database objects that don't exist yet in production. Zero-risk to apply (0 rows affected), high risk to leave (silent 404s / degraded branch creation). → `CODE_AUDIT.md` Medium.
-2. **Demand/requisition save is broken live** — schema drift between a hand-rolled `out_of_stock` table and what the app writes; fix is written (`20260811_align_out_of_stock_schema.sql`) but not applied. → `CODE_AUDIT.md` Critical (open item).
-3. **`admin_users`/`admin_teams` RLS cleanup** — flagged repeatedly (C9, C14) as needing its own careful pass, never done. This is the last known table-level hole of the shape that produced C19. → `Technical-Debt.md` C14.
-4. **Five other draft migrations sitting unapplied** (`professional_consultations`, `backfill_confirmed_auth_users`, `roles_rls`, `booking_config` — see `REMEDIATION-STATUS.md` "Blocked on you" #5) — each has a real, currently-broken or currently-insecure feature behind it.
+
+> **Cleared 2026-08-15.** Items 1–4 below were all re-verified live and are **applied**: master catalog tables + RPCs exist; the `create_requisition` RPC and aligned `out_of_stock` schema exist; `admin_users`/`admin_teams`/`admin_notifications` RLS is now deny-all; `professional_consultations`, `roles_rls`, `booking_config` and the backfill are all live (see CODE_AUDIT.md). The only remaining P0-adjacent open item is the Paystack secret placeholder in `apps/carehub/.env` (Phase 1).
+
+1. **~~Master catalog migrations not applied~~ — APPLIED, re-verified 2026-08-15** (`master_products`, `branch_products`, and the three RPCs exist; no anon EXECUTE).
+2. **~~Demand/requisition save is broken live~~ — RESOLVED; `create_requisition` exists live, `out_of_stock` schema aligned, re-verified 2026-08-15.**
+3. **~~`admin_users`/`admin_teams` RLS cleanup~~ — CLOSED 2026-08-15.** Dropped all `qual:true` policies on `admin_users`/`admin_teams`/`admin_notifications`; RLS stays enabled, deny-all for anon/authenticated, service-role-only (verified behaviorally). This was the last known table-level hole of the C19 shape.
+4. **~~Five draft migrations sitting unapplied~~ — all applied and re-verified** (`professional_consultations`, `backfill_confirmed_auth_users`, `roles_rls`, `booking_config`, `consultation_forms`).
 
 ### P1 — High
 - Finish the repository-seam rollout (8 CareHub modules remaining) — every module migrated so far has surfaced a real defect; the unmigrated ones are unaudited by construction.
@@ -171,8 +174,8 @@ Status reflects reality as of 2026-08-14, not aspiration. Phases run partially i
 | Phase | Scope | Status |
 |---|---|---|
 | **0 — Discovery** | Architecture map, dependency map, DB map, security map, tech-debt inventory | ✅ **Done.** 15 architecture docs, 38 module docs, full schema reference for both products, live-verified. Maintain, don't redo. |
-| **1 — Critical Security** | Auth rebuild, RLS, privileged-field protection, secret hygiene | 🟡 **Mostly done, not closed.** Real sessions + RLS live on all tables for both products; plaintext passwords purged. Open: `admin_users`/`admin_teams` policy pass (P0 #3 above), Paystack secret key still a placeholder in `apps/carehub/.env` per `CODE_AUDIT.md`. |
-| **2 — Data Integrity** | Transactional workflows, inventory, financial correctness | 🟡 **Mostly done for what's been touched.** Stock transfer/adjust/sale-decrement, wallet crediting all atomic and verified. Open: unapplied migrations (P0 #1/#2/#4), no formal migration tooling (§4.3). |
+| **1 — Critical Security** | Auth rebuild, RLS, privileged-field protection, secret hygiene | 🟡 **Mostly done, not closed.** Real sessions + RLS live on all tables for both products; plaintext passwords purged; the last C19-shape table-level hole (`admin_users`/`admin_teams`/`admin_notifications`) **closed 2026-08-15**. Open: Paystack secret key still a placeholder in `apps/carehub/.env` per `CODE_AUDIT.md`. |
+| **2 — Data Integrity** | Transactional workflows, inventory, financial correctness | 🟡 **Mostly done for what's been touched.** Stock transfer/adjust/sale-decrement, wallet crediting all atomic and verified; the queued migrations (master catalog, requisition/`out_of_stock`) are all applied. Open: no formal migration tooling (§4.3). |
 | **3 — Architecture** | Repository/domain layer, validation, standard error handling | 🟡 **16/24 CareHub modules done; CareFind not started.** Continue per §4 — do not restart, do not invent a second pattern. |
 | **4 — Design System** | Tokens, components, navigation, forms, tables, feedback states | ✅ **CareHub 100% done.** ✅ CareFind done for every screen verified; a handful of post-auth screens flagged as not re-verified after a recovery incident — worth a quick re-check, not a redo. |
 | **5 — UX Transformation** | Onboarding, dashboards, role-aware experience, responsiveness, accessibility | 🟡 **Partially covered as a side effect of Phase 4** (every screen verified responsive at 3 breakpoints during the design refresh). Not yet done as a deliberate pass: onboarding flow review, dashboard "what needs my attention" redesign (brief §22), global search/command palette (brief §24). |
@@ -215,10 +218,10 @@ Applies to every module migrated under Phase 3 and every new feature from this p
 
 In order, each independently actionable:
 
-1. **Apply the queued-but-unapplied migrations** (P0, §6) — this is the highest ratio of risk-closed to effort-spent available right now. Needs your explicit go-ahead per this project's established pattern (every production DDL has been gated on that so far — keep it that way).
+1. **~~Apply the queued-but-unapplied migrations~~ — DONE 2026-08-15** (all re-verified live; see §6 P0).
 2. **Stand up minimum-viable CI** (lint + `vitest run` + `vite build` per app, GitHub Actions, two files) — small, mechanical, and closes the biggest process gap.
 3. **Resume the repository-seam rollout at `consultation`** (already the documented next unit) — continues momentum on the workstream with the best track record for finding real bugs.
 4. **Write `docs/operations/DEPLOYMENT.md` + `.env.example` per app** — near-zero effort, removes "tribal knowledge required to deploy" risk.
-5. **Schedule the `admin_users`/`admin_teams` RLS pass** — the last known table-level hole of a previously-critical shape; do it deliberately rather than waiting for it to surface as an incidental finding like C18/C19 did.
+5. **~~Schedule the `admin_users`/`admin_teams` RLS pass~~ — DONE 2026-08-15** (deny-all, service-role-only; verified behaviorally).
 
 None of these require architectural debate — they're the next concrete steps on workstreams already validated by this engagement's own track record.
