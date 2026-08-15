@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { BadgeCheck, UserX, X } from 'lucide-react'
+import { UserX, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar, Empty, Toast, useToast } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { fetchFollowList } from './followers'
 
 // Bottom sheet listing a profile's followers or following. Privacy: profiles
@@ -119,7 +120,7 @@ function FollowersSheet({ profileId, kind, count, onClose, onCountChange }) {
                   <div style={{ minWidth: 0 }}>
                     <p style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 5, fontSize: 13.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {p.full_name || p.display_name || 'CareFind user'}
-                      {p.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" />}
+                      {<VerifiedBadge profile={p} size={14} />}
                     </p>
                     {p.display_name && p.full_name && <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>@{p.display_name}</p>}
                   </div>

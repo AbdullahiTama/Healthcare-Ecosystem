@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import {
-  BadgeCheck, Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
+  Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
   Radio, Repeat2, Share2, X,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -12,6 +12,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading, Toast, useToast } from '../../components/ui'
@@ -117,16 +118,16 @@ function LiveShow() {
     setWhoList([])
     let data = []
     if (kind === 'likes') {
-      const r = await supabase.from('live_reactions').select('user_id, created_at, profiles(id, full_name, display_name, is_verified)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
+      const r = await supabase.from('live_reactions').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
       data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
     } else if (kind === 'shares') {
-      const r = await supabase.from('live_shares').select('user_id, created_at, profiles(id, full_name, display_name, is_verified)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
+      const r = await supabase.from('live_shares').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
       data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
     } else if (kind === 'views') {
-      const r = await supabase.from('live_views').select('user_id, created_at, profiles(id, full_name, display_name, is_verified)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
+      const r = await supabase.from('live_views').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
       data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
     } else if (kind === 'gifts') {
-      const r = await supabase.from('gifts').select('sender_id, coins, created_at, profiles:sender_id(id, full_name, display_name, is_verified)').eq('post_id', id).order('created_at', { ascending: false }).limit(100)
+      const r = await supabase.from('gifts').select('sender_id, coins, created_at, profiles:sender_id(id, full_name, display_name, is_verified, specialty, verification_label)').eq('post_id', id).order('created_at', { ascending: false }).limit(100)
       data = (r.data || []).map(x => ({ ...x.profiles, amount: x.coins, when: x.created_at }))
     }
     // Filter out null profiles (guests/anon), keep unique
@@ -194,7 +195,7 @@ function LiveShow() {
     setLoading(true)
     const { data } = await supabase
       .from('live_shows')
-      .select('*, host:profiles!live_shows_host_id_fkey(full_name, display_name, is_verified), guest:profiles!live_shows_guest_id_fkey(full_name, display_name)')
+      .select('*, host:profiles!live_shows_host_id_fkey(full_name, display_name, is_verified, specialty, verification_label), guest:profiles!live_shows_guest_id_fkey(full_name, display_name)')
       .eq('id', id)
       .maybeSingle()
     setShow(data || null)
@@ -229,7 +230,7 @@ function LiveShow() {
   async function loadComments() {
     const { data } = await supabase
       .from('live_comments')
-      .select('id, content, hidden, created_at, user_id, profiles(full_name, display_name, is_verified)')
+      .select('id, content, hidden, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)')
       .eq('show_id', id)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -355,7 +356,7 @@ function LiveShow() {
         </div>
         <h1 style={{ fontSize: 20, fontWeight: 900, margin: '0 0 4px 0', lineHeight: 1.2 }}>{show.title || 'CareFind Live'}</h1>
         <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-          Hosted by {hostName()}{show.host?.is_verified && <BadgeCheck size={13} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+          Hosted by {hostName()}{<VerifiedBadge profile={show.host} size={13} style={{ color: '#fff', marginLeft: 4 }} />}
           {show.guest && ` · with ${show.guest.full_name || show.guest.display_name}`}
         </p>
         {isLive && (
@@ -519,7 +520,7 @@ function LiveShow() {
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 1px 0', fontSize: 12 }}>
                 <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                {c.profiles?.is_verified && <BadgeCheck size={12} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />}
+                {<VerifiedBadge profile={c.profiles} size={12} style={{ marginLeft: 4 }} />}
                 <span style={{ color: theme.textLight, marginLeft: 6 }}>{timeAgo(c.created_at)}</span>
                 {c.hidden && <span style={{ color: theme.alert, marginLeft: 6, fontWeight: 700 }}>(hidden)</span>}
               </p>
@@ -556,7 +557,7 @@ function LiveShow() {
                   {(p.full_name?.[0] || p.display_name?.[0] || '?').toUpperCase()}
                 </div>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: theme.navy }}>
-                  {p.full_name || p.display_name || 'User'}{p.is_verified && <BadgeCheck size={12} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />}
+                  {p.full_name || p.display_name || 'User'}{<VerifiedBadge profile={p} size={12} style={{ marginLeft: 4 }} />}
                 </span>
                 {whoOpen === 'gifts' && p.amount != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 800, color: theme.tealDeep }}><Gift size={12} aria-hidden="true" /> {p.amount}</span>}
               </Link>

@@ -3,12 +3,13 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
-import { BadgeCheck, Coins, Eraser, Gift, Heart, MessageSquare, Mic, Pen, Share2, X } from 'lucide-react'
+import { Coins, Eraser, Gift, Heart, MessageSquare, Mic, Pen, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 
 const GIFT_TIERS = [
@@ -244,7 +245,7 @@ export default function LiveSession() {
   }, [messages])
 
   async function loadSession() {
-    const { data } = await supabase.from('live_sessions').select('*, profiles(full_name, display_name, avatar_url, specialty, is_verified)').eq('id', id).single()
+    const { data } = await supabase.from('live_sessions').select('*, profiles(full_name, display_name, avatar_url, specialty, verification_label, is_verified)').eq('id', id).single()
     if (!data) { navigate('/feed'); return }
     setSession(data)
     setStrokes(data.board_strokes || [])
@@ -424,7 +425,7 @@ export default function LiveSession() {
           </div>
           <div>
             <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{hostName}</span>
-            {host?.is_verified && host?.specialty && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginLeft: 6 }}><BadgeCheck size={11} aria-label="Verified" style={{ verticalAlign: '-1px', marginRight: 3 }} /> {host.specialty}</span>}
+            {<VerifiedBadge profile={host} size={11} style={{ color: 'rgba(255,255,255,0.6)', marginLeft: 6 }} />}
           </div>
           {/* Like count */}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>

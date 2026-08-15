@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, Bookmark } from 'lucide-react'
+import { ArrowLeft, Bookmark } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
@@ -11,6 +11,7 @@ import { renderArticleHtml } from '../news-publishing/articleFormat'
 import { renderMarkdown } from './markdown.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Avatar, Card, CardSkeleton, Empty } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 function SavedPosts() {
   const { user, loading: authLoading } = useAuth()
@@ -61,7 +62,7 @@ function SavedPosts() {
       const userIds = [...new Set(ordered.map((p) => p.user_id))]
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, display_name, full_name, is_verified, avatar_url')
+        .select('id, display_name, full_name, is_verified, specialty, verification_label, avatar_url')
         .in('id', userIds)
       const profileMap = {}
       ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
@@ -175,9 +176,7 @@ function SavedPosts() {
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ fontSize: 13.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
-                      {profiles[post.user_id]?.is_verified && (
-                        <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ flexShrink: 0 }} />
-                      )}
+                      {<VerifiedBadge profile={profiles[post.user_id]} size={14} />}
                     </span>
                     <span style={{ display: 'block', fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
                       <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>

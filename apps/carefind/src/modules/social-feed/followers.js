@@ -10,8 +10,8 @@
 // show_followers privacy filtering still apply to whatever comes back.
 
 export const FOLLOW_SELECT = {
-  followers: 'follower_id, follower:follower_id(id, full_name, display_name, is_verified, avatar_url, show_followers)',
-  following: 'following_id, following:following_id(id, full_name, display_name, is_verified, avatar_url, show_followers)',
+  followers: 'follower_id, follower:follower_id(id, full_name, display_name, is_verified, specialty, verification_label, avatar_url, show_followers)',
+  following: 'following_id, following:following_id(id, full_name, display_name, is_verified, specialty, verification_label, avatar_url, show_followers)',
 }
 
 export async function fetchFollowList({ supabase, profileId, kind }) {

@@ -5,7 +5,7 @@ Source of truth for the 10-feature UPDATED PENDING ISSUES program
 after frontend + backend + database + auth/RLS + state + persistence +
 loading/error/empty states + mobile + tests + manual user-flow verification
 all pass.
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ---
 
@@ -27,7 +27,7 @@ list; nothing is assumed missing or complete.
 | 7 | Markdown Rendering | PARTIAL | Feed posts, comments/replies, saved posts and the profile post modals render Markdown as raw text (`**bold**`, `# heading`, lists, links show literally). No renderer existed for these surfaces (only the article-specific `renderArticleHtml`). |
 | 8 | Wallet Withdrawal Banks + Security | COMPLETE | Two gaps found and fixed: (1) `request_withdrawal` RPC derived identity from `auth.uid()` but is only called by the service-role handler, so `auth.uid()` was always null and withdrawals never debited the wallet or created a request — reworked to take server-verified `p_user_id`, EXECUTE revoked from PUBLIC/anon/authenticated, leftover PUBLIC-executable overload dropped; (2) no account-name verification — added Paystack `/bank/resolve` check so the typed name must match the account number before any transfer. |
 | 9 | Comment Likes, Replies + Mentions | NOT AUDITED | — |
-| 10 | Role-Specific Professional Verification Badges | NOT AUDITED | — |
+| 10 | Role-Specific Professional Verification Badges | COMPLETE | Consistency pass only (no schema change). Verified system was already role-specific in primary surfaces (Profile/PublicProfile headers, feed post headers, PostCard, CommentThread, Search, LiveSession host, Professional dashboard/monetization). **Gap: ~13 secondary surfaces rendered a bare checkmark with no role label.** All now render the shared `VerifiedBadge` (check + role). |
 
 ---
 
@@ -265,4 +265,36 @@ Backend: COMPLETE
 
 ## FEATURE 10 — ROLE-SPECIFIC PROFESSIONAL VERIFICATION BADGES
 
-Status: NOT STARTED (pending sequential order)
+Status: COMPLETE (2026-08-15)
+Frontend: COMPLETE
+Backend: n/a (consistency pass only — no schema change)
+Scope: the user's verification system was audited and confirmed live
+(`profiles.is_verified` + `verification_label` + `specialty`;
+`verification_requests` with own-row read/insert RLS; `VerifyProfessional.jsx`
+2-step form; admin approve/reject/manual in `api/_handlers/admin-auth.js`).
+The role label was already rendered in primary surfaces (Profile/PublicProfile
+headers, feed post headers, PostCard, CommentThread, Search, LiveSession host,
+professional dashboard/monetization). The gap was **~13 secondary surfaces that
+showed only a bare checkmark with no professional role**.
+
+Changes:
+- **Shared `VerifiedBadge` component** — `src/components/VerifiedBadge.jsx`
+  renders the check + the professional's role (`specialty || verification_label`,
+  falling back to "Verified"), returns `null` for unverified profiles, accepts a
+  `size` and passthrough `style`.
+- **Wired into every previously bare-check surface:** LiveShow (host, comments,
+  who-liked/gifted/shared/viewed list), LiveSession host, SavedPosts, DrugProfile
+  (seller + reviewer), BusinessProfile reviewer, FollowersSheet, NewsArticle
+  (author + commenter), Notifications, PlaylistView, Profile + PublicProfile
+  reviewer lists, UserGoLive guest search. Each surface's `profiles` select now
+  also pulls `specialty`/`verification_label` where it only had `is_verified`.
+- **De-duplicated the feed's inline role pill logic** — the role label source of
+  truth is now the single component (Feed's larger header check remains as-is;
+  its role pill and the NewsArticle byline's separate label line were folded into
+  the badge to avoid duplicate role text).
+- **Tests** — `VerifiedBadge.test.jsx` (5 cases: unverified → null, no profile →
+  null, role shown, `verification_label` fallback, "Verified" fallback); full
+  suite 302/302; `vite build` clean.
+- **Security note (pre-existing, out of scope):** the `credentials` storage
+  bucket is public, so uploaded licenses/certificates/IDs are readable by URL.
+  Recommend re-scoping to private + signed URLs in a future hardening pass.

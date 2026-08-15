@@ -15,7 +15,7 @@
 
 import { supabase } from '../../config/supabaseClient'
 
-export const SELLER_FIELDS = 'id, full_name, display_name, phone, avatar_url, is_verified, verification_label'
+export const SELLER_FIELDS = 'id, full_name, display_name, phone, avatar_url, is_verified, verification_label, specialty'
 
 export async function attachOwnerProfiles(products) {
   const list = products || []

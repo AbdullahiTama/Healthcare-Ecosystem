@@ -284,3 +284,49 @@ ormalizeAccountName
 ode --check clean on the handler and
   lib; 
 pm run build clean (only the usual chunk-size warning).
+
+## 2026-08-15 - Feature 10: Role-Specific Professional Verification Badges
+
+**What:** Make the verified-professional trust signal show the professional's
+role everywhere, not just a bare checkmark. Consistency pass only - no schema
+change.
+
+**Audit findings:**
+- The verification system is fully live: `profiles.is_verified` +
+  `verification_label` + `specialty`; `verification_requests` table with
+  own-row read/insert RLS; `VerifyProfessional.jsx` 2-step form (15-option
+  `SPECIALTIES` list); admin approve/reject/manual via `api/_handlers/
+  admin-auth.js` writing `is_verified: true, verification_label: <role>,
+  specialty: <role>`. Five verified profiles live across four distinct roles.
+- Primary surfaces already render the role: Profile/PublicProfile headers
+  (`verification_label || 'Verified'`), feed post headers + role pill,
+  PostCard, CommentThread, Search, LiveSession host, Professional
+  dashboard/monetization.
+- **Gap:** ~13 secondary surfaces rendered only a bare `BadgeCheck` with no
+  role text - LiveShow (host, comments, who-lists), SavedPosts, DrugProfile
+  (seller + reviewer), BusinessProfile reviewer, FollowersSheet, NewsArticle
+  (author + commenter), Notifications, PlaylistView, Profile/PublicProfile
+  reviewer lists, UserGoLive guest search.
+
+**Changes:**
+- `src/components/VerifiedBadge.jsx` (new): shared check + role label
+  (`specialty || verification_label`, falling back to "Verified"), `null` for
+  unverified profiles, `size` + `style` props. Single source of truth for the
+  trust badge.
+- Wired the component into all 13 previously-bare surfaces; each surface's
+  `profiles` select now pulls `specialty, verification_label` where it only
+  selected `is_verified` (LiveShow host/comments/who-lists, SavedPosts,
+  DrugProfile reviewers, BusinessProfile reviewers, Notifications actor,
+  FollowersSheet via `followers.js`, PlaylistView owner, Profile/PublicProfile
+  reviewers, UserGoLive guests; seller `_owner` via `SELLER_FIELDS`).
+- NewsArticle byline: the separate `verification_label` text line was folded
+  into the badge (role now sits next to the name); date kept alone.
+- Removed now-unused `BadgeCheck` imports from the 12 wired files.
+
+**Verification:**
+- `VerifiedBadge.test.jsx` 5/5 (unverified -> null, no profile -> null, role
+  shown, `verification_label` fallback, "Verified" fallback).
+- Full CareFind suite 302/302; `vite build` clean.
+- Security note (pre-existing, out of scope): `credentials` storage bucket is
+  public - licenses/certificates/IDs are readable by URL. Recommend private
+  bucket + signed URLs in a future hardening pass.

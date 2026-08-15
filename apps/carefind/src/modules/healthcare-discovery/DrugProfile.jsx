@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  AlertTriangle, BadgeCheck, CheckCircle2, MapPin, MessageCircle, Phone, Pill as PillIcon,
+  AlertTriangle, CheckCircle2, MapPin, MessageCircle, Phone, Pill as PillIcon,
   Sparkles, Star, ThumbsDown, ThumbsUp,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -16,6 +16,7 @@ import { getSentimentSummary } from '../business-profiles-reviews/sentiment'
 import { analyzeReviews } from '../business-profiles-reviews/reviewAI'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
@@ -77,7 +78,7 @@ function DrugProfile() {
       if (userIds.length) {
         const { data: profs } = await supabase
           .from('profiles')
-          .select('id, full_name, display_name, is_verified')
+          .select('id, full_name, display_name, is_verified, specialty, verification_label')
           .in('id', userIds)
         const map = {}
         ;(profs || []).forEach((pr) => { map[pr.id] = pr })
@@ -398,7 +399,7 @@ function DrugProfile() {
                     ) : p.owner_id ? (
                       <Link to={`/u/${p.owner_id}`} style={{ textDecoration: 'none' }}>
                         <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>
-                          {seller} {p._owner?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px' }} />} ›
+                          {seller}{<VerifiedBadge profile={p._owner} size={14} style={{ marginLeft: 3 }} />} ›
                         </p>
                       </Link>
                     ) : (
@@ -537,7 +538,7 @@ function DrugProfile() {
                       {r.user_id ? (
                         <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
                           {whoName}
-                          {who?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+                          {<VerifiedBadge profile={who} size={14} style={{ marginLeft: 4 }} />}
                         </Link>
                       ) : (
                         <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{whoName}</span>

@@ -23,6 +23,7 @@ import {
 import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
 import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
+import VerifiedBadge from './components/VerifiedBadge.jsx'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
 
@@ -241,7 +242,7 @@ function PublicProfile() {
     if (userIds.length) {
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, full_name, display_name, is_verified')
+        .select('id, full_name, display_name, is_verified, specialty, verification_label')
         .in('id', userIds)
       const map = {}
       ;(profs || []).forEach((pr) => { map[pr.id] = pr })
@@ -767,7 +768,7 @@ function PublicProfile() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                       <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
                         {whoName}
-                        {who?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+                        {<VerifiedBadge profile={who} size={14} style={{ marginLeft: 4 }} />}
                       </Link>
                       <Stars value={r.rating || 0} size={13} />
                     </div>

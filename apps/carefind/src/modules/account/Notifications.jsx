@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, AtSign, BadgeCheck, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
+  ArrowLeft, AtSign, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -11,6 +11,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, CardSkeleton, Empty } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 // Each notification type gets its own icon and semantic colour — the icon is
 // what a user actually scans for when catching up, so it has to distinguish
@@ -51,7 +52,7 @@ function Notifications() {
     setError('')
     const { data, error: loadError } = await supabase
       .from('notifications')
-      .select('id, type, message, link, post_id, read, created_at, actor_id, profiles!notifications_actor_id_fkey(full_name, display_name, is_verified)')
+      .select('id, type, message, link, post_id, read, created_at, actor_id, profiles!notifications_actor_id_fkey(full_name, display_name, is_verified, specialty, verification_label)')
       .eq('recipient_id', user.id)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -156,9 +157,7 @@ function Notifications() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: '0 0 3px 0', fontSize: 13.5, color: theme.textMid, lineHeight: 1.45 }}>
                   <strong style={{ color: theme.navy, fontWeight: 800 }}>{actorName(n)}</strong>
-                  {n.profiles?.is_verified && (
-                    <BadgeCheck size={13} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />
-                  )}
+                  {<VerifiedBadge profile={n.profiles} size={13} style={{ marginLeft: 3 }} />}
                   {' '}{n.message}
                 </p>
                 <p style={{ margin: 0, fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>

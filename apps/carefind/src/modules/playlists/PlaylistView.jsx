@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { Check, ChevronRight, Film, Image as ImageIcon, Pen, PartyPopper, Play, Plus, Star, Trash2, Video, X, BadgeCheck } from 'lucide-react'
+import { Check, ChevronRight, Film, Image as ImageIcon, Pen, PartyPopper, Play, Plus, Star, Trash2, Video, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Stars } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -12,6 +12,7 @@ import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSe
 import BottomNav from '../../components/BottomNav.jsx'
 import { renderRichText } from '../social-feed/richText.jsx'
 import { ConfirmDialog, Inp, Loading, Toast, useToast } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 // Watch a playlist: a list of parts, tap to view; an "Up next" prompt to continue.
 function PlaylistView() {
@@ -33,7 +34,7 @@ function PlaylistView() {
 
   async function load() {
     setLoading(true)
-    const { data: pl } = await supabase.from('playlists').select('*, profiles:owner_id(full_name, display_name, is_verified)').eq('id', id).maybeSingle()
+    const { data: pl } = await supabase.from('playlists').select('*, profiles:owner_id(full_name, display_name, is_verified, specialty, verification_label)').eq('id', id).maybeSingle()
     const { data: pts } = await supabase.from('playlist_parts').select('*').eq('playlist_id', id).order('position', { ascending: true })
     setPlaylist(pl)
     setParts(pts || [])
@@ -157,7 +158,7 @@ function PlaylistView() {
         <div style={{ background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={11} aria-hidden="true" /> PLAYLIST · {parts.length} PARTS</div>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 900 }}>{playlist.title}</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.75)' }}>
-          By {playlist.profiles?.full_name || playlist.profiles?.display_name || 'CareFind'}{playlist.profiles?.is_verified && <BadgeCheck size={13} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+          By {playlist.profiles?.full_name || playlist.profiles?.display_name || 'CareFind'}{<VerifiedBadge profile={playlist.profiles} size={13} style={{ color: '#fff', marginLeft: 4 }} />}
         </p>
         {playlist.description && <p style={{ margin: '8px 0 0 0', fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.4 }}>{playlist.description}</p>}
       </div>

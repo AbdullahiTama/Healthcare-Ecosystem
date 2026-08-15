@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  ArrowLeft, BadgeCheck, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle, Phone,
+  ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle, Phone,
   Pill as PillIcon, Smile, Sparkles, Star, Store,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -15,6 +15,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Inp, Textarea, Loading, Empty, StarPicker, Stars, Toast, useToast } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 function BookingCard({ biz }) {
   const toast = useToast()
@@ -331,7 +332,7 @@ function BusinessProfile() {
     if (userIds.length) {
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, full_name, display_name, is_verified')
+        .select('id, full_name, display_name, is_verified, specialty, verification_label')
         .in('id', userIds)
       const map = {}
       ;(profs || []).forEach((pr) => { map[pr.id] = pr })
@@ -734,7 +735,7 @@ function BusinessProfile() {
                   {r.user_id ? (
                     <Link to={`/u/${r.user_id}`} style={{ fontSize: 13, fontWeight: 800, color: theme.navy, textDecoration: 'none' }}>
                       {whoName}
-                      {who?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+                      {<VerifiedBadge profile={who} size={14} style={{ marginLeft: 4 }} />}
                     </Link>
                   ) : (
                     <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{whoName}</span>

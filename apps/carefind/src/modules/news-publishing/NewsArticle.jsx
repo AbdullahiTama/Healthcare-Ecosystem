@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
-import { ArrowLeft, BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Share2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { shareOrCopy } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
@@ -16,6 +16,7 @@ import ArticleEditor from './ArticleEditor.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 function NewsArticle() {
   const { id } = useParams()
@@ -80,7 +81,7 @@ function NewsArticle() {
   async function loadEngagement() {
     const [likeRes, commentRes] = await Promise.all([
       supabase.from('news_reactions').select('id, user_id').eq('news_id', id),
-      supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified)').eq('news_id', id).order('created_at', { ascending: true }),
+      supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true }),
     ])
     setLikes(likeRes.data || [])
     setComments(commentRes.data || [])
@@ -133,7 +134,7 @@ function NewsArticle() {
     const { error } = await supabase.from('news_comments').insert({ news_id: id, user_id: user.id, content: text })
     if (!error) {
       setCommentDraft('')
-      const { data } = await supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified)').eq('news_id', id).order('created_at', { ascending: true })
+      const { data } = await supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true })
       setComments(data || [])
       // Tell the author someone commented on their article (never self-notifies).
       notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
@@ -278,10 +279,10 @@ function NewsArticle() {
           <div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: theme.navy }}>
               By {authorName(article)}
-              {article.profiles?.is_verified && <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 4 }} />}
+              {<VerifiedBadge profile={article.profiles} size={14} style={{ marginLeft: 4 }} />}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-              {article.profiles?.verification_label ? `${article.profiles.verification_label} · ` : ''}{formatDate(article.published_at || article.created_at)}
+              {formatDate(article.published_at || article.created_at)}
             </p>
           </div>
         </div>
@@ -395,7 +396,7 @@ function NewsArticle() {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: '0 0 2px 0', fontSize: 12.5 }}>
                   <strong style={{ color: theme.navy }}>{c.profiles?.full_name || c.profiles?.display_name || 'User'}</strong>
-                  {c.profiles?.is_verified && <BadgeCheck size={12} color={theme.tealDeep} aria-label="Verified" style={{ verticalAlign: '-2px', marginLeft: 3 }} />}
+                  {<VerifiedBadge profile={c.profiles} size={12} style={{ marginLeft: 3 }} />}
                   <span style={{ color: theme.textLight, marginLeft: 6, fontWeight: 500 }}>{timeAgoShort(c.created_at)}</span>
                 </p>
                 <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>

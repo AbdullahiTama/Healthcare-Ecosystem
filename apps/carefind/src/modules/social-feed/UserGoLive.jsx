@@ -4,6 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
+import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 // Full user Go Live: go live now, invite co-hosts, or schedule an upcoming
 // show with an optional trailer. Mirrors the admin's Go Live features.
@@ -27,7 +28,7 @@ function UserGoLive({ onClose }) {
     if (q.trim().length < 2) { setGuestResults([]); return }
     const { data } = await supabase
       .from('profiles')
-      .select('id, full_name, display_name, is_verified')
+      .select('id, full_name, display_name, is_verified, specialty, verification_label')
       .or(`full_name.ilike.%${q}%,display_name.ilike.%${q}%`)
       .limit(6)
     setGuestResults((data || []).filter(p => p.id !== user.id))
@@ -148,7 +149,7 @@ function UserGoLive({ onClose }) {
               const picked = guests.some(g => g.id === p.id)
               return (
                 <button key={p.id} onClick={() => toggleGuest(p)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: picked ? theme.bg : '#fff', border: 'none', borderBottom: `1px solid ${theme.border}`, cursor: 'pointer' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{p.full_name || p.display_name}{p.is_verified && <span style={{ color: theme.tealDeep }}> ✓</span>}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{p.full_name || p.display_name}{<VerifiedBadge profile={p} size={12} style={{ marginLeft: 3 }} />}</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: picked ? theme.tealDeep : theme.textLight }}>{picked ? '✓ Added' : '+ Add'}</span>
                 </button>
               )
