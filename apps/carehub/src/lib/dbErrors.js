@@ -33,3 +33,15 @@ export function translateConstraintError(subject, error, blockers) {
   }
   return error
 }
+
+// ── Duplicate-key recognition ─────────────────────────────────────────────────
+// A partial UNIQUE index (clients_phone_unique_per_business, the dispense_ref
+// guard on sales) surfaces through sbFetch as a PostgREST 409 whose message
+// carries Postgres' "duplicate key value violates unique constraint". That
+// shape means "this exact row already exists", which some callers treat as
+// success-with-existing (a retried dispense is not an error — it must not
+// double-dispense). Anything else (5xx, network) stays a genuine failure.
+export function isDuplicateError(e) {
+  return e && typeof e.message === 'string' &&
+    (/Supabase error \(409\)/.test(e.message) || /duplicate key value violates unique constraint/i.test(e.message))
+}

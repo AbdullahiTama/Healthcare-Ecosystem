@@ -220,13 +220,11 @@ export async function deleteProductsBulk(ids) {
 // which carry the identical query. Locations imported getSales without ever
 // calling it.
 //
-// `addSale` stays. PharmacyForm is its only caller, and saleRepository.create
-// is NOT a drop-in replacement for it: create() parks a failed or offline
-// write on the offline queue for later replay, which is correct for a till but
-// would be a silent behaviour change for consultation dispensing. Route it
-// through the repository when the consultation module adopts the seam and that
-// decision can be made deliberately.
-export async function addSale(data) { return sbFetch('sales', { method: 'POST', body: JSON.stringify(data) }) }
+// `addSale` is gone (2026-08-15). PharmacyForm — its only caller — now
+// dispenses through `saleRepository.create(..., { queueOffline: false })`:
+// fail-loud, idempotent on `dispense_ref`, never parked on the offline queue.
+// The deliberate decision the old note deferred is made: dispensing is not a
+// till and must not replay later.
 
 // CLIENTS
 export async function getClients(businessId) { return pagedQuery(sbFetch, 'clients?business_id=eq.' + businessId + '&order=full_name.asc,id.asc&select=*') }

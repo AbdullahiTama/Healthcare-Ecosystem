@@ -1,4 +1,13 @@
 import { sbFetch } from '../../../services/supabase'
+import { isDuplicateError } from '../../../lib/dbErrors'
+
+// ── Fail-loud dispensing ──────────────────────────────────────────────────────
+// A till may park an unsent sale and replay it later. Dispensing must NOT:
+// medication is handed over once, in the real world, and a sale that silently
+// queues on a dead connection is a sale that may never land — or replay twice.
+// Callers that record a dispense pass `{ queueOffline: false }` and `create`
+// throws instead of parking, so the pharmacist is told the truth immediately.
+const NO_QUEUE_OFFLINE_MSG = 'Dispensing requires a connection — the sale was not recorded and nothing was queued.'
 
 // ── Offline sale queue ────────────────────────────────────────────────────────
 // The counter has to keep selling when the network drops, so an unsent sale is
@@ -106,9 +115,20 @@ export function createSaleRepository({
     // would be refused again forever) nor silently dropped. It is rethrown so
     // the page can show the real reason to the cashier. Only transient
     // failures (network, 5xx) park the sale.
-    async create(businessId, sale) {
+    //
+    // options.queueOffline (default true) — false switches to FAIL-LOUD mode
+    // for dispensing: the offline queue is never touched, and any failure —
+    // offline, network, 5xx — is thrown so the caller cannot mistake a
+    // non-recorded dispense for a queued one. A dispensed sale carrying
+    // `dispense_ref` is idempotent: if the write already landed (duplicate
+    // key on the dispense_ref guard), the existing sale is returned as
+    // `{ replayed: true }` instead of erroring, so a retry after an ambiguous
+    // network drop can never double-dispense or double-decrement stock.
+    async create(businessId, sale, options = {}) {
+      const queueOffline = options.queueOffline !== false
       const row = { ...sale, business_id: businessId }
       if (!isOnline()) {
+        if (!queueOffline) throw new Error(NO_QUEUE_OFFLINE_MSG)
         offline.push(row)
         return { queued: true, reason: 'offline' }
       }
@@ -116,9 +136,22 @@ export function createSaleRepository({
         const rows = await request('sales', { method: 'POST', body: JSON.stringify(row) })
         return { queued: false, sale: Array.isArray(rows) ? rows[0] : rows }
       } catch (e) {
+        // An ambiguous network drop can leave the first attempt committed. A
+        // dispense_ref duplicate means "this exact sale already exists" — treat
+        // the retry as success-with-existing, never as a fresh error.
+        if (isDuplicateError(e) && row.dispense_ref) {
+          const existing = await request(
+            `sales?business_id=eq.${businessId}&dispense_ref=eq.${row.dispense_ref}&select=*`
+          )
+          const sale = Array.isArray(existing) ? existing[0] : null
+          if (sale) return { queued: false, sale, replayed: true }
+        }
         if (isServerRejection(e)) throw e
-        // A sale is money that already changed hands — never drop it because
-        // the write failed.
+        // Fail-loud: never park — this sale must reach the server or the
+        // caller is told it did not.
+        if (!queueOffline) throw e
+        // A till sale is money that already changed hands — never drop it
+        // because the write failed.
         offline.push(row)
         return { queued: true, reason: 'error' }
       }

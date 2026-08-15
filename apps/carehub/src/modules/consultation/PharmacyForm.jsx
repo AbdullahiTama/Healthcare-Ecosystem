@@ -3,7 +3,8 @@ import { theme } from '../../styles/theme'
 import { Card, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
 import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
-import { getClients, addClient, addConsultation, addSale } from '../../services/supabase'
+import { getClients, addClient, addConsultation } from '../../services/supabase'
+import { saleRepository } from '../pos/repositories'
 import { genId } from '../../lib/utils'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, bg, danger } = theme
@@ -137,13 +138,22 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
 
     setSaving(true)
     try {
-      // Dispensed items become a real sale (same addSale path as POS) so
-      // stock behaves identically; the consultation links back via sale_id.
+      // Dispensed items become a real sale (same path as POS) so stock behaves
+      // identically; the consultation links back via sale_id. This is NOT a
+      // till sale: it dispenses in the real world, so it records FAIL-LOUD —
+      // the sale repository is told not to park an unsent write on the offline
+      // queue (a silently-queued dispense could be replayed twice, or never).
+      // `dispense_ref` makes a retry after an ambiguous network drop idempotent:
+      // if the first attempt already landed, the repository returns the existing
+      // sale instead of double-dispensing. A failed dispense throws and the
+      // pharmacist sees the real reason; no consultation record is saved either,
+      // because nothing must outlive an unrecorded handover.
       let saleId = null
       if (chargeItems.length) {
         const subtotal = chargeItems.reduce((s, i) => s + (i.price || 0) * i.qty, 0)
-        const sale = (await addSale({
+        const result = await saleRepository.create(brand.id, {
           txn_no: genId('TXN'),
+          dispense_ref: genId('DISP'),
           client_id: client.id,
           client_name: client.full_name,
           items: JSON.stringify(chargeItems),
@@ -155,9 +165,8 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           balance: 0,
           is_credit: false,
           is_on_hold: false,
-          business_id: brand.id,
-        }))[0] || null
-        saleId = sale?.id || null
+        }, { queueOffline: false })
+        saleId = result?.sale?.id || null
       }
 
       const source = chargeItems.length ? 'dispensed' : 'recommended'
@@ -195,7 +204,10 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
       onSaved?.(saved)
     } catch (e) {
       console.error('Pharmacy consultation save error:', e)
-      toast.show('Could not save consultation. Please try again.', { type: 'error' })
+      // Never suppress the real reason — fail-loud dispensing exists so the
+      // pharmacist is told the truth ("no connection, nothing was recorded")
+      // rather than a generic failure that sounds like a fixable retry.
+      toast.show(e?.message || 'Could not save consultation. Please try again.', { type: 'error' })
     }
     setSaving(false)
   }

@@ -1,19 +1,11 @@
 import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
+import { isDuplicateError } from '../../../lib/dbErrors'
 
-// The `clients` table carries a partial unique index on the normalized phone
-// per business (clients_phone_unique_per_business, mirrored from the page's
-// normPhone helper). A violation surfaces through sbFetch as a PostgREST 409
-// whose message carries Postgres' "duplicate key value violates unique
-// constraint". Recognising that shape lets the bulk import honour the
-// template's promise — repeat customers are "skipped, not duplicated" — even
-// when the duplicate was created after the page loaded (concurrent import,
-// single add between load and import, or a direct API write). Everything else
-// (5xx, network) stays a genuine failure.
-export function isDuplicateError(e) {
-  return e && typeof e.message === 'string' &&
-    (/Supabase error \(409\)/.test(e.message) || /duplicate key value violates unique constraint/i.test(e.message))
-}
+// `isDuplicateError` (the duplicate-key shape recogniser) moved to
+// lib/dbErrors.js — it is now shared with the sale repository's dispense_ref
+// guard. Re-exported here so existing importers of this module are unchanged.
+export { isDuplicateError }
 
 // ── Client repository ─────────────────────────────────────────────────────────
 // A deep module over the `clients` aggregate and the per-client history the
