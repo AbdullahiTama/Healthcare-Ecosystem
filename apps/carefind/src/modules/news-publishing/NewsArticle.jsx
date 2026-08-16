@@ -3,9 +3,9 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
-import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Share2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Repeat2, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { shareOrCopy } from '../../utils/share.js'
+import { mediaToFile, shareOrCopy } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -15,7 +15,8 @@ import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
-import { Loading } from '../../components/ui'
+import { Loading, Toast, useToast } from '../../components/ui'
+import { renderMarkdown } from '../social-feed/markdown.jsx'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 function NewsArticle() {
@@ -24,11 +25,13 @@ function NewsArticle() {
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
+  const toast = useToast()
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [more, setMore] = useState([])
   const [likes, setLikes] = useState([])
   const [saved, setSaved] = useState(false)
+  const [reposts, setReposts] = useState([])
   const [comments, setComments] = useState([])
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
@@ -79,12 +82,14 @@ function NewsArticle() {
   }, [id, retryKey])
 
   async function loadEngagement() {
-    const [likeRes, commentRes] = await Promise.all([
+    const [likeRes, commentRes, repostRes] = await Promise.all([
       supabase.from('news_reactions').select('id, user_id').eq('news_id', id),
       supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true }),
+      supabase.from('news_reposts').select('id, user_id').eq('news_id', id),
     ])
     setLikes(likeRes.data || [])
     setComments(commentRes.data || [])
+    setReposts(repostRes.data || [])
     if (user) {
       const { data: sv } = await supabase.from('saved_news').select('id').eq('news_id', id).eq('user_id', user.id).maybeSingle()
       setSaved(!!sv)
@@ -93,12 +98,20 @@ function NewsArticle() {
 
   const likeCount = likes.length
   const userLiked = user && likes.some(l => l.user_id === user.id)
+  const repostCount = reposts.length
+  const userReposted = user && reposts.some(r => r.user_id === user.id)
 
   // Same fallback as the feed's share (utils/share.js): Web Share where it
   // exists, clipboard everywhere else, and the user is told which happened.
+  // The article's hero image is attached to the share where the browser
+  // supports it (mirrors Feed.jsx's sharePost); the URL is still appended to
+  // the clipboard fallback so recipients always get the media. Best-effort:
+  // a failed media fetch leaves the text share intact.
   async function shareArticle() {
     const text = article.subtitle ? `${article.headline} — ${toShareText(article.subtitle)}` : article.headline
-    const result = await shareOrCopy({ title: article.headline, text, url: `${window.location.origin}/news/${article.id}` })
+    const mediaUrl = article.hero_image_url || null
+    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
+    const result = await shareOrCopy({ title: article.headline, text, url: `${window.location.origin}/news/${article.id}`, files: file ? [file] : undefined, mediaUrl })
     if (result === 'copied') setShareMsg('Link copied — paste it anywhere to share.')
     if (result === 'failed') setShareMsg("This browser won't let us share or copy from here.")
     if (result === 'copied' || result === 'failed') setTimeout(() => setShareMsg(''), 4000)
@@ -125,6 +138,38 @@ function NewsArticle() {
     } else {
       setSaved(true)
       await supabase.from('saved_news').insert({ news_id: id, user_id: user.id })
+    }
+  }
+
+  // Self-contained news repost (20260816_news_reposts.sql). Unlike the feed's
+  // classic repost there is no 🔁 feed-post half — news lives in its own table
+  // and UI, so the reference row + count are the whole feature. Optimistic
+  // like the like/save toggles; the insert returns the real row so undo has a
+  // valid id to delete. The unique constraint news_reposts_news_user_uniq
+  // makes a double-tap idempotent at the DB level.
+  async function toggleRepost() {
+    if (!user) { navigate('/login'); return }
+    const existing = reposts.find(r => r.user_id === user.id)
+    if (existing) {
+      setReposts(prev => prev.filter(r => r.user_id !== user.id))
+      const { error } = await supabase.from('news_reposts').delete().eq('id', existing.id)
+      if (error) {
+        setReposts(prev => [...prev, existing])
+        toast.show('Could not undo repost right now.', { type: 'error' })
+        return
+      }
+      toast.show('Repost removed', { type: 'info' })
+    } else {
+      const temp = { id: `temp_${Date.now()}`, user_id: user.id }
+      setReposts(prev => [...prev, temp])
+      const { data, error } = await supabase.from('news_reposts').insert({ news_id: id, user_id: user.id }).select().maybeSingle()
+      if (error || !data) {
+        setReposts(prev => prev.filter(r => r.id !== temp.id))
+        toast.show('Could not repost right now.', { type: 'error' })
+        return
+      }
+      setReposts(prev => prev.map(r => (r.id === temp.id ? data : r)))
+      toast.show('Reposted', { type: 'success' })
     }
   }
 
@@ -343,6 +388,19 @@ function NewsArticle() {
             <Share2 size={18} aria-hidden="true" />
             <span>Share</span>
           </button>
+
+          <button
+            className="cf-eng-item"
+            onClick={() => (user ? toggleRepost() : navigate('/login'))}
+            aria-pressed={userReposted}
+            aria-label={userReposted ? 'Undo repost' : 'Repost this article'}
+            style={{ color: userReposted ? theme.tealDeep : theme.gray500 }}
+          >
+            <Repeat2 size={18} aria-hidden="true" />
+            {repostCount > 0 && (
+              <span>{formatCount(repostCount)} {repostCount === 1 ? 'repost' : 'reposts'}</span>
+            )}
+          </button>
         </div>
 
         <div className="cf-eng-group">
@@ -379,6 +437,8 @@ function NewsArticle() {
         </p>
       )}
 
+      <Toast msg={toast.msg} type={toast.type} />
+
       {/* Comments section */}
       {commentsOpen && (
         <div style={{ padding: '4px 18px 8px', fontFamily: theme.fontFamily }}>
@@ -399,7 +459,7 @@ function NewsArticle() {
                   {<VerifiedBadge profile={c.profiles} size={12} style={{ marginLeft: 3 }} />}
                   <span style={{ color: theme.textLight, marginLeft: 6, fontWeight: 500 }}>{timeAgoShort(c.created_at)}</span>
                 </p>
-                <p style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.4 }}>{c.content}</p>
+                <div style={{ margin: 0, fontSize: 13.5, color: theme.textMid, lineHeight: 1.4 }}>{renderMarkdown(c.content)}</div>
               </div>
               {user && c.user_id === user.id && (
                 <button onClick={() => deleteComment(c.id)} aria-label="Delete comment" style={{ background: 'none', border: 'none', color: theme.gray400, display: 'flex', alignItems: 'center', padding: 4, cursor: 'pointer' }}><X size={14} aria-hidden="true" /></button>
