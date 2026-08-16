@@ -413,22 +413,22 @@ const distanceMeters = (p, u) => {
                     </p>
                   </Link>
                   {p.business_id ? (
-                    <Link to={`/business/${p.business_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
+                    <Link to={`/business/${p.business_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       {sellerName(p)}
                       {(() => {
                         const loc = p.seller_location || p.businesses?.state || p.businesses?.city
                         return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> Â· {loc}</span> : null
                       })()}
-                      {' â€º'}
+                      <ChevronRight size={12} aria-hidden="true" />
                     </Link>
                   ) : p.owner_id ? (
-                    <Link to={`/u/${p.owner_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>
+                    <Link to={`/u/${p.owner_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       {sellerName(p)}
                       {(() => {
                         const loc = p.seller_location
                         return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> Â· {loc}</span> : null
                       })()}
-                      {' â€º'}
+                      <ChevronRight size={12} aria-hidden="true" />
                     </Link>
                   ) : (
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
