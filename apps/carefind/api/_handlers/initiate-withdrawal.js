@@ -1,5 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
 
 const supabase = createClient(
@@ -16,12 +17,55 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  const { amount, bankCode, bankName, accountNumber, accountName } = req.body
+  const { amount, bankCode, bankName, accountNumber, accountName, pin } = req.body
   const coins = parseInt(amount, 10)
 
   if (!coins || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
     return res.status(400).json({ error: 'Missing or invalid withdrawal details' })
   }
+
+  // ── Withdrawal PIN gate ─────────────────────────────────────────────────────
+  // Every withdrawal now requires the account owner's PIN, verified server-side
+  // against the service-role RPC family (sql/20260816_withdrawal_pin.sql). It
+  // sits between JWT verification and any balance/transfer work so a stolen
+  // session alone cannot move money. The PIN is never logged or stored here —
+  // only scrypt(pin, salt) is derived and handed to the RPCs.
+  if (!pin) {
+    return res.status(400).json({ error: 'Withdrawal PIN is required' })
+  }
+  if (!isValidPin(pin)) {
+    return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
+  }
+
+  const { data: pinRows, error: pinFetchError } = await supabase.rpc('get_withdrawal_pin', {
+    p_user_id: user.id,
+  })
+  if (pinFetchError) {
+    return res.status(500).json({ error: 'Could not verify withdrawal PIN' })
+  }
+  const storedPin = Array.isArray(pinRows) ? pinRows[0] : undefined
+  if (!storedPin || !storedPin.pin_hash) {
+    return res.status(400).json({ error: 'Set a withdrawal PIN first' })
+  }
+  if (storedPin.locked_until && new Date(storedPin.locked_until).getTime() > Date.now()) {
+    const minutes = Math.max(1, Math.ceil((new Date(storedPin.locked_until).getTime() - Date.now()) / 60000))
+    return res.status(403).json({ error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` })
+  }
+
+  // Belt-and-braces: the RPC below is the source of truth for the compare and
+  // the lockout state. We also compare locally so a wrong PIN is rejected even
+  // if the RPC ever misbehaved.
+  const attemptHash = hashPin(pin, storedPin.pin_salt)
+  const locallyMatches = verifyPin(pin, storedPin.pin_salt, storedPin.pin_hash)
+  const { data: pinVerified, error: pinVerifyError } = await supabase.rpc('verify_withdrawal_pin', {
+    p_user_id: user.id,
+    p_pin_hash: attemptHash,
+    p_pin_salt: storedPin.pin_salt,
+  })
+  if (pinVerifyError || !locallyMatches || pinVerified !== true) {
+    return res.status(403).json({ error: 'Incorrect withdrawal PIN.' })
+  }
+  // ── End PIN gate ───────────────────────────────────────────────────────────
 
   // Verify wallet has enough balance
   const { data: wallet } = await supabase

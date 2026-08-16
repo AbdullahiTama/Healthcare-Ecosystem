@@ -30,6 +30,7 @@ import verifyBookingPaymentHandler from './_handlers/verify-booking-payment.js'
 import verifyConsultationPaymentHandler from './_handlers/verify-consultation-payment.js'
 import verifyPaymentHandler from './_handlers/verify-payment.js'
 import verifySubscriptionPaymentHandler from './_handlers/verify-subscription-payment.js'
+import withdrawalPinHandler from './_handlers/withdrawal-pin.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -46,6 +47,7 @@ const ROUTES = {
   'verify-consultation-payment': verifyConsultationPaymentHandler,
   'verify-payment': verifyPaymentHandler,
   'verify-subscription-payment': verifySubscriptionPaymentHandler,
+  'withdrawal-pin': withdrawalPinHandler,
 }
 
 // This route must receive the untouched request stream so it can hash the raw
