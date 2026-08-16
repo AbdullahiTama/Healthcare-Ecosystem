@@ -129,7 +129,7 @@ function ProfessionalMonetization() {
           background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
-          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Earn on CareFind</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -165,7 +165,7 @@ function ProfessionalMonetization() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '24px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Dashboard</Link>}
+        {isMobile && <Link to="/professional-dashboard" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Dashboard</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Earn on CareFind</h1>
         <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'rgba(255,255,255,0.65)', margin: '0 0 16px 0' }}><BadgeCheck size={14} aria-hidden="true" /> {profile.specialty || profile.verification_label}</p>
 
@@ -212,11 +212,11 @@ function ProfessionalMonetization() {
         {tab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { Icon: Lock, title: 'Premium Content', desc: subscription ? `â‚¦${subscription.price}/month Â· ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
+              { Icon: Lock, title: 'Premium Content', desc: subscription ? `₦${subscription.price}/month · ${subscribers.length} subscribers` : 'Not set up yet', action: () => setTab('subscription') },
               { Icon: CalendarDays, title: 'Consultations', desc: `${pendingConsults} pending booking${pendingConsults !== 1 ? 's' : ''}`, action: () => setTab('consultation') },
               { Icon: ClipboardList, title: 'Sponsored Tasks', desc: `${tasks.length} open task${tasks.length !== 1 ? 's' : ''} available`, action: () => setTab('tasks') },
-              { Icon: WalletIcon, title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins â‰ˆ â‚¦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
-              { Icon: Radio, title: 'Live Session Earnings', desc: 'Gifts from your live sessions â€” permanently recorded', action: () => {} },
+              { Icon: WalletIcon, title: 'Gifts Received', desc: `${wallet?.balance || 0} CareCoins ≈ ₦${((wallet?.balance || 0) * 200).toLocaleString()}`, action: () => {} },
+              { Icon: Radio, title: 'Live Session Earnings', desc: 'Gifts from your live sessions — permanently recorded', action: () => {} },
             ].map((item) => (
               <button key={item.title} onClick={item.action} style={{
                 border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg,
@@ -256,10 +256,10 @@ function ProfessionalMonetization() {
               {editingPrice || !subscription ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Monthly Price (â‚¦)</label>
+                    <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Monthly Price (₦)</label>
                     <input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="e.g. 500" min="100"
                       style={{ width: '100%', padding: 11, fontSize: 15, fontWeight: 700, border: `1px solid ${theme.border}`, borderRadius: 12 }} />
-                    <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>Minimum â‚¦100 Â· You earn 90% = â‚¦{Math.floor((parseInt(newPrice) || 0) * 0.9)}/subscriber/month</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>Minimum ₦100 · You earn 90% = ₦{Math.floor((parseInt(newPrice) || 0) * 0.9)}/subscriber/month</p>
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>What subscribers get (optional)</label>
@@ -276,11 +276,11 @@ function ProfessionalMonetization() {
               ) : (
                 <div>
                   <div style={{ background: theme.tealMist, borderRadius: 14, padding: 14, marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: theme.tealDeep }}>â‚¦{subscription.price}<span style={{ fontSize: 13, fontWeight: 600 }}>/month</span></p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: theme.tealDeep }}>₦{subscription.price}<span style={{ fontSize: 13, fontWeight: 600 }}>/month</span></p>
                     {subscription.description && <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{subscription.description}</p>}
                   </div>
                   <p style={{ margin: '0 0 10px 0', fontSize: 13, color: theme.textLight }}>
-                    {subscribers.length} active subscriber{subscribers.length !== 1 ? 's' : ''} Â· You earn â‚¦{Math.floor(subscription.price * 0.9 * subscribers.length).toLocaleString()}/month
+                    {subscribers.length} active subscriber{subscribers.length !== 1 ? 's' : ''} · You earn ₦{Math.floor(subscription.price * 0.9 * subscribers.length).toLocaleString()}/month
                   </p>
                   <button onClick={() => setEditingPrice(true)} style={{ padding: '8px 16px', background: 'none', border: `1px solid ${theme.tealDeep}`, color: theme.tealDeep, borderRadius: 10, fontWeight: 700, fontSize: 13 }}>
                     Edit Plan
@@ -332,10 +332,10 @@ function ProfessionalMonetization() {
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Your Fee (â‚¦)</label>
+                  <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Your Fee (₦)</label>
                   <input type="number" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} placeholder="e.g. 2000" min="500"
                     style={{ width: '100%', padding: 11, fontSize: 15, fontWeight: 700, border: `1px solid ${theme.border}`, borderRadius: 12 }} />
-                  {consultFee && <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>You earn â‚¦{Math.floor((parseInt(consultFee) || 0) * 0.85).toLocaleString()} per consultation</p>}
+                  {consultFee && <p style={{ margin: '4px 0 0', fontSize: 11, color: theme.textLight }}>You earn ₦{Math.floor((parseInt(consultFee) || 0) * 0.85).toLocaleString()} per consultation</p>}
                 </div>
                 <div>
                   <label style={{ fontSize: 11, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 4 }}>Notes for patients (optional)</label>
@@ -354,7 +354,7 @@ function ProfessionalMonetization() {
                 {consultations.filter(c => c.status === 'paid').map((c) => (
                   <div key={c.id} style={{ padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: 13, fontWeight: 700, color: theme.navy, textTransform: 'capitalize' }}>{c.type} Consultation</p>
-                    <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight }}>Fee: â‚¦{c.fee?.toLocaleString()}</p>
+                    <p style={{ margin: '0 0 4px 0', fontSize: 12, color: theme.textLight }}>Fee: ₦{c.fee?.toLocaleString()}</p>
                     {c.notes && <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>{c.notes}</p>}
                   </div>
                 ))}
@@ -385,11 +385,11 @@ function ProfessionalMonetization() {
                 <div key={task.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                     <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.navy, flex: 1 }}>{task.title}</h3>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: theme.success, marginLeft: 10 }}>â‚¦{task.compensation?.toLocaleString()}</span>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: theme.success, marginLeft: 10 }}>₦{task.compensation?.toLocaleString()}</span>
                   </div>
                   <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}>{task.description}</p>
                   {task.specialty && <p style={{ margin: '0 0 10px 0', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}><Stethoscope size={12} aria-hidden="true" /> For: {task.specialty}</p>}
-                  {task.deadline && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>â° Deadline: {new Date(task.deadline).toLocaleDateString()}</p>}
+                  {task.deadline && <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.textLight }}>⏰ Deadline: {new Date(task.deadline).toLocaleDateString()}</p>}
                   <button
                     onClick={() => !submitted && acceptTask(task.id)}
                     disabled={submitted}
@@ -412,7 +412,7 @@ function ProfessionalMonetization() {
                   <div key={s.id} style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, background: theme.cardBg }}>
                     <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13, color: theme.navy }}>{s.tasks?.title}</p>
                     <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-                      â‚¦{s.tasks?.compensation?.toLocaleString()} Â· Status: <span style={{ textTransform: 'capitalize', color: s.status === 'approved' ? theme.success : theme.warning }}>{s.status}</span>
+                      ₦{s.tasks?.compensation?.toLocaleString()} · Status: <span style={{ textTransform: 'capitalize', color: s.status === 'approved' ? theme.success : theme.warning }}>{s.status}</span>
                     </p>
                   </div>
                 ))}

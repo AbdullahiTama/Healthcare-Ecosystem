@@ -83,7 +83,7 @@ export default function AdminDashboard() {
         {pending.length > 0 && (
           <div style={{ marginBottom: '20px', padding: '14px 18px', borderRadius: '14px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Bell size={20} color={theme.warning} style={{ flexShrink: 0 }} />
-            <div><div style={{ fontWeight: '700', color: theme.amberText, fontSize: '14px' }}>{pending.length} business(es) waiting for approval!</div><div style={{ fontSize: '12px', color: theme.amberDeep }}>{pending.map(b => b.name).join(' Â· ')}</div></div>
+            <div><div style={{ fontWeight: '700', color: theme.amberText, fontSize: '14px' }}>{pending.length} business(es) waiting for approval!</div><div style={{ fontSize: '12px', color: theme.amberDeep }}>{pending.map(b => b.name).join(' · ')}</div></div>
           </div>
         )}
 
@@ -107,8 +107,8 @@ export default function AdminDashboard() {
                     <div style={{ width: '44px', height: '44px', borderRadius: theme.radius.md, background: theme.tealMist, color: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{(() => { const Icon = businessLucideIcon(b.business_type || b.type); return <Icon size={20} /> })()}</div>
                     <div>
                       <div style={{ fontWeight: '800', fontSize: '15px' }}>{b.name}</div>
-                      <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{b.owner} Â· {b.email}</div>
-                      <div style={{ fontSize: '12px', color: theme.textLight, marginTop: '2px' }}>{businessName(b.business_type || b.type)} Â· {b.state || 'â€”'}</div>
+                      <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{b.owner} · {b.email}</div>
+                      <div style={{ fontSize: '12px', color: theme.textLight, marginTop: '2px' }}>{businessName(b.business_type || b.type)} · {b.state || '—'}</div>
                     </div>
                   </div>
                   <Pill label={b.status} type={b.status === 'active' ? 'green' : b.status === 'pending' ? 'amber' : b.status === 'suspended' ? 'red' : 'gray'} />
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
                       <Avatar name={m.name} size={40} />
                       <div>
                         <div style={{ fontWeight: '700' }}>{m.name}</div>
-                        <div style={{ fontSize: '12px', color: theme.textFaint }}>{m.email} Â· {m.role}</div>
+                        <div style={{ fontSize: '12px', color: theme.textFaint }}>{m.email} · {m.role}</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -161,7 +161,7 @@ export default function AdminDashboard() {
             {sel.status === 'suspended' && <TealBtn onClick={() => updateStatus(sel.id, 'active', 'Reactivated!')} style={{ flex: 1, padding: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Play size={14} /> Reactivate</TealBtn>}
           </div>
         )}>
-        {sel && [['Business Name', sel.name], ['Type', businessName(sel.business_type || sel.type)], ['Owner', sel.owner], ['Email', sel.email], ['Phone', sel.phone || 'â€”'], ['WhatsApp', sel.whatsapp || 'â€”'], ['Address', sel.address || 'â€”'], ['State', sel.state || 'â€”'], ['Hours', sel.hours || 'â€”'], ['CareFind', (sel.visible_on_carefind !== false) ? 'Listed' : 'Hidden'], ['Plan', sel.plan || 'basic'], ['Registered', sel.created_at?.split('T')[0]]].map(([l, v]) => (
+        {sel && [['Business Name', sel.name], ['Type', businessName(sel.business_type || sel.type)], ['Owner', sel.owner], ['Email', sel.email], ['Phone', sel.phone || '—'], ['WhatsApp', sel.whatsapp || '—'], ['Address', sel.address || '—'], ['State', sel.state || '—'], ['Hours', sel.hours || '—'], ['CareFind', (sel.visible_on_carefind !== false) ? 'Listed' : 'Hidden'], ['Plan', sel.plan || 'basic'], ['Registered', sel.created_at?.split('T')[0]]].map(([l, v]) => (
           <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.hairline}`, fontSize: '13px' }}>
             <span style={{ color: theme.textFaint, fontWeight: '600' }}>{l}</span><span style={{ color: theme.slate, textAlign: 'right' }}>{v}</span>
           </div>
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
 
       {/* Invite modal */}
       <Modal show={showInvite} onClose={() => { setShowInvite(false); setInvite({}) }} title='Invite Team Member'
-        footer={<><GhostBtn onClick={() => { setShowInvite(false); setInvite({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={async () => { if (invite.name && invite.email) { try { await addAdminTeam({ name: invite.name, email: invite.email, role: invite.role || 'Support Agent', status: 'invited' }); load(); setShowInvite(false); setInvite({}); showToast('Invite sent!') } catch (e) { showToast('Error â€” email may exist') } } }} style={{ flex: 1, padding: '12px' }}>Send Invite</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowInvite(false); setInvite({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={async () => { if (invite.name && invite.email) { try { await addAdminTeam({ name: invite.name, email: invite.email, role: invite.role || 'Support Agent', status: 'invited' }); load(); setShowInvite(false); setInvite({}); showToast('Invite sent!') } catch (e) { showToast('Error — email may exist') } } }} style={{ flex: 1, padding: '12px' }}>Send Invite</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Inp label='Full Name *' value={invite.name} onChange={v => setInvite(p => ({ ...p, name: v }))} placeholder='Team member name' required />
           <Inp label='Email Address *' value={invite.email} onChange={v => setInvite(p => ({ ...p, email: v }))} type='email' required />

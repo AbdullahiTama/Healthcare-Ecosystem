@@ -103,7 +103,7 @@ function LiveDashboard() {
   async function sendItem() {
     if (!draft.trim() && !image) return
     setSending(true)
-    // live_items.sender_id references profiles(id) â€” hosts without a
+    // live_items.sender_id references profiles(id) — hosts without a
     // profiles row get a 23503 FK violation and the post silently never
     // appears. Same safety net as PostComposer/Stories.
     await ensureProfile(user)
@@ -171,7 +171,7 @@ function LiveDashboard() {
     return `${Math.floor(diff / 3600)}h`
   }
 
-  if (loading) return <Loading text="Loading dashboardâ€¦" />
+  if (loading) return <Loading text="Loading dashboard…" />
 
   if (!show) return (
     <div style={{ fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 40, textAlign: 'center' }}>
@@ -198,7 +198,7 @@ function LiveDashboard() {
   }
 
   // Deliberately NOT wrapped in AppShell: this is a Full-Width Workspace
-  // (LAYOUTS.md) â€” a host's live control room, same "no nav distraction
+  // (LAYOUTS.md) — a host's live control room, same "no nav distraction
   // mid-task" reasoning as CareHub's consultation screen. Desktop still gets
   // a real upgrade: composer/posted-items and audience moderation run side
   // by side instead of one long stacked column, since a host needs both at
@@ -212,14 +212,14 @@ function LiveDashboard() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: ended ? theme.slateMuted : theme.danger }} />
-            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE Â· CONTROL ROOM'}</span>
+            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: '0.05em' }}>{ended ? 'ENDED' : 'LIVE · CONTROL ROOM'}</span>
           </span>
-          <Link to={`/live-show/${id}`} style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontWeight: 700 }}>View audience â†’</Link>
+          <Link to={`/live-show/${id}`} style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontWeight: 700 }}>View audience →</Link>
         </div>
         <p style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{show.title || 'CareFind Live'}</p>
         <p style={{ margin: '2px 0 0 0', fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
           {participants.length} participant{participants.length !== 1 ? 's' : ''}
-          {' Â· '}{participants.filter(p => p.joined).length} joined
+          {' · '}{participants.filter(p => p.joined).length} joined
         </p>
         <div style={{ display: 'flex', gap: 14, marginTop: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, fontWeight: 800 }}><Heart size={14} aria-hidden="true" /> {fmtCount(stats.likes)}</span>
@@ -231,7 +231,7 @@ function LiveDashboard() {
 
       {scheduled && (
         <div style={{ margin: 14, padding: 16, background: theme.navy, borderRadius: 14, color: '#fff', textAlign: 'center' }}>
-          <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>â³ This show is scheduled</p>
+          <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>⏳ This show is scheduled</p>
           <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Your audience sees a countdown. When you're ready, start it live.</p>
           <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Radio size={15} aria-hidden="true" /> Start live now</span></button>
         </div>
@@ -246,7 +246,7 @@ function LiveDashboard() {
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Type something to post liveâ€¦"
+                  placeholder="Type something to post live…"
                   rows={2}
                   style={{ width: '100%', padding: 11, fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', resize: 'none', fontFamily: 'inherit', marginBottom: 8 }}
                 />
@@ -256,7 +256,7 @@ function LiveDashboard() {
                     <input type="file" accept="image/*" onChange={(e) => setImage(e.target.files[0] || null)} style={{ display: 'none' }} />
                   </label>
                   <button onClick={sendItem} disabled={sending} style={{ padding: '10px 22px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-                    {sending ? 'Sendingâ€¦' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Send size={14} aria-hidden="true" /> Post live</span>}
+                    {sending ? 'Sending…' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Send size={14} aria-hidden="true" /> Post live</span>}
                   </button>
                 </div>
                 <VoiceRecorder showId={id} onRecorded={sendVoice} />
@@ -317,7 +317,7 @@ function LiveDashboard() {
       {isHost && !ended && (
         <div style={{ padding: 16 }}>
           <button onClick={() => setConfirmEndOpen(true)} style={{ width: '100%', padding: 13, background: theme.dangerBg, color: theme.alert, border: `1px solid ${theme.alert}`, borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
-            â¹ End Live Show
+            ⏹ End Live Show
           </button>
         </div>
       )}

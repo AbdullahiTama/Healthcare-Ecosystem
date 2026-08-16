@@ -2,9 +2,9 @@
 import { theme } from '../../styles/theme'
 import { renderArticleHtml } from './articleFormat'
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 //  Drawing Canvas Block
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 function DrawingBlock({ block, onChange, onDelete, readOnly }) {
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
@@ -210,9 +210,9 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
         <div style={{ background: '#f8fafc', borderBottom: `1px solid ${theme.border}`, padding: '8px 10px' }}>
           {/* Tool row */}
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
-            <button onClick={() => setTool('pen')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'pen' ? theme.tealDeep : theme.bg, color: tool === 'pen' ? '#fff' : theme.textMid }}>âœï¸ Pen</button>
-            <button onClick={() => setTool('eraser')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'eraser' ? theme.dangerBg : theme.bg, color: tool === 'eraser' ? theme.alert : theme.textMid }}>â¬œ Erase</button>
-            <button onClick={() => { setTool('text'); setAddingText(true) }} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'text' ? theme.amberBg : theme.bg, color: tool === 'text' ? theme.amberText : theme.textMid }}>ðŸ·ï¸ Label</button>
+            <button onClick={() => setTool('pen')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'pen' ? theme.tealDeep : theme.bg, color: tool === 'pen' ? '#fff' : theme.textMid }}>✏️ Pen</button>
+            <button onClick={() => setTool('eraser')} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'eraser' ? theme.dangerBg : theme.bg, color: tool === 'eraser' ? theme.alert : theme.textMid }}>⬜ Erase</button>
+            <button onClick={() => { setTool('text'); setAddingText(true) }} style={{ padding: '4px 9px', borderRadius: 8, border: 'none', fontSize: 11, fontWeight: 700, background: tool === 'text' ? theme.amberBg : theme.bg, color: tool === 'text' ? theme.amberText : theme.textMid }}>🏷️ Label</button>
             <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
               {SIZES.map(s => <button key={s} onClick={() => setPenSize(s)} style={{ width: s + 12, height: s + 12, borderRadius: '50%', background: penSize === s ? theme.tealDeep : '#e2e8f0', border: 'none' }} />)}
             </div>
@@ -220,10 +220,10 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
               {COLORS.map(c => <button key={c} onClick={() => { setPenColor(c); if (tool === 'text') {} }} style={{ width: 16, height: 16, borderRadius: '50%', background: c, border: penColor === c ? '2px solid #0f172a' : '1px solid #ccc' }} />)}
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 3 }}>
-              <button onClick={undo} disabled={historyIdx <= 0} style={{ padding: '3px 7px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.bg, fontSize: 12, opacity: historyIdx <= 0 ? 0.4 : 1 }}>â†©</button>
-              <button onClick={redo} disabled={historyIdx >= history.length - 1} style={{ padding: '3px 7px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.bg, fontSize: 12, opacity: historyIdx >= history.length - 1 ? 0.4 : 1 }}>â†ª</button>
+              <button onClick={undo} disabled={historyIdx <= 0} style={{ padding: '3px 7px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.bg, fontSize: 12, opacity: historyIdx <= 0 ? 0.4 : 1 }}>↩</button>
+              <button onClick={redo} disabled={historyIdx >= history.length - 1} style={{ padding: '3px 7px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.bg, fontSize: 12, opacity: historyIdx >= history.length - 1 ? 0.4 : 1 }}>↪</button>
               <button onClick={clearCanvas} style={{ padding: '3px 7px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.bg, fontSize: 11, color: theme.textLight }}>Clear</button>
-              <button onClick={onDelete} style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: theme.dangerBg, fontSize: 12, color: theme.alert }}>ðŸ—‘ï¸</button>
+              <button onClick={onDelete} style={{ padding: '3px 7px', borderRadius: 7, border: 'none', background: theme.dangerBg, fontSize: 12, color: theme.alert }}>🗑️</button>
             </div>
           </div>
           {/* Add label input */}
@@ -238,7 +238,7 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
                 style={{ flex: 1, padding: '5px 8px', fontSize: 12, border: `1px solid ${theme.tealDeep}`, borderRadius: 8 }}
               />
               <button onClick={addLabel} style={{ padding: '5px 10px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>Add</button>
-              <button onClick={() => { setAddingText(false); setTool('pen') }} style={{ padding: '5px 8px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 12 }}>âœ•</button>
+              <button onClick={() => { setAddingText(false); setTool('pen') }} style={{ padding: '5px 8px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 12 }}>✕</button>
             </div>
           )}
         </div>
@@ -289,8 +289,8 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
                   <span style={{ fontSize: label.size || 13, fontWeight: 800, color: label.color || '#0f172a', whiteSpace: 'nowrap' }}>{label.text}</span>
                   {!readOnly && (
                     <div style={{ display: 'flex', gap: 2 }}>
-                      <button onMouseDown={e => { e.stopPropagation(); setEditingLabel(label.id) }} style={{ background: 'none', border: 'none', fontSize: 9, cursor: 'pointer', color: '#94a3b8', padding: '0 1px' }}>âœï¸</button>
-                      <button onMouseDown={e => { e.stopPropagation(); deleteLabel(label.id) }} style={{ background: 'none', border: 'none', fontSize: 9, cursor: 'pointer', color: theme.alert, padding: '0 1px' }}>âœ•</button>
+                      <button onMouseDown={e => { e.stopPropagation(); setEditingLabel(label.id) }} style={{ background: 'none', border: 'none', fontSize: 9, cursor: 'pointer', color: '#94a3b8', padding: '0 1px' }}>✏️</button>
+                      <button onMouseDown={e => { e.stopPropagation(); deleteLabel(label.id) }} style={{ background: 'none', border: 'none', fontSize: 9, cursor: 'pointer', color: theme.alert, padding: '0 1px' }}>✕</button>
                     </div>
                   )}
                 </div>
@@ -301,7 +301,7 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
 
         {(!block.strokes || block.strokes.length === 0) && labels.length === 0 && !readOnly && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-            <p style={{ color: '#cbd5e1', fontSize: 13, fontWeight: 600 }}>âœï¸ Draw Â· ðŸ·ï¸ Add labels Â· drag labels anywhere</p>
+            <p style={{ color: '#cbd5e1', fontSize: 13, fontWeight: 600 }}>✏️ Draw · 🏷️ Add labels · drag labels anywhere</p>
           </div>
         )}
       </div>
@@ -322,9 +322,9 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
 }
 
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 //  Text Block
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
   return (
     <div style={{ position: 'relative', marginBottom: 4 }}>
@@ -332,7 +332,7 @@ function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
         <button onClick={onDelete} style={{ position: 'absolute', top: 6, right: 6, background: 'none', border: 'none', color: '#cbd5e1', fontSize: 14, cursor: 'pointer', zIndex: 1, opacity: 0 }}
           onMouseEnter={e => e.currentTarget.style.opacity = 1}
           onMouseLeave={e => e.currentTarget.style.opacity = 0}
-        >ðŸ—‘ï¸</button>
+        >🗑️</button>
       )}
       <textarea
         ref={textareaRef}
@@ -353,9 +353,9 @@ function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
   )
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 //  Main Article Editor
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────
 export default function ArticleEditor({ value, onChange, readOnly = false }) {
   const uid = () => Math.random().toString(36).slice(2)
 
@@ -380,7 +380,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
       } catch {}
     }
     if (Array.isArray(parsed)) return parsed.map(normalizeBlock)
-    // Legacy plain text (or a stringified object) â€” wrap in a single text block
+    // Legacy plain text (or a stringified object) — wrap in a single text block
     return [normalizeBlock({ type: 'text', content: typeof val === 'string' ? val : String(val) })]
   }
 
@@ -389,7 +389,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
   const [activeBlockId, setActiveBlockId] = useState(blocks[0]?.id)
   const lastTextareaRef = useRef(null)
 
-  // Sync blocks â†’ parent onChange as JSON string
+  // Sync blocks → parent onChange as JSON string
   useEffect(() => {
     if (!readOnly && onChange) onChange(JSON.stringify(blocks))
   }, [blocks])
@@ -467,7 +467,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
           onClick={insertDrawing}
           style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.tealDeep}`, background: theme.tealMist, color: theme.tealDeep, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}
         >
-          âœï¸ + Drawing
+          ✏️ + Drawing
         </button>
       </div>
 
@@ -503,7 +503,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
       </div>
 
       <p style={{ fontSize: 11, color: theme.textLight, marginTop: 6 }}>
-        Tap <strong>âœï¸ + Drawing</strong> to insert a sketch anywhere in your article
+        Tap <strong>✏️ + Drawing</strong> to insert a sketch anywhere in your article
       </p>
     </div>
   )

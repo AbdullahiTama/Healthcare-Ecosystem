@@ -32,7 +32,7 @@ function BookingCard({ biz }) {
 
   // Return from Paystack: the client was redirected here after paying for this
   // booking. Verify server-side (amount, appointment, Paystack status) and only
-  // then show the confirmation â€” a "confirmed" state must never be shown for an
+  // then show the confirmation — a "confirmed" state must never be shown for an
   // unverified payment.
   useEffect(() => {
     const ref = searchParams.get('reference') || searchParams.get('trxref')
@@ -53,7 +53,7 @@ function BookingCard({ biz }) {
             return
           }
           setDone(true)
-          toast.show('Payment confirmed â€” the business will confirm your appointment.', { type: 'success' })
+          toast.show('Payment confirmed — the business will confirm your appointment.', { type: 'success' })
         }
       } catch (err) {
         if (!cancelled) {
@@ -75,7 +75,7 @@ function BookingCard({ biz }) {
 
   // booking_slots may arrive as a real array OR as a raw comma-separated
   // string (CareFind Hub's "Available time slots" field is a plain text
-  // input) â€” normalize to an array of trimmed, non-empty strings first,
+  // input) — normalize to an array of trimmed, non-empty strings first,
   // or .filter() below throws on a string and blanks the whole page.
   const rawSlots = biz.booking_slots
   const slotList = Array.isArray(rawSlots)
@@ -137,7 +137,7 @@ function BookingCard({ biz }) {
           return
         }
         setDone(true)
-        toast.show('Booking paid with your CareCoins â€” the business will confirm.')
+        toast.show('Booking paid with your CareCoins — the business will confirm.')
         return
       }
       if (data.paymentRequired && payMethod === 'card' && data.authorization_url) {
@@ -146,7 +146,7 @@ function BookingCard({ biz }) {
       }
 
       setDone(true)
-      toast.show('Request sent â€” the business will confirm your appointment.')
+      toast.show('Request sent — the business will confirm your appointment.')
     } catch (err) {
       console.error('Booking error:', err)
       toast.show('Could not send booking request.')
@@ -160,11 +160,11 @@ function BookingCard({ biz }) {
         Book an Appointment
       </p>
       <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
-        Pick a date and time â€” the business will confirm your request.
+        Pick a date and time — the business will confirm your request.
       </p>
 
       {done ? (
-        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent â€” we'll notify you once the business confirms.</p>
+        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
       ) : (
         <form onSubmit={submitBooking}>
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
@@ -232,7 +232,7 @@ function BookingCard({ biz }) {
                   </button>
                 </>
               ) : (
-                <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600 }}>â‚¦{(feeKobo / 100).toLocaleString()} â€” you'll pay securely by card after booking.</span>
+                <span style={{ fontSize: 12.5, color: theme.textMid, fontWeight: 600 }}>₦{(feeKobo / 100).toLocaleString()} — you'll pay securely by card after booking.</span>
               )}
             </div>
           )}
@@ -241,7 +241,7 @@ function BookingCard({ biz }) {
             Preferred time
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {slots.length === 0 && <span style={{ fontSize: 12.5, color: theme.textLight }}>No times left for this date â€” pick another day.</span>}
+            {slots.length === 0 && <span style={{ fontSize: 12.5, color: theme.textLight }}>No times left for this date — pick another day.</span>}
             {slots.map((t) => (
               <button
                 key={t}
@@ -312,7 +312,7 @@ function BusinessProfile() {
       .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices, latitude, longitude, lat, lng)')
       .eq('business_id', id)
 
-    // list_on_carefind may be NULL on legacy CareHub rows â€” treat anything but
+    // list_on_carefind may be NULL on legacy CareHub rows — treat anything but
     // an explicit false as listed, matching MedMarket search semantics.
     const listed = (productData || []).filter((p) => p.list_on_carefind !== false)
 
@@ -367,7 +367,7 @@ function BusinessProfile() {
     if (!error) {
       setComment('')
       setRating(5)
-      toast.show('Review posted â€” thank you!')
+      toast.show('Review posted — thank you!')
       loadAll()
     } else {
       console.error('Review error:', error)
@@ -409,7 +409,7 @@ function BusinessProfile() {
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${bizCoords.lat},${bizCoords.lng}`)}`
       : null)
 
-  // Website field accepts bare domains or handles â€” normalize to a usable href
+  // Website field accepts bare domains or handles — normalize to a usable href
   const websiteHref = biz.website && (biz.website.startsWith('http') ? biz.website : 'https://' + biz.website)
 
   // Business-type icons, matching CareHub's `businessLucideIcon()` vocabulary
@@ -419,7 +419,7 @@ function BusinessProfile() {
 
   // Desktop only: the hero's key facts + primary actions, as a persistent
   // sidebar card instead of a one-time scroll-past block (LAYOUTS.md's
-  // "Profile Detail" template â€” "trust signal and primary action both above
+  // "Profile Detail" template — "trust signal and primary action both above
   // the fold" holds even better on desktop as a sticky panel, since the main
   // column here is a long scroll of products + reviews).
   const sidebarContent = (
@@ -427,7 +427,7 @@ function BusinessProfile() {
       <SidebarSection title="At a glance">
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ flex: 1, textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{avgRating || 'â€”'}</p>
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: theme.navy }}>{avgRating || '—'}</p>
             <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight, fontWeight: 700 }}>Avg Rating</p>
           </div>
           <div style={{ flex: 1, textAlign: 'center' }}>
@@ -522,7 +522,7 @@ function BusinessProfile() {
           <div>
             <h1 style={{ fontSize: 19, fontWeight: 900, margin: '0 0 2px 0', letterSpacing: '-0.01em' }}>{biz.name}</h1>
             <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', textTransform: 'capitalize' }}>
-              {biz.business_type} Â· {biz.city}, {biz.state}
+              {biz.business_type} · {biz.city}, {biz.state}
             </p>
           </div>
         </div>
@@ -530,7 +530,7 @@ function BusinessProfile() {
         {isMobile && (
           <div style={{ display: 'flex', gap: 10, marginTop: 16, ...(biz.cover_url ? { marginLeft: 20, marginRight: 20 } : {}) }}>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || 'â€”'}</p>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
               <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
             </div>
             <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
@@ -638,7 +638,7 @@ function BusinessProfile() {
                 <div style={{ textAlign: 'right' }}>
                   {canShowPrice(p)
                     ? <>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                         {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
                       </>
                     : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}

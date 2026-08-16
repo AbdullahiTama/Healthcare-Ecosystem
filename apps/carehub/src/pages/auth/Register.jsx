@@ -10,7 +10,7 @@ import { theme } from '../../styles/theme'
 
 const { tealDeep, fontDisplay, bg, navy, gray600, gray400, border } = theme
 
-// Lucide icons per business type â€” replaces the emoji glyphs on the auth
+// Lucide icons per business type — replaces the emoji glyphs on the auth
 // screens (config/constants.js's BUSINESS_TYPES still carries emojis for the
 // rest of the app until that wider migration lands). Building2 is the fallback
 // for an unset type (e.g. a deep link straight into the wizard).
@@ -22,7 +22,7 @@ const bizIcon = (id) => BIZ_ICONS[id] || Building2
 
 // Cream-filled field variants for the wizard, so inputs read against the white
 // card the same way the Login screen's do. Defined at module scope (not inside
-// the component) so their identity is stable across renders â€” otherwise every
+// the component) so their identity is stable across renders — otherwise every
 // keystroke would remount the field and drop focus.
 const CInp = (props) => <Inp fill={bg} {...props} />
 const CSel = (props) => <Sel fill={bg} {...props} />
@@ -34,9 +34,9 @@ export default function Register() {
   const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  // Referral agent attribution â€” `?ref=CODE` on the register URL. The client
+  // Referral agent attribution — `?ref=CODE` on the register URL. The client
   // never sends an agent id; the DB `apply_referring_agent()` trigger resolves
-  // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md Â§2).
+  // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md §2).
   const refCode = new URLSearchParams(location.search).get('ref') || ''
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const STEPS = ['Business Info', 'Contact & Location', 'Owner Info', 'Account', 'Review']
@@ -74,7 +74,7 @@ export default function Register() {
         referral_code_used: refCode || null,
       })
       // The register_business RPC mints the owner's CONFIRMED Supabase Auth
-      // account in the same transaction that creates the pending business row â€”
+      // account in the same transaction that creates the pending business row —
       // there is no separate provisioning step any more (businesses.password
       // was dropped in C2). New owners can sign in immediately and see the
       // honest pending state.
@@ -122,7 +122,7 @@ export default function Register() {
     </div>
   )
 
-  // Step 0 â€” type selection
+  // Step 0 — type selection
   if (step === 0) return (
     <div style={{ minHeight: '100vh', background: bg, padding: '32px 20px' }}>
       <div style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -159,7 +159,7 @@ export default function Register() {
               {(() => { const Icon = bizIcon(data.businessType); return <Icon size={17} color={tealDeep} strokeWidth={2} style={{ flexShrink: 0 }} /> })()}
               Register {businessName(data.businessType)}
             </div>
-            <div style={{ fontSize: '12px', color: gray400, marginTop: '1px' }}>Step {step} of {STEPS.length} Â· {STEPS[step - 1]}</div>
+            <div style={{ fontSize: '12px', color: gray400, marginTop: '1px' }}>Step {step} of {STEPS.length} · {STEPS[step - 1]}</div>
           </div>
         </div>
         <div style={{ height: '6px', background: border, borderRadius: theme.radius.full, overflow: 'hidden', marginBottom: '20px' }}>
@@ -225,7 +225,7 @@ export default function Register() {
               <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Create Your Password</div>
               <div style={{ padding: theme.space[6], borderRadius: theme.radius.md, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: '11px', color: theme.textFaint }}>Login email:</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || 'â€”'}</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || '—'}</div>
               </div>
               <CInp label='Password' value={data.password} onChange={v => f('password', v)} type='password' placeholder='Create a strong password' required />
               <CInp label='Confirm Password' value={data.confirmPassword} onChange={v => f('confirmPassword', v)} type='password' placeholder='Repeat your password' required />

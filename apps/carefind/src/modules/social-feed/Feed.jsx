@@ -76,9 +76,9 @@ async function searchPosts(query, { limit = 30 } = {}) {
 const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
 const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
 
-// Explicit view-event mechanism (engagement spec Â§7): each qualifying view
+// Explicit view-event mechanism (engagement spec §7): each qualifying view
 // writes a post_view_events row and the DB bumps posts.view_count via
-// trigger. createViewRecorder counts a post once per app load â€” a re-render,
+// trigger. createViewRecorder counts a post once per app load — a re-render,
 // StrictMode double-effect, tab switch or pull-to-refresh cannot inflate it,
 // while a fresh page load (new session) still records a repeat view. The DB
 // enforces the same dedup with a unique index, so even a missed client guard
@@ -356,7 +356,7 @@ function Feed() {
     ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
 
     // Phase 6 engine inputs: share/save totals, posted-as facility rows and
-    // the viewer's own engagement (follows, saves, subscriptions) â€” the raw
+    // the viewer's own engagement (follows, saves, subscriptions) — the raw
     // material for the affinity and implicit-interest signals. All fire
     // together; each table is query-1 for this batch.
     const postedAsIds = [...new Set((postData || []).map((p) => p.posted_as_id).filter(Boolean))]
@@ -403,7 +403,7 @@ function Feed() {
       },
     })
 
-    // The engine context â€” every pure signal the ranking reads. `myRegion` is
+    // The engine context — every pure signal the ranking reads. `myRegion` is
     // the viewer's normalized location (empty when they haven't set one).
     const context = {
       lCounts, cCounts, sCounts, saveCounts, giftStats: giftTotals,
@@ -415,7 +415,7 @@ function Feed() {
     // For You goes through the full pipeline (pools + diversity), with any
     // staged-rollout treatment overrides merged over the base config. Nearby
     // is a dedicated region view. Every other tab keeps the plain weighted
-    // score â€” diversity caps must never hide posts a reader explicitly asked
+    // score — diversity caps must never hide posts a reader explicitly asked
     // for, and experiments never touch those explicit views.
     const byScore = rankByScore({ posts: postData, context, weights: rankConfig.weights })
     let ranked
@@ -607,7 +607,7 @@ function Feed() {
     setLoading(true)
     setNewPostsCount(0)
     // Video / Medical tabs are dedicated server queries (real clips; medical
-    // authors only), NOT slices of the shared latest-50 feed â€” a tab that
+    // authors only), NOT slices of the shared latest-50 feed — a tab that
     // depends on a sparse column or an author-class filter could otherwise
     // look empty by chance, and Medical must never mix general content.
     let query = supabase
@@ -671,11 +671,11 @@ function Feed() {
       }
     }
 
-    // Record a view for each post shown â€” once per session, fire and forget.
+    // Record a view for each post shown — once per session, fire and forget.
     // record_post_view needs the 20260813 post_view_events migration; until
     // it's applied the RPC is missing and this degrades to a no-op (the old
     // increment_post_view kept counting every refresh, which is exactly the
-    // inflation Â§7 forbids).
+    // inflation §7 forbids).
     ;(postData || []).forEach((p) => { recordFeedView.record(p.id) })
 
     setLoading(false)
@@ -693,7 +693,7 @@ function Feed() {
   }, [user])
 
   // Phase 6: load the personalized-feed config (weights, pools) and the
-  // signals the engine needs that aren't part of the posts query â€” the
+  // signals the engine needs that aren't part of the posts query — the
   // viewer's region (Nearby tab + location signal) and the current sets of
   // verified professionals and active medical facilities (Medical tab). The
   // 20260813_feed_engine migration makes the config real; without it every
@@ -728,7 +728,7 @@ function Feed() {
     })
 
     // Phase 7: resolve the reader's staged-rollout group (deterministic bucket
-    // over user/session id). No experiment staged â‡’ null â‡’ the feed uses the
+    // over user/session id). No experiment staged ⇒ null ⇒ the feed uses the
     // base config and logs no metrics. When the reader lands in the treatment
     // group the For You ranking must apply its config, so reload the current
     // feed once the group is known (experiments are off by default; this only
@@ -749,13 +749,13 @@ function Feed() {
   // first treatment-group render. Reloading via an effect (rather than calling
   // loadFeed() inside loadEngineConfig) runs AFTER the state commits, so the
   // reload's closure sees the fresh activeExperiment. Experiments are off by
-  // default â€” this only costs a refetch while one is actually staged.
+  // default — this only costs a refetch while one is actually staged.
   useEffect(() => {
     if (activeExperiment?.treatment) loadFeed()
   }, [activeExperiment])
 
   // Phase 7 retention signal: one feed_view per session per staged experiment,
-  // tagged with the reader's variant â€” control included, which is what makes
+  // tagged with the reader's variant — control included, which is what makes
   // the A/B comparison valid. A dedicated effect (not loadFeed) means control
   // users, who never trigger the treatment reload, still log theirs. Fire and
   // forget; the metric write can never fail the feed.
@@ -802,7 +802,7 @@ function Feed() {
   }, [user, feedTab])
 
   // Video / Nearby / Medical are dedicated server queries (real clips; region
-  // view; medical authors only), not slices of the shared 50-post feed â€”
+  // view; medical authors only), not slices of the shared 50-post feed —
   // otherwise a tab that depends on a sparse column or an author-class filter
   // could look empty by chance. Entering any of them refetches its batch;
   // leaving them restores the normal feed so the other tabs never inherit the
@@ -1161,7 +1161,7 @@ function Feed() {
       if (!user) return false
       return follows.some((f) => f.follower_id === user.id && f.following_id === p.user_id)
     }
-    // Nearby and Medical are dedicated loadFeed queries â€” the posts state is
+    // Nearby and Medical are dedicated loadFeed queries — the posts state is
     // already exactly that tab's set, so nothing further is sliced out here.
     if (feedTab === 'nearby' || feedTab === 'medical') return true
     if (feedTab === 'video') return !!p.video_url
@@ -1368,7 +1368,7 @@ function Feed() {
 
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const text = author ? `â€œ${toShareText(post.content)}â€ â€” ${author} on CareFind` : toShareText(post.content)
+    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
     // Attach the post's media (image/video) to the share where the browser
     // supports it; the URL is still appended to the clipboard fallback so
     // WhatsApp recipients always get the media, never just the caption.
@@ -1475,7 +1475,7 @@ function Feed() {
     return saveCounts[postId] || 0
   }
 
-  // Classic repost: a ðŸ”-marked post in the reposter's feed PLUS a
+  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
   // post_reposts reference (writeRepost), so followers see the repost and the
   // source carries a real count. Undoing removes both (undoRepost). Optimistic
   // like the other toggles; if the feed-post write fails, the reference is
@@ -1483,8 +1483,8 @@ function Feed() {
   //
   // In-flight guard: a double-tap in one render tick would otherwise run the
   // whole async toggle twice. The DB index posts_user_repost_uniq already
-  // collapses a duplicate ðŸ” post to the existing row (writeRepost reconciles
-  // 23505), but the guard stops the second write from being issued at all â€”
+  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
+  // 23505), but the guard stops the second write from being issued at all —
   // and stops an in-flight repost from being "undone" by a stale second tap.
   const repostInFlight = useRef(new Set())
   async function toggleRepost(post) {
@@ -1511,7 +1511,7 @@ function Feed() {
       const tempRepostPost = {
         id: `temp_repost_${Date.now()}`,
         user_id: user.id,
-        content: `ðŸ” ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
+        content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
         post_type: 'text',
         image_url: post.image_url || null,
         subscriber_only: post.subscriber_only || false,
@@ -1675,7 +1675,7 @@ function Feed() {
               <div style={{ position: 'relative', width: '100%', maxWidth: 280 }}>
                 <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', pointerEvents: 'none' }} />
                 <input
-                  placeholder="Search providers, pharmaciesâ€¦"
+                  placeholder="Search providers, pharmacies…"
                   onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { navigate(`/search?q=${encodeURIComponent(e.target.value.trim())}`) } }}
                   style={{
                     width: '100%', padding: '9px 12px 9px 34px', borderRadius: theme.radius.full, border: 'none',
@@ -1788,7 +1788,7 @@ function Feed() {
             type="search"
             value={feedQuery}
             onChange={(e) => setFeedQuery(e.target.value)}
-            placeholder="Search postsâ€¦"
+            placeholder="Search posts…"
             aria-label="Search posts"
             style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: theme.radius.full, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', WebkitTapHighlightColor: 'transparent', transition: `border-color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}` }}
           />
@@ -1805,7 +1805,7 @@ function Feed() {
         </div>
         {isSearching && (
           <p style={{ margin: '8px 2px 0', fontSize: 11.5, color: theme.textLight }}>
-            {feedSearching ? 'Searchingâ€¦' : `${displayPosts.length} result${displayPosts.length === 1 ? '' : 's'} for â€œ${feedQuery.trim()}â€`}
+            {feedSearching ? 'Searching…' : `${displayPosts.length} result${displayPosts.length === 1 ? '' : 's'} for “${feedQuery.trim()}”`}
           </p>
         )}
       </div>
@@ -1819,7 +1819,7 @@ function Feed() {
         <div style={{ marginTop: 14, marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, padding: '0 2px' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 900, color: theme.navy, letterSpacing: '0.02em' }}><Newspaper size={14} aria-hidden="true" /> Latest news</span>
-            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all â†’</Link>
+            <Link to="/news" style={{ fontSize: 11.5, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>See all →</Link>
           </div>
           <div className="cf-hscroll" style={{ display: 'flex', gap: 10, paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
             {latestNews.map((n) => (
@@ -1856,7 +1856,7 @@ function Feed() {
               <p style={{ margin: '0 0 1px 0', fontSize: 13, fontWeight: 800, color: theme.tealDeep }}>Complete your profile</p>
               <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Add your name, username and phone to get the most out of CareFind</p>
             </div>
-            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>â€º</span>
+            <span style={{ color: theme.tealDeep, fontSize: 18, fontWeight: 800 }}>›</span>
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBannerDismissed(true) }}
               aria-label="Dismiss"
@@ -1901,7 +1901,7 @@ function Feed() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: theme.radius.md, background: theme.navy, marginBottom: 12 }}>
                 {idn.type === 'staff' ? <Award size={16} aria-hidden="true" /> : <Building2 size={16} aria-hidden="true" />}
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#fff' }}>
-                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' Â· ' + idn.businessName : idn.name}
+                  Posting as {idn.type === 'staff' ? (idn.publicTitle || 'Rep') + ' · ' + idn.businessName : idn.name}
                 </p>
               </div>
             )
@@ -2023,7 +2023,7 @@ function Feed() {
                 }}
               >
                 {uploadingVideo
-                  ? 'â€¦'
+                  ? '…'
                   : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={15} aria-hidden="true" /> {cardVideoPreview ? 'Change clip' : 'Clip'}</span>}
                 <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
@@ -2250,7 +2250,7 @@ function Feed() {
             ) : <span />}
 
             <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ minWidth: 108, flexShrink: 0 }}>
-              {posting ? (uploadingImage ? 'Uploading photoâ€¦' : 'Postingâ€¦') : 'Post'}
+              {posting ? (uploadingImage ? 'Uploading photo…' : 'Posting…') : 'Post'}
             </TealBtn>
           </div>
         </form>
@@ -2304,7 +2304,7 @@ function Feed() {
           message={
             <>
               <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>
-                No posts match â€œ{feedQuery.trim()}â€
+                No posts match “{feedQuery.trim()}”
               </div>
               <div style={{ fontSize: 13, color: theme.textLight }}>
                 Try a different word, or clear the search to see the full feed.
@@ -2339,13 +2339,13 @@ function Feed() {
                   </p>
                 )}
               </div>
-              <span style={{ color: theme.textLight }}>â€º</span>
+              <span style={{ color: theme.textLight }}>›</span>
             </Link>
           ))}
         </div>
       )}
 
-      {/* #6 "New posts" pill â€” sticky, centred above the list. Clicking it
+      {/* #6 "New posts" pill — sticky, centred above the list. Clicking it
           scrolls to top and refreshes the feed (which clears the counter). */}
       {newPostsCount > 0 && !loading && (
         <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', top: 8, zIndex: 5, marginBottom: -4 }}>
@@ -2367,7 +2367,7 @@ function Feed() {
           distance, then a spinner state while refreshing. */}
       <div style={{ position: 'sticky', top: 0, height: 0, zIndex: 4, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
         {pullRefreshing ? (
-          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.full, boxShadow: theme.elevation[2] }}>Refreshingâ€¦</span>
+          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.full, boxShadow: theme.elevation[2] }}>Refreshing…</span>
         ) : pullDistance > 4 ? (
           <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.full, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
             {pullDistance > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
@@ -2389,7 +2389,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md }}>
             <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
             <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
-              Medical professionals only â€” posts from verified professionals and approved facilities. General posts are never mixed in here.
+              Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
             </span>
           </div>
         )}
@@ -2434,7 +2434,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
 
         {!canGoLive && (
           <p style={{ margin: '12px 2px 0', fontSize: 10.5, color: theme.textLight, textAlign: 'center' }}>
-            <BadgeCheck size={12} aria-hidden="true" /> Verified only Â·{' '}
+            <BadgeCheck size={12} aria-hidden="true" /> Verified only ·{' '}
             <Link to="/verify" style={{ color: theme.tealDeep, fontWeight: 800, textDecoration: 'none' }}>
               Get verified
             </Link>

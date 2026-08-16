@@ -13,7 +13,7 @@ import { Card, StatCard, Pill, Modal, Inp, Sel, TealBtn, GhostBtn, Loading, Empt
 
 const { tealDeep, navy, gray500, gray400, border, danger, dangerBg } = theme
 
-// â”€â”€ Shared fetch hook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Shared fetch hook ────────────────────────────────────────────────────────
 // One effect per panel: fetch, expose loading/error/data + a reload() that
 // re-runs the same fetch. Keeps every panel's data-loading self-contained.
 function useApi(fn) {
@@ -48,7 +48,7 @@ const STATUS_PILL = (s) => {
   return { label: s, type: 'gray' }
 }
 
-// â”€â”€ 1. APPLICATIONS (review queue) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 1. APPLICATIONS (review queue) ───────────────────────────────────────────
 export function ApplicationsPanel() {
   const { msg, type, show: showToast } = useToast()
   const apps = useApi(getAgentApplications)
@@ -68,7 +68,7 @@ export function ApplicationsPanel() {
       // Guard: don't double-assign a live/pending agent to the same area.
       const existing = sameArea(selected).filter(a => a.status === 'active' || a.status === 'approved_pending_onboarding')
       if (existing.length) {
-        showToast('That area already has a live agent â€” reject or reassign first.', { type: 'error' })
+        showToast('That area already has a live agent — reject or reassign first.', { type: 'error' })
         setBusy(false); return
       }
       await reviewAgentApplication(selected.id, { status: 'approved', review_notes: notes || null, reviewed_at: new Date().toISOString() })
@@ -85,7 +85,7 @@ export function ApplicationsPanel() {
       try {
         await emailAgentApproved({ agentName: selected.applicant_name, agentEmail: selected.contact_email, city: selected.requested_city, area: selected.requested_area, referralCode: code })
       } catch (e) {}
-      showToast('Approved â€” agent created, pending onboarding.', { type: 'success' })
+      showToast('Approved — agent created, pending onboarding.', { type: 'success' })
       setSelected(null); setNotes(''); apps.reload(); allAgents.reload()
     } catch (e) {
       showToast('Approval failed: ' + e.message, { type: 'error' })
@@ -125,8 +125,8 @@ export function ApplicationsPanel() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{a.applicant_name}</div>
-                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{a.contact_email}{a.contact_phone ? ' Â· ' + a.contact_phone : ''}</div>
-                    <div style={{ fontSize: '13px', color: tealDeep, fontWeight: '700', marginTop: '6px' }}>ðŸ“ {a.requested_area}, {a.requested_city}</div>
+                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{a.contact_email}{a.contact_phone ? ' · ' + a.contact_phone : ''}</div>
+                    <div style={{ fontSize: '13px', color: tealDeep, fontWeight: '700', marginTop: '6px' }}>📍 {a.requested_area}, {a.requested_city}</div>
                     {a.applicant_details?.experience && <div style={{ fontSize: '12px', color: gray500, marginTop: '4px' }}>Experience: {a.applicant_details.experience}</div>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -142,7 +142,7 @@ export function ApplicationsPanel() {
       )}
 
       {selected && (
-        <Modal show onClose={() => setSelected(null)} sheet title={'Review â€” ' + selected.applicant_name}
+        <Modal show onClose={() => setSelected(null)} sheet title={'Review — ' + selected.applicant_name}
           footer={
             <>
               <button onClick={() => reject(selected)} disabled={busy} style={{ flex: 1, padding: '13px', borderRadius: theme.radius.md, border: 'none', background: dangerBg, color: danger, fontWeight: 700, cursor: busy ? 'not-allowed' : 'pointer' }}><X size={14} style={{ marginRight: 4 }} /> Reject</button>
@@ -151,7 +151,7 @@ export function ApplicationsPanel() {
           }>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
-              {[['Area', selected.requested_area + ', ' + selected.requested_city], ['Email', selected.contact_email], ['Phone', selected.contact_phone || 'â€”'], ['Submitted', fmtDate(selected.submitted_at)]].map(([l, v]) => (
+              {[['Area', selected.requested_area + ', ' + selected.requested_city], ['Email', selected.contact_email], ['Phone', selected.contact_phone || '—'], ['Submitted', fmtDate(selected.submitted_at)]].map(([l, v]) => (
                 <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${theme.border}` }}><span style={{ color: gray500, fontWeight: 600 }}>{l}</span><span style={{ color: navy, fontWeight: 700, textAlign: 'right' }}>{v}</span></div>
               ))}
               {selected.applicant_details?.experience && <div style={{ fontSize: '13px', color: gray500 }}><b>Experience</b>: {selected.applicant_details.experience}</div>}
@@ -174,7 +174,7 @@ export function ApplicationsPanel() {
   )
 }
 
-// â”€â”€ 2. AGENTS (lifecycle: onboarding gate, suspend/reinstate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 2. AGENTS (lifecycle: onboarding gate, suspend/reinstate) ────────────────
 export function AgentsPanel() {
   const { msg, type, show: showToast } = useToast()
   const agents = useApi(getAgents)
@@ -192,8 +192,8 @@ export function AgentsPanel() {
     agents.reload(); setSelected(null)
   }
 
-  const markTrained = (ag) => act(ag, { status: 'active', onboarding_completed_at: new Date().toISOString() }, agentName(ag) + ' is now live â€” code active.')
-  const suspend = (ag) => act(ag, { status: 'suspended' }, agentName(ag) + ' suspended â€” commissions paused.')
+  const markTrained = (ag) => act(ag, { status: 'active', onboarding_completed_at: new Date().toISOString() }, agentName(ag) + ' is now live — code active.')
+  const suspend = (ag) => act(ag, { status: 'suspended' }, agentName(ag) + ' suspended — commissions paused.')
   const reinstate = (ag) => act(ag, { status: 'active' }, agentName(ag) + ' reinstated.')
 
   return (
@@ -203,7 +203,7 @@ export function AgentsPanel() {
       </div>
 
       {agents.loading ? <Loading /> : agents.error ? <ErrorState onRetry={agents.reload} message={agents.error} /> : !agents.data.length ? (
-        <Empty icon={<UserCheck size={28} />} message='No agents yet â€” approve an application to create one.' />
+        <Empty icon={<UserCheck size={28} />} message='No agents yet — approve an application to create one.' />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {(agents.data || []).map(a => (
@@ -211,12 +211,12 @@ export function AgentsPanel() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{a.name}</div>
-                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{a.contact_email} Â· ðŸ“ {a.area}, {a.city}</div>
-                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>Code: <b style={{ color: tealDeep }}>{a.referral_code || 'â€”'}</b> Â· signed {fmtDate(a.created_at)}</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{a.contact_email} · 📍 {a.area}, {a.city}</div>
+                  <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>Code: <b style={{ color: tealDeep }}>{a.referral_code || '—'}</b> · signed {fmtDate(a.created_at)}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                   <Pill {...STATUS_PILL(a.status)} />
-                  <button onClick={() => setSelected(a)} style={{ fontSize: '12px', fontWeight: '700', color: tealDeep, background: 'none', border: 'none', cursor: 'pointer' }}>Manage â†’</button>
+                  <button onClick={() => setSelected(a)} style={{ fontSize: '12px', fontWeight: '700', color: tealDeep, background: 'none', border: 'none', cursor: 'pointer' }}>Manage →</button>
                 </div>
               </div>
             </Card>
@@ -229,7 +229,7 @@ export function AgentsPanel() {
           footer={
             <div style={{ display: 'flex', gap: '8px', width: '100%', flexWrap: 'wrap' }}>
               {selected.status === 'approved_pending_onboarding' && <>
-                <TealBtn onClick={() => markTrained(selected)} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><PlayCircle size={14} /> Mark trained â†’ Active</TealBtn>
+                <TealBtn onClick={() => markTrained(selected)} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><PlayCircle size={14} /> Mark trained → Active</TealBtn>
                 <GhostBtn onClick={() => { suspend(selected) }} style={{ flex: 1, padding: '12px' }}>Suspend</GhostBtn>
               </>}
               {selected.status === 'active' && <GhostBtn onClick={() => suspend(selected)} style={{ flex: 1, padding: '12px' }}>Suspend</GhostBtn>}
@@ -238,7 +238,7 @@ export function AgentsPanel() {
             </div>
           }>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[['Area', selected.city + ' / ' + selected.area], ['Email', selected.contact_email], ['Phone', selected.contact_phone || 'â€”'], ['Status', selected.status], ['Referral code', selected.referral_code || 'â€”']].map(([l, v]) => (
+            {[['Area', selected.city + ' / ' + selected.area], ['Email', selected.contact_email], ['Phone', selected.contact_phone || '—'], ['Status', selected.status], ['Referral code', selected.referral_code || '—']].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.border}`, fontSize: '13px' }}><span style={{ color: gray500, fontWeight: 600 }}>{l}</span><span style={{ color: navy, fontWeight: 700, textAlign: 'right' }}>{v}</span></div>
             ))}
             <div style={{ fontSize: '12px', color: gray500 }}>
@@ -253,7 +253,7 @@ export function AgentsPanel() {
   )
 }
 
-// â”€â”€ 3. LEDGER (commissions + review flags + totals) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 3. LEDGER (commissions + review flags + totals) ──────────────────────────
 export function LedgerPanel() {
   const { msg, type, show: showToast } = useToast()
   const commissions = useApi(getCommissionsLedger)
@@ -286,7 +286,7 @@ export function LedgerPanel() {
         <Card style={{ padding: '14px', marginBottom: '14px', background: theme.warningBg, border: '1px solid #fcd34d' }}>
           <div style={{ fontWeight: '800', color: theme.amberText, fontSize: '13px', marginBottom: '8px' }}>Payments that earned no commission (review needed)</div>
           {flags.data.slice(0, 8).map(f => (
-            <div key={f.id} style={{ fontSize: '12px', color: theme.amberText, fontFamily: theme.fontMono, padding: '3px 0' }}>{f.reason}{f.created_at ? ' Â· ' + fmtDate(f.created_at) : ''}</div>
+            <div key={f.id} style={{ fontSize: '12px', color: theme.amberText, fontFamily: theme.fontMono, padding: '3px 0' }}>{f.reason}{f.created_at ? ' · ' + fmtDate(f.created_at) : ''}</div>
           ))}
         </Card>
       )}
@@ -298,7 +298,7 @@ export function LedgerPanel() {
       </div>
 
       {commissions.loading ? <Loading /> : commissions.error ? <ErrorState onRetry={commissions.reload} message={commissions.error} /> : !commissions.data.length ? (
-        <Empty icon={<Landmark size={28} />} message='No commissions yet â€” they appear once referred businesses pay.' />
+        <Empty icon={<Landmark size={28} />} message='No commissions yet — they appear once referred businesses pay.' />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {(rows || []).map(c => (
@@ -308,7 +308,7 @@ export function LedgerPanel() {
                   <span style={{ fontWeight: '800', fontSize: '14px', color: navy }}>{c.type === 'referral_bonus' ? 'Referral bonus' : 'Residual'}</span>
                   <Pill label={c.status} type={c.status === 'paid' ? 'green' : c.status === 'void' ? 'red' : c.status === 'payable' ? 'amber' : 'blue'} />
                 </div>
-                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px', fontFamily: theme.fontMono }}>{c.agent_id?.slice(0, 8)}Â·{c.business_id?.toString().slice(0, 8)} Â· {fmtDate(c.created_at)}</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px', fontFamily: theme.fontMono }}>{c.agent_id?.slice(0, 8)}·{c.business_id?.toString().slice(0, 8)} · {fmtDate(c.created_at)}</div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span style={{ fontWeight: '900', fontSize: '15px', color: navy }}>{fmt(c.amount)}</span>
@@ -327,7 +327,7 @@ export function LedgerPanel() {
   )
 }
 
-// â”€â”€ 4. PAYOUTS (manual batch runs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 4. PAYOUTS (manual batch runs) ───────────────────────────────────────────
 export function PayoutsPanel() {
   const { msg, type, show: showToast } = useToast()
   const payouts = useApi(getPayouts)
@@ -338,7 +338,7 @@ export function PayoutsPanel() {
   const [makePayout, setMakePayout] = useState(false)
 
   const payable = (commissions.data || []).filter(c => c.status === 'payable' || c.status === 'accrued')
-  const agentName = id => (agents.data || []).find(a => a.id === id)?.name || 'â€”'
+  const agentName = id => (agents.data || []).find(a => a.id === id)?.name || '—'
   const runAmount = payable.filter(c => c.agent_id === runFor).reduce((s, c) => s + Number(c.amount || 0), 0)
 
   const savePayout = async () => {
@@ -349,7 +349,7 @@ export function PayoutsPanel() {
       const rows = await createPayout({ agent_id: runFor, commission_ids: ids, total_amount: runAmount, method, status: 'pending', notes: null })
       const payout = Array.isArray(rows) ? rows[0] : rows
       for (const id of ids) await updateCommission(id, { status: 'paid' })
-      showToast(payout?.id ? 'Payout created â€” commissions marked paid.' : 'Payout created.', { type: 'success' })
+      showToast(payout?.id ? 'Payout created — commissions marked paid.' : 'Payout created.', { type: 'success' })
       setMakePayout(false); setRunFor(''); commissions.reload(); payouts.reload()
     } catch (e) {
       showToast('Payout failed: ' + e.message, { type: 'error' })
@@ -374,14 +374,14 @@ export function PayoutsPanel() {
       </div>
 
       {payouts.loading ? <Loading /> : payouts.error ? <ErrorState onRetry={payouts.reload} message={payouts.error} /> : !payouts.data.length ? (
-        <Empty icon={<Landmark size={28} />} message='No payout runs yet. Create one to batch an agentâ€™s commissions.' />
+        <Empty icon={<Landmark size={28} />} message='No payout runs yet. Create one to batch an agent’s commissions.' />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {(payouts.data || []).map(p => (
             <Card key={p.id} style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>Payout â€” {agentName(p.agent_id)}</div>
-                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{fmtDate(p.created_at)} Â· {p.method || 'bank transfer'} Â· {(p.commission_ids || []).length} commissions</div>
+                <div style={{ fontWeight: '800', fontSize: '14px', color: navy }}>Payout — {agentName(p.agent_id)}</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{fmtDate(p.created_at)} · {p.method || 'bank transfer'} · {(p.commission_ids || []).length} commissions</div>
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <span style={{ fontWeight: '900', fontSize: '15px', color: navy }}>{fmt(p.total_amount)}</span>
@@ -402,7 +402,7 @@ export function PayoutsPanel() {
           </>
         }>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <Sel label='Agent' value={runFor} onChange={setRunFor} placeholder='Select an agent' options={(agents.data || []).map(a => ({ value: a.id, label: a.name + ' â€” ' + a.city + ' / ' + a.area }))} />
+          <Sel label='Agent' value={runFor} onChange={setRunFor} placeholder='Select an agent' options={(agents.data || []).map(a => ({ value: a.id, label: a.name + ' — ' + a.city + ' / ' + a.area }))} />
           <Sel label='Method' value={method} onChange={setMethod} options={['bank_transfer', 'mobile_money', 'wallet', 'other']} />
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray500, marginBottom: '6px' }}>Payable amount for this agent</div>
@@ -415,7 +415,7 @@ export function PayoutsPanel() {
   )
 }
 
-// â”€â”€ 5. COVERAGE (area map: assigned agents + pending applications) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 5. COVERAGE (area map: assigned agents + pending applications) ───────────
 export function CoveragePanel() {
   const { msg, type, show: showToast } = useToast()
   const agents = useApi(getAgents)
@@ -445,11 +445,11 @@ export function CoveragePanel() {
     <div>
       {agents.loading ? <Loading /> : agents.error ? <ErrorState onRetry={agents.reload} message={agents.error} /> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {citiesList.length === 0 && <Empty icon={<MapPin size={28} />} message='No agents yet â€” coverage opens once you approve applications.' />}
+          {citiesList.length === 0 && <Empty icon={<MapPin size={28} />} message='No agents yet — coverage opens once you approve applications.' />}
 
           {citiesList.map(city => (
             <Card key={city} style={{ padding: '16px' }}>
-              <div style={{ fontWeight: '800', fontSize: '15px', color: navy, marginBottom: '10px' }}>ðŸ“ {city}</div>
+              <div style={{ fontWeight: '800', fontSize: '15px', color: navy, marginBottom: '10px' }}>📍 {city}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: '10px' }}>
                 {Object.keys(cities[city]).sort().map(area => {
                   const ag = cities[city][area]
@@ -457,7 +457,7 @@ export function CoveragePanel() {
                   return (
                     <div key={area} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${ag.status === 'suspended' ? theme.amberBorder : theme.border}`, background: ag.status === 'active' ? theme.successBg : theme.gray50 }}>
                       <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{area}
-                        {pending > 0 && <span style={{ marginLeft: 6, fontSize: '11px', fontWeight: '700', color: theme.amberText }}>Â· {pending} application{pending > 1 ? 's' : ''}</span>}
+                        {pending > 0 && <span style={{ marginLeft: 6, fontSize: '11px', fontWeight: '700', color: theme.amberText }}>· {pending} application{pending > 1 ? 's' : ''}</span>}
                       </div>
                       <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{ag.name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>

@@ -111,7 +111,7 @@ function BusinessDashboard() {
           background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
         }}>
-          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
+          {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
           <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : 0 }}>Business Dashboard</h1>
         </div>
         <div style={{ textAlign: 'center', padding: '40px 20px' }}>
@@ -159,9 +159,9 @@ function BusinessDashboard() {
   function downloadTemplate() {
     const template = [
       'name,generic_name,price,stock,category,emoji',
-      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,ðŸ’Š',
-      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,ðŸ’Š',
-      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,ðŸŠ',
+      'Paracetamol 500mg,Acetaminophen,150,100,analgesic,💊',
+      'Amoxicillin 250mg,Amoxicillin,450,50,antibiotic,💊',
+      'Vitamin C 1000mg,Ascorbic Acid,800,200,supplement,🍊',
     ].join('\n')
     const blob = new Blob([template], { type: 'text/csv' })
     const a = document.createElement('a')
@@ -220,7 +220,7 @@ function BusinessDashboard() {
           list_on_carefind: true,
           generic_name: genericIdx >= 0 ? cols[genericIdx] : null,
           category: categoryIdx >= 0 ? cols[categoryIdx] : null,
-          emoji: emojiIdx >= 0 ? cols[emojiIdx] : 'ðŸ’Š',
+          emoji: emojiIdx >= 0 ? cols[emojiIdx] : '💊',
         }
 
         if (existing) {
@@ -246,7 +246,7 @@ function BusinessDashboard() {
         background: theme.navy, color: '#fff',
         ...(isMobile ? { padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>â† Profile</Link>}
+        {isMobile && <Link to="/profile" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Profile</Link>}
         <h1 style={{ fontSize: 21, fontWeight: 900, margin: isMobile ? '14px 0 4px 0' : '0 0 4px 0' }}>Business Dashboard</h1>
 
         {businesses.length > 1 && (
@@ -271,7 +271,7 @@ function BusinessDashboard() {
               <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 15, color: theme.navy }}>{selectedBiz.name}</p>
               <p style={{ margin: 0, fontSize: 12.5, color: theme.textLight }}>
                 {avgRating
-                  ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Star size={13} color={theme.warning} fill={theme.warning} aria-hidden="true" /> {avgRating} Â· {reviews.length} reviews</span>
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Star size={13} color={theme.warning} fill={theme.warning} aria-hidden="true" /> {avgRating} · {reviews.length} reviews</span>
                   : 'No reviews yet'}
               </p>
             </div>
@@ -283,7 +283,7 @@ function BusinessDashboard() {
                 color: selectedBiz.visible_on_carefind ? theme.success : theme.alert,
               }}
             >
-              {selectedBiz.visible_on_carefind ? 'â— Visible' : 'â—‹ Hidden'}
+              {selectedBiz.visible_on_carefind ? '● Visible' : '○ Hidden'}
             </button>
           </div>
 
@@ -303,7 +303,7 @@ function BusinessDashboard() {
                 <div>
                   <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 13.5, color: theme.navy }}>{p.name}</p>
                   <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>
-                    {canShowPrice(p) ? `â‚¦${Number(p.price).toLocaleString()}` : 'Ask for price'}{p.price_unit ? ` / ${p.price_unit}` : ''} Â· Stock: {p.stock}
+                    {canShowPrice(p) ? `₦${Number(p.price).toLocaleString()}` : 'Ask for price'}{p.price_unit ? ` / ${p.price_unit}` : ''} · Stock: {p.stock}
                   </p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>

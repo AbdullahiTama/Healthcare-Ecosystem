@@ -13,15 +13,15 @@ import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 
 const GIFT_TIERS = [
-  { emoji: 'ðŸ’Š', label: 'Pill', coins: 1 },
-  { emoji: 'ðŸ©º', label: 'Stethoscope', coins: 5 },
-  { emoji: 'â¤ï¸', label: 'Heart', coins: 10 },
-  { emoji: 'â­', label: 'Star', coins: 20 },
-  { emoji: 'ðŸ†', label: 'Trophy', coins: 50 },
-  { emoji: 'ðŸ‘‘', label: 'Crown', coins: 100 },
+  { emoji: '💊', label: 'Pill', coins: 1 },
+  { emoji: '🩺', label: 'Stethoscope', coins: 5 },
+  { emoji: '❤️', label: 'Heart', coins: 10 },
+  { emoji: '⭐', label: 'Star', coins: 20 },
+  { emoji: '🏆', label: 'Trophy', coins: 50 },
+  { emoji: '👑', label: 'Crown', coins: 100 },
 ]
 
-// â”€â”€ Shared Drawing Board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Shared Drawing Board ──────────────────────
 function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
   const canvasRef = useRef(null)
   const [tool, setTool] = useState('pen')
@@ -146,7 +146,7 @@ function LiveBoard({ sessionId, isHost, strokes, onStroke }) {
   )
 }
 
-// â”€â”€ Voice Note Recorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Voice Note Recorder ───────────────────────
 function VoiceRecorder({ onSend, onError }) {
   const [recording, setRecording] = useState(false)
   const [audioURL, setAudioURL] = useState(null)
@@ -193,7 +193,7 @@ function VoiceRecorder({ onSend, onError }) {
         <>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: theme.alert, animation: 'pulse 1s infinite' }} />
           <span style={{ fontSize: 12, color: theme.alert, fontWeight: 700 }}>{Math.floor(duration/60)}:{String(duration%60).padStart(2,'0')}</span>
-          <button onClick={stopRec} style={{ padding: '6px 14px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>â¹ Stop</button>
+          <button onClick={stopRec} style={{ padding: '6px 14px', background: theme.alert, color: '#fff', border: 'none', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>⏹ Stop</button>
         </>
       ) : audioURL ? (
         <>
@@ -208,7 +208,7 @@ function VoiceRecorder({ onSend, onError }) {
   )
 }
 
-// â”€â”€ Main Live Session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Main Live Session ─────────────────────────
 export default function LiveSession() {
   const { id } = useParams()
   const { user } = useAuth()
@@ -330,7 +330,7 @@ export default function LiveSession() {
       payload: { emoji: gift.emoji, label: gift.label, coins: gift.coins, sender: user.email?.split('@')[0] }
     })
 
-    // 7. Log in chat (will be wiped when live ends â€” that's fine)
+    // 7. Log in chat (will be wiped when live ends — that's fine)
     await sendMessage(`sent ${gift.emoji} ${gift.label} (${gift.coins} coins)`, 'gift')
     setGiftPanel(false)
   }
@@ -376,7 +376,7 @@ export default function LiveSession() {
     await ensureProfile(user)
     await supabase.from('posts').insert({
       user_id: user.id,
-      content: `ðŸ”´ Live Session ended\n\nðŸ“Œ Topic: ${session.topic}\nâ±ï¸ Duration: ${duration} min\nðŸŽ Gifts received: ${totalGifts}\nðŸ‘¥ Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
+      content: `🔴 Live Session ended\n\n📌 Topic: ${session.topic}\n⏱️ Duration: ${duration} min\n🎁 Gifts received: ${totalGifts}\n👥 Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
       post_type: 'text',
       expires_at: expiresAt,
     })
@@ -404,12 +404,12 @@ export default function LiveSession() {
         ...(isMobile ? { position: 'sticky', top: 0, zIndex: 50 } : { borderRadius: theme.radius.xl, marginBottom: 16 }),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          {isMobile && <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>â†</Link>}
+          {isMobile && <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 18 }}>←</Link>}
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: session.status === 'live' ? theme.greenLive : theme.slateMuted, animation: session.status === 'live' ? 'pulse 1s infinite' : 'none' }} />
               <span style={{ fontSize: 11, fontWeight: 800, color: session.status === 'live' ? theme.greenLive : 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{session.status === 'live' ? 'LIVE' : 'ENDED'}</span>
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Â· {viewers} watching</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>· {viewers} watching</span>
             </div>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 800, lineHeight: 1.3 }}>{session.topic}</p>
           </div>

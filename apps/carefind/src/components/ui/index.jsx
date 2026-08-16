@@ -12,8 +12,8 @@ const { navy } = theme
 // meeting the states/responsiveness/accessibility bar in
 // docs/design/COMPONENT_LIBRARY.md and docs/design/ACCESSIBILITY.md.
 
-// â”€â”€ BADGE / PILL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Always paired with text â€” never a bare color dot (ACCESSIBILITY.md).
+// ── BADGE / PILL ─────────────────────────────────────────────────────────────
+// Always paired with text — never a bare color dot (ACCESSIBILITY.md).
 export function Pill({ label, type = 'gray', style = {} }) {
   const map = {
     gray: { bg: theme.gray100, color: theme.gray600 },
@@ -33,7 +33,7 @@ export function Pill({ label, type = 'gray', style = {} }) {
 }
 export const Badge = Pill
 
-// â”€â”€ CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CARD ─────────────────────────────────────────────────────────────────────
 export function Card({ children, style = {}, onClick, className }) {
   return (
     <div
@@ -60,7 +60,7 @@ export function Card({ children, style = {}, onClick, className }) {
   )
 }
 
-// â”€â”€ STAT CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── STAT CARD ──────────────────────────────────────────────────────────────
 export function StatCard({ icon, label, value, sub, alert, onClick }) {
   return (
     <Card onClick={onClick} style={{ padding: theme.space[10], border: alert ? `1px solid ${theme.amberBorder}` : `1px solid ${theme.border}` }}>
@@ -72,9 +72,9 @@ export function StatCard({ icon, label, value, sub, alert, onClick }) {
   )
 }
 
-// â”€â”€ BUTTONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── BUTTONS ──────────────────────────────────────────────────────────────────
 // 44px minimum touch height on every button regardless of visual padding
-// (COMPONENT_LIBRARY.md â†’ Buttons, ACCESSIBILITY.md â†’ touch targets).
+// (COMPONENT_LIBRARY.md → Buttons, ACCESSIBILITY.md → touch targets).
 const btnBase = {
   minHeight: 44,
   padding: '10px 20px',
@@ -149,7 +149,7 @@ export function RedBtn({ children, onClick, style = {}, disabled, type = 'button
   )
 }
 
-// â”€â”€ SECTION HEAD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SECTION HEAD ─────────────────────────────────────────────────────────────
 export function SectionHead({ title, sub, btn, onBtn }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: theme.space[10], flexWrap: 'wrap', gap: theme.space[6] }}>
@@ -162,8 +162,8 @@ export function SectionHead({ title, sub, btn, onBtn }) {
   )
 }
 
-// â”€â”€ AVATAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// `src`: a real profile photo, when one exists â€” falls back to an initial on
+// ── AVATAR ───────────────────────────────────────────────────────────────────
+// `src`: a real profile photo, when one exists — falls back to an initial on
 // a colored background otherwise. Every avatar in the product should use
 // this, not a hand-built circle, so the fallback treatment stays consistent.
 export function Avatar({ name, size = 32, bg = theme.tealDeep, src, style = {} }) {
@@ -179,9 +179,9 @@ export function Avatar({ name, size = 32, bg = theme.tealDeep, src, style = {} }
   )
 }
 
-// â”€â”€ RATING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── RATING ───────────────────────────────────────────────────────────────────
 // A rating shown as five icons, with the value always available as text for
-// assistive tech â€” shape and colour alone never carry the number
+// assistive tech — shape and colour alone never carry the number
 // (ACCESSIBILITY.md). Every rating in the product renders through these, so
 // stars never drift between hand-built rows and icon sets screen to screen.
 export function Stars({ value = 0, size = 14 }) {
@@ -201,7 +201,7 @@ export function Stars({ value = 0, size = 14 }) {
   )
 }
 
-// The interactive twin of `Stars` â€” picking a rating rather than reading one.
+// The interactive twin of `Stars` — picking a rating rather than reading one.
 export function StarPicker({ value = 0, onChange, size = 24 }) {
   return (
     <div role="group" aria-label="Your rating" style={{ display: 'flex', gap: 2 }}>
@@ -226,9 +226,9 @@ export function StarPicker({ value = 0, onChange, size = 24 }) {
   )
 }
 
-// â”€â”€ TOAST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── TOAST ────────────────────────────────────────────────────────────────────
 // Desktop: corner-anchored. Mobile: full-width, safe-area anchored
-// (COMPONENT_LIBRARY.md â†’ Notifications). role="status" + aria-live so
+// (COMPONENT_LIBRARY.md → Notifications). role="status" + aria-live so
 // screen readers hear it without it stealing focus.
 const TOAST_VARIANTS = {
   success: { bg: theme.success, Icon: Check },
@@ -261,15 +261,15 @@ export function Toast({ msg, type = 'info', actionLabel, onAction }) {
   )
 }
 
-// â”€â”€ MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// `sheet`: bottom sheet (mobile default per COMPONENT_LIBRARY.md â†’ Modals).
-// `preventBackdropClose`: for destructive/irreversible content â€” backdrop
+// ── MODAL ────────────────────────────────────────────────────────────────────
+// `sheet`: bottom sheet (mobile default per COMPONENT_LIBRARY.md → Modals).
+// `preventBackdropClose`: for destructive/irreversible content — backdrop
 // click and Escape are disabled, only the explicit footer actions can close it
 // (SCREEN_PATTERNS.md pattern 27's rule for irreversible-action modals).
 // `onClose` is kept in a ref so the focus-trap only re-arms on an open-state
 // change, never on a parent re-render (which would steal focus back on every
 // keystroke). Initial focus lands on the first editable field, never the
-// close/cancel button â€” typing works immediately on open.
+// close/cancel button — typing works immediately on open.
 export function Modal({ show, onClose, title, children, footer, wide, sheet, preventBackdropClose, hideCloseButton }) {
   const cardRef = useRef(null)
   const triggerRef = useRef(null)
@@ -284,7 +284,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
 
     // A modal is opened to type into its fields, not to land focus on its
     // own close/cancel button. Focus the first editable field (so the user can
-    // start typing immediately â€” no "click into the input first") and fall
+    // start typing immediately — no "click into the input first") and fall
     // back to the first button only when there are no fields, which keeps
     // ConfirmDialog's Cancel-default-focused behavior (pattern 29).
     // preventScroll stops the sheet jolting when the mobile keyboard opens.
@@ -343,10 +343,10 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
   )
 }
 
-// â”€â”€ CONFIRMATION DIALOG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── CONFIRMATION DIALOG ──────────────────────────────────────────────────────
 // SCREEN_PATTERNS.md pattern 29: reserved for irreversible actions, states the
 // specific consequence, Cancel is always default-focused, the destructive
-// button is never auto-focused. Not a generic "Are you sure?" â€” `consequence`
+// button is never auto-focused. Not a generic "Are you sure?" — `consequence`
 // is required so callers state what will actually happen.
 export function ConfirmDialog({ show, onClose, onConfirm, title, consequence, confirmLabel = 'Delete', danger = true }) {
   return (
@@ -363,10 +363,10 @@ export function ConfirmDialog({ show, onClose, onConfirm, title, consequence, co
   )
 }
 
-// â”€â”€ FORM INPUTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Validate on blur/submit, never on keystroke (UX_PATTERNS.md â†’ Validation).
+// ── FORM INPUTS ──────────────────────────────────────────────────────────────
+// Validate on blur/submit, never on keystroke (UX_PATTERNS.md → Validation).
 // `error` renders an adjacent, specific message and marks the field
-// aria-invalid â€” required indicators are programmatic, not color-only.
+// aria-invalid — required indicators are programmatic, not color-only.
 export function Inp({ label, value, onChange, onBlur, type = 'text', placeholder = '', required, style = {}, readOnly, min, error, id, ...rest }) {
   const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
   return (
@@ -422,7 +422,7 @@ export function Toggle({ label, desc, value, onChange }) {
   )
 }
 
-// â”€â”€ LOADING (spinner) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── LOADING (spinner) ────────────────────────────────────────────────────────
 export function Loading({ text = 'Loading...', fullScreen = false }) {
   return (
     <div role="status" aria-live="polite" style={{
@@ -440,7 +440,7 @@ export function Loading({ text = 'Loading...', fullScreen = false }) {
   )
 }
 
-// â”€â”€ SKELETON (structured content loading â€” MOTION.md) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── SKELETON (structured content loading — MOTION.md) ───────────────────────
 export function Skeleton({ width = '100%', height = 14, radius, style = {} }) {
   return <div className="cf-skeleton" style={{ width, height, borderRadius: radius ?? theme.radius.sm, ...style }} />
 }
@@ -455,7 +455,7 @@ export function CardSkeleton() {
   )
 }
 
-// â”€â”€ EMPTY STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── EMPTY STATE ──────────────────────────────────────────────────────────────
 // `cause` distinguishes the three real empty-state situations
 // (SCREEN_PATTERNS.md pattern 30) so the message and action are appropriate:
 // 'none' = nothing exists yet, 'filtered' = filters/search excluded everything,
@@ -474,10 +474,10 @@ export function Empty({ icon, message, action, onAction, cause = 'none' }) {
   )
 }
 
-// â”€â”€ ERROR STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── ERROR STATE ───────────────────────────────────────────────────────────────
 // SCREEN_PATTERNS.md pattern 32. `variant`: 'network' gets reassuring,
 // auto-retry framing; 'app' is a generic-but-human failure message. Always
-// offers a next step â€” never a dead end.
+// offers a next step — never a dead end.
 export function ErrorState({ variant = 'app', message, onRetry }) {
   const copy = variant === 'network'
     ? { Icon: WifiOff, heading: "You're offline", body: message || "We'll keep trying to reconnect automatically." }

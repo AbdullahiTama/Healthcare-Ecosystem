@@ -76,7 +76,7 @@ function PlaylistView() {
   const hasNext = current < parts.length - 1
 
   // Desktop only: "All parts" moves from an inline bottom list to a sticky
-  // sidebar â€” List/Detail Split (LAYOUTS.md), since "now playing" + full part
+  // sidebar — List/Detail Split (LAYOUTS.md), since "now playing" + full part
   // list side-by-side is the natural desktop shape for a series like this.
   const allPartsList = (
     <>
@@ -154,8 +154,8 @@ function PlaylistView() {
       ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))', background: '#fff', minHeight: '100vh' }
       : { fontFamily: theme.fontFamily, maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       <div style={{ background: theme.navy, padding: '18px 16px', color: '#fff', ...(isMobile ? {} : { borderRadius: theme.radius.xl, marginBottom: 20 }) }}>
-        {isMobile && <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>â† Back</button>}
-        <div style={{ background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={11} aria-hidden="true" /> PLAYLIST Â· {parts.length} PARTS</div>
+        {isMobile && <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>← Back</button>}
+        <div style={{ background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 12, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}><Film size={11} aria-hidden="true" /> PLAYLIST · {parts.length} PARTS</div>
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 900 }}>{playlist.title}</h1>
         <p style={{ margin: '4px 0 0 0', fontSize: 12.5, color: 'rgba(255,255,255,0.75)' }}>
           By {playlist.profiles?.full_name || playlist.profiles?.display_name || 'CareFind'}{<VerifiedBadge profile={playlist.profiles} size={13} style={{ color: '#fff', marginLeft: 4 }} />}
@@ -189,7 +189,7 @@ function PlaylistView() {
           {hasNext ? (
             <button onClick={() => setCurrent(current + 1)} style={{ width: '100%', marginTop: 20, padding: 14, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Play size={14} aria-hidden="true" /> Up next: {parts[current + 1].title}</span>
-              <span>â†’</span>
+              <span>→</span>
             </button>
           ) : (
             <p style={{ marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: theme.gray500, fontWeight: 600 }}><PartyPopper size={16} aria-hidden="true" /> You&apos;ve finished this series!</p>

@@ -64,7 +64,7 @@ const distanceMeters = (p, u) => {
   const trackRef = useRef(null)
   const toast = useToast()
 
-  // JS-driven marquee â€” works even in iOS Low Power Mode (CSS animations get paused, JS doesn't)
+  // JS-driven marquee — works even in iOS Low Power Mode (CSS animations get paused, JS doesn't)
   useEffect(() => {
     if (featured.length === 0) return
     let raf
@@ -112,7 +112,7 @@ const distanceMeters = (p, u) => {
   // Health-facility query builder: one shape shared by the initial search and
   // the "load more" pager so the two can never drift apart. Eligibility is the
   // platform rule, applied server-side: the business must have been approved
-  // (status 'active' â€” registration starts 'pending', admin suspension makes
+  // (status 'active' — registration starts 'pending', admin suspension makes
   // it 'suspended') and must be publicly listed (visible_on_carefind). A
   // pending or suspended business must not appear in the public directory
   // even though registration sets visible_on_carefind optimistically.
@@ -121,7 +121,7 @@ const distanceMeters = (p, u) => {
       .eq('visible_on_carefind', true)
       .eq('status', 'active')
     // A facility query is usually a name, a kind ("pharmacy", "lab"), or a
-    // place ("lagos", "abuja") â€” match all of them server-side. Matching only
+    // place ("lagos", "abuja") — match all of them server-side. Matching only
     // `name` made real queries like "clinic in Abuja" return zero results.
     if (q) bq = bq.or(`name.ilike.%${q}%,business_type.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
     if (st) bq = bq.ilike('state', `%${st}%`)
@@ -133,7 +133,7 @@ const distanceMeters = (p, u) => {
     const { data } = await businessesQuery(query.trim(), stateFilter).range(offset, offset + 39)
     let merged = [...businesses, ...(data || [])]
     // "Near me" must keep the whole merged list nearest-first, not just the
-    // first page â€” otherwise page 2+ appends break the ordering.
+    // first page — otherwise page 2+ appends break the ordering.
     if (nearMe && userCoords) {
       merged = [...merged].sort((a, b) => {
         const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
@@ -166,7 +166,7 @@ const distanceMeters = (p, u) => {
       let list = (data || []).filter(p => p.list_on_carefind !== false)
       if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
       // Resolve standalone sellers' profiles so every card can show a name,
-      // a profile link and a contact â€” not just business-attached products.
+      // a profile link and a contact — not just business-attached products.
       list = await attachOwnerProfiles(list)
       // Nearest first: sort by raw distance in meters so mixed m/km distances order correctly
       if (nearMe && userCoords) list = [...list].sort((a, b) => {
@@ -182,7 +182,7 @@ const distanceMeters = (p, u) => {
       const { data } = await businessesQuery(q, stateFilter).range(0, 39)
       let list = (data || [])
       // Nearest first when the user asked for "Near me" and we have their
-      // location â€” businesses without coordinates sort to the end.
+      // location — businesses without coordinates sort to the end.
       if (nearMe && userCoords) list = [...list].sort((a, b) => {
         const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
         const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
@@ -251,7 +251,7 @@ const distanceMeters = (p, u) => {
         </p>
         <form onSubmit={runSearch}>
           <div style={{ display: 'flex', gap: 8, maxWidth: isMobile ? undefined : 520 }}>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctorâ€¦" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: theme.radius.md, boxSizing: 'border-box', fontFamily: theme.fontFamily }} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctor…" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: theme.radius.md, boxSizing: 'border-box', fontFamily: theme.fontFamily }} />
             <button type="submit" style={{ minHeight: 44, padding: '0 20px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxSizing: 'border-box', WebkitTapHighlightColor: 'transparent', transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}` }}
               onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.94)' }}
               onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
@@ -263,7 +263,7 @@ const distanceMeters = (p, u) => {
       {/* Filter toolbar: mobile stacks category grid above a filter row;
           laptop+ has the horizontal room to put category tabs and location/
           specialty filters on one row (RESPONSIVENESS.md: "Filters: persistent
-          sidebar, inline row, or a bottom sheet" â€” inline row is the desktop-
+          sidebar, inline row, or a bottom sheet" — inline row is the desktop-
           appropriate choice once there's width for it). */}
       <div style={isMobile ? {} : { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 6, flexWrap: 'wrap' }}>
         <div style={isMobile
@@ -345,7 +345,7 @@ const distanceMeters = (p, u) => {
                       }}><PillIcon size={22} aria-hidden="true" /></div>
                       <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
                       {canShowPrice(p)
-                        ?                       <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>
+                        ?                       <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                         : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
                       <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
                       {(() => {
@@ -384,7 +384,7 @@ const distanceMeters = (p, u) => {
           <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another specialty or state.</div></>} />
         )}
 
-        {/* Laptop+: multi-column result grid â€” RESPONSIVENESS.md calls this out
+        {/* Laptop+: multi-column result grid — RESPONSIVENESS.md calls this out
             explicitly as a desktop-appropriate expansion once there's width for
             it. auto-fill/minmax (the GRID_SYSTEM.md card-grid pattern) rather
             than a fixed column count, since result counts vary a lot by query. */}
@@ -417,7 +417,7 @@ const distanceMeters = (p, u) => {
                       {sellerName(p)}
                       {(() => {
                         const loc = p.seller_location || p.businesses?.state || p.businesses?.city
-                        return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> Â· {loc}</span> : null
+                        return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
                       })()}
                       <ChevronRight size={12} aria-hidden="true" />
                     </Link>
@@ -426,7 +426,7 @@ const distanceMeters = (p, u) => {
                       {sellerName(p)}
                       {(() => {
                         const loc = p.seller_location
-                        return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> Â· {loc}</span> : null
+                        return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
                       })()}
                       <ChevronRight size={12} aria-hidden="true" />
                     </Link>
@@ -449,7 +449,7 @@ const distanceMeters = (p, u) => {
                 })()}
                 {canShowPrice(p) ? (
                   <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>â‚¦{Number(p.price).toLocaleString()}</p>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
                     {p.price_unit && <p style={{ margin: 0, fontSize: 9.5, color: theme.textLight }}>per {p.price_unit}</p>}
                   </div>
                 ) : (
@@ -493,7 +493,7 @@ const distanceMeters = (p, u) => {
               </div>
               <div style={{ flex: 1 }}>
                 <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
-                <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} Â· {b.city}{b.state ? `, ${b.state}` : ''}</p>
+                <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
                 {(() => {
                   const bc = businessCoords(b)
                   const dist = (bc && userCoords)
@@ -536,7 +536,7 @@ const distanceMeters = (p, u) => {
                 {pr.full_name || pr.display_name}
                 <BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" />
               </p>
-              <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` Â· ${pr.location}` : ''}</p>
+              <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
             </div>
           </Link>
         ))}
