@@ -8,6 +8,7 @@ import {
 import { theme } from '../../styles/theme'
 import { renderMarkdown } from './markdown.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
+import VideoPlayer from '../../components/VideoPlayer.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import { canExportVideo } from '../../utils/voiceCard.js'
 import PostMenu from './PostMenu.jsx'
@@ -22,6 +23,7 @@ const POST_KIND = {
   article: 'Article',
   visual: 'Voice',
   review: 'Review',
+  video: 'Video',
 }
 
 const POST_KIND_TONE = {
@@ -29,6 +31,7 @@ const POST_KIND_TONE = {
   article: 'blue',
   visual: 'teal',
   review: 'purple',
+  video: 'red',
 }
 
 // The single renderer for every surface that shows a full feed post: the feed
@@ -111,15 +114,15 @@ export default function PostCard({
   }
 
   return (
-    <Card style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
+    <Card style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
       {/* Card header: identity left, one kind pill + overflow menu right.
           Identity reads name → verified badge → handle → credential →
           time, i.e. "who is this, and can I trust them" before anything
           else (Design Principle 12: trust is a design output). */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', gap: 11,
-        padding: post.post_type === 'visual' ? '14px 16px 0 16px' : 0,
-        marginBottom: post.post_type === 'visual' ? 0 : 10,
+        padding: post.post_type === 'visual' || post.post_type === 'video' ? '14px 16px 0 16px' : 0,
+        marginBottom: post.post_type === 'visual' || post.post_type === 'video' ? 0 : 10,
       }}>
         <Link
           to={`/u/${post.user_id}`}
@@ -276,6 +279,24 @@ export default function PostCard({
             </Link>
           </div>
         </div>
+      ) : post.post_type === 'video' ? (
+        <div>
+          <div style={{ borderRadius: theme.radius.md, overflow: 'hidden' }}>
+            <VideoPlayer
+              src={post.video_url}
+              poster={post.image_url}
+              ariaLabel={`Video by ${authorName(post)}`}
+              style={{ aspectRatio: '9/16', maxHeight: 460 }}
+            />
+          </div>
+          {post.content && (
+            <div style={{ margin: '10px 16px 0' }}>
+              <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                {renderMarkdown(post.content)}
+              </p>
+            </div>
+          )}
+        </div>
       ) : post.post_type === 'visual' ? (
         <div>
           <VisualCard templateKey={post.theme} content={post.content} hasVoice={!!post.audio_url} imageUrl={post.image_url} videoUrl={post.video_url} username={profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''} />
@@ -366,9 +387,9 @@ export default function PostCard({
           and no labels; the row's CSS lives in global.css. */}
       <div className="cf-eng-row" style={{
         borderTop: `1px solid ${theme.border}`, marginTop: 10, paddingTop: 4,
-        marginLeft: post.post_type === 'visual' ? 16 : 0,
-        marginRight: post.post_type === 'visual' ? 16 : 0,
-        marginBottom: post.post_type === 'visual' ? 16 : 0,
+        marginLeft: post.post_type === 'visual' || post.post_type === 'video' ? 16 : 0,
+        marginRight: post.post_type === 'visual' || post.post_type === 'video' ? 16 : 0,
+        marginBottom: post.post_type === 'visual' || post.post_type === 'video' ? 16 : 0,
       }}>
         <div className="cf-eng-group">
           {/* Like */}

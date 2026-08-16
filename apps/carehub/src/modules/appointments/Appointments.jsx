@@ -24,6 +24,8 @@ export default function Appointments({ brand, role, perms }) {
   const [withdrawing, setWithdrawing] = useState(false)
   const [form, setForm] = useState({ date: todayDate() })
   const [saving, setSaving] = useState(false)
+  const [payLink, setPayLink] = useState(null)
+  const [payLinkLoading, setPayLinkLoading] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -61,6 +63,7 @@ export default function Appointments({ brand, role, perms }) {
     if (!form.clientName || !form.date || !form.time) { showToast('Please enter client name, date and time.', { type: 'warning' }); return }
     setSaving(true)
     try {
+      const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
       await appointmentRepository.create(brand.id, {
         client_id: form.client_id || null,
         client_name: form.clientName,
@@ -80,6 +83,8 @@ export default function Appointments({ brand, role, perms }) {
         payment_channel: form.paymentChannel || 'cash',
         consultation_medium: brand?.consultation_medium || null,
         consultation_medium_link: brand?.consultation_medium_link || null,
+        fee_amount: feeKobo,
+        payment_status: feeKobo ? 'unpaid' : null,
       })
       showToast('Appointment booked!', { type: 'success' })
       setForm({ date: todayDate() }); setShowAdd(false); load()
@@ -158,6 +163,32 @@ export default function Appointments({ brand, role, perms }) {
       showToast('Network error. Please try again.', { type: 'error' })
     }
     setWithdrawing(false)
+  }
+
+  async function handleSendPaymentLink(appt) {
+    setPayLink(appt.id)
+    setPayLinkLoading(true)
+    try {
+      const { data: { session } } = await authClient.auth.getSession()
+      if (!session) { showToast('Please log in again.', { type: 'warning' }); setPayLink(null); return }
+      const res = await fetch('/api/initiate-appointment-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ appointment_id: appt.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || 'Could not create payment link.', { type: 'error' })
+        setPayLink(null)
+        return
+      }
+      setPayLink({ url: data.authorization_url, ref: data.reference, fee: data.fee, clientName: appt.client_name, date: appt.date, time: appt.time })
+      showToast('Payment link created — share it with the client.', { type: 'success' })
+    } catch (e) {
+      showToast('Network error. Please try again.', { type: 'error' })
+      setPayLink(null)
+    }
+    setPayLinkLoading(false)
   }
 
   const today = todayDate()
@@ -263,6 +294,11 @@ export default function Appointments({ brand, role, perms }) {
             {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
             {a.status === 'confirmed' && <button onClick={() => updateStatus(a.id, 'completed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Complete</button>}
             {a.status !== 'cancelled' && a.status !== 'completed' && <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>}
+            {a.payment_status === 'unpaid' && a.fee_amount && (
+              <button onClick={() => handleSendPaymentLink(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>
+                {payLinkLoading && payLink === a.id ? 'Sending...' : 'Send Pay Link'}
+              </button>
+            )}
             {perms?.canDelete && <RedBtn onClick={() => askDelete(a)} style={{ padding: '4px 9px', fontSize: '11px' }}>Del</RedBtn>}
           </div>
         )}
@@ -295,6 +331,7 @@ export default function Appointments({ brand, role, perms }) {
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
             <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
           </div>
+          <Inp label='Fee (₦, optional)' type='number' value={form.fee || ''} onChange={v => f('fee', v)} placeholder='0' min='0' step='100' />
           <Textarea label='Client concern' value={form.concern} onChange={v => f('concern', v)} placeholder='What is the client coming in for?' rows={2} />
           <Textarea label='Notes' value={form.notes} onChange={v => f('notes', v)} placeholder='Any special notes or instructions...' rows={2} />
         </div>
@@ -322,6 +359,18 @@ export default function Appointments({ brand, role, perms }) {
           </div>
         </div>
       </Modal>
+
+      {payLink && typeof payLink === 'object' && (
+        <Modal show={true} onClose={() => setPayLink(null)} title='Payment Link'
+          footer={<><GhostBtn onClick={() => setPayLink(null)} style={{ flex: 1, padding: '12px' }}>Close</GhostBtn><TealBtn onClick={() => navigator.clipboard.writeText(payLink.url).then(() => showToast('Link copied!', { type: 'success' }))} style={{ flex: 1, padding: '12px' }}>Copy Link</TealBtn></>}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: gray600 }}>Share this link with <b>{payLink.clientName}</b> for the appointment on {payLink.date} at {payLink.time}.</p>
+            <p style={{ margin: 0, fontSize: '12px', color: gray500 }}>Amount: <b>{naira(payLink.fee)}</b></p>
+            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: theme.radius.md, border: `1px solid ${border}`, wordBreak: 'break-all', fontSize: '12px', fontFamily: theme.fontMono, color: navy }}>{payLink.url}</div>
+            <p style={{ margin: 0, fontSize: '11px', color: gray400 }}>The client pays via Paystack. You'll be notified when payment is confirmed.</p>
+          </div>
+        </Modal>
+      )}
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
     </div>

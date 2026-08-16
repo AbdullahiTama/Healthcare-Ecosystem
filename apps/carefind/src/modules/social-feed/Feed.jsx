@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
-  Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
+  Clapperboard, Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
   Lock, MapPin, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
   Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
   Stethoscope, Trash2, Trees, Unlock, Waves, X, Flag,
@@ -38,6 +38,7 @@ import { getActiveIdentity } from '../../lib/activeIdentity'
 import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import PostCard from './PostCard.jsx'
+import VideoFeed from './VideoFeed.jsx'
 import PostDetailModal from './PostDetailModal.jsx'
 import { postRepository } from './repositories'
 import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
@@ -245,6 +246,7 @@ function Feed() {
   const postTypeLabels = {
     text: 'Text Post',
     visual: 'Voice card',
+    video: 'Video',
     question: 'Question',
     review: 'Review',
     article: 'Article',
@@ -1031,7 +1033,15 @@ function Feed() {
 
   async function handlePost(e) {
     e.preventDefault()
-    if (!content.trim() || !user) return
+    if (!user) return
+    if (postType === 'video') {
+      if (!cardVideo) {
+        toast.show('Choose a video before posting.')
+        return
+      }
+    } else if (!content.trim()) {
+      return
+    }
     setPosting(true)
 
     let imageUrl = null
@@ -1077,7 +1087,7 @@ function Feed() {
       post_type: postType,
       subscriber_only: subscriberOnly,
       audio_url: postType === 'visual' ? cardAudio : null,
-      video_url: postType === 'visual' ? cardVideo : null,
+      video_url: postType === 'visual' || postType === 'video' ? cardVideo : null,
       theme: postType === 'visual' ? visualTheme : null,
       rating: postType === 'review' ? postRating : null,
       image_url: imageUrl,
@@ -1146,6 +1156,7 @@ function Feed() {
     { key: 'text',     Icon: MessageSquare, label: 'Post',          run: () => startPost('text') },
     { key: 'question', Icon: HelpCircle,    label: 'Question',      run: () => startPost('question') },
     { key: 'review',   Icon: Star,          label: 'Review',        run: () => startPost('review') },
+    { key: 'video',    Icon: Clapperboard,  label: 'Video',         run: () => startPost('video') },
     { key: 'visual',   Icon: Mic,           label: 'Voice card',    run: () => startPost('visual') },
     { key: 'article',  Icon: FileText,      label: 'Article',       run: () => startPost('article') },
     { key: 'story',    Icon: BookOpen,      label: 'Story',         run: () => navigate('/profile') },
@@ -1925,6 +1936,46 @@ function Feed() {
             ))}
           </div>
 
+          {/* Video post: the clip is the post. A fresh upload, or the current
+              pick, is required before Post becomes available. */}
+          {postType === 'video' && (
+            <div style={{ marginBottom: 10 }}>
+              {cardVideoPreview ? (
+                <div>
+                  <video src={cardVideoPreview} controls style={{ width: '100%', borderRadius: theme.radius.md, maxHeight: 320, background: '#000', display: 'block' }} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <label style={{ flex: 1, textAlign: 'center', padding: '9px 10px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff', fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer' }}>
+                      {uploadingVideo ? '…' : 'Change video'}
+                      <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setCardVideo(null); setCardVideoPreview(null) }}
+                      style={{ flex: 1, padding: '9px 10px', borderRadius: 10, border: `1px solid ${theme.alert}`, background: theme.dangerBg, color: theme.alert, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    padding: '20px 12px', border: `1.5px dashed ${theme.border}`, borderRadius: theme.radius.md,
+                    cursor: 'pointer', background: theme.bg,
+                  }}
+                >
+                  <Clapperboard size={26} color={theme.tealDeep} aria-hidden="true" />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>
+                    {uploadingVideo ? 'Uploading…' : 'Choose a video'}
+                  </span>
+                  <span style={{ fontSize: 11, color: theme.textLight }}>Up to 12MB (about 15 seconds)</span>
+                  <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+                </label>
+              )}
+            </div>
+          )}
+
           {canGoLive && (
             <button
               type="button"
@@ -2212,6 +2263,7 @@ function Feed() {
                   placeholder={
                     postType === 'question' ? 'Ask your question...' :
                     postType === 'review' ? 'Share your experience with this product or service...' :
+                    postType === 'video' ? 'Add a caption for your video...' :
                     'Share a health tip, ask a question...'
                   }
                   rows={3}
@@ -2249,7 +2301,7 @@ function Feed() {
               </label>
             ) : <span />}
 
-            <TealBtn type="submit" disabled={posting || !content.trim() || uploadingImage} style={{ minWidth: 108, flexShrink: 0 }}>
+            <TealBtn type="submit" disabled={posting || uploadingImage || (postType === 'video' ? !cardVideo : !content.trim())} style={{ minWidth: 108, flexShrink: 0 }}>
               {posting ? (uploadingImage ? 'Uploading photo…' : 'Posting…') : 'Post'}
             </TealBtn>
           </div>
@@ -2393,9 +2445,18 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
             </span>
           </div>
         )}
-        {feedTab !== 'series' && displayPosts.map((post) => (
-          <PostCard key={post.id} {...cardProps} post={post} />
-        ))}
+        {feedTab === 'video' ? (
+          <VideoFeed
+            posts={displayPosts}
+            cardProps={cardProps}
+            authorName={(p) => authorName(p)}
+            isMobile={isMobile}
+          />
+        ) : feedTab !== 'series' ? (
+          displayPosts.map((post) => (
+            <PostCard key={post.id} {...cardProps} post={post} />
+          ))
+        ) : null}
       </div>
       <Modal show={createOpen} onClose={() => setCreateOpen(false)} title="Create" sheet>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>

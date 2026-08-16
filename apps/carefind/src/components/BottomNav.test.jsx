@@ -25,29 +25,27 @@ function renderNav(initialPath) {
   )
 }
 
-describe('BottomNav (Feature 5 — Videos entry)', () => {
+describe('BottomNav (five destinations)', () => {
   beforeEach(() => {
     auth.user = null
     supabaseMock.from.mockClear()
   })
 
-  it('renders a Videos entry that deep-links into the feed video tab', () => {
+  it('renders the five core destinations', () => {
     renderNav('/')
-    const videos = screen.getByRole('link', { name: 'Videos' })
-    expect(videos).toBeInTheDocument()
-    expect(videos.getAttribute('href')).toBe('/feed?tab=video')
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'MedMarket' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'News' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create post' })).toBeInTheDocument()
+    // Video access lives in the feed's top tab bar, not the bottom nav.
+    expect(screen.queryByRole('link', { name: 'Videos' })).not.toBeInTheDocument()
   })
 
-  it('highlights Videos (not Home) while the video tab is active', () => {
-    renderNav('/feed?tab=video')
-    // jsdom reports inline hex colors in rgb() form: tealDeep=#0E6F5A, textLight=#6B7B73
-    expect(screen.getByRole('link', { name: 'Videos' }).style.color).toBe('rgb(14, 111, 90)')
-    expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(107, 123, 115)')
-  })
-
-  it('keeps Home highlighted on the plain feed and Videos unlit', () => {
+  it('keeps Home highlighted on the plain feed', () => {
     renderNav('/feed')
+    // jsdom reports inline hex colors in rgb() form: tealDeep=#0E6F5A, textLight=#6B7B73
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(14, 111, 90)')
-    expect(screen.getByRole('link', { name: 'Videos' }).style.color).toBe('rgb(107, 123, 115)')
+    expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(107, 123, 115)')
   })
 })

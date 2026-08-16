@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
-import { Clapperboard, Compass, Home, Newspaper, Plus, User } from 'lucide-react'
+import { Compass, Home, Newspaper, Plus, User } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function BottomNav({ onCompose }) {
@@ -10,11 +10,7 @@ function BottomNav({ onCompose }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const isActive = (path) => location.pathname === path
-  // The Videos entry deep-links into the feed's video tab via ?tab=video (the
-  // Feed owner honours it); Home stays unlit while that tab is active so the
-  // two feed entries never both look selected.
-  const isHomeActive = location.pathname === '/feed' && !location.search
-  const isVideosActive = location.pathname === '/feed' && location.search === '?tab=video'
+  const isHomeActive = location.pathname === '/feed'
   const [unreadNews, setUnreadNews] = useState(0)
 
   const itemStyle = (active) => ({
@@ -115,12 +111,6 @@ function BottomNav({ onCompose }) {
             {unreadNews > 99 ? '99+' : unreadNews}
           </span>
         )}
-      </Link>
-      <Link to="/feed?tab=video" style={itemStyle(isVideosActive)}>
-        <span style={iconCapsule(isVideosActive)}>
-          <Clapperboard size={20} strokeWidth={isVideosActive ? 2.4 : 2} aria-hidden="true" />
-        </span>
-        Videos
       </Link>
       <Link to="/profile" style={itemStyle(isActive('/profile'))}>
         <span style={iconCapsule(isActive('/profile'))}>

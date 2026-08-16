@@ -18,11 +18,11 @@ import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 import {
   coinsForConsultation, fetchConsultationOffer, hasBookedConsultation,
-  bookConsultationWithPaystackFallback, settleConsultationCardPayment,
+  bookConsultation, bookConsultationWithPaystackFallback, settleConsultationCardPayment,
 } from './modules/subscriptions-monetization/consultations.js'
 import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
-import { Card, CardSkeleton, ConfirmDialog, Empty, StarPicker, Stars, Toast, useToast } from './components/ui'
+import { Card, CardSkeleton, ConfirmDialog, Empty, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
 import VerifiedBadge from './components/VerifiedBadge.jsx'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
@@ -59,6 +59,7 @@ function PublicProfile() {
   const [consultOffer, setConsultOffer] = useState(null)
   const [consultBooked, setConsultBooked] = useState(false)
   const [confirmConsultOpen, setConfirmConsultOpen] = useState(false)
+  const [consultPayMethod, setConsultPayMethod] = useState('coins')
   const [bookingConsult, setBookingConsult] = useState(false)
   const [openPost, setOpenPost] = useState(null)
   const [confirmSubOpen, setConfirmSubOpen] = useState(false)
@@ -208,34 +209,49 @@ function PublicProfile() {
 
   function handleBookConsultation() {
     if (!user) { navigate('/login'); return }
+    setConsultPayMethod('coins')
     setConfirmConsultOpen(true)
   }
 
   async function confirmBookConsultation() {
     setConfirmConsultOpen(false)
     setBookingConsult(true)
-    const res = await bookConsultationWithPaystackFallback(user.id, id, `${window.location.origin}/u/${id}`)
-    if (res.paystackUrl) {
-      sessionStorage.setItem('cf_consult_pending', JSON.stringify({ professionalId: id, reference: res.reference }))
-      window.location.href = res.paystackUrl
-      return
+    let res
+    if (consultPayMethod === 'coins') {
+      res = await bookConsultation(user.id, id)
+      if (res.ok) {
+        setConsultBooked(true)
+        notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
+        showToast('Consultation booked with CareCoins! The professional has been notified.', { type: 'success' })
+      } else if (res.insufficient) {
+        showToast('Not enough CareCoins to book. Top up your wallet or choose card payment.', { type: 'warning', actionLabel: 'Top up', onAction: () => navigate('/wallet') })
+      } else if (res.alreadyBooked) {
+        setConsultBooked(true)
+        showToast('You already have a booking with this professional.', { type: 'info' })
+      } else if (res.error) {
+        showToast('Could not book: ' + res.error, { type: 'error' })
+      }
+    } else {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { showToast('Please log in again.', { type: 'warning' }); return }
+        const response = await fetch('/api/charge-consultation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ professionalId: id, callback_url: `${window.location.origin}/u/${id}` }),
+        })
+        const data = await response.json()
+        if (data.authorization_url) {
+          sessionStorage.setItem('cf_consult_pending', JSON.stringify({ professionalId: id, reference: data.reference }))
+          window.location.href = data.authorization_url
+          return
+        }
+        showToast(data.error || 'Could not initiate payment', { type: 'error' })
+      } catch (err) {
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      }
     }
     setBookingConsult(false)
-    if (res.insufficient) {
-      showToast('Not enough CareCoins to book. Top up your wallet to continue.', { type: 'warning', actionLabel: 'Top up', onAction: () => navigate('/wallet') })
-      return
-    }
-    if (res.error) { showToast('Could not book: ' + res.error, { type: 'error' }); return }
-    if (res.alreadyBooked) {
-      setConsultBooked(true)
-      showToast('You already have a booking with this professional.', { type: 'info' })
-      return
-    }
-    if (res.ok) {
-      setConsultBooked(true)
-      notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
-      showToast('Consultation booked! The professional has been notified.', { type: 'success' })
-    }
   }
 
   async function loadUserReviews() {
@@ -945,15 +961,43 @@ function PublicProfile() {
         />
       )}
 
-      <ConfirmDialog
+      <Modal
         show={confirmConsultOpen}
         onClose={() => setConfirmConsultOpen(false)}
-        onConfirm={confirmBookConsultation}
         title="Book this consultation?"
-        consequence={`You'll be charged ${coinsForConsultation(consultOffer?.fee)} CareCoin${coinsForConsultation(consultOffer?.fee) === 1 ? '' : 's'} (₦${Number(consultOffer?.fee || 0).toLocaleString()}) from your CareCoins wallet for a ${consultOffer?.type || 'text'} consultation with ${displayName}. Paid directly by card if your wallet balance is low.`}
-        confirmLabel="Book & Pay"
-        danger={false}
-      />
+        footer={
+          <>
+            <GhostBtn onClick={() => setConfirmConsultOpen(false)} style={{ flex: 1 }}>Cancel</GhostBtn>
+            <TealBtn onClick={confirmBookConsultation} style={{ flex: 1 }} disabled={bookingConsult}>
+              {bookingConsult ? 'Booking...' : 'Book & Pay'}
+            </TealBtn>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
+            You'll be charged <b>{coinsForConsultation(consultOffer?.fee)} CareCoin{coinsForConsultation(consultOffer?.fee) === 1 ? '' : 's'}</b>
+            (₦{Number(consultOffer?.fee || 0).toLocaleString()}) for a {consultOffer?.type || 'text'} consultation with {displayName}.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px', background: theme.bg, borderRadius: theme.radius.md, border: `1px solid ${theme.border}` }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 700, color: theme.gray600, textTransform: 'uppercase' }}>Payment Method</p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: theme.radius.md, border: `2px solid ${consultPayMethod === 'coins' ? theme.tealDeep : theme.border}`, background: consultPayMethod === 'coins' ? theme.tealMist : 'transparent' }}>
+              <input type="radio" name="consultPayMethod" value="coins" checked={consultPayMethod === 'coins'} onChange={e => setConsultPayMethod(e.target.value)} style={{ accentColor: theme.tealDeep }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: theme.navy }}>CareCoins (Wallet)</span>
+                <span style={{ fontSize: 11, color: theme.gray500 }}>Use your CareCoins balance — instant, no fees</span>
+              </div>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: theme.radius.md, border: `2px solid ${consultPayMethod === 'card' ? theme.tealDeep : theme.border}`, background: consultPayMethod === 'card' ? theme.tealMist : 'transparent' }}>
+              <input type="radio" name="consultPayMethod" value="card" checked={consultPayMethod === 'card'} onChange={e => setConsultPayMethod(e.target.value)} style={{ accentColor: theme.tealDeep }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: theme.navy }}>Card / Bank Transfer (Paystack)</span>
+                <span style={{ fontSize: 11, color: theme.gray500 }}>Pay directly with debit card, bank transfer, or USSD</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </Modal>
       <ConfirmDialog
         show={confirmSubOpen}
         onClose={() => setConfirmSubOpen(false)}
