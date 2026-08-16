@@ -387,15 +387,18 @@ const distanceMeters = (p, u) => {
         {/* Laptop+: multi-column result grid — RESPONSIVENESS.md calls this out
             explicitly as a desktop-appropriate expansion once there's width for
             it. auto-fill/minmax (the GRID_SYSTEM.md card-grid pattern) rather
-            than a fixed column count, since result counts vary a lot by query. */}
-        <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 12px' }}>
+            than a fixed column count, since result counts vary a lot by query.
+            Mobile: single column that fills viewport width. */}
+        <div style={isMobile
+          ? { display: 'flex', flexDirection: 'column', gap: 8 }
+          : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '0 12px' }}>
         {products.map((p, idx) => {
           // WhatsApp: product's own number, else the business's number (CareHub
           // inventory), else the owner profile's phone (standalone CareFind seller).
           const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
           const callLink = telLink(sellerPhone(p))
           return (
-            <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, marginBottom: 8 }}>
+            <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                 {p.image_url
                   ? <div style={{ width: 46, height: 46, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
@@ -486,7 +489,7 @@ const distanceMeters = (p, u) => {
           const bizWa = whatsappLink(b.whatsapp, `Hi, I'm interested in ${b.name} on CareFind.`)
           const bizCall = telLink(b.phone)
           return (
-          <div key={b.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg }}>
+          <div key={b.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg }}>
             <Link to={`/business/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12 }}>
               <div style={{ width: 46, height: 46, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
                 {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={20} aria-hidden="true" />)}
@@ -529,7 +532,7 @@ const distanceMeters = (p, u) => {
         })}
 
         {professionals.map((pr, idx) => (
-          <Link key={pr.id} className="mm-card" to={`/u/${pr.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, marginBottom: 8, background: theme.cardBg, alignItems: 'center' }}>
+          <Link key={pr.id} className="mm-card" to={`/u/${pr.id}`} style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg, alignItems: 'center' }}>
             <Avatar name={pr.full_name || pr.display_name} size={44} />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 800, color: theme.navy }}>
