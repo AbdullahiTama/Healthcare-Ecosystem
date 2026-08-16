@@ -1,0 +1,182 @@
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { describe, it, expect, vi } from 'vitest'
+
+// Minimal fake Supabase: every builder method is a thenable that resolves to
+// the table's rows filtered by the eq/in constraints accumulated so far. The
+// deep-linked post fetch goes through the mocked postRepository instead.
+const mockSupabase = vi.hoisted(() => {
+  const data = {
+    tables: {
+      posts: [], post_reactions: [], post_reposts: [], profiles: [],
+      post_comments: [], post_shares: [], saved_posts: [], follows: [],
+      user_subscriptions: [], businesses: [], feed_ranking_config: [],
+      candidate_generation_pools: [], content_distribution_experiments: [],
+      news: [], live_sessions: [], live_shows: [], playlists: [], feed_config: [],
+    },
+    rpcRows: {},
+  }
+  const rows = (table) => data.tables[table] || []
+  const matches = (row, cons) =>
+    Object.entries(cons).every(([col, vals]) => {
+      const arr = Array.isArray(vals) ? vals : [vals]
+      return arr.some((v) => row[col] === v)
+    })
+  function builder(table) {
+    const cons = {}
+    const b = {
+      select: vi.fn(() => b),
+      order: vi.fn(() => b),
+      limit: vi.fn(() => b),
+      not: vi.fn(() => b),
+      or: vi.fn(() => b),
+      textSearch: vi.fn(() => b),
+      ilike: vi.fn(() => b),
+      eq: vi.fn((col, v) => { (cons[col] = cons[col] || []).push(v); return b }),
+      in: vi.fn((col, vs) => { (cons[col] = cons[col] || []).push(vs); return b }),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: rows(table).find((r) => matches(r, cons)) || null, error: null })),
+      single: vi.fn(() => Promise.resolve({ data: rows(table).find((r) => matches(r, cons)) || null, error: null })),
+      insert: vi.fn(() => Promise.resolve({ data: null, error: null })),
+      upsert: vi.fn(() => Promise.resolve({ data: null, error: null })),
+      then: (resolve) => Promise.resolve({ data: rows(table).filter((r) => matches(r, cons)), error: null }).then(resolve),
+    }
+    return b
+  }
+  const supabase = {
+    from: vi.fn((table) => builder(table)),
+    rpc: vi.fn((fn) => Promise.resolve({ data: data.rpcRows[fn] || [], error: null })),
+    channel: vi.fn(() => {
+      const ch = { on: vi.fn(() => ch), subscribe: vi.fn(() => ch), unsubscribe: vi.fn(() => ch) }
+      return ch
+    }),
+    removeChannel: vi.fn(() => {}),
+    storage: {
+      from: vi.fn(() => ({
+        upload: vi.fn(() => Promise.resolve({ error: null })),
+        getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'blob:mock-url' } })),
+      })),
+    },
+  }
+  return { supabase, data }
+})
+
+vi.mock('../../config/supabaseClient', () => ({
+  supabase: mockSupabase.supabase,
+}))
+vi.mock('../../providers/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}))
+vi.mock('./repositories', () => ({
+  postRepository: { getPostById: vi.fn() },
+  commentRepository: {},
+}))
+
+// Leaf/heavy children: not exercised by these tests.
+vi.mock('../../utils/VisualCard.jsx', () => ({ default: () => <div /> }))
+vi.mock('../news-publishing/ArticleEditor.jsx', () => ({ default: () => <div /> }))
+vi.mock('./PostMenu.jsx', () => ({ default: () => null }))
+vi.mock('./components/CommentThread.jsx', () => ({ CommentThread: () => null }))
+vi.mock('./Stories.jsx', () => ({ default: () => null }))
+vi.mock('./Logo.jsx', () => ({ default: () => null }))
+vi.mock('./GoLive.jsx', () => ({ default: () => null }))
+vi.mock('./UserGoLive.jsx', () => ({ default: () => null }))
+vi.mock('../../components/VoiceRecorder.jsx', () => ({ default: () => null }))
+vi.mock('../../components/DrawingBoard.jsx', () => ({ default: () => null }))
+vi.mock('../../components/SupportPrompt.jsx', () => ({ default: () => null }))
+vi.mock('../../components/BottomNav.jsx', () => ({ default: () => null }))
+vi.mock('../../components/layout/AppShell.jsx', () => ({
+  default: ({ children }) => <div>{children}</div>,
+}))
+vi.mock('../../components/layout/RightSidebar.jsx', () => ({ default: () => null }))
+vi.mock('../subscriptions-monetization/GiftPanel.jsx', () => ({ default: () => null }))
+
+vi.mock('../../services/notify.js', () => ({ notify: vi.fn() }))
+vi.mock('../../services/ensureProfile.js', () => ({ ensureProfile: vi.fn() }))
+vi.mock('../../lib/activeIdentity', () => ({ getActiveIdentity: vi.fn(() => null) }))
+vi.mock('../../utils/share.js', () => ({
+  shareOrCopy: vi.fn().mockResolvedValue('copied'),
+  mediaToFile: vi.fn().mockResolvedValue(null),
+}))
+vi.mock('../../utils/voiceCard.js', () => ({
+  canExportVideo: () => false,
+  exportImage: vi.fn().mockResolvedValue({}),
+  exportVideo: vi.fn().mockRejectedValue(new Error('no-video')),
+  shareOrDownload: vi.fn(),
+}))
+vi.mock('../../utils/imageResize.js', () => ({ resizeImage: vi.fn() }))
+
+import Feed from './Feed.jsx'
+import { postRepository } from './repositories'
+import { shareOrCopy } from '../../utils/share.js'
+
+function makePost(overrides = {}) {
+  return {
+    id: 'p1',
+    user_id: 'u1',
+    post_type: 'text',
+    content: 'A shareable post body used across the feed tests.',
+    created_at: '2026-01-01T00:00:00.000Z',
+    view_count: 0,
+    repost_count: 0,
+    posted_as_type: null,
+    posted_as_id: null,
+    repost_of: null,
+    image_url: null,
+    video_url: null,
+    audio_url: null,
+    theme: null,
+    rating: null,
+    ...overrides,
+  }
+}
+
+function renderFeed(initialPath = '/feed') {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <Feed />
+    </MemoryRouter>
+  )
+}
+
+beforeEach(() => {
+  mockSupabase.data.tables.posts = []
+  mockSupabase.data.tables.profiles = []
+  mockSupabase.data.rpcRows = {}
+  postRepository.getPostById.mockReset()
+  shareOrCopy.mockClear()
+})
+
+describe('Feed share deep link (Item 12)', () => {
+  it('shares a post with a ?post=<id> URL', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+
+    const share = await screen.findByRole('button', { name: /share this post/i })
+    fireEvent.click(share)
+
+    await waitFor(() => expect(shareOrCopy).toHaveBeenCalled())
+    const arg = shareOrCopy.mock.calls[0][0]
+    const url = new URL(arg.url)
+    expect(url.pathname).toBe('/feed')
+    expect(url.searchParams.get('post')).toBe('p1')
+  })
+
+  it('opens a deep-linked post in the detail modal and clears the param', async () => {
+    postRepository.getPostById.mockResolvedValue(makePost({ content: 'Deep linked body text' }))
+    renderFeed('/feed?post=p1')
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Deep linked body text/)).toBeInTheDocument()
+    expect(postRepository.getPostById).toHaveBeenCalledWith('p1')
+    await waitFor(() => expect(window.location.search).not.toContain('post='))
+  })
+
+  it('closes silently when the deep-linked post is missing', async () => {
+    postRepository.getPostById.mockRejectedValue(new Error('PGRST116'))
+    renderFeed('/feed?post=p1')
+
+    await waitFor(() => expect(postRepository.getPostById).toHaveBeenCalledWith('p1'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(window.location.search).not.toContain('post=')
+  })
+})

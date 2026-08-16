@@ -1,5 +1,5 @@
-﻿import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
@@ -37,9 +37,10 @@ import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
-import { CommentThread } from './components/CommentThread.jsx'
-import PostMenu from './PostMenu.jsx'
-import { Card, Pill, TealBtn, GhostBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import PostCard from './PostCard.jsx'
+import PostDetailModal from './PostDetailModal.jsx'
+import { postRepository } from './repositories'
+import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
 import RightSidebar from '../../components/layout/RightSidebar.jsx'
@@ -172,6 +173,20 @@ function Feed() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
 
+  // Detail modal (Item 12): one post rendered in full via the shared PostCard.
+  // Opened by a clamped card's "See more" or by a deep link (?post=<id>). The
+  // deep-linked post loads async, so loading/error states live alongside it.
+  const [detailPost, setDetailPost] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
+  // Item 12 deep link: ?post=<id> opens that post on top of the normal feed.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkPostId = searchParams.get('post')
+  // Item 5 bottom-nav Videos entry lands on /feed?tab=video; applied on mount
+  // and then cleared so it never fights the persisted tab preference.
+  const tabParam = searchParams.get('tab')
+  const urlTabAppliedRef = useRef(false)
+
   // #7 In-feed post search. feedResults is null when not searching, so the
   // feed renders the normal ranked list; otherwise it renders search hits.
   const [feedQuery, setFeedQuery] = useState('')
@@ -186,22 +201,6 @@ function Feed() {
   const pullStartY = useRef(0)
   const [pullDistance, setPullDistance] = useState(0)
   const [pullRefreshing, setPullRefreshing] = useState(false)
-
-  // One pill per post, never two. `text` posts deliberately have no pill : 
-  // labelling the default kind adds noise without adding information.
-  const POST_KIND = {
-    question: 'Question',
-    article: 'Article',
-    visual: 'Voice',
-    review: 'Review',
-  }
-
-  const POST_KIND_TONE = {
-    question: 'amber',
-    article: 'blue',
-    visual: 'teal',
-    review: 'purple',
-  }
 
   // The four things a reader can actually report. Free text was the old
   // behaviour and produced unmoderatable rows ("idk", ""), so the reasons are
@@ -440,6 +439,170 @@ function Feed() {
     setPosts(ranked)
   }
 
+  // Single-post enrichment for the detail modal (deep link path). Mirrors what
+  // enrichAndSetPosts does for the whole feed, but MERGES into the shared
+  // state instead of overwriting it: a deep-linked post must light up the same
+  // counts the feed cards show (likes, comment totals, gifts, shares, saves,
+  // the author profile, follow/repost state) without ever clobbering the
+  // loaded feed. Returns the (unchanged) post so the caller can open the modal.
+  async function enrichSinglePost(postData) {
+    const post = Array.isArray(postData) ? postData[0] : postData
+    if (!post) return null
+
+    const { data: reactionData } = await supabase
+      .from('post_reactions')
+      .select('id, post_id, user_id')
+      .eq('post_id', post.id)
+    setReactions((prev) => {
+      const seen = new Set(prev.map((r) => r.id))
+      return [...prev, ...(reactionData || []).filter((r) => !seen.has(r.id))]
+    })
+
+    if (user) {
+      const { data: repostData } = await supabase
+        .from('post_reposts')
+        .select('id, post_id')
+        .eq('user_id', user.id)
+        .eq('post_id', post.id)
+      setRepostedPosts((prev) => {
+        const seen = new Set(prev.map((r) => r.post_id))
+        return [...prev, ...(repostData || []).filter((r) => !seen.has(r.post_id))]
+      })
+    }
+
+    // Gift totals for the post in one RPC; skipped (no state change) if the
+    // RPC isn't available.
+    try {
+      const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: [post.id] })
+      if (giftRows?.[0]) setGiftStats((prev) => ({ ...prev, [post.id]: { gift_count: giftRows[0].gift_count, total_coins: giftRows[0].total_coins } }))
+    } catch (e) {
+      console.warn('gift stats unavailable:', e)
+    }
+
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country')
+      .eq('id', post.user_id)
+      .maybeSingle()
+    if (profileData) setProfiles((prev) => ({ ...prev, [profileData.id]: profileData }))
+
+    const { data: commentRows } = await supabase
+      .from('post_comments')
+      .select('post_id, user_id')
+      .eq('post_id', post.id)
+    setCommentCounts((prev) => ({ ...prev, [post.id]: (commentRows || []).length }))
+
+    const [shareRows, saveRows, followRows, mySavedRows] = await Promise.all([
+      supabase.from('post_shares').select('post_id').eq('post_id', post.id),
+      supabase.from('saved_posts').select('post_id').eq('post_id', post.id),
+      supabase.from('follows').select('id, follower_id, following_id').eq('following_id', post.user_id),
+      user ? supabase.from('saved_posts').select('post_id').eq('user_id', user.id).eq('post_id', post.id) : null,
+    ])
+    setShareCounts((prev) => ({ ...prev, [post.id]: (shareRows?.data || []).length }))
+    setSaveCounts((prev) => ({ ...prev, [post.id]: (saveRows?.data || []).length }))
+    setFollows((prev) => {
+      const seen = new Set(prev.map((f) => f.id))
+      return [...prev, ...(followRows?.data || []).filter((f) => !seen.has(f.id))]
+    })
+    if (mySavedRows?.data?.length) {
+      setSavedPosts((prev) => {
+        const seen = new Set(prev.map((s) => s.post_id))
+        return [...prev, ...mySavedRows.data.filter((s) => !seen.has(s.post_id))]
+      })
+    }
+
+    return post
+  }
+
+  // Detail modal open/close. Both the See-more button and the deep link land
+  // here so every surface opens the post through one path.
+  function openPostDetail(post) {
+    setDetailPost(post)
+    setDetailLoading(false)
+    setDetailError('')
+  }
+
+  function closePostDetail() {
+    setDetailPost(null)
+    setDetailLoading(false)
+    setDetailError('')
+  }
+
+  // Clear the ?post= param after the deep-linked post has been resolved,
+  // without navigating (mirrors BusinessProfile's ?reference= handling).
+  function clearPostParam() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('post')
+    const qs = next.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    setSearchParams(next, { replace: true })
+  }
+
+  // Mirrors clearPostParam for the ?tab= landing param (Item 5).
+  function clearTabParam() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    const qs = next.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    setSearchParams(next, { replace: true })
+  }
+
+  // Item 5: honor a ?tab=<key> landing param (bottom-nav Videos entry). Applied
+  // once on mount, then dropped so a reload returns to the persisted tab.
+  useEffect(() => {
+    if (!tabParam || !FEED_TABS.some(([key]) => key === tabParam)) return
+    urlTabAppliedRef.current = true
+    setFeedTab(tabParam)
+    clearTabParam()
+  }, [])
+
+  // Item 12 deep link: when the URL carries ?post=<id>, open that post in the
+  // detail modal on top of the normal feed, then drop the param. A post
+  // already in the loaded feed list is preferred (no refetch); otherwise it's
+  // fetched + enriched through the same path the feed uses. Missing/deleted
+  // posts close the modal silently — the feed itself is never disturbed.
+  useEffect(() => {
+    if (!deepLinkPostId) return
+    let cancelled = false
+    const existing = posts.find((p) => p.id === deepLinkPostId)
+    const resolveTo = (post) => {
+      if (cancelled) return
+      openPostDetail(post)
+      clearPostParam()
+    }
+    const fail = () => {
+      if (cancelled) return
+      closePostDetail()
+      clearPostParam()
+    }
+
+    if (existing) {
+      resolveTo(existing)
+      return () => { cancelled = true }
+    }
+
+    setDetailLoading(true)
+    postRepository
+      .getPostById(deepLinkPostId)
+      .then((data) => {
+        if (cancelled) return
+        if (!data) { fail(); return }
+        return enrichSinglePost(data).then(() => data)
+      })
+      .then((post) => { if (!cancelled && post) resolveTo(post) })
+      .catch(() => { if (!cancelled) fail() })
+    return () => { cancelled = true }
+  }, [deepLinkPostId])
+
+  // The feed loads in parallel with the deep-link fetch. If the deep-linked
+  // post lands in the loaded list while the modal is still loading, swap to
+  // that in-memory copy instead of the fetched one.
+  useEffect(() => {
+    if (!deepLinkPostId || !detailLoading) return
+    const existing = posts.find((p) => p.id === deepLinkPostId)
+    if (existing) { openPostDetail(existing); clearPostParam() }
+  }, [posts, deepLinkPostId, detailLoading])
+
   async function loadFeed() {
     setLoading(true)
     setNewPostsCount(0)
@@ -614,6 +777,7 @@ function Feed() {
   // isn't remembered across visits.
   useEffect(() => {
     if (!user) { feedConfigLoadedRef.current = true; return }
+    if (urlTabAppliedRef.current) { feedConfigLoadedRef.current = true; return }
     supabase
       .from('feed_config')
       .select('value')
@@ -1210,7 +1374,7 @@ function Feed() {
     // WhatsApp recipients always get the media, never just the caption.
     const mediaUrl = post.image_url || post.video_url || null
     const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: window.location.href, files: file ? [file] : undefined, mediaUrl })
+    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/feed?post=${post.id}`, files: file ? [file] : undefined, mediaUrl })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
 
@@ -1432,6 +1596,56 @@ function Feed() {
   const trendingPosts = [...posts]
     .sort((a, b) => (likeCount(b.id) + (commentCounts[b.id] || 0)) - (likeCount(a.id) + (commentCounts[a.id] || 0)))
     .slice(0, 4)
+
+  // Every prop PostCard needs besides `post`/`preview`. Shared verbatim by the
+  // feed list and the detail modal so both surfaces render byte-identically
+  // (same counts, same handlers, same comment thread state).
+  const cardProps = {
+    isLocked,
+    user,
+    navigate,
+    profiles,
+    authorName,
+    formatCount,
+    timeAgo,
+    likeCount,
+    userHasLiked,
+    commentTotal,
+    shareCount,
+    saveCount,
+    giftCount,
+    userHasReposted,
+    isSaved,
+    isFollowing,
+    toggleLike,
+    toggleComments,
+    toggleRepost,
+    toggleSave,
+    toggleFollow,
+    sharePost,
+    shareCard,
+    openReport,
+    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
+    handleEditPost,
+    handleCommentAdded,
+    openComments,
+    comments,
+    setComments,
+    editingComment,
+    setEditingComment,
+    replyingTo,
+    setReplyingTo,
+    commentDrafts,
+    setCommentDrafts,
+    myUsername,
+    myAvatar,
+    reportedPosts,
+    sharingId,
+    editingPost,
+    setEditingPost,
+    setConfirmDeleteId,
+    onOpenDetail: openPostDetail,
+  }
 
   const bodyContent = (
     <div style={isMobile
@@ -2176,341 +2390,7 @@ function Feed() {
           </div>
         )}
         {feedTab !== 'series' && displayPosts.map((post) => (
-          <Card key={post.id} style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
-            {/* Card header: identity left, one kind pill + overflow menu right.
-                Identity reads name â†’ verified badge â†’ handle â†’ credential â†’
-                time, i.e. "who is this, and can I trust them" before anything
-                else (Design Principle 12: trust is a design output). */}
-            <div style={{
-              display: 'flex', alignItems: 'flex-start', gap: 11,
-              padding: post.post_type === 'visual' ? '14px 16px 0 16px' : 0,
-              marginBottom: post.post_type === 'visual' ? 0 : 10,
-            }}>
-              <Link
-                to={`/u/${post.user_id}`}
-                aria-label={`${authorName(post)}'s profile`}
-                style={{ position: 'relative', flexShrink: 0, textDecoration: 'none', display: 'block' }}
-              >
-                <div
-                  aria-hidden="true"
-                  style={{
-                    width: 42, height: 42, borderRadius: post.posted_as_type ? theme.radius.md : '50%',
-                    background: post.posted_as_type
-                      ? theme.navy
-                      : (profiles[post.user_id]?.avatar_url
-                          ? `url(${profiles[post.user_id].avatar_url}) center/cover`
-                          : theme.tealDeep),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 15, fontWeight: 800,
-                  }}
-                >
-                  {post.posted_as_type
-                    ? (post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />)
-                    : (!profiles[post.user_id]?.avatar_url &&
-                        (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
-                </div>
-
-                {/* Follow badge sitting on the avatar (TikTok-style) */}
-                {user && post.user_id !== user.id && (
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFollow(post.user_id) }}
-                    aria-label={isFollowing(post.user_id) ? `Unfollow ${authorName(post)}` : `Follow ${authorName(post)}`}
-                    style={{
-                      position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
-                      width: 21, height: 21, borderRadius: '50%', padding: 0, lineHeight: 1,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer',
-                      background: isFollowing(post.user_id) ? '#fff' : theme.tealDeep,
-                      border: isFollowing(post.user_id) ? `2px solid ${theme.tealDeep}` : '2px solid #fff',
-                      color: isFollowing(post.user_id) ? theme.tealDeep : '#fff',
-                      boxShadow: isFollowing(post.user_id) ? 'none' : theme.elevation[2],
-                    }}
-                  >
-                    {isFollowing(post.user_id) ? <Check size={12} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
-                  </button>
-                )}
-              </Link>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                  <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none' }}>
-                    <span style={{ fontSize: 14.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
-                  </Link>
-                  {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
-                    <BadgeCheck size={15} color={theme.tealDeep} style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
-                  )}
-                  {!post.posted_as_type && profiles[post.user_id]?.display_name && (
-                    <span style={{ fontSize: 12.5, color: theme.gray400, fontWeight: 600 }}>
-                      @{profiles[post.user_id].display_name}
-                    </span>
-                  )}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-                  {post.posted_as_type ? (
-                    <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>
-                      {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
-                      {' Â· posted by '}
-                      {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
-                    </span>
-                  ) : (
-                    profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                        color: theme.tealDeep, background: theme.tealMist,
-                        padding: '2px 8px', borderRadius: theme.radius.full,
-                      }}>
-                        <BadgeCheck size={12} aria-hidden="true" /> {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
-                      </span>
-                    )
-                  )}
-                  <span style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
-                    <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                {POST_KIND[post.post_type] && <Pill label={POST_KIND[post.post_type]} type={POST_KIND_TONE[post.post_type]} />}
-                <PostMenu
-                  label={`Options for ${authorName(post)}'s post`}
-                  items={user && post.user_id === user.id
-                    ? [
-                        { key: 'edit', label: 'Edit post', Icon: Pencil, onSelect: () => setEditingPost({ id: post.id, content: post.content }) },
-                        { key: 'delete', label: 'Delete post', Icon: Trash2, danger: true, onSelect: () => setConfirmDeleteId(post.id) },
-                      ]
-                    : [
-                        { key: 'save', label: isSaved(post.id) ? 'Remove from saved' : 'Save post', Icon: Bookmark, onSelect: () => (user ? toggleSave(post.id) : navigate('/login')) },
-                        { key: 'report', label: reportedPosts.includes(post.id) ? 'Reported' : 'Report post', Icon: Flag, danger: true, onSelect: () => openReport(post.id) },
-                      ]}
-                />
-              </div>
-            </div>
-
-            {/* Edit post mode */}
-            {editingPost?.id === post.id && (
-              <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <textarea
-                  value={editingPost.content}
-                  onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
-                  rows={3}
-                  style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
-                />
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
-                  <GhostBtn onClick={() => setEditingPost(null)} style={{ flex: 1 }}>Cancel</GhostBtn>
-                </div>
-              </div>
-            )}
-
-            {isLocked(post) ? (
-              <div style={{ margin: '8px 0 10px 0' }}>
-                {/* Teaser: the opening of the post, fading into nothing */}
-                <div style={{ position: 'relative', maxHeight: 110, overflow: 'hidden' }}>
-                  <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>
-                    {String(post.content || '').slice(0, 220)}
-                  </p>
-                  <div style={{
-                    position: 'absolute', left: 0, right: 0, bottom: 0, height: 70,
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0), #fff)',
-                  }} />
-                </div>
-
-                {/* The gate */}
-                <div style={{
-                  border: `1px solid ${theme.border}`, borderRadius: 14,
-                  padding: 16, textAlign: 'center', background: theme.bg, marginTop: 4,
-                }}>
-                  <p style={{ margin: '0 0 6px 0', display: 'flex', justifyContent: 'center', color: theme.tealDeep }}><Lock size={22} aria-hidden="true" /></p>
-                  <p style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>
-                    Subscriber-only content
-                  </p>
-                  <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
-                    Subscribe to {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'this creator'} to read the rest.
-                  </p>
-                  <Link
-                    to={`/u/${post.user_id}`}
-                    style={{
-                      display: 'inline-block', padding: '10px 22px', background: theme.tealDeep,
-                      color: '#fff', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none',
-                    }}
-                  >
-                    Subscribe to read
-                  </Link>
-                </div>
-              </div>
-            ) : post.post_type === 'visual' ? (
-              <div>
-                <VisualCard templateKey={post.theme} content={post.content} hasVoice={!!post.audio_url} imageUrl={post.image_url} videoUrl={post.video_url} username={profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''} />
-
-                {post.audio_url && (
-                  <audio
-                    src={post.audio_url}
-                    controls
-                    preload="none"
-                    style={{ width: '100%', height: 38, marginTop: 8 }}
-                  />
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => shareCard(post)}
-                  disabled={sharingId === post.id}
-                  style={{
-                    width: '100%', marginTop: 8, padding: '10px 12px',
-                    background: theme.navy, color: '#fff', border: 'none',
-                    borderRadius: theme.radius.md, fontWeight: 800, fontSize: 12.5, cursor: 'pointer',
-                  }}
-                >
-                  {sharingId === post.id
-                    ? 'Preparingâ€¦'
-                    : post.audio_url && canExportVideo()
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download with voice Â· share to status</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Download size={15} aria-hidden="true" /> Download card Â· share to status</span>}
-                </button>
-              </div>
-            ) : (
-              <>
-                {post.post_type === 'review' && post.rating && (
-                  <p style={{ margin: '8px 0 6px 0', display: 'flex', gap: 1 }}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} size={15} color={theme.starAmber} fill={n <= post.rating ? theme.starAmber : 'none'} aria-hidden="true" />
-                    ))}
-                  </p>
-                )}
-                {post.post_type === 'article' || post.post_type === 'premium' ? (
-
-                  <div style={{ margin: '10px 0 12px 0' }}>
-                    <ArticleEditor value={post.content} readOnly />
-                  </div>
-                ) : (
-                  <div style={{ margin: '8px 0 10px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>
-                    {renderMarkdown(post.content)}
-                  </div>
-                )}
-                {post.image_url && post.post_type !== 'visual' && (
-                  <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
-                )}
-              </>
-            )}
-            {/* Engagement bar. Reading actions (react, reply, pass on) group
-                left; keeping and supporting group right: the same left/right
-                split on every card, so the target a user reaches for never
-                moves. Views are a read-only fact, so they're text, not a
-                button that does nothing when pressed. The icons were
-                hand-drawn SVG copies of lucide glyphs with hardcoded colours
-                and no labels; the row's CSS lives in global.css. */}
-            <div className="cf-eng-row" style={{
-              borderTop: `1px solid ${theme.border}`, marginTop: 10, paddingTop: 4,
-              marginLeft: post.post_type === 'visual' ? 16 : 0,
-              marginRight: post.post_type === 'visual' ? 16 : 0,
-              marginBottom: post.post_type === 'visual' ? 16 : 0,
-            }}>
-              <div className="cf-eng-group">
-                {/* Like */}
-                <button
-                  className="cf-eng-item"
-                  onClick={() => (user ? toggleLike(post.id) : navigate('/login'))}
-                  aria-pressed={userHasLiked(post.id)}
-                  aria-label={userHasLiked(post.id) ? 'Unlike this post' : 'Like this post'}
-                  style={{ color: userHasLiked(post.id) ? theme.danger : theme.gray500 }}
-                >
-                  <Heart size={18} aria-hidden="true" fill={userHasLiked(post.id) ? theme.danger : 'none'} />
-                  {likeCount(post.id) > 0 && (
-                    <span>{formatCount(likeCount(post.id))} {likeCount(post.id) === 1 ? 'like' : 'likes'}</span>
-                  )}
-                </button>
-
-                {/* Comment */}
-                <button
-                  className="cf-eng-item"
-                  onClick={() => toggleComments(post.id)}
-                  aria-expanded={!!openComments[post.id]}
-                  aria-label={`Comments on ${authorName(post)}'s post`}
-                  style={{ color: theme.gray500 }}
-                >
-                  <MessageCircle size={18} aria-hidden="true" />
-                  <span>{commentTotal(post.id) > 0 ? formatCount(commentTotal(post.id)) : 'Comment'}</span>
-                </button>
-
-                {/* Share */}
-                <button className="cf-eng-item" onClick={() => sharePost(post)} aria-label="Share this post" style={{ color: theme.gray500 }}>
-                  <Share2 size={18} aria-hidden="true" />
-                  <span>{shareCount(post.id) > 0 ? formatCount(shareCount(post.id)) : 'Share'}</span>
-                </button>
-
-                {/* Repost: hidden on reposts themselves â€” a repost of a
-                    repost would fan out the same content twice. */}
-                {!post.repost_of && (
-                  <button
-                    className="cf-eng-item"
-                    onClick={() => (user ? toggleRepost(post) : navigate('/login'))}
-                    aria-pressed={userHasReposted(post.id)}
-                    aria-label={userHasReposted(post.id) ? 'Undo repost' : 'Repost this post'}
-                    style={{ color: userHasReposted(post.id) ? theme.tealDeep : theme.gray500 }}
-                  >
-                    <Repeat2 size={18} aria-hidden="true" />
-                    {post.repost_count > 0 && (
-                      <span>{formatCount(post.repost_count)} {post.repost_count === 1 ? 'repost' : 'reposts'}</span>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              <div className="cf-eng-group">
-                {post.view_count > 0 && (
-                  <span className="cf-eng-meta" style={{ color: theme.gray400 }}>
-                    <Eye size={15} aria-hidden="true" /> {formatCount(post.view_count)}
-                  </span>
-                )}
-
-                {/* Gift */}
-                <button
-                  className="cf-eng-item"
-                  aria-label={`Send a gift to ${authorName(post)}`}
-                  onClick={() => (user ? setGiftingPost({ postId: post.id, authorId: post.user_id }) : navigate('/login'))}
-                  style={{ color: theme.tealDeep }}
-                >
-                  <Gift size={18} aria-hidden="true" />
-                  {giftCount(post.id) > 0 && (
-                    <span>{formatCount(giftCount(post.id))}</span>
-                  )}
-                </button>
-
-                {/* Save */}
-                <button
-                  className="cf-eng-item"
-                  onClick={() => (user ? toggleSave(post.id) : navigate('/login'))}
-                  aria-pressed={isSaved(post.id)}
-                  aria-label={isSaved(post.id) ? 'Remove from saved' : 'Save this post'}
-                  style={{ color: isSaved(post.id) ? theme.tealDeep : theme.gray500 }}
-                >
-                  <Bookmark size={18} aria-hidden="true" fill={isSaved(post.id) ? theme.tealDeep : 'none'} />
-                  {saveCount(post.id) > 0 && (
-                    <span>{formatCount(saveCount(post.id))}</span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {openComments[post.id] && (
-              <CommentThread
-                postId={post.id}
-                user={user}
-                comments={comments[post.id] || []}
-                onCommentsChange={(updated) => setComments(prev => ({ ...prev, [post.id]: updated }))}
-                editingComment={editingComment}
-                setEditingComment={setEditingComment}
-                replyingTo={replyingTo}
-                setReplyingTo={setReplyingTo}
-                commentDrafts={commentDrafts}
-                setCommentDrafts={setCommentDrafts}
-                myUsername={myUsername}
-                myAvatar={myAvatar}
-                onCommentAdded={handleCommentAdded}
-              />
-            )}
-          </Card>
+          <PostCard key={post.id} {...cardProps} post={post} />
         ))}
       </div>
       <Modal show={createOpen} onClose={() => setCreateOpen(false)} title="Create" sheet>
@@ -2631,6 +2511,18 @@ function Feed() {
           ))}
         </div>
       </Modal>
+
+      {/* Item 12 detail modal: full content for one post. Opened by "See
+          more" on a clamped card or by a ?post=<id> deep link; the deep-link
+          post loads async (loading/error states handled inside the modal). */}
+      <PostDetailModal
+        show={!!detailPost || detailLoading}
+        post={detailPost}
+        loading={detailLoading}
+        error={detailError}
+        onClose={closePostDetail}
+        cardProps={cardProps}
+      />
 
       <Toast msg={toast.msg} type={toast.type} />
     </div>
