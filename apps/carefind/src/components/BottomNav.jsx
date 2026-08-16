@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
-import { Compass, Home, Newspaper, Plus, User } from 'lucide-react'
+import { LogOut, Home, Newspaper, Plus, User } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function BottomNav({ onCompose }) {
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const isActive = (path) => location.pathname === path
   const isHomeActive = location.pathname === '/feed'
@@ -118,6 +118,18 @@ function BottomNav({ onCompose }) {
         </span>
         Profile
       </Link>
+      <button
+        onClick={() => user && (async () => { await signOut(); navigate('/login') })()}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          borderRadius: theme.radius.md, color: theme.alert, fontSize: 12, fontWeight: 600,
+          border: 'none', background: 'rgba(239, 68, 68, 0.1)', cursor: 'pointer',
+          marginLeft: 'auto', width: 'auto',
+        }}
+        aria-label="Sign out"
+      >
+        <LogOut size={16} /> Sign out
+      </button>
     </div>
   )
 }
