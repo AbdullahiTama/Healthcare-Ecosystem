@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
-import { Home, Compass, Plus, Newspaper, User } from 'lucide-react'
+import { Clapperboard, Compass, Home, Newspaper, Plus, User } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function BottomNav({ onCompose }) {
@@ -10,6 +10,11 @@ function BottomNav({ onCompose }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const isActive = (path) => location.pathname === path
+  // The Videos entry deep-links into the feed's video tab via ?tab=video (the
+  // Feed owner honours it); Home stays unlit while that tab is active so the
+  // two feed entries never both look selected.
+  const isHomeActive = location.pathname === '/feed' && !location.search
+  const isVideosActive = location.pathname === '/feed' && location.search === '?tab=video'
   const [unreadNews, setUnreadNews] = useState(0)
 
   const itemStyle = (active) => ({
@@ -59,8 +64,8 @@ function BottomNav({ onCompose }) {
       display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '10px 0 18px 0',
       boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
     }}>
-      <Link to="/feed" style={itemStyle(isActive('/feed'))}>
-        <Home size={20} strokeWidth={isActive('/feed') ? 2.4 : 2} aria-hidden="true" />
+      <Link to="/feed" style={itemStyle(isHomeActive)}>
+        <Home size={20} strokeWidth={isHomeActive ? 2.4 : 2} aria-hidden="true" />
         Home
       </Link>
       <Link to="/search" style={itemStyle(isActive('/search'))}>
@@ -90,6 +95,10 @@ function BottomNav({ onCompose }) {
             {unreadNews > 99 ? '99+' : unreadNews}
           </span>
         )}
+      </Link>
+      <Link to="/feed?tab=video" style={itemStyle(isVideosActive)}>
+        <Clapperboard size={20} strokeWidth={isVideosActive ? 2.4 : 2} aria-hidden="true" />
+        Videos
       </Link>
       <Link to="/profile" style={itemStyle(isActive('/profile'))}>
         <User size={20} strokeWidth={isActive('/profile') ? 2.4 : 2} aria-hidden="true" />

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, BadgeCheck, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
-  MessageSquare, Repeat2, Star, User, X,
+  MessageSquare, Play, Repeat2, Star, User, X,
 } from 'lucide-react'
 import { supabase } from './config/supabaseClient'
 import { useAuth } from './providers/AuthContext'
@@ -101,7 +101,7 @@ function PublicProfile() {
         supabase.from('posts').select('id, content, created_at, post_type, theme, image_url').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
-        supabase.from('stories').select('id, title, body, image_url, bg_color, created_at').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
+        supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
         supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
       ])
 
@@ -109,13 +109,22 @@ function PublicProfile() {
       setFollowerCount(followerData.count || 0)
       setFollowingCount(followingData.count || 0)
       setPostCount(postData.data?.length || 0)
-      setUserStories(storyData.data || [])
       setPlaylists(playlistData.data || [])
+
+      // Rank the profile's stories the same way the feed rail does (Stories.jsx):
+      // explicit position first (nulls last), then view count, then newest.
+      const stories = (storyData.data || []).sort((a, b) => {
+        const pa = a.position ?? Infinity
+        const pb = b.position ?? Infinity
+        if (pa !== pb) return pa - pb
+        if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
+        return new Date(b.created_at) - new Date(a.created_at)
+      })
+      setUserStories(stories)
 
       // Which of this profile's stories the CURRENT viewer has already seen
       // (RLS scopes the query to the viewer's own story_views rows) — this is
       // what greys the ring out once every story has been watched.
-      const stories = storyData.data || []
       if (user && stories.length) {
         const seen = await fetchViewedStoryIds(supabase, stories.map((s) => s.id))
         setViewedStoryIds(seen)
@@ -292,6 +301,12 @@ function PublicProfile() {
   function navigateStory(next) {
     setViewerIndex(next === null || next < 0 || next >= userStories.length ? null : next)
   }
+  // Chooser's "View Profile" — we're already on the profile, so dismiss the
+  // popover and bring the profile content into view rather than doing nothing.
+  function scrollToProfileContent() {
+    const el = document.getElementById('profile-content')
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   async function toggleFollow() {
     if (!user) return
@@ -455,11 +470,43 @@ function PublicProfile() {
     </div>
   )
 
+  // Menu-item look for the story chooser, matching PostMenu's menu styling.
+  const storyMenuItemStyle = {
+    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+    padding: '9px 10px', borderRadius: theme.radius.sm, border: 'none',
+    background: 'transparent', cursor: 'pointer', textAlign: 'left',
+    fontSize: 13, fontWeight: 600, fontFamily: theme.fontFamily, color: theme.gray600,
+  }
+
   // The avatar, wearing a teal ring when there's an unexpired story to open.
   // One definition, two sizes: large over the mobile cover, small in the
-  // desktop sidebar card. It's a real button only when there's something to
-  // open — a click target that does nothing is worse than no target.
+  // desktop sidebar card. Tapping the ring opens a two-option chooser (View
+  // Stories / View Profile) instead of jumping straight into the viewer —
+  // a story ring that is also the identity avatar shouldn't force playback.
+  // With no stories the ring is plain identity chrome, not a button.
   function StoryAvatar({ size, fontSize, borderWidth = 3, style = {} }) {
+    const [chooserOpen, setChooserOpen] = useState(false)
+    const wrapRef = useRef(null)
+
+    useEffect(() => {
+      if (!chooserOpen) return
+      function onDocClick(e) {
+        if (!wrapRef.current?.contains(e.target)) setChooserOpen(false)
+      }
+      function onKeyDown(e) {
+        if (e.key === 'Escape') {
+          setChooserOpen(false)
+          wrapRef.current?.querySelector('button')?.focus()
+        }
+      }
+      document.addEventListener('mousedown', onDocClick)
+      document.addEventListener('keydown', onKeyDown)
+      return () => {
+        document.removeEventListener('mousedown', onDocClick)
+        document.removeEventListener('keydown', onKeyDown)
+      }
+    }, [chooserOpen])
+
     const ringPad = hasStory ? Math.round(size * 0.045) + 2 : 0
     const face = (
       <div style={{
@@ -477,20 +524,54 @@ function PublicProfile() {
       width: size, height: size, borderRadius: '50%', padding: ringPad,
       background: hasStory ? (allSeen ? theme.gray300 : theme.tealDeep) : 'transparent',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      border: 'none', boxSizing: 'border-box', ...style,
+      border: 'none', boxSizing: 'border-box',
     }
 
     if (!hasStory) return <div style={ringStyle}>{face}</div>
 
     return (
-      <button
-        type="button"
-        onClick={() => setViewerIndex(0)}
-        aria-label={`View ${displayName}'s story`}
-        style={{ ...ringStyle, cursor: 'pointer' }}
-      >
-        {face}
-      </button>
+      <div ref={wrapRef} style={{ position: 'relative', ...style }}>
+        <button
+          type="button"
+          onClick={() => setChooserOpen(true)}
+          aria-label={`View ${displayName}'s story`}
+          aria-haspopup="menu"
+          aria-expanded={chooserOpen}
+          style={{ ...ringStyle, cursor: 'pointer' }}
+        >
+          {face}
+        </button>
+
+        {chooserOpen && (
+          <div
+            role="menu"
+            aria-label={`${displayName} options`}
+            style={{
+              position: 'absolute', top: size + 6, left: 0, zIndex: 30, minWidth: 184,
+              background: theme.cardBg, border: `1px solid ${theme.gray200}`,
+              borderRadius: theme.radius.md, boxShadow: theme.elevation[3],
+              padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
+            }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setChooserOpen(false); setViewerIndex(0) }}
+              style={storyMenuItemStyle}
+            >
+              <Play size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Stories
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { setChooserOpen(false); scrollToProfileContent() }}
+              style={storyMenuItemStyle}
+            >
+              <User size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Profile
+            </button>
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -514,7 +595,7 @@ function PublicProfile() {
           }}>
             {/* The stored label usually already reads "Verified Doctor" —
                 prefixing it printed "Verified Verified Doctor". */}
-            <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || 'Verified'}
+            <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
           </span>
         )}
         {profile.bio && (
@@ -628,7 +709,7 @@ function PublicProfile() {
         </div>
       )}
 
-      <div style={isMobile ? { padding: '0 16px 16px 16px' } : {}}>
+      <div id="profile-content" style={isMobile ? { padding: '0 16px 16px 16px' } : {}}>
         {isMobile && identityBlock('hero')}
 
         {/* Consultation offer — the professional's bookable service */}
@@ -661,6 +742,32 @@ function PublicProfile() {
                 {bookingConsult ? 'Booking…' : <><Coins size={15} style={{ verticalAlign: '-2px', marginRight: 6 }} aria-hidden="true" />Book Consultation</>}
               </button>
             )}
+          </div>
+        )}
+
+        {/* Story rail — a quick-access TikTok-style row, read-only mirror of
+            the own-profile rail (Profile.jsx). One circle per story, ordered
+            position → views → newest. Empty profiles render nothing. */}
+        {userStories.length > 0 && (
+          <div className="cf-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
+            {userStories.map((s, i) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setViewerIndex(i)}
+                aria-label={`View story${s.title ? `: ${s.title}` : ''}`}
+                style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: allSeen ? theme.gray300 : theme.tealDeep }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>
+                    {!s.image_url && (s.title?.[0]?.toUpperCase() || displayName[0]?.toUpperCase() || '?')}
+                  </div>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.title || 'Story'}
+                </span>
+              </button>
+            ))}
           </div>
         )}
 
