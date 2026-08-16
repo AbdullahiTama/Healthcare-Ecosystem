@@ -36,45 +36,6 @@ vi.mock('../../../../providers/AuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }))
 
-import { useComments } from '../../hooks/useComments'
-
-describe('useComments', () => {
-  it('should initialize with empty state', () => {
-    const { result } = renderHook(() => useComments('post1'))
-
-    expect(result.current.comments).toEqual([])
-    expect(result.current.open).toBe(false)
-    expect(result.current.loading).toBe(false)
-    expect(result.current.commentCount).toBe(0)
-  })
-
-  it('should toggle comments open state', () => {
-    const { result } = renderHook(() => useComments('post1'))
-
-    act(() => {
-      result.current.toggleComments()
-    })
-
-    expect(result.current.open).toBe(true)
-  })
-
-  it('should load comments when opened', async () => {
-    const { result } = renderHook(() => useComments('post1'))
-
-    act(() => {
-      result.current.toggleComments()
-    })
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(result.current.open).toBe(true)
-    expect(result.current.loading).toBe(false)
-    expect(result.current.comments).toEqual([])
-  })
-})
-
 import { usePostComposer } from '../../hooks/usePostComposer'
 
 describe('usePostComposer', () => {

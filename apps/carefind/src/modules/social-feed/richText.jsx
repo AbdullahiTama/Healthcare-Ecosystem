@@ -105,6 +105,19 @@ export function stripMarkers(text) {
     .replace(/\{\/[bisu]\}/g, '')
 }
 
+// Strip Markdown syntax for PLAIN-TEXT previews (NOT full rendering): bold
+// and italic asterisks, inline-code backticks and leading ATX heading marks.
+// Composes over stripMarkers so the legacy {b}/{h:yellow}.. markers go too —
+// one source of truth for the bracket syntax. Dependency-free by design.
+export function stripMarkdown(text) {
+  if (!text) return ''
+  return stripMarkers(String(text))
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold** -> bold
+    .replace(/\*([^*\n]+)\*/g, '$1')   // *italic* -> italic
+    .replace(/`([^`\n]+)`/g, '$1')     // `code` -> code
+    .replace(/^(#{1,6})\s+/gm, '')     // # Heading -> Heading
+}
+
 // Article posts are stored as JSON blocks (text, drawing, voice, image...).
 // This pulls out just the readable words for previews, so we never dump raw JSON.
 export function previewText(content) {

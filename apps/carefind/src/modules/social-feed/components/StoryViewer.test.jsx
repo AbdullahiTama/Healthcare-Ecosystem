@@ -80,6 +80,21 @@ describe('StoryViewer (Feature 8 — shared sequential viewer)', () => {
     expect(screen.queryByText('one')).toBeNull()
   })
 
+  it('renders markdown in the title and body instead of leaking syntax', () => {
+    renderViewer({
+      stories: [{ id: 's4', title: '**Hydration**', body: 'Stay **hydrated** and drink `water`', bg_color: '#0E6F5A', created_at: '2026-08-01T10:00:00Z' }],
+      index: 0,
+      // Header renders its own copy of the title — keep it out so the leak
+      // assertions only inspect the story title/body content.
+      renderHeader: () => <div>Author</div>,
+    })
+    expect(screen.getByRole('heading', { name: 'Hydration' })).toBeTruthy()
+    expect(screen.getByText('hydrated')).toBeTruthy()
+    expect(screen.getByText('water')).toBeTruthy()
+    expect(screen.queryByText(/\*\*/)).toBeNull()
+    expect(screen.queryByText(/`/)).toBeNull()
+  })
+
   it('does not auto-advance past the last story (parent closes instead)', () => {
     vi.useFakeTimers()
     try {

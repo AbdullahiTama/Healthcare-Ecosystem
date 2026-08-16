@@ -73,6 +73,19 @@ describe('CommentThread (Feature 4 — comment notifications)', () => {
 
     await waitFor(() => expect(onCommentAdded).toHaveBeenCalledWith({ postId: 'post1', parentId: 'c1' }))
   })
+
+  it('shows a verified commenter badge with their stored verification_label', () => {
+    const comment = { id: 'c2', content: 'hello', user_id: 'user2', created_at: new Date().toISOString(), parent_id: null, profiles: { is_verified: true, verification_label: 'Verified Doctor', specialty: 'General Practice' } }
+    renderThread({ comments: [comment] })
+    expect(screen.getByText('Verified Doctor')).toBeInTheDocument()
+    expect(screen.queryByText('General Practice')).not.toBeInTheDocument()
+  })
+
+  it('does not render an empty badge for a verified commenter without a label', () => {
+    const comment = { id: 'c3', content: 'hi', user_id: 'user2', created_at: new Date().toISOString(), parent_id: null, profiles: { is_verified: true } }
+    renderThread({ comments: [comment] })
+    expect(screen.getByText('Verified')).toBeInTheDocument()
+  })
 })
 
 function HarnessWith({ comments, onCommentAdded }) {

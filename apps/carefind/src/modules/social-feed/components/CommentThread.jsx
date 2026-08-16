@@ -7,8 +7,9 @@ import { commentRepository } from '../repositories'
 import { renderMarkdown } from '../markdown.jsx'
 import { extractMentions } from '../mentions.js'
 import { Avatar, TealBtn } from '../../../components/ui'
+import VerifiedBadge from '../../../components/VerifiedBadge.jsx'
 import { theme } from '../../../styles/theme'
-import { Heart, Pencil, Trash2, X, BadgeCheck } from 'lucide-react'
+import { Heart, Pencil, Trash2, X } from 'lucide-react'
 
 function getCommentName(comment) {
   return comment.profiles?.full_name || comment.profiles?.display_name || 'CareFind User'
@@ -150,9 +151,7 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                     </span>
                   </Link>
                   {comment.profiles?.is_verified && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 800, color: theme.tealDeep }}>
-                      <BadgeCheck size={11} /> {comment.profiles?.specialty || ''}
-                    </span>
+                    <VerifiedBadge profile={comment.profiles} size={11} style={{ fontSize: 9, fontWeight: 800 }} />
                   )}
                 </div>
                 {user && comment.user_id === user.id && (

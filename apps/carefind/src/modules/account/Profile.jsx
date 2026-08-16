@@ -495,7 +495,7 @@ function Profile() {
                   }}>
                     {/* The stored label usually already reads "Verified Doctor" : 
                         prefixing it printed "Verified Verified Doctor". */}
-                    <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || 'Verified'}
+                    <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
                   </span>
                 )}
               </div>

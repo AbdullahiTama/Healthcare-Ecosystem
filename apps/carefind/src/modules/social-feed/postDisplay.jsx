@@ -1,6 +1,6 @@
 import { FileText, Gem, HelpCircle, MessageSquare, Mic, Star } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { previewText } from './richText.jsx'
+import { previewText, stripMarkdown } from './richText.jsx'
 
 // Shared vocabulary for showing someone's posts as a grid of tiles — used by
 // both the public profile (`/u/:id`) and the owner's own profile. These were
@@ -27,7 +27,8 @@ export const POST_KIND_ICON = {
 // tile carrying the post-kind icon; kind label and a three-line preview below.
 export function PostTile({ post, onOpen }) {
   const KindIcon = POST_KIND_ICON[post.post_type] || MessageSquare
-  const preview = previewText(withoutRepostMark(post.content))
+  // Markdown syntax stripped first so tiles read "bold text", never "**bold**".
+  const preview = previewText(stripMarkdown(withoutRepostMark(post.content)))
 
   return (
     <button

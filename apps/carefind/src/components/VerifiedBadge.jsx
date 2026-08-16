@@ -11,12 +11,12 @@ import { theme } from '../styles/theme'
 //
 // Props:
 //   profile  object with `is_verified` and the role columns
-//            (`specialty` || `verification_label`)
+//            (`verification_label` preferred, `specialty` fallback)
 //   size     BadgeCheck size in px (default 12)
 //   style    extra inline styles merged into the wrapper
 export default function VerifiedBadge({ profile, size = 12, style }) {
   if (!profile?.is_verified) return null
-  const role = profile.specialty || profile.verification_label
+  const role = profile.verification_label || profile.specialty
   return (
     <span
       style={{

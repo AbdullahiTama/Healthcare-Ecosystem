@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { theme } from '../../../styles/theme'
+import { renderMarkdown } from '../markdown.jsx'
 
 // Shared full-screen sequential story viewer used by the feed rail
 // (Stories.jsx), the own-profile rail (Profile.jsx) and the public profile
@@ -68,16 +69,16 @@ const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderH
         ) : (
           <div style={{ width: '100%', height: '100%', background: story.bg_color || theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 30, boxSizing: 'border-box' }}>
             <div style={{ textAlign: 'center', maxWidth: 340 }}>
-              {story.title && <h2 style={{ color: '#fff', fontSize: 26, fontWeight: 900, margin: '0 0 14px 0', lineHeight: 1.2 }}>{story.title}</h2>}
-              {story.body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{story.body}</p>}
+              {story.title && <div role="heading" aria-level={2} style={{ color: '#fff', fontSize: 26, fontWeight: 900, margin: '0 0 14px 0', lineHeight: 1.2 }}>{renderMarkdown(story.title)}</div>}
+              {story.body && <div style={{ color: 'rgba(255,255,255,0.92)', fontSize: 17, lineHeight: 1.5, margin: 0 }}>{renderMarkdown(story.body)}</div>}
             </div>
           </div>
         )}
 
         {story.image_url && (story.title || story.body) && (
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3, padding: '40px 20px 24px', background: 'linear-gradient(transparent, rgba(0,0,0,0.75))' }}>
-            {story.title && <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 900, margin: '0 0 6px 0' }}>{story.title}</h2>}
-            {story.body && <p style={{ color: 'rgba(255,255,255,0.92)', fontSize: 14, lineHeight: 1.5, margin: 0, whiteSpace: 'pre-wrap' }}>{story.body}</p>}
+            {story.title && <div role="heading" aria-level={2} style={{ color: '#fff', fontSize: 20, fontWeight: 900, margin: '0 0 6px 0' }}>{renderMarkdown(story.title)}</div>}
+            {story.body && <div style={{ color: 'rgba(255,255,255,0.92)', fontSize: 14, lineHeight: 1.5, margin: 0 }}>{renderMarkdown(story.body)}</div>}
           </div>
         )}
       </div>
