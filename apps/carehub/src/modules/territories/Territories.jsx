@@ -157,8 +157,8 @@ export default function Territories({ brand }) {
 
       <Modal show={showForm} onClose={() => setShowForm(false)} sheet title={editingId ? 'Edit Territory' : 'Add Territory'}
         footer={<>
-          <GhostBtn onClick={() => setShowForm(false)} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={save} style={{ flex: 1, padding: '13px' }}>{editingId ? 'Save Changes' : 'Add Territory'}</TealBtn>
+          <GhostBtn onClick={() => setShowForm(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{editingId ? 'Save Changes' : 'Add Territory'}</TealBtn>
         </>}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <Inp label='Territory Name' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Lagos Mainland' required />
@@ -191,7 +191,7 @@ export default function Territories({ brand }) {
       </Modal>
 
       <Modal show={!!assigningTerritory} onClose={() => setAssigningTerritory(null)} sheet title={'Assign Reps — ' + (assigningTerritory?.name || '')}
-        footer={<GhostBtn onClick={() => setAssigningTerritory(null)} style={{ width: '100%', padding: '13px' }}>Done</GhostBtn>}>
+        footer={<GhostBtn onClick={() => setAssigningTerritory(null)} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Tap to toggle who covers this territory.</div>
 
             {staff.length === 0 && <div style={{ fontSize: '13px', color: gray400 }}>No staff added yet.</div>}

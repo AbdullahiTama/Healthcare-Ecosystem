@@ -133,7 +133,7 @@ export default function Consultation({ brand, products, staffName }) {
         <div style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search by client name...'
-            style={{ flex: 1, padding: '11px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+            style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label='Filter by consultation type'
           style={{ padding: '10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: '#fff', outline: 'none' }}>
@@ -379,7 +379,7 @@ function PharmacyDetail({ d, g, recProducts }) {
         {medRows.length === 0 ? <DRow label='Medications' value='' /> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0' }}>
             {medRows.map((r, i) => (
-              <div key={i} style={{ padding: 11, borderRadius: 10, border: `1px solid ${theme.gray100}`, background: bg, fontSize: 12.5 }}>
+              <div key={i} style={{ padding: 12, borderRadius: 10, border: `1px solid ${theme.gray100}`, background: bg, fontSize: 12.5 }}>
                 <div style={{ fontWeight: 800, color: navy }}>{r.drug || '—'}{r.dose ? ' · ' + r.dose : ''}{r.frequency ? ' · ' + r.frequency : ''}</div>
                 <div style={{ color: gray500, marginTop: 3 }}>
                   {[r.prescriber && 'Rx: ' + r.prescriber, r.indication, r.start_date && 'since ' + r.start_date, r.adherence].filter(Boolean).join(' · ')}

@@ -10,23 +10,9 @@ import { appointmentRepository } from '../appointments/repositories'
 import { staffRepository } from '../staff/repositories'
 import { fmt } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, Avatar, Loading } from '../../components/ui'
+import { Card, Avatar, Loading, StatCard } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success, bg, cardBg } = theme
-
-function StatTile({ icon: Icon, label, value, sub, tone = 'default', onClick }) {
-  const toneColor = { default: navy, warning, danger }[tone] || navy
-  return (
-    <Card onClick={onClick} style={{ padding: 18, cursor: onClick ? 'pointer' : 'default' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: gray500, marginBottom: 10 }}>
-        <Icon size={15} strokeWidth={2} />
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 25, fontWeight: 900, color: toneColor, lineHeight: 1.1, letterSpacing: '-0.01em' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: gray400, marginTop: 5 }}>{sub}</div>}
-    </Card>
-  )
-}
 
 // Cross-branch overview dashboard for the business owner. Aggregates stats
 // across every branch the owner can reach (parent + all descendants via the
@@ -63,7 +49,7 @@ export default function Overview({ brand, role, perms }) {
 
   if (loading) return <Loading text="Loading overview..." />
   if (role !== 'Owner') return (
-    <div style={{ padding: 40, textAlign: 'center', color: gray400 }}>
+    <div style={{ padding: 32, textAlign: 'center', color: gray400 }}>
       <div style={{ fontSize: 16, fontWeight: '700', color: navy }}>Overview is for the business Owner</div>
       <div style={{ fontSize: 13, marginTop: 8 }}>Switch to a branch to see its dashboard.</div>
     </div>
@@ -125,10 +111,10 @@ export default function Overview({ brand, role, perms }) {
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14 }}>
-          <StatTile icon={BarChart2} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'} · ${branches.length} branches`} />
-          <StatTile icon={Calendar} label='Upcoming appts' value={upcomingAppts.length} sub={`${pendingAppts} pending confirmation`} tone={pendingAppts > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/appointments')} />
-          <StatTile icon={Users} label='Total staff' value={allStaff.length} sub={`${staffByBranch.filter(b => b.count > 0).length} branches staffed`} />
-          <StatTile icon={AlertTriangle} label='Pending tasks' value={pendingTasks} sub={`${heldSales} held sales · ${pendingAppts} appts`} tone={pendingTasks > 0 ? 'warning' : 'default'} />
+          <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'} · ${branches.length} branches`} onClick={() => navigate('/dashboard/pos')} />
+          <StatCard icon={<Calendar />} label='Upcoming appts' value={upcomingAppts.length} sub={`${pendingAppts} pending confirmation`} tone={pendingAppts > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/appointments')} />
+          <StatCard icon={<Users />} label='Total staff' value={allStaff.length} sub={`${staffByBranch.filter(b => b.count > 0).length} branches staffed`} onClick={() => navigate('/dashboard/staff')} />
+          <StatCard icon={<AlertTriangle />} label='Pending tasks' value={pendingTasks} sub={`${heldSales} held sales · ${pendingAppts} appts`} tone={pendingTasks > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/appointments')} />
         </div>
 
         {/* Appointments (left) + branch summary (right) */}

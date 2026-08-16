@@ -4,7 +4,7 @@ import { useAuth } from '../../../providers/AuthProvider'
 import { getPatients, updatePatient, getLabRequests, getLabResults, addLabResult, updateLabRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
 import { fmt, todayDate } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, StatusBadge, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, successBg, warning, warningBg, info, infoBg, bg } = theme
 
@@ -285,7 +285,7 @@ export default function Lab({ brand }) {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                    <Pill label={req.status === 'pending' ? 'Pending' : 'Completed'} type={req.status === 'pending' ? 'amber' : 'green'} />
+                    <StatusBadge status={req.status} />
                     {req.priority === 'urgent' && <Pill label='URGENT' type='red' />}
                     <span style={{ fontSize: '12px', color: tealDeep, fontWeight: '600' }}>Open →</span>
                   </div>

@@ -5,7 +5,7 @@ import { clientRepository, isDuplicateError } from './repositories'
 import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
 
@@ -34,7 +34,7 @@ function SourcePill({ source }) {
 function SaleRow({ s }) {
   const items = saleItems(s)
   return (
-    <div style={{ padding: '11px 13px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
+    <div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{s.txn_no || '—'}</span>
         <span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}>{fmt(s.total || 0)}</span>
@@ -63,7 +63,7 @@ function ConsultationRow({ c }) {
   const prods = c.recommended_products || []
   const isPh = c.consultation_type === 'pharmacy'
   return (
-    <div style={{ padding: '11px 13px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
+    <div style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{c.consultation_date || '—'}</span>
         <div style={{ display: 'flex', gap: 5 }}>
@@ -98,6 +98,8 @@ export default function Clients({ brand, role, perms }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [search, clients.length])
   const [showAdd, setShowAdd] = useState(false)
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({})
@@ -419,33 +421,37 @@ export default function Clients({ brand, role, perms }) {
       <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 14px' }}>
         <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search by name, phone or email...'
-          style={{ flex: 1, padding: '11px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+          style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
-        <Empty icon={<Users size={40} />} message={search ? 'No clients match your search' : 'No clients yet. Add your first client!'} action='+ Add Client' onAction={() => setShowAdd(true)} cause={search ? 'filtered' : 'none'} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {filtered.map(c => (
-            <Card key={c.id} style={{ padding: '16px', cursor: 'pointer' }} onClick={() => setSelected(c)}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-                  <Avatar name={c.full_name} size={44} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{c.full_name}</div>
-                    <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{c.phone || 'No phone'}{c.email ? ' · ' + c.email : ''}</div>
-                    <div style={{ fontSize: '12px', color: gray400, marginTop: '2px' }}>{c.gender || ''}{c.date_of_birth ? ' · DOB: ' + c.date_of_birth : ''}</div>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: '16px', fontWeight: '900', color: navy }}>{fmt(c.total_spend || 0)}</div>
-                  <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{c.visit_count || 0} visit(s)</div>
-                </div>
+      <DataTable
+        variant="cards"
+        rows={filtered}
+        page={page}
+        setPage={setPage}
+        pageSize={25}
+        total={filtered.length}
+        loading={loading}
+        onRowClick={c => setSelected(c)}
+        empty={<Empty icon={<Users size={40} />} message={search ? 'No clients match your search' : 'No clients yet. Add your first client!'} action='+ Add Client' onAction={() => setShowAdd(true)} cause={search ? 'filtered' : 'none'} />}
+        count={`${filtered.length} client${filtered.length !== 1 ? 's' : ''}`}
+        renderCard={c => (
+          <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+              <Avatar name={c.full_name} size={44} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{c.full_name}</div>
+                <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{c.phone || 'No phone'}{c.email ? ' · ' + c.email : ''}</div>
+                <div style={{ fontSize: '12px', color: gray400, marginTop: '2px' }}>{c.gender || ''}{c.date_of_birth ? ' · DOB: ' + c.date_of_birth : ''}</div>
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: '16px', fontWeight: '900', color: navy }}>{fmt(c.total_spend || 0)}</div>
+              <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{c.visit_count || 0} visit(s)</div>
+            </div>
+          </div>
+        )}
+      />
 
       {/* Add Client Modal */}
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({}) }} title='Add New Client'
@@ -510,7 +516,7 @@ export default function Clients({ brand, role, perms }) {
             )}
 
             {/* Full history across POS, appointments, consultations and debts */}
-            <div style={{ marginTop: '22px' }}>
+            <div style={{ marginTop: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                 <div style={{ fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase' }}>History</div>
                 <button onClick={() => exportHistoryCsv()} title='Export this history as CSV'
@@ -560,7 +566,7 @@ export default function Clients({ brand, role, perms }) {
               )}
 
               {historyLoading ? <Loading /> : filteredHistory.length === 0 ? (
-                <div style={{ padding: '22px 14px', borderRadius: '10px', background: bg, textAlign: 'center', fontSize: '12px', color: gray500 }}>
+                <div style={{ padding: '24px 14px', borderRadius: '10px', background: bg, textAlign: 'center', fontSize: '12px', color: gray500 }}>
                   {history.length > 0 ? 'No history matches your filters.' : historyTab === 'timeline' ? 'No activity yet. Sales and consultations for this client will appear here.' : historyTab === 'sales' ? 'No sales recorded for this client yet. Charge them at the POS and link their name to build history.' : historyTab === 'appointments' ? 'No appointments yet. Book one from Appointments and pick this client.' : historyTab === 'consultations' ? 'No consultations yet. Start one from the Consultations page for this client.' : 'No debts for this client yet. Credit sales and manual debts will appear here.'}
                 </div>
               ) : historyTab === 'sales' ? (
@@ -570,7 +576,7 @@ export default function Clients({ brand, role, perms }) {
               ) : historyTab === 'appointments' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
                   {history.map(a => (
-                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '11px 13px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
+                    <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
                       <div>
                         <div style={{ fontWeight: '700', fontSize: '12px', color: navy }}>{a.service || 'Appointment'}</div>
                         <div style={{ fontSize: '11px', color: gray500, marginTop: '2px' }}>{a.date || '—'} at {a.time || '—'}{a.staff_name ? ' · ' + a.staff_name : ''}</div>
@@ -590,7 +596,7 @@ export default function Clients({ brand, role, perms }) {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '260px', overflowY: 'auto' }}>
                   {history.map(d => (
-                    <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '11px 13px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
+                    <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${gray100}`, background: bg }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: '11px', color: gray500 }}>{d.created_at?.slice(0, 10) || '—'} · {d.direction === 'owes_us' ? 'Owes us' : 'We owe'}</div>
                         <div style={{ fontWeight: '700', fontSize: '12px', color: navy, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>{d.description || d.party_name || '—'}</div>

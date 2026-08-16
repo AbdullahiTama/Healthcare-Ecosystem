@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
@@ -9,7 +9,7 @@ import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
 import { findDuplicate, findAllDuplicateGroups } from '../../lib/productMatches'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
@@ -46,18 +46,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
   }), [products, catFilter, search])
 
-  // Pagination â€” 50 rows per page. Reset to page 0 whenever the result set
+  // Pagination — 50 rows per page. Reset to page 0 whenever the result set
   // changes (search, filter, or data reload) so the user never lands on an
-  // empty page that no longer exists.
+  // empty page that no longer exists. DataTable does the slicing.
   const PAGE_SIZE = 50
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const [page, setPage] = useState(0)
-  const safePage = Math.min(page, pageCount - 1)
   useEffect(() => { setPage(0) }, [search, catFilter, products.length])
-  const paged = useMemo(
-    () => filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE),
-    [filtered, safePage],
-  )
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
@@ -404,75 +398,99 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       )}
 
       {filtered.length === 0 ? <Empty icon={<Package size={40} />} message='No products found' action={perms?.canEditStock ? '+ Add First Product' : undefined} onAction={() => setShowAdd(true)} /> : (
-        <Card>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${border}`, background: theme.gray50 }}>
-                  {['Product', 'Generic Name', 'Cat', 'Sell Price', 'Cost Price', 'Margin', 'Stock', 'CareFind', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map(p => {
-                  const cat = p.cat || p.category || ''
-                  const low = cat !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)
-                  const out = cat !== 'Services' && p.stock <= 0
-                  const margin = p.price && p.cost_price ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null
-                  const Icon = productIcon(p)
-                  return (
-                    <tr key={p.id} style={{ borderBottom: `1px solid ${gray100}`, background: out ? dangerBg : low ? warningBg : 'white' }}>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{ width: 30, height: 30, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
-                          <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{p.name}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || 'â€”'}</td>
-                      <td style={{ padding: '12px 14px' }}><Pill label={cat} type='teal' /></td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : 'â€”'}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '12px', fontWeight: '700', color: margin !== null ? (margin > 30 ? success : warning) : gray400 }}>
-                        {margin !== null ? margin + '%' : 'â€”'}
-                      </td>
-                      <td style={{ padding: '12px 14px', fontSize: '14px', fontWeight: '900', color: out ? danger : low ? warning : navy }}>
-                        {cat === 'Services' ? 'âˆž' : p.stock}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <button onClick={() => toggleCareFind(p)} aria-label='Toggle CareFind listing'
-                          style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer', position: 'relative', background: p.list_on_carefind !== false ? tealDeep : theme.gray200 }}>
-                          <div style={{ position: 'absolute', top: '2px', left: p.list_on_carefind !== false ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
-                        </button>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        {cat === 'Services' ? <Pill label='Service' type='blue' /> : out ? <Pill label='Out of Stock' type='red' /> : low ? <Pill label='Low Stock' type='amber' /> : <Pill label='In Stock' type='green' />}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                          {cat !== 'Services' && <button onClick={() => setShowRestock(p)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>+ Stock</button>}
-                          <GhostBtn onClick={() => setEditItem(p)}>Edit</GhostBtn>
-                          {perms?.canDelete && <RedBtn onClick={() => askDelete(p)}>Del</RedBtn>}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              </table>
-          </div>
-          {filtered.length > PAGE_SIZE && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderTop: `1px solid ${border}`, fontSize: '12px', color: gray500 }}>
-              <span>{safePage * PAGE_SIZE + 1}â€“{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} products</span>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
-                  style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: safePage === 0 ? gray100 : 'white', color: safePage === 0 ? gray400 : navy, fontWeight: '700', fontSize: '12px', cursor: safePage === 0 ? 'not-allowed' : 'pointer'}}>Previous</button>
-                <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={safePage >= pageCount - 1}
-                  style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, background: safePage >= pageCount - 1 ? gray100 : 'white', color: safePage >= pageCount - 1 ? gray400 : navy, fontWeight: '700', fontSize: '12px', cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer'}}>Next</button>
-              </div>
+        <DataTable
+          rows={filtered}
+          page={page}
+          setPage={setPage}
+          pageSize={PAGE_SIZE}
+          total={filtered.length}
+          count={`${filtered.length} product${filtered.length !== 1 ? 's' : ''}`}
+          onRetry={reload}
+          columns={[
+            {
+              key: 'name', label: 'Product', sortable: true,
+              render: p => {
+                const Icon = productIcon(p)
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
+                    <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{p.name}</span>
+                  </div>
+                )
+              },
+            },
+            {
+              key: 'generic_name', label: 'Generic Name', sortable: true,
+              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || '—'}</span>,
+            },
+            {
+              key: 'cat', label: 'Cat', sortable: true,
+              sortValue: p => p.cat || p.category || '',
+              render: p => <Pill label={p.cat || p.category || ''} type='teal' />,
+            },
+            {
+              key: 'price', label: 'Sell Price', sortable: true, align: 'right',
+              render: p => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(p.price)}</span>,
+            },
+            {
+              key: 'cost_price', label: 'Cost Price', sortable: true, align: 'right',
+              render: p => <span style={{ fontSize: '13px', color: gray500 }}>{p.cost_price ? fmt(p.cost_price) : '—'}</span>,
+            },
+            {
+              key: 'margin', label: 'Margin', sortable: true, align: 'right',
+              sortValue: p => (p.price && p.cost_price ? ((p.price - p.cost_price) / p.price) : -1),
+              render: p => {
+                const margin = p.price && p.cost_price ? Math.round(((p.price - p.cost_price) / p.price) * 100) : null
+                return <span style={{ fontSize: '12px', fontWeight: '700', color: margin !== null ? (margin > 30 ? success : warning) : gray400 }}>
+                  {margin !== null ? margin + '%' : '—'}
+                </span>
+              },
+            },
+            {
+              key: 'stock', label: 'Stock', sortable: true, align: 'right',
+              render: p => {
+                const cat = p.cat || p.category || ''
+                const low = cat !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+                const out = cat !== 'Services' && p.stock <= 0
+                return <span style={{ fontSize: '14px', fontWeight: '900', color: out ? danger : low ? warning : navy }}>
+                  {cat === 'Services' ? '∞' : p.stock}
+                </span>
+              },
+            },
+            {
+              key: 'carefind', label: 'CareFind', align: 'center',
+              render: p => (
+                <button onClick={() => toggleCareFind(p)} aria-label='Toggle CareFind listing'
+                  style={{ width: '36px', height: '20px', borderRadius: '10px', border: 'none', cursor: 'pointer', position: 'relative', background: p.list_on_carefind !== false ? tealDeep : theme.gray200 }}>
+                  <div style={{ position: 'absolute', top: '2px', left: p.list_on_carefind !== false ? '18px' : '2px', width: '16px', height: '16px', borderRadius: '50%', background: 'white', transition: 'left 0.2s' }} />
+                </button>
+              ),
+            },
+            {
+              key: 'status', label: 'Status', sortable: true,
+              sortValue: p => (p.cat || p.category || '') === 'Services' ? 'service' : p.stock > 0 && p.stock <= (p.reorder_level || 5) ? 'low' : p.stock <= 0 ? 'out' : 'in',
+              render: p => {
+                const cat = p.cat || p.category || ''
+                const low = cat !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+                const out = cat !== 'Services' && p.stock <= 0
+                return cat === 'Services' ? <Pill label='Service' type='blue' /> : out ? <Pill label='Out of Stock' type='red' /> : low ? <Pill label='Low Stock' type='amber' /> : <Pill label='In Stock' type='green' />
+              },
+            },
+          ]}
+          rowStyle={p => {
+            const cat = p.cat || p.category || ''
+            const low = cat !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5)
+            const out = cat !== 'Services' && p.stock <= 0
+            return { background: out ? dangerBg : low ? warningBg : 'white' }
+          }}
+          actions={p => (
+            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+              {(p.cat || p.category || '') !== 'Services' && <button onClick={() => setShowRestock(p)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>+ Stock</button>}
+              <GhostBtn onClick={() => setEditItem(p)}>Edit</GhostBtn>
+              {perms?.canDelete && <RedBtn onClick={() => askDelete(p)}>Del</RedBtn>}
             </div>
           )}
-        </Card>
+        />
       )}
 
       {/* Add/Edit Product Modal */}

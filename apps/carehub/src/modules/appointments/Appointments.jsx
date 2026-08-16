@@ -7,7 +7,7 @@ import { getClients, notify, sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, ErrorState, CardSkeleton, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, RedBtn, Avatar, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, success } = theme
 
@@ -203,74 +203,70 @@ export default function Appointments({ brand, role, perms }) {
         )})}
       </div>
 
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
-        </div>
-      ) : loadError ? <ErrorState message={loadError} onRetry={load} /> : filtered.length === 0 ? (
-        <Empty icon={<Calendar size={40} />} message='No appointments found' action='+ Book Appointment' onAction={() => setShowAdd(true)} />
-      ) : (
-        <Card>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
-                  {['Client', 'Concern', 'Service', 'Date', 'Time', 'Payment', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(a => (
-                  <tr key={a.id} style={{ borderBottom: `1px solid ${gray100}`, background: a.date === today ? tealMist : 'white' }}>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <Avatar name={a.client_name} size={30} />
-                        <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{a.client_name}</span>
-                        {a.source === 'carefind' && <Pill label='Web' type='blue' />}
-                        {a.booking_type === 'online' && <Pill label='Online' type='purple' />}
-                      </div>
-                      <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{a.phone ? a.phone : ''}</div>
-                      {a.booking_type === 'online' && a.consultation_medium && (
-                        <div style={{ fontSize: '10px', color: gray400, marginTop: '1px', textTransform: 'capitalize' }}>
-                          {a.consultation_medium}{a.consultation_medium_link ? `: ${a.consultation_medium_link}` : ''}
-                        </div>
-                      )}
-                    </td>
-                     <td style={{ padding: '12px 16px', fontSize: '12px', color: gray600, maxWidth: '160px' }}>
-                      {a.concern ? <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.concern}>{a.concern}</span> : <span style={{ color: gray400 }}>—</span>}
-                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{a.service || '—'}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '700', color: navy }}>{a.date}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{a.time}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '12px' }}>
-                      {a.payment_status === 'paid' && !a.released_at && <Pill label={`Held ${feeLabel(a.fee_amount)}`} type='amber' />}
-                      {a.payment_status === 'paid' && a.released_at && <Pill label={`Available ${feeLabel(a.fee_amount)}`} type='green' />}
-                      {a.payment_status === 'unpaid' && <Pill label='Unpaid' type='red' />}
-                      {a.payment_status === 'refunded' && <Pill label='Refunded' type='gray' />}
-                      {!a.payment_status && <span style={{ color: gray400 }}>—</span>}
-                      {a.payment_channel && <div style={{ marginTop: '3px', fontSize: '10px', color: gray400, textTransform: 'capitalize' }}>{a.payment_channel}</div>}
-                    </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} />
-                     </td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                        {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
-                        {a.status === 'confirmed' && <button onClick={() => updateStatus(a.id, 'completed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Complete</button>}
-                        {a.status !== 'cancelled' && a.status !== 'completed' && <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>}
-                        {perms?.canDelete && <RedBtn onClick={() => askDelete(a)} style={{ padding: '4px 9px', fontSize: '11px' }}>Del</RedBtn>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <DataTable
+        rows={filtered}
+        loading={loading}
+        error={loadError}
+        onRetry={load}
+        empty={<Empty icon={<Calendar size={40} />} message='No appointments found' action='+ Book Appointment' onAction={() => setShowAdd(true)} />}
+        count={`${filtered.length} appointment${filtered.length !== 1 ? 's' : ''}`}
+        rowStyle={a => ({ background: a.date === today ? tealMist : 'white' })}
+        columns={[
+          {
+            key: 'client_name', label: 'Client', sortable: true,
+            render: a => (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Avatar name={a.client_name} size={30} />
+                  <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{a.client_name}</span>
+                  {a.source === 'carefind' && <Pill label='Web' type='blue' />}
+                  {a.booking_type === 'online' && <Pill label='Online' type='purple' />}
+                </div>
+                <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{a.phone ? a.phone : ''}</div>
+                {a.booking_type === 'online' && a.consultation_medium && (
+                  <div style={{ fontSize: '10px', color: gray400, marginTop: '1px', textTransform: 'capitalize' }}>
+                    {a.consultation_medium}{a.consultation_medium_link ? `: ${a.consultation_medium_link}` : ''}
+                  </div>
+                )}
+              </>
+            ),
+          },
+          {
+            key: 'concern', label: 'Concern', sortable: true,
+            render: a => a.concern
+              ? <span style={{ display: 'block', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '12px', color: gray600 }} title={a.concern}>{a.concern}</span>
+              : <span style={{ color: gray400 }}>—</span>,
+          },
+          { key: 'service', label: 'Service', sortable: true, render: a => <span style={{ fontSize: '13px', color: gray600 }}>{a.service || '—'}</span> },
+          { key: 'date', label: 'Date', sortable: true, render: a => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{a.date}</span> },
+          { key: 'time', label: 'Time', sortable: true, render: a => <span style={{ fontSize: '13px', color: gray600 }}>{a.time}</span> },
+          {
+            key: 'payment_status', label: 'Payment', sortable: true,
+            render: a => (
+              <>
+                {a.payment_status === 'paid' && !a.released_at && <Pill label={`Held ${feeLabel(a.fee_amount)}`} type='amber' />}
+                {a.payment_status === 'paid' && a.released_at && <Pill label={`Available ${feeLabel(a.fee_amount)}`} type='green' />}
+                {a.payment_status === 'unpaid' && <Pill label='Unpaid' type='red' />}
+                {a.payment_status === 'refunded' && <Pill label='Refunded' type='gray' />}
+                {!a.payment_status && <span style={{ color: gray400 }}>—</span>}
+                {a.payment_channel && <div style={{ marginTop: '3px', fontSize: '10px', color: gray400, textTransform: 'capitalize' }}>{a.payment_channel}</div>}
+              </>
+            ),
+          },
+          {
+            key: 'status', label: 'Status', sortable: true,
+            render: a => <Pill label={a.status} type={a.status === 'confirmed' ? 'green' : a.status === 'completed' ? 'teal' : a.status === 'cancelled' ? 'red' : 'amber'} />,
+          },
+        ]}
+        actions={a => (
+          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+            {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
+            {a.status === 'confirmed' && <button onClick={() => updateStatus(a.id, 'completed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Complete</button>}
+            {a.status !== 'cancelled' && a.status !== 'completed' && <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>}
+            {perms?.canDelete && <RedBtn onClick={() => askDelete(a)} style={{ padding: '4px 9px', fontSize: '11px' }}>Del</RedBtn>}
           </div>
-        </Card>
-      )}
+        )}
+      />
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ date: todayDate() }) }} title='New Appointment'
         footer={<><GhostBtn onClick={() => { setShowAdd(false); setForm({ date: todayDate() }) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Book Appointment'}</TealBtn></>}>

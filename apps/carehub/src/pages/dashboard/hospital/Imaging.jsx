@@ -3,7 +3,7 @@ import { ArrowLeft, Scan, CheckCircle, Bell, RefreshCw, MessageCircle, Lightbulb
 import { useAuth } from '../../../providers/AuthProvider'
 import { getImagingRequests, updateImagingRequest, addPatientMessage, getPatientMessages } from '../../../services/supabase'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, Inp, Sel, Textarea, GhostBtn, TealBtn, Pill, Loading, Empty, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, StatusBadge, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, success, warning, warningBg, info, infoBg, bg } = theme
 
@@ -210,7 +210,7 @@ export default function Imaging({ brand }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
-                  <Pill label={req.status === 'pending' ? 'Pending' : 'Done'} type={req.status === 'pending' ? 'amber' : 'green'} />
+                  <StatusBadge status={req.status} />
                   <span style={{ fontSize: '12px', color: tealDeep, fontWeight: '600' }}>Open →</span>
                 </div>
               </div>

@@ -116,7 +116,7 @@ export default function Locations({ brand, role }) {
   const totalLowStock = Object.values(stats).reduce((s, x) => s + (x.lowStock || 0), 0)
 
   if (!isOwner) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: gray400 }}>
+    <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
       <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>Multi-location management is restricted to the business Owner</div>
     </div>

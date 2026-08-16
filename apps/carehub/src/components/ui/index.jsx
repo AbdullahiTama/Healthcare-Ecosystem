@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useRef, cloneElement, isValidElement } from 'react'
-import { Activity, Inbox, WifiOff, AlertTriangle, Check, X } from 'lucide-react'
+import { forwardRef, useEffect, useMemo, useRef, useState, cloneElement, isValidElement } from 'react'
+import { Activity, ArrowLeft, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Inbox, WifiOff, AlertTriangle, Check, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 export { useToast } from '../../hooks/useToast'
 
 const { darkGradient } = theme
@@ -46,6 +47,55 @@ export function Pill({ label, type = 'gray', style = {} }) {
   )
 }
 export const Badge = Pill
+
+// ── STATUS BADGE ─────────────────────────────────────────────────────────────
+// The one status→pill registry for CareHub (T3.3). Covers the hospital patient
+// flow (Reception/Triage statuses) and the generic workflow statuses every
+// module shares (pending/completed/confirmed/cancelled/paid/…). Reception and
+// Triage previously kept private copies of this map with divergent fallbacks
+// ('Unknown' vs '—'); the shared fallback is the raw status or '—'.
+const STATUS_PILLS = {
+  // Patient flow (Reception → Triage → Doctor → Pharmacy → Lab → Discharged)
+  at_reception: { label: 'At Reception', type: 'blue' },
+  at_triage: { label: 'At Triage', type: 'amber' },
+  at_doctor: { label: 'With Doctor', type: 'purple' },
+  at_pharmacy: { label: 'At Pharmacy', type: 'teal' },
+  at_lab: { label: 'At Lab / Imaging', type: 'purple' },
+  discharged: { label: 'Discharged', type: 'green' },
+  admitted: { label: 'Admitted', type: 'red' },
+  referred: { label: 'Referred Out', type: 'purple' },
+  transferred: { label: 'Emergency Transfer', type: 'red' },
+  // Generic workflow statuses
+  pending: { label: 'Pending', type: 'amber' },
+  confirmed: { label: 'Confirmed', type: 'green' },
+  completed: { label: 'Completed', type: 'green' },
+  cancelled: { label: 'Cancelled', type: 'red' },
+  done: { label: 'Done', type: 'green' },
+  paid: { label: 'Paid', type: 'green' },
+  unpaid: { label: 'Unpaid', type: 'red' },
+  refunded: { label: 'Refunded', type: 'gray' },
+  active: { label: 'Active', type: 'green' },
+  suspended: { label: 'Suspended', type: 'red' },
+}
+export function StatusBadge({ status }) {
+  const s = STATUS_PILLS[status] || { label: status || '—', type: 'gray' }
+  return <Pill label={s.label} type={s.type} />
+}
+
+// ── DETAIL HEADER ─────────────────────────────────────────────────────────────
+// The standardized "drill-in" page chrome (T3.4): a back button + title +
+// subtitle row. Hospital detail views (Reception registration, Triage vitals,
+// Doctor consultation, RxInbox prescription) each hand-rolled this identical
+// 38px-back-button header; one component keeps the chrome consistent and the
+// aria-label uniform.
+export function DetailHeader({ onBack, title, sub }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+      <button onClick={onBack} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${theme.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
+      <div><div style={{ fontWeight: '900', fontSize: '18px', color: theme.navy }}>{title}</div>{sub && <div style={{ fontSize: '12px', color: theme.gray400 }}>{sub}</div>}</div>
+    </div>
+  )
+}
 
 // ── CARD ─────────────────────────────────────────────────────────────────────
 // forwardRef so Modal can focus-trap its content (the ref attaches to this
@@ -448,6 +498,204 @@ export function ErrorState({ variant = 'app', message, onRetry }) {
       <div style={{ fontSize: 15, fontWeight: 700, color: theme.textDark, marginBottom: 4 }}>{copy.heading}</div>
       <div style={{ fontSize: 13, color: theme.gray500, marginBottom: onRetry ? 20 : 0, maxWidth: 320 }}>{copy.body}</div>
       {onRetry && <TealBtn onClick={onRetry}>Retry</TealBtn>}
+    </div>
+  )
+}
+
+// ── DATA TABLE ────────────────────────────────────────────────────────────────
+// The one table implementation for every operational list in CareHub
+// (SCREEN_PATTERNS.md patterns 5–6, 13): a real <table> with sortable
+// aria-sort headers, a result count, empty/filtered states, row hover, a
+// trailing row-actions column, optional pagination, and a mobile → card-list
+// transform via useBreakpoint. `variant="cards"` renders the same column model
+// as rich cards (used by the approval/warehouse/client lists whose dense
+// multi-field content does not fit a row).
+//
+// Columns: `{ key, label, sortable, sortValue(row), align, render(row) }`.
+// `sortValue` defaults to `row[key]`; render defaults to a plain-text cell.
+// Sorting is internal state — click a sortable header to toggle asc/desc.
+//
+// `count`: a node shown above the list ("12 products"). When pagination is on,
+// a "X–Y of N" range replaces it in the footer unless overridden.
+// `empty`/`loading`/`error`+`onRetry`: the standard state surface, so callers
+// replace their bespoke loading/empty/error blocks with these props.
+// `actions(row)`: optional trailing column of per-row controls.
+// `onRowClick`/`rowStyle`: row interaction (rowStyle can tint rows, e.g. the
+// Inventory low-stock / Appointments "today" highlights).
+// Pagination is fully controlled: pass `page`, `setPage`, `pageSize`, and
+// optionally `total` (when rows are a slice of a larger set).
+// `mobileCard(row)` (table variant only): the mobile card-list transform;
+// defaults to a label/value card built from the columns.
+// `renderCard(row)` (cards variant only): the rich card body.
+export function DataTable({ rows = [], columns = [], actions, onRowClick, rowStyle, count, empty, loading, error, onRetry, page, setPage, pageSize, total, variant = 'table', renderCard, mobileCard }) {
+  const { isMobile } = useBreakpoint()
+  const [sortKey, setSortKey] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
+
+  const sortable = columns.some(c => c.sortable)
+  const sorted = useMemo(() => {
+    if (!sortKey) return rows
+    const col = columns.find(c => c.key === sortKey)
+    if (!col) return rows
+    const get = col.sortValue || (r => r[col.key])
+    const dir = sortDir === 'desc' ? -1 : 1
+    return [...rows].sort((a, b) => {
+      const av = get(a); const bv = get(b)
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+      return String(av).localeCompare(String(bv)) * dir
+    })
+  }, [rows, columns, sortKey, sortDir])
+
+  const hasPagination = pageSize != null && setPage != null && page != null
+  const pageCount = hasPagination ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1
+  const safePage = hasPagination ? Math.min(page, pageCount - 1) : 0
+  const visible = hasPagination ? sorted.slice(safePage * pageSize, safePage * pageSize + pageSize) : sorted
+  const shown = total != null ? total : rows.length
+
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
+      {[0, 1, 2].map(i => <CardSkeleton key={i} />)}
+    </div>
+  )
+  if (error) return <ErrorState message={error} onRetry={onRetry} />
+  if (rows.length === 0) return empty || <Empty message="Nothing here yet" />
+
+  const toggleSort = (col) => {
+    if (!col.sortable) return
+    if (sortKey !== col.key) { setSortKey(col.key); setSortDir('asc'); return }
+    setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+  }
+
+  const sortBar = sortable && variant === 'cards' && (
+    <div role="group" aria-label="Sort" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: theme.space[6] }}>
+      {columns.filter(c => c.sortable).map(c => {
+        const active = sortKey === c.key
+        return (
+          <button key={c.key} onClick={() => toggleSort(c)} aria-pressed={active}
+            style={{ padding: '6px 12px', borderRadius: theme.radius.full, border: active ? `1px solid ${theme.tealDeep}` : `1px solid ${theme.border}`, background: active ? theme.tealMist : 'white', color: active ? theme.tealDeep : theme.gray600, fontSize: 11.5, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {c.label}
+            {active && (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  const countLine = (count || shown) != null && (
+    <div style={{ fontSize: 12, color: theme.gray500, marginBottom: theme.space[6], fontWeight: 600 }}>{count || `${shown} item${shown !== 1 ? 's' : ''}`}</div>
+  )
+
+  // ── CARDS VARIANT (rich card lists: Orders, Stock, Clients) ────────────────
+  if (variant === 'cards') {
+    return (
+      <div>
+        {countLine}
+        {sortBar}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
+          {visible.map(row => (
+            <Card key={row.id} onClick={onRowClick ? () => onRowClick(row) : undefined} style={{ padding: 0, overflow: 'hidden', ...(rowStyle ? rowStyle(row) : {}) }}>
+              {renderCard ? renderCard(row) : (
+                <div style={{ padding: theme.space[8] }}>
+                  {columns.map(c => (
+                    <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: `1px solid ${theme.gray100}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: theme.gray400, textTransform: 'uppercase' }}>{c.label}</span>
+                      <span style={{ fontSize: 13, color: theme.navy, textAlign: 'right' }}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</span>
+                    </div>
+                  ))}
+                  {actions && <div style={{ display: 'flex', gap: 6, marginTop: theme.space[6] }}>{actions(row)}</div>}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+        {hasPagination && pageCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 4px', fontSize: 12, color: theme.gray500 }}>
+            <span>{safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setPage(Math.max(0, page - 1))} disabled={safePage === 0} aria-label="Previous page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage === 0 ? theme.gray100 : 'white', color: safePage === 0 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage === 0 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ChevronLeft size={13} /> Prev</button>
+              <button onClick={() => setPage(Math.min(pageCount - 1, page + 1))} disabled={safePage >= pageCount - 1} aria-label="Next page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage >= pageCount - 1 ? theme.gray100 : 'white', color: safePage >= pageCount - 1 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>Next <ChevronRight size={13} /></button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── TABLE VARIANT ──────────────────────────────────────────────────────────
+  // Mobile → card-list transform: at phone width the same column model renders
+  // as stacked cards (or the caller's `mobileCard`) instead of a horizontal-
+  // scroll table, matching CareFind's mobile-first pattern for long lists.
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[6] }}>
+        {countLine}
+        {visible.map(row => (
+          <Card key={row.id} onClick={onRowClick ? () => onRowClick(row) : undefined} style={{ padding: theme.space[8], ...(rowStyle ? rowStyle(row) : {}) }}>
+            {mobileCard ? mobileCard(row) : (
+              <div>
+                {columns.map(c => (
+                  <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: `1px solid ${theme.gray100}` }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: theme.gray400, textTransform: 'uppercase' }}>{c.label}</span>
+                    <span style={{ fontSize: 13, color: theme.navy, textAlign: 'right' }}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</span>
+                  </div>
+                ))}
+                {actions && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: theme.space[6] }}>{actions(row)}</div>}
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {countLine}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${theme.border}`, background: theme.gray50 }}>
+                {columns.map(c => (
+                  <th key={c.key}
+                    aria-sort={c.sortable && sortKey === c.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    onClick={() => toggleSort(c)}
+                    style={{ padding: '12px 14px', textAlign: c.align || 'left', fontSize: 11, fontWeight: 700, color: theme.gray400, textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: c.sortable ? 'pointer' : 'default', userSelect: 'none' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {c.label}
+                      {c.sortable && sortKey === c.key && (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+                    </span>
+                  </th>
+                ))}
+                {actions && <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: theme.gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(row => (
+                <tr key={row.id} className="ch-data-row" onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  style={{ borderBottom: `1px solid ${theme.gray100}`, cursor: onRowClick ? 'pointer' : 'default', transition: 'background 0.12s ease', ...(rowStyle ? rowStyle(row) : {}) }}>
+                  {columns.map(c => (
+                    <td key={c.key} style={{ padding: '12px 14px', textAlign: c.align || 'left' }}>{c.render ? c.render(row) : String(row[c.key] ?? '—')}</td>
+                  ))}
+                  {actions && <td style={{ padding: '12px 14px' }}>{actions(row)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {hasPagination && pageCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderTop: `1px solid ${theme.border}`, fontSize: 12, color: theme.gray500 }}>
+            <span>{safePage * pageSize + 1}–{Math.min((safePage + 1) * pageSize, shown)} of {shown}</span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => setPage(Math.max(0, page - 1))} disabled={safePage === 0} aria-label="Previous page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage === 0 ? theme.gray100 : 'white', color: safePage === 0 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage === 0 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}><ChevronLeft size={13} /> Previous</button>
+              <button onClick={() => setPage(Math.min(pageCount - 1, page + 1))} disabled={safePage >= pageCount - 1} aria-label="Next page" style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: safePage >= pageCount - 1 ? theme.gray100 : 'white', color: safePage >= pageCount - 1 ? theme.gray400 : theme.navy, fontWeight: 700, fontSize: 12, cursor: safePage >= pageCount - 1 ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>Next <ChevronRight size={13} /></button>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

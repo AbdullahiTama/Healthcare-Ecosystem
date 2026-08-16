@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, Component } from 'react'
+import { useState, useEffect, Component } from 'react'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
@@ -469,7 +469,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const tabBar = (active) => {
     const tabs = [['pos', 'Sell', null], ['held', 'Held', heldSales.length], ['recent', 'Recent', null], ['credit', 'Credit', creditSales.length]]
     return (
-      <div style={{ display: 'flex', gap: 22, borderBottom: `1px solid ${border}` }}>
+      <div style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}` }}>
         {tabs.map(([v, label, count]) => {
           const on = active === v
           return (
@@ -521,10 +521,10 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           </div>
         </div>
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button onClick={() => printReceipt(receipt)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: '12px', border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: 'pointer' }}>
+          <button onClick={() => printReceipt(receipt)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: '12px', border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: 'pointer' }}>
             <Printer size={15} /> Print receipt
           </button>
-          <button onClick={newSale} style={{ padding: '11px', borderRadius: '12px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', cursor: 'pointer' }}>
+          <button onClick={newSale} style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', cursor: 'pointer' }}>
             + New sale
           </button>
         </div>
@@ -669,7 +669,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 12px', minWidth: 0 }}>
               <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search products or scan...'
-                style={{ flex: 1, border: 'none', outline: 'none', padding: '11px 0', fontSize: 13, background: 'transparent', color: navy, minWidth: 0 }} />
+                style={{ flex: 1, border: 'none', outline: 'none', padding: '12px 0', fontSize: 13, background: 'transparent', color: navy, minWidth: 0 }} />
             </div>
             <button onClick={startScan} title='Scan barcode' aria-label='Scan barcode'
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', flexShrink: 0 }}>
@@ -727,7 +727,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               : { t: String(p.stock), bg: gray100, fg: gray500 }
             return (
               <button key={p.id} onClick={() => add(p)}
-                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 13, cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
+                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 12, cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
@@ -868,11 +868,11 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setShowHoldModal(true)} disabled={!cart.length}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '13px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 13, cursor: cart.length ? 'pointer' : 'not-allowed', opacity: cart.length ? 1 : 0.5, flexShrink: 0 }}>
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 13, cursor: cart.length ? 'pointer' : 'not-allowed', opacity: cart.length ? 1 : 0.5, flexShrink: 0 }}>
               <Pause size={14} /> Hold
             </button>
             <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length}
-              style={{ flex: 1, padding: 13, borderRadius: theme.radius.md, border: 'none', background: cart.length ? tealDeep : theme.gray200, color: cart.length ? 'white' : gray400, fontWeight: 800, fontSize: 14, cursor: cart.length ? 'pointer' : 'not-allowed' }}>
+              style={{ flex: 1, padding: 12, borderRadius: theme.radius.md, border: 'none', background: cart.length ? tealDeep : theme.gray200, color: cart.length ? 'white' : gray400, fontWeight: 800, fontSize: 14, cursor: cart.length ? 'pointer' : 'not-allowed' }}>
               {chargeLabel}
             </button>
           </div>

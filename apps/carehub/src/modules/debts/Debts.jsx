@@ -8,7 +8,7 @@ import { debtRepository } from './repositories'
 import { getClients } from '../../services/supabase'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, useToast, Toast } from '../../components/ui'
+import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, bg } = theme
 
@@ -26,6 +26,8 @@ export default function Debts({ brand, role, perms }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [search, filterMonth, debts.length])
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ direction: 'owes_us' })
   const [saving, setSaving] = useState(false)
@@ -120,45 +122,67 @@ export default function Debts({ brand, role, perms }) {
       {loading ? <Loading /> : filtered.length === 0 ? (
         <Empty icon={<Landmark size={40} />} message='No debts recorded' action='+ Record Debt' onAction={() => setShowAdd(true)} />
       ) : (
-        <Card>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
-                  {['Source', 'Direction', 'Party', 'Details', 'Amount', 'Paid', 'Balance', 'Due Date', 'Status', 'Action'].map(h => (
-                    <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(d => (
-                  <tr key={d.id} style={{ borderBottom: `1px solid ${gray100}` }}>
-                    <td style={{ padding: '12px 14px' }}>
-                      <Pill label={sourceLabel(d.source, false)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} />
-                    </td>
-                    <td style={{ padding: '12px 14px' }}><Pill label={d.direction === 'owes_us' ? 'Owed to Us' : 'We Owe'} type={d.direction === 'owes_us' ? 'green' : 'red'} /></td>
-                    <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: navy }}>
-                      {d.party_name}
-                      {d.client_id && <div style={{ marginTop: '4px' }}><Pill label={<> <UserCheck size={10} /> Client record</>} type='teal' /></div>}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: '12px', color: gray500, maxWidth: '200px' }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.description || '—'}</div>
-                      {d.source && <div style={{ marginTop: '4px' }}><Pill label={sourceLabel(d.source, true)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} /></div>}
-                    </td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(d.amount)}</td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px', color: success }}>{fmt(d.amount_paid || 0)}</td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: '900', color: (d.balance || 0) > 0 ? danger : success }}>{fmt(d.balance || 0)}</td>
-                    <td style={{ padding: '12px 14px', fontSize: '12px', color: gray400 }}>{d.due_date || '—'}</td>
-                    <td style={{ padding: '12px 14px' }}><Pill label={d.status} type={d.status === 'paid' ? 'green' : 'amber'} /></td>
-                    <td style={{ padding: '12px 14px' }}>
-                      {d.status !== 'paid' && <button onClick={() => markPaid(d)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <DataTable
+          rows={filtered}
+          page={page}
+          setPage={setPage}
+          pageSize={25}
+          total={filtered.length}
+          count={`${filtered.length} debt${filtered.length !== 1 ? 's' : ''}`}
+          onRetry={load}
+          columns={[
+            {
+              key: 'source', label: 'Source', sortable: true,
+              sortValue: d => d.source || '',
+              render: d => <Pill label={sourceLabel(d.source, false)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} />,
+            },
+            {
+              key: 'direction', label: 'Direction', sortable: true,
+              render: d => <Pill label={d.direction === 'owes_us' ? 'Owed to Us' : 'We Owe'} type={d.direction === 'owes_us' ? 'green' : 'red'} />,
+            },
+            {
+              key: 'party_name', label: 'Party', sortable: true,
+              render: d => (
+                <>
+                  <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{d.party_name}</span>
+                  {d.client_id && <div style={{ marginTop: '4px' }}><Pill label={<> <UserCheck size={10} /> Client record</>} type='teal' /></div>}
+                </>
+              ),
+            },
+            {
+              key: 'description', label: 'Details', sortable: true,
+              render: d => (
+                <span style={{ fontSize: '12px', color: gray500, maxWidth: '200px', display: 'block' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{d.description || '—'}</span>
+                  {d.source && <div style={{ marginTop: '4px' }}><Pill label={sourceLabel(d.source, true)} type={d.source === 'purchase' ? 'amber' : d.source === 'credit_sale' ? 'blue' : 'gray'} /></div>}
+                </span>
+              ),
+            },
+            {
+              key: 'amount', label: 'Amount', sortable: true, align: 'right',
+              render: d => <span style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{fmt(d.amount)}</span>,
+            },
+            {
+              key: 'amount_paid', label: 'Paid', sortable: true, align: 'right',
+              render: d => <span style={{ fontSize: '13px', color: success }}>{fmt(d.amount_paid || 0)}</span>,
+            },
+            {
+              key: 'balance', label: 'Balance', sortable: true, align: 'right',
+              render: d => <span style={{ fontSize: '13px', fontWeight: '900', color: (d.balance || 0) > 0 ? danger : success }}>{fmt(d.balance || 0)}</span>,
+            },
+            {
+              key: 'due_date', label: 'Due Date', sortable: true,
+              render: d => <span style={{ fontSize: '12px', color: gray400 }}>{d.due_date || '—'}</span>,
+            },
+            {
+              key: 'status', label: 'Status', sortable: true,
+              render: d => <Pill label={d.status} type={d.status === 'paid' ? 'green' : 'amber'} />,
+            },
+          ]}
+          actions={d => (
+            d.status !== 'paid' && <button onClick={() => markPaid(d)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>
+          )}
+        />
       )}
 
       <Modal show={showAdd} onClose={() => { setShowAdd(false); setForm({ direction: 'owes_us' }) }} title='Record Debt'

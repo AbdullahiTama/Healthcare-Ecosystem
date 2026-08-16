@@ -929,7 +929,7 @@ export default function LiveActivity({ brand }) {
       )}
 
       <Modal show={pickingCols} onClose={function () { setPickingCols(false) }} sheet title='Columns'
-        footer={<GhostBtn onClick={function () { setPickingCols(false) }} style={{ width: '100%', padding: '13px' }}>Done</GhostBtn>}>
+        footer={<GhostBtn onClick={function () { setPickingCols(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>
               Tick what you want to see. The export matches exactly this.
             </div>
@@ -954,8 +954,8 @@ export default function LiveActivity({ brand }) {
 
       <Modal show={logging} onClose={function () { setLogging(false) }} sheet wide title='Log Activity'
         footer={<>
-          <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '13px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
+          <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
         </>}>
             <div style={{ padding: '10px 12px', borderRadius: '8px', background: placeName ? tealMist : bg, border: '1px solid ' + (placeName ? tealMist : gray100), marginBottom: '16px' }}>
               <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Location</div>
@@ -974,7 +974,7 @@ export default function LiveActivity({ brand }) {
               <div>
                 <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Territory</div>
                 <select value={terrId} onChange={function (e) { setTerrId(e.target.value) }}
-                  style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
+                  style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
                   <option value=''>Not set</option>
                   {territories.map(function (t) { return <option key={t.id} value={t.id}>{t.name}</option> })}
                 </select>
@@ -997,12 +997,12 @@ export default function LiveActivity({ brand }) {
 
                     {f.field_type === 'long text' && (
                       <textarea value={val} onChange={function (e) { set(e.target.value) }} rows={4}
-                        style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
+                        style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' }} />
                     )}
 
                     {f.field_type === 'choice' && (
                       <select value={val} onChange={function (e) { set(e.target.value) }}
-                        style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
+                        style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
                         <option value=''>Choose...</option>
                         {(f.options || '').split(',').map(function (opt) {
                           const t = opt.trim()
@@ -1016,7 +1016,7 @@ export default function LiveActivity({ brand }) {
                       <input
                         type={f.field_type === 'number' ? 'number' : f.field_type === 'date' ? 'date' : 'text'}
                         value={val} onChange={function (e) { set(e.target.value) }}
-                        style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
+                        style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
                     )}
                   </div>
                 )
@@ -1112,7 +1112,7 @@ export default function LiveActivity({ brand }) {
       </Modal>
 
       <Modal show={settingUp} onClose={function () { setSettingUp(false) }} sheet wide title='Activity Fields'
-        footer={<GhostBtn onClick={function () { setSettingUp(false) }} style={{ width: '100%', padding: '13px' }}>Done</GhostBtn>}>
+        footer={<GhostBtn onClick={function () { setSettingUp(false) }} style={{ width: '100%', padding: '12px' }}>Done</GhostBtn>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>
               Decide what your reps record on every visit. Name them whatever suits your company.
             </div>
@@ -1121,7 +1121,7 @@ export default function LiveActivity({ brand }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '18px' }}>
                 {fields.map(function (f) {
                   return (
-                    <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}` }}>
+                    <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}` }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>
                           {f.label}{f.required ? ' *' : ''}
@@ -1147,11 +1147,11 @@ export default function LiveActivity({ brand }) {
                 <input value={newField.label}
                   onChange={function (e) { setNewField({ ...newField, label: e.target.value }) }}
                   placeholder='Field name — e.g. Customer, Products discussed, Outcome'
-                  style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
 
                 <select value={newField.field_type}
                   onChange={function (e) { setNewField({ ...newField, field_type: e.target.value }) }}
-                  style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', textTransform: 'capitalize' }}>
+                  style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', textTransform: 'capitalize' }}>
                   {FIELD_TYPES.map(function (t) { return <option key={t} value={t}>{t}</option> })}
                 </select>
 
@@ -1159,7 +1159,7 @@ export default function LiveActivity({ brand }) {
                   <input value={newField.options}
                     onChange={function (e) { setNewField({ ...newField, options: e.target.value }) }}
                     placeholder='Options, separated by commas — e.g. Sold, Follow-up, No interest'
-                    style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', boxSizing: 'border-box' }} />
                 )}
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '9px', cursor: 'pointer' }}>
@@ -1175,8 +1175,8 @@ export default function LiveActivity({ brand }) {
 
       <Modal show={pickingViewers} onClose={function () { setPickingViewers(false) }} sheet title='Who sees my activity'
         footer={<>
-          <GhostBtn onClick={function () { setPickingViewers(false) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={saveViewers} style={{ flex: 2, padding: '13px' }}>Save</TealBtn>
+          <GhostBtn onClick={function () { setPickingViewers(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={saveViewers} style={{ flex: 2, padding: '12px' }}>Save</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>
               Set this once. Everything you log goes to these people, live.

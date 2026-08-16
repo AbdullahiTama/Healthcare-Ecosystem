@@ -235,7 +235,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {matched.map(c => (
                 <button key={c.id} type="button" onClick={() => setClient(c)}
-                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 14px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}>
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}>
                   <span style={{ fontWeight: 700, fontSize: 13, color: navy }}>{c.full_name}</span>
                   <span style={{ fontSize: 12, color: gray400 }}>{c.phone || 'No phone'}</span>
                 </button>
@@ -331,7 +331,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
                   </div>
                 </div>
               ))}
-              <TealBtn onClick={addRow} style={{ alignSelf: 'flex-start', padding: '9px 16px', fontSize: 12.5 }}>+ Add medication</TealBtn>
+              <TealBtn onClick={addRow} style={{ alignSelf: 'flex-start', padding: '8px 16px', fontSize: 12.5 }}>+ Add medication</TealBtn>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: gray600, marginBottom: 6 }}>Issues reported</div>
                 <Chips options={ISSUE_OPTIONS} selected={form.medReview.issues} onToggle={o => toggle('medReview', 'issues', o)} />
@@ -456,8 +456,8 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
           </SectionCard>
 
           <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-            <TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: '13px' }}>{saving ? 'Saving...' : 'Save Consultation'}</TealBtn>
-            <GhostBtn onClick={onCancel} style={{ padding: '13px 20px' }}>Cancel</GhostBtn>
+            <TealBtn onClick={save} disabled={saving} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Consultation'}</TealBtn>
+            <GhostBtn onClick={onCancel} style={{ padding: '14px 20px' }}>Cancel</GhostBtn>
           </div>
         </>
       )}

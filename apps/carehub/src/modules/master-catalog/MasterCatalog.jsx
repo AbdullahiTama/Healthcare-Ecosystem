@@ -154,7 +154,7 @@ export default function MasterCatalog({ brand, role }) {
     .reduce((s, byMaster) => s + Object.values(byMaster).filter(l => l.active).length, 0)
 
   if (!isOwner) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: gray400 }}>
+    <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
       <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>The master catalog is managed by the business Owner</div>
     </div>

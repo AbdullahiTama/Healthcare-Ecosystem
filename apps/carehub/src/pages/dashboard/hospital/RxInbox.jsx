@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Pill as PillIcon, RefreshCw, Bell, CheckCircle, ClipboardList, AlertTriangle, Check } from 'lucide-react'
+import { Pill as PillIcon, RefreshCw, Bell, CheckCircle, ClipboardList, AlertTriangle, Check } from 'lucide-react'
 import { getPrescriptions, updatePrescription, updatePatient } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Pill, TealBtn, GhostBtn, Avatar, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
+import { Card, StatCard, SectionHead, Pill, TealBtn, GhostBtn, Avatar, Loading, Empty, ErrorState, DetailHeader, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, bg } = theme
 
@@ -41,10 +41,7 @@ export default function RxInbox({ brand, products }) {
     try { meds = JSON.parse(selected.medicines || '[]') } catch (e) {}
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-          <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
-          <div><div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Prescription Details</div><div style={{ fontSize: '12px', color: gray400 }}>Patient: {selected.patient_name}</div></div>
-        </div>
+        <DetailHeader onBack={() => setSelected(null)} title='Prescription Details' sub={`Patient: ${selected.patient_name}`} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600', marginBottom: '14px' }}>
           <PillIcon size={14} /> Pharmacy — Prescription received from Doctor
         </div>

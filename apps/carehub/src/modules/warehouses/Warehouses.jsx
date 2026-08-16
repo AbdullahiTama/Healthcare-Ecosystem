@@ -167,8 +167,8 @@ export default function Warehouses({ brand }) {
 
       <Modal show={showForm} onClose={() => setShowForm(false)} sheet wide={false} title={editingId ? 'Edit Location' : 'Add Location'}
         footer={<>
-          <GhostBtn onClick={() => setShowForm(false)} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={save} style={{ flex: 1, padding: '13px' }}>{editingId ? 'Save Changes' : 'Add Location'}</TealBtn>
+          <GhostBtn onClick={() => setShowForm(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={save} style={{ flex: 1, padding: '12px' }}>{editingId ? 'Save Changes' : 'Add Location'}</TealBtn>
         </>}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <Inp label='Location Name' value={form.name} onChange={v => f('name', v)} placeholder='e.g. Lagos Central Warehouse' required />

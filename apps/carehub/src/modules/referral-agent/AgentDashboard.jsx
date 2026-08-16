@@ -192,8 +192,8 @@ export default function AgentDashboard() {
 
       <Modal show={showLog} onClose={() => setShowLog(false)} sheet title='Log support activity'
         footer={<>
-          <GhostBtn onClick={() => setShowLog(false)} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={saveSupportLog} style={{ flex: 1, padding: '13px' }}>Save</TealBtn>
+          <GhostBtn onClick={() => setShowLog(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={saveSupportLog} style={{ flex: 1, padding: '12px' }}>Save</TealBtn>
         </>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <Sel label='Business' value={logForm.business_id} onChange={v => setLogForm(p => ({ ...p, business_id: v }))} options={portfolio.map(b => ({ value: b.id, label: b.name }))} />

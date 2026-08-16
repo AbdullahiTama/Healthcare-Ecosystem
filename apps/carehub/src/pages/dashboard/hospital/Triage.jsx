@@ -1,17 +1,11 @@
 // Triage.jsx
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Activity, AlertTriangle, CheckCircle, Bell, Search as SearchIcon } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle, Bell, Search as SearchIcon } from 'lucide-react'
 import { getPatients, addTriage, updatePatient, getTriage } from '../../../services/supabase'
 import { theme } from '../../../styles/theme'
-import { Card, SectionHead, Inp, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../../../components/ui'
+import { Card, SectionHead, Inp, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, StatusBadge, DetailHeader, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray500, gray400, gray100, border, danger, dangerBg, success, warning, warningBg } = theme
-
-function StatusBadge({ status }) {
-  const map = { at_triage: { label: 'At Triage', type: 'amber' }, at_doctor: { label: 'With Doctor', type: 'purple' }, at_pharmacy: { label: 'At Pharmacy', type: 'teal' }, discharged: { label: 'Discharged', type: 'green' } }
-  const s = map[status] || { label: status || '—', type: 'gray' }
-  return <Pill label={s.label} type={s.type} />
-}
 
 export default function Triage({ brand }) {
   const [patients, setPatients] = useState([])
@@ -55,10 +49,7 @@ export default function Triage({ brand }) {
 
   if (selected && !done) return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
-        <div><div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Triage — {selected.full_name}</div><div style={{ fontSize: '12px', color: gray400 }}>{selected.reg_no} · {selected.department || 'General OPD'}</div></div>
-      </div>
+<DetailHeader onBack={() => setSelected(null)} title={`Triage — ${selected.full_name}`} sub={`${selected.reg_no} · ${selected.department || 'General OPD'}`} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: warningBg, border: `1px solid ${warning}`, fontSize: '12px', color: warning, fontWeight: '600', marginBottom: '16px' }}>
         <Activity size={14} /> Nurse Module — Vitals saved here go directly to the Doctor
       </div>

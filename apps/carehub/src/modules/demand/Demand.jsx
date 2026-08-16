@@ -311,7 +311,7 @@ export default function Demand({ brand, role, perms, products }) {
           const on = tab === key
           return (
             <button key={key} onClick={() => setTab(key)}
-              style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 16px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '13px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600 }}>
+              style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '8px 16px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '13px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600 }}>
               <Icon size={15} /> {label}
             </button>
           )

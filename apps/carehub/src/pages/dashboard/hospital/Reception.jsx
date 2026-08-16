@@ -1,28 +1,12 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, UserCheck, CheckCircle, Bell, Users, Hourglass, BedDouble, ArrowUpRight, Siren, Search as SearchIcon } from 'lucide-react'
+import { UserCheck, CheckCircle, Bell, Users, Hourglass, BedDouble, ArrowUpRight, Siren, Search as SearchIcon } from 'lucide-react'
 import { getPatients, addPatient, updatePatient } from '../../../services/supabase'
 import { todayDate, genId } from '../../../lib/utils'
 import { NIG_STATES } from '../../../config/constants'
 import { theme } from '../../../styles/theme'
-import { Card, StatCard, SectionHead, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../.././../components/ui'
+import { Card, StatCard, SectionHead, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, StatusBadge, DetailHeader, useToast, Toast } from '../.././../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, success, warning, warningBg, info, infoBg } = theme
-
-function StatusBadge({ status }) {
-  const map = {
-    at_reception: { label: 'At Reception', type: 'blue' },
-    at_triage: { label: 'At Triage', type: 'amber' },
-    at_doctor: { label: 'With Doctor', type: 'purple' },
-    at_pharmacy: { label: 'At Pharmacy', type: 'teal' },
-    at_lab: { label: 'At Lab / Imaging', type: 'purple' },
-    discharged: { label: 'Discharged', type: 'green' },
-    admitted: { label: 'Admitted', type: 'red' },
-    referred: { label: 'Referred Out', type: 'purple' },
-    transferred: { label: 'Emergency Transfer', type: 'red' },
-  }
-  const s = map[status] || { label: status || 'Unknown', type: 'gray' }
-  return <Pill label={s.label} type={s.type} />
-}
 
 export default function Reception({ brand }) {
   const [patients, setPatients] = useState([])
@@ -89,10 +73,7 @@ export default function Reception({ brand }) {
 
   if (view === 'new' && !saved) return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button onClick={() => setView('list')} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
-        <div><div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>New Patient Registration</div><div style={{ fontSize: '12px', color: gray400 }}>Reception — data flows to Triage and Doctor automatically</div></div>
-      </div>
+<DetailHeader onBack={() => setView('list')} title='New Patient Registration' sub='Reception — data flows to Triage and Doctor automatically' />
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: theme.radius.md, background: infoBg, border: `1px solid ${info}`, fontSize: '12px', color: info, fontWeight: '600', marginBottom: '16px' }}>
         <UserCheck size={14} /> Data entered here will automatically appear for the Nurse and Doctor
       </div>

@@ -213,7 +213,7 @@ export default function Settings({ brand, role, perms }) {
   }
 
   if (!isOwner) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: gray400 }}>
+    <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
       <div style={{ fontSize: '16px', fontWeight: '700', color: gray600 }}>Settings are restricted to the business Owner</div>
       <div style={{ fontSize: '13px', marginTop: '8px' }}>Contact the owner to make changes</div>
@@ -254,10 +254,10 @@ export default function Settings({ brand, role, perms }) {
 
         {isOwner ? (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '11px 20px' }}>
+            <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
               {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
             </TealBtn>
-            <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '11px 20px' }}>
+            <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
               {renewing ? 'Redirecting…' : `Renew 12 months, pay for 10 — ₦${(monthlyPrice * 10).toLocaleString()}`}
             </GhostBtn>
           </div>
@@ -320,7 +320,7 @@ export default function Settings({ brand, role, perms }) {
           <Textarea label='About your business' value={bizForm.description || ''} onChange={v => b('description', v)} rows={3} placeholder='Shown on your public CareFind profile — services, specialties, what makes you stand out...' />
           <Toggle label='Listed on CareFind' desc='Allow patients to find your business on the public CareFind platform' value={bizForm.visible_on_carefind !== false} onChange={v => b('visible_on_carefind', v)} />
           <Toggle label='Show product prices on CareFind' desc='When off, patients see "Ask for price" instead of your product prices' value={bizForm.show_prices !== false} onChange={v => b('show_prices', v)} />
-          <TealBtn onClick={saveBizDetails} style={{ alignSelf: 'flex-start', padding: '11px 24px' }}>{savingBiz ? 'Saving...' : 'Save Business Details'}</TealBtn>
+          <TealBtn onClick={saveBizDetails} style={{ alignSelf: 'flex-start', padding: '12px 24px' }}>{savingBiz ? 'Saving...' : 'Save Business Details'}</TealBtn>
         </div>
       </Card>
 
@@ -347,7 +347,7 @@ export default function Settings({ brand, role, perms }) {
               </div>
             </>
           )}
-          <TealBtn onClick={saveBookingSettings} style={{ alignSelf: 'flex-start', padding: '11px 24px' }}>{savingBooking ? 'Saving...' : 'Save Booking Settings'}</TealBtn>
+          <TealBtn onClick={saveBookingSettings} style={{ alignSelf: 'flex-start', padding: '12px 24px' }}>{savingBooking ? 'Saving...' : 'Save Booking Settings'}</TealBtn>
         </div>
       </Card>
 
@@ -391,7 +391,7 @@ export default function Settings({ brand, role, perms }) {
           </div>
         </div>
 
-        <TealBtn onClick={saveReceiptSettings} style={{ marginTop: '16px', alignSelf: 'flex-start', padding: '11px 24px' }}>{savingSettings ? 'Saving...' : 'Save Receipt Settings'}</TealBtn>
+        <TealBtn onClick={saveReceiptSettings} style={{ marginTop: '16px', alignSelf: 'flex-start', padding: '12px 24px' }}>{savingSettings ? 'Saving...' : 'Save Receipt Settings'}</TealBtn>
       </Card>
 
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />

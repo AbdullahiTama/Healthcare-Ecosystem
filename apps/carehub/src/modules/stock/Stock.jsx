@@ -8,7 +8,7 @@ import { warehouseRepository } from '../warehouses/repositories'
 // (the product catalogue behind the receive form).
 import { getProducts } from '../../services/supabase'
 import { theme } from '../../styles/theme'
-import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, CardSkeleton } from '../../components/ui'
+import { Card, Inp, TealBtn, GhostBtn, Modal, DataTable, useToast, Toast, ConfirmDialog } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, warningBg, bg } = theme
 const STATUSES = ['available', 'reserved', 'damaged', 'returned', 'expired']
@@ -47,6 +47,8 @@ export default function Stock({ brand }) {
   const [filterLoc, setFilterLoc] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [filterLoc, filterStatus, search, batches.length])
 
   const [receiving, setReceiving] = useState(false)
   const [form, setForm] = useState({})
@@ -236,7 +238,7 @@ export default function Stock({ brand }) {
           <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
           <input value={search} onChange={function (e) { setSearch(e.target.value) }}
             placeholder='Search by product or batch number...'
-            style={{ flex: 1, padding: '11px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
+            style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -258,38 +260,37 @@ export default function Stock({ brand }) {
         </div>
       </div>
 
-      {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
-        </div>
-      )}
-
-      {!loading && locations.length === 0 && (
-        <Card style={{ padding: '32px', textAlign: 'center' }}>
-          <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>No warehouses yet</div>
-          <div style={{ fontSize: '13px', color: gray500 }}>Add a warehouse under "Warehouses & Branches" first — stock has to go somewhere.</div>
-        </Card>
-      )}
-
-      {!loading && locations.length > 0 && visible.length === 0 && (
-        <Card style={{ padding: '32px', textAlign: 'center' }}>
-          <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
-            {batches.length === 0 ? 'No stock received yet' : 'Nothing matches those filters'}
-          </div>
-          <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
-            {batches.length === 0 ? 'Record your first batch into a warehouse.' : 'Try clearing the search or filters.'}
-          </div>
-          {batches.length === 0 && <TealBtn onClick={openReceive} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Receive stock</TealBtn>}
-        </Card>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {visible.map(function (b) {
+      <DataTable
+        variant="cards"
+        rows={visible}
+        page={page}
+        setPage={setPage}
+        pageSize={25}
+        total={visible.length}
+        loading={loading}
+        empty={
+          locations.length === 0 ? (
+            <Card style={{ padding: '32px', textAlign: 'center' }}>
+              <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>No warehouses yet</div>
+              <div style={{ fontSize: '13px', color: gray500 }}>Add a warehouse under "Warehouses & Branches" first — stock has to go somewhere.</div>
+            </Card>
+          ) : (
+            <Card style={{ padding: '32px', textAlign: 'center' }}>
+              <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
+                {batches.length === 0 ? 'No stock received yet' : 'Nothing matches those filters'}
+              </div>
+              <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
+                {batches.length === 0 ? 'Record your first batch into a warehouse.' : 'Try clearing the search or filters.'}
+              </div>
+              {batches.length === 0 && <TealBtn onClick={openReceive} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Receive stock</TealBtn>}
+            </Card>
+          )
+        }
+        count={`${visible.length} batch${visible.length !== 1 ? 'es' : ''}`}
+        renderCard={function (b) {
           const tone = expiryTone(b.expiry_date)
           return (
-            <Card key={b.id} style={{ padding: '16px' }}>
+            <div style={{ padding: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -368,15 +369,15 @@ export default function Stock({ brand }) {
                   )
                 })}
               </div>
-            </Card>
+            </div>
           )
-        })}
-      </div>
+        }}
+      />
 
       <Modal show={receiving} onClose={function () { setReceiving(false); setForm({}) }} sheet wide title='Receive Stock'
         footer={<>
-          <GhostBtn onClick={function () { setReceiving(false); setForm({}) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={saveBatch} style={{ flex: 2, padding: '13px' }}>{saving ? 'Saving...' : 'Receive Stock'}</TealBtn>
+          <GhostBtn onClick={function () { setReceiving(false); setForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={saveBatch} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Receive Stock'}</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Recording as <strong>{meName}</strong></div>
 
@@ -443,8 +444,8 @@ export default function Stock({ brand }) {
 
       <Modal show={!!transferring} onClose={function () { setTransferring(null) }} sheet title='Transfer Stock'
         footer={<>
-          <GhostBtn onClick={function () { setTransferring(null) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={doTransfer} style={{ flex: 2, padding: '13px' }}>Transfer</TealBtn>
+          <GhostBtn onClick={function () { setTransferring(null) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={doTransfer} style={{ flex: 2, padding: '12px' }}>Transfer</TealBtn>
         </>}>
             {transferring && (<>
               <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>
@@ -477,8 +478,8 @@ export default function Stock({ brand }) {
 
       <Modal show={!!adjusting} onClose={function () { setAdjusting(null) }} sheet title='Adjust Quantity'
         footer={<>
-          <GhostBtn onClick={function () { setAdjusting(null) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={doAdjust} style={{ flex: 2, padding: '13px' }}>Save Adjustment</TealBtn>
+          <GhostBtn onClick={function () { setAdjusting(null) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={doAdjust} style={{ flex: 2, padding: '12px' }}>Save Adjustment</TealBtn>
         </>}>
             {adjusting && (<>
               <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>

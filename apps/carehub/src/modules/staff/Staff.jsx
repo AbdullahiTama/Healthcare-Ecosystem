@@ -423,7 +423,7 @@ export default function Staff({ brand, role, perms }) {
       </Modal>
 
       {isOwner && (
-        <div style={{ marginTop: '28px' }}>
+        <div style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Shield size={17} color={navy} />

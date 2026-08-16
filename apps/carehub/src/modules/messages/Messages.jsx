@@ -363,7 +363,7 @@ export default function Messages({ brand }) {
           return (
             <Card key={t.id} style={{ padding: '0', overflow: 'hidden', borderLeft: unread > 0 ? `3px solid ${tealDeep}` : '3px solid transparent' }}>
               <button onClick={function () { openThreadView(t) }}
-                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '15px 16px', cursor: 'pointer' }}>
+                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '16px 16px', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -398,8 +398,8 @@ export default function Messages({ brand }) {
 
       <Modal show={composing} onClose={function () { setComposing(false) }} sheet wide title='New Message'
         footer={<>
-          <GhostBtn onClick={function () { setComposing(false) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={send} style={{ flex: 2, padding: '13px' }}>{sending ? 'Sending...' : 'Send Message'}</TealBtn>
+          <GhostBtn onClick={function () { setComposing(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={send} style={{ flex: 2, padding: '12px' }}>{sending ? 'Sending...' : 'Send Message'}</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Sending as <strong>{meName}</strong>{meTitle ? ' · ' + meTitle : ''}</div>
 
@@ -567,9 +567,9 @@ export default function Messages({ brand }) {
                 <div style={{ fontSize: '11px', color: gray400, marginBottom: '8px' }}>Goes to everyone on this thread, including those copied.</div>
                 <textarea value={replyBody} onChange={function (e) { setReplyBody(e.target.value) }} rows={4}
                   placeholder='Write your reply...'
-                  style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '13.5px', fontFamily: 'inherit', lineHeight: '1.6', resize: 'vertical', boxSizing: 'border-box' }} />
+                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '13.5px', fontFamily: 'inherit', lineHeight: '1.6', resize: 'vertical', boxSizing: 'border-box' }} />
 
-                <label style={{ display: 'block', marginTop: '10px', border: `2px dashed ${border}`, borderRadius: '8px', padding: '11px', textAlign: 'center', cursor: 'pointer', background: bg }}>
+                <label style={{ display: 'block', marginTop: '10px', border: `2px dashed ${border}`, borderRadius: '8px', padding: '12px', textAlign: 'center', cursor: 'pointer', background: bg }}>
                   <span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}>+ Attach files to reply</span>
                   <input type='file' multiple onChange={pickReplyFiles} style={{ display: 'none' }} />
                 </label>

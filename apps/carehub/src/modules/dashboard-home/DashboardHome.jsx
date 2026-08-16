@@ -11,30 +11,11 @@ import { saleRepository } from '../pos/repositories'
 import { appointmentRepository } from '../appointments/repositories'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
-import { Card, Avatar, Empty, Loading } from '../../components/ui'
+import { Card, Avatar, Empty, Loading, StatCard } from '../../components/ui'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, danger, dangerBg, warning, warningBg, success, bg } = theme
-
-// Stat tile — the template's dashboard KPI: a muted icon+label row on top, a
-// large value (colored for the two states an owner must not miss — money owed
-// in amber, stock danger in red), and a one-line supporting figure. Clickable
-// per SCREEN_PATTERNS.md pattern 5 (every stat card drills into the view that
-// explains it — never a decorative vanity number).
-function StatTile({ icon: Icon, label, value, sub, tone = 'default', onClick }) {
-  const toneColor = { default: navy, warning, danger }[tone] || navy
-  return (
-    <Card onClick={onClick} style={{ padding: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: gray500, marginBottom: 10 }}>
-        <Icon size={15} strokeWidth={2} />
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 25, fontWeight: 900, color: toneColor, lineHeight: 1.1, letterSpacing: '-0.01em' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: gray400, marginTop: 5 }}>{sub}</div>}
-    </Card>
-  )
-}
 
 // Worklist row — one shape for every "needs attention" item (stock alert,
 // credit follow-up, appointment reminder). A business owner cares about "what
@@ -47,7 +28,7 @@ function WorkItem({ tone, icon: Icon, title, sub, action, onAction }) {
   }
   const t = tones[tone] || tones.teal
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: theme.radius.md, border: `1px solid ${border}` }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}` }}>
       <div style={{ width: 36, height: 36, borderRadius: theme.radius.md, background: t.bg, color: t.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icon size={17} />
       </div>
@@ -143,10 +124,10 @@ export default function DashboardHome({ brand, products, role, perms }) {
 
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14 }}>
-          <StatTile icon={BarChart2} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}`} onClick={() => navigate('/dashboard/pos')} />
-          <StatTile icon={Pause} label='Held sales' value={heldSales.length} sub={heldSales.length > 0 ? 'waiting at counter' : 'none on hold'} onClick={() => navigate('/dashboard/pos')} />
-          <StatTile icon={CreditCard} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} credit sale${creditSales.length === 1 ? '' : 's'} open`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
-          <StatTile icon={AlertTriangle} label='Stock alerts' value={stockAlertCount} sub={`${outCount} out of stock`} tone={stockAlertCount > 0 ? 'danger' : 'default'} onClick={() => navigate('/dashboard/inventory')} />
+          <StatCard icon={<BarChart2 />} label='Sales today' value={fmt(todayTotal)} sub={`${todaySales.length} transaction${todaySales.length === 1 ? '' : 's'}`} onClick={() => navigate('/dashboard/pos')} />
+          <StatCard icon={<Pause />} label='Held sales' value={heldSales.length} sub={heldSales.length > 0 ? 'waiting at counter' : 'none on hold'} onClick={() => navigate('/dashboard/pos')} />
+          <StatCard icon={<CreditCard />} label='Owed to you' value={fmt(creditTotal)} sub={`${creditSales.length} credit sale${creditSales.length === 1 ? '' : 's'} open`} tone={creditSales.length > 0 ? 'warning' : 'default'} onClick={() => navigate('/dashboard/debts')} />
+          <StatCard icon={<AlertTriangle />} label='Stock alerts' value={stockAlertCount} sub={`${outCount} out of stock`} tone={stockAlertCount > 0 ? 'danger' : 'default'} onClick={() => navigate('/dashboard/inventory')} />
         </div>
 
         {/* Worklist (left) + recent sales & quick actions (right). A grid with

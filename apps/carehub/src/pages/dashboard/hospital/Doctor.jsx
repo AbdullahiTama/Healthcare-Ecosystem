@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus, Search as SearchIcon } from 'lucide-react'
+import { Stethoscope, AlertTriangle, Pill as PillIcon, Microscope, Scan, Send, MessageCircle, CheckCircle, Check, Plus, Search as SearchIcon } from 'lucide-react'
 import { useAuth } from '../../../providers/AuthProvider'
 import { getPatients, getTriage, addHospitalConsultation, addPrescription, updatePatient, addLabRequest, addImagingRequest, getPatientMessages, addPatientMessage } from '../../../services/supabase'
 import { fmt } from '../../../lib/utils'
 import { theme } from '../../../styles/theme'
-import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, useToast, Toast } from '../../../components/ui'
+import { Card, SectionHead, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, ErrorState, Pill, StatusBadge, DetailHeader, useToast, Toast } from '../../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, bg } = theme
 
@@ -182,10 +182,7 @@ export default function Doctor({ brand, products }) {
 
   if (selected && !done) return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-        <button onClick={() => setSelected(null)} aria-label='Back' style={{ width: '38px', height: '38px', borderRadius: theme.radius.md, background: 'white', border: `1px solid ${border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: navy, flexShrink: 0 }}><ArrowLeft size={16} /></button>
-        <div><div style={{ fontWeight: '900', fontSize: '18px', color: navy }}>Doctor Consultation</div><div style={{ fontSize: '12px', color: gray400 }}>{selected.full_name} · {selected.reg_no}</div></div>
-      </div>
+<DetailHeader onBack={() => setSelected(null)} title='Doctor Consultation' sub={`${selected.full_name} · ${selected.reg_no}`} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '10px 14px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, fontSize: '12px', color: tealDeep, fontWeight: '600', marginBottom: '14px' }}>
         <Stethoscope size={14} /> Patient info auto-filled from Reception and Triage
       </div>
@@ -421,7 +418,10 @@ export default function Doctor({ brand, products }) {
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{p.department || 'General OPD'}{p.assigned_doctor ? ' · ' + p.assigned_doctor : ''}</div>
                 </div>
               </div>
-              <TealBtn onClick={() => openPatient(p)}>Open File</TealBtn>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <StatusBadge status={p.status} />
+                <TealBtn onClick={() => openPatient(p)}>Open File</TealBtn>
+              </div>
             </Card>
           ))}
         </div>

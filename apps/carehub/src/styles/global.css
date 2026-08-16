@@ -177,6 +177,16 @@ body {
   animation: ch-toast-in var(--motion-base) var(--ease-out);
 }
 
+/* DataTable row hover (the inline-style rows cannot express :hover, so the
+   shared DataTable gives each <tr> this class and the highlight lives here —
+   one place, consistent across every operational list). */
+.ch-data-row:hover td {
+  background: var(--gray-50);
+}
+.ch-data-row td {
+  transition: background 0.12s ease;
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
   .ch-skeleton, .ch-spinner, .ch-toast {

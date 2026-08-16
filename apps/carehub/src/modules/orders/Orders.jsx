@@ -8,11 +8,13 @@ import { productRepository } from '../inventory/repositories'
 import { warehouseRepository } from '../warehouses/repositories'
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
-import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, CardSkeleton } from '../../components/ui'
+import { Card, Inp, TealBtn, GhostBtn, Modal, Empty, DataTable, useToast, Toast } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
 const PIPELINE = ['submitted', 'approved', 'processing', 'dispatched', 'delivered']
+
+const PAGE_SIZE = 25
 
 const STAGE_LABEL = {
   submitted: 'Awaiting Approval',
@@ -74,6 +76,8 @@ export default function Orders({ brand }) {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStage, setFilterStage] = useState('all')
+  const [page, setPage] = useState(0)
+  useEffect(() => { setPage(0) }, [filterStage, orders.length])
 
   const [openOrder, setOpenOrder] = useState(null)
   const [events, setEvents] = useState([])
@@ -371,83 +375,83 @@ export default function Orders({ brand }) {
         })}
       </div>
 
-      {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <CardSkeleton />
-          <CardSkeleton />
-          <CardSkeleton />
-        </div>
-      )}
-
-      {!loading && visible.length === 0 && (
-        <Card style={{ padding: '32px', textAlign: 'center' }}>
-          <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
-            {orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
-          </div>
-          <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
-            {orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
-          </div>
-          {orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
-        </Card>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {visible.map(function (o) {
+      <DataTable
+        variant="cards"
+        rows={visible}
+        page={page}
+        setPage={setPage}
+        pageSize={PAGE_SIZE}
+        total={visible.length}
+        loading={loading}
+        empty={
+          <Card style={{ padding: '32px', textAlign: 'center' }}>
+            <div style={{ fontWeight: '800', color: navy, marginBottom: '6px' }}>
+              {orders.length === 0 ? 'No orders yet' : 'Nothing at this stage'}
+            </div>
+            <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>
+              {orders.length === 0 ? 'Submit your first order and tag a manager to approve it.' : 'Try another filter.'}
+            </div>
+            {orders.length === 0 && <TealBtn onClick={openNew}>+ New Order</TealBtn>}
+          </Card>
+        }
+        count={`${visible.length} order${visible.length !== 1 ? 's' : ''}`}
+        rowStyle={function (o) {
+          const mine = o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
+          return { borderLeft: mine ? `3px solid ${warning}` : '3px solid transparent' }
+        }}
+        renderCard={function (o) {
           const tone = STAGE_TONE[o.status] || STAGE_TONE.submitted
           const items = itemsByOrder[o.id] || []
           const watchers = watchersByOrder[o.id] || []
           const files = filesByOrder[o.id] || []
-          const mine = o.status === 'submitted' && (isOwner || o.approver_staff_id === meStaffId)
           return (
-            <Card key={o.id} style={{ padding: '0', overflow: 'hidden', borderLeft: mine ? `3px solid ${warning}` : '3px solid transparent' }}>
-              <button onClick={function () { openOrderView(o) }}
-                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '16px', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '15px', fontWeight: '800', color: navy }}>{o.customer_name}</span>
-                      <span style={{ fontSize: '10px', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.03em',
-                        background: tone.bg, color: tone.color, border: '1px solid ' + tone.border }}>
-                        {STAGE_LABEL[o.status] || o.status}
-                      </span>
-                    </div>
-
-                    <div style={{ fontSize: '10px', color: gray400, fontFamily: 'monospace', marginTop: '4px' }}>{o.order_ref}</div>
-
-                    <div style={{ fontSize: '12px', color: gray600, marginTop: '8px' }}>
-                      <strong>Raised by:</strong> {o.created_by_name}{o.created_by_title ? ' · ' + o.created_by_title : ''}
-                    </div>
-                    <div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>
-                      <strong>Approver:</strong> {o.approver_name || 'Not set'}
-                    </div>
-                    {watchers.length > 0 && (
-                      <div style={{ fontSize: '11.5px', color: gray400, marginTop: '2px' }}>
-                        <strong>Copied:</strong> {watchers.map(function (w) { return w.watcher_name }).join(', ')}
-                      </div>
-                    )}
-
-                    <div style={{ fontSize: '11.5px', color: gray400, marginTop: '6px' }}>
-                      {items.length} line item{items.length !== 1 ? 's' : ''}
-                      {files.length > 0 ? ' · ' + files.length + ' document' + (files.length > 1 ? 's' : '') : ''}
-                      {terrName(o.territory_id) ? ' · ' + terrName(o.territory_id) : ''}
-                    </div>
+            <button onClick={function () { openOrderView(o) }}
+              style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '16px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '800', color: navy }}>{o.customer_name}</span>
+                    <span style={{ fontSize: '10px', fontWeight: '700', padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.03em',
+                      background: tone.bg, color: tone.color, border: '1px solid ' + tone.border }}>
+                      {STAGE_LABEL[o.status] || o.status}
+                    </span>
                   </div>
 
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: '17px', fontWeight: '900', color: tealDeep }}>{money(o.total_value)}</div>
-                    <div style={{ fontSize: '10.5px', color: gray400, fontWeight: '600', marginTop: '4px' }}>{fmtStamp(o.created_at)}</div>
+                  <div style={{ fontSize: '10px', color: gray400, fontFamily: 'monospace', marginTop: '4px' }}>{o.order_ref}</div>
+
+                  <div style={{ fontSize: '12px', color: gray600, marginTop: '8px' }}>
+                    <strong>Raised by:</strong> {o.created_by_name}{o.created_by_title ? ' · ' + o.created_by_title : ''}
+                  </div>
+                  <div style={{ fontSize: '12px', color: gray600, marginTop: '2px' }}>
+                    <strong>Approver:</strong> {o.approver_name || 'Not set'}
+                  </div>
+                  {watchers.length > 0 && (
+                    <div style={{ fontSize: '11.5px', color: gray400, marginTop: '2px' }}>
+                      <strong>Copied:</strong> {watchers.map(function (w) { return w.watcher_name }).join(', ')}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '11.5px', color: gray400, marginTop: '6px' }}>
+                    {items.length} line item{items.length !== 1 ? 's' : ''}
+                    {files.length > 0 ? ' · ' + files.length + ' document' + (files.length > 1 ? 's' : '') : ''}
+                    {terrName(o.territory_id) ? ' · ' + terrName(o.territory_id) : ''}
                   </div>
                 </div>
-              </button>
-            </Card>
+
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: '17px', fontWeight: '900', color: tealDeep }}>{money(o.total_value)}</div>
+                  <div style={{ fontSize: '10.5px', color: gray400, fontWeight: '600', marginTop: '4px' }}>{fmtStamp(o.created_at)}</div>
+                </div>
+              </div>
+            </button>
           )
-        })}
-      </div>
+        }}
+      />
 
       <Modal show={composing} onClose={function () { setComposing(false) }} sheet wide title='New Order'
         footer={<>
-          <GhostBtn onClick={function () { setComposing(false) }} style={{ flex: 1, padding: '13px' }}>Cancel</GhostBtn>
-          <TealBtn onClick={submitOrder} style={{ flex: 2, padding: '13px' }}>{sending ? 'Submitting...' : 'Submit for Approval'}</TealBtn>
+          <GhostBtn onClick={function () { setComposing(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+          <TealBtn onClick={submitOrder} style={{ flex: 2, padding: '12px' }}>{sending ? 'Submitting...' : 'Submit for Approval'}</TealBtn>
         </>}>
             <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '16px' }}>Raised by <strong>{meName}</strong>{meTitle ? ' · ' + meTitle : ''}</div>
 
@@ -460,7 +464,7 @@ export default function Orders({ brand }) {
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Territory</div>
                   <select value={form.territory_id || ''} onChange={function (e) { f('territory_id', e.target.value) }}
-                    style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
+                    style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
                     <option value=''>Not set</option>
                     {territories.map(function (t) { return <option key={t.id} value={t.id}>{t.name}</option> })}
                   </select>
@@ -468,7 +472,7 @@ export default function Orders({ brand }) {
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Fulfil from</div>
                   <select value={form.location_id || ''} onChange={function (e) { f('location_id', e.target.value) }}
-                    style={{ width: '100%', padding: '11px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
+                    style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white' }}>
                     <option value=''>Not set</option>
                     {locations.map(function (l) { return <option key={l.id} value={l.id}>{l.name}</option> })}
                   </select>
@@ -560,12 +564,12 @@ export default function Orders({ brand }) {
                 </datalist>
 
                 <button type='button' onClick={addLine}
-                  style={{ width: '100%', marginTop: '8px', border: `1px dashed ${tealDeep}`, background: bg, color: tealDeep, borderRadius: '10px', padding: '11px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer' }}>
+                  style={{ width: '100%', marginTop: '8px', border: `1px dashed ${tealDeep}`, background: bg, color: tealDeep, borderRadius: '10px', padding: '12px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer' }}>
                   + Add another product
                 </button>
 
                 {orderTotal > 0 && (
-                  <div style={{ marginTop: '10px', padding: '11px 13px', borderRadius: '10px', background: tealMist, border: `1px solid ${tealMist}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ marginTop: '10px', padding: '12px 14px', borderRadius: '10px', background: tealMist, border: `1px solid ${tealMist}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}>Order total</span>
                     <span style={{ fontSize: '17px', fontWeight: '900', color: tealDeep }}>{money(orderTotal)}</span>
                   </div>
@@ -626,7 +630,7 @@ export default function Orders({ brand }) {
                   const active = openOrder.status === stage
                   const rejected = openOrder.status === 'rejected'
                   return (
-                    <div key={stage} style={{ display: 'flex', gap: '11px', paddingBottom: i === PIPELINE.length - 1 ? 0 : '16px', position: 'relative' }}>
+                    <div key={stage} style={{ display: 'flex', gap: '12px', paddingBottom: i === PIPELINE.length - 1 ? 0 : '16px', position: 'relative' }}>
                       {i < PIPELINE.length - 1 && (
                         <div style={{ position: 'absolute', left: '13px', top: '28px', bottom: '0', width: '2px', background: done ? tealDeep : gray100 }} />
                       )}
@@ -744,7 +748,7 @@ export default function Orders({ brand }) {
                   <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '8px' }}>Add a note (optional)</div>
                   <textarea value={actionNote} onChange={function (e) { setActionNote(e.target.value) }} rows={2}
                     placeholder='Recorded against whatever you do next...'
-                    style={{ width: '100%', padding: '11px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: '10px' }} />
+                    style={{ width: '100%', padding: '12px', borderRadius: '8px', border: `1px solid ${border}`, fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box', marginBottom: '10px' }} />
 
                   {canApprove(openOrder) && (
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -760,7 +764,7 @@ export default function Orders({ brand }) {
                   )}
 
                   {openOrder.status === 'submitted' && !canApprove(openOrder) && (
-                    <div style={{ padding: '11px 13px', borderRadius: '8px', background: bg, fontSize: '12px', color: gray500, textAlign: 'center' }}>
+                    <div style={{ padding: '12px 14px', borderRadius: '8px', background: bg, fontSize: '12px', color: gray500, textAlign: 'center' }}>
                       Waiting on <strong>{openOrder.approver_name}</strong> to approve.
                     </div>
                   )}
