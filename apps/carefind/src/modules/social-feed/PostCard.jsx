@@ -111,7 +111,7 @@ export default function PostCard({
   }
 
   return (
-    <Card style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden' }}>
+    <Card style={{ padding: post.post_type === 'visual' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
       {/* Card header: identity left, one kind pill + overflow menu right.
           Identity reads name → verified badge → handle → credential →
           time, i.e. "who is this, and can I trust them" before anything

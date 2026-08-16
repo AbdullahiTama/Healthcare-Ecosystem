@@ -228,7 +228,7 @@ const distanceMeters = (p, u) => {
   ]
 
   const bodyContent = (
-    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
+    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
       <style>{`
         @keyframes medmarket-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
@@ -237,9 +237,9 @@ const distanceMeters = (p, u) => {
       `}</style>
 
       <div style={{
-        background: theme.navy, color: '#fff',
+        background: theme.heroGradient, color: '#fff',
         ...(isMobile
-          ? { padding: '24px 18px 22px', borderRadius: '0 0 26px 26px' }
+          ? { padding: '26px 18px 24px', borderRadius: '0 0 28px 28px' }
           : { padding: '28px 32px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -251,8 +251,11 @@ const distanceMeters = (p, u) => {
         </p>
         <form onSubmit={runSearch}>
           <div style={{ display: 'flex', gap: 8, maxWidth: isMobile ? undefined : 520 }}>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctorâ€¦" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: theme.radius.md, boxSizing: 'border-box' }} />
-            <button type="submit" style={{ minHeight: 44, padding: '0 18px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 14 }}>Go</button>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search medication, facility, doctorâ€¦" aria-label="Search medication, facility, doctor" style={{ flex: 1, minHeight: 44, padding: 13, fontSize: 14, border: 'none', borderRadius: theme.radius.md, boxSizing: 'border-box', fontFamily: theme.fontFamily }} />
+            <button type="submit" style={{ minHeight: 44, padding: '0 20px', background: '#fff', color: theme.tealDeep, border: 'none', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 14, cursor: 'pointer', boxSizing: 'border-box', WebkitTapHighlightColor: 'transparent', transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}` }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.94)' }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+            >Go</button>
           </div>
         </form>
       </div>

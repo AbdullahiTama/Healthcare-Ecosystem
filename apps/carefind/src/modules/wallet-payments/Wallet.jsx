@@ -285,7 +285,7 @@ function Wallet() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' }
       : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
       <div style={{

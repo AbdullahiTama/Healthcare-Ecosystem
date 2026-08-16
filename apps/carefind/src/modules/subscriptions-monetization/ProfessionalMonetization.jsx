@@ -124,7 +124,7 @@ function ProfessionalMonetization() {
 
   if (!user || !profile?.is_verified) {
     const verifyRequiredContent = (
-      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
         <div style={{
           background: theme.navy, color: '#fff',
           ...(isMobile ? { padding: '22px 20px 26px', borderRadius: '0 0 28px 28px' } : { padding: '22px 26px', borderRadius: theme.radius.xl }),
@@ -159,7 +159,7 @@ function ProfessionalMonetization() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 }
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' }
       : { fontFamily: theme.fontFamily, maxWidth: 640, margin: '0 auto' }}>
       <div style={{
         background: theme.navy, color: '#fff',

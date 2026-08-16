@@ -1649,7 +1649,7 @@ function Feed() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 90 }
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }
       : { fontFamily: theme.fontFamily }}>
       <style>{`
         .article-body p { margin: 0 0 14px 0; }
@@ -1665,28 +1665,29 @@ function Feed() {
       `}</style>
       {isMobile && (
         <div style={{
-          background: theme.navy, margin: '-20px -20px 0 -20px', padding: '14px 16px 0',
-          borderRadius: '0 0 22px 22px', color: '#fff',
+          background: theme.heroGradient, margin: '-20px -20px 0 -20px', padding: '14px 16px 2px',
+          borderRadius: '0 0 24px 24px', color: '#fff',
         }}>
           {/* App bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 12 }}>
             <Logo size={30} />
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
               <div style={{ position: 'relative', width: '100%', maxWidth: 280 }}>
-                <SearchIcon size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }} />
+                <SearchIcon size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', pointerEvents: 'none' }} />
                 <input
                   placeholder="Search providers, pharmaciesâ€¦"
                   onKeyDown={(e) => { if (e.key === 'Enter' && e.target.value.trim()) { navigate(`/search?q=${encodeURIComponent(e.target.value.trim())}`) } }}
                   style={{
-                    width: '100%', padding: '8px 12px 8px 32px', borderRadius: 20, border: 'none',
-                    background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 13, outline: 'none',
+                    width: '100%', padding: '9px 12px 9px 34px', borderRadius: theme.radius.full, border: 'none',
+                    background: 'rgba(255,255,255,0.14)', color: '#fff', fontSize: 13, outline: 'none',
+                    WebkitTapHighlightColor: 'transparent',
                   }} />
               </div>
             </div>
 
             <Link to="/notifications" style={{
               width: 34, height: 34, borderRadius: theme.radius.md, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', background: 'rgba(255,255,255,0.08)', fontSize: 15,
+              justifyContent: 'center', background: 'rgba(255,255,255,0.1)', fontSize: 15,
               textDecoration: 'none', color: '#fff', position: 'relative',
             }}>
               <Bell size={18} aria-hidden="true" />
@@ -1705,18 +1706,21 @@ function Feed() {
             </Link>
           </div>
 
-          {/* What do you want to read? */}
-          <div role="group" aria-label="Filter the feed" className="cf-hscroll" style={{ display: 'flex', gap: 20, WebkitOverflowScrolling: 'touch' }}>
+          {/* What do you want to read? — pill tabs, like the feed headers in
+              modern social apps: active tab lifts onto a white capsule. */}
+          <div role="group" aria-label="Filter the feed" className="cf-hscroll" style={{ display: 'flex', gap: 6, padding: '2px 2px 12px', WebkitOverflowScrolling: 'touch' }}>
             {FEED_TABS.map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setFeedTab(key)}
                 style={{
-                  flexShrink: 0, padding: '0 0 11px', background: 'none', border: 'none',
-                  fontSize: 13.5, fontWeight: feedTab === key ? 800 : 700,
-                  color: feedTab === key ? '#fff' : 'rgba(255,255,255,0.45)',
-                  borderBottom: feedTab === key ? `2.5px solid ${theme.tealBright}` : '2.5px solid transparent',
-                  whiteSpace: 'nowrap', cursor: 'pointer',
+                  flexShrink: 0, padding: '8px 14px', background: feedTab === key ? '#fff' : 'transparent',
+                  border: 'none', borderRadius: theme.radius.full,
+                  fontSize: 12.5, fontWeight: feedTab === key ? 800 : 700,
+                  color: feedTab === key ? theme.navy : 'rgba(255,255,255,0.6)',
+                  boxShadow: feedTab === key ? '0 2px 8px rgba(0,0,0,0.18)' : 'none',
+                  whiteSpace: 'nowrap', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}`,
                 }}
               >
                 {label}
@@ -1786,7 +1790,7 @@ function Feed() {
             onChange={(e) => setFeedQuery(e.target.value)}
             placeholder="Search postsâ€¦"
             aria-label="Search posts"
-            style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '10px 36px 10px 36px', borderRadius: theme.radius.full, border: `1px solid ${theme.border}`, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: '#fff', WebkitTapHighlightColor: 'transparent', transition: `border-color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}` }}
           />
           {feedQuery && (
             <button
@@ -2349,7 +2353,7 @@ function Feed() {
             onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); loadFeed() }}
             style={{
               background: theme.tealDeep, color: '#fff', border: 'none', cursor: 'pointer',
-              fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: theme.radius.md99,
+              fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: theme.radius.full,
               boxShadow: theme.elevation[2], display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
@@ -2363,16 +2367,16 @@ function Feed() {
           distance, then a spinner state while refreshing. */}
       <div style={{ position: 'sticky', top: 0, height: 0, zIndex: 4, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
         {pullRefreshing ? (
-          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.md99, boxShadow: theme.elevation[2] }}>Refreshingâ€¦</span>
+          <span style={{ transform: 'translateY(6px)', background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.full, boxShadow: theme.elevation[2] }}>Refreshingâ€¦</span>
         ) : pullDistance > 4 ? (
-          <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.md99, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
+          <span style={{ transform: `translateY(${pullDistance - 34}px)`, background: theme.navy, color: '#fff', fontSize: 11, fontWeight: 800, padding: '6px 12px', borderRadius: theme.radius.full, opacity: pullDistance / 90, whiteSpace: 'nowrap' }}>
             {pullDistance > PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh'}
           </span>
         ) : null}
       </div>
 
       <div
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
         onTouchStart={pullStart}
         onTouchMove={pullMove}
         onTouchEnd={pullEnd}

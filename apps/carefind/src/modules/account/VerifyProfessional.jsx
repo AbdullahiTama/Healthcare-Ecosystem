@@ -129,7 +129,7 @@ function VerifyProfessional() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 90 }
+      ? { fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' }
       : { fontFamily: theme.fontFamily, maxWidth: 560, margin: '0 auto' }}>
       <div style={{
         background: theme.navy, color: '#fff',

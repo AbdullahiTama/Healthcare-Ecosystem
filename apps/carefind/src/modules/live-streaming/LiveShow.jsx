@@ -267,7 +267,7 @@ function LiveShow() {
 
   if (!show) {
     const notFoundContent = (
-      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Radio size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Live show not found</h3>
@@ -296,7 +296,7 @@ function LiveShow() {
     const mins = Math.max(0, Math.floor((diff % 3600000) / 60000))
     const secs = Math.max(0, Math.floor((diff % 60000) / 1000))
     return (
-      <div style={{ fontFamily: theme.fontFamily, maxWidth: isMobile ? 480 : 640, margin: '0 auto', paddingBottom: 90, background: theme.navy, minHeight: '100vh', color: '#fff' }}>
+      <div style={{ fontFamily: theme.fontFamily, maxWidth: isMobile ? 480 : 640, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))', background: theme.navy, minHeight: '100vh', color: '#fff' }}>
         <div style={{ padding: '18px 16px' }}>
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
@@ -334,7 +334,7 @@ function LiveShow() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
+      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))', background: '#fff' }
       : { fontFamily: theme.fontFamily, maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       {/* Header */}
       <div style={{

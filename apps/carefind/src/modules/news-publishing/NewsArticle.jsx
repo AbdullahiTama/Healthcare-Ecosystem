@@ -236,7 +236,7 @@ function NewsArticle() {
 
   if (!article || article.status !== 'approved') {
     const notFoundContent = (
-      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 90 } : { fontFamily: theme.fontFamily }}>
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Newspaper size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 6px 0' }}>Article not available</h3>
@@ -279,7 +279,7 @@ function NewsArticle() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontDisplay, maxWidth: 480, margin: '0 auto', paddingBottom: 90, background: '#fff' }
+      ? { fontFamily: theme.fontDisplay, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))', background: '#fff' }
       : { fontFamily: theme.fontDisplay, maxWidth: 700, margin: '0 auto', background: '#fff' }}>
       {/* Top bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontFamily: theme.fontFamily }}>
