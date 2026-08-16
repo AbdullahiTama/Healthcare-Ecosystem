@@ -66,7 +66,7 @@ export default function AdminDashboard() {
   const logout = () => { authLogout(); navigate('/login') }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: 'system-ui,sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: theme.bg, fontFamily: theme.fontFamily }}>
       {/* Header */}
       <div style={{ background: DARK, color: 'white', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundImage: DARK }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -82,7 +82,7 @@ export default function AdminDashboard() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
         {pending.length > 0 && (
           <div style={{ marginBottom: '20px', padding: '14px 18px', borderRadius: '14px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Bell size={20} color='#d97706' style={{ flexShrink: 0 }} />
+            <Bell size={20} color={theme.warning} style={{ flexShrink: 0 }} />
             <div><div style={{ fontWeight: '700', color: theme.amberText, fontSize: '14px' }}>{pending.length} business(es) waiting for approval!</div><div style={{ fontSize: '12px', color: theme.amberDeep }}>{pending.map(b => b.name).join(' Â· ')}</div></div>
           </div>
         )}
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? '#0E6F5A' : '#f3f4f6', color: tab === t ? 'white' : '#666', textTransform: 'capitalize' }}>{t}</button>)}
+          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? theme.tealDeep : theme.gray100, color: tab === t ? 'white' : theme.gray600, textTransform: 'capitalize' }}>{t}</button>)}
         </div>
 
         {loading ? <Loading /> : tab === 'businesses' ? (
@@ -108,7 +108,7 @@ export default function AdminDashboard() {
                     <div>
                       <div style={{ fontWeight: '800', fontSize: '15px' }}>{b.name}</div>
                       <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{b.owner} Â· {b.email}</div>
-                      <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>{businessName(b.business_type || b.type)} Â· {b.state || 'â€”'}</div>
+                      <div style={{ fontSize: '12px', color: theme.textLight, marginTop: '2px' }}>{businessName(b.business_type || b.type)} Â· {b.state || 'â€”'}</div>
                     </div>
                   </div>
                   <Pill label={b.status} type={b.status === 'active' ? 'green' : b.status === 'pending' ? 'amber' : b.status === 'suspended' ? 'red' : 'gray'} />
@@ -126,7 +126,7 @@ export default function AdminDashboard() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
               <TealBtn onClick={() => setShowInvite(true)}>+ Invite Team Member</TealBtn>
             </div>
-            {team.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: '#ccc' }}>No team members yet</div> : (
+            {team.length === 0 ? <div style={{ textAlign: 'center', padding: '40px', color: theme.gray400 }}>No team members yet</div> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {team.map(m => (
                   <Card key={m.id} style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
@@ -162,7 +162,7 @@ export default function AdminDashboard() {
           </div>
         )}>
         {sel && [['Business Name', sel.name], ['Type', businessName(sel.business_type || sel.type)], ['Owner', sel.owner], ['Email', sel.email], ['Phone', sel.phone || 'â€”'], ['WhatsApp', sel.whatsapp || 'â€”'], ['Address', sel.address || 'â€”'], ['State', sel.state || 'â€”'], ['Hours', sel.hours || 'â€”'], ['CareFind', (sel.visible_on_carefind !== false) ? 'Listed' : 'Hidden'], ['Plan', sel.plan || 'basic'], ['Registered', sel.created_at?.split('T')[0]]].map(([l, v]) => (
-          <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f9f9f9', fontSize: '13px' }}>
+          <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${theme.hairline}`, fontSize: '13px' }}>
             <span style={{ color: theme.textFaint, fontWeight: '600' }}>{l}</span><span style={{ color: theme.slate, textAlign: 'right' }}>{v}</span>
           </div>
         ))}

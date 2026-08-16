@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { AlertTriangle, Check, Inbox, Star, WifiOff, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 export { useToast } from '../../hooks/useToast'
@@ -491,5 +491,25 @@ export function ErrorState({ variant = 'app', message, onRetry }) {
       <div style={{ fontSize: 13, color: theme.gray500, marginBottom: onRetry ? 20 : 0, maxWidth: 320 }}>{copy.body}</div>
       {onRetry && <TealBtn onClick={onRetry}>Retry</TealBtn>}
     </div>
+  )
+}
+
+// ── BRAND ILLUSTRATION ──────────────────────────────────────────────────────
+// BRAND_GUIDELINES.md: the one illustration style used across the ecosystem —
+// simple, geometric, brand-palette — reserved for empty states and onboarding.
+// `BrandArt` is that style as a reusable SVG. `tone` picks the ink colour:
+// 'light' on the navy/teal hero surfaces (Onboarding mobile header), 'dark'
+// on light surfaces (desktop centered card).
+export function BrandArt({ size = 104, tone = 'light', style = {} }) {
+  const ink = tone === 'dark' ? theme.navy : '#fff'
+  const soft = tone === 'dark' ? theme.tealDeep : 'rgba(255,255,255,0.35)'
+  return (
+    <svg width={size} height={size} viewBox="0 0 96 96" fill="none" aria-hidden="true" style={style}>
+      <rect x="6" y="6" width="84" height="84" rx="24" fill={soft} />
+      <rect x="18" y="18" width="60" height="60" rx="16" fill={soft} opacity="0.85" />
+      <circle cx="48" cy="40" r="16" fill={ink} />
+      <circle cx="48" cy="40" r="5.5" fill={tone === 'dark' ? theme.cardBg : theme.tealDeep} />
+      <path d="M34 74c0-8.8 6.3-14 14-14s14 5.2 14 14" stroke={ink} strokeWidth="7" strokeLinecap="round" />
+    </svg>
   )
 }

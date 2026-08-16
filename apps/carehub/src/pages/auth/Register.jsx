@@ -194,7 +194,7 @@ export default function Register() {
           {step === 2 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Contact & Location for CareFind</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: '#FDFBF7', border: '1px solid #e5e7eb', fontSize: '12px', color: '#0E6F5A', lineHeight: '1.6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: theme.space[6], borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${theme.border}`, fontSize: '12px', color: theme.tealDeep, lineHeight: '1.6' }}>
                 <Search size={13} /> This info will show on CareFind so patients can find and contact your business
               </div>
               <CInp label='WhatsApp Number' value={data.whatsapp} onChange={v => f('whatsapp', v)} placeholder='e.g. 08012345678' required />
@@ -223,31 +223,31 @@ export default function Register() {
           {step === 4 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Create Your Password</div>
-              <div style={{ padding: '12px', borderRadius: '10px', background: '#FDFBF7', border: '1px solid #e5e7eb' }}>
+              <div style={{ padding: theme.space[6], borderRadius: theme.radius.md, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: '11px', color: theme.textFaint }}>Login email:</div>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || 'â€”'}</div>
               </div>
               <CInp label='Password' value={data.password} onChange={v => f('password', v)} type='password' placeholder='Create a strong password' required />
               <CInp label='Confirm Password' value={data.confirmPassword} onChange={v => f('confirmPassword', v)} type='password' placeholder='Repeat your password' required />
               {data.password && data.confirmPassword && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '700', color: data.password === data.confirmPassword ? '#059669' : '#ef4444' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '700', color: data.password === data.confirmPassword ? theme.success : theme.danger }}>
                   {data.password === data.confirmPassword ? <><Check size={13} /> Passwords match</> : <><X size={13} /> Passwords do not match</>}
                 </div>
               )}
-              <div style={{ padding: '14px', borderRadius: '12px', background: '#FDFBF7', border: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '14px', borderRadius: '12px', background: theme.cardBg, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
-                <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: '#0E6F5A' }}>Free</div><div style={{ fontSize: '11px', color: '#bbb' }}>for now</div></div>
+                <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: theme.tealDeep }}>Free</div><div style={{ fontSize: '11px', color: theme.textLight }}>for now</div></div>
               </div>
               <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', alignItems: 'flex-start' }}>
                 <input type='checkbox' checked={data.agreedTerms || false} onChange={e => f('agreedTerms', e.target.checked)} style={{ marginTop: '2px', flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: '#555', lineHeight: '1.6' }}>I agree to the Terms of Service and Privacy Policy. I understand my account requires admin approval.</span>
+                <span style={{ fontSize: '12px', color: theme.textMid, lineHeight: '1.6' }}>I agree to the Terms of Service and Privacy Policy. I understand my account requires admin approval.</span>
               </label>
             </div>
           )}
           {step === 5 && (
             <div>
               <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate, marginBottom: '16px' }}>Review & Submit</div>
-              <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid #f0f0f0' }}>
+              <div style={{ borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.hairline}` }}>
                 {[
                   ['Business Type', businessName(data.businessType)],
                   ['Business Name', data.businessName],
@@ -258,7 +258,7 @@ export default function Register() {
                   ['Login Email', data.ownerEmail],
                   ['CareFind', data.visibleOnCareFind !== false ? 'Yes - Listed publicly' : 'No'],
                 ].filter(([, v]) => v).map(([l, v], i) => (
-                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? '#fafafa' : 'white', fontSize: '13px' }}>
+                  <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? theme.gray50 : '#fff', fontSize: '13px' }}>
                     <span style={{ color: theme.textFaint, fontWeight: '600' }}>{l}</span><span style={{ color: theme.slate }}>{v}</span>
                   </div>
                 ))}

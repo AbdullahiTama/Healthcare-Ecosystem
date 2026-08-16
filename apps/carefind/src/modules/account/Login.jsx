@@ -167,7 +167,7 @@ function Login() {
   // wider viewport — there's nothing to add at 2 columns for a single form.
   if (isMobileOrTablet) {
     return (
-      <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
+      <div style={{ fontFamily: theme.fontFamily, maxWidth: 420, margin: '0 auto', minHeight: '100vh', background: theme.bg }}>
         <div style={{ background: theme.heroGradient, padding: '24px 20px 50px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Back</Link>
           <h1 style={{ fontSize: 23, fontWeight: 900, margin: '18px 0 4px 0', letterSpacing: '-0.02em' }}>
@@ -190,7 +190,7 @@ function Login() {
   // Laptop+: a genuine two-panel desktop composition (brand story left, form
   // right) rather than a 420px mobile card adrift in a mostly-empty monitor.
   return (
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', minHeight: '100vh', display: 'flex' }}>
+    <div style={{ fontFamily: theme.fontFamily, minHeight: '100vh', display: 'flex' }}>
       <div style={{
         flex: '0 0 44%', maxWidth: 560, background: theme.heroGradient, color: '#fff',
         padding: '48px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',

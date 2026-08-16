@@ -12,10 +12,10 @@ gsap.registerPlugin(ScrollTrigger)
 const { tealDeep, tealBright, navy, navySoft, bg, cardBg, border, textDark, textMid, textLight } = theme
 
 const FEATURES = [
-  { icon: Search, title: 'Find care near you', desc: 'Search medicines, pharmacies, hospitals and labs in your area. Real listings, real locations.', color: '#0E6F5A' },
-  { icon: Star, title: 'Real patient reviews', desc: 'See what actual patients say before you book. Every review comes from a verified visit.', color: '#1A8A72' },
-  { icon: MessageCircle, title: 'Connect on WhatsApp', desc: 'Message providers directly. No extra app, no phone tag, just tap and talk.', color: '#155A4B' },
-  { icon: Shield, title: 'Verified providers', desc: 'Every business on CareFind is verified. Your health deserves nothing less.', color: '#0B4A3E' },
+  { icon: Search, title: 'Find care near you', desc: 'Search medicines, pharmacies, hospitals and labs in your area. Real listings, real locations.', color: tealDeep },
+  { icon: Star, title: 'Real patient reviews', desc: 'See what actual patients say before you book. Every review comes from a verified visit.', color: tealBright },
+  { icon: MessageCircle, title: 'Connect on WhatsApp', desc: 'Message providers directly. No extra app, no phone tag, just tap and talk.', color: navySoft },
+  { icon: Shield, title: 'Verified providers', desc: 'Every business on CareFind is verified. Your health deserves nothing less.', color: navy },
 ]
 
 const STEPS = [
