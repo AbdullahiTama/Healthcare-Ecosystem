@@ -1,0 +1,47 @@
+name: CareFind CI
+
+# Minimum-viable quality gate (ROADMAP.md §10.2): nothing reaches `main` or a
+# PR merge with a failing test or build. Lint can be layered on once a lint
+# config exists; test + build is the gate that closes the real risk today.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/carefind/**'
+      - 'packages/**'
+      - '.github/workflows/carefind-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/carefind/**'
+      - 'packages/**'
+      - '.github/workflows/carefind-ci.yml'
+
+concurrency:
+  group: carefind-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Test & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/carefind/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/carefind
+        run: npm ci
+
+      - name: Run tests
+        working-directory: apps/carefind
+        run: npm run test
+
+      - name: Build
+        working-directory: apps/carefind
+        run: npm run build
