@@ -49,19 +49,12 @@ describe('BottomNav (five destinations)', () => {
     expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(139, 151, 143)')
   })
 
-  it('shows the More overflow menu with authenticated-only destinations', () => {
+  it('does not render the More overflow menu — logout lives on the Profile page', () => {
     auth.user = { id: 'u1' }
     renderNav('/feed')
-    fireEvent.click(screen.getByRole('button', { name: 'More' }))
-    expect(screen.getByRole('link', { name: 'Wallet' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Saved' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument()
-  })
-
-  it('hides the More menu for signed-out users', () => {
-    auth.user = null
-    renderNav('/')
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Wallet' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Notifications' })).not.toBeInTheDocument()
   })
 
   it('falls back to onCompose when tapped on the feed and the composer is not in the DOM', () => {

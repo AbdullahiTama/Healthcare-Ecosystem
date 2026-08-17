@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
-import { Home, Newspaper, Plus, User, Compass, Menu, Wallet, Bookmark, Bell } from 'lucide-react'
+import { Home, Newspaper, Plus, User, Compass } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function BottomNav({ onCompose }) {
@@ -12,16 +12,6 @@ function BottomNav({ onCompose }) {
   const isActive = (path) => location.pathname === path
   const isHomeActive = location.pathname === '/feed'
   const [unreadNews, setUnreadNews] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef(null)
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
 
   const itemStyle = (active) => ({
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
@@ -132,55 +122,6 @@ function BottomNav({ onCompose }) {
         </span>
         Profile
       </Link>
-      {user && (
-        <div ref={menuRef} style={{ position: 'relative' }}>
-          <button
-            onClick={() => setMenuOpen(p => !p)}
-            aria-label="More"
-            aria-expanded={menuOpen}
-            style={{
-              ...itemStyle(false),
-              background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit',
-              minHeight: 44, minWidth: 44,
-            }}
-          >
-            <span style={iconCapsule(menuOpen)}>
-              <Menu size={20} strokeWidth={menuOpen ? 2.4 : 2} aria-hidden="true" />
-            </span>
-            More
-          </button>
-          {menuOpen && (
-            <div style={{
-              position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 120,
-              minWidth: 190, background: '#fff', borderRadius: theme.radius.lg,
-              border: `1px solid ${theme.border}`, boxShadow: '0 -8px 24px rgba(0,0,0,0.08)',
-              padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
-            }}>
-              {[
-                { to: '/wallet', label: 'Wallet', Icon: Wallet },
-                { to: '/saved', label: 'Saved', Icon: Bookmark },
-                { to: '/notifications', label: 'Notifications', Icon: Bell },
-              ].map(({ to, label, Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  onClick={() => setMenuOpen(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, minHeight: 44,
-                    padding: '9px 12px', borderRadius: theme.radius.md, boxSizing: 'border-box',
-                    color: isActive(to) ? theme.tealDeep : theme.navy,
-                    background: isActive(to) ? theme.tealMist : 'transparent',
-                    fontSize: 13, fontWeight: 600, textDecoration: 'none',
-                  }}
-                >
-                  <Icon size={17} strokeWidth={isActive(to) ? 2.4 : 2} aria-hidden="true" />
-                  {label}
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

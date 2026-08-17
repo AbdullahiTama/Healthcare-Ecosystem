@@ -915,11 +915,11 @@ function Profile() {
             <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
           </Link>
         </div>
+        </>)}
 
         <button onClick={handleSignOut} style={{ width: '100%', padding: 13, background: theme.dangerBg, color: theme.alert, border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 8 }}>
           Sign Out
         </button>
-        </>)}
       </div>
 
       {openPost && (
