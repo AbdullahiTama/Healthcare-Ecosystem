@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
-import { LogOut, Compass, Home, Newspaper, Plus, User } from 'lucide-react'
+import { Home, Newspaper, Plus, User } from 'lucide-react'
 import { theme } from '../styles/theme'
-import { Menu } from 'lucide-react'
 
 function BottomNav({ onCompose }) {
   const location = useLocation()
@@ -13,7 +12,6 @@ function BottomNav({ onCompose }) {
   const isActive = (path) => location.pathname === path
   const isHomeActive = location.pathname === '/feed'
   const [unreadNews, setUnreadNews] = useState(0)
-  const [menuOpen, setMenuOpen] = useState(false)
 
   const itemStyle = (active) => ({
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
@@ -58,7 +56,7 @@ function BottomNav({ onCompose }) {
         if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.querySelector('textarea')?.focus() }
       }, 400)
     } else {
-      const el = document.getElementById('post-composer')
+      const el = document.getElementAt('post-composer')
       if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.querySelector('textarea')?.focus() }
       if (onCompose) onCompose()
     }
@@ -121,69 +119,19 @@ function BottomNav({ onCompose }) {
         Profile
       </Link>
       {user && (
-        <div
-          onClick={() => setMenuOpen(p => !p)}
+        <button
+          onClick={() => { signOut(); navigate('/login') }}
           style={{
-            position: 'relative',
-            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+            borderRadius: theme.radius.md, color: theme.alert, fontSize: 12, fontWeight: 600,
+            border: 'none', background: 'rgba(239, 68, 68, 0.1)', cursor: 'pointer',
+            marginLeft: 'auto', width: 'auto',
           }}
+          aria-label="Sign out"
         >
-          <Menu size={16} style={{ color: theme.gray500 }} />
-          <MenuDropdown user={user} signOut={signOut} navigate={navigate} open={menuOpen} setOpen={setMenuOpen} />
-        </div>
+          <LogOut size={16} /> Sign out
+        </button>
       )}
-    </div>
-  )
-}
-
-function MenuDropdown({ user, signOut, navigate, open, setOpen }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(open)
-
-  useEffect(() => {
-    setIsMenuOpen(open)
-  }, [open])
-
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '100%',
-        right: 0,
-        marginTop: 8,
-        minWidth: 180,
-        background: '#fff',
-        borderRadius: theme.radius.lg,
-        border: `1px solid ${theme.border}`,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-        padding: 6,
-        zIndex: 50,
-        display: isMenuOpen ? 'block' : 'none',
-      }}
-    >
-      <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border}`, marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: theme.navy }}>{user?.full_name || user?.name || 'User'}</div>
-        {user?.email && <div style={{ fontSize: 12, color: theme.gray500, marginTop: 2 }}>{user?.email}</div>}
-      </div>
-      <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: theme.radius.md, color: theme.navy, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-        <User size={15} /> Profile
-      </Link>
-      <button
-        onClick={() => { handleSignOut(); setIsMenuOpen(false) }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
-          borderRadius: theme.radius.md, color: theme.alert, fontSize: 13, fontWeight: 600,
-          border: 'none', background: 'transparent', cursor: 'pointer', width: '100%',
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-      >
-        <LogOut size={15} /> Sign out
-      </button>
     </div>
   )
 }
