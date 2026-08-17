@@ -134,6 +134,5 @@ function BottomNav({ onCompose }) {
       )}
     </div>
   )
-}
 
 export default BottomNav
