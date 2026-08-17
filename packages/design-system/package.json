@@ -1,0 +1,28 @@
+{
+  "name": "@care-ecosystem/design-system",
+  "version": "1.0.0",
+  "description": "Unified design tokens and component primitives for CareHub + CareFind",
+  "main": "src/theme.js",
+  "module": "src/theme.js",
+  "types": "src/theme.js",
+  "exports": {
+    ".": {
+      "import": "./src/theme.js",
+      "types": "./src/theme.js"
+    }
+  },
+  "scripts": {
+    "lint": "eslint src --ext .js",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["design-system", "tokens", "healthcare", "ui"],
+  "author": "Care Ecosystem",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0"
+  }
+}

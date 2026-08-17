@@ -1,5 +1,5 @@
 /* Global tokens and resets for CareFind.
-   Mirrors apps/carefind/src/styles/theme.js — kept in sync by hand, since the
+   Mirrors @care-ecosystem/design-system tokens — kept in sync by hand, since the
    app is inline-style-driven and theme.js is the source of truth for JS.
    This file exists only for what inline styles cannot express: CSS variables
    for use in the few places that need real CSS (keyframes, media queries,
@@ -11,18 +11,18 @@
   --teal-600: #0E6F5A;
   --teal-500: #1A8A72;
   --navy-900: #0B4A3E;
-  --navy-800: #155A4B;
+  --navy-800: #3C4B44;
   --teal-mist: #E3EEE8;
 
-  /* Neutrals */
+  /* Neutrals (unified warm gray scale) */
   --bg-page: #F7F5EF;
-  --gray-50: #F7F5EF;
-  --gray-100: #F0EEE5;
-  --gray-200: #E7E4D9;
-  --gray-300: #D4D0C5;
+  --gray-50: #FBFAF6;
+  --gray-100: #F7F5EF;
+  --gray-200: #ECEAE0;
+  --gray-300: #E7E4D9;
   --gray-400: #9AA69F;
   --gray-500: #8B978F;
-  --gray-600: #3C4B44;
+  --gray-600: #5B6B63;
   --gray-900: #182722;
 
   /* Semantic */
@@ -35,6 +35,7 @@
   --info: #2563eb;
   --info-bg: #eff6ff;
   --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
 
   /* Spacing (SPACING.md) */
   --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
@@ -106,6 +107,7 @@ body {
 /* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
    @font-face only, never preloaded — see apps/carehub/src/styles/global.css
    for the full rationale. Same self-hosted files, shared token. */
+
 @font-face {
   font-family: 'Lora';
   src: url('/fonts/lora-latin.woff2') format('woff2');
@@ -127,6 +129,7 @@ body {
 /* ── Focus visibility (ACCESSIBILITY.md — every interactive element needs a
    visible focus state; mouse clicks should not show a focus ring, keyboard
    navigation should) ─────────────────────────────────────────────────────── */
+
 :focus {
   outline: none;
 }
@@ -142,6 +145,7 @@ body {
    scrollbar track under them reads as a broken layout rather than an
    affordance, so it's hidden — the content still scrolls, and keyboard users
    reach the items via normal tab order, not the bar. */
+
 .cf-hscroll {
   overflow-x: auto;
   scrollbar-width: none;
@@ -158,6 +162,7 @@ body {
    content (the feed, news articles) — the target a user reaches for must not
    move between screens. Reading actions group left, keeping/supporting group
    right; the caller supplies only the buttons and their colours. */
+
 .cf-eng-row {
   display: flex;
   align-items: center;
