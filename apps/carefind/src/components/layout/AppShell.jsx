@@ -21,8 +21,6 @@ import LeftSidebar from './LeftSidebar.jsx'
 export default function AppShell({ children, rightSidebar, user, myUsername, myAvatar, unreadNotifs, onCompose }) {
   const { isMobile, isTablet } = useBreakpoint()
 
-  if (isMobile) return children
-
   return (
     <div style={{ minHeight: '100vh', background: theme.bg }}>
       <DesktopHeader user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} />
