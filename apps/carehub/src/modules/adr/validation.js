@@ -12,7 +12,7 @@ import {
   QUALIFICATIONS,
   PATIENT_GENDER,
   PATIENT_AGE_GROUP
-} from '../modules/adr/types'
+} from './types'
 
 /**
  * Core validation service for ADR report submission.

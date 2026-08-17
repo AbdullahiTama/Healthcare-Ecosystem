@@ -8,10 +8,10 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useToast } from '../../components/ui'
 import { sbFetch } from '../../services/supabase'
-import { ADR_FORM, ADR_MODULE_TYPES, REPORT_STATUS, REACTION_SEVERITY, REACTION_OUTCOME, ACTION_TAKEN, DECHALLENGE, RECHALLENGE, CAUSALITY, REACTION_EXPECTED, EVIDENCE_PHOTO_TYPE, QUALIFICATIONS, PATIENT_GENDER, PATIENT_AGE_GROUP } from '../modules/adr/types'
-import { adrValidation } from '../modules/adr/validation'
-import { calculateDeadline, getDeadlineStatus } from '../modules/adr/services'
-import ADR_FORM_ENGINE from '../modules/adr/formEngine'
+import { ADR_MODULE_TYPES, REPORT_STATUS, REACTION_SEVERITY, REACTION_OUTCOME, ACTION_TAKEN, DECHALLENGE, RECHALLENGE, CAUSALITY, REACTION_EXPECTED, EVIDENCE_PHOTO_TYPE, QUALIFICATIONS, PATIENT_GENDER, PATIENT_AGE_GROUP } from './types'
+import { adrValidation } from './validation'
+import { calculateDeadline, getDeadlineStatus } from './services'
+import { ADR_FORM } from './formEngine'
 
 export default function AdrReportPage({ reportId }) {
   const navigate = useNavigate()
@@ -63,7 +63,7 @@ export default function AdrReportPage({ reportId }) {
             inputs.new_safety_signal
           )
           setDeadline(deadlineMs)
-          setDeadlineStatus(ADR_FORM.getDeadlineStatus(deadlineMs))
+          setDeadlineStatus(getDeadlineStatus(deadlineMs))
         }
       } else {
         showToast('ADR report not found', { variant: 'destructive' })
@@ -93,7 +93,7 @@ export default function AdrReportPage({ reportId }) {
         inputs.new_safety_signal
       )
       setDeadline(deadlineMs)
-      setDeadlineStatus(ADR_FORM.getDeadlineStatus(deadlineMs))
+      setDeadlineStatus(getDeadlineStatus(deadlineMs))
     }
   }, [report, isSerious, reactionExpected, newSafetySignal, moduleType])
 
@@ -132,7 +132,7 @@ export default function AdrReportPage({ reportId }) {
         inputs.new_safety_signal
       )
       setDeadline(deadlineMs)
-      setDeadlineStatus(ADR_FORM.getDeadlineStatus(deadlineMs))
+      setDeadlineStatus(getDeadlineStatus(deadlineMs))
     }
   }, [moduleType, report])
 
@@ -544,7 +544,7 @@ export default function AdrReportPage({ reportId }) {
               {isSubmitting ? (
                 <Loader2 size={15} />
               ) : (
-                Submit Report
+                'Submit Report'
               )}
             </button>
             <button
@@ -580,7 +580,7 @@ export default function AdrReportPage({ reportId }) {
               <div style={{ fontSize: '12px', color: 'gray500', fontWeight: '600', marginBottom: '4px' }}>
                 Deadline
               </div>
-              <div style={{ fontSize: '20px', fontWeight: '900', color: '{deadlineStatus === 'overdue' ? '#dc2626' : deadlineStatus === 'due_soon' ? '#d97706' : '#16a34a'}' }}>
+              <div style={{ fontSize: '20px', fontWeight: '900', color: deadlineStatus === 'overdue' ? '#dc2626' : deadlineStatus === 'due_soon' ? '#d97706' : '#16a34a' }}>
                 {formatDeadline(deadline)}
               </div>
               <div style={{ fontSize: '11px', color: 'gray500', marginTop: '4px' }}>
@@ -588,7 +588,7 @@ export default function AdrReportPage({ reportId }) {
               </div>
             </div>
           )}
-        </div> : null}
+        </div>) : null}
     </div>
   )
 }

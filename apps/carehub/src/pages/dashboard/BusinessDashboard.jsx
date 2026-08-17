@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { Menu } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
@@ -48,6 +48,8 @@ import Lab from './hospital/Lab'
 import Imaging from './hospital/Imaging'
 import Consultation from '../../modules/consultation/Consultation'
 import Overview from '../../modules/overview/Overview'
+import AdrReportsList from '../../modules/adr/AdrReportsList'
+import AdrReportPage from '../../modules/adr/AdrReportPage'
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog',
@@ -55,7 +57,7 @@ const PAGE_TITLES = {
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
   staff: 'Staff', reports: 'Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
-  overview: 'Overview',
+  overview: 'Overview', 'adr-reports': 'ADR Reports',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -193,6 +195,8 @@ export default function BusinessDashboard() {
             <Route path='demand' element={guard('demand', <><TopBar title='Demand' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Demand {...pageProps} /></div></>)} />
             <Route path='staff' element={guard('staff', <><TopBar title='Staff' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Staff {...pageProps} /></div></>)} />
             <Route path='reports' element={guard('reports', <><TopBar title='Reports' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reports {...pageProps} /></div></>)} />
+            <Route path='adr-reports' element={guard('adr-reports', <><TopBar title='ADR Reports' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><AdrReportsList {...pageProps} /></div></>)} />
+            <Route path='adr-reports/:reportId/detail' element={bareGuard('adr-reports', <AdrReportPageRoute />)} />
             <Route path='settings' element={guard('settings', <><TopBar title='Settings' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Settings {...pageProps} /></div></>)} />
             <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
             <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
@@ -216,4 +220,11 @@ export default function BusinessDashboard() {
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
+}
+
+// Reads the :reportId URL param for the ADR report detail route so the page
+// component stays prop-driven (matches how hospital detail routes thread ids).
+function AdrReportPageRoute() {
+  const { reportId } = useParams()
+  return <AdrReportPage reportId={reportId} />
 }

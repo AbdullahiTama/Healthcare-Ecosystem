@@ -209,9 +209,9 @@ describe('module registry (business type → modules)', () => {
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
-    expect(ALL_NAV_DEFAULT.length).toBe(17)
-    expect(ALL_NAV_HOSPITAL.length).toBe(21)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(13)
+    expect(ALL_NAV_DEFAULT.length).toBe(18)
+    expect(ALL_NAV_HOSPITAL.length).toBe(22)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(14)
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
