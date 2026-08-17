@@ -4,7 +4,7 @@
 import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
-  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
+  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
   ClipboardList, LayoutDashboard, Layers,
 } from 'lucide-react'
 
@@ -201,36 +201,56 @@ const ENTERPRISE_TYPES = ['manufacturer_importer', 'wholesale']
 const CONSULT_TYPES = ['skincare', 'pharmacy']
 
 export const MODULES = {
-  dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES },
-  overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES },
-  pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES },
-  inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES },
-  mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES },
-  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' } },
-  appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES },
-  consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES },
-  expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES },
-  debts: { label: 'Debts', icon: Landmark, types: ALL_TYPES },
-  purchases: { label: 'Purchases', icon: Truck, types: ALL_TYPES },
-  demand: { label: 'Demand', icon: ClipboardList, types: ALL_TYPES },
-  carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES },
-  locations: { label: 'Locations', icon: Building2, types: ALL_TYPES },
-  staff: { label: 'Staff', icon: User, types: ALL_TYPES },
-  reports: { label: 'Reports', icon: BarChart2, types: ALL_TYPES },
-  settings: { label: 'Settings', icon: Settings, types: ALL_TYPES },
-  reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES },
-  triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES },
-  doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES },
-  rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES },
-  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES },
-  imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES },
-  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES },
-  orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES },
-  warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES },
-  stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES },
-  territories: { label: 'Territories', icon: Map, types: ENTERPRISE_TYPES },
-  messages: { label: 'Correspondence', icon: Mail, types: ENTERPRISE_TYPES },
+  dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES, section: 'overview' },
+  overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES, section: 'overview' },
+  pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES, section: 'operations' },
+  inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES, section: 'operations' },
+  mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES, section: 'ecosystem' },
+  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' }, section: 'patients' },
+  appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES, section: 'operations' },
+  consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES, section: 'operations' },
+  expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES, section: 'finance' },
+  debts: { label: 'Debts', icon: Landmark, types: ALL_TYPES, section: 'finance' },
+  purchases: { label: 'Purchases', icon: Truck, types: ALL_TYPES, section: 'operations' },
+  demand: { label: 'Demand', icon: ClipboardList, types: ALL_TYPES, section: 'intelligence' },
+  carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES, section: 'ecosystem' },
+  locations: { label: 'Locations', icon: Building2, types: ALL_TYPES, section: 'ecosystem' },
+  staff: { label: 'Staff', icon: User, types: ALL_TYPES, section: 'people' },
+  reports: { label: 'Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence' },
+  settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
+  reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
+  triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },
+  doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES, section: 'clinical' },
+  rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES, section: 'clinical' },
+  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES, section: 'clinical' },
+  imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
+  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  territories: { label: 'Territories', icon: MapIcon, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  messages: { label: 'Correspondence', icon: Mail, types: ENTERPRISE_TYPES, section: 'ecosystem' },
 }
+
+// Workflow sections (docs/product/INFORMATION-ARCHITECTURE.md — "group by
+// workflow, not module"). The roadmap's P2.5 grouping: Overview, Operations,
+// Patients, Clinical, Finance, People, Intelligence, Ecosystem, Admin.
+// SECTION_ORDER is the canonical order; MODULES[id].section is the membership
+// map. Section order is intentionally fixed so a role can never reflow the
+// sidebar by granting odd nav subsets.
+export const NAV_SECTIONS = {
+  overview: { label: 'Overview' },
+  operations: { label: 'Operations' },
+  patients: { label: 'Patients & Clients' },
+  clinical: { label: 'Clinical' },
+  finance: { label: 'Finance' },
+  people: { label: 'People' },
+  intelligence: { label: 'Intelligence' },
+  ecosystem: { label: 'Ecosystem' },
+  admin: { label: 'Admin' },
+}
+
+export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 'finance', 'people', 'intelligence', 'ecosystem', 'admin']
 
 // Per-vertical ordering. Kept separate from the registry because the three
 // legacy nav lists ordered their modules differently and nothing should
@@ -273,6 +293,23 @@ export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.map(id => [id, MODULES[id
 export function getNavItems(role, businessType, customRoles = {}) {
   const perms = getPerms(role, customRoles)
   return getModulesForType(businessType).filter(item => perms.nav.includes(item[0]))
+}
+
+// Grouped nav for the sidebar (docs/product/INFORMATION-ARCHITECTURE.md).
+// Derives purely from the same flat ordering getNavItems uses — the registry
+// and NAV_ORDER stay the single source of truth, and this only slices the
+// allowed list into workflow sections so route guards and the role editor keep
+// consuming the flat form unchanged. Empty sections are dropped.
+export function getNavGroups(role, businessType, customRoles = {}) {
+  const items = getNavItems(role, businessType, customRoles)
+  const groups = new Map(SECTION_ORDER.map(id => [id, []]))
+  items.forEach(item => {
+    const section = MODULES[item[0]].section
+    if (groups.has(section)) groups.get(section).push(item)
+  })
+  return SECTION_ORDER
+    .filter(id => groups.get(id).length > 0)
+    .map(id => ({ id, label: NAV_SECTIONS[id].label, items: groups.get(id) }))
 }
 
 export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier', 'Nurse', 'Doctor', 'Lab Technician']
