@@ -60,7 +60,7 @@ export const REACTION_OUTCOME_LABELS = {
   [REACTION_OUTCOME.NOT_RECOVERED]: 'Not recovered',
   [REACTION_OUTCOME.RECOVERED_WITH_SEQUELAE]: 'Recovered with sequelae',
   [REACTION_OUTCOME.FATAL]: 'Fatal',
-  [REACTION_OUTcome.UNKNOWN]: 'Unknown',
+  [REACTION_OUTCOME.UNKNOWN]: 'Unknown',
 }
 
 export const ACTION_TAKEN = {
