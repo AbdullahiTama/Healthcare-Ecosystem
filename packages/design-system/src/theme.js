@@ -55,6 +55,27 @@ export const theme = {
   tealMist: '#E3EEE8',       // Teal-tinted surfaces (selected rows, hover)
 
   // ──────────────────────────────────────────────────────────────────────────────
+  // BACKWARD-COMPAT ALIASES (legacy token names still referenced by app code)
+  // Values match the pre-unification per-app themes; aliases exist so existing
+  // call sites keep working without churn. Prefer the canonical names above.
+  // ──────────────────────────────────────────────────────────────────────────────
+  deepTeal: '#0B4A3E',       // CareHub legacy — same value as navy
+  alert: '#dc2626',          // Old danger alias (Login, AgentLogin, DrugProfile)
+  alertLight: '#fca5a5',     // Light danger tint (LiveSession like button)
+  amberText: '#92400e',      // Amber warning text (Register, Inventory, News)
+  amberBorder: '#fcd34d',    // Amber warning border (Register, AdminDashboard)
+  amberDeep: '#b45309',      // Darker amber emphasis (AdminDashboard)
+  amberBg: '#fef3c7',        // Amber status-pill background (News, AdminPanel)
+  amberSoft: '#fef9c3',      // Soft amber highlight (Feed unclaimed)
+  dangerBorder: '#fecaca',   // Danger alert border (Login, AgentLogin, DrugProfile)
+  dangerGradient: 'linear-gradient(135deg, #7F1D1D, #B91C1C)', // LiveSession
+  greenLive: '#4ade80',      // Live status dot (LiveSession)
+  slate: '#0f172a',          // Dark slate alias (Register, Feed live-now strip)
+  slateMuted: '#94a3b8',     // Muted slate text (Feed, GiftPanel)
+  starAmber: '#f5b301',      // Review/rating stars (Feed, postDisplay)
+  textFaint: '#888',         // Faint gray text (Register, AdminDashboard)
+
+  // ──────────────────────────────────────────────────────────────────────────────
   // HEALTHCARE-SPECIFIC SEMANTIC STATES
   // Always pair with icon + text — never color alone
   // ──────────────────────────────────────────────────────────────────────────────
