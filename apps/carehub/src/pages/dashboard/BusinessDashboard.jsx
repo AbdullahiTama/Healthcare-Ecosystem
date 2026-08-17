@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { Menu } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import Sidebar from '../../components/layout/Sidebar'
 import TopBar from '../../components/layout/TopBar'
@@ -15,6 +16,7 @@ import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { MOBILE_MENU_TOP, MOBILE_MENU_LEFT, MOBILE_MENU_SIZE, MOBILE_MENU_CLEAR } from '../../components/layout/shellConstants'
 
 // Pages
 import DashboardHome from '../../modules/dashboard-home/DashboardHome'
@@ -93,9 +95,9 @@ export default function BusinessDashboard() {
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   // The enterprise screens (warehouses/stock/orders/etc.) render their own
   // top-left H1 with no TopBar, which on mobile sits under the shell's
-  // floating hamburger. bareGuard adds top clearance for just those routes so
-  // the heading clears it (POS handles its own via its sticky header's padding).
-  const bareGuard = (routeKey, element) => guard(routeKey, isMobile ? <div style={{ paddingTop: 40 }}>{element}</div> : element)
+  // floating menu. bareGuard adds top clearance for just those routes so the
+  // heading clears it (POS handles its own via its sticky header's padding).
+  const bareGuard = (routeKey, element) => guard(routeKey, isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -154,13 +156,15 @@ export default function BusinessDashboard() {
             onClick={() => setDrawerOpen(true)}
             aria-label="Open menu"
             style={{
-              position: 'absolute', top: 10, left: 10, zIndex: 20,
-              width: 36, height: 36, borderRadius: 10, border: 'none',
-              background: 'rgba(15,23,42,0.75)', color: '#fff', fontSize: 17,
+              position: 'absolute', top: MOBILE_MENU_TOP, left: MOBILE_MENU_LEFT, zIndex: 20,
+              width: MOBILE_MENU_SIZE, height: MOBILE_MENU_SIZE, borderRadius: theme.radius.md,
+              border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.textDark,
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              boxShadow: theme.elevation[2],
+              transition: `background ${theme.motion.fast} ${theme.motion.easeOut}`,
             }}
           >
-            ☰
+            <Menu size={22} strokeWidth={2.2} aria-hidden="true" />
           </button>
         )}
         {!online && (

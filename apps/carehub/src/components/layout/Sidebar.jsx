@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthProvider'
-import { getNavItems } from '../../lib/permissions'
+import { getNavGroups } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -26,7 +26,7 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
   const { isMobile, isTablet } = useBreakpoint()
   const userName = auth?.staff?.full_name || brand?.owner || 'Owner'
   const bType = brand?.business_type || brand?.type || 'skincare'
-  const navItems = getNavItems(role, bType, customRoles)
+  const navGroups = getNavGroups(role, bType, customRoles)
   const current = location.pathname.split('/').pop() || 'dashboard'
   const collapsed = isTablet
 
@@ -59,7 +59,9 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
         </div>
       </div>
 
-      {/* Nav items */}
+      {/* Nav items — grouped into workflow sections (docs/design/NAVIGATION.md,
+          INFORMATION-ARCHITECTURE.md). Collapsed rail hides labels AND section
+          headers, separating groups with a hairline instead. */}
       <nav style={{ flex: 1, padding: collapsed ? '8px 6px' : '8px' }}>
         {!collapsed && (
           <div style={{ marginBottom: '6px' }}>
@@ -67,25 +69,39 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
           </div>
         )}
 
-        {navItems.map(([id, Icon, label]) => {
-          const active = current === id || (id === 'dashboard' && current === 'dashboard')
-          return (
-            <button key={id} onClick={() => go(id)} title={collapsed ? label : undefined}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
-                padding: collapsed ? '10px 0' : '9px 10px', justifyContent: collapsed ? 'center' : 'flex-start',
-                borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '12px',
-                marginBottom: '1px', textAlign: 'left', boxSizing: 'border-box',
-                background: active ? tealMist : 'transparent', color: active ? tealDeep : gray600,
-              }}>
-              <Icon size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
-              {!collapsed && label}
-              {!collapsed && id === 'carefind' && (brand?.visible_on_carefind || brand?.visibleOnCareFind) && (
-                <span style={{ marginLeft: 'auto', width: '6px', height: '6px', borderRadius: '50%', background: tealDeep }} />
-              )}
-            </button>
-          )
-        })}
+        {navGroups.map((group) => (
+          <div key={group.id}>
+            {collapsed ? (
+              group.id !== 'overview' && (
+                <div style={{ borderTop: `1px solid ${border}`, margin: '6px 10px 6px', paddingTop: 6 }} />
+              )
+            ) : (
+              <div style={{ padding: '12px 10px 4px', fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: gray400 }}>
+                {group.label}
+              </div>
+            )}
+
+            {group.items.map(([id, Icon, label]) => {
+              const active = current === id || (id === 'dashboard' && current === 'dashboard')
+              return (
+                <button key={id} onClick={() => go(id)} title={collapsed ? label : undefined}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: collapsed ? '10px 0' : '9px 10px', justifyContent: collapsed ? 'center' : 'flex-start',
+                    borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '12px',
+                    marginBottom: '1px', textAlign: 'left', boxSizing: 'border-box',
+                    background: active ? tealMist : 'transparent', color: active ? tealDeep : gray600,
+                  }}>
+                  <Icon size={16} strokeWidth={2} style={{ flexShrink: 0 }} />
+                  {!collapsed && label}
+                  {!collapsed && id === 'carefind' && (brand?.visible_on_carefind || brand?.visibleOnCareFind) && (
+                    <span style={{ marginLeft: 'auto', width: '6px', height: '6px', borderRadius: '50%', background: tealDeep }} />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Footer — signed-in identity (avatar + name + role) with Sign Out,

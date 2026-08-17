@@ -31,6 +31,7 @@ export const theme = {
   cardBg: '#FBFAF6',         // Card, modal, drawer backgrounds (=== gray50)
   border: '#ECEAE0',         // Default borders, dividers (=== gray200)
   hairline: '#E7E4D9',       // Subtle separators (=== gray300)
+  overlay: 'rgba(15,23,42,0.55)', // Modal/drawer/sheet backdrop (neutral slate — Slice 4)
   textDark: '#182722',       // Primary text (=== gray900, navy)
   textMid: '#3C4B44',        // Secondary text (=== gray600)
   textLight: '#8B978F',      // Muted text (=== gray500)

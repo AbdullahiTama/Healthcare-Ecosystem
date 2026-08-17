@@ -5,6 +5,7 @@ import { territoryRepository } from './repositories'
 import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
 const LEVEL_SUGGESTIONS = ['Region', 'State', 'City', 'LGA', 'Zone']
@@ -104,15 +105,14 @@ export default function Territories({ brand }) {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '760px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Territories</div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>Regions, states, or coverage areas — named however your company works. Assign reps to each.</div>
-        </div>
-        <TealBtn onClick={openNew} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add territory</TealBtn>
-      </div>
+    <>
+      <PageHeader
+        title="Territories"
+        description="Regions, states, or coverage areas — named however your company works. Assign reps to each."
+        primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }}
+      />
+      <div style={{ padding: '24px', maxWidth: '760px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       {loading && <Loading />}
 
@@ -217,6 +217,7 @@ export default function Territories({ brand }) {
         title={'Delete "' + (territoryToDelete ? territoryToDelete.name : '') + '"?'}
         consequence={'This permanently removes the territory' + (territoryToDelete && repsFor(territoryToDelete.id).length > 0 ? ' and unassigns the ' + repsFor(territoryToDelete.id).length + ' rep(s) currently covering it' : '') + '. This cannot be undone.'}
         confirmLabel="Delete" />
-    </div>
+      </div>
+    </>
   )
 }

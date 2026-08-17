@@ -9,6 +9,7 @@ import { warehouseRepository } from '../warehouses/repositories'
 import { getProducts } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, DataTable, useToast, Toast, ConfirmDialog } from '../../components/ui'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, warning, warningBg, bg } = theme
 const STATUSES = ['available', 'reserved', 'damaged', 'returned', 'expired']
@@ -200,15 +201,14 @@ export default function Stock({ brand }) {
   })
 
   return (
-    <div style={{ padding: '24px', maxWidth: '900px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Stock & Batches</div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>Receive stock into a warehouse, track batch numbers and expiry, transfer between locations.</div>
-        </div>
-        <TealBtn onClick={openReceive} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Receive stock</TealBtn>
-      </div>
+    <>
+      <PageHeader
+        title="Stock & Batches"
+        description="Receive stock into a warehouse, track batch numbers and expiry, transfer between locations."
+        primaryAction={{ label: 'Receive stock', leftIcon: <Plus size={15} />, onClick: openReceive }}
+      />
+      <div style={{ padding: '24px', maxWidth: '900px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       {expired.length > 0 && (
         <div style={{ padding: '12px 14px', borderRadius: theme.radius.md, background: dangerBg, border: `1px solid ${danger}`, marginBottom: '10px' }}>
@@ -506,6 +506,7 @@ export default function Stock({ brand }) {
         title={'Delete batch' + (batchToDelete && batchToDelete.batch_number ? ' "' + batchToDelete.batch_number + '"' : '') + '?'}
         consequence={'This permanently removes the record of ' + (batchToDelete ? (batchToDelete.quantity || 0).toLocaleString() + ' units of ' + batchToDelete.product_name : 'this batch') + ' from stock. This cannot be undone.'}
         confirmLabel="Delete" />
-    </div>
+      </div>
+    </>
   )
 }

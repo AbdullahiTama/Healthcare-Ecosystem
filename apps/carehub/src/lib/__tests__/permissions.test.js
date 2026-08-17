@@ -6,6 +6,7 @@ import {
   getPerms,
   can,
   getNavItems,
+  getNavGroups,
   getModulesForType,
   rolesForType,
   ALL_NAV_DEFAULT,
@@ -227,5 +228,47 @@ describe('module registry (business type → modules)', () => {
     expect(rolesForType('hospital')).toContain('Lab Technician')
     expect(rolesForType('wholesale')).toEqual([])
     expect(rolesForType('manufacturer_importer')).toEqual([])
+  })
+})
+
+describe('getNavGroups (workflow sections)', () => {
+  it('groups every allowed module into exactly one workflow section', () => {
+    const groups = getNavGroups('Owner', 'hospital')
+    const ids = groups.flatMap(g => g.items.map(([id]) => id))
+    const flat = getNavItems('Owner', 'hospital').map(([id]) => id)
+    // Same membership as the flat list — grouping may reorder by section but
+    // must never add or drop items, and each module lands in exactly one group.
+    expect([...ids].sort()).toEqual([...flat].sort())
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(groups.every(g => g.label && g.items.length > 0)).toBe(true)
+  })
+
+  it('preserves section order and drops empty sections', () => {
+    // Pharmacist at a pharmacy never has Finance/People/Admin/Clinical groups.
+    const groups = getNavGroups('Pharmacist', 'pharmacy')
+    const labels = groups.map(g => g.label)
+    expect(labels[0]).toBe('Overview')
+    expect(labels).not.toContain('Finance')
+    expect(labels).not.toContain('People')
+    expect(labels).not.toContain('Admin')
+    expect(labels).not.toContain('Clinical')
+  })
+
+  it('puts hospital clinical modules in the Clinical section', () => {
+    const groups = getNavGroups('Owner', 'hospital')
+    const clinical = groups.find(g => g.id === 'clinical')
+    expect(clinical).toBeTruthy()
+    const ids = clinical.items.map(([id]) => id)
+    expect(ids).toContain('reception')
+    expect(ids).toContain('doctor')
+    expect(ids).toContain('lab')
+  })
+
+  it('respects custom role nav restrictions', () => {
+    // Owner is intentionally immune to custom-role narrowing (business admin),
+    // so exercise the override through a non-Owner role instead.
+    const groups = getNavGroups('Manager', 'pharmacy', { Manager: { nav: ['dashboard', 'pos'] } })
+    const ids = groups.flatMap(g => g.items.map(([id]) => id))
+    expect(ids).toEqual(['dashboard', 'pos'])
   })
 })

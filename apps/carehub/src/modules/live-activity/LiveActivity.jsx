@@ -12,6 +12,7 @@ import { staffRepository } from '../staff/repositories'
 import { watchTable } from '../../lib/realtime'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
 const FIELD_TYPES = ['text', 'long text', 'number', 'date', 'choice']
@@ -598,33 +599,23 @@ export default function LiveActivity({ brand }) {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1100px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ fontSize: '18px', fontWeight: '900', color: navy }}>Live Field Activity</div>
-            {liveOn && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}` }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
-                LIVE
-              </span>
-            )}
-          </div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>
-            Reps log what happens in the field. Tagged managers see it the moment it lands — and can reply.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {isOwner && (
-            <GhostBtn onClick={function () { setSettingUp(true) }} style={{ padding: '10px 14px' }}>Set up fields</GhostBtn>
-          )}
-          {!isOwner && (
-            <GhostBtn onClick={openViewerPicker} style={{ padding: '10px 14px' }}>Who sees my activity</GhostBtn>
-          )}
-          <TealBtn onClick={openLogger}>+ Log Activity</TealBtn>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title={<>Live Field Activity{liveOn && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', fontWeight: '800', color: danger, background: dangerBg, padding: '3px 9px', borderRadius: '20px', border: `1px solid ${danger}`, marginLeft: '8px', verticalAlign: 'middle' }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: danger }} />
+            LIVE
+          </span>
+        )}</>}
+        description="Reps log what happens in the field. Tagged managers see it the moment it lands — and can reply."
+        secondaryActions={[
+          ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
+          ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),
+        ]}
+        primaryAction={{ label: 'Log Activity', onClick: openLogger }}
+      />
+      <div style={{ padding: '24px', maxWidth: '1100px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
@@ -1207,6 +1198,7 @@ export default function LiveActivity({ brand }) {
         title={'Remove "' + (fieldToRemove ? fieldToRemove.label : '') + '"?'}
         consequence="This field disappears from the Log Activity form for everyone. Past records that already have a value for it keep that value, but you will not be able to see or filter by it going forward unless you add the field back."
         confirmLabel="Remove Field" />
-    </div>
+      </div>
+    </>
   )
 }

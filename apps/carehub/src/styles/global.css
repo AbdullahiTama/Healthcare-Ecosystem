@@ -1,21 +1,20 @@
 /* Global tokens and resets for CareHub.
-   Mirrors apps/carehub/src/styles/theme.js — kept in sync by hand, since the
+   Mirrors @care-ecosystem/design-system tokens — kept in sync by hand, since the
    app is inline-style-driven and theme.js is the source of truth for JS.
    This file exists only for what inline styles cannot express: CSS variables
    for use in the few places that need real CSS (keyframes, media queries,
    pseudo-classes), plus the resets and animations documented in
-   docs/design/MOTION.md and docs/design/ACCESSIBILITY.md. Mirrors
-   apps/carefind/src/styles/global.css's shape (ch- prefix instead of cf-). */
+   docs/design/MOTION.md and docs/design/ACCESSIBILITY.md. */
 
 :root {
   /* Brand */
   --teal-600: #0E6F5A;
-  --teal-500: #0E6F5A;
-  --navy-900: #182722;
+  --teal-500: #1A8A72;
+  --navy-900: #0B4A3E;
   --navy-800: #3C4B44;
   --teal-mist: #E3EEE8;
 
-  /* Neutrals */
+  /* Neutrals (unified warm gray scale) */
   --bg-page: #F7F5EF;
   --canvas-bg: #E7E5DC;
   --gray-50: #FBFAF6;
@@ -28,8 +27,8 @@
   --gray-900: #182722;
 
   /* Semantic */
-  --success: #0E6F5A;
-  --success-bg: #E3EEE8;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
   --warning: #d97706;
   --warning-bg: #fffbeb;
   --danger: #dc2626;
@@ -37,6 +36,7 @@
   --info: #2563eb;
   --info-bg: #eff6ff;
   --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
 
   /* Spacing (SPACING.md) */
   --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
@@ -122,10 +122,10 @@ body {
 /* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
    @font-face only, never preloaded: a browser only fetches these files when
    an element actually rendered on screen uses font-family: var(--font-display).
-   No dashboard/POS/table/form screen does, so this costs nothing there.
    Self-hosted from Lora's variable-font source (covers the whole 600–700
    range from 2 subset files, latin + latin-ext, instead of 4 static-weight
    files) — smaller total payload for the same two weights this system uses. */
+
 @font-face {
   font-family: 'Lora';
   src: url('/fonts/lora-latin.woff2') format('woff2');
