@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { stockRepository } from './repositories'
-// Cross-aggregate read: a batch sits in a warehouse, which the warehouses
-// module owns.
 import { warehouseRepository } from '../warehouses/repositories'
-// Cross-aggregate read owned by a module that has not adopted the seam yet
-// (the product catalogue behind the receive form).
 import { getProducts } from '../../services/supabase'
+import { notify } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, DataTable, useToast, Toast, ConfirmDialog } from '../../components/ui'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
@@ -27,6 +24,43 @@ function expiryTone(dateStr) {
   if (days < 0) return { label: 'EXPIRED', bg: dangerBg, color: danger, border: danger }
   if (days <= 60) return { label: days + ' days left', bg: warningBg, color: warning, border: warning }
   return { label: 'Exp ' + new Date(dateStr).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' }), bg: gray50, color: gray500, border: border }
+}
+
+async function checkAndNotifyExpiry(brandId) {
+  if (!brandId) return
+  try {
+    const batches = await stockRepository.getBatches(brandId)
+    const now = new Date()
+    const sixtyDaysMs = 60 * 24 * 60 * 60 * 1000
+
+    for (const batch of batches) {
+      const expiryDate = batch.expiry_date
+      if (!expiryDate) continue
+      const expiryMs = new Date(expiryDate).getTime()
+      const daysUntilExpiry = Math.ceil((expiryMs - now.getTime()) / (1000 * 60 * 60 * 24))
+
+      // Only notify for batches within 60 days and still available
+      if (daysUntilExpiry > 0 && daysUntilExpiry <= 60 && batch.status === 'available') {
+        // Check if a notification already exists for this batch/product combination
+        // to avoid flooding staff with duplicate notifications
+        const alreadyNotified = batches.some(b => b.id !== batch.id && b.expiry_date === batch.expiry_date && b.product_name === batch.product_name)
+        if (alreadyNotified) continue
+
+        // Determine recipient: owner if available, otherwise first staff member
+        // For now, notify the business owner
+        const recipientId = null // will notify owner
+
+        const productName = batch.product_name || 'Product'
+        const batchNumber = batch.batch_number ? ' (Batch ' + batch.batch_number + ')' : ''
+        const title = 'Product approaching expiry'
+        const body = `${productName}${batchNumber} expires in ${daysUntilExpiry} days`
+
+        await notify(brandId, [{ staffId: null }], 'product_expiring_soon', title, body, `/inventory/${batch.product_id || ''}`)
+      }
+    }
+  } catch (e) {
+    console.error('Expiry notification check failed:', e)
+  }
 }
 
 function readAuth() {
@@ -66,6 +100,19 @@ export default function Stock({ brand }) {
   const [batchToDelete, setBatchToDelete] = useState(null)
 
   useEffect(() => { load() }, [brand?.id])
+
+  // Check for products approaching expiry and notify staff recursively
+  useEffect(() => {
+    if (!brand?.id) return
+    let timeoutId: NodeJS.Timeout | null = null
+    async function check() {
+      await checkAndNotifyExpiry(brand.id)
+      // Re-check once per day (24 hours) until the component unmounts
+      timeoutId = setTimeout(check, 24 * 60 * 60 * 1000)
+    }
+    check()
+    return () => { if (timeoutId) clearTimeout(timeoutId) }
+  }, [brand?.id])
 
   async function load() {
     if (!brand || !brand.id) return

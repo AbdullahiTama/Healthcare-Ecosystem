@@ -476,6 +476,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 return cat === 'Services' ? <Pill label='Service' type='blue' /> : out ? <Pill label='Out of Stock' type='red' /> : low ? <Pill label='Low Stock' type='amber' /> : <Pill label='In Stock' type='green' />
               },
             },
+            {
+              key: 'expiry_date', label: 'Expiry Date', sortable: true,
+              sortValue: p => p.expiry_date || '',
+              render: p => {
+                const days = (() => {
+                  if (!p.expiry_date) return null
+                  const d = new Date(p.expiry_date)
+                  const now = new Date()
+                  return Math.ceil((d - now) / (1000 * 60 * 60 * 24))
+                })()
+                if (!p.expiry_date) return <span style={{ color: gray500 }}>—</span>
+                if (days < 0) return <span style={{ color: danger, fontWeight: '700' }}>EXPIRED</span>
+                if (days <= 60) return <span style={{ color: warning, fontWeight: '700' }}>{days} days left</span>
+                return <span style={{ color: navy, fontWeight: '700' }}>Exp {new Date(p.expiry_date).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' })}</span>
+              },
+            },
           ]}
           rowStyle={p => {
             const cat = p.cat || p.category || ''
@@ -662,7 +678,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
-  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
+  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category, expiry_date: product.expiry_date } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '', expiry_date: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
@@ -685,7 +701,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
       return
     }
     setSaving(true)
-    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, show_price: _sp, ...restForm } = form
+    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, show_price: _sp, expiry_date: _ed, ...restForm } = form
     const saleData = hasSaleFields
       ? {
           sale_type: form.sale_type || 'retail',
@@ -718,13 +734,14 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           </div>
         )}
         {!canEditPrice && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', background: warningBg, fontSize: '12px', color: warning }}><AlertTriangle size={13} /> Only the Owner can edit prices</div>}
+        <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
         {form.cat !== 'Services' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Stock Quantity' value={form.stock} onChange={v => f('stock', v)} type='number' placeholder='0' readOnly={!perms?.canEditStock} />
             <Inp label='Reorder Level' value={form.reorder_level} onChange={v => f('reorder_level', v)} type='number' placeholder='5' />
+            <Inp label='Expiry Date' value={form.expiry_date} onChange={v => f('expiry_date', v)} type='date' />
           </div>
         )}
-        <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
         {!isService && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Sel
