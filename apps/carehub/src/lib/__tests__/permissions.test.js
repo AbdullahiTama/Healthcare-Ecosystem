@@ -36,7 +36,7 @@ describe('permissions role matrix', () => {
     expect(perms.canDelete).toBe(false)
     expect(perms.canViewFinance).toBe(false)
     expect(perms.canManageStaff).toBe(false)
-    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'clients', 'consultation', 'rx_inbox'])
+    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'clients', 'consultation', 'rx_inbox', 'adr-reports'])
   })
 
   it('gives Receptionist no sales or finance rights', () => {
@@ -138,6 +138,7 @@ describe('getNavItems by business type', () => {
   it('filters the business nav by the role’s allowed routes', () => {
     const nav = getNavItems('Pharmacist', 'hospital').map(([id]) => id)
     expect(nav).toContain('pos')
+    expect(nav).toContain('adr-reports')
     expect(nav).not.toContain('reports')
     expect(nav).not.toContain('staff')
     expect(nav).not.toContain('settings')

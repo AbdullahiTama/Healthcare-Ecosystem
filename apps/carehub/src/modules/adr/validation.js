@@ -17,9 +17,145 @@ import { calculateDeadline, getDeadlineStatus, getModuleTypeFromBusinessType } f
 
 /**
  * Core validation service for ADR report submission.
- * This is the authoritative gate - client-side UI may allow incomplete drafts,
- * but submission is only permitted when all gates pass.
+ * This is the authoritative client-side gate - drafts may be incomplete, but
+ * submission is only permitted when all gates pass. It is the client-side twin
+ * of the server-side submit_adr_report RPC (see sql/20260818_adr_reports_phase1.sql);
+ * the two must stay in lockstep.
  */
+
+const SERIOUSNESS_FIELDS = [
+  'seriousness_death',
+  'seriousness_life_threatening',
+  'seriousness_hospitalization',
+  'seriousness_disability',
+  'seriousness_congenital_anomaly',
+  'seriousness_other_medically_important',
+]
+
+// The canonical submission validator, shared by both entry points below.
+function validateReportSubmit(report) {
+  const missing = []
+
+  // 1. Reporter qualification must be set
+  if (!report.reporter_qualification) {
+    missing.push('Reporter qualification')
+  }
+
+  // 2. Reporter name or anonymous confirmation
+  const hasName = report.reporter_name && report.reporter_name.trim().length > 0
+  const anonymousConfirmed = report.reporter_anonymous_confirmed_by_facility === true
+
+  if (!hasName && !anonymousConfirmed) {
+    missing.push('Reporter name')
+  }
+
+  // 3. Reporter consent must be explicitly true or false
+  if (report.reporter_consent_followup === undefined || report.reporter_consent_followup === null) {
+    missing.push('Reporter consent for follow-up')
+  }
+
+  // 4. Patient identifier must be set
+  if (!report.patient_identifier || report.patient_identifier.trim().length === 0) {
+    missing.push('Patient identifier')
+  }
+
+  // 5. At least one of patient_age, patient_dob, patient_age_group must be set
+  const hasPatientAge = report.patient_age && String(report.patient_age).trim().length > 0
+  const hasPatientDob = report.patient_dob && String(report.patient_dob).trim().length > 0
+  const hasPatientAgeGroup = report.patient_age_group && String(report.patient_age_group).trim().length > 0
+
+  if (!hasPatientAge && !hasPatientDob && !hasPatientAgeGroup) {
+    missing.push('Patient age or DOB or age group')
+  }
+
+  // 6. Patient gender must be set
+  if (!report.patient_gender || !Object.values(PATIENT_GENDER).includes(report.patient_gender)) {
+    missing.push('Patient gender')
+  }
+
+  // 7. At least one suspect product exists
+  const hasProducts = report.adr_products && Array.isArray(report.adr_products) && report.adr_products.length > 0
+  if (!hasProducts) {
+    missing.push('At least one suspect product')
+  }
+
+  // 8. At least one product must have a brand name
+  if (hasProducts) {
+    const hasBrandName = report.adr_products.some(p => p.product_brand_name && p.product_brand_name.trim().length > 0)
+    if (!hasBrandName) {
+      missing.push('Product brand name')
+    }
+  }
+
+  // 9. At least one reaction exists
+  const hasReactions = report.adr_reactions && Array.isArray(report.adr_reactions) && report.adr_reactions.length > 0
+  if (!hasReactions) {
+    missing.push('At least one adverse reaction')
+  }
+
+  // 10. Reaction description must be set (at least one)
+  if (hasReactions) {
+    const hasReactionDesc = report.adr_reactions.some(r => r.reaction_description && r.reaction_description.trim().length > 0)
+    if (!hasReactionDesc) {
+      missing.push('Reaction description')
+    }
+  }
+
+  // 11. Severity must be set (at least one)
+  if (hasReactions) {
+    const hasSeverity = report.adr_reactions.some(r => r.severity && Object.values(REACTION_SEVERITY).includes(r.severity))
+    if (!hasSeverity) {
+      missing.push('Severity')
+    }
+  }
+
+  // 12. All six seriousness fields must be non-null on at least one reaction
+  if (hasReactions) {
+    const complete = report.adr_reactions.some(r =>
+      SERIOUSNESS_FIELDS.every(f => r[f] !== undefined && r[f] !== null)
+    )
+    if (!complete) {
+      missing.push('All six seriousness fields')
+    }
+  }
+
+  // 13. Outcome must be set (at least one)
+  if (hasReactions) {
+    const hasOutcome = report.adr_reactions.some(r => r.outcome && Object.values(REACTION_OUTCOME).includes(r.outcome))
+    if (!hasOutcome) {
+      missing.push('Outcome')
+    }
+  }
+
+  // Industry-specific validation
+  if (report.module_type === ADR_MODULE_TYPES.INDUSTRY) {
+    if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
+      missing.push('Batch/lot number')
+    }
+    if (!report.causality_assessment || !Object.values(CAUSALITY).includes(report.causality_assessment)) {
+      missing.push('Causality assessment')
+    }
+    if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
+      missing.push('Case narrative summary')
+    }
+  }
+
+  // Hospital-specific validation
+  if (report.module_type === ADR_MODULE_TYPES.HOSPITAL) {
+    if (!report.ward_department || report.ward_department.trim().length === 0) {
+      missing.push('Ward/department')
+    }
+    if (!report.attending_physician || report.attending_physician.trim().length === 0) {
+      missing.push('Attending physician')
+    }
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing,
+  }
+}
+
 export const adrValidation = {
 
   /**
@@ -27,134 +163,15 @@ export const adrValidation = {
    * Returns { valid: true } or { valid: false, missing: [...] }
    */
   async validateReportSubmit(report) {
-    const missing = []
+    return validateReportSubmit(report)
+  },
 
-    // 1. Reporter qualification must be set
-    if (!report.reporter_qualification) {
-      missing.push('Reporter qualification')
-    }
-
-    // 2. Reporter name or anonymous confirmation
-    const hasName = report.reporter_name && report.reporter_name.trim().length > 0
-    const hasContact = report.reporter_phone && report.reporter_phone.trim().length > 0
-    const hasEmail = report.reporter_email && report.reporter_email.trim().length > 0
-    const licenseSet = report.reporter_license_number && report.reporter_license_number.trim().length > 0
-    const anonymousConfirmed = report.reporter_anonymous_confirmed_by_facility === true
-
-    if (!hasName && !anonymousConfirmed) {
-      missing.push('Reporter name')
-    }
-
-    // If anonymous, facility confirmation must be true
-    if (report.reporter_anonymous_confirmed_by_facility === true && !hasName) {
-      // OK - name can be blank when anonymous confirmed by facility
-    } else if (!hasName) {
-      missing.push('Reporter name')
-    }
-
-    // 3. Reporter consent must be explicitly true or false
-    if (report.reporter_consent_followup === undefined || report.reporter_consent_followup === null) {
-      missing.push('Reporter consent for follow-up')
-    }
-
-    // 4. Patient identifier must be set
-    if (!report.patient_identifier || report.patient_identifier.trim().length === 0) {
-      missing.push('Patient identifier')
-    }
-
-    // 5. At least one of patient_age, patient_dob, patient_age_group must be set
-    const hasPatientAge = report.patient_age && String(report.patient_age).trim().length > 0
-    const hasPatientDob = report.patient_dob && String(report.patient_dob).trim().length > 0
-    const hasPatientAgeGroup = report.patient_age_group && PATIENT_AGE_GROUP[report.patient_age_group] ? true : (report.patient_age_group && String(report.patient_age_group).trim().length > 0)
-
-    if (!hasPatientAge && !hasPatientDob && !hasPatientAgeGroup) {
-      missing.push('Patient age or DOB or age group')
-    }
-
-    // 6. Patient gender must be set
-    if (!report.patient_gender || !PATIENT_GENDER[report.patient_gender]) {
-      missing.push('Patient gender')
-    }
-
-    // 7. At least one suspect product exists
-    const hasProducts = report.adr_products && Array.isArray(report.adr_products) && report.adr_products.length > 0
-    if (!hasProducts) {
-      missing.push('At least one suspect product')
-    }
-
-    // 8. At least one product must have a brand name
-    if (hasProducts) {
-      const hasBrandName = report.adr_products.some(p => p.product_brand_name && p.product_brand_name.trim().length > 0)
-      if (!hasBrandName) {
-        missing.push('Product brand name')
-      }
-    }
-
-    // 9. At least one reaction exists
-    const hasReactions = report.adr_reactions && Array.isArray(report.adr_reactions) && report.adr_reactions.length > 0
-    if (!hasReactions) {
-      missing.push('At least one adverse reaction')
-    }
-
-    // 10. Reaction description must be set (at least one)
-    if (hasReactions) {
-      const hasReactionDesc = report.adr_reactions.some(r => r.reaction_description && r.reaction_description.trim().length > 0)
-      if (!hasReactionDesc) {
-        missing.push('Reaction description')
-      }
-    }
-
-    // 11. Severity must be set (at least one)
-    if (hasReactions) {
-      const hasSeverity = report.adr_reactions.some(r => r.severity && REACTION_SEVERITY[r.severity])
-      if (!hasSeverity) {
-        missing.push('Severity')
-      }
-    }
-
-    // 12. All six seriousness fields must be non-null
-    if (hasReactions) {
-      const seriousnessFields = [
-        'seriousness_death',
-        'seriousness_life_threatening',
-        'seriousness_hospitalization',
-        'seriousness_disability',
-        'seriousness_congenital_anomaly',
-        'seriousness_other_medically_important'
-      ]
-
-      for (const field of seriousnessFields) {
-        if (report.adr_reactions[0][field] === undefined || report.adr_reactions[0][field] === null) {
-          missing.push(field.replace('seriousness_', 'Seriousness '))
-        }
-      }
-    }
-
-    // 13. Outcome must be set
-    if (hasReactions) {
-      const hasOutcome = report.adr_reactions[0].outcome && REACTION_OUTCOME[report.adr_reactions[0].outcome]
-      if (!hasOutcome) {
-        missing.push('Outcome')
-      }
-    }
-
-    // Industry-specific validation
-    if (report.module_type === ADR_MODULE_TYPES.INDUSTRY) {
-      if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
-        missing.push('Batch/lot number')
-      }
-      if (!report.causality_assessment || !CAUSALITY[report.causality_assessment]) {
-        missing.push('Causality assessment')
-      }
-      if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
-        missing.push('Case narrative summary')
-      }
-    }
-
-    return {
-      valid: missing.length === 0,
-      missing,
-    }
+  /**
+   * The name the form page calls. Delegates to the canonical validator so there
+   * is exactly one gate, not two drift-prone copies.
+   */
+  async validateForSubmit(report) {
+    return validateReportSubmit(report)
   },
 
   /**
@@ -205,13 +222,13 @@ export const adrValidation = {
 
     const hasAge = report.patient_age && String(report.patient_age).trim().length > 0
     const hasDob = report.patient_dob && String(report.patient_dob).trim().length > 0
-    const hasAgeGroup = report.patient_age_group && PATIENT_AGE_GROUP[report.patient_age_group]
+    const hasAgeGroup = report.patient_age_group && Object.values(PATIENT_AGE_GROUP).includes(report.patient_age_group)
 
     if (!hasAge && !hasDob && !hasAgeGroup) {
       issues.push('Patient age or DOB or age group is required')
     }
 
-    if (!report.patient_gender || !PATIENT_GENDER[report.patient_gender]) {
+    if (!report.patient_gender || !Object.values(PATIENT_GENDER).includes(report.patient_gender)) {
       issues.push('Patient gender is required')
     }
 
@@ -226,13 +243,7 @@ export const adrValidation = {
     const issues = []
 
     if (!report.adr_products || !Array.isArray(report.adr_products)) {
-      issues.push('Products data is required')
       return { valid: true, issues: [] } // drafts can be saved without products
-    }
-
-    if (report.adr_products.length === 0) {
-      // This is OK for drafts, but will block submission
-      // issues.push('At least one suspect product is required')
     }
 
     // Check that at least one has a brand name (for submission)
@@ -252,51 +263,32 @@ export const adrValidation = {
     const issues = []
 
     if (!report.adr_reactions || !Array.isArray(report.adr_reactions)) {
-      issues.push('Reactions data is required')
       return { valid: true, issues: [] } // drafts can be saved without reactions
     }
 
-    if (report.adr_reactions.length === 0) {
-      // OK for drafts
-    }
-
-    // Check reaction description (for submission)
     if (report.adr_reactions.length > 0) {
+      // Check reaction description (for submission)
       const hasDesc = report.adr_reactions.some(r => r.reaction_description && r.reaction_description.trim().length > 0)
       if (!hasDesc) {
         issues.push('At least one reaction must have a description')
       }
-    }
 
-    // Check severity (for submission)
-    if (report.adr_reactions.length > 0) {
-      const hasSeverity = report.adr_reactions.some(r => r.severity && REACTION_SEVERITY[r.severity])
+      // Check severity (for submission)
+      const hasSeverity = report.adr_reactions.some(r => r.severity && Object.values(REACTION_SEVERITY).includes(r.severity))
       if (!hasSeverity) {
         issues.push('Severity must be set')
       }
-    }
 
-    // Check all six seriousness fields are non-null (for submission)
-    if (report.adr_reactions.length > 0) {
-      const seriousnessFields = [
-        'seriousness_death',
-        'seriousness_life_threatening',
-        'seriousness_hospitalization',
-        'seriousness_disability',
-        'seriousness_congenital_anomaly',
-        'seriousness_other_medically_important'
-      ]
-
-      for (const field of seriousnessFields) {
-        if (report.adr_reactions[0][field] === undefined || report.adr_reactions[0][field] === null) {
-          issues.push(`Seriousness: ${field.replace('seriousness_', '')}`)
-        }
+      // Check all six seriousness fields are non-null (for submission)
+      const complete = report.adr_reactions.some(r =>
+        SERIOUSNESS_FIELDS.every(f => r[f] !== undefined && r[f] !== null)
+      )
+      if (!complete) {
+        issues.push('All six seriousness fields must be set')
       }
-    }
 
-    // Check outcome (for submission)
-    if (report.adr_reactions.length > 0) {
-      const hasOutcome = report.adr_reactions[0].outcome && REACTION_OUTCOME[report.adr_reactions[0].outcome]
+      // Check outcome (for submission)
+      const hasOutcome = report.adr_reactions.some(r => r.outcome && Object.values(REACTION_OUTCOME).includes(r.outcome))
       if (!hasOutcome) {
         issues.push('Outcome must be set')
       }
@@ -315,7 +307,7 @@ export const adrValidation = {
     if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
       issues.push('Batch/lot number')
     }
-    if (!report.causality_assessment || !CAUSALITY[report.causality_assessment]) {
+    if (!report.causality_assessment || !Object.values(CAUSALITY).includes(report.causality_assessment)) {
       issues.push('Causality assessment')
     }
     if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
@@ -332,12 +324,10 @@ export const adrValidation = {
   validateHospitalFields(report) {
     const issues = []
 
-    // Hospital fields are optional for drafts, but may be required for submission
-    // based on the specification. For now, we note which are present.
-    if (report.ward_department && report.ward_department.trim().length === 0) {
+    if (!report.ward_department || report.ward_department.trim().length === 0) {
       issues.push('Ward/department')
     }
-    if (report.attending_physician && report.attending_physician.trim().length === 0) {
+    if (!report.attending_physician || report.attending_physician.trim().length === 0) {
       issues.push('Attending physician')
     }
 
@@ -372,18 +362,20 @@ export const adrValidation = {
 
   /**
    * Computes the is_serious flag from the six seriousness booleans.
-   * Prefers deriving it rather than requiring user input.
+   * Serious if ANY reaction is serious — mirrors the RPC's bool_or across
+   * every reaction row, not just the first.
    */
   computeIsSerious(reactions) {
     if (!reactions || reactions.length === 0) return false
 
-    const r = reactions[0]
-    return r.seriousness_death ||
+    return reactions.some(r =>
+      r.seriousness_death ||
       r.seriousness_life_threatening ||
       r.seriousness_hospitalization ||
       r.seriousness_disability ||
       r.seriousness_congenital_anomaly ||
       r.seriousness_other_medically_important
+    )
   },
 
   /**
@@ -394,10 +386,11 @@ export const adrValidation = {
   },
 
   /**
-   * Gets the deadline status string.
+   * Gets the deadline status string. Requires both the deadline and the report
+   * creation time — the status is a percentage of the reporting window elapsed.
    */
-  getDeadlineStatus(deadlineMs) {
-    return getDeadlineStatus(deadlineMs)
+  getDeadlineStatus(deadlineMs, createdAt) {
+    return getDeadlineStatus(deadlineMs, createdAt)
   },
 
   /**
@@ -412,7 +405,7 @@ export const adrValidation = {
 const REACTION_TYPE_SKINCARE = {
   IRRITATION: 'irritation',
   ALLERGIC_CONTACT_DERMATITIS: 'allergic_contact_dermatitis',
-  PHOTOSensitivity: 'photosensitivity',
+  PHOTOSENSITIVITY: 'photosensitivity',
   BREAKOUT: 'breakout',
   OTHER: 'other',
 }
@@ -422,7 +415,7 @@ const ONSET_TIMING_SKINCARE = ['immediate', 'delayed']
 const REACTION_TYPE_LABELS_SKINCARE = {
   [REACTION_TYPE_SKINCARE.IRRITATION]: 'Irritation',
   [REACTION_TYPE_SKINCARE.ALLERGIC_CONTACT_DERMATITIS]: 'Allergic contact dermatitis',
-  [REACTION_TYPE_SKINCARE.PHOTOSensitivity]: 'Photosensitivity',
+  [REACTION_TYPE_SKINCARE.PHOTOSENSITIVITY]: 'Photosensitivity',
   [REACTION_TYPE_SKINCARE.BREAKOUT]: 'Breakout',
   [REACTION_TYPE_SKINCARE.OTHER]: 'Other',
 }

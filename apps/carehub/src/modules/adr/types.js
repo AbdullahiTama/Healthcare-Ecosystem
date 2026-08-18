@@ -107,7 +107,7 @@ export const CAUSALITY = {
   POSSIBLE: 'possible',
   UNLIKELY: 'unlikely',
   CONDITIONAL_UNCLASSIFIED: 'conditional_unclassified',
-  UNASSessABLE: 'unassessable',
+  UNASSESSABLE: 'unassessable',
 }
 
 export const CAUSALITY_LABELS = {
@@ -116,12 +116,15 @@ export const CAUSALITY_LABELS = {
   [CAUSALITY.POSSIBLE]: 'Possible',
   [CAUSALITY.UNLIKELY]: 'Unlikely',
   [CAUSALITY.CONDITIONAL_UNCLASSIFIED]: 'Conditional / Unclassified',
-  [CAUSALITY.UNASSessABLE]: 'Unassessable',
+  [CAUSALITY.UNASSESSABLE]: 'Unassessable',
 }
 
+// reaction_expected is a boolean on the report row (DB column), not a string
+// enum. These keys are booleans so callers can render the label for the stored
+// value directly: REACTION_EXPECTED_LABELS[true] / REACTION_EXPECTED_LABELS[false].
 export const REACTION_EXPECTED = {
-  EXPECTED: 'expected',
-  UNEXPECTED: 'unexpected',
+  EXPECTED: true,
+  UNEXPECTED: false,
 }
 
 export const REACTION_EXPECTED_LABELS = {
@@ -161,7 +164,7 @@ export const QUALIFICATION_LABELS = {
   [QUALIFICATIONS.NURSE]: 'Nurse',
   [QUALIFICATIONS.OTHER_HCP]: 'Other HCP',
   [QUALIFICATIONS.CONSUMER]: 'Consumer',
-  [QUALIFICATIONS.CAREgiver]: 'Caregiver',
+  [QUALIFICATIONS.CAREGIVER]: 'Caregiver',
   [QUALIFICATIONS.LAWYER]: 'Lawyer',
 }
 

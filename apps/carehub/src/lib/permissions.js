@@ -36,7 +36,7 @@ export const ROLES = {
     label: 'Manager',
   },
   Pharmacist: {
-    nav: ['dashboard','pos','inventory','clients','consultation','rx_inbox'],
+    nav: ['dashboard','pos','inventory','clients','consultation','rx_inbox','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -88,7 +88,7 @@ export const ROLES = {
     label: 'Cashier',
   },
   Nurse: {
-    nav: ['dashboard','triage','clients'],
+    nav: ['dashboard','triage','clients','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -101,7 +101,7 @@ export const ROLES = {
     label: 'Nurse',
   },
   Doctor: {
-    nav: ['dashboard','doctor','consultation','clients'],
+    nav: ['dashboard','doctor','consultation','clients','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,

@@ -1,4 +1,6 @@
-import { ADR_MODULE_TYPES, REPORT_STATUS, REACTION_SEVERITY, REACTION_OUTCOME, ACTION_TAKEN, DECHALLENGE, RECHALLENGE, CAUSALITY, REACTION_EXPECTED, EVIDENCE_PHOTO_TYPE, QUALIFICATIONS, PATIENT_GENDER, PATIENT_AGE_GROUP } from './types'
+import { ADR_MODULE_TYPES, ADR_MODULE_TYPE_LABELS, REPORT_STATUS, REACTION_SEVERITY, REACTION_OUTCOME, ACTION_TAKEN, DECHALLENGE, RECHALLENGE, CAUSALITY, REACTION_EXPECTED, EVIDENCE_PHOTO_TYPE, QUALIFICATIONS, PATIENT_GENDER, PATIENT_AGE_GROUP } from './types'
+import { getDeadlineStatus } from './services'
+import { adrValidation } from './validation'
 
 /**
  * Shared ADR form engine - controls presentation and validation logic
@@ -328,26 +330,18 @@ export const ADR_FORM = {
   },
 
   /**
-   * Compute deadline status string.
+   * Get the module title for display.
    */
-  computeDeadlineStatus(deadlineMs) {
-    const now = new Date()
-    const diffMs = deadlineMs - now
-    const diffDays = diffMs / (1000 * 60 * 60 * 24)
+  getModuleTitle(moduleType) {
+    return ADR_MODULE_TYPE_LABELS[moduleType] || moduleType || 'ADR Report'
+  },
 
-    if (diffDays < 0) {
-      return 'overdue'
-    }
-
-    if (diffDays <= 3) {
-      return 'due_soon'
-    }
-
-    if (diffDays <= 10) {
-      return 'due_soon'
-    }
-
-    return 'on_track'
+  /**
+   * Compute deadline status string. Percentage-of-window based, matching the
+   * shared service (on_track / due_soon / overdue).
+   */
+  computeDeadlineStatus(deadlineMs, createdAt) {
+    return getDeadlineStatus(deadlineMs, createdAt)
   },
 
   /**
@@ -367,51 +361,10 @@ export const ADR_FORM = {
    * Validate a report is ready for submission.
    * Centralized validation - client UI may allow incomplete drafts,
    * but this gate prevents submission when ICSR validation fails.
+   * Delegates to adrValidation — the single authoritative gate.
    */
   async validateForSubmit(report) {
-    const missing = []
-
-    // Reuse the validation service
-    const { valid, missing: validationMissing } = adrValidation.validateReportSubmit(report)
-
-    if (!valid) {
-      validationMissing.forEach(m => missing.push(m))
-    }
-
-    // Additional form-engine checks
-    const moduleType = this.getModuleType(report.business_type || 'skincare')
-
-    // Check module-specific mandatory fields
-    const moduleConfig = this.getModuleConfig(moduleType)
-
-    // Industry mandatory fields
-    if (moduleType === ADR_MODULE_TYPES.INDUSTRY) {
-      if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
-        missing.push('Batch/lot number')
-      }
-      if (!report.causality_assessment || !CAUSALITY[report.causality_assessment]) {
-        missing.push('Causality assessment')
-      }
-      if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
-        missing.push('Case narrative summary')
-      }
-    }
-
-    // Skincare terminology check - ensure ACE fields are present
-    if (moduleType === ADR_MODULE_TYPES.SKINCARE) {
-      if (!report.application_site || report.application_site.trim().length === 0) {
-        missing.push('Application site')
-      }
-      if (!report.cosmetic_reaction_type || !Object.values(this.getSkincareReactionTypes()).includes(report.cosmetic_reaction_type)) {
-        missing.push('Cosmetic reaction type')
-      }
-    }
-
-    return {
-      valid: missing.length === 0,
-      missing,
-      moduleType,
-    }
+    return adrValidation.validateForSubmit(report)
   },
 
   getSkincareReactionTypes() {

@@ -8,7 +8,7 @@ import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
 import { saleRepository } from '../pos/repositories'
 import { expenseRepository } from '../expenses/repositories'
 import { purchaseRepository } from '../purchases/repositories'
-import { getAdrReports } from '../adr/services'
+import { adrReportRepository } from '../adr/repositories'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Loading, useToast, Toast } from '../../components/ui'
@@ -34,7 +34,7 @@ export default function Reports({ brand, role, perms }) {
         saleRepository.getAll(brand.id),
         expenseRepository.getAll(brand.id),
         purchaseRepository.getAll(brand.id),
-        getAdrReports(brand.id),
+        adrReportRepository.getReports(brand.id),
       ])
       setSales(s || []); setExpenses(e || []); setPurchases(p || []); setAdrReports(ad || [])
     } catch (e) {}

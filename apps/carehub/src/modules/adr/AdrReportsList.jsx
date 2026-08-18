@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Plus } from 'lucide-react'
-import { getAdrReports, createAdrReport } from './services'
+import { adrReportRepository } from './repositories'
 import { ADR_FORM } from './formEngine'
+import AdrReportsAnalytics from './AdrReportsAnalytics'
 import { theme } from '../../styles/theme'
 import { useAuth } from '../../providers/AuthProvider'
 import { Card, Loading, Empty, ErrorState, Pill, useToast, Toast, Button } from '../../components/ui'
@@ -18,6 +19,7 @@ export default function AdrReportsList({ brand }) {
   const navigate = useNavigate()
   const { auth } = useAuth()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
+  const [tab, setTab] = useState('list')
   const [reports, setReports] = useState(null)
   const [error, setError] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -27,7 +29,7 @@ export default function AdrReportsList({ brand }) {
   async function load() {
     setError(false)
     try {
-      const data = await getAdrReports(brand.id)
+      const data = await adrReportRepository.getReports(brand.id)
       setReports(data || [])
     } catch (e) {
       setError(true)
@@ -39,8 +41,7 @@ export default function AdrReportsList({ brand }) {
     try {
       const moduleType = ADR_FORM.getModuleType(brand.business_type || brand.type || 'pharmacy')
       const staffId = (auth && auth.staff && auth.staff.id) ? auth.staff.id : null
-      const result = await createAdrReport({
-        business_id: brand.id,
+      const result = await adrReportRepository.createReport(brand.id, {
         module_type: moduleType,
         status: 'draft',
         created_by_user_id: staffId,
@@ -72,20 +73,40 @@ export default function AdrReportsList({ brand }) {
         </Button>
       </div>
 
-      {error ? (
+      <div role="tablist" aria-label="ADR report views" style={{ display: 'flex', gap: 4, marginBottom: theme.space[8], borderBottom: `1px solid ${border}` }}>
+        {['list', 'analytics'].map(t => {
+          const on = tab === t
+          return (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(t)}
+              style={{
+                padding: '9px 16px', background: 'none', border: 'none', borderBottom: `2px solid ${on ? tealDeep : 'transparent'}`,
+                color: on ? tealDeep : gray500, fontWeight: 700, fontSize: 13, cursor: 'pointer', textTransform: 'capitalize',
+              }}
+            >
+              {t}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'analytics' ? (
+        <AdrReportsAnalytics brand={brand} />
+      ) : error ? (
         <ErrorState
-          title="Could not load ADR reports"
-          message="Check your connection and try again."
+          message="We couldn't load your ADR reports. Check your connection and try again."
           onRetry={load}
         />
       ) : reports === null ? (
-        <Loading label="Loading ADR reports..." />
+        <Loading text="Loading ADR reports..." />
       ) : reports.length === 0 ? (
         <Card style={{ padding: '40px 24px' }}>
           <Empty
             icon={<AlertTriangle size={22} />}
-            title="No ADR reports yet"
-            message="Start a new adverse drug reaction report to record a suspected reaction, product, or event."
+            message="No ADR reports yet. Start a new adverse drug reaction report to record a suspected reaction, product, or event."
             action="New ADR Report"
             onAction={handleNewReport}
           />
