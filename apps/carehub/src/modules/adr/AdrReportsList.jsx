@@ -76,7 +76,7 @@ export default function AdrReportsList({ brand }) {
         <ErrorState
           title="Could not load ADR reports"
           message="Check your connection and try again."
-          action={{ label: 'Retry', onClick: load }}
+          onRetry={load}
         />
       ) : reports === null ? (
         <Loading label="Loading ADR reports..." />
@@ -86,7 +86,8 @@ export default function AdrReportsList({ brand }) {
             icon={<AlertTriangle size={22} />}
             title="No ADR reports yet"
             message="Start a new adverse drug reaction report to record a suspected reaction, product, or event."
-            action={{ label: 'New ADR Report', onClick: handleNewReport }}
+            action="New ADR Report"
+            onAction={handleNewReport}
           />
         </Card>
       ) : (
