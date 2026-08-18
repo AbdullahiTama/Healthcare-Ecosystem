@@ -713,7 +713,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           ...(listedOnCareFind ? { show_price: form.show_price !== false } : {}),
         }
       : {}
-    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines' })
+    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
     setSaving(false)
   }
 
