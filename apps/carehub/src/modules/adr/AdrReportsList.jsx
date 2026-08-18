@@ -15,7 +15,7 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-export default function AdrReportsList({ brand }) {
+export default function AdrReportsList({ brand, embedded = false }) {
   const navigate = useNavigate()
   const { auth } = useAuth()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
@@ -61,13 +61,15 @@ export default function AdrReportsList({ brand }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: theme.space[10], flexWrap: 'wrap', gap: theme.space[6] }}>
-        <div>
-          <div style={{ fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.textDark }}>ADR Reports</div>
-          <div style={{ fontSize: theme.type.body.size, color: theme.textLight, marginTop: 3 }}>
-            Adverse drug reaction reports for {brand?.name || 'your business'}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: embedded ? 'flex-end' : 'space-between', marginBottom: theme.space[10], flexWrap: 'wrap', gap: theme.space[6] }}>
+        {!embedded && (
+          <div>
+            <div style={{ fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight, color: theme.textDark }}>Pharmacovigilance (ADR)</div>
+            <div style={{ fontSize: theme.type.body.size, color: theme.textLight, marginTop: 3 }}>
+              Adverse drug reaction reports for {brand?.name || 'your business'}
+            </div>
           </div>
-        </div>
+        )}
         <Button variant="primary" size="md" onClick={handleNewReport} disabled={creating}>
           <Plus size={15} /> New ADR Report
         </Button>

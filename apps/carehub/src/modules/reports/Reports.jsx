@@ -15,7 +15,7 @@ import { Card, StatCard, Loading, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
 
-export default function Reports({ brand, role, perms }) {
+export default function Reports({ brand, role, perms, embedded = false }) {
   const [sales, setSales] = useState([])
   const [expenses, setExpenses] = useState([])
   const [purchases, setPurchases] = useState([])
@@ -119,14 +119,16 @@ export default function Reports({ brand, role, perms }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Financial Reports</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Full breakdown of revenue, expenses and profit</div></div>
-        {perms?.canExportReports && (
-          <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
-            <Download size={15} /> Export to Excel / CSV
-          </button>
-        )}
-      </div>
+      {(!embedded || perms?.canExportReports) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+          {!embedded && <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Financial Reports</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Full breakdown of revenue, expenses and profit</div></div>}
+          {perms?.canExportReports && (
+            <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+              <Download size={15} /> Export to Excel / CSV
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
         {['today', 'week', 'month', 'year', 'all'].map(p => { const on = period === p; return (

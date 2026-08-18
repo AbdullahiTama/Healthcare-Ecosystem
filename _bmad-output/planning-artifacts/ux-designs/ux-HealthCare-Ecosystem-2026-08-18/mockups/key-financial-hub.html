@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Reports — CareHub Reports Hub (desktop)</title>
+<style>
+/* ============================================================
+   Mock: CareHub Reports Hub — Financial tab (desktop 1440px)
+   Governed by DESIGN.md: Layout (Desktop), Typography, Colors,
+   Components (ReportTab, KPICard, DataTable, PrimaryButton).
+   EXPERIENCE.md: §1 Form factors, §2 Tab taxonomy, §5 States.
+   Tokens: tealDeep #0E6F5A, navy #0B4A3E, gray100 #F7F5EF,
+   gray50 #FBFAF6, gray200 #ECEAE0, gray400 #9AA69F, gray600 #5B6B63,
+   gray900 #182722, success #16a34a, warning #d97706, danger #dc2626,
+   info #2563eb; radius md 10px, lg 14px; font Geist/system.
+   Offline mock: inline CSS, system fonts, no JS.
+   ============================================================ */
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#E9E6DC; font-family:"Geist",-apple-system,"Segoe UI",Roboto,Arial,sans-serif; color:#182722; padding:40px; }
+.window { max-width:1280px; margin:0 auto; background:#F7F5EF; border:1px solid #ECEAE0; border-radius:14px; box-shadow:0 20px 48px rgba(15,23,42,0.18); overflow:hidden; }
+.chrome { height:34px; background:#FBFAF6; border-bottom:1px solid #ECEAE0; display:flex; align-items:center; padding:0 16px; gap:8px; }
+.chrome span { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.app { padding:28px 36px 44px; }
+.crumb { font-size:11px; font-weight:700; letter-spacing:.04em; color:#8B978F; text-transform:uppercase; margin-bottom:6px; }
+h1 { font-size:21px; font-weight:900; letter-spacing:-.02em; margin-bottom:4px; }
+.sub { font-size:12px; font-weight:600; color:#5B6B63; margin-bottom:22px; }
+/* context bar */
+.ctx { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+.ctx .spacer { flex:1; }
+.btn { font:inherit; font-size:12px; font-weight:700; padding:8px 16px; border-radius:6px; cursor:pointer; border:1px solid #ECEAE0; background:#FBFAF6; color:#182722; display:inline-flex; align-items:center; gap:6px; }
+.btn-primary { background:#0E6F5A; border-color:#0E6F5A; color:#fff; }
+.btn-primary:hover { background:#0B4A3E; }
+/* tabs */
+.tabs { display:flex; gap:4px; border-bottom:1px solid #E7E4D9; margin-bottom:22px; }
+.tab { font-size:13px; font-weight:600; color:#3C4B44; padding:10px 16px; border-radius:10px 10px 0 0; cursor:pointer; border:1px solid transparent; border-bottom:none; }
+.tab.active { background:#E3EEE8; color:#0B4A3E; font-weight:800; box-shadow:inset 0 -2px 0 #0E6F5A; }
+.tab:not(.active):hover { background:#FBFAF6; }
+/* KPI strip */
+.kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+.kpi { background:#FBFAF6; border:1px solid #ECEAE0; border-radius:14px; padding:16px; border-left:3px solid #0E6F5A; cursor:pointer; }
+.kpi.attention { border-left-color:#d97706; }
+.kpi.risk { border-left-color:#dc2626; }
+.kpi .label { font-size:12px; font-weight:600; color:#3C4B44; }
+.kpi .value { font-family:"Geist Mono",ui-monospace,Consolas,monospace; font-size:24px; font-weight:900; letter-spacing:-.02em; margin:4px 0; }
+.kpi .delta { font-size:11px; font-weight:700; color:#16a34a; }
+.kpi .delta.down { color:#dc2626; }
+/* table */
+table { width:100%; border-collapse:collapse; background:#FBFAF6; border:1px solid #ECEAE0; border-radius:10px; overflow:hidden; }
+thead th { text-align:left; font-size:11px; font-weight:700; letter-spacing:.02em; color:#3C4B44; padding:10px 14px; border-bottom:1px solid #E7E4D9; background:#FBFAF6; }
+tbody td { font-size:13px; font-weight:500; padding:10px 14px; border-bottom:1px solid #F1EFE6; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:hover { background:#E3EEE8; }
+td.num { text-align:right; font-family:"Geist Mono",ui-monospace,Consolas,monospace; }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:9999px; }
+.pill .dot { width:6px; height:6px; border-radius:50%; }
+.pill.ok { background:#F0FDF4; color:#0B4A3E; } .pill.ok .dot { background:#16a34a; }
+.pill.pending { background:#FFFBEB; color:#92400e; } .pill.pending .dot { background:#d97706; }
+.meta { margin-top:12px; font-size:11px; font-weight:700; letter-spacing:.02em; color:#8B978F; text-transform:uppercase; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="chrome"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>
+  <div class="app">
+    <div class="crumb">Intelligence &amp; Reporting</div>
+    <h1>Financial Reports</h1>
+    <div class="sub">Sales, expenses, purchases and VAT for Adebayo Pharmacy — 2 locations</div>
+
+    <div class="ctx">
+      <button class="btn">Last month ▾</button>
+      <button class="btn">All locations ▾</button>
+      <div class="spacer"></div>
+      <button class="btn">Export CSV</button>
+      <button class="btn btn-primary">Schedule report</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">Financial</div>
+      <div class="tab">Operational</div>
+      <div class="tab">Client &amp; Sales</div>
+      <div class="tab">ADR</div>
+      <div class="tab">Compliance</div>
+      <div class="tab">Scheduled</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="label">Gross sales</div><div class="value">₦4,582,110</div><div class="delta">▲ 8.4% vs Jun</div></div>
+      <div class="kpi attention"><div class="label">Expenses</div><div class="value">₦1,207,450</div><div class="delta down">▲ 12.1% vs Jun</div></div>
+      <div class="kpi"><div class="label">Net profit</div><div class="value">₦974,300</div><div class="delta">▲ 3.2% vs Jun</div></div>
+      <div class="kpi"><div class="label">VAT collected</div><div class="value">₦274,927</div><div class="delta">—</div></div>
+    </div>
+
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Status</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>
+        <tr><td>31 Jul</td><td>Month-end close</td><td>Sales</td><td><span class="pill ok"><span class="dot"></span>Reconciled</span></td><td class="num">₦4,582,110</td></tr>
+        <tr><td>30 Jul</td><td>Supplier — Emzor Ltd</td><td>Purchases</td><td><span class="pill pending"><span class="dot"></span>Pending</span></td><td class="num">₦318,400</td></tr>
+        <tr><td>29 Jul</td><td>Staff payroll</td><td>Expenses</td><td><span class="pill ok"><span class="dot"></span>Reconciled</span></td><td class="num">₦610,000</td></tr>
+        <tr><td>28 Jul</td><td>Utility — PHCN</td><td>Expenses</td><td><span class="pill ok"><span class="dot"></span>Reconciled</span></td><td class="num">₦86,250</td></tr>
+      </tbody>
+    </table>
+
+    <div class="meta">Last refreshed 18 Aug 2026 · 21:45 · ref #EXP-1042</div>
+  </div>
+</div>
+</body>
+</html>

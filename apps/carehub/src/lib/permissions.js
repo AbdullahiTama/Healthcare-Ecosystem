@@ -5,7 +5,7 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
-  ClipboardList, LayoutDashboard, Layers, AlertTriangle,
+  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock,
 } from 'lucide-react'
 
 export const ROLES = {
@@ -216,8 +216,12 @@ export const MODULES = {
   carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES, section: 'ecosystem' },
   locations: { label: 'Locations', icon: Building2, types: ALL_TYPES, section: 'ecosystem' },
   staff: { label: 'Staff', icon: User, types: ALL_TYPES, section: 'people' },
-  reports: { label: 'Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence' },
-  'adr-reports': { label: 'ADR Reports', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence' },
+  // Reports Hub (planning-artifacts/ux-designs/…/EXPERIENCE.md §2 IA). The hub
+  // lives at /dashboard/reports; each report module deep-links to its tab via
+  // `path`. More tabs (operational, client & sales, compliance, scheduled) are
+  // appended to the registry + REPORT_TABS as their modules ship (Phase 2/3).
+  reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
+  'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
   settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
   reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
   triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },
@@ -311,6 +315,68 @@ export function getNavGroups(role, businessType, customRoles = {}) {
   return SECTION_ORDER
     .filter(id => groups.get(id).length > 0)
     .map(id => ({ id, label: NAV_SECTIONS[id].label, items: groups.get(id) }))
+}
+
+// ── Reports Hub (planning-artifacts/ux-designs/…/EXPERIENCE.md §2 taxonomy) ──
+// Canonical tab order for /dashboard/reports. REPORT_TABS is the single source
+// of truth for the hub's tab bar; a tab must both exist in MODULES and be
+// granted in a role's nav array before it can appear here. More tabs are
+// appended as their modules ship (Phase 2/3: operational, client & sales,
+// compliance, scheduled).
+export const REPORT_TABS = ['reports', 'adr-reports']
+
+// Deep-linkable URL slug per tab — /dashboard/reports/:slug. The sidebar items
+// deep-link via MODULES[id].path, which resolves to these slugs.
+export const REPORT_TAB_SLUGS = {
+  reports: 'financial',
+  'adr-reports': 'adr',
+}
+
+// Reverse lookup for the :tab route param (ReportsHub).
+export const slugToReportTab = Object.fromEntries(
+  Object.entries(REPORT_TAB_SLUGS).map(([id, slug]) => [slug, id])
+)
+
+export function reportTabSlug(id) {
+  return REPORT_TAB_SLUGS[id]
+}
+
+// The tabs a role may actually open, in canonical order, filtered through the
+// same role/business-type matrix the sidebar and route guards use.
+export function getReportTabs(role, businessType, customRoles = {}) {
+  const allowed = getNavItems(role, businessType, customRoles).map(item => item[0])
+  return REPORT_TABS.filter(id => allowed.includes(id))
+}
+
+// Role-aware landing tab (EXPERIENCE.md §2): clinical staff (Pharmacist, Nurse,
+// Doctor) land on ADR, every other report-granted role lands on Financial.
+// Falls back to the first tab a role can access so a role never lands on a tab
+// it cannot open.
+export function getReportDefaultTab(role, businessType, customRoles = {}) {
+  const tabs = getReportTabs(role, businessType, customRoles)
+  if (tabs.length === 0) return null
+  if (['Pharmacist', 'Nurse', 'Doctor'].includes(role) && tabs.includes('adr-reports')) return 'adr-reports'
+  if (tabs.includes('reports')) return 'reports'
+  return tabs[0]
+}
+
+// Sidebar deep links: report modules resolve to their hub tab path, everything
+// else to /dashboard/:id.
+export function modulePath(id) {
+  return MODULES[id]?.path || `/dashboard/${id}`
+}
+
+// Sidebar active state. Report modules are hub deep links, and the legacy
+// /dashboard/adr-reports* URLs (list + detail) keep the ADR item highlighted
+// while a report is open.
+export function isModuleActive(id, pathname) {
+  if (id === 'reports') {
+    return pathname === '/dashboard/reports' || pathname.startsWith('/dashboard/reports/financial')
+  }
+  if (id === 'adr-reports') {
+    return pathname.startsWith('/dashboard/reports/adr') || pathname.startsWith('/dashboard/adr-reports')
+  }
+  return pathname.split('/').pop() === id
 }
 
 export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier', 'Nurse', 'Doctor', 'Lab Technician']

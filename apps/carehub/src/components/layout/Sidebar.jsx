@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthProvider'
-import { getNavGroups } from '../../lib/permissions'
+import { getNavGroups, modulePath, isModuleActive } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -27,11 +27,12 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
   const userName = auth?.staff?.full_name || brand?.owner || 'Owner'
   const bType = brand?.business_type || brand?.type || 'skincare'
   const navGroups = getNavGroups(role, bType, customRoles)
-  const current = location.pathname.split('/').pop() || 'dashboard'
   const collapsed = isTablet
 
   function go(id) {
-    navigate('/dashboard/' + id)
+    // Report modules deep-link to their hub tab (modulePath); everything else
+    // resolves to /dashboard/:id.
+    navigate(modulePath(id))
     if (isMobile) onClose?.()
   }
 
@@ -82,7 +83,7 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
             )}
 
             {group.items.map(([id, Icon, label]) => {
-              const active = current === id || (id === 'dashboard' && current === 'dashboard')
+              const active = isModuleActive(id, location.pathname)
               return (
                 <button key={id} onClick={() => go(id)} title={collapsed ? label : undefined}
                   style={{

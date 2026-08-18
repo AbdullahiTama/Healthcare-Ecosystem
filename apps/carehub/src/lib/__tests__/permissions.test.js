@@ -13,6 +13,14 @@ import {
   ALL_NAV_HOSPITAL,
   ALL_NAV_ENTERPRISE,
   ROLE_LIST,
+  REPORT_TABS,
+  REPORT_TAB_SLUGS,
+  slugToReportTab,
+  reportTabSlug,
+  getReportTabs,
+  getReportDefaultTab,
+  modulePath,
+  isModuleActive,
 } from '../permissions.js'
 
 describe('permissions role matrix', () => {
@@ -271,5 +279,56 @@ describe('getNavGroups (workflow sections)', () => {
     const groups = getNavGroups('Manager', 'pharmacy', { Manager: { nav: ['dashboard', 'pos'] } })
     const ids = groups.flatMap(g => g.items.map(([id]) => id))
     expect(ids).toEqual(['dashboard', 'pos'])
+  })
+})
+
+describe('reports hub (EXPERIENCE.md §2 tab taxonomy)', () => {
+  it('maps each canonical tab to a deep-linkable slug and back', () => {
+    expect(REPORT_TABS).toEqual(['reports', 'adr-reports'])
+    expect(REPORT_TAB_SLUGS).toEqual({ reports: 'financial', 'adr-reports': 'adr' })
+    expect(reportTabSlug('reports')).toBe('financial')
+    expect(slugToReportTab['financial']).toBe('reports')
+    expect(slugToReportTab['adr']).toBe('adr-reports')
+  })
+
+  it('exposes only the tabs a role is granted, in canonical order', () => {
+    expect(getReportTabs('Owner', 'pharmacy')).toEqual(['reports', 'adr-reports'])
+    expect(getReportTabs('Manager', 'pharmacy')).toEqual(['reports', 'adr-reports'])
+    // Pharmacist has ADR but not Financial Reports.
+    expect(getReportTabs('Pharmacist', 'pharmacy')).toEqual(['adr-reports'])
+    expect(getReportTabs('Nurse', 'hospital')).toEqual(['adr-reports'])
+    // Receptionist has no report modules at all.
+    expect(getReportTabs('Receptionist', 'hospital')).toEqual([])
+  })
+
+  it('lands clinical staff on ADR and every other role on Financial', () => {
+    expect(getReportDefaultTab('Owner', 'pharmacy')).toBe('reports')
+    expect(getReportDefaultTab('Manager', 'hospital')).toBe('reports')
+    expect(getReportDefaultTab('Pharmacist', 'pharmacy')).toBe('adr-reports')
+    expect(getReportDefaultTab('Nurse', 'hospital')).toBe('adr-reports')
+    expect(getReportDefaultTab('Doctor', 'hospital')).toBe('adr-reports')
+  })
+
+  it('returns no default tab for roles with no report access', () => {
+    expect(getReportDefaultTab('Receptionist', 'hospital')).toBeNull()
+    expect(getReportDefaultTab('Cashier', 'pharmacy')).toBeNull()
+  })
+
+  it('resolves module paths — report modules deep-link to their hub tab', () => {
+    expect(modulePath('reports')).toBe('/dashboard/reports/financial')
+    expect(modulePath('adr-reports')).toBe('/dashboard/reports/adr')
+    expect(modulePath('pos')).toBe('/dashboard/pos')
+  })
+
+  it('keeps the sidebar active on hub deep links and legacy ADR URLs', () => {
+    expect(isModuleActive('reports', '/dashboard/reports')).toBe(true)
+    expect(isModuleActive('reports', '/dashboard/reports/financial')).toBe(true)
+    expect(isModuleActive('reports', '/dashboard/reports/adr')).toBe(false)
+    expect(isModuleActive('adr-reports', '/dashboard/reports/adr')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/adr-reports')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/adr-reports/abc123/detail')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/reports/financial')).toBe(false)
+    expect(isModuleActive('pos', '/dashboard/pos')).toBe(true)
+    expect(isModuleActive('pos', '/dashboard/reports/financial')).toBe(false)
   })
 })

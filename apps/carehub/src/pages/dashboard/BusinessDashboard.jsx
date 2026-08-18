@@ -11,7 +11,7 @@ import { getProducts, cacheData, getCached } from '../../services/supabase'
 // owned by the staff module.
 import { staffRepository } from '../../modules/staff/repositories'
 import { saleRepository } from '../../modules/pos/repositories'
-import { getNavItems, getPerms } from '../../lib/permissions'
+import { getNavItems, getPerms, getReportTabs } from '../../lib/permissions'
 import { businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
@@ -29,7 +29,7 @@ import Debts from '../../modules/debts/Debts'
 import Purchases from '../../modules/purchases/Purchases'
 import Demand from '../../modules/demand/Demand'
 import Staff from '../../modules/staff/Staff'
-import Reports from '../../modules/reports/Reports'
+import ReportsHub from '../../modules/reports/ReportsHub'
 import Settings from '../../modules/settings/Settings'
 import CareFind from '../../modules/carefind/CareFind'
 import Locations from '../../modules/locations/Locations'
@@ -48,16 +48,15 @@ import Lab from './hospital/Lab'
 import Imaging from './hospital/Imaging'
 import Consultation from '../../modules/consultation/Consultation'
 import Overview from '../../modules/overview/Overview'
-import AdrReportsList from '../../modules/adr/AdrReportsList'
 import AdrReportPage from '../../modules/adr/AdrReportPage'
 
 const PAGE_TITLES = {
   dashboard: 'Dashboard', pos: 'POS / Sales', inventory: 'Inventory', mastercatalog: 'Master Catalog',
   clients: 'Clients', appointments: 'Appointments', consultation: 'Consultations',
   expenses: 'Expenses', debts: 'Debts', purchases: 'Purchases', demand: 'Demand',
-  staff: 'Staff', reports: 'Reports', settings: 'Settings', carefind: 'CareFind Profile',
+  staff: 'Staff', reports: 'Financial Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
-  overview: 'Overview', 'adr-reports': 'ADR Reports',
+  overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -100,6 +99,12 @@ export default function BusinessDashboard() {
   // floating menu. bareGuard adds top clearance for just those routes so the
   // heading clears it (POS handles its own via its sticky header's padding).
   const bareGuard = (routeKey, element) => guard(routeKey, isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element)
+  // The Reports Hub is reachable when the role has ANY report tab, not just the
+  // legacy `reports` key — a Pharmacist who owns ADR must reach /dashboard/reports.
+  // Same mobile top clearance as bareGuard so the hub's own header clears the
+  // floating menu trigger.
+  const reportTabs = getReportTabs(role, bType, customRoles)
+  const reportHubGuard = (element) => (reportTabs.length > 0 ? (isMobile ? <div style={{ paddingTop: MOBILE_MENU_CLEAR }}>{element}</div> : element) : <Navigate to='dashboard' replace />)
   // Sidebar.jsx's own nav handler closes this after a route change on mobile.
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -194,8 +199,12 @@ export default function BusinessDashboard() {
             <Route path='purchases' element={guard('purchases', <><TopBar title='Purchases' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Purchases {...pageProps} /></div></>)} />
             <Route path='demand' element={guard('demand', <><TopBar title='Demand' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Demand {...pageProps} /></div></>)} />
             <Route path='staff' element={guard('staff', <><TopBar title='Staff' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Staff {...pageProps} /></div></>)} />
-            <Route path='reports' element={guard('reports', <><TopBar title='Reports' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reports {...pageProps} /></div></>)} />
-            <Route path='adr-reports' element={guard('adr-reports', <><TopBar title='ADR Reports' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><AdrReportsList {...pageProps} /></div></>)} />
+            <Route path='reports' element={reportHubGuard(<ReportsHub {...pageProps} role={role} customRoles={customRoles} />)} />
+            <Route path='reports/:tab' element={reportHubGuard(<ReportsHub {...pageProps} role={role} customRoles={customRoles} />)} />
+            {/* Back-compat: the legacy /dashboard/adr-reports list now lives at
+                the hub's ADR tab; typed/bookmarked URLs redirect there. Detail
+                pages keep their own URL below. */}
+            <Route path='adr-reports' element={guard('adr-reports', <Navigate to='/dashboard/reports/adr' replace />)} />
             <Route path='adr-reports/:reportId/detail' element={bareGuard('adr-reports', <AdrReportPageRoute />)} />
             <Route path='settings' element={guard('settings', <><TopBar title='Settings' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Settings {...pageProps} /></div></>)} />
             <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
