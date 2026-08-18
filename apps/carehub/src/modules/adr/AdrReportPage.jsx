@@ -40,7 +40,7 @@ export default function AdrReportPage({ reportId }) {
   async function loadReport() {
     setLoading(true)
     try {
-      const data = await sbFetch(`adr_reports?id=eq.${reportId}&select=*`)
+      const data = await sbFetch(`adr_reports?report_id=eq.${reportId}&select=*`)
       if (data && data.length) {
         const r = data[0]
         setReport(r)
@@ -177,7 +177,7 @@ export default function AdrReportPage({ reportId }) {
       }
 
       // Update status to submitted
-      await sbFetch(`adr_reports?id=eq.${reportId}`, {
+      await sbFetch(`adr_reports?report_id=eq.${reportId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: REPORT_STATUS.SUBMITTED }),
         prefer: 'return=minimal',
@@ -199,15 +199,55 @@ export default function AdrReportPage({ reportId }) {
     showToast('Draft saved')
   }
 
-  // Handle export PDF
+  // Handle export PDF — client-side printable view (there is no server-side
+  // export endpoint; the old call to `/export` always 400'd)
   async function handleExportPdf() {
+    if (!report) return
     try {
-      await sbFetch(`adr_reports?id=eq.${reportId}/export?format=pdf`, {
-        method: 'POST',
-        body: JSON.stringify({ format: 'pdf' }),
-        prefer: 'return=representation',
-      })
-      showToast('PDF export initiated!')
+      const win = window.open('', '_blank')
+      if (!win) {
+        showToast('Popup blocked — allow popups to export the PDF', { variant: 'destructive' })
+        return
+      }
+
+      const rows = [
+        ['Report Number', ADR_FORM.formatReportNumber(report.report_number)],
+        ['Module Type', ADR_FORM.getModuleTitle ? ADR_FORM.getModuleTitle(report.module_type) : report.module_type],
+        ['Status', ADR_FORM.getStatusLabel(report.status)],
+        ['Created', report.created_at ? new Date(report.created_at).toLocaleDateString('en-NG') : '—'],
+        ['Reporter Name', report.reporter_name || '—'],
+        ['Reporter Qualification', report.reporter_qualification || '—'],
+        ['Reporter Facility', report.reporter_facility_name || '—'],
+        ['Reporter Phone', report.reporter_phone || '—'],
+        ['Reporter Email', report.reporter_email || '—'],
+        ['Reporter License', report.reporter_license_number || '—'],
+        ['Patient Identifier', report.patient_identifier || '—'],
+        ['Patient Age', report.patient_age != null ? String(report.patient_age) : '—'],
+        ['Patient DOB', report.patient_dob || '—'],
+        ['Patient Age Group', report.patient_age_group || '—'],
+        ['Patient Gender', report.patient_gender || '—'],
+        ['Patient Weight (kg)', report.patient_weight_kg != null ? String(report.patient_weight_kg) : '—'],
+      ]
+
+      const table = rows
+        .map(([k, v]) => `<tr><td style="padding:6px 10px;border:1px solid #ccc;font-weight:700;white-space:nowrap">${k}</td><td style="padding:6px 10px;border:1px solid #ccc">${v}</td></tr>`)
+        .join('')
+
+      win.document.write(`<!doctype html>
+<html><head><title>ADR Report ${ADR_FORM.formatReportNumber(report.report_number)}</title>
+<style>
+  body { font-family: Arial, sans-serif; color: #111; margin: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 24px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+</style></head>
+<body>
+  <h1>ADR Report ${ADR_FORM.formatReportNumber(report.report_number)}</h1>
+  <div class="sub">Adverse Drug Reaction report</div>
+  <table>${table}</table>
+  <script>window.onload = function(){ window.print() }</script>
+</body></html>`)
+      win.document.close()
     } catch (e) {
       showToast('Error exporting PDF', { variant: 'destructive' })
     }
@@ -283,7 +323,7 @@ export default function AdrReportPage({ reportId }) {
     setShowDeleteConfirm(false)
     
     try {
-      await sbFetch(`adr_reports?id=eq.${report.report_id}`, {
+      await sbFetch(`adr_reports?report_id=eq.${report.report_id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: REPORT_STATUS.FOLLOW_UP_REQUIRED }),
         prefer: 'return=minimal',

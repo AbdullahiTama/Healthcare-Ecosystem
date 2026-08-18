@@ -40,11 +40,11 @@ export async function getAdrReports(businessId, filters = {}) {
 }
 
 export async function getAdrReport(reportId) {
-  return sbFetch(`adr_reports?id=eq.${reportId}&select=*`)
+  return sbFetch(`adr_reports?report_id=eq.${reportId}&select=*`)
 }
 
 export async function updateAdrReport(reportId, data) {
-  return sbFetch(`adr_reports?id=eq.${reportId}`, {
+  return sbFetch(`adr_reports?report_id=eq.${reportId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
     prefer: 'return=minimal',
@@ -52,18 +52,10 @@ export async function updateAdrReport(reportId, data) {
 }
 
 export async function submitAdrReport(reportId) {
-  return sbFetch(`adr_reports?id=eq.${reportId}`, {
+  return sbFetch(`adr_reports?report_id=eq.${reportId}`, {
     method: 'PATCH',
     body: JSON.stringify({ status: REPORT_STATUS.SUBMITTED }),
     prefer: 'return=minimal',
-  })
-}
-
-export async function exportAdrReport(reportId, format = 'pdf') {
-  return sbFetch(`adr_reports?id=eq.${reportId}/export?format=${format}`, {
-    method: 'POST',
-    body: JSON.stringify({ format }),
-    prefer: 'return=representation',
   })
 }
 
@@ -81,7 +73,7 @@ export async function getAdrProducts(reportId) {
 }
 
 export async function updateAdrProduct(productId, data) {
-  return sbFetch(`adr_report_products?id=eq.${productId}`, {
+  return sbFetch(`adr_report_products?product_id=eq.${productId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
     prefer: 'return=minimal',
@@ -89,7 +81,7 @@ export async function updateAdrProduct(productId, data) {
 }
 
 export async function deleteAdrProduct(productId) {
-  return sbFetch(`adr_report_products?id=eq.${productId}`, {
+  return sbFetch(`adr_report_products?product_id=eq.${productId}`, {
     method: 'DELETE',
     prefer: 'return=minimal',
   })
@@ -122,7 +114,7 @@ export async function getAdrReactions(reportId) {
 }
 
 export async function updateAdrReaction(reactionId, data) {
-  return sbFetch(`adr_report_reactions?id=eq.${reactionId}`, {
+  return sbFetch(`adr_report_reactions?reaction_id=eq.${reactionId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
     prefer: 'return=minimal',
