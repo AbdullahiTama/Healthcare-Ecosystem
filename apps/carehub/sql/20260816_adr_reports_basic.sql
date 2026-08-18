@@ -1,7 +1,19 @@
 -- ============================================================================
 -- ADR Reporting Module - Core Schema
 --
--- Status: PENDING APPLY - run via Supabase SQL editor / psql.
+-- Status: APPLIED 2026-08-18 via MCP (migration `adr_reports_basic`) and
+--         verified behaviorally. Tables, RLS, triggers and the adr-evidence
+--         storage bucket are live.
+--   - report_number column added (trigger references it)
+--   - reporter_* and patient_* fields live on adr_reports (frontend reads
+--     them from the report row, not from reactions)
+--   - created_by_user_id made nullable (Owners have no staff row, so it is
+--     null on insert) - "NOT NULL ... ON DELETE SET NULL" was contradictory
+--   - report_number year-prefix comparison fixed (ADR-YYYY is 8 chars)
+--   - idempotent triggers (DROP ... IF EXISTS before CREATE)
+--   - industry/skincare optional columns the form engine references
+--   - both trigger functions pinned with `set search_path = public` (keeps
+--     the security advisors at baseline; mutable search_path is a WARN)
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -12,41 +24,76 @@ CREATE TABLE IF NOT EXISTS adr_reports (
   business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
   module_type text NOT NULL CHECK (module_type IN ('community_pharmacy','hospital','industry','skincare')),
   status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted','exported','follow_up_required')),
+  report_number text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  created_by_user_id uuid NOT NULL REFERENCES staff(id) ON DELETE SET NULL,
-  follow_up_of_report_id uuid REFERENCES adr_reports(report_id) ON DELETE SET NULL
+  created_by_user_id uuid REFERENCES staff(id) ON DELETE SET NULL,
+  follow_up_of_report_id uuid REFERENCES adr_reports(report_id) ON DELETE SET NULL,
+  follow_up_version_number integer,
+
+  -- Reporter section (read/written from the report row)
+  reporter_name text,
+  reporter_qualification text,
+  reporter_facility_name text,
+  reporter_phone text,
+  reporter_email text,
+  reporter_license_number text,
+  reporter_consent_followup boolean,
+  reporter_anonymous_confirmed_by_facility boolean NOT NULL DEFAULT false,
+
+  -- Patient section
+  patient_identifier text,
+  patient_age integer,
+  patient_dob date,
+  patient_age_group text,
+  patient_gender text,
+  patient_weight_kg numeric(6,2),
+
+  -- Deadline inputs
+  reaction_expected boolean,
+  new_safety_signal boolean NOT NULL DEFAULT false,
+
+  -- Industry-specific (formEngine.industryConfig)
+  batch_lot_number text,
+  causality_assessment text,
+  case_narrative_summary text,
+  naranjo_score integer,
+  distribution_batch_trace_notes text,
+
+  -- Skincare-specific (formEngine.skincareConfig)
+  application_site text,
+  cosmetic_reaction_type text
 );
 
 -- Human-readable report number generated trigger
 CREATE OR REPLACE FUNCTION public.generate_adr_report_number()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
+declare
+  v_max numeric;
 begin
   if new.report_number is null then
-    declare
-      v_max numeric;
-    begin
-      select coalesce(max(
-        case when left(report_number, 7) = 'ADR-' || to_char(current_date, 'YYYY') then
-          cast(substring(report_number from 9) as numeric)
-        else 0 end
-      ), 0) into v_max
-      from adr_reports
-      where business_id = new.business_id
-        and module_type = new.module_type;
+    select coalesce(max(
+      case when left(report_number, 8) = 'ADR-' || to_char(current_date, 'YYYY') then
+        cast(substring(report_number from 9) as numeric)
+      else 0 end
+    ), 0) into v_max
+    from adr_reports
+    where business_id = new.business_id
+      and module_type = new.module_type;
 
-      if v_max is null then
-        v_max := 0;
-      end if;
+    if v_max is null then
+      v_max := 0;
+    end if;
 
-      new.report_number := 'ADR-' || to_char(current_date, 'YYYY') || '-' || lpad((v_max + 1)::text, 6, '0');
-    end;
+    new.report_number := 'ADR-' || to_char(current_date, 'YYYY') || '-' || lpad((v_max + 1)::text, 6, '0');
   end if;
   return new;
 end $$;
 
+DROP TRIGGER IF EXISTS trg_adr_report_number ON adr_reports;
 CREATE TRIGGER trg_adr_report_number
 BEFORE INSERT ON adr_reports
 FOR EACH ROW
@@ -120,8 +167,6 @@ CREATE TABLE IF NOT EXISTS adr_report_reactions (
   causality_assessment text CHECK (causality_assessment IN ('certain','probable_likely','possible','unlikely','conditional_unclassified','unassessable')),
   dechallenge_result text CHECK (dechallenge_result IN ('positive','negative','not_applicable')),
   rechallenge_result text CHECK (rechallenge_result IN ('positive','negative','not_done')),
-  reporter_consent_followup boolean NOT NULL,
-  reporter_anonymous_confirmed_by_facility boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -144,6 +189,8 @@ CREATE INDEX IF NOT EXISTS idx_adr_photos_report ON adr_report_evidence_photos(r
 -- ----------------------------------------------------------------------------
 -- 6. RLS: Business isolation for all ADR tables
 --    Users from Business A must not access Business B's ADR records.
+--    Relies on current_business_ids() / is_platform_admin() from
+--    sql/phase2_rls_pilot.sql - apply that first if not already applied.
 -- ----------------------------------------------------------------------------
 ALTER TABLE adr_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE adr_report_products ENABLE ROW LEVEL SECURITY;
@@ -195,12 +242,14 @@ END $$;
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
   return new;
 end $$;
 
+DROP TRIGGER IF EXISTS trg_adr_reports_updated_at ON adr_reports;
 CREATE TRIGGER trg_adr_reports_updated_at
 BEFORE UPDATE ON adr_reports
 FOR EACH ROW
@@ -211,3 +260,27 @@ COMMENT ON TABLE adr_report_products IS 'Suspect products in ADR reports';
 COMMENT ON TABLE adr_report_concomitant_meds IS 'Concomitant medications in ADR reports';
 COMMENT ON TABLE adr_report_reactions IS 'Adverse reactions in ADR reports';
 COMMENT ON TABLE adr_report_evidence_photos IS 'Evidence photos in ADR reports';
+
+-- ----------------------------------------------------------------------------
+-- 8. adr-evidence storage bucket — the evidence-photo upload destination
+--    (AdrReportPage.jsx uploads to `adr-evidence` and stores the public URL in
+--    adr_report_evidence_photos.evidence_photo_file). Public read so the stored
+--    URL renders; INSERT restricted to authenticated so only logged-in staff/
+--    owners can upload. APPLIED live 2026-08-18.
+-- ----------------------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('adr-evidence', 'adr-evidence', true, 5242880, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='adr-evidence public read') then
+    create policy "adr-evidence public read" on storage.objects
+      for select to public using (bucket_id = 'adr-evidence');
+  end if;
+
+  if not exists (select 1 from pg_policies where schemaname='storage' and tablename='objects' and policyname='adr-evidence authenticated insert') then
+    create policy "adr-evidence authenticated insert" on storage.objects
+      for insert to authenticated with check (bucket_id = 'adr-evidence');
+  end if;
+end $$;

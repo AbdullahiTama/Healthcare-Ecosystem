@@ -70,7 +70,7 @@ This document tracks architecture issues discovered during review.
 
 ## Documentation
 
-- [ ]
+- [x] **ADR Reporting Module — schema APPLIED and verified 2026-08-18.** `apps/carehub/sql/20260816_adr_reports_basic.sql` (tables `adr_reports`, `adr_report_products`, `adr_report_concomitant_meds`, `adr_report_reactions`, `adr_report_evidence_photos` + RLS + the `generate_adr_report_number`/`update_updated_at_column` triggers) applied via MCP as `adr_reports_basic`, plus the `adr-evidence` storage bucket (public read, authenticated-only insert — the evidence-photo destination from `AdrReportPage.jsx`). Verified behaviorally: `report_number` auto-generates `ADR-YYYY-000001` per business/module; `updated_at` bumps on update; anon SELECT returns `[]` (business-isolation policy filters); anon INSERT → 42501; an ordinary owner can insert/read their own business's reports but a cross-tenant INSERT is rejected and cross-tenant rows are invisible; children follow the parent report's RLS; all probes rolled back with zero residue. Both trigger functions pinned `set search_path = public`; security advisors unchanged (the two mutable-search_path WARNs this DDL would have added were closed by the pin).
 
 ---
 
