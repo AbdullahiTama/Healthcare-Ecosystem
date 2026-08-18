@@ -104,7 +104,7 @@ export default function Stock({ brand }) {
   // Check for products approaching expiry and notify staff recursively
   useEffect(() => {
     if (!brand?.id) return
-    let timeoutId: NodeJS.Timeout | null = null
+    let timeoutId = null
     async function check() {
       await checkAndNotifyExpiry(brand.id)
       // Re-check once per day (24 hours) until the component unmounts
