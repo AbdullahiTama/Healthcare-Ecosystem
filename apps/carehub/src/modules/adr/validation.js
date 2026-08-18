@@ -13,6 +13,7 @@ import {
   PATIENT_GENDER,
   PATIENT_AGE_GROUP
 } from './types'
+import { calculateDeadline, getDeadlineStatus, getModuleTypeFromBusinessType } from './services'
 
 /**
  * Core validation service for ADR report submission.
@@ -179,7 +180,7 @@ export const adrValidation = {
     }
 
     // Nigerian phone validation if provided
-    if (report.reporter_phone && !NIGERIAN_PHONE_REGEX.test(reporter.reporter_phone)) {
+    if (report.reporter_phone && !/^(?:\+?234|0)?[1-9][0-9]{8}$/.test(report.reporter_phone)) {
       issues.push('Invalid Nigerian phone number format')
     }
 
