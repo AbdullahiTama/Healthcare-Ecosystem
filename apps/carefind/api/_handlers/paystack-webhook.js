@@ -4,7 +4,7 @@ import { getPaystackSecretKey } from '../_lib/paystack.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 
-// Single Paystack webhook for all apps ΓÇö register this URL in the Paystack
+// Single Paystack webhook for all apps — register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
 // and CareHub plan payments all route through here.
 const supabase = createClient(
@@ -23,7 +23,7 @@ function readRawBody(req) {
   })
 }
 
-// ΓöÇΓöÇ Top-up handler (CareFind wallet credit) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Top-up handler (CareFind wallet credit)
 async function handleTopup(metadata, reference, amount) {
   if (!metadata?.user_id || !metadata?.coins) return null
   return creditTopup(supabase, {
@@ -34,46 +34,44 @@ async function handleTopup(metadata, reference, amount) {
   })
 }
 
-// ΓöÇΓöÇ Subscription handler (CareFind Paystack card payment) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Subscription handler (CareFind Paystack card payment)
 async function handleSubscription(metadata, reference, amount) {
   if (metadata?.purpose !== 'subscription') return null
 
-  const { data: existing } = await supabase
-    .from('transactions').select('id')
-    .eq('reference', reference).eq('type', 'subscription_payment')
-    .maybeSingle()
-  if (existing) return { alreadyProcessed: true }
-
-  const { data, error } = await supabase.rpc('pay_creator_subscription', {
+  const { data, error } = await supabase.rpc('settle_subscription_payment', {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
+    p_naira_amount: amount,
+    p_reference: reference,
   })
-  if (error || data !== 'ok') return null
-
-  await supabase.from('transactions').insert({
-    user_id: metadata.user_id,
-    type: 'subscription_payment',
-    amount: parseInt(metadata.coins),
-    naira_amount: amount,
-    reference,
-    status: 'success',
-  }).select().maybeSingle()
-
+  if (error) return null
+  const row = Array.isArray(data) ? data[0] : data
+  if (row?.already_processed) return { alreadyProcessed: true }
   return { credited: true }
 }
 
-// ΓöÇΓöÇ Transfer handler (automated withdrawal payouts) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Transfer handler (automated withdrawal payouts)
 async function handleTransferSuccess(reference) {
+  // CareFind user withdrawals
   await supabase
     .from('withdrawal_requests')
     .update({ status: 'completed' })
     .eq('paystack_reference', reference)
     .eq('status', 'pending')
+
+  // CareHub business withdrawals
+  await supabase
+    .from('business_withdrawal_requests')
+    .update({ status: 'completed' })
+    .eq('paystack_reference', reference)
+    .in('status', ['pending', 'processing'])
+
   return { received: true }
 }
 
 async function handleTransferFailed(reference) {
+  // CareFind user withdrawals
   const { data: requests } = await supabase
     .from('withdrawal_requests')
     .select('id')
@@ -84,10 +82,23 @@ async function handleTransferFailed(reference) {
   if (requests && requests.length > 0) {
     await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
   }
+
+  // CareHub business withdrawals
+  const { data: bizRequests } = await supabase
+    .from('business_withdrawal_requests')
+    .select('id')
+    .eq('paystack_reference', reference)
+    .in('status', ['pending', 'processing'])
+    .limit(1)
+
+  if (bizRequests && bizRequests.length > 0) {
+    await supabase.rpc('reject_business_withdrawal', { p_request_id: bizRequests[0].id })
+  }
+
   return { received: true }
 }
 
-// ΓöÇΓöÇ Consultation handler (CareFind professional consultation booking) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Consultation handler (CareFind professional consultation booking)
 // Races verify-consultation-payment.js on the same reference; the RPC claims
 // the reference atomically so only one caller can ever settle the booking.
 async function handleConsultation(metadata, reference, amount) {
@@ -101,8 +112,7 @@ async function handleConsultation(metadata, reference, amount) {
   }).then((result) => ({ settled: true, ...result }))
 }
 
-// ΓöÇΓöÇ CareHub plan renewal handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-// ── Booking handler (CareFind business-profile appointment, card paid) ──
+// Booking handler (CareFind business-profile appointment, card paid)
 // Races verify-booking-payment.js on the same appointment; settle_card_booking
 // is SECURITY DEFINER and idempotent (returns 'already_paid' for a repeat), so
 // whichever caller arrives first settles, and the other is a safe no-op. This
@@ -143,32 +153,23 @@ async function handleBooking(metadata, reference, amount) {
   return { settled: true }
 }
 
+// CareHub plan renewal handler
 async function handlePlanPayment(metadata, reference, amount) {
   if (!metadata?.business_id || !metadata?.months) return null
 
-  const { data: existing } = await supabase
-    .from('plan_payments').select('id')
-    .eq('reference', reference)
-    .maybeSingle()
-  if (existing) return { alreadyProcessed: true }
-
-  const { data: business } = await supabase
-    .from('businesses').select('id, plan_expires_at')
-    .eq('id', metadata.business_id)
-    .maybeSingle()
-  if (!business) return null
-
   const months = parseInt(metadata.months)
-  const base = business.plan_expires_at && new Date(business.plan_expires_at) > new Date()
-    ? new Date(business.plan_expires_at) : new Date()
-  const newExpiry = new Date(base)
-  newExpiry.setMonth(newExpiry.getMonth() + months)
 
-  await supabase.from('businesses').update({ plan_expires_at: newExpiry.toISOString() }).eq('id', business.id)
-  await supabase.from('plan_payments').insert({
-    business_id: business.id, months, naira_amount: amount, reference, status: 'success',
+  const { data, error } = await supabase.rpc('renew_business_plan', {
+    p_business_id: metadata.business_id,
+    p_months: months,
+    p_naira_amount: amount,
+    p_reference: reference,
   })
-  return { credited: true, new_expiry: newExpiry.toISOString() }
+  if (error) return null
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  if (row.already_processed) return { alreadyProcessed: true }
+  return { credited: true, new_expiry: row.new_expiry }
 }
 
 export default async function handler(req, res) {

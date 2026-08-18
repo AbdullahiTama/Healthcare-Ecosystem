@@ -40,61 +40,52 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'This transaction does not belong to your business' })
   }
 
-  const { data: existing } = await supabase
-    .from('plan_payments')
-    .select('id')
-    .eq('reference', reference)
-    .maybeSingle()
-  if (existing) return res.status(200).json({ alreadyProcessed: true })
-
-  // First-payment detection feeds the referral-agent commission: the FIRST
-  // successful payment for a business earns the 40% referral bonus, every
-  // later one earns 5% residual. Computed once here, before the new row is
-  // written (commission job reads the same value — it never reconstructs it).
-  const { count: priorPayments } = await supabase
-    .from('plan_payments')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', business.id)
-  const isFirstPayment = (priorPayments || 0) === 0
-
   const months = parseInt(metadata.months)
-  // Extend from whichever is later: the current expiry (if still active, so
-  // an early renewal doesn't lose the time already paid for) or right now
-  // (if the plan had already lapsed).
-  const base = business.plan_expires_at && new Date(business.plan_expires_at) > new Date()
-    ? new Date(business.plan_expires_at)
-    : new Date()
-  const newExpiry = new Date(base)
-  newExpiry.setMonth(newExpiry.getMonth() + months)
+  const { data, error } = await supabase.rpc('renew_business_plan', {
+    p_business_id: business.id,
+    p_months: months,
+    p_naira_amount: amount,
+    p_reference: reference,
+  })
+  if (error) return res.status(500).json({ error: error.message })
 
-  await supabase.from('businesses').update({ plan_expires_at: newExpiry.toISOString() }).eq('id', business.id)
-  const { data: payment } = await supabase.from('plan_payments').insert({
-    business_id: business.id,
-    months,
-    naira_amount: amount,
-    reference,
-    status: 'success',
-    is_first_payment: isFirstPayment,
-  }).select('id').single()
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return res.status(500).json({ error: 'Could not renew plan' })
+  if (row.already_processed) {
+    // Commission may have been skipped if the webhook settled first; attempt it
+    // now (idempotent via UNIQUE payment_id).
+    const { data: paymentRow } = await supabase
+      .from('plan_payments')
+      .select('id, is_first_payment')
+      .eq('reference', reference)
+      .maybeSingle()
+    if (paymentRow?.id) {
+      try {
+        await computeCommission(supabase, {
+          paymentId: paymentRow.id,
+          businessId: business.id,
+          nairaCharged: amount / 100,
+          isFirstPayment: paymentRow.is_first_payment,
+        })
+      } catch (err) {
+        console.error('Commission computation failed:', err)
+      }
+    }
+    return res.status(200).json({ alreadyProcessed: true })
+  }
 
-  // Referral-agent commission (money path): best effort, runs only after the
-  // charge and the plan_payments row are both confirmed. A commission write
-  // failure must NEVER roll back a customer's confirmed renewal — it leaves a
-  // review journal entry (commission_review_flags) an admin can reconcile.
-  // NOTE: Paystack's `amount` is in kobo; nairaCharged below is the real Naira
-  // a commission is calculated on, regardless of how plan_payments stores it.
-  if (payment?.id) {
+  if (row.payment_id) {
     try {
       await computeCommission(supabase, {
-        paymentId: payment.id,
+        paymentId: row.payment_id,
         businessId: business.id,
         nairaCharged: amount / 100,
-        isFirstPayment,
+        isFirstPayment: row.is_first_payment,
       })
     } catch (err) {
       console.error('Commission computation failed:', err)
     }
   }
 
-  return res.status(200).json({ credited: true, newExpiry: newExpiry.toISOString() })
+  return res.status(200).json({ credited: true, newExpiry: row.new_expiry })
 }

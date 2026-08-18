@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     const data = await paystackFetch('/transaction/initialize', {
       method: 'POST',
       body: JSON.stringify({
-        email: appt.phone ? `booking+${appt.id}@carehub.ng` : `booking+${appt.id}@carehub.ng`,
+        email: `booking+${appt.id}@carehub.ng`,
         amount: appt.fee_amount,
         reference,
         currency: 'NGN',
