@@ -521,7 +521,7 @@ function AuditTrailSection({ events, loading }) {
       {loading ? (
         <Loading text="Loading history…" />
       ) : events.length === 0 ? (
-        <Empty icon={AlertTriangle} message="No events recorded yet." />
+        <Empty icon={<AlertTriangle size={20} />} message="No events recorded yet." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {events.map((ev) => {
