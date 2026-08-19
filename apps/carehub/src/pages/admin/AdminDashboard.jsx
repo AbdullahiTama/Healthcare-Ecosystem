@@ -95,7 +95,7 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? theme.tealDeep : theme.gray100, color: tab === t ? 'white' : theme.gray600, textTransform: 'capitalize' }}>{t}</button>)}
+          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage', 'product-catalog', 'inventory', 'pricing', 'reporting', 'roles', 'subscriptions', 'promotions', 'clients', 'health'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? theme.tealDeep : theme.gray100, color: tab === t ? 'white' : theme.gray600, textTransform: 'capitalize' }}>{t}</button>)}
         </div>
 
         {loading ? <Loading /> : tab === 'businesses' ? (
@@ -121,6 +121,15 @@ export default function AdminDashboard() {
         : tab === 'ledger' ? <LedgerPanel />
         : tab === 'payouts' ? <PayoutsPanel />
         : tab === 'coverage' ? <CoveragePanel />
+        : tab === 'product-catalog' ? <ProductCatalogAdmin />
+        : tab === 'inventory' ? <InventoryAdmin />
+        : tab === 'pricing' ? <PricingAdmin />
+        : tab === 'reporting' ? <ReportingAdmin />
+        : tab === 'roles' ? <RolesAdmin />
+        : tab === 'subscriptions' ? <SubscriptionsAdmin />
+        : tab === 'promotions' ? <PromotionsAdmin />
+        : tab === 'clients' ? <ClientsAdmin />
+        : tab === 'health' ? <HealthAdmin />
         : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
