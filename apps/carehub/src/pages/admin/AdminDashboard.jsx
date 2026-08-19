@@ -9,6 +9,14 @@ import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo } from '../../components/ui'
 import { ApplicationsPanel, AgentsPanel, LedgerPanel, PayoutsPanel, CoveragePanel } from './referral/AdminReferralPanels'
 import ProductCatalogAdmin from './ProductCatalogAdmin'
+import InventoryAdmin from './InventoryAdmin'
+import PricingAdmin from './PricingAdmin'
+import ReportingAdmin from './ReportingAdmin'
+import RolesAdmin from './RolesAdmin'
+import SubscriptionsAdmin from './SubscriptionsAdmin'
+import PromotionsAdmin from './PromotionsAdmin'
+import ClientsAdmin from './ClientsAdmin'
+import HealthAdmin from './HealthAdmin'
 
 export default function AdminDashboard() {
   const [businesses, setBusinesses] = useState([])
