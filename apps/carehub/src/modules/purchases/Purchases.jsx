@@ -11,7 +11,8 @@ import { stockRepository } from '../stock/repositories'
 // inventory replenishment, and the debt raised by any shortfall. Each is owned
 // by its own module's repository rather than re-derived here.
 import { debtRepository } from '../debts/repositories'
-import { fmt, todayDate } from '../../lib/utils'
+import { fmt, fmtDate, todayDate } from '../../lib/utils'
+import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -78,6 +79,7 @@ export default function Purchases({ brand, role, perms }) {
       const balance = Math.max(0, total - paid)
       const totalQty = validItems.reduce((s, i) => s + Number(i.qty), 0)
       const productNames = validItems.map(i => i.name.trim())
+      const { expiry, batch } = purchaseExpirySummary(validItems)
       const purchase = await purchaseRepository.create(brand.id, {
         supplier_name: form.supplier,
         product_name: productNames.join(', '),
@@ -90,6 +92,8 @@ export default function Purchases({ brand, role, perms }) {
         due_date: form.dueDate || '',
         status: paid >= total ? 'paid' : 'pending',
         notes: form.notes || '',
+        expiry: expiry,
+        batch: batch,
       })
       const purchaseId = (purchase[0] || {}).id || ''
 
@@ -281,7 +285,7 @@ export default function Purchases({ brand, role, perms }) {
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '900', color: (p.balance || 0) > 0 ? danger : success }}>{fmt(p.balance || 0)}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.supply_date || '—'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}>{p.due_date || '—'}</td>
-                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.expiry_date || '—'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{fmtDate(p.expiry)}</td>
                     <td style={{ padding: '12px 12px' }}><Pill label={p.status} type={p.status === 'paid' ? 'green' : 'amber'} /></td>
                     <td style={{ padding: '12px 12px' }}>
                       {p.status !== 'paid' && <button onClick={() => markPaid(p)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>}
