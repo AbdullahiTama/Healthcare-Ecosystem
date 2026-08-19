@@ -8,6 +8,7 @@ import { businessLucideIcon, businessName, DARK } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo } from '../../components/ui'
 import { ApplicationsPanel, AgentsPanel, LedgerPanel, PayoutsPanel, CoveragePanel } from './referral/AdminReferralPanels'
+import ProductCatalogAdmin from './ProductCatalogAdmin'
 
 export default function AdminDashboard() {
   const [businesses, setBusinesses] = useState([])
