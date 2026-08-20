@@ -167,4 +167,6 @@ export const careHubMessages = {
   [NOTIFICATION_TYPES.BOOKING_CREATED]: 'New appointment booking',
   [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
   [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Appointment confirmed',
+  [NOTIFICATION_TYPES.PRODUCT_EXPIRING_SOON]: ' product is approaching its expiry date',
+  [NOTIFICATION_TYPES.CONTACT_LEAD]: '[User] found [Drug] on your CareFind profile and contacted you via WhatsApp/Call — please follow up.',
 }

@@ -10,6 +10,8 @@ import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidF
 import { findDuplicate, findAllDuplicateGroups } from '../../lib/productMatches'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { notify } from '../../services/supabase'
+import { NOTIFICATION_TYPES, DEFAULT_MESSAGES } from '@care-ecosystem/shared-notifications'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
@@ -57,6 +59,14 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
   const costValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.cost_price || 0) * (p.stock || 0), 0)
   const onCareFind = products.filter(p => p.list_on_carefind !== false && p.stock > 0).length
+  const today = new Date()
+  const thirtyDays = today
+  thirtyDays.setDate(thirtyDays.getDate() + 30)
+  const expiringSoon = products.filter(p => {
+    if (!p.expiry_date) return false
+    const expDate = new Date(p.expiry_date)
+    return expDate >= today && expDate <= thirtyDays
+  })
 
   async function reload() {
     try {
@@ -207,10 +217,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   function downloadTemplate() {
     const rows = [
-      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)'],
-      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes'],
-      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes'],
-      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes'],
+      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'Expiry Date', 'List on CareFind (yes/no)'],
+      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', '', 'yes'],
+      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', '', 'yes'],
+      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', '', 'yes'],
     ]
     const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -374,6 +384,13 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         <div style={{ marginBottom: '16px', padding: '14px 18px', borderRadius: theme.radius.lg, background: warningBg, border: `1px solid ${warning}`, display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
           <AlertTriangle size={20} color={warning} style={{ flexShrink: 0 }} />
           <div><div style={{ fontWeight: '700', color: warning, fontSize: '14px' }}>{lowStock.length} item(s) running low</div><div style={{ fontSize: '12px', color: gray500, marginTop: '4px' }}>{lowStock.map(p => p.name).join(' · ')}</div></div>
+        </div>
+      )}
+
+      {expiringSoon.length > 0 && (
+        <div style={{ marginBottom: '16px', padding: '14px 18px', borderRadius: theme.radius.lg, background: infoBg, border: `1px solid ${info}`, display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <Info size={20} color={info} style={{ flexShrink: 0 }} />
+          <div><div style={{ fontWeight: '700', color: info, fontSize: '14x' }}>{expiringSoon.length} product(s) expiring soon</div><div style={{ fontSize: '12px', color: gray500, marginTop: '4px' }}>{expiringSoon.map(p => `${p.name} (expires ${new Date(p.expiry_date).toLocaleDateString('en-NG')})`).join(' · ')}</div></div>
         </div>
       )}
 
@@ -644,7 +661,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               </div>
               <ArrowRight size={18} color={gray300} />
               <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', background: '#FDFBF7' }}>
-                <div style={{ fontSize: '10px', fontWeight: '700', color: '#0E6F5A', marginBottom: '6px' }}>YOU'RE ADDING</div>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: '#1E5A43', marginBottom: '6px' }}>YOU'RE ADDING</div>
                 <div style={{ fontWeight: '700', fontSize: '14px' }}>{duplicateWarning.incoming.name}</div>
                 {duplicateWarning.incoming.generic_name && (
                   <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
@@ -797,7 +814,7 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
         <Inp label='Units to Add *' value={qty} onChange={setQty} type='number' placeholder='e.g. 100' required />
         {qty && parseInt(qty) > 0 && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>New total: {product.stock + parseInt(qty)} units</div>}
         <Inp label='Note (optional)' value={note} onChange={setNote} placeholder='Supplier name, invoice number...' />
-        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: '#FDFBF7', fontSize: '12px', color: '#0E6F5A' }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
+        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: '#FDFBF7', fontSize: '12px', color: '#1E5A43' }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
       </div>
     </Modal>
   )

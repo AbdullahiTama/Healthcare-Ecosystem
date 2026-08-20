@@ -27,6 +27,8 @@ export const NOTIFICATION_TYPES = {
   BOOKING_PAID: 'booking_paid',
   BOOKING_CONFIRMED: 'booking_confirmed',
   PRODUCT_EXPIRING_SOON: 'product_expiring_soon',
+  CONTACT_LEAD: 'contact_lead',
+  SALES_TREND_DIGEST: 'sales_trend_digest',
 }
 
 // Default human-readable messages per type
@@ -55,6 +57,8 @@ export const DEFAULT_MESSAGES = {
   [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
   [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Your appointment was confirmed',
   [NOTIFICATION_TYPES.PRODUCT_EXPIRING_SOON]: ' product is approaching its expiry date',
+  [NOTIFICATION_TYPES.CONTACT_LEAD]: '[User] found [Drug] on your CareFind profile and contacted you via WhatsApp/Call — please follow up.',
+  [NOTIFICATION_TYPES.SALES_TREND_DIGEST]: 'Periodic summary of fast-, medium-, and slow-moving products based on sales velocity.',
 }
 
 /**

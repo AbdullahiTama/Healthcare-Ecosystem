@@ -64,6 +64,7 @@ export default function AdrReportPage({ reportId }) {
   const [archiving, setArchiving] = useState(false)
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [missing, setMissing] = useState([])
+  const [focusMissing, setFocusMissing] = useState(null)
 
   const [reactionExpected, setReactionExpected] = useState(null)
   const [newSafetySignal, setNewSafetySignal] = useState(false)
@@ -196,6 +197,7 @@ export default function AdrReportPage({ reportId }) {
       const client = await adrValidation.validateForSubmit(hydrated)
       if (!client.valid) {
         setMissing(client.missing)
+        setFocusMissing('submission')
         showToast('Cannot submit — complete the highlighted fields', { type: 'warning' })
         setSubmitting(false)
         return
@@ -411,8 +413,24 @@ export default function AdrReportPage({ reportId }) {
         <div role="alert" style={{ marginBottom: 20, padding: '14px 16px', borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}` }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet — missing:</div>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: theme.gray600, lineHeight: 1.7 }}>
-            {missing.map((m, i) => <li key={i}>{m}</li>)}
+            {missing.map((m, i) => {
+              const onClick = () => setFocusMissing(m)
+              return (
+                <li key={i} style={{ cursor: 'pointer' }} onClick={onClick}>
+                  {m}
+                </li>
+              )
+            })}
           </ul>
+        </div>
+      )}
+
+      {focusMissing && (
+        <div role="alert" style={{ marginBottom: 20, padding: '14px 16px', borderRadius: theme.radius.md, background: theme.infoBg, border: `1px solid ${theme.info}` }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Focus field: {focusMissing}</div>
+          <p style={{ fontSize: 12.5, color: theme.gray600, margin: 0 }}>
+            Click a field name above to jump to it, or scroll the form to find the required field.
+          </p>
         </div>
       )}
 

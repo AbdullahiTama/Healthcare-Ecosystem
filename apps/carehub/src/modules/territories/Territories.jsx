@@ -6,8 +6,8 @@ import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
+import { Download } from 'lucide-react'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
 const LEVEL_SUGGESTIONS = ['Region', 'State', 'City', 'LGA', 'Zone']
 
 export default function Territories({ brand }) {
@@ -21,6 +21,9 @@ export default function Territories({ brand }) {
   const [form, setForm] = useState({})
   const [assigningTerritory, setAssigningTerritory] = useState(null)
   const [territoryToDelete, setTerritoryToDelete] = useState(null)
+  const [showBulkUpload, setShowBulkUpload] = useState(false)
+  const [bulkUploadData, setBulkUploadData] = useState([])
+  const [bulkUploadError, setBulkUploadError] = useState('')
 
   useEffect(() => { load() }, [brand?.id])
 
@@ -43,6 +46,12 @@ export default function Territories({ brand }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const openNew = () => { setForm({}); setEditingId(null); setShowForm(true) }
+
+  const openBulkUpload = () => {
+    setBulkUploadError('')
+    setBulkUploadData([])
+    setShowBulkUpload(true)
+  }
 
   const openEdit = (t) => {
     setForm({ name: t.name, level: t.level || '', parent_territory_id: t.parent_territory_id || '' })
@@ -109,7 +118,8 @@ export default function Territories({ brand }) {
       <PageHeader
         title="Territories"
         description="Regions, states, or coverage areas — named however your company works. Assign reps to each."
-        primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }}
+        primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }},
+        secondaryAction={{ label: 'Bulk upload', leftIcon: <Download size={14} />, onClick: openBulkUpload }}
       />
       <div style={{ padding: '24px', maxWidth: '760px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
