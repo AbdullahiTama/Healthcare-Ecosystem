@@ -4,6 +4,7 @@ import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import Reports from './Reports'
 import AdrReportsList from '../adr/AdrReportsList'
+import ExpiryAlerts from './ExpiryAlerts'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border } = theme
 
@@ -29,6 +30,7 @@ export default function ReportsHub({ brand, role, customRoles = {}, ...pageProps
   const subtitles = {
     reports: 'Sales, expenses, purchases and VAT across your business',
     'adr-reports': 'Adverse drug reaction reporting with a 24-hour NAFDAC/PCN submission window',
+    expiry: 'Batches expiring soon, per warehouse, with expected loss value',
   }
 
   return (
@@ -74,6 +76,7 @@ export default function ReportsHub({ brand, role, customRoles = {}, ...pageProps
       <div style={{ padding: isMobile ? '16px' : '24px' }}>
         {activeTab === 'reports' && <Reports {...pageProps} brand={brand} role={role} embedded />}
         {activeTab === 'adr-reports' && <AdrReportsList {...pageProps} brand={brand} embedded />}
+        {activeTab === 'expiry' && <ExpiryAlerts {...pageProps} brand={brand} />}
       </div>
     </div>
   )

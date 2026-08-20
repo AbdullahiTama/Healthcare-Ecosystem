@@ -218,9 +218,9 @@ describe('module registry (business type → modules)', () => {
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
-    expect(ALL_NAV_DEFAULT.length).toBe(18)
-    expect(ALL_NAV_HOSPITAL.length).toBe(22)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(14)
+    expect(ALL_NAV_DEFAULT.length).toBe(19)
+    expect(ALL_NAV_HOSPITAL.length).toBe(23)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(15)
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
@@ -284,21 +284,32 @@ describe('getNavGroups (workflow sections)', () => {
 
 describe('reports hub (EXPERIENCE.md §2 tab taxonomy)', () => {
   it('maps each canonical tab to a deep-linkable slug and back', () => {
-    expect(REPORT_TABS).toEqual(['reports', 'adr-reports'])
-    expect(REPORT_TAB_SLUGS).toEqual({ reports: 'financial', 'adr-reports': 'adr' })
+    expect(REPORT_TABS).toEqual(['reports', 'adr-reports', 'expiry'])
+    expect(REPORT_TAB_SLUGS).toEqual({ reports: 'financial', 'adr-reports': 'adr', expiry: 'expiry' })
     expect(reportTabSlug('reports')).toBe('financial')
     expect(slugToReportTab['financial']).toBe('reports')
     expect(slugToReportTab['adr']).toBe('adr-reports')
+    expect(reportTabSlug('expiry')).toBe('expiry')
+    expect(slugToReportTab['expiry']).toBe('expiry')
   })
 
   it('exposes only the tabs a role is granted, in canonical order', () => {
-    expect(getReportTabs('Owner', 'pharmacy')).toEqual(['reports', 'adr-reports'])
-    expect(getReportTabs('Manager', 'pharmacy')).toEqual(['reports', 'adr-reports'])
-    // Pharmacist has ADR but not Financial Reports.
+    expect(getReportTabs('Owner', 'pharmacy')).toEqual(['reports', 'adr-reports', 'expiry'])
+    expect(getReportTabs('Manager', 'pharmacy')).toEqual(['reports', 'adr-reports', 'expiry'])
+    // Pharmacist has ADR but not Financial Reports or Expiry Alerts.
     expect(getReportTabs('Pharmacist', 'pharmacy')).toEqual(['adr-reports'])
     expect(getReportTabs('Nurse', 'hospital')).toEqual(['adr-reports'])
     // Receptionist has no report modules at all.
     expect(getReportTabs('Receptionist', 'hospital')).toEqual([])
+  })
+
+  it('never offers the Expiry Alerts tab to a role without it in its nav', () => {
+    for (const role of ['Pharmacist', 'Cashier', 'Nurse', 'Doctor', 'Receptionist', 'Therapist', 'Lab Technician']) {
+      const tabs = getReportTabs(role, 'pharmacy')
+      expect(tabs, `${role} must not see expiry`).not.toContain('expiry')
+    }
+    // Default staff (custom-typed enterprise titles) have no expiry either.
+    expect(getReportTabs('Regional Manager', 'manufacturer_importer')).not.toContain('expiry')
   })
 
   it('lands clinical staff on ADR and every other role on Financial', () => {
@@ -324,10 +335,16 @@ describe('reports hub (EXPERIENCE.md §2 tab taxonomy)', () => {
     expect(isModuleActive('reports', '/dashboard/reports')).toBe(true)
     expect(isModuleActive('reports', '/dashboard/reports/financial')).toBe(true)
     expect(isModuleActive('reports', '/dashboard/reports/adr')).toBe(false)
+    expect(isModuleActive('reports', '/dashboard/reports/expiry')).toBe(false)
     expect(isModuleActive('adr-reports', '/dashboard/reports/adr')).toBe(true)
     expect(isModuleActive('adr-reports', '/dashboard/adr-reports')).toBe(true)
     expect(isModuleActive('adr-reports', '/dashboard/adr-reports/abc123/detail')).toBe(true)
     expect(isModuleActive('adr-reports', '/dashboard/reports/financial')).toBe(false)
+    expect(isModuleActive('adr-reports', '/dashboard/reports/expiry')).toBe(false)
+    expect(isModuleActive('expiry', '/dashboard/reports/expiry')).toBe(true)
+    expect(isModuleActive('expiry', '/dashboard/reports/financial')).toBe(false)
+    expect(isModuleActive('expiry', '/dashboard/reports/adr')).toBe(false)
+    expect(isModuleActive('expiry', '/dashboard/expiry')).toBe(false)
     expect(isModuleActive('pos', '/dashboard/pos')).toBe(true)
     expect(isModuleActive('pos', '/dashboard/reports/financial')).toBe(false)
   })

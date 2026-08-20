@@ -10,7 +10,7 @@ import {
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','adr-reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','adr-reports','expiry','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -23,7 +23,7 @@ export const ROLES = {
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','expiry','carefind','messages','stock','orders','activity'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -222,6 +222,7 @@ export const MODULES = {
   // appended to the registry + REPORT_TABS as their modules ship (Phase 2/3).
   reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
   'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
+  expiry: { label: 'Expiry Alerts', icon: CalendarClock, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/expiry' },
   settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
   reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
   triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },
@@ -261,9 +262,9 @@ export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 
 // legacy nav lists ordered their modules differently and nothing should
 // depend on a reorder happening silently.
 const NAV_ORDER = {
-   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
-   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'reports', 'adr-reports', 'carefind', 'settings'],
+   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'expiry', 'settings'],
+   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'expiry', 'settings'],
+   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'reports', 'adr-reports', 'expiry', 'carefind', 'settings'],
 }
 
 function familyOf(businessType) {
@@ -323,13 +324,14 @@ export function getNavGroups(role, businessType, customRoles = {}) {
 // granted in a role's nav array before it can appear here. More tabs are
 // appended as their modules ship (Phase 2/3: operational, client & sales,
 // compliance, scheduled).
-export const REPORT_TABS = ['reports', 'adr-reports']
+export const REPORT_TABS = ['reports', 'adr-reports', 'expiry']
 
 // Deep-linkable URL slug per tab — /dashboard/reports/:slug. The sidebar items
 // deep-link via MODULES[id].path, which resolves to these slugs.
 export const REPORT_TAB_SLUGS = {
   reports: 'financial',
   'adr-reports': 'adr',
+  expiry: 'expiry',
 }
 
 // Reverse lookup for the :tab route param (ReportsHub).
@@ -375,6 +377,9 @@ export function isModuleActive(id, pathname) {
   }
   if (id === 'adr-reports') {
     return pathname.startsWith('/dashboard/reports/adr') || pathname.startsWith('/dashboard/adr-reports')
+  }
+  if (id === 'expiry') {
+    return pathname.startsWith('/dashboard/reports/expiry')
   }
   return pathname.split('/').pop() === id
 }
