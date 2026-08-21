@@ -9,10 +9,6 @@
 // footer from one source of truth.
 import { computeTax, fmtReceiptDate } from './receiptPrint.js'
 
-// QR code URL — if the user provided a custom QR URL, use it; otherwise
-// generate one that points to the receipt ID so the printer can display it.
-  const qrUrl = s.qr_code_url || `receipt/${r.id}`
-  const qrData = btoa(qrUrl) // base64-encode for compact QR input
 const WIDTH_COLS = { '58': 32, '80': 48 }
 
 // ESC/POS command sequences (byte values chosen per the Epson ESC/POS reference).
@@ -107,7 +103,6 @@ const money = (n) => 'N' + Number(n || 0).toLocaleString('en-US')
 export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} }) {
   const r = receipt
   const biz = business
-  // const s = settings  // REMOVED - use settings. directly
   const cols = WIDTH_COLS[settings.receipt_width === '58' ? '58' : '80'] || WIDTH_COLS['80']
   const items = Array.isArray(r.items) ? r.items : []
   const tax = computeTax(r.total, settings.tax_rate)
