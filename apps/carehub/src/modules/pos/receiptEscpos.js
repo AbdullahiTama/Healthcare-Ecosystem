@@ -9,9 +9,10 @@
 // footer from one source of truth.
 import { computeTax, fmtReceiptDate } from './receiptPrint.js'
 
-// Printable columns per roll width. A 58mm roll fits 32 columns of the
-// printer's default 12×24 font; an 80mm roll fits 48. Mirrors the receipt_width
-// setting already used by the HTML path's @page sizing.
+// QR code URL — if the user provided a custom QR URL, use it; otherwise
+// generate one that points to the receipt ID so the printer can display it.
+  const qrUrl = s.qr_code_url || `receipt/${r.id}`
+  const qrData = btoa(qrUrl) // base64-encode for compact QR input
 const WIDTH_COLS = { '58': 32, '80': 48 }
 
 // ESC/POS command sequences (byte values chosen per the Epson ESC/POS reference).
@@ -190,6 +191,9 @@ export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} 
 
   if (s.refund_policy) { wrapText(s.refund_policy, cols).forEach(centered); sep() }
   wrapText(s.receipt_footer || 'Thank you for your patronage!', cols).forEach(centered)
+  // QR code URL — printed as text for scanner compatibility
+  const qrDisplayUrl = s.qr_code_url || `${window.location.origin}/receipt/${r.id}`
+  wrapText('QR: ' + qrDisplayUrl, cols).forEach(centered)
 
   cmd(CMD.FEED_CUT)
   return new Uint8Array(bytes)

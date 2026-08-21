@@ -98,12 +98,17 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
   const metaRow = (label, value) =>
     '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>' + label + '</div><div style="text-align:right">' + value + '</div></div>'
 
-  // ── SEPARATOR ───────────────────────────────────────────────────────────
-  const hr = '<div style="border-top:1px dashed #999;margin:8px 0"></div>'
+  // ── QR CODE ──────────────────────────────────────────────────────────────
+  // Generate a QR code data URL for the receipt URL. If no custom URL is
+  // provided, use the receipt ID as a simple identifier. The QR code is
+  // rendered as an image at the bottom of the receipt.
+  const receiptUrl = s.qr_code_url || `${window.location.origin}/receipt/${r.id}`
+  const qrData = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(receiptUrl)
+  const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid ${border};margin:4px auto;display:block" />`
 
   return `<!DOCTYPE html><html><head><title>Receipt</title><style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Courier New',Courier,monospace;font-size:${p.fontSize};width:${p.paper};margin:0 auto;padding:${p.pad};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:${p.fontSize};width:${p.paper};margin:0 auto;padding:${p.pad};-webkit-print-color-adjust:exact;print-color-adjust:exact}
     @page{size:${p.paper} auto;margin:0}
     @media print{body{padding:0}}
   </style></head><body>
@@ -133,5 +138,6 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
     ${hr}
     ${s.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(s.refund_policy) + '</div>' + hr : ''}
     <div style="text-align:center;margin-top:6px">${esc(s.receipt_footer || 'Thank you for your patronage!')}</div>
-  </body></html>`
+    <div style="text-align:center;margin-top:8px">${qrCode}</div>
+</body></html>`
 }
