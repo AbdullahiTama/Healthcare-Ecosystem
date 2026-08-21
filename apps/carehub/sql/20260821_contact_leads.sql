@@ -93,3 +93,61 @@ CREATE TRIGGER trg_notify_owner_on_review
 -- not check EXECUTE, so this only closes the RPC surface (advisor lint 0028).
 REVOKE EXECUTE ON FUNCTION public.notify_owner_on_review()
   FROM anon, authenticated, public;
+
+-- ---------------------------------------------------------------------------
+-- Contact-lead → owner notification trigger
+--
+-- The whole point of recording a lead (issue #4 addendum): the moment a
+-- viewer taps WhatsApp/Call, the owner hears about it in CareHub. Same
+-- definer shape as the review trigger — an anonymous insert must still be
+-- able to write the owner's staff_notifications row.
+-- ---------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.notify_business_contact_lead()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  viewer_name text;
+  subject     text;
+BEGIN
+  SELECT COALESCE(
+           NULLIF(au.raw_user_meta_data->>'full_name', ''),
+           NULLIF(au.raw_user_meta_data->>'name', ''),
+           NULLIF(au.email, ''),
+           'Someone'
+         )
+    INTO viewer_name
+    FROM auth.users au
+   WHERE au.id = NEW.viewer_id;
+
+  viewer_name := COALESCE(viewer_name, 'Someone');
+  subject     := COALESCE(NULLIF(NEW.product_name, ''), 'your business');
+
+  INSERT INTO public.staff_notifications
+    (business_id, staff_id, is_owner, kind, title, body, link)
+  VALUES (
+    NEW.business_id,
+    NULL,
+    true,
+    'contact_lead',
+    'New ' || CASE NEW.channel WHEN 'whatsapp' THEN 'WhatsApp' ELSE 'Call' END || ' lead',
+    viewer_name || ' found ' || subject || ' on your CareFind profile and contacted you via '
+      || CASE NEW.channel WHEN 'whatsapp' THEN 'WhatsApp' ELSE 'Call' END
+      || ' — please follow up.',
+    '/dashboard/carefind'
+  );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_notify_business_contact_lead ON public.contact_leads;
+CREATE TRIGGER trg_notify_business_contact_lead
+  AFTER INSERT ON public.contact_leads
+  FOR EACH ROW EXECUTE FUNCTION public.notify_business_contact_lead();
+
+-- Trigger-only function: close the RPC surface (advisor lint 0028).
+REVOKE EXECUTE ON FUNCTION public.notify_business_contact_lead()
+  FROM anon, authenticated, public;
