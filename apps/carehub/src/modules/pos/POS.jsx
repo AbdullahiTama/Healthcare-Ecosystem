@@ -17,6 +17,8 @@ import { settingsRepository } from '../settings/repositories'
 import { getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { buildReceiptHtml } from './receiptPrint'
+import { buildReceiptEscpos } from './receiptEscpos'
+import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -106,6 +108,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // deleted) the moment this cart is actually charged, so held sales never
   // linger as phantom rows after completion (#17).
   const [resumedSaleId, setResumedSaleId] = useState(null)
+  const [printing, setPrinting] = useState(false)
   const [clients, setClients] = useState([])
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
@@ -421,11 +424,48 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
 
-  function printReceipt(r) {
+  // Universal fallback path: render an HTML page and let the browser/OS
+  // rasterize it via the system print dialog. Always works, but thermal
+  // printers print softer than with raw commands.
+  function legacyPrint(r) {
     const w = window.open('', '_blank', 'width=400,height=700')
     w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {} }))
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 400)
+  }
+
+  // ESC/POS-first. Pairing persists per-origin via navigator.usb.getDevices(),
+  // so only the first print ever shows a device picker. The transferOut
+  // failure contract prevents a second (browser) print after bytes reached
+  // the hardware.
+  async function printReceipt(r) {
+    if (!isEscposUsbSupported()) { legacyPrint(r); return }
+    try {
+      let device = (await getPairedPrinters())[0]
+      if (!device) device = await requestPrinter()
+      if (!device) { legacyPrint(r); return }
+      const bytes = buildReceiptEscpos({ receipt: r, business: brand || {}, settings: settings || {} })
+      setPrinting(true)
+      showToast('Sending to printer…', { type: 'info' })
+      try {
+        await printEscpos(bytes, device)
+        showToast('Receipt printed', { type: 'success' })
+      } catch (e) {
+        console.error('ESC/POS print failed:', e)
+        if (e instanceof EscposTransferError || e?.sent) {
+          showToast('The printer accepted the job but failed mid-print. Check the printer and try again.', { type: 'error' })
+        } else {
+          showToast('Direct printing unavailable — opening the browser print dialog.', { type: 'warning' })
+          legacyPrint(r)
+        }
+      } finally {
+        setPrinting(false)
+      }
+    } catch (e) {
+      console.error('ESC/POS setup failed:', e)
+      legacyPrint(r)
+      setPrinting(false)
+    }
   }
 
   function startScan() {
@@ -521,8 +561,9 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           </div>
         </div>
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <button onClick={() => printReceipt(receipt)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: '12px', border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: 'pointer' }}>
-            <Printer size={15} /> Print receipt
+          <button onClick={() => printReceipt(receipt)} disabled={printing} aria-busy={printing || undefined}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: '12px', border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.65 : 1 }}>
+            <Printer size={15} /> {printing ? 'Sending…' : 'Print receipt'}
           </button>
           <button onClick={newSale} style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', cursor: 'pointer' }}>
             + New sale
@@ -616,8 +657,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                       date: s.created_at,
                     }
                     printReceipt(receiptData)
-                  }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>
-                    <Printer size={12} /> Reprint
+                  }} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
+                    <Printer size={12} /> {printing ? 'Sending…' : 'Reprint'}
                   </button>
                 </div>
               </div>
