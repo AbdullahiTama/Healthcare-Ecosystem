@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
@@ -40,19 +41,41 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const totalDuplicateItems = duplicateGroups.reduce((s, g) => s + (g.length - 1), 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))]
+
+  // Deep-link filters (issue #4): the dashboard's proactive alerts link here
+  // with ?stock=low|out and ?expiry=expiring|expired, so a tap opens the full
+  // affected list rather than a summary line.
+  const [searchParams] = useSearchParams()
+  const [stockFilter, setStockFilter] = useState(searchParams.get('stock') === 'low' || searchParams.get('stock') === 'out' ? searchParams.get('stock') : '')
+  const [expiryFilter, setExpiryFilter] = useState(searchParams.get('expiry') === 'expiring' || searchParams.get('expiry') === 'expired' ? searchParams.get('expiry') : '')
+
+  const daysToExpiry = (p) => {
+    if (!p.expiry_date) return null
+    const d = new Date(p.expiry_date)
+    if (Number.isNaN(d.getTime())) return null
+    return Math.ceil((d - new Date()) / 86400000)
+  }
+
   const filtered = useMemo(() => products.filter(p => {
     const pCat = p.cat || p.category || ''
     const pGeneric = p.generic_name || p.genericName || ''
-    return (catFilter === 'All' || pCat === catFilter) &&
-      (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
-  }), [products, catFilter, search])
+    if (catFilter !== 'All' && pCat !== catFilter) return false
+    if (!(p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))) return false
+    const isService = pCat === 'Services'
+    if (stockFilter === 'low' && (isService || !(p.stock > 0 && p.stock <= (p.reorder_level || 5)))) return false
+    if (stockFilter === 'out' && (isService || p.stock > 0)) return false
+    const t = expiryFilter ? daysToExpiry(p) : null
+    if (expiryFilter === 'expiring' && !(t !== null && t >= 0 && t <= 60)) return false
+    if (expiryFilter === 'expired' && !(t !== null && t < 0)) return false
+    return true
+  }), [products, catFilter, search, stockFilter, expiryFilter])
 
   // Pagination — 50 rows per page. Reset to page 0 whenever the result set
   // changes (search, filter, or data reload) so the user never lands on an
   // empty page that no longer exists. DataTable does the slicing.
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [search, catFilter, products.length])
+  useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
@@ -373,6 +396,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
           {cats.map(c => { const on = catFilter === c; return <button key={c} onClick={() => setCatFilter(c)} style={{ padding: '8px 14px', borderRadius: theme.radius.full, border: `1px solid ${on ? tealDeep : border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '700', background: on ? tealDeep : 'white', color: on ? 'white' : gray600 }}>{c}</button> })}
         </div>
       </div>
+
+      {(stockFilter || expiryFilter) && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: gray500, fontWeight: '700' }}>Filtered by:</span>
+          {stockFilter && (
+            <button onClick={() => setStockFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${warning}`, background: warningBg, color: warning, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              {stockFilter === 'low' ? 'Low stock only' : 'Out of stock only'} ✕
+            </button>
+          )}
+          {expiryFilter && (
+            <button onClick={() => setExpiryFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              {expiryFilter === 'expiring' ? 'Expiring within 60 days' : 'Expired'} ✕
+            </button>
+          )}
+        </div>
+      )}
 
       {scanning && (
         <div style={{ marginBottom: '16px', borderRadius: theme.radius.lg, overflow: 'hidden', border: `2px solid ${tealDeep}`, position: 'relative', background: 'black' }}>

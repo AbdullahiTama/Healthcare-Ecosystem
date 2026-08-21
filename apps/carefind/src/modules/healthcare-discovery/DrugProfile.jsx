@@ -18,6 +18,7 @@ import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
 function DrugProfile() {
@@ -441,6 +442,14 @@ function DrugProfile() {
                   const wa = waLinkFor(p)
                   const call = telLink(sellerPhone(p))
                   if (!wa && !call) return null
+                  // Record the lead intent before the deep link takes the
+                  // viewer out of the app (fire-and-forget, throttled).
+                  const lead = (channel) => recordContactLead({
+                    businessId: p.business_id,
+                    productId: p.id,
+                    productName: p.name,
+                    channel,
+                  })
                   return (
                     <div style={{ display: 'flex', gap: 8 }}>
                       {wa && (
@@ -448,6 +457,7 @@ function DrugProfile() {
                           href={wa}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={() => lead('whatsapp')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                         >
                           <MessageCircle size={16} aria-hidden="true" /> WhatsApp
@@ -456,6 +466,7 @@ function DrugProfile() {
                       {call && (
                         <a
                           href={call}
+                          onClick={() => lead('call')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                         >
                           <Phone size={16} aria-hidden="true" /> Call

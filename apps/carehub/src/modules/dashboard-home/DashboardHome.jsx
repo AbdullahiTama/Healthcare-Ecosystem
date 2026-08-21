@@ -9,6 +9,8 @@ import {
 // keeping a second copy of either query. Same shape as Reports.
 import { saleRepository } from '../pos/repositories'
 import { appointmentRepository } from '../appointments/repositories'
+import { notify } from '../../services/supabase'
+import { classifySalesVelocity } from '../../lib/velocity'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Avatar, Empty, Loading, StatCard } from '../../components/ui'
@@ -84,6 +86,82 @@ export default function DashboardHome({ brand, products, role, perms }) {
     .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
   const nextAppt = upcomingAppts[0]
   const showApptItem = canSeeAppts && upcomingAppts.length > 0
+
+  // ── Proactive owner alerts (issue #4) ────────────────────────────────────────
+  // The dashboard is where the owner already looks, so it raises the stock and
+  // expiry conditions it can see into the notification center — once per kind,
+  // per business, per day (localStorage dedupe). Owner-only: staff dashboards
+  // must not write owner notifications as a side effect of being viewed.
+  const daysToExpiry = (p) => {
+    if (!p.expiry_date) return null
+    const d = new Date(p.expiry_date)
+    if (Number.isNaN(d.getTime())) return null
+    return Math.ceil((d - new Date()) / 86400000)
+  }
+  const expiringSoon = products.filter(p => { const t = daysToExpiry(p); return t !== null && t >= 0 && t <= 60 })
+  const expiredProducts = products.filter(p => { const t = daysToExpiry(p); return t !== null && t < 0 })
+
+  useEffect(() => {
+    if (role !== 'Owner' || !brand?.id || loading) return
+    const dayKey = new Date().toISOString().split('T')[0]
+    const keyFor = (kind) => 'carehub_notified_' + kind + '_' + brand.id
+    const sentToday = (kind) => { try { return localStorage.getItem(keyFor(kind)) === dayKey } catch (e) { return false } }
+    const markSent = (kind) => { try { localStorage.setItem(keyFor(kind), dayKey) } catch (e) {} }
+    // notify() itself never throws; marking after the await keeps the dedupe
+    // honest for the failures it CAN report.
+    const names = (arr) => arr.slice(0, 5).map(p => p.name).join(', ') + (arr.length > 5 ? ' +' + (arr.length - 5) + ' more' : '')
+
+    async function raiseAlerts() {
+      try {
+        if (outStock.length > 0 && !sentToday('out_of_stock')) {
+          await notify(brand.id, [{ staffId: null }], 'out_of_stock',
+            outStock.length + ' product' + (outStock.length === 1 ? '' : 's') + ' out of stock',
+            names(outStock), '/dashboard/inventory?stock=out')
+          markSent('out_of_stock')
+        }
+        if (lowStock.length > 0 && !sentToday('low_stock')) {
+          await notify(brand.id, [{ staffId: null }], 'low_stock',
+            lowStock.length + ' product' + (lowStock.length === 1 ? '' : 's') + ' running low',
+            names(lowStock), '/dashboard/inventory?stock=low')
+          markSent('low_stock')
+        }
+        if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
+          await notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
+            expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
+            names(expiringSoon), '/dashboard/inventory?expiry=expiring')
+          markSent('product_expiring_soon')
+        }
+        if (expiredProducts.length > 0 && !sentToday('product_expired')) {
+          await notify(brand.id, [{ staffId: null }], 'product_expired',
+            expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
+            names(expiredProducts), '/dashboard/inventory?expiry=expired')
+          markSent('product_expired')
+        }
+        // Velocity digest — only when something actually sold in the window;
+        // "everything is slow" on an empty book is noise, not insight.
+        const windowStart = Date.now() - 30 * 86400000
+        const recentSales = allSales.filter(s => new Date(s.created_at || 0).getTime() >= windowStart)
+        if (recentSales.length > 0 && !sentToday('sales_velocity')) {
+          const v = classifySalesVelocity(products, recentSales, { days: 30 })
+          const parts = []
+          if (v.fast.length > 0) parts.push(v.fast.length + ' fast mover' + (v.fast.length === 1 ? '' : 's'))
+          if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
+          if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
+          if (parts.length > 0) {
+            await notify(brand.id, [{ staffId: null }], 'sales_velocity',
+              '30-day sales velocity: ' + parts.join(', '),
+              v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
+              '/dashboard/reports')
+            markSent('sales_velocity')
+          }
+        }
+      } catch (e) {
+        console.error('Proactive alert check failed:', e)
+      }
+    }
+    raiseAlerts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, brand?.id, loading, products, allSales])
 
   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
   const worklistEmpty = attentionCount === 0
