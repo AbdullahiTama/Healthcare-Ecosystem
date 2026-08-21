@@ -107,12 +107,12 @@ const money = (n) => 'N' + Number(n || 0).toLocaleString('en-US')
 export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} }) {
   const r = receipt
   const biz = business
-  const s = settings
-  const cols = WIDTH_COLS[s.receipt_width === '58' ? '58' : '80'] || WIDTH_COLS['80']
+  // const s = settings  // REMOVED - use settings. directly
+  const cols = WIDTH_COLS[settings.receipt_width === '58' ? '58' : '80'] || WIDTH_COLS['80']
   const items = Array.isArray(r.items) ? r.items : []
-  const tax = computeTax(r.total, s.tax_rate)
+  const tax = computeTax(r.total, settings.tax_rate)
   const date = fmtReceiptDate(r.date)
-  const rate = Number(s.tax_rate) || 0
+  const rate = Number(settings.tax_rate) || 0
   const total = Number(r.total) || 0
 
   const bytes = []
@@ -189,10 +189,10 @@ export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} 
   }
   sep()
 
-  if (s.refund_policy) { wrapText(s.refund_policy, cols).forEach(centered); sep() }
-  wrapText(s.receipt_footer || 'Thank you for your patronage!', cols).forEach(centered)
+  if (settings.refund_policy) { wrapText(settings.refund_policy, cols).forEach(centered); sep() }
+  wrapText(settings.receipt_footer || 'Thank you for your patronage!', cols).forEach(centered)
   // QR code URL — printed as text for scanner compatibility
-  const qrDisplayUrl = s.qr_code_url || `${window.location.origin}/receipt/${r.id}`
+  const qrDisplayUrl = settings.qr_code_url || `${window.location.origin}/receipt/${r.id}`
   wrapText('QR: ' + qrDisplayUrl, cols).forEach(centered)
 
   cmd(CMD.FEED_CUT)

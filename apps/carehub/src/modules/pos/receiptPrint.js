@@ -35,17 +35,17 @@ const PAPER = { '58': { paper: '58mm', pad: '2mm', fontSize: '10.5px', nameSize:
 export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} }) {
   const r = receipt
   const biz = business
-  const s = settings
-  const width = s.receipt_width === '58' ? '58' : '80'
+  // const s = settings  // REMOVED - use settings. directly
+  const width = settings.receipt_width === '58' ? '58' : '80'
   const p = PAPER[width] || PAPER['80']
   const items = Array.isArray(r.items) ? r.items : []
-  const tax = computeTax(r.total, s.tax_rate)
+  const tax = computeTax(r.total, settings.tax_rate)
   const date = fmtReceiptDate(r.date)
-  const rate = Number(s.tax_rate) || 0
+  const rate = Number(settings.tax_rate) || 0
   const total = Number(r.total) || 0
 
-  const logo = s.logo_url
-    ? '<div style="margin-bottom:4px"><img src="' + esc(s.logo_url) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover" /></div>'
+  const logo = settings.logo_url
+    ? '<div style="margin-bottom:4px"><img src="' + esc(settings.logo_url) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover" /></div>'
     : ''
 
   const bizName = biz?.name
@@ -54,7 +54,7 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
   const bizAddr = biz?.address ? '<div>' + esc(biz.address) + '</div>' : ''
   const bizPhone = biz?.phone ? '<div>' + esc(biz.phone) + '</div>' : ''
   const bizWhatsapp = biz?.whatsapp ? '<div>WhatsApp: ' + esc(biz.whatsapp) + '</div>' : ''
-  const headerLine = s.receipt_header ? '<div style="margin-top:2px;font-style:italic">' + esc(s.receipt_header) + '</div>' : ''
+  const headerLine = settings.receipt_header ? '<div style="margin-top:2px;font-style:italic">' + esc(settings.receipt_header) + '</div>' : ''
 
   // ── ITEM ROWS ───────────────────────────────────────────────────────────
   // Each item: name block (wraps) + qty×price line. Grid ensures the name
@@ -102,7 +102,7 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
   // Generate a QR code data URL for the receipt URL. If no custom URL is
   // provided, use the receipt ID as a simple identifier. The QR code is
   // rendered as an image at the bottom of the receipt.
-  const receiptUrl = s.qr_code_url || `${window.location.origin}/receipt/${r.id}`
+  const receiptUrl = settings.qr_code_url || `${window.location.origin}/receipt/${r.id}`
   const qrData = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(receiptUrl)
   const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid ${border};margin:4px auto;display:block" />`
 
@@ -136,8 +136,8 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
     ${paymentRows}
     ${splitLine}
     ${hr}
-    ${s.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(s.refund_policy) + '</div>' + hr : ''}
-    <div style="text-align:center;margin-top:6px">${esc(s.receipt_footer || 'Thank you for your patronage!')}</div>
+    ${settings.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(settings.refund_policy) + '</div>' + hr : ''}
+    <div style="text-align:center;margin-top:6px">${esc(settings.receipt_footer || 'Thank you for your patronage!')}</div>
     <div style="text-align:center;margin-top:8px">${qrCode}</div>
 </body></html>`
 }
