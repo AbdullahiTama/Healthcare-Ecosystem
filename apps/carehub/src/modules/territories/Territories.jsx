@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
-import { Plus, Check } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Plus, Check, Upload, Download, FileUp, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
 import { territoryRepository } from './repositories'
+import { parseTerritoryCsv, resolveTerritoryUpload } from './territoryImport'
 // Cross-aggregate read: reps assigned to a territory are staff.
 import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg, success, warning, warningBg } = theme
 const LEVEL_SUGGESTIONS = ['Region', 'State', 'City', 'LGA', 'Zone']
 
 export default function Territories({ brand }) {
@@ -21,6 +22,10 @@ export default function Territories({ brand }) {
   const [form, setForm] = useState({})
   const [assigningTerritory, setAssigningTerritory] = useState(null)
   const [territoryToDelete, setTerritoryToDelete] = useState(null)
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploadData, setUploadData] = useState([])
+  const [uploadError, setUploadError] = useState('')
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => { load() }, [brand?.id])
 
@@ -90,6 +95,70 @@ export default function Territories({ brand }) {
   const repsFor = (territoryId) => assignments.filter(a => a.territory_id === territoryId)
   const parentName = (id) => territories.find(t => t.id === id)?.name || null
 
+  // ── Bulk upload (CSV) ────────────────────────────────────────────────────────
+  // Mirrors the Inventory product upload: download a template, fill it in
+  // Excel, save as CSV, upload here. The parent territory is referenced by
+  // NAME in the file and resolved against territories that already exist.
+  const resolution = useMemo(
+    () => resolveTerritoryUpload(uploadData, territories),
+    [uploadData, territories],
+  )
+
+  function downloadTerritoryTemplate() {
+    const rows = [
+      ['Territory Name', 'Level', 'Sits Under (name)'],
+      ['Nigeria South', 'Region', ''],
+      ['Lagos Region', 'Region', 'Nigeria South'],
+      ['Ikeja', 'LGA', 'Lagos Region'],
+    ]
+    const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Territories_Template.csv'; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })
+  }
+
+  function handleTerritoryFileUpload(e) {
+    const file = e.target.files[0]; if (!file) return
+    setUploadError(''); setUploadData([])
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const { rows, error } = parseTerritoryCsv(ev.target.result)
+        if (error) { setUploadError(error); return }
+        setUploadData(rows)
+      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
+
+  async function importTerritories() {
+    if (resolution.fresh.length === 0) { showToast('Nothing new to import — everything in the file already exists.', { type: 'warning' }); return }
+    setImporting(true)
+    showToast('Importing ' + resolution.fresh.length + ' territories…', { type: 'info' })
+    try {
+      const { added, skipped: serverSkipped, failed } = await territoryRepository.createMany(brand.id, resolution.fresh)
+      await load()
+      setShowUpload(false); setUploadData([]); setUploadError('')
+      const skipped = resolution.skipped.length + serverSkipped
+      const parts = [added + ' imported']
+      if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
+      if (resolution.invalid.length > 0) parts.push(resolution.invalid.length + ' invalid')
+      if (resolution.unresolvedParents > 0) parts.push(resolution.unresolvedParents + ' added as top-level (parent not found)')
+      if (failed.length > 0) parts.push(failed.length + ' failed')
+      const summary = parts.join(' · ')
+      if (failed.length > 0) {
+        showToast(summary + ': ' + failed.slice(0, 3).map(x => x.name + ' (' + x.message + ')').join(', '), { type: 'warning' })
+      } else {
+        showToast(summary + '!', { type: 'success' })
+      }
+    } catch (e) {
+      showToast('Import failed: ' + e.message, { type: 'error' })
+    }
+    setImporting(false)
+  }
+
   const toggleRep = async (territoryId, staffId) => {
     const existing = assignments.find(a => a.territory_id === territoryId && a.staff_id === staffId)
     try {
@@ -110,6 +179,7 @@ export default function Territories({ brand }) {
         title="Territories"
         description="Regions, states, or coverage areas — named however your company works. Assign reps to each."
         primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }}
+        secondaryActions={[{ label: 'Bulk upload', leftIcon: <Upload size={15} />, onClick: () => { setUploadData([]); setUploadError(''); setShowUpload(true) } }]}
       />
       <div style={{ padding: '24px', maxWidth: '760px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
@@ -211,6 +281,60 @@ export default function Territories({ brand }) {
                 )
               })}
             </div>
+      </Modal>
+
+      {/* Bulk Upload Modal */}
+      <Modal show={showUpload} onClose={() => { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Territories from Excel / CSV'>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
+            1. Tap <strong>Download Template</strong><br />
+            2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
+            3. Fill in your territories row by row — "Sits Under" must match an existing territory's name exactly<br />
+            4. Save as <strong>CSV</strong><br />
+            5. Upload here
+          </div>
+          <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: theme.bg }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
+            <div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}>Tap to select CSV file</div>
+            <input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleTerritoryFileUpload} style={{ display: 'none' }} />
+          </label>
+          {uploadError && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}><AlertTriangle size={15} /> {uploadError}</div>}
+          {uploadData.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                <CheckCircle size={15} /> {resolution.fresh.length} new territories in file
+                {resolution.skipped.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.skipped.length} already exist (will be skipped)</span>}
+                {resolution.invalid.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.invalid.length} invalid</span>}
+                {resolution.unresolvedParents > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.unresolvedParents} parent name(s) not found</span>}
+              </div>
+              <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${theme.gray100}` }}>
+                {uploadData.map((t, i) => {
+                  const isDupe = resolution.skipped.some(s => s.toLowerCase() === t.name.toLowerCase())
+                  return (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${theme.gray100}`, fontSize: '12px', background: isDupe ? warningBg : 'transparent' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: isDupe ? warning : navy }}>
+                        {isDupe && <AlertTriangle size={12} />}{t.name}
+                      </span>
+                      <span style={{ color: isDupe ? warning : gray500 }}>
+                        {isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' · ') || '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <GhostBtn onClick={downloadTerritoryTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
+            {uploadData.length > 0 && resolution.fresh.length > 0 && (
+              <button onClick={importTerritories} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
+                {importing
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>
+                  : 'Import ' + resolution.fresh.length + ' Territories'}
+              </button>
+            )}
+          </div>
+        </div>
       </Modal>
 
       <ConfirmDialog show={!!territoryToDelete} onClose={() => setTerritoryToDelete(null)} onConfirm={remove}
