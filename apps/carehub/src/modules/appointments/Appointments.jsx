@@ -366,7 +366,7 @@ export default function Appointments({ brand, role, perms }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <p style={{ margin: 0, fontSize: '13px', color: gray600 }}>Share this link with <b>{payLink.clientName}</b> for the appointment on {payLink.date} at {payLink.time}.</p>
             <p style={{ margin: 0, fontSize: '12px', color: gray500 }}>Amount: <b>{naira(payLink.fee)}</b></p>
-            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: theme.radius.md, border: `1px solid ${border}`, wordBreak: 'break-all', fontSize: '12px', fontFamily: theme.fontMono, color: navy }}>{payLink.url}</div>
+            <div style={{ padding: '12px', background: theme.gray50, borderRadius: theme.radius.md, border: `1px solid ${border}`, wordBreak: 'break-all', fontSize: '12px', fontFamily: theme.fontMono, color: navy }}>{payLink.url}</div>
             <p style={{ margin: 0, fontSize: '11px', color: gray400 }}>The client pays via Paystack. You'll be notified when payment is confirmed.</p>
           </div>
         </Modal>

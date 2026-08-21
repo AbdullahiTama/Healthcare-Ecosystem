@@ -110,7 +110,7 @@ export const Button = forwardRef(function Button(
     gap: 8,
     width: fullWidth ? '100%' : 'auto',
     boxSizing: 'border-box',
-    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
+    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
     ...style,
   }
 

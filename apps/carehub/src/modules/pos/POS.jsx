@@ -55,12 +55,12 @@ class POSErrorBoundary extends Component {
           <div style={{ fontWeight: 800, fontSize: 16, color: theme.danger, marginBottom: 10 }}>
             POS page crashed — screenshot this and send it:
           </div>
-          <div style={{ padding: 12, background: theme.dangerBg, border: '1px solid #fecaca', borderRadius: 8, color: '#7f1d1d', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ padding: 12, background: theme.dangerBg, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.danger, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {String(this.state.error?.message || this.state.error)}
             {this.state.error?.stack ? '\n\n' + this.state.error.stack : ''}
           </div>
           <button onClick={() => this.setState({ error: null })}
-            style={{ marginTop: 14, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: 'white', fontWeight: 700 }}>
+            style={{ marginTop: 14, padding: '10px 16px', borderRadius: 8, border: 'none', background: theme.tealDeep, color: 'white', fontWeight: 700 }}>
             Try again
           </button>
         </div>
@@ -633,7 +633,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 <div>
                   <div style={{ fontWeight: '700', fontSize: '14px' }}>{s.client_name || 'Walk-in'}</div>
                   <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{s.txn_no} · {items.length} item(s) · {s.payment_method}</div>
-                  <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
+                  <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div style={{ textAlign: 'right' }}>
@@ -974,7 +974,7 @@ function CollectPayment({ sale, onCollect }) {
   return (
     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
       <input type='number' value={amount} onChange={e => setAmount(e.target.value)} placeholder='Amount'
-        style={{ width: '90px', padding: '6px 8px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px', outline: 'none' }} />
+        style={{ width: '90px', padding: '6px 8px', borderRadius: '8px', border: `1px solid ${theme.border}`, fontSize: '12px', outline: 'none' }} />
       <TealBtn onClick={handleCollect} style={{ padding: '6px 12px', fontSize: '12px' }}>{collecting ? '...' : 'Collect'}</TealBtn>
     </div>
   )

@@ -620,12 +620,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             {duplicateGroups.map((group, gi) => {
               const totalStock = group.reduce((s, p) => s + (p.stock || 0), 0)
               return (
-                <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: '#fffdf5' }}>
+                <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: warningBg }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: warning, marginBottom: '8px' }}>
                     GROUP {gi + 1} — {group.length} duplicates · will combine to {totalStock} units
                   </div>
                   {group.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: 'white', marginBottom: '4px', fontSize: '12px' }}>
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: theme.gray50, marginBottom: '4px', fontSize: '12px' }}>
                       <div>
                         <span style={{ fontWeight: '600' }}>{p.name}</span>
                         {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> · {p.generic_name || p.genericName}</span>}
@@ -668,8 +668,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 <div style={{ fontSize: '12px', color: gray500 }}>{duplicateWarning.existing.stock} in stock</div>
               </div>
               <ArrowRight size={18} color={gray300} />
-              <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', background: '#FDFBF7' }}>
-                <div style={{ fontSize: '10px', fontWeight: '700', color: '#0E6F5A', marginBottom: '6px' }}>YOU'RE ADDING</div>
+              <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${theme.border}`, background: theme.gray50 }}>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: tealDeep, marginBottom: '6px' }}>YOU'RE ADDING</div>
                 <div style={{ fontWeight: '700', fontSize: '14px' }}>{duplicateWarning.incoming.name}</div>
                 {duplicateWarning.incoming.generic_name && (
                   <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
@@ -679,7 +679,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               </div>
             </div>
 
-            <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#f9fafb', fontSize: '12px', color: '#555' }}>
+            <div style={{ padding: '10px 14px', borderRadius: '10px', background: theme.gray50, fontSize: '12px', color: theme.gray600 }}>
               Updating will combine stock ({duplicateWarning.existing.stock} + {duplicateWarning.incoming.stock} = {(duplicateWarning.existing.stock || 0) + (duplicateWarning.incoming.stock || 0)} units) and apply the new price you entered.
             </div>
 
@@ -822,7 +822,7 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
         <Inp label='Units to Add *' value={qty} onChange={setQty} type='number' placeholder='e.g. 100' required />
         {qty && parseInt(qty) > 0 && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>New total: {product.stock + parseInt(qty)} units</div>}
         <Inp label='Note (optional)' value={note} onChange={setNote} placeholder='Supplier name, invoice number...' />
-        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: '#FDFBF7', fontSize: '12px', color: '#0E6F5A' }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
+        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: theme.gray50, fontSize: '12px', color: tealDeep }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
       </div>
     </Modal>
   )

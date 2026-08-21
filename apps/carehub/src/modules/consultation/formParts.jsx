@@ -16,8 +16,8 @@ export function Chips({ options, selected = [], onToggle, customLabel }) {
         const on = selected.includes(o)
         return (
           <button key={o} type="button" onClick={() => onToggle(o)} aria-pressed={on}
-            style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {customLabel ? customLabel(o) : o}
+style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : theme.cardBg, color: on ? '#fff' : gray600 }}>
+          {customLabel ? customLabel(o) : o}
           </button>
         )
       })}
@@ -32,8 +32,8 @@ export function Pills({ options, value, onChange }) {
         const on = value === o
         return (
           <button key={o} type="button" onClick={() => onChange(on ? '' : o)} aria-pressed={on}
-            style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {o}
+style={{ padding: '7px 12px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : theme.cardBg, color: on ? '#fff' : gray600 }}>
+          {o}
           </button>
         )
       })}
@@ -48,8 +48,8 @@ export function YesNo({ value, onChange }) {
         const on = value === (o === 'Yes' ? 'yes' : 'no')
         return (
           <button key={o} type="button" onClick={() => onChange(on ? '' : (o === 'Yes' ? 'yes' : 'no'))} aria-pressed={on}
-            style={{ padding: '7px 16px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : '#fff', color: on ? '#fff' : gray600 }}>
-            {o}
+style={{ padding: '7px 16px', borderRadius: theme.radius.full, border: '1px solid', borderColor: on ? tealDeep : border, cursor: 'pointer', fontSize: 12, fontWeight: 700, background: on ? tealDeep : theme.cardBg, color: on ? '#fff' : gray600 }}>
+          {o}
           </button>
         )
       })}
@@ -122,7 +122,7 @@ export function ProductSearchPicker({ businessId, selectedIds = [], onToggle, pl
         )}
       </div>
       {!loading && visible.length > 0 && (
-        <div style={{ marginTop: 8, maxHeight: 224, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: 6, background: '#fff' }}>
+        <div style={{ marginTop: 8, maxHeight: 224, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: 6, background: theme.cardBg }}>
           {visible.map(p => (
             <button key={p.id} type="button" onClick={() => onToggle(p)}
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}
