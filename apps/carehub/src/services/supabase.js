@@ -196,11 +196,11 @@ export async function getAllLocations(mainBusinessId) {
 // on a limit=50000 request). Only offset-paging through the clamp reaches
 // every row, so the products/clients collection reads below page through it.
 export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
-export async function searchProducts(businessId, query, limit = 30) {
-  const q = encodeURIComponent(query.trim())
-  if (!q) return []
-  return sbFetch('products?business_id=eq.' + businessId + '&name=ilike.*' + q + '*&order=name.asc&select=id,name,price,category,sku&limit=' + limit)
-}
+// NOTE: `searchProducts` lived here until 2026-08-21. It selected a nonexistent
+// `sku` column, so every call failed with PGRST204 and the consultation form's
+// silent catch made the picker look empty. Replaced by
+// productRepository.search (modules/inventory/repositories), which matches
+// name OR generic_name and selects only real columns.
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
