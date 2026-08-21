@@ -85,8 +85,14 @@ function validateReportSubmit(report) {
     flag('patient_age', 'Patient age or DOB or age group')
   }
 
-  // 6. Patient gender must be set
-  if (!report.patient_gender || !Object.values(PATIENT_GENDER).includes(report.patient_gender)) {
+  // 6. Patient gender must be set (case-insensitive)
+  const normalizedPatientGender = report.patient_gender
+    ? String(report.patient_gender).trim().toLowerCase()
+    : null
+  if (
+    !normalizedPatientGender ||
+    !Object.values(PATIENT_GENDER).includes(normalizedPatientGender)
+  ) {
     flag('patient_gender', 'Patient gender')
   }
 
