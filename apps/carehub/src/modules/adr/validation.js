@@ -33,12 +33,27 @@ const SERIOUSNESS_FIELDS = [
 ]
 
 // The canonical submission validator, shared by both entry points below.
+//
+// Every gate records its gap twice: as a human-readable label in `missing`
+// (the legacy shape, kept for backward compatibility) and as a structured
+// { id, label } in `missingFields`. The ids are stable DOM anchors — the form
+// page tags its inputs with matching data-adr-field attributes so a banner
+// item can scroll to and focus the exact field it names.
 function validateReportSubmit(report) {
   const missing = []
+  const missingFields = []
+  // flag() keeps the two lists in lockstep — never push to one without the
+  // other. `missing` mirrors the server RPC's strings verbatim (the two must
+  // stay interchangeable); a third argument overrides only the banner label
+  // where the page needs to disambiguate same-named fields.
+  function flag(id, label, bannerLabel) {
+    missing.push(label)
+    missingFields.push({ id, label: bannerLabel || label })
+  }
 
   // 1. Reporter qualification must be set
   if (!report.reporter_qualification) {
-    missing.push('Reporter qualification')
+    flag('reporter_qualification', 'Reporter qualification')
   }
 
   // 2. Reporter name or anonymous confirmation
@@ -46,58 +61,60 @@ function validateReportSubmit(report) {
   const anonymousConfirmed = report.reporter_anonymous_confirmed_by_facility === true
 
   if (!hasName && !anonymousConfirmed) {
-    missing.push('Reporter name')
+    flag('reporter_name', 'Reporter name')
   }
 
   // 3. Reporter consent must be explicitly true or false
   if (report.reporter_consent_followup === undefined || report.reporter_consent_followup === null) {
-    missing.push('Reporter consent for follow-up')
+    flag('reporter_consent_followup', 'Reporter consent for follow-up')
   }
 
   // 4. Patient identifier must be set
   if (!report.patient_identifier || report.patient_identifier.trim().length === 0) {
-    missing.push('Patient identifier')
+    flag('patient_identifier', 'Patient identifier')
   }
 
-  // 5. At least one of patient_age, patient_dob, patient_age_group must be set
-  const hasPatientAge = report.patient_age && String(report.patient_age).trim().length > 0
+  // 5. At least one of patient_age, patient_dob, patient_age_group must be set.
+  // Age is checked against null/undefined explicitly, NOT truthiness: 0 is a
+  // valid age (neonate) and was previously flagged as missing.
+  const hasPatientAge = report.patient_age !== null && report.patient_age !== undefined && String(report.patient_age).trim().length > 0
   const hasPatientDob = report.patient_dob && String(report.patient_dob).trim().length > 0
   const hasPatientAgeGroup = report.patient_age_group && String(report.patient_age_group).trim().length > 0
 
   if (!hasPatientAge && !hasPatientDob && !hasPatientAgeGroup) {
-    missing.push('Patient age or DOB or age group')
+    flag('patient_age', 'Patient age or DOB or age group')
   }
 
   // 6. Patient gender must be set
   if (!report.patient_gender || !Object.values(PATIENT_GENDER).includes(report.patient_gender)) {
-    missing.push('Patient gender')
+    flag('patient_gender', 'Patient gender')
   }
 
   // 7. At least one suspect product exists
   const hasProducts = report.adr_products && Array.isArray(report.adr_products) && report.adr_products.length > 0
   if (!hasProducts) {
-    missing.push('At least one suspect product')
+    flag('products_section', 'At least one suspect product')
   }
 
   // 8. At least one product must have a brand name
   if (hasProducts) {
     const hasBrandName = report.adr_products.some(p => p.product_brand_name && p.product_brand_name.trim().length > 0)
     if (!hasBrandName) {
-      missing.push('Product brand name')
+      flag('products_section', 'Product brand name')
     }
   }
 
   // 9. At least one reaction exists
   const hasReactions = report.adr_reactions && Array.isArray(report.adr_reactions) && report.adr_reactions.length > 0
   if (!hasReactions) {
-    missing.push('At least one adverse reaction')
+    flag('reactions_section', 'At least one adverse reaction')
   }
 
   // 10. Reaction description must be set (at least one)
   if (hasReactions) {
     const hasReactionDesc = report.adr_reactions.some(r => r.reaction_description && r.reaction_description.trim().length > 0)
     if (!hasReactionDesc) {
-      missing.push('Reaction description')
+      flag('reaction_description', 'Reaction description')
     }
   }
 
@@ -105,7 +122,7 @@ function validateReportSubmit(report) {
   if (hasReactions) {
     const hasSeverity = report.adr_reactions.some(r => r.severity && Object.values(REACTION_SEVERITY).includes(r.severity))
     if (!hasSeverity) {
-      missing.push('Severity')
+      flag('severity', 'Severity')
     }
   }
 
@@ -115,7 +132,7 @@ function validateReportSubmit(report) {
       SERIOUSNESS_FIELDS.every(f => r[f] !== undefined && r[f] !== null)
     )
     if (!complete) {
-      missing.push('All six seriousness fields')
+      flag('seriousness_fields', 'All six seriousness fields')
     }
   }
 
@@ -123,37 +140,61 @@ function validateReportSubmit(report) {
   if (hasReactions) {
     const hasOutcome = report.adr_reactions.some(r => r.outcome && Object.values(REACTION_OUTCOME).includes(r.outcome))
     if (!hasOutcome) {
-      missing.push('Outcome')
+      flag('outcome', 'Outcome')
     }
   }
 
-  // Industry-specific validation
+  // Industry-specific validation. The regulatory batch/causality anchors are
+  // deliberately distinct from the per-product batch field and the per-reaction
+  // causality field — same subject matter, different inputs on the page.
   if (report.module_type === ADR_MODULE_TYPES.INDUSTRY) {
     if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
-      missing.push('Batch/lot number')
+      flag('regulatory_batch_lot_number', 'Batch/lot number', 'Batch/lot number (Regulatory details)')
     }
     if (!report.causality_assessment || !Object.values(CAUSALITY).includes(report.causality_assessment)) {
-      missing.push('Causality assessment')
+      flag('regulatory_causality_assessment', 'Causality assessment', 'Causality assessment (Regulatory details)')
     }
     if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
-      missing.push('Case narrative summary')
+      flag('case_narrative_summary', 'Case narrative summary')
     }
   }
 
   // Hospital-specific validation
   if (report.module_type === ADR_MODULE_TYPES.HOSPITAL) {
     if (!report.ward_department || report.ward_department.trim().length === 0) {
-      missing.push('Ward/department')
+      flag('ward_department', 'Ward/department')
     }
     if (!report.attending_physician || report.attending_physician.trim().length === 0) {
-      missing.push('Attending physician')
+      flag('attending_physician', 'Attending physician')
     }
   }
 
   return {
     valid: missing.length === 0,
     missing,
+    missingFields,
   }
+}
+
+// Date and DB-CHECK enum keys on the child rows (products / reactions). The
+// drafts hold '' while the form is empty; Postgres rejects '' for date columns
+// and CHECK enums alike, so both families coerce to null before persistence.
+const CHILD_DATE_KEYS = ['expiry_date', 'start_date', 'stop_date', 'onset_date']
+const CHILD_ENUM_KEYS = ['severity', 'outcome', 'causality_assessment', 'action_taken', 'dechallenge_result', 'rechallenge_result']
+
+/**
+ * Normalises a child-row draft (suspect product / adverse reaction) for
+ * persistence: blank strings on date and enum columns become null so the row
+ * no longer trips the database CHECK constraints. Free-text columns are left
+ * untouched ('' is valid there). Pure — returns a copy, never mutates.
+ */
+export function normalizeChildRow(row) {
+  if (row === null || row === undefined || typeof row !== 'object') return row
+  const out = { ...row }
+  for (const key of [...CHILD_DATE_KEYS, ...CHILD_ENUM_KEYS]) {
+    if (out[key] === '') out[key] = null
+  }
+  return out
 }
 
 export const adrValidation = {
@@ -220,7 +261,8 @@ export const adrValidation = {
       issues.push('Patient identifier is required')
     }
 
-    const hasAge = report.patient_age && String(report.patient_age).trim().length > 0
+    // Same explicit null/undefined check as the submit gate: 0 is a valid age.
+    const hasAge = report.patient_age !== null && report.patient_age !== undefined && String(report.patient_age).trim().length > 0
     const hasDob = report.patient_dob && String(report.patient_dob).trim().length > 0
     const hasAgeGroup = report.patient_age_group && Object.values(PATIENT_AGE_GROUP).includes(report.patient_age_group)
 

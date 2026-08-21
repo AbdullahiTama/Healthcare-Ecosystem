@@ -3,7 +3,7 @@ import { ArrowLeft, Plus, Trash2, Download, Camera, X, RefreshCw, CheckCircle, A
 import { useNavigate } from 'react-router-dom'
 import { Button, Card, Pill, Input, Select, Textarea, Toggle, useToast, Toast, Loading, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
 import { adrReportRepository } from './repositories'
-import { adrValidation } from './validation'
+import { adrValidation, normalizeChildRow } from './validation'
 import { ADR_FORM } from './formEngine'
 import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename } from './exports'
 import { draftBackup, buildDraftSnapshot, isStale } from './draftBackup'
@@ -195,7 +195,9 @@ export default function AdrReportPage({ reportId }) {
       const hydrated = { ...report, reaction_expected: reactionExpected, new_safety_signal: newSafetySignal, adr_products: products, adr_reactions: reactions }
       const client = await adrValidation.validateForSubmit(hydrated)
       if (!client.valid) {
-        setMissing(client.missing)
+        // Structured items carry a stable id that doubles as a DOM anchor —
+        // the banner renders them as jump-to-field buttons.
+        setMissing(client.missingFields || [])
         showToast('Cannot submit — complete the highlighted fields', { type: 'warning' })
         setSubmitting(false)
         return
@@ -208,8 +210,10 @@ export default function AdrReportPage({ reportId }) {
         showToast(`${terminology.adrLabel} submitted`, { type: 'success' })
         await load()
       } else {
+        // The server path returns plain strings with no anchor ids — they
+        // render as text items in the same banner.
         const list = (result && result.missing) || ['Submission could not be completed']
-        setMissing(Array.isArray(list) ? list : [list])
+        setMissing((Array.isArray(list) ? list : [list]).map(label => ({ label })))
         showToast('Cannot submit — server rejected the report', { type: 'warning' })
       }
     } catch (e) {
@@ -217,6 +221,16 @@ export default function AdrReportPage({ reportId }) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Banner tap-through: scroll the named field into view and focus it. Items
+  // whose id has no matching anchor (e.g. server-side strings) stay inert.
+  function focusMissingField(id) {
+    const el = document.querySelector(`[data-adr-field="${id}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const focusable = el.matches('input, select, textarea') ? el : el.querySelector('input, select, textarea')
+    if (focusable) focusable.focus({ preventScroll: true })
   }
 
   async function handleArchive() {
@@ -409,9 +423,22 @@ export default function AdrReportPage({ reportId }) {
 
       {missing.length > 0 && (
         <div role="alert" style={{ marginBottom: 20, padding: '14px 16px', borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}` }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet — missing:</div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet — tap a field to jump to it:</div>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: theme.gray600, lineHeight: 1.7 }}>
-            {missing.map((m, i) => <li key={i}>{m}</li>)}
+            {missing.map((m, i) => {
+              const label = typeof m === 'string' ? m : m.label
+              // Structured items anchor to a real input; anything without an
+              // id (server-side strings) renders as plain text.
+              return (
+                <li key={m.id || i}>
+                  {m.id ? (
+                    <button onClick={() => focusMissingField(m.id)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>
+                      {label}
+                    </button>
+                  ) : label}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -426,6 +453,7 @@ export default function AdrReportPage({ reportId }) {
         onRemove={removeProduct}
         disabled={isLocked}
         industry={isIndustry}
+        showToast={showToast}
       />
 
       <ConcomitantSection meds={meds} onAdd={addMed} onRemove={removeMed} disabled={isLocked} />
@@ -439,6 +467,7 @@ export default function AdrReportPage({ reportId }) {
         terminology={terminology}
         reactionExpected={reactionExpected}
         onExpectedChange={setReactionExpected}
+        showToast={showToast}
       />
 
       {isIndustry && <IndustrySection report={report} setField={setField} newSafetySignal={newSafetySignal} setNewSafetySignal={setNewSafetySignal} disabled={isLocked} />}
@@ -554,8 +583,8 @@ function ReporterSection({ report, setField, disabled }) {
   return (
     <Section title="Reporter" sub="Who is reporting this event. Name may be blank when the facility confirms anonymity.">
       <div style={grid}>
-        <Input label="Name" value={r.reporter_name || ''} onChange={v => setField('reporter_name', v)} placeholder="Reporter name" disabled={disabled} />
-        <Select label="Qualification" value={r.reporter_qualification || ''} onChange={v => setField('reporter_qualification', v)} options={qualificationOptions()} disabled={disabled} />
+        <Input label="Name" value={r.reporter_name || ''} onChange={v => setField('reporter_name', v)} placeholder="Reporter name" disabled={disabled} data-adr-field="reporter_name" />
+        <Select label="Qualification" value={r.reporter_qualification || ''} onChange={v => setField('reporter_qualification', v)} options={qualificationOptions()} disabled={disabled} data-adr-field="reporter_qualification" />
         <Input label="Facility" value={r.reporter_facility_name || ''} onChange={v => setField('reporter_facility_name', v)} placeholder="Facility name" disabled={disabled} />
         <Input label="Phone (Nigeria)" value={r.reporter_phone || ''} onChange={v => setField('reporter_phone', v)} placeholder="+234..." disabled={disabled} />
         <Input label="Email" type="email" value={r.reporter_email || ''} onChange={v => setField('reporter_email', v)} placeholder="reporter@example.com" disabled={disabled} />
@@ -566,6 +595,7 @@ function ReporterSection({ report, setField, disabled }) {
           onChange={v => setField('reporter_consent_followup', v === 'yes' ? true : v === 'no' ? false : null)}
           options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
           disabled={disabled}
+          data-adr-field="reporter_consent_followup"
         />
         <Select
           label="Anonymous confirmed by facility"
@@ -584,11 +614,11 @@ function PatientSection({ report, setField, disabled }) {
   return (
     <Section title="Patient" sub="An identifier (initials or internal ID) plus age, DOB or age group. No full name is stored.">
       <div style={grid}>
-        <Input label="Identifier (initials or internal ID)" value={r.patient_identifier || ''} onChange={v => setField('patient_identifier', v)} placeholder="J.S. or patient-001" disabled={disabled} />
-        <Input label="Age" type="number" value={r.patient_age != null ? String(r.patient_age) : ''} onChange={v => setField('patient_age', v === '' ? null : Number(v))} placeholder="e.g. 45" disabled={disabled} />
+        <Input label="Identifier (initials or internal ID)" value={r.patient_identifier || ''} onChange={v => setField('patient_identifier', v)} placeholder="J.S. or patient-001" disabled={disabled} data-adr-field="patient_identifier" />
+        <Input label="Age" type="number" value={r.patient_age != null ? String(r.patient_age) : ''} onChange={v => setField('patient_age', v === '' ? null : Number(v))} placeholder="e.g. 45" disabled={disabled} data-adr-field="patient_age" />
         <Input label="Date of birth" type="date" value={r.patient_dob || ''} onChange={v => setField('patient_dob', v || null)} disabled={disabled} />
         <Select label="Age group" value={r.patient_age_group || ''} onChange={v => setField('patient_age_group', v)} options={ageGroupOptions()} disabled={disabled} />
-        <Select label="Gender" value={r.patient_gender || ''} onChange={v => setField('patient_gender', v)} options={genderOptions()} disabled={disabled} />
+        <Select label="Gender" value={r.patient_gender || ''} onChange={v => setField('patient_gender', v)} options={genderOptions()} disabled={disabled} data-adr-field="patient_gender" />
         <Input label="Weight (kg)" type="number" value={r.patient_weight_kg != null ? String(r.patient_weight_kg) : ''} onChange={v => setField('patient_weight_kg', v === '' ? null : Number(v))} placeholder="e.g. 70" disabled={disabled} />
         <div style={{ gridColumn: '1 / -1' }}>
           <Textarea label="Medical history (relevant)" rows={3} value={r.patient_medical_history || ''} onChange={v => setField('patient_medical_history', v)} placeholder="Allergies, chronic conditions, pregnancy status, relevant comorbidities…" disabled={disabled} />
@@ -615,7 +645,7 @@ const emptyProduct = () => ({
 
 const ROUTE_OPTIONS = ['Oral', 'Topical', 'IV', 'IM', 'Subcutaneous', 'Inhalation', 'Ophthalmic', 'Other']
 
-function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry }) {
+function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry, showToast }) {
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState(emptyProduct())
 
@@ -629,9 +659,16 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
   }
   async function save() {
     if (!draft.product_brand_name || !draft.product_brand_name.trim()) return
-    if (editing === '__new__') await onAdd(draft)
-    else await onUpdate(editing, draft)
-    setEditing(null)
+    // Blank date/enum inputs must persist as null — the raw '' draft trips the
+    // database CHECK constraints and used to fail silently.
+    const row = normalizeChildRow(draft)
+    try {
+      if (editing === '__new__') await onAdd(row)
+      else await onUpdate(editing, row)
+      setEditing(null)
+    } catch (e) {
+      showToast('Could not save the suspect product — check its values and try again', { type: 'error' })
+    }
   }
   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
 
@@ -641,36 +678,38 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
       sub="At least one product with a brand name is required before submission."
       badge={!disabled && <Button variant="ghost" size="sm" onClick={startNew}><Plus size={14} /> Add product</Button>}
     >
-      {products.length === 0 && !editing && (
-        <Empty icon={<AlertTriangle size={20} />} message="No products yet. Add the product(s) suspected of causing the reaction." />
-      )}
+      <div data-adr-field="products_section">
+        {products.length === 0 && !editing && (
+          <Empty icon={<AlertTriangle size={20} />} message="No products yet. Add the product(s) suspected of causing the reaction." />
+        )}
 
-      {products.map(p => (
-        <div key={p.product_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
-          {editing === p.product_id ? (
-            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{p.product_brand_name || 'Unnamed product'}</div>
-                <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
-                  {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' · ') || 'No details yet'}
+        {products.map(p => (
+          <div key={p.product_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
+            {editing === p.product_id ? (
+              <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{p.product_brand_name || 'Unnamed product'}</div>
+                  <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
+                    {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' · ') || 'No details yet'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
+                  {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(p.product_id)}><Trash2 size={13} /></Button>}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
-                {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(p.product_id)}><Trash2 size={13} /></Button>}
-              </div>
-            </div>
-          )}
-        </div>
-      ))}
+            )}
+          </div>
+        ))}
 
-      {editing === '__new__' && (
-        <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
-          <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
-        </div>
-      )}
+        {editing === '__new__' && (
+          <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
+            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+          </div>
+        )}
+      </div>
     </Section>
   )
 }
@@ -679,7 +718,7 @@ function ProductForm({ draft, set, industry, onSave, onCancel }) {
   return (
     <div>
       <div style={grid}>
-        <Input label="Brand name *" value={draft.product_brand_name} onChange={v => set('product_brand_name', v)} placeholder="e.g. Ampiclox" required />
+        <Input label="Brand name *" value={draft.product_brand_name} onChange={v => set('product_brand_name', v)} placeholder="e.g. Ampiclox" required data-adr-field="product_brand_name" />
         <Input label="Generic name" value={draft.product_generic_name} onChange={v => set('product_generic_name', v)} />
         <Input label="Manufacturer" value={draft.manufacturer} onChange={v => set('manufacturer', v)} />
         <Input label={industry ? 'Batch / lot number *' : 'Batch / lot number'} value={draft.batch_lot_number} onChange={v => set('batch_lot_number', v)} placeholder="Batch/lot" />
@@ -752,7 +791,7 @@ const emptyReaction = () => ({
   rechallenge_result: '',
 })
 
-function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, terminology, reactionExpected, onExpectedChange }) {
+function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, terminology, reactionExpected, onExpectedChange, showToast }) {
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState(emptyReaction())
 
@@ -760,9 +799,16 @@ function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, term
   function startNew() { setEditing('__new__'); setDraft(emptyReaction()) }
   async function save() {
     if (!draft.reaction_description || !draft.reaction_description.trim()) return
-    if (editing === '__new__') await onAdd(draft)
-    else await onUpdate(editing, draft)
-    setEditing(null)
+    // Blank date/enum inputs must persist as null — the raw '' draft trips the
+    // database CHECK constraints and used to fail silently.
+    const row = normalizeChildRow(draft)
+    try {
+      if (editing === '__new__') await onAdd(row)
+      else await onUpdate(editing, row)
+      setEditing(null)
+    } catch (e) {
+      showToast('Could not save the reaction — check its values and try again', { type: 'error' })
+    }
   }
   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
 
@@ -772,53 +818,55 @@ function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, term
       sub="Describe the reaction(s). At least one is required; the six seriousness flags and outcome decide the reporting deadline."
       badge={!disabled && <Button variant="ghost" size="sm" onClick={startNew}><Plus size={14} /> Add reaction</Button>}
     >
-      <div style={{ marginBottom: 16 }}>
-        <Select
-          label="Was this expected for the product?"
-          value={reactionExpected === null ? '' : reactionExpected ? 'expected' : 'unexpected'}
-          onChange={v => onExpectedChange(v === '' ? null : v === 'expected')}
-          options={[{ value: 'expected', label: 'Expected' }, { value: 'unexpected', label: 'Unexpected' }]}
-          disabled={disabled}
-        />
-      </div>
+      <div data-adr-field="reactions_section">
+        <div style={{ marginBottom: 16 }}>
+          <Select
+            label="Was this expected for the product?"
+            value={reactionExpected === null ? '' : reactionExpected ? 'expected' : 'unexpected'}
+            onChange={v => onExpectedChange(v === '' ? null : v === 'expected')}
+            options={[{ value: 'expected', label: 'Expected' }, { value: 'unexpected', label: 'Unexpected' }]}
+            disabled={disabled}
+          />
+        </div>
 
-      {reactions.length === 0 && !editing && (
-        <Empty icon={<AlertTriangle size={20} />} message={`Add the ${terminology.adrLabel.toLowerCase()} description and seriousness.`} />
-      )}
+        {reactions.length === 0 && !editing && (
+          <Empty icon={<AlertTriangle size={20} />} message={`Add the ${terminology.adrLabel.toLowerCase()} description and seriousness.`} />
+        )}
 
-      {reactions.map(r => (
-        <div key={r.reaction_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
-          {editing === r.reaction_id ? (
-            <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
-          ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{r.reaction_description}</div>
-                  <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
-                    {[r.severity ? REACTION_SEVERITY_LABELS[r.severity] : null, r.outcome ? `Outcome: ${REACTION_OUTCOME_LABELS[r.outcome]}` : null, r.onset_date ? `Onset ${r.onset_date}` : null].filter(Boolean).join(' · ')}
+        {reactions.map(r => (
+          <div key={r.reaction_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
+            {editing === r.reaction_id ? (
+              <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{r.reaction_description}</div>
+                    <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
+                      {[r.severity ? REACTION_SEVERITY_LABELS[r.severity] : null, r.outcome ? `Outcome: ${REACTION_OUTCOME_LABELS[r.outcome]}` : null, r.onset_date ? `Onset ${r.onset_date}` : null].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>Edit</Button>}
+                    {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(r.reaction_id)}><Trash2 size={13} /></Button>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>Edit</Button>}
-                  {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(r.reaction_id)}><Trash2 size={13} /></Button>}
-                </div>
+                {isSeriousRow(r) && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {SERIOUSNESS_OPTIONS.filter(o => r[o.key]).map(o => <Pill key={o.key} label={o.label} type="red" />)}
+                  </div>
+                )}
               </div>
-              {isSeriousRow(r) && (
-                <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {SERIOUSNESS_OPTIONS.filter(o => r[o.key]).map(o => <Pill key={o.key} label={o.label} type="red" />)}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
+            )}
+          </div>
+        ))}
 
-      {editing === '__new__' && (
-        <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
-          <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
-        </div>
-      )}
+        {editing === '__new__' && (
+          <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
+            <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
+          </div>
+        )}
+      </div>
     </Section>
   )
 }
@@ -832,19 +880,19 @@ function ReactionForm({ draft, set, onSave, onCancel }) {
     <div>
       <div style={grid}>
         <div style={{ gridColumn: '1 / -1' }}>
-          <Textarea label="Reaction description *" rows={2} value={draft.reaction_description} onChange={v => set('reaction_description', v)} placeholder="e.g. Anaphylactic reaction, rash, nausea…" required />
+          <Textarea label="Reaction description *" rows={2} value={draft.reaction_description} onChange={v => set('reaction_description', v)} placeholder="e.g. Anaphylactic reaction, rash, nausea…" required data-adr-field="reaction_description" />
         </div>
         <Input label="Onset date" type="date" value={draft.onset_date} onChange={v => set('onset_date', v)} />
         <Input label="Duration" value={draft.duration} onChange={v => set('duration', v)} placeholder="e.g. 2 hours, 3 days" />
-        <Select label="Severity *" value={draft.severity} onChange={v => set('severity', v)} options={severityOptions()} />
-        <Select label="Outcome *" value={draft.outcome} onChange={v => set('outcome', v)} options={outcomeOptions()} />
+        <Select label="Severity *" value={draft.severity} onChange={v => set('severity', v)} options={severityOptions()} data-adr-field="severity" />
+        <Select label="Outcome *" value={draft.outcome} onChange={v => set('outcome', v)} options={outcomeOptions()} data-adr-field="outcome" />
         <Select label="Action taken" value={draft.action_taken} onChange={v => set('action_taken', v)} options={actionTakenOptions()} />
         <Select label="Causality assessment" value={draft.causality_assessment} onChange={v => set('causality_assessment', v)} options={causalityOptions()} />
         <Select label="De-challenge result" value={draft.dechallenge_result} onChange={v => set('dechallenge_result', v)} options={dechallengeOptions()} />
         <Select label="Re-challenge result" value={draft.rechallenge_result} onChange={v => set('rechallenge_result', v)} options={rechallengeOptions()} />
       </div>
 
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 14 }} data-adr-field="seriousness_fields">
         <div style={{ fontSize: 11.5, fontWeight: 700, color: theme.gray600, marginBottom: 8 }}>Seriousness (tick all that apply)</div>
         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {SERIOUSNESS_OPTIONS.map(o => (
@@ -869,12 +917,12 @@ function IndustrySection({ report, setField, newSafetySignal, setNewSafetySignal
   return (
     <Section title="Regulatory details" sub="Industry / manufacturer-importer fields. Batch/lot, causality assessment and case narrative are mandatory.">
       <div style={grid}>
-        <Input label="Batch / lot number *" value={report.batch_lot_number || ''} onChange={v => setField('batch_lot_number', v)} placeholder="Batch/lot" disabled={disabled} />
-        <Select label="Causality assessment *" value={report.causality_assessment || ''} onChange={v => setField('causality_assessment', v)} options={causalityOptions()} disabled={disabled} />
+        <Input label="Batch / lot number *" value={report.batch_lot_number || ''} onChange={v => setField('batch_lot_number', v)} placeholder="Batch/lot" disabled={disabled} data-adr-field="regulatory_batch_lot_number" />
+        <Select label="Causality assessment *" value={report.causality_assessment || ''} onChange={v => setField('causality_assessment', v)} options={causalityOptions()} disabled={disabled} data-adr-field="regulatory_causality_assessment" />
         <Input label="Naranjo score" type="number" value={report.naranjo_score != null ? String(report.naranjo_score) : ''} onChange={v => setField('naranjo_score', v === '' ? null : Number(v))} disabled={disabled} />
         <Input label="Follow-up version" type="number" value={report.follow_up_version_number != null ? String(report.follow_up_version_number) : ''} onChange={v => setField('follow_up_version_number', v === '' ? null : Number(v))} disabled={disabled} />
         <div style={{ gridColumn: '1 / -1' }}>
-          <Textarea label="Case narrative summary *" rows={4} value={report.case_narrative_summary || ''} onChange={v => setField('case_narrative_summary', v)} placeholder="Chronological account of the event…" disabled={disabled} />
+          <Textarea label="Case narrative summary *" rows={4} value={report.case_narrative_summary || ''} onChange={v => setField('case_narrative_summary', v)} placeholder="Chronological account of the event…" disabled={disabled} data-adr-field="case_narrative_summary" />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <Textarea label="Distribution / batch trace notes" rows={3} value={report.distribution_batch_trace_notes || ''} onChange={v => setField('distribution_batch_trace_notes', v)} placeholder="Batches distributed, locations, quantities…" disabled={disabled} />
@@ -920,8 +968,8 @@ function HospitalSection({ report, setField, onUpload, uploading, disabled }) {
   return (
     <Section title="Clinical details" sub="Hospital / clinic fields. Ward/department and attending physician are mandatory before submission.">
       <div style={grid}>
-        <Input label="Ward / department *" value={r.ward_department || ''} onChange={v => setField('ward_department', v)} placeholder="e.g. Ward 4, General Medicine" disabled={disabled} />
-        <Input label="Attending physician *" value={r.attending_physician || ''} onChange={v => setField('attending_physician', v)} placeholder="Physician name" disabled={disabled} />
+        <Input label="Ward / department *" value={r.ward_department || ''} onChange={v => setField('ward_department', v)} placeholder="e.g. Ward 4, General Medicine" disabled={disabled} data-adr-field="ward_department" />
+        <Input label="Attending physician *" value={r.attending_physician || ''} onChange={v => setField('attending_physician', v)} placeholder="Physician name" disabled={disabled} data-adr-field="attending_physician" />
         <div style={{ gridColumn: '1 / -1' }}>
           <Textarea label="Lab investigation notes" rows={3} value={r.lab_investigation_notes || ''} onChange={v => setField('lab_investigation_notes', v)} placeholder="Lab results, investigations relevant to the reaction…" disabled={disabled} />
         </div>

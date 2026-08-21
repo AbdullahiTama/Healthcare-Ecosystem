@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { adrValidation } from './validation.js'
+import { adrValidation, normalizeChildRow } from './validation.js'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -76,6 +76,12 @@ describe('adrValidation.validateForSubmit', () => {
     expect(byGroup.valid).toBe(true)
   })
 
+  it('accepts patient age 0 (neonate) without flagging the age gate', async () => {
+    const result = await adrValidation.validateForSubmit({ ...validReport, patient_age: 0 })
+    expect(result.valid).toBe(true)
+    expect(result.missing).not.toContain('Patient age or DOB or age group')
+  })
+
   it('requires age, DOB or age group', async () => {
     const result = await adrValidation.validateForSubmit({ ...validReport, patient_age: null })
     expect(result.missing).toContain('Patient age or DOB or age group')
@@ -150,6 +156,115 @@ describe('adrValidation.validateForSubmit', () => {
     const result = await adrValidation.validateForSubmit(validReport)
     expect(result.missing).not.toContain('Ward/department')
     expect(result.missing).not.toContain('Attending physician')
+  })
+})
+
+describe('structured missing fields (anchorable banner items)', () => {
+  it('returns missingFields with stable ids alongside the legacy label list', async () => {
+    const result = await adrValidation.validateForSubmit({
+      ...validReport,
+      reporter_qualification: '',
+      patient_identifier: '',
+      adr_reactions: [{ reaction_description: 'Rash' }],
+    })
+    expect(result.valid).toBe(false)
+    for (const f of result.missingFields) {
+      expect(typeof f.id).toBe('string')
+      expect(f.id.length).toBeGreaterThan(0)
+      expect(typeof f.label).toBe('string')
+    }
+    const ids = result.missingFields.map(f => f.id)
+    expect(ids).toContain('reporter_qualification')
+    expect(ids).toContain('patient_identifier')
+    expect(ids).toContain('severity')
+    expect(ids).toContain('outcome')
+    expect(ids).toContain('seriousness_fields')
+    // For the community module every structured label mirrors the legacy string
+    expect(result.missingFields.map(f => f.label)).toEqual(result.missing)
+  })
+
+  it('labels regulatory batch/causality distinctly from per-product/per-reaction fields', async () => {
+    const result = await adrValidation.validateForSubmit({ ...validReport, module_type: 'industry' })
+    const ids = result.missingFields.map(f => f.id)
+    expect(ids).toContain('regulatory_batch_lot_number')
+    expect(ids).toContain('regulatory_causality_assessment')
+    expect(ids).toContain('case_narrative_summary')
+    const causality = result.missingFields.find(f => f.id === 'regulatory_causality_assessment')
+    expect(causality.label).toMatch(/Regulatory/i)
+  })
+
+  it('anchors section-level gaps to their section', async () => {
+    const none = await adrValidation.validateForSubmit({ ...validReport, adr_products: [], adr_reactions: [] })
+    const ids = none.missingFields.map(f => f.id)
+    expect(ids).toContain('products_section')
+    expect(ids).toContain('reactions_section')
+
+    const noBrand = await adrValidation.validateForSubmit({ ...validReport, adr_products: [{ product_generic_name: 'Generic only' }] })
+    expect(noBrand.missingFields.map(f => f.id)).toContain('products_section')
+  })
+
+  it('anchors hospital gates to their fields', async () => {
+    const result = await adrValidation.validateForSubmit({ ...validReport, module_type: 'hospital' })
+    const ids = result.missingFields.map(f => f.id)
+    expect(ids).toContain('ward_department')
+    expect(ids).toContain('attending_physician')
+  })
+})
+
+describe('normalizeChildRow (blank draft coercion)', () => {
+  it('coerces blank date and enum fields to null and keeps everything else', () => {
+    const row = normalizeChildRow({
+      severity: '',
+      onset_date: '',
+      outcome: 'recovered',
+      start_date: '2026-01-01',
+      reaction_description: 'Rash',
+    })
+    expect(row.severity).toBeNull()
+    expect(row.onset_date).toBeNull()
+    expect(row.outcome).toBe('recovered')
+    expect(row.start_date).toBe('2026-01-01')
+    expect(row.reaction_description).toBe('Rash')
+  })
+
+  it('coerces every DB CHECK enum key and passes non-blank values through', () => {
+    const out = normalizeChildRow({
+      severity: 'severe',
+      outcome: '',
+      causality_assessment: '',
+      action_taken: '',
+      dechallenge_result: '',
+      rechallenge_result: '',
+      expiry_date: '2027-05-01',
+      stop_date: '',
+    })
+    expect(out.severity).toBe('severe')
+    expect(out.expiry_date).toBe('2027-05-01')
+    expect(out.outcome).toBeNull()
+    expect(out.causality_assessment).toBeNull()
+    expect(out.action_taken).toBeNull()
+    expect(out.dechallenge_result).toBeNull()
+    expect(out.rechallenge_result).toBeNull()
+    expect(out.stop_date).toBeNull()
+  })
+
+  it('leaves free-text keys untouched (blank strings are valid text columns)', () => {
+    const out = normalizeChildRow({ dose: '', route: '', duration: '' })
+    expect(out.dose).toBe('')
+    expect(out.route).toBe('')
+    expect(out.duration).toBe('')
+  })
+
+  it('does not mutate the input row', () => {
+    const row = { severity: '', onset_date: '' }
+    normalizeChildRow(row)
+    expect(row.severity).toBe('')
+    expect(row.onset_date).toBe('')
+  })
+
+  it('handles nullish rows defensively', () => {
+    expect(normalizeChildRow(null)).toBeNull()
+    expect(normalizeChildRow(undefined)).toBeUndefined()
   })
 })
 
