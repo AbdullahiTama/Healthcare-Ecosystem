@@ -35,7 +35,6 @@ const PAPER = { '58': { paper: '58mm', pad: '2mm', fontSize: '10.5px', nameSize:
 export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} }) {
   const r = receipt
   const biz = business
-  // const s = settings  // REMOVED - use settings. directly
   const width = settings.receipt_width === '58' ? '58' : '80'
   const p = PAPER[width] || PAPER['80']
   const items = Array.isArray(r.items) ? r.items : []
@@ -94,6 +93,9 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
         .join('')
     : ''
 
+  // ── DIVIDER ─────────────────────────────────────────────────────────────
+  const hr = '<div style="border-top:1px dashed #999;margin:8px 0"></div>'
+
   // ── METADATA ROW ────────────────────────────────────────────────────────
   const metaRow = (label, value) =>
     '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>' + label + '</div><div style="text-align:right">' + value + '</div></div>'
@@ -104,7 +106,7 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
   // rendered as an image at the bottom of the receipt.
   const receiptUrl = settings.qr_code_url || `${window.location.origin}/receipt/${r.id}`
   const qrData = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(receiptUrl)
-  const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid ${border};margin:4px auto;display:block" />`
+  const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid #999;margin:4px auto;display:block" />`
 
   return `<!DOCTYPE html><html><head><title>Receipt</title><style>
     *{margin:0;padding:0;box-sizing:border-box}

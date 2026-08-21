@@ -114,7 +114,9 @@ describe('buildReceiptHtml', () => {
 
   it('shows the logo when a logo_url is configured and omits it otherwise', () => {
     expect(buildReceiptHtml({ ...base, settings: { ...base.settings, logo_url: 'https://x/logo.png' } })).toContain('<img src="https://x/logo.png"')
-    expect(buildReceiptHtml(base)).not.toContain('<img')
+    // The QR block always renders an <img>, so absence of the logo is asserted
+    // on the circular-crop styling unique to the logo rather than on '<img'.
+    expect(buildReceiptHtml(base)).not.toContain('border-radius:50%')
   })
 
   // ── EDGE CASES ──────────────────────────────────────────────────────────
