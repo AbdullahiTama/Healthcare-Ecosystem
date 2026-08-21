@@ -3,7 +3,7 @@ import { MapPin, BadgeCheck, AlertTriangle } from 'lucide-react'
 import {
   getActivityFields, addActivityField, deleteActivityField,
   getDefaultViewers, setDefaultViewers,
-  getFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
+  getFieldActivities, countFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
   logActivity, reactToActivity, unreactToActivity, commentOnActivity,
   uploadActivityVoice, reverseGeocode, geocodePlace,
 } from '../../services/supabase'
@@ -87,6 +87,8 @@ export default function LiveActivity({ brand }) {
     ? (authData.staff.public_title || authData.staff.role || 'Staff')
     : 'Owner'
   const isOwner = meStaffId === null
+  // Managers (and the owner) get the My Feed / Team Reports split (issue #7).
+  const isManager = isOwner || /manager/i.test((authData.staff && authData.staff.role) || '')
 
   const [fields, setFields] = useState([])
   const [activities, setActivities] = useState([])
@@ -100,6 +102,11 @@ export default function LiveActivity({ brand }) {
   const [liveOn, setLiveOn] = useState(false)
 
   const [view, setView] = useState('feed')
+  // Scope tabs (managers only): 'mine' shows the manager's own logs, 'team'
+  // shows everything the business's permission model lets them see. The owner
+  // has no staff row, so their "mine" would be empty — they start on 'team'.
+  const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
+  const [counts, setCounts] = useState(null)
   const [dateRange, setDateRange] = useState('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -174,6 +181,21 @@ export default function LiveActivity({ brand }) {
       setActivities(acts || [])
       setStaffList(stf || [])
       setTerritories(ters || [])
+
+      // Tab badges for managers. Non-fatal: a failed count just hides the
+      // numbers, it must not blank the feed.
+      if (isManager) {
+        try {
+          const [mine, team] = await Promise.all([
+            countFieldActivities(brand.id, meStaffId),
+            countFieldActivities(brand.id),
+          ])
+          setCounts({ mine: mine, team: team })
+        } catch (e) {
+          console.error('Activity counts failed:', e)
+          setCounts(null)
+        }
+      }
 
       const ids = (acts || []).map(function (a) { return a.id })
       const vs = await getActivityViewers(ids)
@@ -559,6 +581,7 @@ export default function LiveActivity({ brand }) {
   }
 
   const permitted = activities.filter(function (a) {
+    if (isManager && scope === 'mine') return a.staff_id === meStaffId
     if (isOwner) return true
     if (a.staff_id === meStaffId) return true
     const vs = viewersByAct[a.id] || []
@@ -693,6 +716,30 @@ export default function LiveActivity({ brand }) {
           <div style={{ fontSize: '12px', color: warning, marginTop: '2px' }}>
             Tap "Set up fields" and decide what a visit record should capture.
           </div>
+        </div>
+      )}
+
+      {isManager && (
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+          {[
+            ['mine', 'My Feed', counts ? counts.mine : null],
+            ['team', 'Team Reports', counts ? counts.team : null],
+          ].map(function (t) {
+            const on = scope === t[0]
+            const label = t[2] != null
+              ? t[1] + ' (' + (t[2] >= 1000 ? '1000+' : t[2]) + ')'
+              : t[1]
+            return (
+              <button key={t[0]} onClick={function () { setScope(t[0]) }}
+                aria-pressed={on}
+                style={{ fontSize: '12.5px', fontWeight: '800', padding: '9px 18px', borderRadius: '10px', cursor: 'pointer',
+                  border: `1px solid ${on ? tealDeep : border}`,
+                  background: on ? tealDeep : 'white',
+                  color: on ? 'white' : gray500 }}>
+              {label}
+              </button>
+            )
+          })}
         </div>
       )}
 

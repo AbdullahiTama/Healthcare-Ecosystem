@@ -505,8 +505,19 @@ export async function setDefaultViewers(businessId, staffId, viewers) {
   }
 }
 
-export async function getFieldActivities(businessId) {
-  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=100')
+export async function getFieldActivities(businessId, { limit = 100 } = {}) {
+  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=' + limit)
+}
+
+// Lightweight count for the manager's My Feed / Team Reports tab badges.
+// select=id keeps the payload tiny; PostgREST's server-side db-max-rows clamp
+// (1000 on this project) saturates the result past that, which callers must
+// surface as "1000+" rather than an exact figure.
+export async function countFieldActivities(businessId, staffId) {
+  let path = 'field_activities?business_id=eq.' + businessId
+  if (staffId) path += '&staff_id=eq.' + staffId
+  const rows = await sbFetch(path + '&select=id&limit=1000')
+  return Array.isArray(rows) ? rows.length : 0
 }
 export async function getActivityViewers(activityIds) {
   if (!activityIds || activityIds.length === 0) return []
