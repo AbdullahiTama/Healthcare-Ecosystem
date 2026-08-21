@@ -2,7 +2,7 @@
 title: 'ESC/POS direct thermal receipt printing with browser-print fallback'
 type: 'bugfix'
 created: '2026-08-21'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_commit: 'a1b4446dc8043edcb4fe2a42577d6c2bd56c487c'
 context: []
@@ -111,3 +111,36 @@ Encoding: fold Latin-1 accents to base ASCII (é→e); unmappable → `?`. CP437
 **Manual checks (if no CLI):**
 - Real 80mm USB thermal printer in Chrome: first print shows picker; later prints skip it; output darker/sharper than `window.print()` baseline; auto-cut fires
 - Firefox: print dialog opens exactly as before
+
+## Suggested Review Order
+
+**ESC/POS-first orchestration**
+
+- WebUSB-first printReceipt with automatic browser fallback and duplicate-receipt guard
+  [`POS.jsx:441`](../../apps/carehub/src/modules/pos/POS.jsx#L441)
+
+- Null-guarded popup fallback and disabled “Sending…” buttons with aria-busy
+  [`POS.jsx:430`](../../apps/carehub/src/modules/pos/POS.jsx#L430)
+
+**Pure encoder**
+
+- CP437-safe ASCII folding, 32/48-col word-wrap and GS V cut from the shared { receipt, business, settings } contract
+  [`receiptEscpos.js:106`](../../apps/carehub/src/modules/pos/receiptEscpos.js#L106)
+
+**WebUSB transport**
+
+- Paired-device lookup, in-gesture picker, printer-config discovery and OUT endpoint plus EscposTransferError guard
+  [`escposUsb.js:63`](../../apps/carehub/src/modules/pos/escposUsb.js#L63)
+
+**Tests**
+
+- Byte-level encoder assertions (init/cut, widths, wrapping, payment variants, accent/emoji/CJK, double-size gate)
+  [`receiptEscpos.test.js:1`](../../apps/carehub/src/modules/pos/receiptEscpos.test.js#L1)
+
+- Mock-USB transport contract (open/claim/transferOut/close, config discovery, alternates, failure modes)
+  [`escposUsb.test.js:1`](../../apps/carehub/src/modules/pos/escposUsb.test.js#L1)
+
+**Docs**
+
+- Dual-path printing section with support matrix, pairing behaviour and fallback rules
+  [`point-of-sale.md:9`](../../knowledge/modules/point-of-sale.md#L9)

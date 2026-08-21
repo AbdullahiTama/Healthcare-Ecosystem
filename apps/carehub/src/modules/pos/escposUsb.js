@@ -13,9 +13,15 @@ export function isEscposUsbSupported(usb = globalThis.navigator?.usb) {
   return typeof usb?.requestDevice === 'function' && typeof usb?.getDevices === 'function'
 }
 
+function allAlternates(iface) {
+  if (Array.isArray(iface?.alternates) && iface.alternates.length) return iface.alternates
+  if (iface?.alternate) return [iface.alternate]
+  return []
+}
+
 function interfaceClasses(device) {
   const configs = device?.configurations || (device?.configuration ? [device.configuration] : [])
-  return configs.flatMap(c => (c.interfaces || []).map(i => i.alternate?.interfaceClass))
+  return configs.flatMap(c => (c.interfaces || []).flatMap(i => allAlternates(i).map(a => a.interfaceClass)))
 }
 
 const isPrinterDevice = (device) => interfaceClasses(device).includes(PRINTER_CLASS)
@@ -57,17 +63,28 @@ export class EscposTransferError extends Error {
 }
 
 function findPrinterInterface(configuration) {
-  return (configuration?.interfaces || []).find(i => i.alternate?.interfaceClass === PRINTER_CLASS)
+  return (configuration?.interfaces || []).find(i => allAlternates(i).some(a => a.interfaceClass === PRINTER_CLASS))
+}
+
+function findPrinterConfigValue(device) {
+  for (const c of device?.configurations || []) {
+    if ((c.interfaces || []).some(i => allAlternates(i).some(a => a.interfaceClass === PRINTER_CLASS))) {
+      return c.configurationValue
+    }
+  }
+  return 1
 }
 
 export async function printEscpos(bytes, device) {
+  let claimedInterface = null
   await device.open()
   try {
-    if (!device.configuration) await device.selectConfiguration(1)
+    if (!device.configuration) await device.selectConfiguration(findPrinterConfigValue(device))
     const iface = findPrinterInterface(device.configuration)
     if (!iface) throw new Error('No USB printer interface (class 7) on the selected device')
     await device.claimInterface(iface.interfaceNumber)
-    const endpoint = (iface.alternate.endpoints || []).find(e => e.direction === 'out')
+    claimedInterface = iface.interfaceNumber
+    const endpoint = allAlternates(iface).flatMap(a => a.endpoints || []).find(e => e.direction === 'out')
     if (!endpoint) throw new Error('No OUT endpoint on the printer interface')
     try {
       await device.transferOut(endpoint.endpointNumber, bytes)
@@ -75,8 +92,7 @@ export async function printEscpos(bytes, device) {
       throw new EscposTransferError(e)
     }
   } finally {
-    // Release the claim so other tabs/apps can use the printer; a one-shot
-    // open→print→close per receipt keeps state simple and predictable.
+    if (claimedInterface !== null) { try { await device.releaseInterface(claimedInterface) } catch {} }
     try { await device.close() } catch {}
   }
 }

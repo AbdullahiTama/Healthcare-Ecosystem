@@ -429,6 +429,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // printers print softer than with raw commands.
   function legacyPrint(r) {
     const w = window.open('', '_blank', 'width=400,height=700')
+    if (!w) { showToast('Pop-up blocked — allow pop-ups to print this receipt.', { type: 'warning' }); return }
     w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {} }))
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 400)

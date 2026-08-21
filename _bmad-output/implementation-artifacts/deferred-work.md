@@ -16,3 +16,21 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-issues-1-to-8-batch-fixes.md`
   summary: Pre-existing advisor findings left untouched by this batch — SECURITY DEFINER views (staff_directory, professional_earnings), mutable search_path on legacy functions (handle_new_user, increment_*_view), anon-executable definer RPCs (register_business, attempt_staff_claim, etc.), pg_trgm in public schema, leaked-password protection disabled.
   evidence: All present before this work; fixing them is a dedicated hardening pass, not a drive-by inside an issue-batch spec.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Support choosing among multiple paired USB printers instead of always using the first device.
+  evidence: POS.jsx picks getPairedPrinters()[0] with no chooser; a user with two thermal printers has no way to switch — surfaced in blind-hunter review of POS.jsx:444.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Broaden WebUSB discovery to include vendor-specific (0xFF) printers so more thermal models are offered.
+  evidence: escposUsb.js filters to classCode 7 only; many ESC/POS thermals expose vendor class and are hidden from the picker — blind-hunter noted class-7 filter hides most hardware.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Add an automated parity check that HTML and ESC/POS receipt builders render the same business/items/totals/tax/payment/footer from one contract.
+  evidence: Both builders consume { receipt, business, settings } but no test asserts identical output; drift could ship — blind-hunter flagged missing parity enforcement.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Add structured observability for direct-print success vs fallback vs mid-transfer failure to validate the faint/blurry fix.
+  evidence: Current code logs only console.error and toasts; no counters or error codes to measure whether ESC/POS actually replaces rasterized prints — blind-hunter review.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Add timeout/abort handling for hanging USB operations (open/claim/transfer) to avoid a stuck Sending state.
+  evidence: printEscpos can hang indefinitely with no timeout; printing flag stays true and both Print buttons remain disabled — blind-hunter review of escposUsb.js:63.
+- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  summary: Add component-level test harness (@testing-library/react) and cover POS.jsx printReceipt branching plus Recent-sales reprint mapping.
+  evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx; verification-gap review showed no test observes the WebUSB-first decision matrix, duplicate-receipt guard, printing lock, or the sales-row to receipt-object reconstruction — repo has no component test harness.
