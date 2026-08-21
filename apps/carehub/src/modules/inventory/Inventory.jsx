@@ -4,6 +4,7 @@ import {
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
 } from 'lucide-react'
 import { productRepository } from './repositories'
+import { parseInventoryCsv } from './csvImport'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -207,10 +208,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   function downloadTemplate() {
     const rows = [
-      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)'],
-      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes'],
-      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes'],
-      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes'],
+      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)', 'Expiry Date'],
+      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes', '2027-06-30'],
+      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes', '2028-01-31'],
+      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes', ''],
     ]
     const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -226,26 +227,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const lines = ev.target.result.split('\n').filter(l => l.trim())
-        if (lines.length < 2) { setUploadError('File is empty or has no products.'); return }
-        const parsed = lines.slice(1).map(line => {
-          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
-          if (!cols[0]) return null
-          return {
-            name: cols[0] || '',
-            generic_name: cols[1] || '',
-            category: cols[2] || 'Medicines',
-            price: parseFloat(cols[3]) || 0,
-            cost_price: parseFloat(cols[4]) || 0,
-            stock: cols[5] !== '' ? parseInt(cols[5]) || 0 : 999,
-            reorder_level: parseInt(cols[6]) || 5,
-            barcode: cols[7] || '',
-            list_on_carefind: (cols[8] || 'yes').toLowerCase() !== 'no',
-            emoji: '💊',
-          }
-        }).filter(Boolean)
-        if (parsed.length === 0) { setUploadError('No valid products found.'); return }
-        setUploadData(parsed)
+        const { rows, error } = parseInventoryCsv(ev.target.result)
+        if (error) { setUploadError(error); return }
+        setUploadData(rows)
       } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
     }
     reader.readAsText(file); e.target.value = ''
@@ -281,6 +265,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         reorder_level: parseInt(p.reorder_level) || 5,
         barcode: p.barcode || '',
         list_on_carefind: p.list_on_carefind !== false,
+        expiry_date: p.expiry_date || null,
         emoji: '💊',
         business_id: brand.id,
       })
@@ -537,8 +522,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             1. Tap <strong>Download Template</strong><br />
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
             3. Fill in your products row by row<br />
-            4. Save as <strong>CSV</strong><br />
-            5. Upload here
+            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (e.g. 2027-06-30) — leave blank if none<br />
+            5. Save as <strong>CSV</strong><br />
+            6. Upload here
           </div>
           <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
