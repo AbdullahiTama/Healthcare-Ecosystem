@@ -134,22 +134,47 @@ export default function Territories({ brand }) {
   }
 
   async function importTerritories() {
-    if (resolution.fresh.length === 0) { showToast('Nothing new to import — everything in the file already exists.', { type: 'warning' }); return }
+    if (resolution.creates.length === 0) { showToast('Nothing new to import — everything in the file already exists.', { type: 'warning' }); return }
     setImporting(true)
-    showToast('Importing ' + resolution.fresh.length + ' territories…', { type: 'info' })
+    showToast('Importing ' + resolution.creates.length + ' territories…', { type: 'info' })
     try {
-      const { added, skipped: serverSkipped, failed } = await territoryRepository.createMany(brand.id, resolution.fresh)
+      const { added, skipped: serverSkipped, failed } = await territoryRepository.createMany(brand.id, resolution.creates)
+
+      // Second pass: children whose parent was created by this same file are
+      // still top-level — patch each onto its parent now that every row has an id.
+      let linked = 0
+      const linkFailures = []
+      if (resolution.parentLinks.length > 0) {
+        const byName = new Map((await territoryRepository.getAll(brand.id)).map(t => [t.name.toLowerCase(), t]))
+        for (const link of resolution.parentLinks) {
+          try {
+            const child = byName.get(link.name.toLowerCase())
+            const parent = byName.get(link.parent_name.toLowerCase())
+            if (!child?.id || !parent?.id) throw new Error('territory not found after import')
+            await territoryRepository.update(child.id, brand.id, { parent_territory_id: parent.id })
+            linked++
+          } catch {
+            linkFailures.push(link.name)
+          }
+        }
+      }
+
       await load()
       setShowUpload(false); setUploadData([]); setUploadError('')
       const skipped = resolution.skipped.length + serverSkipped
+      const problems = [
+        ...resolution.failed.map(f => f.name + ' (' + f.reason + ')'),
+        ...failed.map(x => x.name + ' (' + x.message + ')'),
+        ...linkFailures.map(n => n + ' (could not link to parent)'),
+      ]
       const parts = [added + ' imported']
+      if (linked > 0) parts.push(linked + ' linked to their parents')
       if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
       if (resolution.invalid.length > 0) parts.push(resolution.invalid.length + ' invalid')
-      if (resolution.unresolvedParents > 0) parts.push(resolution.unresolvedParents + ' added as top-level (parent not found)')
-      if (failed.length > 0) parts.push(failed.length + ' failed')
+      if (problems.length > 0) parts.push(problems.length + ' need attention')
       const summary = parts.join(' · ')
-      if (failed.length > 0) {
-        showToast(summary + ': ' + failed.slice(0, 3).map(x => x.name + ' (' + x.message + ')').join(', '), { type: 'warning' })
+      if (problems.length > 0) {
+        showToast(summary + ': ' + problems.slice(0, 3).join(', '), { type: 'warning' })
       } else {
         showToast(summary + '!', { type: 'success' })
       }
@@ -289,7 +314,7 @@ export default function Territories({ brand }) {
           <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
             1. Tap <strong>Download Template</strong><br />
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
-            3. Fill in your territories row by row — "Sits Under" must match an existing territory's name exactly<br />
+            3. Fill in your territories row by row — "Sits Under" must match an existing territory's name, or another row in this file (children may be listed before their parents)<br />
             4. Save as <strong>CSV</strong><br />
             5. Upload here
           </div>
@@ -302,21 +327,22 @@ export default function Territories({ brand }) {
           {uploadData.length > 0 && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                <CheckCircle size={15} /> {resolution.fresh.length} new territories in file
+                <CheckCircle size={15} /> {resolution.creates.length} new territories in file
                 {resolution.skipped.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.skipped.length} already exist (will be skipped)</span>}
                 {resolution.invalid.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.invalid.length} invalid</span>}
-                {resolution.unresolvedParents > 0 && <span style={{ color: warning, fontWeight: '600' }}> · {resolution.unresolvedParents} parent name(s) not found</span>}
+                {resolution.failed.length > 0 && <span style={{ color: danger, fontWeight: '600' }}> · {resolution.failed.length} cannot be imported</span>}
               </div>
               <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${theme.gray100}` }}>
                 {uploadData.map((t, i) => {
                   const isDupe = resolution.skipped.some(s => s.toLowerCase() === t.name.toLowerCase())
+                  const failedRow = resolution.failed.find(f => f.row === i + 1)
                   return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${theme.gray100}`, fontSize: '12px', background: isDupe ? warningBg : 'transparent' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: isDupe ? warning : navy }}>
-                        {isDupe && <AlertTriangle size={12} />}{t.name}
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${theme.gray100}`, fontSize: '12px', background: failedRow ? dangerBg : isDupe ? warningBg : 'transparent' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: failedRow ? danger : isDupe ? warning : navy }}>
+                        {(isDupe || failedRow) && <AlertTriangle size={12} />}{t.name}
                       </span>
-                      <span style={{ color: isDupe ? warning : gray500 }}>
-                        {isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' · ') || '—'}
+                      <span style={{ color: failedRow ? danger : isDupe ? warning : gray500 }}>
+                        {failedRow ? failedRow.reason : isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' · ') || '—'}
                       </span>
                     </div>
                   )
@@ -326,7 +352,7 @@ export default function Territories({ brand }) {
           )}
           <div style={{ display: 'flex', gap: '10px' }}>
             <GhostBtn onClick={downloadTerritoryTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
-            {uploadData.length > 0 && resolution.fresh.length > 0 && (
+            {uploadData.length > 0 && resolution.creates.length > 0 && (
               <button onClick={importTerritories} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
                 {importing
                   ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> Importing…</span>

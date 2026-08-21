@@ -30,46 +30,98 @@ export function parseTerritoryCsv(text) {
 }
 
 /**
- * Turns parsed rows into insertable payloads against the business's existing
- * territories. Returns:
- *   fresh            — [{ name, level, parent_territory_id }] ready to insert
- *   skipped          — names already in the database or duplicated in-file
- *                      (case-insensitive)
- *   invalid          — file positions of rows with no name ("row 3")
- *   unresolvedParents— count of rows whose "Sits Under" name matches nothing
- *                      that exists yet (including names later in the same
- *                      file). They import as top-level rather than pointing at
- *                      a row parallel batch inserts cannot guarantee exists.
+ * Turns parsed rows into a two-pass upload plan against the business's
+ * existing territories:
+ *   creates     — [{ name, level, parent_territory_id }] first-pass inserts.
+ *                 parent_territory_id is set only when the parent ALREADY
+ *                 exists in the database; everything else inserts top-level.
+ *   parentLinks — [{ name, parent_name }] second-pass PATCHes: children whose
+ *                 parent is created by this same file. The caller resolves
+ *                 names to ids after the inserts land and patches each child.
+ *   skipped     — names already in the database or duplicated in-file
+ *                 (case-insensitive)
+ *   invalid     — file positions of rows with no name ("row 3")
+ *   failed      — [{ name, row, reason }] rows that can never link: unknown
+ *                 parent name, or membership in / hanging off a circular
+ *                 hierarchy inside the file.
  */
 export function resolveTerritoryUpload(rows, existingTerritories) {
   const known = new Map(
     (existingTerritories || []).filter(t => t && t.name).map(t => [t.name.toLowerCase(), t]),
   )
-  const fresh = []
+  const pending = [] // rows that will definitely be created (parent already in DB, or no parent)
+  const deferred = new Map() // lower(name) -> { name, level, row, parent_name }
   const skipped = []
   const invalid = []
-  let unresolvedParents = 0
 
+  // Pass 1: park every valid row; defer any whose parent isn't already in the
+  // database (it may be created later in this same file).
   rows.forEach((r, i) => {
     const name = String(r?.name || '').trim()
     if (!name) { invalid.push('row ' + (i + 1)); return }
     const key = name.toLowerCase()
     if (known.has(key)) { skipped.push(name); return }
 
-    const parentName = String(r?.parent_name || '').trim().toLowerCase()
+    const parentName = String(r?.parent_name || '').trim()
     let parent_territory_id = null
     if (parentName) {
-      const parent = known.get(parentName)
+      const parent = known.get(parentName.toLowerCase())
       if (parent?.id) parent_territory_id = parent.id
-      else unresolvedParents++
     }
 
-    fresh.push({ name, level: String(r?.level || '').trim() || null, parent_territory_id })
+    if (parentName && !parent_territory_id) {
+      deferred.set(key, { name, level: String(r?.level || '').trim() || null, row: i + 1, parent_name: parentName })
+    } else {
+      pending.push({ name, level: String(r?.level || '').trim() || null, parent_territory_id, row: i + 1 })
+    }
     // Register only AFTER dedupe checks so a later duplicate of this name is
-    // skipped — but deliberately NOT as a resolvable parent: parents must
-    // already exist in the database (see unresolvedParents above).
+    // skipped — and WITHOUT an id, so it can never serve as an existing parent.
     known.set(key, { name })
   })
 
-  return { fresh, skipped, invalid, unresolvedParents }
+  // Pass 2 classification: walk each deferred child up its in-file parent
+  // chain. A chain terminates safely when it reaches a row that resolved to a
+  // real id in pass 1; it dead-ends at a name nothing created (unknown) or
+  // loops forever (cycle). Memoized so shared tails are walked once.
+  const statusOf = new Map() // key -> true (resolvable) | false (circular)
+
+  const resolves = (key, path) => {
+    if (statusOf.has(key)) return statusOf.get(key)
+    const node = deferred.get(key)
+    if (!node) return true // not deferred → its parent got a real id in pass 1
+    const cycleStart = path.indexOf(key)
+    if (cycleStart !== -1) {
+      for (let i = cycleStart; i < path.length; i++) statusOf.set(path[i], false)
+      return false
+    }
+    const ok = resolves(node.parent_name.toLowerCase(), [...path, key])
+    statusOf.set(key, ok)
+    return ok
+  }
+
+  const creates = []
+  const parentLinks = []
+  const failed = []
+
+  pending.forEach(p => creates.push({ name: p.name, level: p.level, parent_territory_id: p.parent_territory_id }))
+  deferred.forEach((node, key) => {
+    if (!pending.some(p => p.name.toLowerCase() === node.parent_name.toLowerCase()) &&
+        !deferred.has(node.parent_name.toLowerCase())) {
+      failed.push({ name: node.name, row: node.row, reason: 'Unknown parent "' + node.parent_name + '"' })
+      return
+    }
+    if (resolves(key, [])) {
+      creates.push({ name: node.name, level: node.level, parent_territory_id: null })
+      parentLinks.push({ name: node.name, parent_name: node.parent_name })
+    } else {
+      failed.push({ name: node.name, row: node.row, reason: 'Circular hierarchy detected' })
+    }
+  })
+
+  // Restore file order so previews read like the spreadsheet.
+  const rowIndex = new Map()
+  rows.forEach((r, i) => { if (r?.name) rowIndex.set(String(r.name).trim().toLowerCase(), i) })
+  creates.sort((a, b) => (rowIndex.get(a.name.toLowerCase()) ?? 0) - (rowIndex.get(b.name.toLowerCase()) ?? 0))
+
+  return { creates, parentLinks, skipped, invalid, failed }
 }

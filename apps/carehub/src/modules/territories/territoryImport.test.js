@@ -38,15 +38,90 @@ describe('resolveTerritoryUpload', () => {
   ]
 
   it('resolves parent names case-insensitively to existing territory ids', () => {
-    const { fresh } = resolveTerritoryUpload(
+    const { creates, parentLinks } = resolveTerritoryUpload(
       [{ name: 'Ikeja', level: 'LGA', parent_name: 'lagos region' }],
       existing,
     )
-    expect(fresh).toEqual([{ name: 'Ikeja', level: 'LGA', parent_territory_id: 't2' }])
+    expect(creates).toEqual([{ name: 'Ikeja', level: 'LGA', parent_territory_id: 't2' }])
+    expect(parentLinks).toEqual([])
+  })
+
+  it('defers a child whose parent is defined later in the same file (two-pass)', () => {
+    // Parallel batch inserts give no ordering guarantee, so the child inserts
+    // with a null parent first; the link is patched once every row exists.
+    const { creates, parentLinks, failed } = resolveTerritoryUpload(
+      [
+        { name: 'Ikeja', level: 'LGA', parent_name: 'Lagos Region' },
+        { name: 'Lagos Region', level: 'Region', parent_name: '' },
+      ],
+      [],
+    )
+    expect(creates).toEqual([
+      { name: 'Ikeja', level: 'LGA', parent_territory_id: null },
+      { name: 'Lagos Region', level: 'Region', parent_territory_id: null },
+    ])
+    expect(parentLinks).toEqual([{ name: 'Ikeja', parent_name: 'Lagos Region' }])
+    expect(failed).toEqual([])
+  })
+
+  it('fails rows whose parent exists nowhere with a reason', () => {
+    const { creates, parentLinks, failed } = resolveTerritoryUpload(
+      [{ name: 'Ikeja', level: 'LGA', parent_name: 'Atlantis' }],
+      existing,
+    )
+    expect(creates).toHaveLength(0)
+    expect(parentLinks).toEqual([])
+    expect(failed).toHaveLength(1)
+    expect(failed[0].name).toBe('Ikeja')
+    expect(failed[0].reason).toMatch(/unknown parent/i)
+    expect(failed[0].reason).toContain('Atlantis')
+  })
+
+  it('fails every row in a parent cycle instead of guessing an order', () => {
+    const { creates, parentLinks, failed } = resolveTerritoryUpload(
+      [
+        { name: 'Area A', level: '', parent_name: 'Area B' },
+        { name: 'Area B', level: '', parent_name: 'Area A' },
+      ],
+      [],
+    )
+    expect(creates).toEqual([])
+    expect(parentLinks).toEqual([])
+    expect(failed.map(f => f.name).sort()).toEqual(['Area A', 'Area B'])
+    for (const f of failed) expect(f.reason).toMatch(/circular/i)
+  })
+
+  it('fails rows hanging off a cycle — they can never resolve either', () => {
+    const { parentLinks, failed } = resolveTerritoryUpload(
+      [
+        { name: 'Area A', level: '', parent_name: 'Area B' },
+        { name: 'Area B', level: '', parent_name: 'Area A' },
+        { name: 'Depot', level: '', parent_name: 'Area A' },
+      ],
+      [],
+    )
+    expect(parentLinks).toEqual([])
+    expect(failed.map(f => f.name).sort()).toEqual(['Area A', 'Area B', 'Depot'])
+  })
+
+  it('chains multi-level in-file hierarchies onto their file-created parents', () => {
+    const { creates, parentLinks } = resolveTerritoryUpload(
+      [
+        { name: 'Region R', level: 'Region', parent_name: '' },
+        { name: 'State S', level: 'State', parent_name: 'Region R' },
+        { name: 'LGA L', level: 'LGA', parent_name: 'State S' },
+      ],
+      [],
+    )
+    expect(creates).toHaveLength(3)
+    expect(parentLinks).toEqual([
+      { name: 'State S', parent_name: 'Region R' },
+      { name: 'LGA L', parent_name: 'State S' },
+    ])
   })
 
   it('skips names that already exist, case-insensitively, and dedupes within the file', () => {
-    const { fresh, skipped } = resolveTerritoryUpload(
+    const { creates, skipped } = resolveTerritoryUpload(
       [
         { name: 'LAGOS REGION', level: '', parent_name: '' },
         { name: 'Ibadan', level: '', parent_name: '' },
@@ -54,34 +129,21 @@ describe('resolveTerritoryUpload', () => {
       ],
       existing,
     )
-    expect(fresh.map(r => r.name)).toEqual(['Ibadan'])
+    expect(creates.map(r => r.name)).toEqual(['Ibadan'])
     expect(skipped).toEqual(['LAGOS REGION', 'ibadan'])
   })
 
-  it('counts rows whose parent does not exist yet instead of guessing an id', () => {
-    // The parent is in the same file but not yet in the database; parallel
-    // batch inserts give no ordering guarantee, so the row must NOT point at
-    // a row that may not exist. It imports as top-level and the count is
-    // surfaced so the preview can say so.
-    const { fresh, unresolvedParents } = resolveTerritoryUpload(
-      [{ name: 'Ikeja', level: 'LGA', parent_name: 'Lagos Region' }],
-      [],
-    )
-    expect(fresh[0].parent_territory_id).toBeNull()
-    expect(unresolvedParents).toBe(1)
-  })
-
   it('reports rows without a name as invalid with their file position', () => {
-    const { fresh, invalid } = resolveTerritoryUpload(
+    const { creates, invalid } = resolveTerritoryUpload(
       [{ name: '', level: 'Region', parent_name: '' }],
       existing,
     )
-    expect(fresh).toHaveLength(0)
+    expect(creates).toHaveLength(0)
     expect(invalid).toEqual(['row 1'])
   })
 
   it('nulls blank levels for the nullable column', () => {
-    const { fresh } = resolveTerritoryUpload([{ name: 'Kano', level: '', parent_name: '' }], [])
-    expect(fresh[0]).toEqual({ name: 'Kano', level: null, parent_territory_id: null })
+    const { creates } = resolveTerritoryUpload([{ name: 'Kano', level: '', parent_name: '' }], [])
+    expect(creates[0]).toEqual({ name: 'Kano', level: null, parent_territory_id: null })
   })
 })
