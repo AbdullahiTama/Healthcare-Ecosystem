@@ -335,8 +335,11 @@ export default function Purchases({ brand, role, perms }) {
                       <input value={item.batch} onChange={e => setItem(i, 'batch', e.target.value)} placeholder='Batch no. (optional)'
                         aria-label='Batch number'
                         style={{ padding: '8px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
-                      <input value={item.expiry} onChange={e => setItem(i, 'expiry', e.target.value)} type='date' aria-label='Expiry date'
-                        style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <label style={{ fontSize: '11px', fontWeight: '700', color: gray500 }}>Expiry Date</label>
+                        <input value={item.expiry} onChange={e => setItem(i, 'expiry', e.target.value)} type='date' aria-label='Expiry date'
+                          style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
+                      </div>
                       <select value={item.cat} onChange={e => setItem(i, 'cat', e.target.value)} aria-label='Category'
                         style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }}>
                         {PRODUCT_CATS.map(c => <option key={c}>{c}</option>)}
