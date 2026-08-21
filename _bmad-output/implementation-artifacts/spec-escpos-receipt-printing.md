@@ -2,7 +2,7 @@
 title: 'ESC/POS direct thermal receipt printing with browser-print fallback'
 type: 'bugfix'
 created: '2026-08-21'
-status: 'in-progress'
+status: 'in-review'
 review_loop_iteration: 0
 baseline_commit: 'a1b4446dc8043edcb4fe2a42577d6c2bd56c487c'
 context: []
@@ -66,12 +66,12 @@ context: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `apps/carehub/src/modules/pos/receiptEscpos.js` -- Create pure `buildReceiptEscpos({ receipt, business, settings })` → Uint8Array: `ESC @` init; centered bold double-size business name; address/phone/header lines; txn id/date/client; item rows (name wrapped, qty × price right-aligned); subtotal/discount/total; display-only tax lines via `computeTax`; payment block (cash given/change, credit paid/balance, split entries >0); refund policy + footer; feeds + `GS V` partial cut. ASCII-folding helper; 32/48-column layout from `receipt_width` -- single testable source of command construction
-- [ ] `apps/carehub/src/modules/pos/escposUsb.js` -- Create transport: `isEscposUsbSupported()`; `getPairedPrinters()` filtering `navigator.usb.getDevices()` to interface class 7; `requestPrinter()` wrapping `requestDevice({ filters: [{ classCode: 7 }] })`, returns null on `NotFoundError`; `printEscpos(bytes, device)` doing `open()` → `selectConfiguration(1)` → `claimInterface()` → first OUT endpoint → `transferOut()`. Injectable usb-like object (default `navigator.usb`) for hardware-free tests
-- [ ] `apps/carehub/src/modules/pos/POS.jsx` -- Rework `printReceipt(r)` async per the I/O matrix: paired → encode+send with loading/success toasts; supported-but-unpaired → `requestPrinter()` inside click gesture, grant → send, cancel → legacy `window.open`/`buildReceiptHtml`/`window.print()` path; unsupported → legacy immediately; pre-transfer failure → console.error + warning toast + legacy fallback; after successful `transferOut` never fall back; disable print buttons while sending -- zero regression for non-Chromium users
-- [ ] `apps/carehub/src/modules/pos/receiptEscpos.test.js` -- Tests mirroring `receiptPrint.test.js`: init/header sequence, 32 vs 48 columns, long-name wrap, cash/credit/split/tax variants, non-ASCII folding, cut bytes present -- proves encoder without hardware
-- [ ] `apps/carehub/src/modules/pos/escposUsb.test.js` -- Mock-device tests: happy-path bytes reach `transferOut`; unsupported env → false; cancelled picker → null; `transferOut` rejection propagates -- locks transport contract
-- [ ] `knowledge/modules/point-of-sale.md` -- Add "Receipt Printing" section: ESC/POS-first flow, fallback rules, Chromium-only note, pairing behavior, correct current paths
+- [x] `apps/carehub/src/modules/pos/receiptEscpos.js` -- Created pure `buildReceiptEscpos({ receipt, business, settings })` → Uint8Array: `ESC @` init; left-aligned with manual center-pad; bold/double for short business names; wrapped item rows + two-col pricing; discount/tax/payment blocks; refund/footer + `GS V` cut; CP437-safe folding; 32/48-col layout from `receipt_width`
+- [x] `apps/carehub/src/modules/pos/escposUsb.js` -- Created transport: `isEscposUsbSupported()`; `getPairedPrinters()` filtered to class 7; `requestPrinter()` null on cancel; `printEscpos(bytes, device)` `open()` → `selectConfiguration(1)` → `claimInterface()` → `transferOut()` with `EscposTransferError.sent`; injectable usb param; graceful close in finally
+- [x] `apps/carehub/src/modules/pos/POS.jsx` -- Reworked `printReceipt(r)` async per matrix (paired → encode+send, unpaired → `requestPrinter()` inside gesture, unsupported/cancel → legacy; pre-transfer failure → fallback, post-transfer failure → `EscposTransferError` no reprint); added `printing` state, disabled buttons + "Sending…" label and `aria-busy`; split into `legacyPrint()` helper
+- [x] `apps/carehub/src/modules/pos/receiptEscpos.test.js` -- 15 tests: init+cut bytes, header/meta/items/totals/footer, date, 32/48 column budgets, long-name wrap, tax/cash/credit/split/discount variants, accent folding, emoji drop, CJK `?`, double-size gate, reprint-shaped input parity
+- [x] `apps/carehub/src/modules/pos/escposUsb.test.js` -- 13 tests: happy-path OUT endpoint, config-select fallback, missing interface/endpoint rejects, `EscposTransferError.sent` wrap, close-on-failure, `isEscposUsbSupported`/`getPairedPrinters`/`requestPrinter` primitives including cancel→null
+- [x] `knowledge/modules/point-of-sale.md` -- Fixed stale file paths + added "Receipt Printing" section documenting ESC/POS-first flow, fallback rules, Chromium-only + HTTPS + gesture constraints, pairing persistence, dual entry points and button UX
 
 **Acceptance Criteria:**
 - Given a paired ESC/POS USB printer in Chrome/Edge, when "Print receipt" is clicked, then raw commands reach the printer producing sharp dark text with auto-cut and no browser dialog appears
