@@ -143,7 +143,7 @@ export function buildReceiptEscpos({ receipt = {}, business = {}, settings = {} 
   if (biz?.address) centered(biz.address)
   if (biz?.phone) centered(biz.phone)
   if (biz?.whatsapp) centered('WhatsApp: ' + biz.whatsapp)
-  if (s.receipt_header) centered(s.receipt_header)
+  if (settings.receipt_header) centered(settings.receipt_header)
 
   sep()
   twoCol('Receipt:', r.id, cols).forEach(line)
