@@ -551,6 +551,29 @@ export async function reverseGeocode(lat, lng) {
   }
 }
 
+// Forward geocoding for the Place of Visit field: a typed place name becomes
+// coordinates so the log can verify the rep's GPS against where they claim to
+// be. Same free OpenStreetMap service as reverseGeocode — no key, no cost.
+// Returns [{ name, lat, lng }] sorted by OSM relevance; throws on transport
+// failure so the caller can show a retryable error rather than an empty list.
+export async function geocodePlace(query) {
+  const q = encodeURIComponent(String(query || '').trim())
+  if (!q) return []
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=' + q
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
+  if (!res.ok) throw new Error('Place lookup failed (' + res.status + ')')
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+  return data
+    .map(function (d) {
+      const lat = parseFloat(d.lat)
+      const lng = parseFloat(d.lon)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      return { name: d.display_name, lat: lat, lng: lng }
+    })
+    .filter(Boolean)
+}
+
 export async function uploadActivityVoice(blob) {
   const type = blob.type || 'audio/mp4'
   let ext = 'mp4'

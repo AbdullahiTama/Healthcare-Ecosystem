@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
+import { MapPin, BadgeCheck, AlertTriangle } from 'lucide-react'
 import {
   getActivityFields, addActivityField, deleteActivityField,
   getDefaultViewers, setDefaultViewers,
   getFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
   logActivity, reactToActivity, unreactToActivity, commentOnActivity,
-  uploadActivityVoice, reverseGeocode,
+  uploadActivityVoice, reverseGeocode, geocodePlace,
 } from '../../services/supabase'
+// Pure distance check: does the GPS fix sit within tolerance of the claimed place?
+import { verifyPlaceMatch } from '../../lib/geo'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -115,6 +118,15 @@ export default function LiveActivity({ brand }) {
   const [gps, setGps] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
+  // Place of Visit (issue #8): the rep names WHERE they visited; the name is
+  // geocoded to coordinates and checked against the GPS fix at submit time.
+  const [placeQuery, setPlaceQuery] = useState('')
+  const [placeCoords, setPlaceCoords] = useState(null)
+  const [placeSuggestions, setPlaceSuggestions] = useState([])
+  const [geocoding, setGeocoding] = useState(false)
+  const [geoError, setGeoError] = useState(false)
+  const [geoRetry, setGeoRetry] = useState(0)
+  const placeTimer = useRef(null)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
 
@@ -339,6 +351,38 @@ export default function LiveActivity({ brand }) {
     setVoicePreview(null)
   }
 
+  // Debounced forward-geocode of the typed place name. Suggestions are only
+  // fetched while the logger is open; picking one pins the coordinates that
+  // the submit-time verification compares against the GPS fix.
+  useEffect(function () {
+    if (!logging) return
+    const q = placeQuery.trim()
+    if (q.length < 3) { setPlaceSuggestions([]); setGeoError(false); return }
+    clearTimeout(placeTimer.current)
+    placeTimer.current = setTimeout(async function () {
+      setGeocoding(true)
+      try {
+        const results = await geocodePlace(q)
+        setPlaceSuggestions(results)
+        setGeoError(false)
+      } catch (e) {
+        console.error('Place lookup failed:', e)
+        setPlaceSuggestions([])
+        setGeoError(true)
+      } finally {
+        setGeocoding(false)
+      }
+    }, 400)
+    return function () { clearTimeout(placeTimer.current) }
+  }, [placeQuery, logging, geoRetry])
+
+  function pickPlace(s) {
+    setPlaceQuery(s.name)
+    setPlaceCoords({ lat: s.lat, lng: s.lng })
+    setPlaceSuggestions([])
+    setGeoError(false)
+  }
+
   function openLogger() {
     if (fields.length === 0) {
       showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
@@ -351,6 +395,10 @@ export default function LiveActivity({ brand }) {
     setVoicePreview(null)
     setGps(null)
     setPlaceName('')
+    setPlaceQuery('')
+    setPlaceCoords(null)
+    setPlaceSuggestions([])
+    setGeoError(false)
     setLogging(true)
 
     if (navigator.geolocation) {
@@ -360,7 +408,12 @@ export default function LiveActivity({ brand }) {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
           setGps(coords)
           const name = await reverseGeocode(coords.lat, coords.lng)
-          if (name) setPlaceName(name)
+          if (name) {
+            setPlaceName(name)
+            // Prefill the editable Place of Visit with the reverse-geocoded
+            // guess; the rep can correct it before submitting.
+            setPlaceQuery(function (prev) { return prev || name })
+          }
           setFindingPlace(false)
         },
         function () { setFindingPlace(false) },
@@ -393,6 +446,11 @@ export default function LiveActivity({ brand }) {
         return { staff_id: id, viewer_name: nameFor(id) }
       })
 
+      // Verification is computed once, at log time, and stored with the row —
+      // the feed never re-derives it. No GPS or no resolved place means
+      // "unverified", not an error: the log must still go through.
+      const verified = !!(placeCoords && gps && verifyPlaceMatch(placeCoords, gps))
+
       await logActivity({
         business_id: brand.id,
         staff_id: meStaffId,
@@ -404,6 +462,9 @@ export default function LiveActivity({ brand }) {
         lat: gps ? gps.lat : null,
         lng: gps ? gps.lng : null,
         location_label: placeName || null,
+        place_of_visit: placeQuery.trim() || null,
+        place_coords: placeCoords || null,
+        place_verified: verified,
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -543,7 +604,7 @@ export default function LiveActivity({ brand }) {
     if (col.key === 'date') return fmtStamp(a.created_at)
     if (col.key === 'rep') return a.rep_name
     if (col.key === 'territory') return terrName(a.territory_id) || ''
-    if (col.key === 'place') return a.location_label || ''
+    if (col.key === 'place') return a.place_of_visit || a.location_label || ''
     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
     if (col.fieldId) {
@@ -812,6 +873,22 @@ export default function LiveActivity({ brand }) {
                         {a.location_label}
                       </div>
                     )}
+                    {(a.place_of_visit || a.place_verified) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: a.location_label ? '2px' : '4px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: '700', color: navy }}>
+                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />{a.place_of_visit}
+                        </span>
+                        {a.place_verified ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
+                            <BadgeCheck size={10} /> GPS verified
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
+                            <AlertTriangle size={10} /> Unverified
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {a.lat && a.lng && (
                     <a href={'https://www.google.com/maps?q=' + a.lat + ',' + a.lng} target='_blank' rel='noreferrer'
@@ -948,17 +1025,58 @@ export default function LiveActivity({ brand }) {
           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
           <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
         </>}>
-            <div style={{ padding: '10px 12px', borderRadius: '8px', background: placeName ? tealMist : bg, border: '1px solid ' + (placeName ? tealMist : gray100), marginBottom: '16px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Location</div>
-              <div style={{ fontSize: '12.5px', color: placeName ? tealDeep : gray400, fontWeight: placeName ? '700' : '500', marginTop: '2px' }}>
-                {placeName
-                  ? placeName
-                  : findingPlace
-                    ? 'Finding where you are...'
-                    : gps
-                      ? 'Coordinates captured'
-                      : 'Location not available'}
+            <div style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GPS</div>
+              <div style={{ fontSize: '12.5px', color: gps ? tealDeep : gray400, fontWeight: gps ? '700' : '500', marginTop: '2px' }}>
+                {findingPlace
+                  ? 'Finding where you are...'
+                  : gps
+                    ? 'Coordinates captured'
+                    : 'Location not available'}
               </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Place of Visit</div>
+              <input value={placeQuery} onChange={function (e) { setPlaceQuery(e.target.value) }}
+                placeholder='Where did you visit? e.g. Lagos University Teaching Hospital'
+                aria-label='Place of Visit'
+                style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', boxSizing: 'border-box' }} />
+              {geocoding && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>Looking up place…</div>}
+              {!geocoding && geoError && (
+                <button type='button' onClick={function () { setGeoRetry(function (n) { return n + 1 }) }}
+                  style={{ display: 'block', width: '100%', marginTop: '6px', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', textAlign: 'left' }}>
+                  Couldn't look up that place. Tap to retry — or keep typing.
+                </button>
+              )}
+              {placeSuggestions.length > 0 && (
+                <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: `1px solid ${border}`, borderRadius: '10px', background: 'white' }}>
+                  {placeSuggestions.map(function (s, i) {
+                    return (
+                      <button key={i} type='button' onClick={function () { pickPlace(s) }}
+                        style={{ display: 'block', width: '100%', padding: '9px 12px', borderBottom: `1px solid ${gray100}`, background: 'white', border: 'none', borderTop: i > 0 ? `1px solid ${gray100}` : 'none', cursor: 'pointer', textAlign: 'left', fontSize: '12px', color: navy }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: '600' }}><MapPin size={12} /> {s.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {gps && placeCoords && (
+                verifyPlaceMatch(placeCoords, gps) ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: success, marginTop: '6px' }}>
+                    <BadgeCheck size={13} /> GPS matches this place
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: warning, marginTop: '6px' }}>
+                    <AlertTriangle size={13} /> You are far from this place — it will be saved unverified
+                  </div>
+                )
+              )}
+              {gps && !placeCoords && placeQuery.trim().length >= 3 && !geocoding && (
+                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '6px' }}>
+                  Pick a suggestion above to verify against your GPS.
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
