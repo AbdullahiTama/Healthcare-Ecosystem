@@ -344,7 +344,7 @@ function News() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

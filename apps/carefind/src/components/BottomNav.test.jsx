@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import BottomNav from './BottomNav.jsx'
+import { CREATE_PARAM } from '../modules/social-feed/createSelector.js'
+
+// Reports the router's current location so a navigate() can be asserted.
+function LocationProbe() {
+  const location = useLocation()
+  return <span data-testid="location">{`${location.pathname}${location.search}`}</span>
+}
 
 const supabaseMock = vi.hoisted(() => {
   const q = {
@@ -57,11 +64,44 @@ describe('BottomNav (five destinations)', () => {
     expect(screen.queryByRole('link', { name: 'Notifications' })).not.toBeInTheDocument()
   })
 
-  it('falls back to onCompose when tapped on the feed and the composer is not in the DOM', () => {
+  // Issue #2 regression suite. The old behaviour scrolled to #post-composer
+  // whenever it was in the DOM and only called onCompose as a fallback, so on
+  // the feed — where the composer is always present — the create selector
+  // never opened, and on every other page BottomNav was rendered with no
+  // onCompose at all so the button just went to /feed and stopped there.
+  it('opens the create selector when the feed provides onCompose', () => {
     auth.user = null
     const onCompose = vi.fn()
     renderNav('/feed', { onCompose })
     fireEvent.click(screen.getByRole('button', { name: 'Create post' }))
     expect(onCompose).toHaveBeenCalledTimes(1)
+  })
+
+  it('still opens the selector when the post composer is in the DOM', () => {
+    auth.user = null
+    const onCompose = vi.fn()
+    const composer = document.createElement('div')
+    composer.id = 'post-composer'
+    composer.appendChild(document.createElement('textarea'))
+    document.body.appendChild(composer)
+    try {
+      renderNav('/feed', { onCompose })
+      fireEvent.click(screen.getByRole('button', { name: 'Create post' }))
+      expect(onCompose).toHaveBeenCalledTimes(1)
+    } finally {
+      composer.remove()
+    }
+  })
+
+  it('navigates to the feed carrying the create flag when no onCompose is given', () => {
+    auth.user = null
+    render(
+      <MemoryRouter initialEntries={['/profile']}>
+        <BottomNav />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Create post' }))
+    expect(screen.getByTestId('location').textContent).toBe(`/feed?${CREATE_PARAM}=1`)
   })
 })

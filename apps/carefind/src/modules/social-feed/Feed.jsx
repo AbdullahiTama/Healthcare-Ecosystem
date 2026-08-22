@@ -10,6 +10,7 @@ import {
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder } from './engagement'
+import { CREATE_PARAM, logCreateTap } from './createSelector.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
@@ -187,6 +188,10 @@ function Feed() {
   // and then cleared so it never fights the persisted tab preference.
   const tabParam = searchParams.get('tab')
   const urlTabAppliedRef = useRef(false)
+  // Issue #2: any screen's create button navigates here with ?create=1. The
+  // feed is the only screen that can open the selector, so it opens it on
+  // arrival and strips the flag — a refresh or a Back tap must not re-open it.
+  const createParam = searchParams.get(CREATE_PARAM)
 
   // #7 In-feed post search. feedResults is null when not searching, so the
   // feed renders the normal ranked list; otherwise it renders search hits.
@@ -557,6 +562,20 @@ function Feed() {
     setFeedTab(tabParam)
     clearTabParam()
   }, [])
+
+  // Issue #2: honour ?create=1 from another screen's create button. Runs on
+  // every change of the param (not just mount) so a second tap from the same
+  // page re-opens the selector, and drops the flag once it has been consumed.
+  useEffect(() => {
+    if (createParam !== '1') return
+    setCreateOpen(true)
+    logCreateTap({ source: 'feed-create-param', opened: true, path: '/feed' })
+    const next = new URLSearchParams(searchParams)
+    next.delete(CREATE_PARAM)
+    const qs = next.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    setSearchParams(next, { replace: true })
+  }, [createParam])
 
   // Item 12 deep link: when the URL carries ?post=<id>, open that post in the
   // detail modal on top of the normal feed, then drop the param. A post
@@ -2462,9 +2481,12 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
           {CREATE_OPTIONS.map((opt) => {
             const locked = opt.pro && !canGoLive
+            const OptIcon = opt.Icon
             return (
               <button
                 key={opt.key}
+                type="button"
+                aria-label={locked ? `${opt.label} — verified accounts only` : opt.label}
                 onClick={() => {
                   setCreateOpen(false)
                   if (locked) { navigate('/verify'); return }
@@ -2477,7 +2499,12 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
                   opacity: locked ? 0.55 : 1, cursor: 'pointer',
                 }}
               >
-                <span style={{ display: 'block', fontSize: 21, marginBottom: 6 }}>{opt.icon}</span>
+                <span style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 6, color: opt.danger ? theme.alert : theme.tealDeep,
+                }}>
+                  <OptIcon size={21} strokeWidth={1.9} aria-hidden="true" />
+                </span>
                 <span style={{
                   fontSize: 10.5, fontWeight: opt.danger ? 900 : 700,
                   color: opt.danger ? theme.alert : theme.textMid,

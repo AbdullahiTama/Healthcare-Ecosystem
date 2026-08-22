@@ -89,7 +89,7 @@ function SavedPosts() {
   function inShell(content) {
     if (isMobile) return content
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {content}
       </AppShell>
     )

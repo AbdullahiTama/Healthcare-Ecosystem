@@ -568,7 +568,6 @@ const distanceMeters = (p, u) => {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
     >
       {bodyContent}
     </AppShell>

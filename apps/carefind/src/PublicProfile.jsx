@@ -367,7 +367,7 @@ function PublicProfile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -399,7 +399,7 @@ function PublicProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -1033,7 +1033,6 @@ function PublicProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

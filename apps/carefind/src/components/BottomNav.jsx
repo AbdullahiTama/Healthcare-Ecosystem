@@ -4,6 +4,7 @@ import { supabase } from '../config/supabaseClient'
 import { useAuth } from '../providers/AuthContext'
 import { Home, Newspaper, Plus, User, Compass } from 'lucide-react'
 import { theme } from '../styles/theme'
+import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 
 function BottomNav({ onCompose }) {
   const location = useLocation()
@@ -48,22 +49,19 @@ function BottomNav({ onCompose }) {
     loadUnread()
   }, [user, location.pathname])
 
+  // Create always shows the selector first — never a silent drop into the
+  // Text Post composer. See modules/social-feed/createSelector.js for why the
+  // previous "scroll to #post-composer, fall back to onCompose" shape made the
+  // selector disappear. The feed passes an onCompose that opens the modal in
+  // place; every other screen navigates to the feed carrying the create flag.
   function handleCompose() {
-    if (location.pathname !== '/feed') {
-      navigate('/feed')
-      setTimeout(() => {
-        const el = document.getElementById('post-composer')
-        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.querySelector('textarea')?.focus() }
-      }, 400)
-    } else {
-      const el = document.getElementById('post-composer')
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        el.querySelector('textarea')?.focus()
-      } else if (onCompose) {
-        onCompose()
-      }
+    if (onCompose) {
+      onCompose()
+      logCreateTap({ source: 'bottom-nav', opened: true, path: location.pathname })
+      return
     }
+    navigate(CREATE_PATH)
+    logCreateTap({ source: 'bottom-nav-navigate', opened: true, path: location.pathname })
   }
 
   return (

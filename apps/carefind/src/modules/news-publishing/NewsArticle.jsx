@@ -228,7 +228,7 @@ function NewsArticle() {
     )
     if (isMobile) return errContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {errContent}
       </AppShell>
     )
@@ -250,7 +250,7 @@ function NewsArticle() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -506,7 +506,6 @@ function NewsArticle() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

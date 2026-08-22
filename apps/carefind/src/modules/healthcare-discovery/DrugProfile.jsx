@@ -176,7 +176,7 @@ function DrugProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -585,7 +585,6 @@ function DrugProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}
