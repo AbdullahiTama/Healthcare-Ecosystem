@@ -535,5 +535,54 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true })
   }
 
+  // --------------------------------------------------------------------
+  // Credential review (issue #5). The `credentials` bucket holds professional
+  // licences, MDCN/PCN certificates and work IDs — identity documents — and
+  // is now PRIVATE (20260822_credentials_bucket_hardening.sql). It used to be
+  // a public bucket, so AdminPanel could link straight at credential_url and
+  // so could anyone else who had or guessed that URL.
+  //
+  // Reviewers reach a document through here instead: this handler holds the
+  // service-role key, so it is the one caller that can read another user's
+  // object, and it hands back a URL that expires. Requires a valid admin
+  // session, same as every other action above.
+  // --------------------------------------------------------------------
+  if (action === 'credential_url') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+
+    const { requestId } = req.body
+    if (!requestId) return res.status(400).json({ error: 'requestId required' })
+
+    const { data: request, error: readError } = await supabase
+      .from('verification_requests')
+      .select('id, credential_url')
+      .eq('id', requestId)
+      .maybeSingle()
+    if (readError) return res.status(400).json({ error: readError.message })
+    if (!request || !request.credential_url) {
+      return res.status(404).json({ error: 'This request has no credential document attached.' })
+    }
+
+    // Rows written before this change stored a full public URL; rows written
+    // after store the bare object path. Accept both, and never let a stored
+    // value walk out of the bucket.
+    const stored = String(request.credential_url)
+    const marker = '/credentials/'
+    const idx = stored.indexOf(marker)
+    const objectPath = (idx >= 0 ? stored.slice(idx + marker.length) : stored).replace(/^\/+/, '')
+    if (!objectPath || objectPath.includes('..')) {
+      return res.status(400).json({ error: 'Stored credential path is not usable.' })
+    }
+
+    const { data: signed, error: signError } = await supabase.storage
+      .from('credentials')
+      .createSignedUrl(objectPath, 300) // five minutes is long enough to review
+    if (signError) return res.status(400).json({ error: signError.message })
+
+    return res.status(200).json({ url: signed.signedUrl, expiresIn: 300 })
+  }
+
   return res.status(400).json({ error: 'Unknown action' })
 }

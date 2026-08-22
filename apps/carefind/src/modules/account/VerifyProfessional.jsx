@@ -9,6 +9,10 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Loading } from '../../components/ui'
+import {
+  validateCredentialFile, credentialStoragePath, describeUploadError,
+  CREDENTIAL_ACCEPT_ATTR, MAX_CREDENTIAL_LABEL,
+} from './credentialUpload.js'
 
 const SPECIALTIES = [
   'Pharmacist', 'Medical Doctor', 'Cardiologist', 'Surgeon', 'Pediatrician',
@@ -80,27 +84,48 @@ function VerifyProfessional() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!file) { setError('Please upload a credential photo (license, certificate, or ID)'); return }
+
+    // Validate before touching the network so the message names the real
+    // problem (type vs size vs missing) instead of the old catch-all
+    // "Upload failed. Try a smaller image." — which was what every failure
+    // said, including the RLS rejection that was actually blocking all of
+    // them. See modules/account/credentialUpload.js.
+    const check = validateCredentialFile(file)
+    if (!check.ok) { setError(check.error); return }
+
     setSubmitting(true)
     setError('')
 
-    const fileExt = file.name.split('.').pop()
-    const filePath = `${user.id}-${Date.now()}.${fileExt}`
+    // `<userId>/…` is required, not stylistic: the credentials bucket's RLS
+    // policies derive ownership from the first path segment.
+    const filePath = credentialStoragePath(user.id, file)
 
-    const { error: uploadError } = await supabase.storage.from('credentials').upload(filePath, file)
+    const { error: uploadError } = await supabase.storage
+      .from('credentials')
+      .upload(filePath, file, { contentType: check.contentType, upsert: false })
     if (uploadError) {
-      setError('Upload failed. Try a smaller image.')
+      // Log the real response so a future failure is diagnosable from the
+      // console rather than only from the sanitised UI copy.
+      console.error('Credential upload failed', {
+        status: uploadError.statusCode ?? uploadError.status,
+        message: uploadError.message,
+        path: filePath,
+        contentType: check.contentType,
+        bytes: file.size,
+      })
+      setError(describeUploadError(uploadError))
       setSubmitting(false)
       return
     }
 
-    const { data: urlData } = supabase.storage.from('credentials').getPublicUrl(filePath)
-
+    // The bucket is private (licence documents are identity documents), so
+    // there is no public URL. The stored value is the object path; admin
+    // review resolves it to a short-lived signed URL server-side.
     const { error: insertError } = await supabase.from('verification_requests').insert({
       user_id: user.id,
       full_name: form.full_name.trim(),
       profession: form.profession,
-      credential_url: urlData.publicUrl,
+      credential_url: filePath,
       phone: form.phone.trim(),
       workplace: form.workplace.trim(),
       work_address: form.work_address.trim(),
@@ -108,7 +133,8 @@ function VerifyProfessional() {
     })
 
     if (insertError) {
-      setError('Something went wrong. Please try again.')
+      console.error('Verification request insert failed', insertError)
+      setError('Your document uploaded, but the request could not be saved: ' + (insertError.message || 'please try again.'))
     } else {
       await supabase.from('profiles').update({ specialty: form.profession }).eq('id', user.id)
       setExistingRequest({ full_name: form.full_name, profession: form.profession, status: 'pending' })
@@ -274,7 +300,7 @@ function VerifyProfessional() {
                       Upload Credential
                     </label>
                     <p style={{ fontSize: 12, color: theme.textLight, margin: '0 0 8px 0' }}>
-                      Upload a clear photo of your professional license, MDCN certificate, PCN license, nursing certificate, or valid work ID
+                      Upload a clear photo or PDF of your professional license, MDCN certificate, PCN license, nursing certificate, or valid work ID
                     </p>
                     <label style={{
                       display: 'block', border: `2px dashed ${theme.border}`, borderRadius: 14, padding: '20px 16px',
@@ -284,13 +310,22 @@ function VerifyProfessional() {
                       <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 700, color: theme.navy }}>
                         {fileName || 'Tap to choose a file'}
                       </p>
-                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>JPG, PNG · max 5MB</p>
+                      <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>
+                        JPG, PNG, WEBP, HEIC or PDF · max {MAX_CREDENTIAL_LABEL}
+                      </p>
                       <input
                         type="file"
-                        accept="image/*"
+                        accept={CREDENTIAL_ACCEPT_ATTR}
                         onChange={(e) => {
                           const f = e.target.files[0]
-                          if (f) { setFile(f); setFileName(f.name) }
+                          if (!f) return
+                          // Report a bad file at the moment it is chosen, not
+                          // after the user has filled in the rest and pressed
+                          // submit.
+                          const picked = validateCredentialFile(f)
+                          setFile(picked.ok ? f : null)
+                          setFileName(f.name)
+                          setError(picked.ok ? '' : picked.error)
                         }}
                         style={{ display: 'none' }}
                       />
