@@ -228,14 +228,30 @@ export default function PostCard({
       {/* Edit post mode */}
       {editingPost?.id === post.id && (
         <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea
-            value={editingPost.content}
-            onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
-            rows={3}
-            style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
-          />
+          {/* Issue #4: an article's content is a JSON array of blocks. Editing
+              it through a plain 3-row textarea showed the author raw JSON, and
+              saving whatever they typed collapsed the whole article into one
+              text block — every later block, and every drawing, gone. Article
+              posts get the real block editor; everything else keeps the plain
+              textarea, which is correct for them. */}
+          {post.post_type === 'article' || post.post_type === 'premium' ? (
+            <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, padding: 10 }}>
+              <ArticleEditor
+                value={editingPost.content}
+                onChange={(val) => setEditingPost((prev) => (prev ? { ...prev, content: val } : prev))}
+              />
+            </div>
+          ) : (
+            <textarea
+              value={editingPost.content}
+              onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
+              rows={3}
+              aria-label="Edit post"
+              style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
+            />
+          )}
           <div style={{ display: 'flex', gap: 6 }}>
-            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
+            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content, post.post_type)} style={{ flex: 1 }}>Save</TealBtn>
             <GhostBtn onClick={() => setEditingPost(null)} style={{ flex: 1 }}>Cancel</GhostBtn>
           </div>
         </div>

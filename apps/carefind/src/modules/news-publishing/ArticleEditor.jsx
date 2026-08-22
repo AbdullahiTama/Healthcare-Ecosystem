@@ -1,4 +1,5 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react'
+import { Trash2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { renderArticleHtml, stripMalformedHighlights } from './articleFormat'
 
@@ -337,13 +338,49 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
 //  Text Block
 // ─────────────────────────────────────────────
 function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
+  // Issue #4: this control used to be `opacity: 0`, revealed only by
+  // mouseenter, while sitting directly over the top-right corner of the
+  // textarea — and it was fully clickable the whole time. A phone has no
+  // hover, so a tap near the corner of a paragraph silently deleted the
+  // entire block, with no confirmation and no undo. That is content
+  // disappearing between writing and publishing.
+  //
+  // It is now a visible, labelled control placed outside the typing area, and
+  // deleting a section that has text in it takes two taps — the first arms it,
+  // the second removes it. (Two-step rather than a dialog: the project bans
+  // native confirm(), and a section delete does not warrant a modal.)
+  const hasText = !!(block.content || '').trim()
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    if (!armed) return undefined
+    const t = setTimeout(() => setArmed(false), 4000)
+    return () => clearTimeout(t)
+  }, [armed])
+
   return (
     <div style={{ position: 'relative', marginBottom: 4 }}>
       {!readOnly && (
-        <button onClick={onDelete} style={{ position: 'absolute', top: 6, right: 6, background: 'none', border: 'none', color: '#cbd5e1', fontSize: 14, cursor: 'pointer', zIndex: 1, opacity: 0 }}
-          onMouseEnter={e => e.currentTarget.style.opacity = 1}
-          onMouseLeave={e => e.currentTarget.style.opacity = 0}
-        >🗑️</button>
+        <button
+          type="button"
+          aria-label={armed ? 'Confirm delete this section' : 'Delete this section'}
+          title={armed ? 'Tap again to delete' : 'Delete this section'}
+          onClick={() => {
+            if (hasText && !armed) { setArmed(true); return }
+            onDelete()
+          }}
+          style={{
+            position: 'absolute', top: -10, right: 4, zIndex: 2,
+            height: 26, minWidth: 26, padding: armed ? '0 9px' : 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+            background: armed ? theme.dangerBg : '#fff',
+            border: `1px solid ${armed ? theme.alert : theme.border}`,
+            borderRadius: 13, fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit',
+            color: armed ? theme.alert : theme.gray400, cursor: 'pointer',
+          }}
+        >
+          <Trash2 size={13} aria-hidden="true" />
+          {armed && 'Tap again'}
+        </button>
       )}
       <textarea
         ref={textareaRef}

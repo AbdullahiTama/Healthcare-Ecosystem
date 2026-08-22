@@ -19,6 +19,7 @@ import {
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
+import { validateArticleForPublish, compareForLoss } from '../news-publishing/articleContent.js'
 import { renderMarkdown } from './markdown.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
@@ -1061,6 +1062,20 @@ function Feed() {
     } else if (!content.trim()) {
       return
     }
+    // Issue #4: an article body is a JSON block array, so validate and repair
+    // it BEFORE anything irreversible happens (image upload, insert). The gate
+    // refuses rather than persisting a body that lost a block or a paragraph,
+    // and logs the published shape either way.
+    let postContent = content.trim()
+    if (postType === 'article') {
+      const check = validateArticleForPublish(postContent)
+      if (!check.ok) {
+        toast.show(check.error, { type: 'error' })
+        return
+      }
+      postContent = check.content
+    }
+
     setPosting(true)
 
     let imageUrl = null
@@ -1089,7 +1104,7 @@ function Feed() {
       imageUrl = urlData.publicUrl
     }
 
-    if (screenContent(content.trim())) {
+    if (screenContent(postContent)) {
       toast.show('Your post was flagged for review. Please remove any spam-like content and try again.')
       setPosting(false)
       return
@@ -1102,7 +1117,7 @@ function Feed() {
 
     const { error } = await supabase.from('posts').insert({
       user_id: user.id,
-      content: content.trim(),
+      content: postContent,
       post_type: postType,
       subscriber_only: subscriberOnly,
       audio_url: postType === 'visual' ? cardAudio : null,
@@ -1211,9 +1226,32 @@ function Feed() {
     return reactions.some((r) => r.post_id === postId && r.user_id === user.id)
   }
 
-  async function handleEditPost(postId, newContent) {
-    if (!newContent.trim()) return
-    await supabase.from('posts').update({ content: newContent.trim() }).eq('id', postId).eq('user_id', user.id)
+  // Editing runs through the same integrity gate as publishing: an edit that
+  // would drop a block or a paragraph is refused with a message rather than
+  // silently overwriting the author's article with less than they wrote.
+  async function handleEditPost(postId, newContent, postType) {
+    if (!newContent || !newContent.trim()) return
+    let content = newContent.trim()
+
+    if (postType === 'article' || postType === 'premium') {
+      const previous = posts.find((p) => p.id === postId)?.content
+      const check = validateArticleForPublish(content)
+      if (!check.ok) { toast.show(check.error, { type: 'error' }); return }
+      content = check.content
+      if (previous) {
+        const loss = compareForLoss(previous, content)
+        if (!loss.ok) {
+          toast.show(`This edit would remove ${loss.lostChars} characters of your article. Nothing was saved.`, { type: 'error' })
+          return
+        }
+      }
+    }
+
+    const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)
+    if (error) {
+      toast.show('Could not save the edit: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
     setEditingPost(null)
     loadFeed()
   }

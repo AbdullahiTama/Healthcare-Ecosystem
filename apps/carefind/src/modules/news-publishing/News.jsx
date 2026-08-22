@@ -9,6 +9,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
+import { validateArticleForPublish } from './articleContent.js'
 import { ErrorState, CardSkeleton } from '../../components/ui'
 
 function News() {
@@ -96,6 +97,14 @@ function News() {
     if (!body.trim()) { setSubmitOk(false); setSubmitMsg('Please write the article body.'); return }
     if (!contactPhone.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact phone number.'); return }
     if (!contactEmail.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact email.'); return }
+
+    // Issue #4: validate and repair the block body before the hero upload and
+    // the insert, so a body that would lose a section is refused with a clear
+    // message instead of being published short.
+    const check = validateArticleForPublish(body)
+    if (!check.ok) { setSubmitOk(false); setSubmitMsg(check.error); return }
+    const articleBody = check.content
+
     setSubmitting(true)
     setSubmitMsg('')
 
@@ -113,7 +122,7 @@ function News() {
     const { error } = await supabase.from('news').insert({
       headline: headline.trim(),
       subtitle: subtitle.trim() || null,
-      body: body.trim(),
+      body: articleBody,
       hero_image_url: heroUrl,
       author_id: user.id,
       contact_phone: contactPhone.trim(),
