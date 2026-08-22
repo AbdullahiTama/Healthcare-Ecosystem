@@ -27,6 +27,46 @@ export function wrapHighlight(textareaRef, text, setText, colorHex) {
   wrapSelection(textareaRef, text, setText, `==${colorHex}|`, '==')
 }
 
+// ── Highlight markup contract ────────────────────────────────────────────
+// Canonical:  ==#RRGGBB|highlighted text==   (opener carries the colour)
+// Also valid: ==highlighted text==           (default <mark>, no colour)
+//
+// The article editor's colour buttons used to wrap the selection with the
+// LITERAL string "==color|" on *both* sides, so applying colour produced
+// `==color|your text==color|` — visible garbage in the body instead of
+// coloured text, and content that no longer round-trips through the editor.
+// Real examples are in production (posts.content, e.g. the 2026-08-21 wound
+// article). These two helpers are the repair: MALFORMED_HIGHLIGHT recognises
+// the shape, stripMalformedHighlights removes it non-destructively (the
+// wrapped words are kept, only the marker characters go), and
+// findMalformedHighlights is the save-time validation gate.
+//
+// The pattern is deliberately narrow — an opener `==` followed by a bare
+// identifier and a `|` that is NOT a valid hex colour. `==#fde68a|` and a
+// plain `==highlight==` are both left alone.
+const MALFORMED_HIGHLIGHT = /==(?!#[0-9a-fA-F]{3,8}\|)([A-Za-z_][A-Za-z0-9_-]*)\|/g
+
+// Every malformed marker found, as { token, index }. Empty array means clean.
+export function findMalformedHighlights(content) {
+  if (content == null) return []
+  const text = typeof content === 'string' ? content : String(content)
+  const found = []
+  for (const match of text.matchAll(MALFORMED_HIGHLIGHT)) {
+    found.push({ token: match[0], index: match.index })
+  }
+  return found
+}
+
+// Remove malformed colour markers, keeping the text they wrapped. Used both
+// when loading an already-corrupted article for editing (so it can be edited
+// and reposted again) and before persisting, so a stray token can never be
+// written back.
+export function stripMalformedHighlights(content) {
+  if (content == null) return ''
+  const text = typeof content === 'string' ? content : String(content)
+  return text.replace(MALFORMED_HIGHLIGHT, '')
+}
+
 function escapeHtml(str) {
   return str
     .replace(/&/g, '&amp;')

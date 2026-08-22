@@ -1,6 +1,17 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react'
 import { theme } from '../../styles/theme'
-import { renderArticleHtml } from './articleFormat'
+import { renderArticleHtml, stripMalformedHighlights } from './articleFormat'
+
+// The highlight palette, as literal hex. See the toolbar for why these are
+// not theme tokens.
+const HIGHLIGHT_COLORS = [
+  { hex: '#fde68a', label: 'yellow' },
+  { hex: '#a7f3d0', label: 'green' },
+  { hex: '#bfdbfe', label: 'blue' },
+  { hex: '#fbcfe8', label: 'pink' },
+  { hex: '#fecaca', label: 'red' },
+  { hex: '#ddd6fe', label: 'purple' },
+]
 
 // ─────────────────────────────────────────────
 //  Drawing Canvas Block
@@ -359,14 +370,22 @@ function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
 export default function ArticleEditor({ value, onChange, readOnly = false }) {
   const uid = () => Math.random().toString(36).slice(2)
 
-  // Guard a raw block so renderArticleHtml never receives a non-string.
+  // Guard a raw block so renderArticleHtml never receives a non-string, and
+  // repair the malformed `==color|` markers the old colour button wrote into
+  // already-published articles (issue #3). Repairing here — the one place
+  // every block passes through, in both edit and read modes — means a
+  // corrupted article renders clean immediately AND is written back clean the
+  // first time its author edits or reposts it, which is what "can no longer
+  // be successfully edited and reposted" was describing.
   const normalizeBlock = (b) => {
-    if (!b || typeof b !== 'object') return { id: uid(), type: 'text', content: b == null ? '' : String(b) }
+    if (!b || typeof b !== 'object') {
+      return { id: uid(), type: 'text', content: stripMalformedHighlights(b) }
+    }
     return {
       ...b,
       id: b.id || uid(),
       type: b.type === 'drawing' ? 'drawing' : 'text',
-      content: typeof b.content === 'string' ? b.content : (b.content == null ? '' : String(b.content)),
+      content: stripMalformedHighlights(b.content),
     }
   }
 
@@ -421,17 +440,36 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
     setActiveBlockId(textBlock.id)
   }
 
-  // Bold / Italic helpers operate on active text block
-  function wrapActive(marker) {
+  // Apply a formatting mark to the selection in the active text block.
+  //
+  // `before` and `after` are separate because not every mark is symmetric:
+  // bold and italic are (`**`…`**`), but a highlight carries its colour in
+  // the OPENER only (`==#fde68a|`…`==`). The colour buttons used to call this
+  // with a single marker, which wrapped the selection as
+  // `==color|text==color|` — literal characters in the body instead of
+  // colour, and an article that no longer round-tripped through the editor
+  // (issue #3). See articleFormat.js for the markup contract.
+  function wrapActive(before, after = before) {
     setBlocks(prev => prev.map(b => {
       if (b.id !== activeBlockId || b.type !== 'text') return b
       const ta = lastTextareaRef.current
       if (!ta) return b
       const s = ta.selectionStart; const e = ta.selectionEnd
       const sel = b.content.slice(s, e)
-      const wrapped = sel ? `${marker}${sel}${marker}` : `${marker}${marker}`
+      const wrapped = `${before}${sel}${after}`
       const next = b.content.slice(0, s) + wrapped + b.content.slice(e)
-      setTimeout(() => { ta.selectionStart = ta.selectionEnd = s + (sel ? wrapped.length : marker.length) }, 0)
+      // Empty selection: park the caret between the markers so the next
+      // keystroke lands inside them. Non-empty: select the wrapped run so a
+      // second mark can be applied on top without re-selecting by hand.
+      setTimeout(() => {
+        if (sel) {
+          ta.selectionStart = s + before.length
+          ta.selectionEnd = s + before.length + sel.length
+        } else {
+          ta.selectionStart = ta.selectionEnd = s + before.length
+        }
+        ta.focus()
+      }, 0)
       return { ...b, content: next }
     }))
   }
@@ -456,10 +494,22 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" onClick={() => wrapActive('**')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontWeight: 900, fontSize: 13 }}>B</button>
         <button type="button" onClick={() => wrapActive('*')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontStyle: 'italic', fontSize: 13 }}>I</button>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {['#fde68a', '#a7f3d0', '#bfdbfe', '#fbcfe8', theme.dangerBorder, '#ddd6fe'].map(c => (
-            <button type="button" key={c} onClick={() => { setHighlightColor(c); wrapActive(`==color|`) }}
-              style={{ width: 18, height: 18, borderRadius: '50%', background: c, border: highlightColor === c ? '2px solid #333' : '1px solid #ccc' }} />
+        {/* Highlight colours are literal hex, not theme tokens: they are
+            persisted into the article markup (==#RRGGBB|…==) and must stay
+            stable for already-published articles even if the palette moves.
+            The old list included theme.dangerBorder, which does not exist on
+            the theme — it evaluated to undefined and rendered a colourless
+            swatch. */}
+        <div role="group" aria-label="Highlight colour" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          {HIGHLIGHT_COLORS.map(({ hex, label }) => (
+            <button
+              type="button"
+              key={hex}
+              aria-label={`Highlight in ${label}`}
+              aria-pressed={highlightColor === hex}
+              onClick={() => { setHighlightColor(hex); wrapActive(`==${hex}|`, '==') }}
+              style={{ width: 18, height: 18, borderRadius: '50%', background: hex, border: highlightColor === hex ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer', padding: 0 }}
+            />
           ))}
         </div>
         <button
