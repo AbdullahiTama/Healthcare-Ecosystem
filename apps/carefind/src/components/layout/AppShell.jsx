@@ -42,7 +42,7 @@ export default function AppShell({ children, rightSidebar, user, myUsername, myA
             {children}
           </main>
           {rightSidebar && (
-            <div style={{ width: isTablet ? '100%' : undefined, paddingTop: isTablet ? 0 : 24 }}>
+            <div style={{ width: isTablet ? '100%' : undefined, paddingTop: isTablet ? 0 : 24, alignSelf: isTablet ? 'auto' : 'stretch' }}>
               {rightSidebar}
             </div>
           )}
