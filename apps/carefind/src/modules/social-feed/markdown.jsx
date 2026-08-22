@@ -58,6 +58,26 @@ function renderInline(text, keyPrefix = '', mentions = null) {
       rest = rest.slice(m[0].length)
       continue
     }
+    if ((m = rest.match(/^==(#[0-9a-fA-F]{3,8})\|([\s\S]+?)==/))) {
+      flush()
+      out.push(
+        <mark key={keyPrefix + out.length} style={{ background: m[1], color: '#1f2937', padding: '1px 4px', borderRadius: 4 }}>
+          {renderInline(m[2], `${keyPrefix}${out.length}_`, mentions)}
+        </mark>,
+      )
+      rest = rest.slice(m[0].length)
+      continue
+    }
+    if ((m = rest.match(/^==([\s\S]+?)==/))) {
+      flush()
+      out.push(
+        <mark key={keyPrefix + out.length} style={{ background: '#fef08a', color: '#1a1a1a', padding: '0 2px', borderRadius: 3 }}>
+          {renderInline(m[1], `${keyPrefix}${out.length}_`, mentions)}
+        </mark>,
+      )
+      rest = rest.slice(m[0].length)
+      continue
+    }
     if (mentions && (m = rest.match(MENTION_AT))) {
       const userId = mentions[m[1].toLowerCase()]
       if (userId) {

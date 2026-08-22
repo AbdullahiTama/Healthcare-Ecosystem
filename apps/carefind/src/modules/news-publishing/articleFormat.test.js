@@ -74,6 +74,24 @@ describe('renderArticleHtml', () => {
     expect(renderArticleHtml('==plain==')).toContain('<mark>plain</mark>')
   })
 
+  it('renders the legacy bracket-marker vocabulary so articles and text posts share one dialect', () => {
+    const html = renderArticleHtml('{h:yellow}glow{/h} and {c:red}red{/c} and {b}bold{/b} and {i}it{/i} and {s}strike{/s} and {u}under{/u}')
+    expect(html).toContain('<mark')
+    expect(html).toContain('glow')
+    expect(html).toContain('color:#dc2626')
+    expect(html).toContain('red')
+    expect(html).toContain('<strong>bold</strong>')
+    expect(html).toContain('<em>it</em>')
+    expect(html).toContain('text-decoration:line-through')
+    expect(html).toContain('text-decoration:underline')
+  })
+
+  it('still escapes html inside bracket markers', () => {
+    const html = renderArticleHtml('{h:yellow}<b>bad</b>{/h}')
+    expect(html).not.toContain('<b>bad</b>')
+    expect(html).toContain('&lt;b&gt;bad&lt;/b&gt;')
+  })
+
   it('never throws on null, undefined or non-string content', () => {
     expect(renderArticleHtml(null)).toBe('<p></p>')
     expect(renderArticleHtml(undefined)).toBe('<p></p>')

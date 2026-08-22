@@ -90,6 +90,21 @@ describe('renderMarkdown (Feature 7 — markdown in post + comment bodies)', () 
     expect(html('{c:red}red{/c}')).toContain('red')
   })
 
+  it('renders == highlight == markup (the canonical dialect shared with articles)', () => {
+    const out = html('Diabetes damages the ==heart== long before symptoms.')
+    expect(out).toContain('<mark')
+    expect(out).toContain('heart')
+    expect(out).not.toContain('==heart==')
+  })
+
+  it('renders coloured ==#RRGGBB|text== highlights', () => {
+    const out = html('==#00FF00|safe future==')
+    expect(out).toContain('<mark')
+    expect(out).toContain('safe future')
+    // React serialises the hex colour to rgb(), so assert on the value form.
+    expect(out).toMatch(/background:\s*rgb\(0,\s*255,\s*0\)/)
+  })
+
   it('links @mentions to the profile when a mentions map is provided', () => {
     const out = renderMarkdown('hi @DrAda', { mentions: { drada: 'u9' } })
     const { container } = render(<MemoryRouter><div>{out}</div></MemoryRouter>)

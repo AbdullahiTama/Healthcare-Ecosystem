@@ -6,6 +6,7 @@ import {
 import { theme } from '../../styles/theme'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
+import { renderMarkdown } from './markdown.jsx'
 
 // The Videos tab's dedicated feed: one full-height clip per view, swiped
 // vertically like Reels/TikTok. Each slide carries a right-hand action rail
@@ -146,9 +147,9 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
                   display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   fontFamily: theme.fontFamily,
                 }}
-              >
-                {post.content}
-              </button>
+                >
+                  {renderMarkdown(post.content) || post.content}
+                </button>
             )}
 
             {/* Right action rail */}

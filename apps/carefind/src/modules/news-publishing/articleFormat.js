@@ -27,6 +27,13 @@ export function wrapHighlight(textareaRef, text, setText, colorHex) {
   wrapSelection(textareaRef, text, setText, `==${colorHex}|`, '==')
 }
 
+// Legacy bracket-marker vocabulary, shared with renderMarkdown (text posts,
+// comments, feed) and renderRichText so the same highlight/colour markup
+// renders identically everywhere. Articles used to only understand the `==`
+// dialect; this keeps content portable between post types.
+const HIGHLIGHTS = { yellow: '#fef08a', green: '#bbf7d0', pink: '#fbcfe8', blue: '#bfdbfe' }
+const TEXTCOLORS = { red: '#dc2626', blue: '#2563eb', green: '#16a34a' }
+
 // ── Highlight markup contract ────────────────────────────────────────────
 // Canonical:  ==#RRGGBB|highlighted text==   (opener carries the colour)
 // Also valid: ==highlighted text==           (default <mark>, no colour)
@@ -86,6 +93,15 @@ export function renderArticleHtml(content) {
   return paragraphs
     .map((para) => {
       let safe = escapeHtml(para.trim())
+      // Legacy bracket markers (kept for parity with renderMarkdown so the
+      // same body renders the same way as a text post). Applied before the
+      // `==`/`**` rules so their inner text can still pick up other styling.
+      safe = safe.replace(/\{h:(\w+)\}([\s\S]*?)\{\/h\}/g, (_, c, t) => `<mark style="background:${HIGHLIGHTS[c] || '#fef08a'};color:#1a1a1a;padding:0 2px;border-radius:3px;">${t}</mark>`)
+      safe = safe.replace(/\{c:(\w+)\}([\s\S]*?)\{\/c\}/g, (_, c, t) => `<span style="color:${TEXTCOLORS[c] || '#dc2626'};font-weight:600;">${t}</span>`)
+      safe = safe.replace(/\{b\}([\s\S]*?)\{\/b\}/g, '<strong>$1</strong>')
+      safe = safe.replace(/\{i\}([\s\S]*?)\{\/i\}/g, '<em>$1</em>')
+      safe = safe.replace(/\{s\}([\s\S]*?)\{\/s\}/g, '<span style="text-decoration:line-through;">$1</span>')
+      safe = safe.replace(/\{u\}([\s\S]*?)\{\/u\}/g, '<span style="text-decoration:underline;">$1</span>')
       safe = safe.replace(/==(#[0-9a-fA-F]{3,8})\|(.+?)==/g, '<mark style="background:$1;color:#1f2937;padding:1px 4px;border-radius:4px;">$2</mark>')
       safe = safe.replace(/==(.+?)==/g, '<mark>$1</mark>')
       safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
