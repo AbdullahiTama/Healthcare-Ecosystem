@@ -760,6 +760,12 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
         )}
         {!canEditPrice && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', background: warningBg, fontSize: '12px', color: warning }}><AlertTriangle size={13} /> Only the Owner can edit prices</div>}
         <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
+        {isEdit && !form.expiry_date && form.cat !== 'Services' && (
+          <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, lineHeight: 1.6 }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>No expiry date set — add one to enable expiry alerts and reports.</span>
+          </div>
+        )}
         {form.cat !== 'Services' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Stock Quantity' value={form.stock} onChange={v => f('stock', v)} type='number' placeholder='0' readOnly={!perms?.canEditStock} />
