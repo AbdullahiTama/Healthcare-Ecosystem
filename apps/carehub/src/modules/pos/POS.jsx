@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react'
+import { useState, useEffect, useRef, Component } from 'react'
 import {
   Pause, Clock, CreditCard, Camera, ShoppingCart,
   Minus, Plus, Printer, Trash2, Play, CheckCircle,
@@ -84,6 +84,9 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const [discPct, setDiscPct] = useState(false)
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
+  const [stockFilter, setStockFilter] = useState('All')
+  const [expiryFilter, setExpiryFilter] = useState('All')
+  const [sortBy, setSortBy] = useState('name_asc')
   const [receipt, setReceipt] = useState(null)
   const [scanning, setScanning] = useState(false)
   // Out-of-stock products are hidden from the sellable grid; the badge under
@@ -121,8 +124,75 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // Services are always sellable; stock goods only when stock > 0. Anything
   // else is collected for the Out-of-Stock sheet instead of the grid.
   const isService = p => (p.cat || p.category) === 'Services'
-  const sellable = visible.filter(p => isService(p) || p.stock > 0)
   const outOfStock = visible.filter(p => !isService(p) && p.stock <= 0)
+
+  // The stock/expiry/sort controls were rendered but never read, so choosing
+  // "Low stock" or "Price high-low" changed nothing. They are applied here.
+  // Services have neither stock nor an expiry date, so a stock or expiry
+  // filter excludes them rather than matching them by accident.
+  const daysUntil = (date) => {
+    if (!date) return null
+    const ms = new Date(date).getTime() - Date.now()
+    return Number.isNaN(ms) ? null : Math.floor(ms / 86400000)
+  }
+  const EXPIRING_SOON_DAYS = 60
+
+  const matchesStock = (p) => {
+    if (stockFilter === 'All' || !stockFilter) return true
+    if (isService(p)) return false
+    if (stockFilter === 'out') return p.stock <= 0
+    if (stockFilter === 'low') return p.stock > 0 && p.stock <= (p.reorder_level || 5)
+    return true
+  }
+
+  const matchesExpiry = (p) => {
+    if (expiryFilter === 'All' || !expiryFilter) return true
+    const days = daysUntil(p.expiry_date || p.expiryDate)
+    if (days === null) return false
+    if (expiryFilter === 'expired') return days < 0
+    if (expiryFilter === 'expiring') return days >= 0 && days <= EXPIRING_SOON_DAYS
+    return true
+  }
+
+  const sortProducts = (list) => {
+    const by = {
+      name_asc: (a, b) => (a.name || '').localeCompare(b.name || ''),
+      name_desc: (a, b) => (b.name || '').localeCompare(a.name || ''),
+      price_asc: (a, b) => (a.price || 0) - (b.price || 0),
+      price_desc: (a, b) => (b.price || 0) - (a.price || 0),
+    }[sortBy]
+    return by ? [...list].sort(by) : list
+  }
+
+  // "Out of stock" is a deliberate exception: the grid normally hides
+  // unsellable rows, but a cashier who explicitly asks for them expects to see
+  // them rather than an empty grid.
+  const sellable = sortProducts(
+    (stockFilter === 'out'
+      ? visible
+      : visible.filter(p => isService(p) || p.stock > 0)
+    ).filter(p => matchesStock(p) && matchesExpiry(p))
+  )
+
+  // The search box advertises Ctrl+K; nothing implemented it.
+  const productSearchRef = useRef(null)
+  const focusProductSearch = () => {
+    const el = productSearchRef.current
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.focus()
+    el.select?.()
+  }
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        focusProductSearch()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   useEffect(() => {
     if (brand?.id) {
@@ -710,11 +780,12 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: '0 12px', minWidth: 0 }}>
               <Search size={15} color={gray400} style={{ flexShrink: 0 }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder='Search products or scan...'
+              <input ref={productSearchRef} value={search} onChange={e => setSearch(e.target.value)} placeholder='Search products or scan...' aria-label='Search products'
                 style={{ flex: 1, border: 'none', outline: 'none', padding: '12px 0', fontSize: 13, background: 'transparent', color: navy, minWidth: 0 }} />
+              <span style={{ color: gray400, fontSize: 11, padding: '0 8px' }}>Ctrl+K</span>
             </div>
             <button onClick={startScan} title='Scan barcode' aria-label='Scan barcode'
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', flexShrink: 0 }}>
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 42, borderRadius: theme.radius.md, border: `1px solid ${border}`, background: tealDeep, color: 'white', cursor: 'pointer', flexShrink: 0 }}>
               <Camera size={17} />
             </button>
           </div>
@@ -730,6 +801,43 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 </button>
               )
             })}
+          </div>
+
+          {/* Stock filter */}
+          <div style={{ marginTop: 8 }}>
+            <select
+              value={stockFilter}
+              onChange={e => setStockFilter(e.target.value)}
+              style={{ padding: '7px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12, color: navy, background: bg, minWidth: 120 }}>
+              <option value='All'>All stock levels</option>
+              <option value='low'>Low stock</option>
+              <option value='out'>Out of stock</option>
+            </select>
+          </div>
+
+          {/* Expiry filter */}
+          <div style={{ marginTop: 8, marginLeft: 12 }}>
+            <select
+              value={expiryFilter}
+              onChange={e => setExpiryFilter(e.target.value)}
+              style={{ padding: '7px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12, color: navy, background: bg, minWidth: 120 }}>
+              <option value='All'>Any expiry</option>
+              <option value='expiring'>Expiring soon</option>
+              <option value='expired'>Expired</option>
+            </select>
+          </div>
+
+          {/* Grid / List toggle and sort */}
+          <div style={{ marginTop: 8, marginLeft: 12 }}>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value)}
+              style={{ padding: '7px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12, color: navy, background: bg, minWidth: 140 }}>
+              <option value='name_asc'>Name A-Z</option>
+              <option value='name_desc'>Name Z-A</option>
+              <option value='price_asc'>Price low-high</option>
+              <option value='price_desc'>Price high-low</option>
+            </select>
           </div>
 
           {/* Out-of-stock badge — opens the sheet listing unavailable products */}
@@ -768,20 +876,24 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               : low ? { t: p.stock + ' left', bg: warningBg, fg: warning }
               : { t: String(p.stock), bg: gray100, fg: gray500 }
             return (
-              <button key={p.id} onClick={() => add(p)}
-                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 12, cursor: 'pointer', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
+              <div key={p.id}
+                style={{ background: 'white', border: `1px solid ${qty > 0 ? tealDeep : border}`, borderRadius: theme.radius.lg, padding: 12, display: 'flex', flexDirection: 'column', gap: 10, boxShadow: qty > 0 ? '0 2px 10px rgba(15,118,110,0.15)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
+                    <div style={{ width: 34, height: 34, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
                     {qty > 0 && <div style={{ position: 'absolute', top: -7, right: -7, minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, background: tealDeep, color: 'white', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>{qty}</div>}
                   </div>
                   <span style={{ padding: '2px 8px', borderRadius: theme.radius.full, background: badge.bg, color: badge.fg, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{badge.t}</span>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3 }}>{p.name}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.3, textTransform: 'uppercase' }}>{p.name}</div>
                   <div style={{ fontSize: 14, fontWeight: 900, color: navy, marginTop: 4 }}>{fmt(p.price)}</div>
                 </div>
-              </button>
+                <button onClick={() => add(p)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 0', borderRadius: theme.radius.sm, border: `1px solid ${qty > 0 ? tealDeep : border}`, background: qty > 0 ? tealMist : 'white', color: qty > 0 ? tealDeep : navy, fontWeight: 700, fontSize: 12, cursor: 'pointer', marginTop: 'auto' }}>
+                  <Plus size={14} /> Add
+                </button>
+              </div>
             )
           })}
         </div>
@@ -789,9 +901,17 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
       {/* Cart panel — "Current sale" */}
       <div style={{ width: isMobile ? 'auto' : 340, flexShrink: 0, background: 'white', borderLeft: isMobile ? 'none' : `1px solid ${border}`, borderTop: isMobile ? `1px solid ${border}` : 'none', display: 'flex', flexDirection: 'column', ...(isMobile ? {} : { height: '100vh' }) }}>
+        {/* Online status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderBottom: `1px solid ${border}`, color: success, fontSize: 12 }}>
+          <svg style={{ width: 12, height: 12 }} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><circle cx='3' cy='3' r='2'/><path d='M7 3a5 5 0 0 1 10 0 5 5 0 0 1-10 0Z'/><path d='M12 12a4 4 0 0 0 0 8 4 4 0 0 0 0-8Z'/></svg>
+          <span style={{ fontWeight: 700 }}>Online</span>
+        </div>
         {/* Header + client */}
         <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: navy }}>Current sale</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: navy, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg style={{ width: 20, height: 20 }} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M3 3v2h6l9 3v19h-6v-9h2v9h5v-9h2v-5h3v5h5v-5h2v-9h-5v9h-2V6H6v9H3z' /></svg>
+            Current Sale
+          </div>
           <div style={{ position: 'relative' }}>
             <input list='pos-clients' value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in'
               style={{ width: 140, padding: '8px 12px', borderRadius: theme.radius.full, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
@@ -805,7 +925,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         <div style={{ flex: 1, overflowY: 'auto', ...(isMobile ? { maxHeight: 320 } : {}) }}>
           {cart.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 160 }}>
-              <Empty icon={<ShoppingCart size={40} strokeWidth={1.5} />} message="Cart is empty" action="Tap a product to add it" />
+              {/* `action` renders as a real button, so it needs a handler that
+                  exists: onAction={() => setShowProducts(true)} referenced no
+                  state in this file and threw a ReferenceError into
+                  POSErrorBoundary, replacing the whole POS screen with the
+                  crash page. On mobile the products panel is above the cart,
+                  so both controls focus the search field — the one thing that
+                  actually gets a product into the cart. */}
+              <Empty icon={<Package size={80} strokeWidth={2} />} message="Your cart is empty" action="Search or scan a product to add it" onAction={focusProductSearch} />
+              <button onClick={focusProductSearch}
+                style={{ marginTop: '12px', padding: '8px 16px', borderRadius: theme.radius.md, border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Browse products</button>
             </div>
           ) : cart.map(item => {
             // The catalog price this line was added at — the baseline shown
@@ -880,7 +1009,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           {/* Method-specific inputs */}
           {method === 'Cash' && (
             <div>
-              <input type='number' value={cash} onChange={e => setCash(e.target.value)} placeholder='Cash given (₦)'
+              <input type='number' value={cash} onChange={e => setCash(e.target.value)} placeholder='Cash received (₦)'
                 style={{ width: '100%', padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, fontSize: 12.5, outline: 'none', boxSizing: 'border-box', background: bg, color: navy }} />
               {cash !== '' && <div style={{ fontSize: 11.5, fontWeight: 700, marginTop: 5, color: change >= 0 ? theme.success : danger }}>{change >= 0 ? 'Change: ' + fmt(change) : 'Short: ' + fmt(Math.abs(change))}</div>}
             </div>
@@ -913,8 +1042,14 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 13, cursor: cart.length ? 'pointer' : 'not-allowed', opacity: cart.length ? 1 : 0.5, flexShrink: 0 }}>
               <Pause size={14} /> Hold
             </button>
+            {/* Credit MUST route to chargeCredit. charge() computes
+                `amtPaid = method === 'Cash' ? … : method === 'Split' ? … :
+                total`, so a Credit sale would be stored as paid in full
+                (balance 0, is_credit false), the `creditAmountPaid` the
+                cashier typed would be ignored, and the debt would never be
+                recorded — the balance simply disappears. */}
             <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length}
-              style={{ flex: 1, padding: 12, borderRadius: theme.radius.md, border: 'none', background: cart.length ? tealDeep : theme.gray200, color: cart.length ? 'white' : gray400, fontWeight: 800, fontSize: 14, cursor: cart.length ? 'pointer' : 'not-allowed' }}>
+              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', background: cart.length ? tealDeep : theme.gray200, color: cart.length ? 'white' : gray400, fontWeight: 800, fontSize: 14, cursor: cart.length ? 'pointer' : 'not-allowed' }}>
               {chargeLabel}
             </button>
           </div>
@@ -958,7 +1093,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   )
 }
 
-// Collect payment component for credit sales
+
 function CollectPayment({ sale, onCollect }) {
   const [amount, setAmount] = useState('')
   const [collecting, setCollecting] = useState(false)
