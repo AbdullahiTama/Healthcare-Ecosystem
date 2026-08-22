@@ -371,7 +371,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Package />} label='Total Products' value={products.length} />
         <StatCard icon={<AlertTriangle />} label='Low Stock' value={lowStock.length} alert={lowStock.length > 0} sub={outOfStock.length + ' out of stock'} />
         <StatCard icon={<DollarSign />} label='Stock Value' value={fmt(stockValue)} sub={'Cost: ' + fmt(costValue)} />
@@ -421,7 +421,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       )}
 
-      {filtered.length === 0 ? <Empty icon={<Package size={40} />} message='No products found' action={perms?.canEditStock ? '+ Add First Product' : undefined} onAction={() => setShowAdd(true)} /> : (
+      {filtered.length === 0 ? <Empty icon={<Package size={80} />} message="No products found" action={perms?.canEditStock ? '+ Add Product' : undefined} onAction={() => setShowAdd(true)} /> : (
         <DataTable
           rows={filtered}
           page={page}
@@ -437,8 +437,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 const Icon = productIcon(p)
                 return (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: 30, height: 30, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
-                    <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{p.name}</span>
+                    <div style={{ width: 30, height: 30, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
+                    <span style={{ fontWeight: '700', fontSize: '13px', color: navy, textTransform: 'uppercase' }}>{p.name}</span>
                   </div>
                 )
               },
