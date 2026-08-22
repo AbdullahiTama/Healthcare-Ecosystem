@@ -4,16 +4,24 @@ import {
   getActivityFields, addActivityField, deleteActivityField,
   getDefaultViewers, setDefaultViewers,
   getFieldActivities, countFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
-  logActivity, reactToActivity, unreactToActivity, commentOnActivity,
-  uploadActivityVoice, reverseGeocode, geocodePlace,
+  reactToActivity, unreactToActivity, commentOnActivity,
+  uploadActivityVoice, reverseGeocode,
 } from '../../services/supabase'
-// Pure distance check: does the GPS fix sit within tolerance of the claimed place?
-import { verifyPlaceMatch } from '../../lib/geo'
+// Pure distance helpers for the GPS-driven facility verification.
+import { verifyFacilityMatch, haversineMeters } from '../../lib/geo'
+// GPS-driven facility discovery (issue #1) — replaces free-text Place of Visit.
+import {
+  nearbyHealthFacilities,
+  getRepAddedFacilities,
+  confirmRepAddedFacility,
+  dismissRepAddedFacility,
+} from '../../lib/places.js'
+import FacilityPicker from './FacilityPicker.jsx'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
 import { watchTable } from '../../lib/realtime'
-import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
+import { Card, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
@@ -125,15 +133,20 @@ export default function LiveActivity({ brand }) {
   const [gps, setGps] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
-  // Place of Visit (issue #8): the rep names WHERE they visited; the name is
-  // geocoded to coordinates and checked against the GPS fix at submit time.
-  const [placeQuery, setPlaceQuery] = useState('')
-  const [placeCoords, setPlaceCoords] = useState(null)
-  const [placeSuggestions, setPlaceSuggestions] = useState([])
-  const [geocoding, setGeocoding] = useState(false)
-  const [geoError, setGeoError] = useState(false)
-  const [geoRetry, setGeoRetry] = useState(0)
-  const placeTimer = useRef(null)
+  // Facility capture (issue #1): the GPS fix drives automatic detection of the
+  // nearest health facility. `facility` is the chosen facility object (or a
+  // rep-added synthetic one); it replaces the old free-text `placeQuery` box.
+  const [facility, setFacility] = useState(null)
+  const [facilityLoading, setFacilityLoading] = useState(false)
+  const [facilityError, setFacilityError] = useState(false)
+  // Manager review: opens the same FacilityPicker centered on a logged visit's
+  // saved GPS, so a manager can independently verify what was near.
+  const [reviewing, setReviewing] = useState(null)
+
+  // Manager/owner review queue for rep-added facilities (#1 spec #5).
+  const [pendingFacilities, setPendingFacilities] = useState([])
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewLoading, setReviewLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
 
@@ -229,7 +242,43 @@ export default function LiveActivity({ brand }) {
     } catch (e) {
       showToast('Could not load activity: ' + e.message, { type: 'error' })
     }
+    loadPending()
     setLoading(false)
+  }
+
+  async function loadPending() {
+    if (!brand || !brand.id) return
+    if (!(isManager || isOwner)) return
+    setReviewLoading(true)
+    try {
+      const rows = await getRepAddedFacilities(brand.id, 'pending_review')
+      setPendingFacilities(rows || [])
+    } catch (e) {
+      console.error('Pending facilities load failed:', e)
+      setPendingFacilities([])
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  async function confirmPending(id) {
+    try {
+      await confirmRepAddedFacility(id, brand.id)
+      showToast('Facility confirmed — it now appears for everyone near it.', { type: 'success' })
+      loadPending()
+    } catch (e) {
+      showToast('Could not confirm: ' + e.message, { type: 'error' })
+    }
+  }
+
+  async function dismissPending(id) {
+    try {
+      await dismissRepAddedFacility(id)
+      showToast('Facility dismissed.', { type: 'info' })
+      loadPending()
+    } catch (e) {
+      showToast('Could not dismiss: ' + e.message, { type: 'error' })
+    }
   }
 
   const people = staffList
@@ -373,38 +422,6 @@ export default function LiveActivity({ brand }) {
     setVoicePreview(null)
   }
 
-  // Debounced forward-geocode of the typed place name. Suggestions are only
-  // fetched while the logger is open; picking one pins the coordinates that
-  // the submit-time verification compares against the GPS fix.
-  useEffect(function () {
-    if (!logging) return
-    const q = placeQuery.trim()
-    if (q.length < 3) { setPlaceSuggestions([]); setGeoError(false); return }
-    clearTimeout(placeTimer.current)
-    placeTimer.current = setTimeout(async function () {
-      setGeocoding(true)
-      try {
-        const results = await geocodePlace(q)
-        setPlaceSuggestions(results)
-        setGeoError(false)
-      } catch (e) {
-        console.error('Place lookup failed:', e)
-        setPlaceSuggestions([])
-        setGeoError(true)
-      } finally {
-        setGeocoding(false)
-      }
-    }, 400)
-    return function () { clearTimeout(placeTimer.current) }
-  }, [placeQuery, logging, geoRetry])
-
-  function pickPlace(s) {
-    setPlaceQuery(s.name)
-    setPlaceCoords({ lat: s.lat, lng: s.lng })
-    setPlaceSuggestions([])
-    setGeoError(false)
-  }
-
   function openLogger() {
     if (fields.length === 0) {
       showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
@@ -417,10 +434,9 @@ export default function LiveActivity({ brand }) {
     setVoicePreview(null)
     setGps(null)
     setPlaceName('')
-    setPlaceQuery('')
-    setPlaceCoords(null)
-    setPlaceSuggestions([])
-    setGeoError(false)
+    setFacility(null)
+    setFacilityLoading(false)
+    setFacilityError(false)
     setLogging(true)
 
     if (navigator.geolocation) {
@@ -429,12 +445,25 @@ export default function LiveActivity({ brand }) {
         async function (pos) {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
           setGps(coords)
-          const name = await reverseGeocode(coords.lat, coords.lng)
-          if (name) {
-            setPlaceName(name)
-            // Prefill the editable Place of Visit with the reverse-geocoded
-            // guess; the rep can correct it before submitting.
-            setPlaceQuery(function (prev) { return prev || name })
+          // Best-effort area label (reverse geocode) for the location caption;
+          // the precise place now comes from the auto-detected facility.
+          reverseGeocode(coords.lat, coords.lng).then(function (name) {
+            if (name) setPlaceName(name)
+          }).catch(function () {})
+          // Auto-detect the single closest facility to the GPS. The picker also
+          // does this on mount, but we kick it off here so the card is populated
+          // even before the picker renders. Failures degrade to "add manually".
+          setFacilityLoading(true)
+          try {
+            const res = await nearbyHealthFacilities(coords.lat, coords.lng, {
+              radius: 200, category: 'all', businessId: brand.id,
+            })
+            if (res.facilities.length > 0) setFacility(res.facilities[0])
+          } catch (e) {
+            console.error('Auto facility detection failed:', e)
+            setFacilityError(true)
+          } finally {
+            setFacilityLoading(false)
           }
           setFindingPlace(false)
         },
@@ -469,9 +498,13 @@ export default function LiveActivity({ brand }) {
       })
 
       // Verification is computed once, at log time, and stored with the row —
-      // the feed never re-derives it. No GPS or no resolved place means
-      // "unverified", not an error: the log must still go through.
-      const verified = !!(placeCoords && gps && verifyPlaceMatch(placeCoords, gps))
+      // the feed never re-derives it. It is DISTANCE-ONLY: is the GPS fix within
+      // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
+      // or no chosen facility means "unverified", never an error: the log must
+      // still go through. We never text-match facility names.
+      const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
+      const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
+      const verified = !!(gps && facilityCoords && verifyFacilityMatch(gps, facilityCoords))
 
       await logActivity({
         business_id: brand.id,
@@ -483,10 +516,18 @@ export default function LiveActivity({ brand }) {
         voice_url: voiceUrl,
         lat: gps ? gps.lat : null,
         lng: gps ? gps.lng : null,
-        location_label: placeName || null,
-        place_of_visit: placeQuery.trim() || null,
-        place_coords: placeCoords || null,
+        location_label: (facility && facility.name) || placeName || null,
+        place_of_visit: (facility && facility.name) || null,
+        place_coords: facilityCoords || null,
         place_verified: verified,
+        facility_name: facility ? facility.name : null,
+        facility_address: facility ? facility.address || null : null,
+        facility_category: facility ? facility.category : null,
+        facility_lat: facilityCoords ? facility.lat : null,
+        facility_lng: facilityCoords ? facility.lng : null,
+        facility_distance_m: distanceM,
+        facility_source: facility ? (facility.source || 'detected') : null,
+        facility_verified: verified,
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -627,7 +668,7 @@ export default function LiveActivity({ brand }) {
     if (col.key === 'date') return fmtStamp(a.created_at)
     if (col.key === 'rep') return a.rep_name
     if (col.key === 'territory') return terrName(a.territory_id) || ''
-    if (col.key === 'place') return a.place_of_visit || a.location_label || ''
+    if (col.key === 'place') return a.facility_name || a.place_of_visit || a.location_label || ''
     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
     if (col.fieldId) {
@@ -695,6 +736,11 @@ export default function LiveActivity({ brand }) {
         secondaryActions={[
           ...(isOwner ? [{ label: 'Set up fields', variant: 'ghost', onClick: function () { setSettingUp(true) } }] : []),
           ...(!isOwner ? [{ label: 'Who sees my activity', variant: 'ghost', onClick: openViewerPicker }] : []),
+          ...((isManager || isOwner) ? [{
+            label: (pendingFacilities.length ? 'Review facilities (' + pendingFacilities.length + ')' : 'Review facilities'),
+            variant: 'ghost',
+            onClick: function () { loadPending(); setReviewOpen(true) },
+          }] : []),
         ]}
         primaryAction={{ label: 'Log Activity', onClick: openLogger }}
       />
@@ -916,22 +962,32 @@ export default function LiveActivity({ brand }) {
                       {terrName(a.territory_id) ? ' · ' + terrName(a.territory_id) : ''}
                     </div>
                     {a.location_label && (
-                      <div style={{ fontSize: '12px', color: tealDeep, fontWeight: '600', marginTop: '4px' }}>
-                        {a.location_label}
-                      </div>
-                    )}
-                    {(a.place_of_visit || a.place_verified) && (
+                       <div style={{ fontSize: '12px', color: tealDeep, fontWeight: '600', marginTop: '4px' }}>
+                         {a.location_label}
+                       </div>
+                     )}
+                    {(a.facility_name || a.facility_category || a.place_verified != null) && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: a.location_label ? '2px' : '4px' }}>
                         <span style={{ fontSize: '12px', fontWeight: '700', color: navy }}>
-                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />{a.place_of_visit}
+                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />{a.facility_name || a.place_of_visit}
                         </span>
-                        {a.place_verified ? (
+                        {(a.facility_category || a.facility_source) && (
+                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray500 }}>
+                            {a.facility_category || ''}{a.facility_source === 'rep_added' ? ' · rep-added' : ''}
+                          </span>
+                        )}
+                        {(a.facility_verified != null ? a.facility_verified : a.place_verified) ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
                             <BadgeCheck size={10} /> GPS verified
                           </span>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
                             <AlertTriangle size={10} /> Unverified
+                          </span>
+                        )}
+                        {a.facility_distance_m != null && (
+                          <span style={{ fontSize: '10px', fontWeight: '700', color: gray400 }}>
+                            {a.facility_distance_m} m from GPS
                           </span>
                         )}
                       </div>
@@ -993,6 +1049,13 @@ export default function LiveActivity({ brand }) {
                     style={{ border: `1px solid ${border}`, background: 'white', color: gray500, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
                     Comment{comments.length > 0 ? ' · ' + comments.length : ''}
                   </button>
+
+                  {isManager && a.lat && a.lng && (
+                    <button onClick={function () { setReviewing(a) }}
+                      style={{ border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, borderRadius: '20px', padding: '6px 13px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                      Verify location
+                    </button>
+                  )}
                 </div>
 
                 {reactions.length > 0 && (
@@ -1084,45 +1147,27 @@ export default function LiveActivity({ brand }) {
             </div>
 
             <div>
-              <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Place of Visit</div>
-              <input value={placeQuery} onChange={function (e) { setPlaceQuery(e.target.value) }}
-                placeholder='Where did you visit? e.g. Lagos University Teaching Hospital'
-                aria-label='Place of Visit'
-                style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', boxSizing: 'border-box' }} />
-              {geocoding && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>Looking up place…</div>}
-              {!geocoding && geoError && (
-                <button type='button' onClick={function () { setGeoRetry(function (n) { return n + 1 }) }}
-                  style={{ display: 'block', width: '100%', marginTop: '6px', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', textAlign: 'left' }}>
-                  Couldn't look up that place. Tap to retry — or keep typing.
-                </button>
-              )}
-              {placeSuggestions.length > 0 && (
-                <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: `1px solid ${border}`, borderRadius: '10px', background: 'white' }}>
-                  {placeSuggestions.map(function (s, i) {
-                    return (
-                      <button key={i} type='button' onClick={function () { pickPlace(s) }}
-                        style={{ display: 'block', width: '100%', padding: '9px 12px', borderBottom: `1px solid ${gray100}`, background: 'white', border: 'none', borderTop: i > 0 ? `1px solid ${gray100}` : 'none', cursor: 'pointer', textAlign: 'left', fontSize: '12px', color: navy }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: '600' }}><MapPin size={12} /> {s.name}</span>
-                      </button>
-                    )
-                  })}
+              <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>
+                Facility visited <span style={{ fontWeight: '500', color: gray400 }}>(auto-detected from your GPS)</span>
+              </div>
+              {!gps && !findingPlace && (
+                <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg, fontSize: '12.5px', color: gray500 }}>
+                  Waiting for GPS before we can find nearby facilities.
                 </div>
               )}
-              {gps && placeCoords && (
-                verifyPlaceMatch(placeCoords, gps) ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: success, marginTop: '6px' }}>
-                    <BadgeCheck size={13} /> GPS matches this place
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: warning, marginTop: '6px' }}>
-                    <AlertTriangle size={13} /> You are far from this place — it will be saved unverified
-                  </div>
-                )
-              )}
-              {gps && !placeCoords && placeQuery.trim().length >= 3 && !geocoding && (
-                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '6px' }}>
-                  Pick a suggestion above to verify against your GPS.
+              {findingPlace && (
+                <div style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${border}`, background: bg, fontSize: '12.5px', color: gray500 }}>
+                  Finding where you are…
                 </div>
+              )}
+              {gps && (
+                <FacilityPicker
+                  gps={gps}
+                  businessId={brand.id}
+                  createdBy={meStaffId}
+                  value={facility}
+                  onChange={function (f) { setFacility(f) }}
+                />
               )}
             </div>
 
@@ -1363,6 +1408,75 @@ export default function LiveActivity({ brand }) {
         title={'Remove "' + (fieldToRemove ? fieldToRemove.label : '') + '"?'}
         consequence="This field disappears from the Log Activity form for everyone. Past records that already have a value for it keep that value, but you will not be able to see or filter by it going forward unless you add the field back."
         confirmLabel="Remove Field" />
+
+      {/* Manager review (issue #1): the SAME FacilityPicker, read-only, centered
+          on the logged visit's saved GPS so a manager can independently verify
+          what facilities were actually near — without altering the record. */}
+      <Modal show={!!reviewing} onClose={function () { setReviewing(null) }} sheet title='Verify logged location'
+        footer={<GhostBtn onClick={function () { setReviewing(null) }} style={{ width: '100%', padding: '12px' }}>Close</GhostBtn>}>
+        {reviewing && (function () {
+          const reviewGps = { lat: reviewing.lat, lng: reviewing.lng }
+          const reviewValue = {
+            name: reviewing.facility_name || reviewing.place_of_visit || (reviewing.lat ? 'GPS pin' : 'Unknown'),
+            lat: reviewing.facility_lat != null ? reviewing.facility_lat : reviewing.lat,
+            lng: reviewing.facility_lng != null ? reviewing.facility_lng : reviewing.lng,
+            category: reviewing.facility_category || '',
+            address: reviewing.facility_address || '',
+            source: reviewing.facility_source || 'detected',
+            distanceM: reviewing.facility_distance_m,
+          }
+          return (
+            <div>
+              <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '10px' }}>
+                The rep logged this at {reviewGps.lat != null ? reviewGps.lat.toFixed(5) + ', ' + reviewGps.lng.toFixed(5) : 'no GPS'}.
+                Tap a nearby facility below to compare it against the logged pin.
+              </div>
+              <FacilityPicker gps={reviewGps} businessId={brand.id} value={reviewValue} readOnly />
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* Manager/owner review of rep-added facilities (#1 spec #5): a rep-added
+          place is flagged for review; this queue lets a manager confirm it into a
+          normal cached entry or dismiss it. */}
+      <Modal show={reviewOpen} onClose={function () { setReviewOpen(false) }} sheet wide title='Review pending facilities'
+        footer={<GhostBtn onClick={function () { setReviewOpen(false) }} style={{ width: '100%', padding: '12px' }}>Close</GhostBtn>}>
+        <div style={{ fontSize: '11.5px', color: gray500, marginBottom: '14px' }}>
+          Facilities reps added because they weren't in the map. Confirm to make one a normal entry everyone near that spot will see, or dismiss it if it's wrong.
+        </div>
+        {reviewLoading ? <Loading /> : (
+          pendingFacilities.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: gray400, fontSize: '13px' }}>No facilities awaiting review.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {pendingFacilities.map(function (f) {
+                const addedBy = (staffList.find(function (s) { return s.id === f.created_by }) || {}).full_name
+                return (
+                  <div key={f.id} style={{ padding: '12px 14px', borderRadius: '10px', border: `1px solid ${border}` }}>
+                    <div style={{ fontSize: '13.5px', fontWeight: '800', color: navy }}>{f.name}</div>
+                    <div style={{ fontSize: '11.5px', color: gray500, marginTop: '2px' }}>
+                      {f.category || 'Other health facility'}
+                      {addedBy ? ' · added by ' + addedBy : ''}
+                      {f.created_at ? ' · ' + fmtStamp(f.created_at) : ''}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      <button onClick={function () { confirmPending(f.id) }}
+                        style={{ border: 'none', background: success, color: 'white', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '800', cursor: 'pointer' }}>
+                        Confirm
+                      </button>
+                      <button onClick={function () { dismissPending(f.id) }}
+                        style={{ border: `1px solid ${danger}`, background: dangerBg, color: danger, borderRadius: '8px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+      </Modal>
       </div>
     </>
   )

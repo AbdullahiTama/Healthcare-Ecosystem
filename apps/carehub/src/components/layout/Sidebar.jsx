@@ -37,7 +37,7 @@ export default function Sidebar({ brand, role, customRoles = {}, mobileOpen, onC
   }
 
   const content = (
-    <div style={{ width: isMobile ? '100%' : collapsed ? '64px' : '210px', flexShrink: 0, background: 'white', borderRight: `1px solid ${border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
+    <div style={{ width: isMobile ? '100%' : collapsed ? '64px' : '210px', flexShrink: 0, background: theme.gray50, borderRight: `1px solid ${border}`, display: 'flex', flexDirection: 'column', overflowY: 'auto', height: '100%', boxSizing: 'border-box' }}>
       {/* Brand header */}
       <div style={{ padding: collapsed ? '16px 8px' : '16px 14px', borderBottom: `1px solid ${border}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: collapsed ? 'center' : 'flex-start' }}>
