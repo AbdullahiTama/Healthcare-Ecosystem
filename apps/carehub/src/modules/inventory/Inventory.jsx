@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
 } from 'lucide-react'
 import { productRepository } from './repositories'
+import { parseInventoryCsv } from './csvImport'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -39,19 +41,41 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const totalDuplicateItems = duplicateGroups.reduce((s, g) => s + (g.length - 1), 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))]
+
+  // Deep-link filters (issue #4): the dashboard's proactive alerts link here
+  // with ?stock=low|out and ?expiry=expiring|expired, so a tap opens the full
+  // affected list rather than a summary line.
+  const [searchParams] = useSearchParams()
+  const [stockFilter, setStockFilter] = useState(searchParams.get('stock') === 'low' || searchParams.get('stock') === 'out' ? searchParams.get('stock') : '')
+  const [expiryFilter, setExpiryFilter] = useState(searchParams.get('expiry') === 'expiring' || searchParams.get('expiry') === 'expired' ? searchParams.get('expiry') : '')
+
+  const daysToExpiry = (p) => {
+    if (!p.expiry_date) return null
+    const d = new Date(p.expiry_date)
+    if (Number.isNaN(d.getTime())) return null
+    return Math.ceil((d - new Date()) / 86400000)
+  }
+
   const filtered = useMemo(() => products.filter(p => {
     const pCat = p.cat || p.category || ''
     const pGeneric = p.generic_name || p.genericName || ''
-    return (catFilter === 'All' || pCat === catFilter) &&
-      (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
-  }), [products, catFilter, search])
+    if (catFilter !== 'All' && pCat !== catFilter) return false
+    if (!(p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))) return false
+    const isService = pCat === 'Services'
+    if (stockFilter === 'low' && (isService || !(p.stock > 0 && p.stock <= (p.reorder_level || 5)))) return false
+    if (stockFilter === 'out' && (isService || p.stock > 0)) return false
+    const t = expiryFilter ? daysToExpiry(p) : null
+    if (expiryFilter === 'expiring' && !(t !== null && t >= 0 && t <= 60)) return false
+    if (expiryFilter === 'expired' && !(t !== null && t < 0)) return false
+    return true
+  }), [products, catFilter, search, stockFilter, expiryFilter])
 
   // Pagination — 50 rows per page. Reset to page 0 whenever the result set
   // changes (search, filter, or data reload) so the user never lands on an
   // empty page that no longer exists. DataTable does the slicing.
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [search, catFilter, products.length])
+  useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
   const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
@@ -207,10 +231,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 
   function downloadTemplate() {
     const rows = [
-      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)'],
-      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes'],
-      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes'],
-      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes'],
+      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)', 'Expiry Date'],
+      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes', '2027-06-30'],
+      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes', '2028-01-31'],
+      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes', ''],
     ]
     const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -226,26 +250,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
     const reader = new FileReader()
     reader.onload = ev => {
       try {
-        const lines = ev.target.result.split('\n').filter(l => l.trim())
-        if (lines.length < 2) { setUploadError('File is empty or has no products.'); return }
-        const parsed = lines.slice(1).map(line => {
-          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
-          if (!cols[0]) return null
-          return {
-            name: cols[0] || '',
-            generic_name: cols[1] || '',
-            category: cols[2] || 'Medicines',
-            price: parseFloat(cols[3]) || 0,
-            cost_price: parseFloat(cols[4]) || 0,
-            stock: cols[5] !== '' ? parseInt(cols[5]) || 0 : 999,
-            reorder_level: parseInt(cols[6]) || 5,
-            barcode: cols[7] || '',
-            list_on_carefind: (cols[8] || 'yes').toLowerCase() !== 'no',
-            emoji: '💊',
-          }
-        }).filter(Boolean)
-        if (parsed.length === 0) { setUploadError('No valid products found.'); return }
-        setUploadData(parsed)
+        const { rows, error } = parseInventoryCsv(ev.target.result)
+        if (error) { setUploadError(error); return }
+        setUploadData(rows)
       } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
     }
     reader.readAsText(file); e.target.value = ''
@@ -281,6 +288,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         reorder_level: parseInt(p.reorder_level) || 5,
         barcode: p.barcode || '',
         list_on_carefind: p.list_on_carefind !== false,
+        expiry_date: p.expiry_date || null,
         emoji: '💊',
         business_id: brand.id,
       })
@@ -363,7 +371,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Package />} label='Total Products' value={products.length} />
         <StatCard icon={<AlertTriangle />} label='Low Stock' value={lowStock.length} alert={lowStock.length > 0} sub={outOfStock.length + ' out of stock'} />
         <StatCard icon={<DollarSign />} label='Stock Value' value={fmt(stockValue)} sub={'Cost: ' + fmt(costValue)} />
@@ -389,6 +397,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       </div>
 
+      {(stockFilter || expiryFilter) && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: '12px', color: gray500, fontWeight: '700' }}>Filtered by:</span>
+          {stockFilter && (
+            <button onClick={() => setStockFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${warning}`, background: warningBg, color: warning, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              {stockFilter === 'low' ? 'Low stock only' : 'Out of stock only'} ✕
+            </button>
+          )}
+          {expiryFilter && (
+            <button onClick={() => setExpiryFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
+              {expiryFilter === 'expiring' ? 'Expiring within 60 days' : 'Expired'} ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {scanning && (
         <div style={{ marginBottom: '16px', borderRadius: theme.radius.lg, overflow: 'hidden', border: `2px solid ${tealDeep}`, position: 'relative', background: 'black' }}>
           <video id='inv-cam' style={{ width: '100%', maxHeight: '240px', objectFit: 'cover', display: 'block' }} autoPlay playsInline muted />
@@ -397,7 +421,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       )}
 
-      {filtered.length === 0 ? <Empty icon={<Package size={40} />} message='No products found' action={perms?.canEditStock ? '+ Add First Product' : undefined} onAction={() => setShowAdd(true)} /> : (
+      {filtered.length === 0 ? <Empty icon={<Package size={80} />} message="No products found" action={perms?.canEditStock ? '+ Add Product' : undefined} onAction={() => setShowAdd(true)} /> : (
         <DataTable
           rows={filtered}
           page={page}
@@ -413,8 +437,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 const Icon = productIcon(p)
                 return (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: 30, height: 30, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
-                    <span style={{ fontWeight: '700', fontSize: '13px', color: navy }}>{p.name}</span>
+                    <div style={{ width: 30, height: 30, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={15} /></div>
+                    <span style={{ fontWeight: '700', fontSize: '13px', color: navy, textTransform: 'uppercase' }}>{p.name}</span>
                   </div>
                 )
               },
@@ -476,6 +500,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 return cat === 'Services' ? <Pill label='Service' type='blue' /> : out ? <Pill label='Out of Stock' type='red' /> : low ? <Pill label='Low Stock' type='amber' /> : <Pill label='In Stock' type='green' />
               },
             },
+            {
+              key: 'expiry_date', label: 'Expiry Date', sortable: true,
+              sortValue: p => p.expiry_date || '',
+              render: p => {
+                const days = (() => {
+                  if (!p.expiry_date) return null
+                  const d = new Date(p.expiry_date)
+                  const now = new Date()
+                  return Math.ceil((d - now) / (1000 * 60 * 60 * 24))
+                })()
+                if (!p.expiry_date) return <span style={{ color: gray500 }}>—</span>
+                if (days < 0) return <span style={{ color: danger, fontWeight: '700' }}>EXPIRED</span>
+                if (days <= 60) return <span style={{ color: warning, fontWeight: '700' }}>{days} days left</span>
+                return <span style={{ color: navy, fontWeight: '700' }}>Exp {new Date(p.expiry_date).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' })}</span>
+              },
+            },
           ]}
           rowStyle={p => {
             const cat = p.cat || p.category || ''
@@ -521,8 +561,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             1. Tap <strong>Download Template</strong><br />
             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
             3. Fill in your products row by row<br />
-            4. Save as <strong>CSV</strong><br />
-            5. Upload here
+            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (e.g. 2027-06-30) — leave blank if none<br />
+            5. Save as <strong>CSV</strong><br />
+            6. Upload here
           </div>
           <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
@@ -579,12 +620,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
             {duplicateGroups.map((group, gi) => {
               const totalStock = group.reduce((s, p) => s + (p.stock || 0), 0)
               return (
-                <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: '#fffdf5' }}>
+                <div key={gi} style={{ padding: '12px', borderRadius: '10px', border: `1px solid ${warning}`, background: warningBg }}>
                   <div style={{ fontSize: '11px', fontWeight: '700', color: warning, marginBottom: '8px' }}>
                     GROUP {gi + 1} — {group.length} duplicates · will combine to {totalStock} units
                   </div>
                   {group.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: 'white', marginBottom: '4px', fontSize: '12px' }}>
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: '6px', background: theme.gray50, marginBottom: '4px', fontSize: '12px' }}>
                       <div>
                         <span style={{ fontWeight: '600' }}>{p.name}</span>
                         {(p.generic_name || p.genericName) && <span style={{ color: gray400 }}> · {p.generic_name || p.genericName}</span>}
@@ -627,8 +668,8 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
                 <div style={{ fontSize: '12px', color: gray500 }}>{duplicateWarning.existing.stock} in stock</div>
               </div>
               <ArrowRight size={18} color={gray300} />
-              <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', background: '#FDFBF7' }}>
-                <div style={{ fontSize: '10px', fontWeight: '700', color: '#0E6F5A', marginBottom: '6px' }}>YOU'RE ADDING</div>
+              <div style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `1px solid ${theme.border}`, background: theme.gray50 }}>
+                <div style={{ fontSize: '10px', fontWeight: '700', color: tealDeep, marginBottom: '6px' }}>YOU'RE ADDING</div>
                 <div style={{ fontWeight: '700', fontSize: '14px' }}>{duplicateWarning.incoming.name}</div>
                 {duplicateWarning.incoming.generic_name && (
                   <div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>{duplicateWarning.incoming.generic_name}</div>
@@ -638,7 +679,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               </div>
             </div>
 
-            <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#f9fafb', fontSize: '12px', color: '#555' }}>
+            <div style={{ padding: '10px 14px', borderRadius: '10px', background: theme.gray50, fontSize: '12px', color: theme.gray600 }}>
               Updating will combine stock ({duplicateWarning.existing.stock} + {duplicateWarning.incoming.stock} = {(duplicateWarning.existing.stock || 0) + (duplicateWarning.incoming.stock || 0)} units) and apply the new price you entered.
             </div>
 
@@ -662,7 +703,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
 }
 
 function ProductModal({ product, perms, onSave, onClose, showToast }) {
-  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '' })
+  const [form, setForm] = useState(product ? { ...product, cat: product.cat || product.category, expiry_date: product.expiry_date } : { emoji: '💊', cat: 'Medicines', list_on_carefind: true, show_price: true, sale_type: 'retail', price_unit: 'piece', min_purchase: '', expiry_date: '' })
   const [saving, setSaving] = useState(false)
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isEdit = !!product
@@ -685,7 +726,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
       return
     }
     setSaving(true)
-    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, show_price: _sp, ...restForm } = form
+    const { sale_type: _st, price_unit: _pu, min_purchase: _mp, show_price: _sp, expiry_date: _ed, ...restForm } = form
     const saleData = hasSaleFields
       ? {
           sale_type: form.sale_type || 'retail',
@@ -697,7 +738,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           ...(listedOnCareFind ? { show_price: form.show_price !== false } : {}),
         }
       : {}
-    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines' })
+    await onSave({ ...restForm, ...saleData, price: parseFloat(form.price) || 0, cost_price: parseFloat(form.cost_price) || 0, stock: isService ? 999 : parseInt(form.stock) || 0, reorder_level: parseInt(form.reorder_level) || 5, category: form.cat || form.category || 'Medicines', expiry_date: form.expiry_date || null })
     setSaving(false)
   }
 
@@ -718,13 +759,20 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
           </div>
         )}
         {!canEditPrice && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', background: warningBg, fontSize: '12px', color: warning }}><AlertTriangle size={13} /> Only the Owner can edit prices</div>}
+        <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
+        {isEdit && !form.expiry_date && form.cat !== 'Services' && (
+          <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, lineHeight: 1.6 }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>No expiry date set — add one to enable expiry alerts and reports.</span>
+          </div>
+        )}
         {form.cat !== 'Services' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Stock Quantity' value={form.stock} onChange={v => f('stock', v)} type='number' placeholder='0' readOnly={!perms?.canEditStock} />
             <Inp label='Reorder Level' value={form.reorder_level} onChange={v => f('reorder_level', v)} type='number' placeholder='5' />
+            <Inp label='Expiry Date' value={form.expiry_date} onChange={v => f('expiry_date', v)} type='date' />
           </div>
         )}
-        <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
         {!isService && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <Sel
@@ -780,7 +828,7 @@ function RestockModal({ product, onRestock, onClose, showToast }) {
         <Inp label='Units to Add *' value={qty} onChange={setQty} type='number' placeholder='e.g. 100' required />
         {qty && parseInt(qty) > 0 && <div style={{ fontSize: '12px', color: success, fontWeight: '700' }}>New total: {product.stock + parseInt(qty)} units</div>}
         <Inp label='Note (optional)' value={note} onChange={setNote} placeholder='Supplier name, invoice number...' />
-        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: '#FDFBF7', fontSize: '12px', color: '#0E6F5A' }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
+        {product.list_on_carefind !== false && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px', borderRadius: '8px', background: theme.gray50, fontSize: '12px', color: tealDeep }}><Search size={13} /> After restocking this product will show as available on CareFind</div>}
       </div>
     </Modal>
   )

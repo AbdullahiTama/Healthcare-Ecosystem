@@ -26,7 +26,7 @@ export function ProductCard({ product, onEdit, onDelete, onRestock, onToggleCare
   const canManage = perms?.inventory_write || perms?.all || role === 'owner'
 
   return (
-    <Card style={{ background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden' }}>
+    <Card style={{ background: theme.cardBg, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'hidden' }}>
       <div style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
         <div style={{ 
           width: 56, height: 56, borderRadius: 12, 

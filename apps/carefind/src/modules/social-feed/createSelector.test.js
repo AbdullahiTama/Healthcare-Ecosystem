@@ -1,0 +1,77 @@
+import { describe, it, expect, vi } from 'vitest'
+import {
+  CREATE_PARAM, CREATE_PATH, shouldOpenCreateSelector, withoutCreateParam,
+  logCreateTap, logCreateSelectorRendered, logCreateSelectorFailed,
+} from './createSelector.js'
+
+describe('createSelector signal', () => {
+  it('navigates to the feed with the create flag set', () => {
+    expect(CREATE_PATH).toBe(`/feed?${CREATE_PARAM}=1`)
+  })
+
+  it('recognises the flag from a query string, with or without the leading ?', () => {
+    expect(shouldOpenCreateSelector('?create=1')).toBe(true)
+    expect(shouldOpenCreateSelector('create=1')).toBe(true)
+    expect(shouldOpenCreateSelector('?post=abc&create=1')).toBe(true)
+  })
+
+  it('recognises the flag from a react-router location object', () => {
+    expect(shouldOpenCreateSelector({ search: '?create=1' })).toBe(true)
+    expect(shouldOpenCreateSelector({ search: '?post=abc' })).toBe(false)
+  })
+
+  it('recognises the flag from URLSearchParams', () => {
+    expect(shouldOpenCreateSelector(new URLSearchParams('create=1'))).toBe(true)
+    expect(shouldOpenCreateSelector(new URLSearchParams('create=0'))).toBe(false)
+  })
+
+  it('is false for an absent, empty or non-1 flag', () => {
+    expect(shouldOpenCreateSelector('')).toBe(false)
+    expect(shouldOpenCreateSelector(undefined)).toBe(false)
+    expect(shouldOpenCreateSelector('?create=')).toBe(false)
+    expect(shouldOpenCreateSelector('?create=yes')).toBe(false)
+  })
+
+  it('strips only the create flag, preserving every other parameter', () => {
+    expect(withoutCreateParam('?create=1')).toBe('')
+    expect(withoutCreateParam('?post=abc&create=1')).toBe('?post=abc')
+    expect(withoutCreateParam({ search: '?create=1&tab=video' })).toBe('?tab=video')
+    expect(withoutCreateParam('?post=abc')).toBe('?post=abc')
+  })
+})
+
+// The instrumentation is two events, not one. A single event with `opened`
+// hardcoded true at both tap sites — which is what shipped first — made the
+// failure path unreachable, so the logging added to catch a recurrence of
+// issue #2 could never have caught it.
+describe('create-flow telemetry', () => {
+  it('records what the tap did, distinguishing opening from navigating', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    const inPlace = logCreateTap({ source: 'bottom-nav', route: 'in-place', path: '/feed' }, sink)
+    const navigating = logCreateTap({ source: 'bottom-nav', route: 'navigate', path: '/profile' }, sink)
+    expect(inPlace.route).toBe('in-place')
+    expect(navigating.route).toBe('navigate')
+    expect(sink.info).toHaveBeenCalledTimes(2)
+    expect(sink.warn).not.toHaveBeenCalled()
+  })
+
+  it('records the selector actually rendering as its own event', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    logCreateSelectorRendered({ source: 'feed' }, sink)
+    expect(sink.info).toHaveBeenCalledWith('[create] selector rendered', { source: 'feed' })
+  })
+
+  it('has a reachable failure path that warns rather than staying silent', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    const detail = logCreateSelectorFailed({ source: 'feed', reason: 'no handler' }, sink)
+    expect(sink.warn).toHaveBeenCalledTimes(1)
+    expect(sink.info).not.toHaveBeenCalled()
+    expect(detail).toEqual({ source: 'feed', reason: 'no handler' })
+  })
+
+  it('a tap never claims the selector opened — only the render event does', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    const detail = logCreateTap({ source: 'bottom-nav', route: 'navigate', path: '/profile' }, sink)
+    expect(detail).not.toHaveProperty('opened')
+  })
+})

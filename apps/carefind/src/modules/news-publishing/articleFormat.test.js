@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { wrapSelection, wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from './articleFormat.js'
+import {
+  wrapSelection, wrapBold, wrapItalic, wrapHighlight, renderArticleHtml,
+  findMalformedHighlights, stripMalformedHighlights,
+} from './articleFormat.js'
 
 describe('wrapSelection', () => {
   function makeEditor(text) {
@@ -82,5 +85,55 @@ describe('renderArticleHtml', () => {
   it('coerces non-string content to a safe rendered paragraph', () => {
     expect(() => renderArticleHtml({ id: 'x', content: '**hi**' })).not.toThrow()
     expect(renderArticleHtml(42)).toBe('<p>42</p>')
+  })
+})
+describe('malformed highlight markers (issue #3)', () => {
+  // The exact content the broken colour button wrote into production, taken
+  // from posts.content of the 2026-08-21 "wound" article.
+  const CORRUPTED = '**==color|Why does a wound sometimes itch when it starts healing ?\n**==color|\nHave you ever had a small cut'
+
+  it('finds every literal ==color| marker', () => {
+    const found = findMalformedHighlights(CORRUPTED)
+    expect(found).toHaveLength(2)
+    expect(found[0].token).toBe('==color|')
+  })
+
+  it('also catches the ==undefined| marker an unset theme token produced', () => {
+    expect(findMalformedHighlights('a ==undefined|b==undefined| c')).toHaveLength(2)
+  })
+
+  it('reports nothing for well-formed markup', () => {
+    expect(findMalformedHighlights('==#fde68a|highlighted== and ==plain== and **bold**')).toEqual([])
+    expect(findMalformedHighlights('')).toEqual([])
+    expect(findMalformedHighlights(null)).toEqual([])
+  })
+
+  it('strips the markers but keeps every word they wrapped', () => {
+    const cleaned = stripMalformedHighlights(CORRUPTED)
+    expect(cleaned).not.toContain('==color|')
+    expect(cleaned).toContain('Why does a wound sometimes itch when it starts healing ?')
+    expect(cleaned).toContain('Have you ever had a small cut')
+    expect(cleaned.startsWith('**')).toBe(true)
+  })
+
+  it('leaves valid colour and plain highlights untouched', () => {
+    const valid = 'x ==#fde68a|kept== y ==plain== z'
+    expect(stripMalformedHighlights(valid)).toBe(valid)
+  })
+
+  it('a stripped article renders with no marker characters visible', () => {
+    const html = renderArticleHtml(stripMalformedHighlights(CORRUPTED))
+    expect(html).not.toContain('color|')
+    expect(html).not.toContain('==')
+  })
+
+  it('a correctly applied colour round-trips markup -> html', () => {
+    const setText = vi.fn()
+    const textareaRef = { current: { selectionStart: 0, selectionEnd: 5 } }
+    wrapHighlight(textareaRef, 'hello world', setText, '#fde68a')
+    const markup = setText.mock.calls[0][0]
+    expect(markup).toBe('==#fde68a|hello== world')
+    expect(findMalformedHighlights(markup)).toEqual([])
+    expect(renderArticleHtml(markup)).toContain('<mark style="background:#fde68a;color:#1f2937;padding:1px 4px;border-radius:4px;">hello</mark>')
   })
 })

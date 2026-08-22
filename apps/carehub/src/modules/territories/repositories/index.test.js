@@ -47,6 +47,52 @@ describe('territoryRepository', () => {
       expect(created).toMatchObject({ business_id: A, parent_territory_id: 't2' })
     })
 
+    // ── Bulk import (CSV upload) — same contract as clients.createMany ────────
+    it('createMany inserts every row with the tenant stamped', async () => {
+      const { repo, client } = seeded()
+      const result = await repo.createMany(A, [
+        { name: 'Ikeja', level: 'City', parent_territory_id: 't2' },
+        { name: 'Ibadan', level: 'City', parent_territory_id: null },
+      ])
+      expect(result).toEqual({ added: 2, skipped: 0, failed: [] })
+      expect(client.rows('territories').filter((r) => r.name === 'Ikeja' || r.name === 'Ibadan'))
+        .toEqual([
+          expect.objectContaining({ name: 'Ikeja', business_id: A }),
+          expect.objectContaining({ name: 'Ibadan', business_id: A }),
+        ])
+    })
+
+    it('createMany captures per-row failures without losing the rest', async () => {
+      let n = 0
+      const repo = createTerritoryRepository(async (path, options) => {
+        n++
+        if (n === 1) throw new Error('network blip')
+        return []
+      })
+      const result = await repo.createMany(A, [
+        { name: 'Broken' },
+        { name: 'Fine' },
+      ])
+      expect(result.added).toBe(1)
+      expect(result.failed).toEqual([{ name: 'Broken', message: 'network blip' }])
+    })
+
+    it('createMany is a no-op for an empty list (issues no request)', async () => {
+      let called = false
+      const repo = createTerritoryRepository(async () => { called = true; return [] })
+      const result = await repo.createMany(A, [])
+      expect(result).toEqual({ added: 0, skipped: 0, failed: [] })
+      expect(called).toBe(false)
+    })
+
+    it('createMany counts a server duplicate as skipped, not failed', async () => {
+      const repo = createTerritoryRepository(async () => {
+        throw new Error('Supabase error (409): duplicate key value violates unique constraint')
+      })
+      const result = await repo.createMany(A, [{ name: 'South West' }])
+      expect(result).toEqual({ added: 0, skipped: 1, failed: [] })
+    })
+
     it('update scopes by id and business', async () => {
       const { repo, client } = seeded()
       await repo.update('t2', A, { name: 'Lagos State' })

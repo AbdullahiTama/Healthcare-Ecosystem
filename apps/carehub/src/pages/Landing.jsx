@@ -138,13 +138,13 @@ export default function Landing() {
       {/* ── Glass Nav ─────────────────────────────────────────── */}
       <nav ref={navRef} style={{
         position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
-        background: navScrolled ? '#fff' : 'rgba(255,255,255,0.08)',
-        backdropFilter: 'blur(16px)',
-        borderRadius: 60, padding: '8px 10px 8px 20px',
+        background: navScrolled ? '#fff' : 'rgba(255,255,255,0.05)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: 64, padding: '8px 10px 8px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         zIndex: 100, width: isMobile ? 'calc(100% - 24px)' : 720,
-        border: navScrolled ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.12)',
-        transition: 'background 0.3s ease, border 0.3s ease',
+        border: navScrolled ? '1px solid rgba(0,0,0,0.04)' : '1px solid rgba(255,255,255,0.08)',
+        transition: 'background 0.3s ease, border 0.3s ease, backdropFilter 0.3s ease',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Logo size={28} />
@@ -171,19 +171,19 @@ export default function Landing() {
       }}>
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.06) 0%, transparent 60%)',
+          background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.04) 0%, transparent 50%)',
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 900, margin: '0 auto' }}>
           <h1 className="hero-fade" style={{
             fontFamily: fontDisplay, fontWeight: 700,
             fontSize: isMobile ? 'clamp(32px, 8vw, 42px)' : 'clamp(42px, 5vw, 60px)',
-            lineHeight: 1.1, letterSpacing: '-0.02em', color: '#fff', margin: '0 0 20px',
+            lineHeight: 1.1, letterSpacing: '-0.02em', color: '#fff', margin: '0 0 24px',
             maxWidth: 900,
           }}>
             Run your healthcare business. Get found by patients.
           </h1>
-          <p className="hero-fade" style={{ fontSize: isMobile ? 14 : 16, color: 'rgba(255,255,255,0.7)', maxWidth: 580, margin: '0 auto 32px', lineHeight: 1.7 }}>
+          <p className="hero-fade" style={{ fontSize: isMobile ? 14 : 16, color: 'rgba(255,255,255,0.7)', maxWidth: 600, margin: '0 auto 36px', lineHeight: 1.75 }}>
             Sales, inventory, staff and patient workflow in one calm, reliable platform — for pharmacies, hospitals, labs and clinics across Nigeria.
           </p>
           <div className="hero-fade" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -297,22 +297,22 @@ export default function Landing() {
 
       {/* ── Steps with GSAP ───────────────────────────────────── */}
       <div ref={stepsRef} style={{
-        background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)`,
-        padding: '80px 24px', borderTop: `1px solid ${border}`,
+        background: `linear-gradient(180deg, ${theme.bg} 0%, #fff 100%)`,
+        padding: '80px 24px', borderTop: `1px solid ${theme.border}`,
       }}>
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
               Selling within the hour, not the week.
             </h2>
-            <p style={{ fontSize: 14, color: gray500, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: theme.gray500, maxWidth: 480, margin: '0 auto', lineHeight: 1.6 }}>
               Three steps to get your business online and selling.
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {STEPS_DATA.map(([title, desc], i) => (
               <div key={i} className="step-card" style={{
-                background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`,
+                background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${theme.border}`,
                 padding: isMobile ? 24 : 32, display: 'flex', alignItems: 'flex-start', gap: 20,
                 transition: 'transform 0.3s ease, box-shadow 0.3s ease',
               }}
@@ -321,13 +321,13 @@ export default function Landing() {
               >
                 <div style={{
                   width: 36, height: 36, borderRadius: theme.radius.full,
-                  background: tealMist, color: tealDeep,
+                  background: theme.tealMist, color: theme.tealDeep,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 14, fontWeight: 900, flexShrink: 0,
                 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, color: navy, marginBottom: 6 }}>{title}</div>
-                  <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.65, maxWidth: 520 }}>{desc}</div>
+                  <div style={{ fontSize: 13.5, color: theme.gray500, lineHeight: 1.65, maxWidth: 520 }}>{desc}</div>
                 </div>
               </div>
             ))}
@@ -352,42 +352,42 @@ export default function Landing() {
       </div>
 
       {/* ── Testimonial Carousel ──────────────────────────────── */}
-      <div ref={testimonialsRef} style={{ padding: '80px 24px', maxWidth: 800, margin: '0 auto', borderTop: `1px solid ${border}` }}>
+      <div ref={testimonialsRef} style={{ padding: '80px 24px', maxWidth: 800, margin: '0 auto', borderTop: `1px solid ${theme.border}` }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 32, color: navy, margin: '0 0 10px' }}>
             Loved by healthcare teams
           </h2>
-          <p style={{ fontSize: 13.5, color: gray500 }}>From pharmacy counters to hospital administrations across Nigeria.</p>
+          <p style={{ fontSize: 13.5, color: theme.gray500 }}>From pharmacy counters to hospital administrations across Nigeria.</p>
         </div>
         <div className="testimonial-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontFamily: fontDisplay, fontSize: 48, fontWeight: 700, color: tealDeep, lineHeight: 1, marginBottom: 12, opacity: 0.15 }}>&ldquo;</div>
+          <div style={{ fontFamily: fontDisplay, fontSize: 48, fontWeight: 700, color: theme.tealDeep, lineHeight: 1, marginBottom: 12, opacity: 0.15 }}>&ldquo;</div>
           <p style={{ fontSize: isMobile ? 16 : 20, color: navy, lineHeight: 1.6, maxWidth: 640, margin: '0 auto 28px', fontWeight: 500, fontStyle: 'italic' }}>
             {TESTIMONIALS[activeTestimonial][4]}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, fontWeight: 900, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: theme.radius.full, background: theme.tealMist, color: theme.tealDeep, fontWeight: 900, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {TESTIMONIALS[activeTestimonial][0]}
             </div>
             <div style={{ textAlign: 'left' }}>
               <div style={{ fontSize: 14, fontWeight: 800, color: navy }}>{TESTIMONIALS[activeTestimonial][1]}</div>
-              <div style={{ fontSize: 12, color: gray400 }}>{TESTIMONIALS[activeTestimonial][2]} &middot; {TESTIMONIALS[activeTestimonial][3]}</div>
+              <div style={{ fontSize: 12, color: theme.gray400 }}>{TESTIMONIALS[activeTestimonial][2]} &middot; {TESTIMONIALS[activeTestimonial][3]}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 24 }}>
             {TESTIMONIALS.map((_, i) => (
               <button key={i} onClick={() => setActiveTestimonial(i)} aria-label={`Testimonial ${i + 1}`} style={{
-                width: i === activeTestimonial ? 24 : 8, height: 8, borderRadius: 4,
+                width: i === activeTestimonial ? 24 : 8, height: 8, borderRadius: theme.radius.sm,
                 border: 'none', cursor: 'pointer',
-                background: i === activeTestimonial ? tealDeep : gray300,
+                background: i === activeTestimonial ? theme.tealDeep : theme.gray300,
                 transition: 'all 0.3s ease',
               }} />
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16 }}>
-            <button onClick={() => setActiveTestimonial(p => p === 0 ? TESTIMONIALS.length - 1 : p - 1)} aria-label="Previous testimonial" style={{ width: 36, height: 36, borderRadius: theme.radius.full, border: `1px solid ${border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: gray500 }}>
+            <button onClick={() => setActiveTestimonial(p => p === 0 ? TESTIMONIALS.length - 1 : p - 1)} aria-label="Previous testimonial" style={{ width: 36, height: 36, borderRadius: theme.radius.full, border: `1px solid ${theme.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.gray500 }}>
               <ChevronLeft size={15} />
             </button>
-            <button onClick={() => setActiveTestimonial(p => (p + 1) % TESTIMONIALS.length)} aria-label="Next testimonial" style={{ width: 36, height: 36, borderRadius: theme.radius.full, border: `1px solid ${border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: gray500 }}>
+            <button onClick={() => setActiveTestimonial(p => (p + 1) % TESTIMONIALS.length)} aria-label="Next testimonial" style={{ width: 36, height: 36, borderRadius: theme.radius.full, border: `1px solid ${theme.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.gray500 }}>
               <ChevronRight size={15} />
             </button>
           </div>

@@ -196,11 +196,11 @@ export async function getAllLocations(mainBusinessId) {
 // on a limit=50000 request). Only offset-paging through the clamp reaches
 // every row, so the products/clients collection reads below page through it.
 export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
-export async function searchProducts(businessId, query, limit = 30) {
-  const q = encodeURIComponent(query.trim())
-  if (!q) return []
-  return sbFetch('products?business_id=eq.' + businessId + '&name=ilike.*' + q + '*&order=name.asc&select=id,name,price,category,sku&limit=' + limit)
-}
+// NOTE: `searchProducts` lived here until 2026-08-21. It selected a nonexistent
+// `sku` column, so every call failed with PGRST204 and the consultation form's
+// silent catch made the picker look empty. Replaced by
+// productRepository.search (modules/inventory/repositories), which matches
+// name OR generic_name and selects only real columns.
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
@@ -505,8 +505,19 @@ export async function setDefaultViewers(businessId, staffId, viewers) {
   }
 }
 
-export async function getFieldActivities(businessId) {
-  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=100')
+export async function getFieldActivities(businessId, { limit = 100 } = {}) {
+  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=' + limit)
+}
+
+// Lightweight count for the manager's My Feed / Team Reports tab badges.
+// select=id keeps the payload tiny; PostgREST's server-side db-max-rows clamp
+// (1000 on this project) saturates the result past that, which callers must
+// surface as "1000+" rather than an exact figure.
+export async function countFieldActivities(businessId, staffId) {
+  let path = 'field_activities?business_id=eq.' + businessId
+  if (staffId) path += '&staff_id=eq.' + staffId
+  const rows = await sbFetch(path + '&select=id&limit=1000')
+  return Array.isArray(rows) ? rows.length : 0
 }
 export async function getActivityViewers(activityIds) {
   if (!activityIds || activityIds.length === 0) return []
@@ -549,6 +560,29 @@ export async function reverseGeocode(lat, lng) {
   } catch (e) {
     return null
   }
+}
+
+// Forward geocoding for the Place of Visit field: a typed place name becomes
+// coordinates so the log can verify the rep's GPS against where they claim to
+// be. Same free OpenStreetMap service as reverseGeocode — no key, no cost.
+// Returns [{ name, lat, lng }] sorted by OSM relevance; throws on transport
+// failure so the caller can show a retryable error rather than an empty list.
+export async function geocodePlace(query) {
+  const q = encodeURIComponent(String(query || '').trim())
+  if (!q) return []
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=' + q
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
+  if (!res.ok) throw new Error('Place lookup failed (' + res.status + ')')
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+  return data
+    .map(function (d) {
+      const lat = parseFloat(d.lat)
+      const lng = parseFloat(d.lon)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      return { name: d.display_name, lat: lat, lng: lng }
+    })
+    .filter(Boolean)
 }
 
 export async function uploadActivityVoice(blob) {

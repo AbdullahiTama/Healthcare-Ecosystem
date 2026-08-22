@@ -145,7 +145,11 @@ function renderInline(text, keyPrefix = '', mentions = null) {
 // `options.mentions` maps lower-cased @username -> user id for linking.
 export function renderMarkdown(text, options = {}) {
   if (text == null) return null
-  const source = String(text)
+  // Stored content can carry literal "\n" escape sequences (e.g. pasted or
+  // imported bodies). Normalise them to real line breaks so the parser below
+  // — which splits on real newlines — renders them as paragraphs/breaks
+  // instead of printing the raw characters.
+  const source = String(text).replace(/\\n/g, '\n')
   if (!source.trim()) return null
   const lines = source.split(/\r?\n/)
   const blocks = []

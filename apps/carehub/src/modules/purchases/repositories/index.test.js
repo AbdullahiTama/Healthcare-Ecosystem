@@ -33,6 +33,18 @@ describe('purchaseRepository', () => {
     expect(client.rows('purchases').find((r) => r.supplier_name === 'NewCo').business_id).toBe(A)
   })
 
+  it('create persists expiry and batch on the created row', async () => {
+    const { repo, client } = seeded()
+    await repo.create(A, { supplier_name: 'ExpiryCo', total_cost: 90, expiry: '2026-12-01', batch: 'B-1, B-2' })
+    expect(client.rows('purchases').find((r) => r.supplier_name === 'ExpiryCo')).toMatchObject({ expiry: '2026-12-01', batch: 'B-1, B-2' })
+  })
+
+  it('create keeps expiry and batch null when none are supplied', async () => {
+    const { repo, client } = seeded()
+    await repo.create(A, { supplier_name: 'NoExpiryCo', total_cost: 90, expiry: null, batch: null })
+    expect(client.rows('purchases').find((r) => r.supplier_name === 'NoExpiryCo')).toMatchObject({ expiry: null, batch: null })
+  })
+
   it('update scopes by id and business', async () => {
     const { repo, client } = seeded()
     await repo.update('2', A, { amount_paid: 500, balance: 0, status: 'paid' })

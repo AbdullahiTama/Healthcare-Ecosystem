@@ -27,6 +27,10 @@ export default function AdminPanel() {
   const [stats, setStats] = useState({})
   const [users, setUsers] = useState([])
   const [verifications, setVerifications] = useState([])
+  // Credential review: which document is being signed, and any failure to
+  // report inline against that row.
+  const [credentialLoadingId, setCredentialLoadingId] = useState(null)
+  const [credentialError, setCredentialError] = useState({ id: null, message: '' })
   const [claims, setClaims] = useState([])
   const [reports, setReports] = useState([])
   const [posts, setPosts] = useState([])
@@ -635,6 +639,34 @@ export default function AdminPanel() {
     loadAll()
   }
 
+  // Resolve a private credential document to a short-lived signed URL and
+  // open it. The admin API holds the service-role key; the browser never does.
+  async function openCredential(requestId) {
+    setCredentialLoadingId(requestId)
+    setCredentialError({ id: null, message: '' })
+
+    // The tab is opened SYNCHRONOUSLY, inside the click's user-activation
+    // window, and pointed at the signed URL once it arrives. Calling
+    // window.open() after the await is blocked by Chrome and Safari, which
+    // would look like the button doing nothing at all.
+    const tab = window.open('', '_blank', 'noopener,noreferrer')
+    try {
+      const { url } = await callAdminAuth('credential_url', { token: localStorage.getItem('admin_token'), requestId })
+      if (tab) {
+        tab.location = url
+      } else {
+        // Popups blocked entirely — hand the reviewer a link rather than
+        // failing silently.
+        setCredentialError({ id: requestId, message: 'Your browser blocked the document window. Allow popups for this site and try again.' })
+      }
+    } catch (err) {
+      if (tab) tab.close()
+      setCredentialError({ id: requestId, message: `Could not open the document: ${err.message}` })
+    } finally {
+      setCredentialLoadingId(null)
+    }
+  }
+
   async function approveVerif(id, userId, profession) {
     try {
       await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
@@ -908,7 +940,23 @@ export default function AdminPanel() {
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 9px', borderRadius: 20, height: 'fit-content', background: v.status === 'approved' ? theme.tealMist : v.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: v.status === 'approved' ? theme.success : v.status === 'rejected' ? theme.alert : theme.amberText }}>{v.status}</span>
                 </div>
-                {v.credential_url && <a href={v.credential_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: 10, fontSize: 12, color: theme.tealDeep, fontWeight: 700 }}>📎 View Credential</a>}
+                {/* Issue #5: the credentials bucket is private now — licence
+                    and ID documents were world-readable through their public
+                    URL. A reviewer asks the admin API (service role) for a
+                    5-minute signed URL instead of linking at the object. */}
+                {v.credential_url && (
+                  <button
+                    type="button"
+                    onClick={() => openCredential(v.id)}
+                    disabled={credentialLoadingId === v.id}
+                    style={{ display: 'inline-block', marginBottom: 10, padding: 0, background: 'none', border: 'none', fontSize: 12, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {credentialLoadingId === v.id ? 'Opening…' : '📎 View Credential'}
+                  </button>
+                )}
+                {credentialError.id === v.id && (
+                  <p style={{ margin: '0 0 10px 0', fontSize: 11.5, color: theme.alert }}>{credentialError.message}</p>
+                )}
                 {v.status === 'pending' && (
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => approveVerif(v.id, v.user_id, v.profession)} style={{ flex: 1, padding: 9, background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13 }}>✓ Approve</button>

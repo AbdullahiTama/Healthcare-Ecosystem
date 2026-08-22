@@ -7,6 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react/dist/cjs/lucide-react.js'),
+      '@care-ecosystem/design-system/components': path.resolve(__dirname, '../../packages/design-system/src/components'),
+      '@care-ecosystem/design-system': path.resolve(__dirname, '../../packages/design-system/src/theme.js'),
     },
   },
 })

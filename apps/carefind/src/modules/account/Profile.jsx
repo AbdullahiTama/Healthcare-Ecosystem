@@ -59,6 +59,9 @@ function Profile() {
   const [reviewers, setReviewers] = useState({})
   const [tabLoading, setTabLoading] = useState(false)
   const [openPost, setOpenPost] = useState(null)
+  // Authors of the posts this profile has reposted, so a repost can name and
+  // link the person who actually wrote it (issue #8).
+  const [sourceAuthors, setSourceAuthors] = useState({})
   const [menuOpen, setMenuOpen] = useState(false)
   const [myStories, setMyStories] = useState([])
   const [myShows, setMyShows] = useState([])
@@ -121,25 +124,61 @@ function Profile() {
     })))
   }
 
+  // Issue #6: this query used to omit `repost_of`, so every reference repost
+  // looked like an ordinary post to isRepost() and the Reposts tab was always
+  // empty while the Posts tab showed a bare 🔁 row. It now selects repost_of
+  // AND resolves each source, so a reposted article appears on the reposting
+  // user's own profile showing the original author's words, labelled as a
+  // repost (issue #8).
   async function loadMyPosts() {
     if (!user) return
     const { data } = await supabase
       .from('posts')
-      .select('id, content, created_at, post_type, image_url')
+      .select('id, content, created_at, post_type, image_url, repost_of, user_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(60)
-    setMyPosts(data || [])
+    setMyPosts(await withRepostSources(data || []))
+  }
+
+  // Attach `source` to every repost in a list, and remember who wrote each
+  // source so the original author can be named and linked (issue #8).
+  async function withRepostSources(list) {
+    const ids = [...new Set(list.filter((p) => p.repost_of).map((p) => p.repost_of))]
+    if (!ids.length) return list
+    const { data: sources } = await supabase
+      .from('posts')
+      .select('id, content, created_at, post_type, image_url, user_id')
+      .in('id', ids)
+    const byId = {}
+    ;(sources || []).forEach((s) => { byId[s.id] = s })
+
+    const authorIds = [...new Set((sources || []).map((s) => s.user_id).filter(Boolean))]
+    if (authorIds.length) {
+      const { data: authors } = await supabase
+        .from('profiles')
+        .select('id, display_name, full_name, is_verified')
+        .in('id', authorIds)
+      if (authors?.length) {
+        setSourceAuthors((prev) => {
+          const next = { ...prev }
+          authors.forEach((a) => { next[a.id] = a })
+          return next
+        })
+      }
+    }
+
+    return list.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p))
   }
 
   async function loadSavedPosts() {
     if (!user) return
     const { data } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(id, content, created_at, post_type, image_url)')
+      .select('post_id, posts(id, content, created_at, post_type, image_url, repost_of, user_id)')
       .eq('user_id', user.id)
       .limit(60)
-    setSavedPosts((data || []).map(s => s.posts).filter(Boolean))
+    setSavedPosts(await withRepostSources((data || []).map(s => s.posts).filter(Boolean)))
   }
 
   async function loadMyPlaylists() {
@@ -392,7 +431,7 @@ function Profile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -928,10 +967,32 @@ function Profile() {
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type && openPost.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{openPost.post_type}</span>}
-            <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? new Date(openPost.created_at).toLocaleDateString() : ''}</p>
+            {/* A repost shows the source's words and says whose they are
+                (issue #8) — never the reposter's name over someone else's
+                writing. */}
+            {(() => {
+              const shown = (isRepost(openPost) && openPost.source) || openPost
+              const sourceAuthor = isRepost(openPost) && openPost.source ? sourceAuthors[openPost.source.user_id] : null
+              return (
+                <>
+                  {isRepost(openPost) && (
+                    <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: theme.gray500 }}>
+                      <Repeat2 size={14} aria-hidden="true" />
+                      You reposted{sourceAuthor ? ' ' : ''}
+                      {sourceAuthor && (
+                        <Link to={`/u/${openPost.source.user_id}`} style={{ color: theme.tealDeep, textDecoration: 'none', fontWeight: 800 }}>
+                          {sourceAuthor.full_name || sourceAuthor.display_name || 'a CareFind user'}
+                        </Link>
+                      )}
+                    </p>
+                  )}
+                  {shown.image_url && <img src={shown.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
+                  {shown.post_type && shown.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{shown.post_type}</span>}
+                  <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(shown.content)))}</div>
+                  <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{shown.created_at ? new Date(shown.created_at).toLocaleDateString() : ''}</p>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -1016,7 +1077,7 @@ function Profile() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

@@ -124,7 +124,7 @@ export default function AgentDashboard() {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ padding: '9px 18px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t.id ? theme.tealDeep : '#fff', color: tab === t.id ? 'white' : gray500, boxShadow: tab === t.id ? theme.elevation[2] : theme.elevation[1] }}>
+              style={{ padding: '9px 18px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t.id ? theme.tealDeep : theme.cardBg, color: tab === t.id ? 'white' : gray500, boxShadow: tab === t.id ? theme.elevation[2] : theme.elevation[1] }}>
               {t.label}
             </button>
           ))}

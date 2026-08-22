@@ -13,6 +13,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from './components/layout/SidebarSection.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
+import { notifyReview } from './services/reviewNotifications.js'
 import { previewText } from './modules/social-feed/richText.jsx'
 import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
@@ -99,14 +100,30 @@ function PublicProfile() {
       }
 
       const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
-        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
+        // repost_of is load-bearing: without it isRepost() misreads every
+        // reference repost as an original post (issue #6).
+        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
         supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
         supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
       ])
 
-      setPosts(postData.data || [])
+      // Resolve each repost to the post it points at, so the grid shows what
+      // was actually shared rather than a bare marker (issues #6/#8).
+      const ownPosts = postData.data || []
+      const sourceIds = [...new Set(ownPosts.filter((p) => p.repost_of).map((p) => p.repost_of))]
+      if (sourceIds.length) {
+        const { data: sources } = await supabase
+          .from('posts')
+          .select('id, content, created_at, post_type, theme, image_url, user_id')
+          .in('id', sourceIds)
+        const byId = {}
+        ;(sources || []).forEach((s) => { byId[s.id] = s })
+        setPosts(ownPosts.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)))
+      } else {
+        setPosts(ownPosts)
+      }
       setFollowerCount(followerData.count || 0)
       setFollowingCount(followingData.count || 0)
       setPostCount(postData.data?.length || 0)
@@ -287,6 +304,15 @@ function PublicProfile() {
       rating: myRating,
       comment: myComment.trim() || null,
     })
+
+    // Issue #7: this is the exact case reported — a 5-star review that
+    // produced no notification. Nothing was ever emitted here.
+    if (!error) {
+      const sent = await notifyReview(supabase, {
+        kind: 'user', actorId: user.id, subjectId: id, rating: myRating, link: `/u/${user.id}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+    }
     setPostingReview(false)
     if (error) { showToast('Could not post review: ' + error.message, { type: 'error' }); return }
     setMyRating(5)
@@ -367,7 +393,7 @@ function PublicProfile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -399,7 +425,7 @@ function PublicProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -928,14 +954,37 @@ function PublicProfile() {
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type === 'visual' && !openPost.image_url && (
-              <div style={{ background: visualThemes[openPost.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
-                <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
-              </div>
-            )}
-            {openPost.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>}
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
+            {/* A repost row carries no words of its own — render the post it
+                points at, and say whose it is (issues #6/#8). Reading
+                openPost.content directly here would show an empty modal. */}
+            {(() => {
+              const reposted = isRepost(openPost)
+              const shown = (reposted && openPost.source) || openPost
+              return (
+                <>
+                  {reposted && (
+                    <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: theme.gray500 }}>
+                      <Repeat2 size={14} aria-hidden="true" />
+                      Reposted{openPost.source ? ' from another CareFind member' : ''}
+                    </p>
+                  )}
+                  {reposted && !openPost.source ? (
+                    <p style={{ margin: 0, fontSize: 14, color: theme.gray500 }}>This post is no longer available.</p>
+                  ) : (
+                    <>
+                      {shown.image_url && <img src={shown.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
+                      {shown.post_type === 'visual' && !shown.image_url && (
+                        <div style={{ background: visualThemes[shown.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
+                          <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{shown.content}</p>
+                        </div>
+                      )}
+                      {shown.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(shown.content)))}</div>}
+                      <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{shown.created_at ? timeAgo(shown.created_at) : ''}</p>
+                    </>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -1033,7 +1082,6 @@ function PublicProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

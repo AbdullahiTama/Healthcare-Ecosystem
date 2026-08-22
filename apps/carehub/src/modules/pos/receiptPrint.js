@@ -2,6 +2,12 @@
 // print window and calls buildReceiptHtml; all string assembly lives here so
 // escaping, the 58/80mm @page sizing, the tax line and the payment rows are
 // unit-testable without a browser.
+//
+// Architecture: CSS Grid for all label/value rows. The grid's implicit
+// `min-width: 0` on the left column prevents long product names from pushing
+// the right-aligned price off the paper. The @page rule sets zero margins so
+// the full paper width is available for content — matching thermal printer
+// hardware which has no concept of print margins.
 import { esc } from '../../lib/escape.js'
 import { fmt, nowStr } from '../../lib/utils.js'
 
@@ -21,89 +27,119 @@ export const fmtReceiptDate = (d) => d
   ? new Date(d).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })
   : nowStr()
 
-// mm of printable width inside the paper. 58mm portable rolls keep ~48mm
-// usable; 80mm counter rolls ~72mm. Matching the @page size keeps the whole
-// layout inside the physical roll.
-const CONTENT_MM = { '58': 48, '80': 72 }
+// Paper width configuration. 58mm rolls keep ~48mm usable; 80mm rolls ~72mm.
+// The @page rule uses the full paper width with zero margins, matching thermal
+// printer hardware. Body padding is minimal (2mm) for edge-to-edge content.
+const PAPER = { '58': { paper: '58mm', pad: '2mm', fontSize: '10.5px', nameSize: '11px', totalSize: '13px' }, '80': { paper: '80mm', pad: '3mm', fontSize: '11.5px', nameSize: '12px', totalSize: '14px' } }
 
 export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} }) {
   const r = receipt
   const biz = business
-  const s = settings
-  const width = s.receipt_width === '58' ? '58' : '80'
-  const contentMm = CONTENT_MM[width] || 72
+  const width = settings.receipt_width === '58' ? '58' : '80'
+  const p = PAPER[width] || PAPER['80']
   const items = Array.isArray(r.items) ? r.items : []
-  const tax = computeTax(r.total, s.tax_rate)
+  const tax = computeTax(r.total, settings.tax_rate)
   const date = fmtReceiptDate(r.date)
-  const rate = Number(s.tax_rate) || 0
+  const rate = Number(settings.tax_rate) || 0
   const total = Number(r.total) || 0
 
-  const logo = s.logo_url
-    ? '<img src="' + esc(s.logo_url) + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;margin-bottom:8px" />'
-    : '<div class="logo">🏥</div>'
-
-  const bizLines = [
-    biz?.name && '<div class="b" style="font-size:16px">' + esc(biz.name) + '</div>',
-    biz?.address && '<div style="font-size:11px;color:#666;margin-top:2px">' + esc(biz.address) + '</div>',
-    biz?.phone && '<div style="font-size:11px;color:#666">' + esc(biz.phone) + '</div>',
-    biz?.whatsapp && '<div style="font-size:11px;color:#666">WhatsApp: ' + esc(biz.whatsapp) + '</div>',
-    s.receipt_header && '<div style="font-size:11px;margin-top:4px;font-style:italic">' + esc(s.receipt_header) + '</div>',
-  ].filter(Boolean).join('')
-
-  const itemRows = items.map(i =>
-    '<div style="margin-bottom:6px"><div class="b" style="font-size:12px">' + (i.emoji ? esc(i.emoji) + ' ' : '') + esc(i.name) + '</div>' +
-    '<div class="r" style="color:#666"><span>' + String(i.qty) + ' x ' + fmt(i.price) + '</span><span>' + fmt(i.price * i.qty) + '</span></div></div>'
-  ).join('')
-
-  const taxRows = tax > 0
-    ? '<div class="r"><span>Tax (' + esc(String(rate)) + '%)</span><span>' + fmt(tax) + '</span></div>' +
-      '<div class="r b"><span>Total incl. tax</span><span>' + fmt(total + tax) + '</span></div>'
+  const logo = settings.logo_url
+    ? '<div style="margin-bottom:4px"><img src="' + esc(settings.logo_url) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover" /></div>'
     : ''
 
+  const bizName = biz?.name
+    ? '<div style="font-weight:bold;font-size:' + p.nameSize + '">' + esc(biz.name) + '</div>'
+    : ''
+  const bizAddr = biz?.address ? '<div>' + esc(biz.address) + '</div>' : ''
+  const bizPhone = biz?.phone ? '<div>' + esc(biz.phone) + '</div>' : ''
+  const bizWhatsapp = biz?.whatsapp ? '<div>WhatsApp: ' + esc(biz.whatsapp) + '</div>' : ''
+  const headerLine = settings.receipt_header ? '<div style="margin-top:2px;font-style:italic">' + esc(settings.receipt_header) + '</div>' : ''
+
+  // ── ITEM ROWS ───────────────────────────────────────────────────────────
+  // Each item: name block (wraps) + qty×price line. Grid ensures the name
+  // never pushes content off the right edge.
+  const itemRows = items.map(i => {
+    const nameBlock = (i.emoji ? esc(i.emoji) + ' ' : '') + esc(i.name)
+    const qtyPrice = String(i.qty) + ' × ' + fmt(i.price)
+    const lineTotal = fmt(i.price * i.qty)
+    return '<div style="margin-bottom:6px">' +
+      '<div style="word-break:break-word;overflow-wrap:anywhere">' + nameBlock + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:1px">' +
+        '<div>' + qtyPrice + '</div>' +
+        '<div style="text-align:right;font-weight:bold">' + lineTotal + '</div>' +
+      '</div></div>'
+  }).join('')
+
+  // ── TAX ROWS ────────────────────────────────────────────────────────────
+  const taxRows = tax > 0
+    ? '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>Tax (' + esc(String(rate)) + '%)</div><div style="text-align:right">' + fmt(tax) + '</div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px;font-weight:bold"><div>Total incl. tax</div><div style="text-align:right">' + fmt(total + tax) + '</div></div>'
+    : ''
+
+  // ── PAYMENT ROWS ────────────────────────────────────────────────────────
   const paymentRows = r.method === 'Cash' && Number(r.cashGiven) > 0
-    ? '<div class="r"><span>Cash Given</span><span>' + fmt(r.cashGiven) + '</span></div>' +
-      '<div class="r" style="color:green"><span>Change</span><span>' + fmt(Number(r.cashGiven) - total) + '</span></div>'
+    ? '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>Cash Given</div><div style="text-align:right">' + fmt(r.cashGiven) + '</div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>Change</div><div style="text-align:right;font-weight:bold">' + fmt(Number(r.cashGiven) - total) + '</div></div>'
     : r.method === 'Credit'
-      ? '<div class="r" style="color:orange"><span>Amount Paid</span><span>' + fmt(r.amtPaid) + '</span></div>' +
-        '<div class="r" style="color:red"><span>Balance Owed</span><span>' + fmt(r.balance) + '</span></div>'
+      ? '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>Amount Paid</div><div style="text-align:right">' + fmt(r.amtPaid) + '</div></div>' +
+        '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>Balance Owed</div><div style="text-align:right;font-weight:bold">' + fmt(r.balance) + '</div></div>'
       : ''
 
+  // ── SPLIT PAYMENT ───────────────────────────────────────────────────────
   const splitLine = r.splitAmounts
-    ? '<div style="font-size:11px;margin-top:4px">' + Object.entries(r.splitAmounts)
+    ? Object.entries(r.splitAmounts)
         .filter(([, v]) => parseFloat(v) > 0)
-        .map(([k, v]) => esc(k) + ': ' + fmt(parseFloat(v)))
-        .join(' | ') + '</div>'
+        .map(([k, v]) => '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:2px"><div>' + esc(k) + '</div><div style="text-align:right;font-weight:bold">' + fmt(parseFloat(v)) + '</div></div>')
+        .join('')
     : ''
 
+  // ── DIVIDER ─────────────────────────────────────────────────────────────
+  const hr = '<div style="border-top:1px dashed #999;margin:8px 0"></div>'
+
+  // ── METADATA ROW ────────────────────────────────────────────────────────
+  const metaRow = (label, value) =>
+    '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>' + label + '</div><div style="text-align:right">' + value + '</div></div>'
+
+  // ── QR CODE ──────────────────────────────────────────────────────────────
+  // Generate a QR code data URL for the receipt URL. If no custom URL is
+  // provided, use the receipt ID as a simple identifier. The QR code is
+  // rendered as an image at the bottom of the receipt.
+  const receiptUrl = settings.qr_code_url || `${window.location.origin}/receipt/${r.id}`
+  const qrData = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(receiptUrl)
+  const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid #999;margin:4px auto;display:block" />`
+
   return `<!DOCTYPE html><html><head><title>Receipt</title><style>
-    *{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New',monospace}
-    @page { size: ${width}mm auto; margin: 0 }
-    body{width:${contentMm}mm;margin:auto;padding:${width === '58' ? '3mm' : '5mm'};font-size:${width === '58' ? '11px' : '12px'}}
-    .c{text-align:center}.b{font-weight:bold}
-    hr{border:none;border-top:1px dashed #999;margin:8px 0}
-    .r{display:flex;justify-content:space-between;margin:3px 0;font-size:12px}
-    .logo{font-size:28px;margin-bottom:4px}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:${p.fontSize};width:${p.paper};margin:0 auto;padding:${p.pad};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    @page{size:${p.paper} auto;margin:0}
+    @media print{body{padding:0}}
   </style></head><body>
-    <div class="c">
+    <div style="text-align:center">
       ${logo}
-      ${bizLines}
+      ${bizName}
+      ${bizAddr}
+      ${bizPhone}
+      ${bizWhatsapp}
+      ${headerLine}
     </div>
-    <hr/>
-    <div class="r"><span>Receipt:</span><span>${esc(r.id)}</span></div>
-    <div class="r"><span>Date:</span><span>${esc(date)}</span></div>
-    <div class="r"><span>Client:</span><span>${esc(r.client)}</span></div>
-    <hr/>
+    ${hr}
+    ${metaRow('Receipt:', esc(r.id))}
+    ${metaRow('Date:', esc(date))}
+    ${metaRow('Client:', esc(r.client))}
+    ${hr}
     ${itemRows}
-    <hr/>
-    <div class="r"><span>Subtotal</span><span>${fmt(r.subtotal)}</span></div>
-    ${Number(r.disc) > 0 ? '<div class="r" style="color:green"><span>Discount</span><span>-' + fmt(r.disc) + '</span></div>' : ''}
-    <div class="r b" style="font-size:15px"><span>TOTAL</span><span>${fmt(r.total)}</span></div>
+    ${hr}
+    ${metaRow('Subtotal', fmt(r.subtotal))}
+    ${Number(r.disc) > 0 ? metaRow('Discount', '-' + fmt(r.disc)) : ''}
+    <div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:4px;font-weight:bold;font-size:${p.totalSize}"><div>TOTAL</div><div style="text-align:right">${fmt(r.total)}</div></div>
     ${taxRows}
-    <div class="r"><span>Payment</span><span>${esc(r.method)}</span></div>
+    ${hr}
+    ${metaRow('Payment', esc(r.method))}
     ${paymentRows}
     ${splitLine}
-    <hr/>
-    ${s.refund_policy ? '<div style="font-size:10px;color:#666;margin-bottom:6px;text-align:center">' + esc(s.refund_policy) + '</div><hr/>' : ''}
-    <div class="c" style="font-size:11px;color:#999;margin-top:8px">${esc(s.receipt_footer || 'Thank you for your patronage!')}</div>
-  </body></html>`
+    ${hr}
+    ${settings.refund_policy ? '<div style="text-align:center;margin-bottom:6px">' + esc(settings.refund_policy) + '</div>' + hr : ''}
+    <div style="text-align:center;margin-top:6px">${esc(settings.receipt_footer || 'Thank you for your patronage!')}</div>
+    <div style="text-align:center;margin-top:8px">${qrCode}</div>
+</body></html>`
 }

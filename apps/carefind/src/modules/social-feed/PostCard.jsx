@@ -93,12 +93,19 @@ export default function PostCard({
   setEditingPost,
   setConfirmDeleteId,
   onOpenDetail,
+  // Repost support (issues #6/#8). `resolveSource(id)` returns the post a
+  // repost points at, or null if it is not loaded. `isRepostBody` marks the
+  // inner render of a source post inside a repost banner, so the banner is
+  // drawn exactly once and a repost-of-a-repost cannot recurse.
+  resolveSource,
+  isRepostBody = false,
 }) {
-  const locked = isLocked ? isLocked(post) : false
-
-  // Preview clamp: measure the real rendered body once it exists. The clamp
-  // div is rendered only in preview mode, so the ref stays null in the detail
-  // modal and See-more never appears there.
+  // Every hook is declared BEFORE the repost early return below. React
+  // requires an unchanging hook order per component instance, and an instance
+  // can be reused across a repost/non-repost post swap (PostDetailModal
+  // renders an unkeyed PostCard whose `post` changes while it stays mounted) —
+  // hooks placed after the return would throw "Rendered more hooks than
+  // during the previous render" in exactly that case.
   const bodyRef = useRef(null)
   const [bodyOverflow, setBodyOverflow] = useState(false)
   useEffect(() => {
@@ -106,6 +113,74 @@ export default function PostCard({
     setBodyOverflow(!!el && el.scrollHeight > el.clientHeight)
   }, [post.content, post.post_type, preview])
 
+  // ── Reposts (issues #6/#8) ────────────────────────────────────────────
+  // A repost row holds no words of its own: `repost_of` names the post it
+  // points at. Render the SOURCE — its author, its content, its post type —
+  // under a "Reposted by" banner, the way X and every other platform does it,
+  // so the reposter is never mistaken for the writer. Because the inner card
+  // is the source post, every engagement handler below (like, comment, gift,
+  // view) already targets the original rather than the copy.
+  const repostSource = post.repost_of && resolveSource ? resolveSource(post.repost_of) : null
+  if (post.repost_of && !isRepostBody) {
+    const reposterName = authorName(post)
+    return (
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          padding: '0 4px 6px', fontSize: 12, fontWeight: 700, color: theme.gray500,
+        }}>
+          <Repeat2 size={14} color={theme.gray400} aria-hidden="true" />
+          <span>
+            Reposted by{' '}
+            <Link to={`/u/${post.user_id}`} style={{ color: theme.gray600, textDecoration: 'none', fontWeight: 800 }}>
+              {reposterName}
+            </Link>
+          </span>
+          {user && post.user_id === user.id && (
+            <button
+              type="button"
+              onClick={() => toggleRepost(repostSource || { id: post.repost_of })}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 800, color: theme.tealDeep, cursor: 'pointer', fontFamily: theme.fontFamily }}
+            >
+              Undo repost
+            </button>
+          )}
+        </div>
+        {repostSource ? (
+          <PostCard
+            {...{
+              preview, isLocked, user, navigate, profiles, authorName, formatCount, timeAgo,
+              likeCount, userHasLiked, commentTotal, shareCount, saveCount, giftCount,
+              userHasReposted, isSaved, isFollowing, toggleLike, toggleComments, toggleRepost,
+              toggleSave, toggleFollow, sharePost, shareCard, openReport, onGift, handleEditPost,
+              handleCommentAdded, openComments, comments, setComments, editingComment,
+              setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts,
+              myUsername, myAvatar, reportedPosts, sharingId, editingPost, setEditingPost,
+              setConfirmDeleteId, onOpenDetail, resolveSource,
+            }}
+            post={repostSource}
+            isRepostBody
+          />
+        ) : (
+          // The source has not been resolved (or was deleted). Show that
+          // honestly rather than falling back to the repost row, which is
+          // exactly how the reposter got credited as the author.
+          <Card style={{ padding: theme.space[8], borderRadius: theme.radius.xl }}>
+            <p style={{ margin: 0, fontSize: 13, color: theme.gray500 }}>
+              This post is no longer available.
+            </p>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
+  const locked = isLocked ? isLocked(post) : false
+
+  // Preview clamp: `bodyRef`/`bodyOverflow` are declared with the other hooks
+  // at the top of the component. The clamp div is rendered only in preview
+  // mode, so the ref stays null in the detail modal and See-more never
+  // appears there.
   const clampStyle = {
     display: '-webkit-box',
     WebkitLineClamp: 5,
@@ -228,14 +303,30 @@ export default function PostCard({
       {/* Edit post mode */}
       {editingPost?.id === post.id && (
         <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea
-            value={editingPost.content}
-            onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
-            rows={3}
-            style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
-          />
+          {/* Issue #4: an article's content is a JSON array of blocks. Editing
+              it through a plain 3-row textarea showed the author raw JSON, and
+              saving whatever they typed collapsed the whole article into one
+              text block — every later block, and every drawing, gone. Article
+              posts get the real block editor; everything else keeps the plain
+              textarea, which is correct for them. */}
+          {post.post_type === 'article' || post.post_type === 'premium' ? (
+            <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, padding: 10 }}>
+              <ArticleEditor
+                value={editingPost.content}
+                onChange={(val) => setEditingPost((prev) => (prev ? { ...prev, content: val } : prev))}
+              />
+            </div>
+          ) : (
+            <textarea
+              value={editingPost.content}
+              onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
+              rows={3}
+              aria-label="Edit post"
+              style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
+            />
+          )}
           <div style={{ display: 'flex', gap: 6 }}>
-            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
+            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content, post.post_type)} style={{ flex: 1 }}>Save</TealBtn>
             <GhostBtn onClick={() => setEditingPost(null)} style={{ flex: 1 }}>Cancel</GhostBtn>
           </div>
         </div>

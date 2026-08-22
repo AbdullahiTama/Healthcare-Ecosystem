@@ -289,6 +289,29 @@ body {
   animation: cf-backdrop-in var(--motion-base) var(--ease-out);
 }
 
+/* ── Right sidebar scroll ───────────────────────────────────────────────────
+   The desktop right sidebar is sticky and scrolls independently of the feed.
+   A slim, rounded, on-brand scrollbar keeps that internal scroll discoverable
+   without the heavy default Windows/Linux chrome. */
+.cf-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-300) transparent;
+}
+.cf-sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.cf-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cf-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-page);
+}
+.cf-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
   .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {

@@ -18,6 +18,10 @@ import LeftSidebar from './LeftSidebar.jsx'
 //    three-column block capped at a max width and centered — large monitors
 //    get a genuinely wider, denser layout, not a 480px column adrift in grey
 //    space, but text still reads comfortably on an ultrawide.
+// `onCompose` is optional. Only the feed can open the create selector in
+// place, so every other page omits it and LeftSidebar navigates to the feed
+// carrying the create flag instead — the create button must never resolve to
+// "go to the feed and do nothing".
 export default function AppShell({ children, rightSidebar, user, myUsername, myAvatar, unreadNotifs, onCompose }) {
   const { isMobile, isTablet } = useBreakpoint()
 
@@ -38,7 +42,7 @@ export default function AppShell({ children, rightSidebar, user, myUsername, myA
             {children}
           </main>
           {rightSidebar && (
-            <div style={{ width: isTablet ? '100%' : undefined, paddingTop: isTablet ? 0 : 24 }}>
+            <div style={{ width: isTablet ? '100%' : undefined, paddingTop: isTablet ? 0 : 24, alignSelf: isTablet ? 'auto' : 'stretch' }}>
               {rightSidebar}
             </div>
           )}

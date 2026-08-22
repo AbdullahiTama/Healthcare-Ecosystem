@@ -109,4 +109,13 @@ describe('renderMarkdown (Feature 7 — markdown in post + comment bodies)', () 
   it('keeps @mention text plain when no mentions map is passed', () => {
     expect(html('hi @DrAda')).not.toContain('<a ')
   })
+
+  it('turns stored "\\n" escapes into real line breaks, not raw text', () => {
+    const out = html('First line.\\nSecond line.\\n\\nThird line.')
+    expect(out).not.toContain('\\n')
+    // Each line becomes its own paragraph block (or a <br/> within one).
+    expect(out).toContain('First line.')
+    expect(out).toContain('Second line.')
+    expect(out).toContain('Third line.')
+  })
 })

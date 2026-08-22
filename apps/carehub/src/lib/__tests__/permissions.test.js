@@ -6,12 +6,21 @@ import {
   getPerms,
   can,
   getNavItems,
+  getNavGroups,
   getModulesForType,
   rolesForType,
   ALL_NAV_DEFAULT,
   ALL_NAV_HOSPITAL,
   ALL_NAV_ENTERPRISE,
   ROLE_LIST,
+  REPORT_TABS,
+  REPORT_TAB_SLUGS,
+  slugToReportTab,
+  reportTabSlug,
+  getReportTabs,
+  getReportDefaultTab,
+  modulePath,
+  isModuleActive,
 } from '../permissions.js'
 
 describe('permissions role matrix', () => {
@@ -35,7 +44,7 @@ describe('permissions role matrix', () => {
     expect(perms.canDelete).toBe(false)
     expect(perms.canViewFinance).toBe(false)
     expect(perms.canManageStaff).toBe(false)
-    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'clients', 'consultation', 'rx_inbox'])
+    expect(perms.nav).toEqual(['dashboard', 'pos', 'inventory', 'clients', 'consultation', 'rx_inbox', 'adr-reports'])
   })
 
   it('gives Receptionist no sales or finance rights', () => {
@@ -137,6 +146,7 @@ describe('getNavItems by business type', () => {
   it('filters the business nav by the role’s allowed routes', () => {
     const nav = getNavItems('Pharmacist', 'hospital').map(([id]) => id)
     expect(nav).toContain('pos')
+    expect(nav).toContain('adr-reports')
     expect(nav).not.toContain('reports')
     expect(nav).not.toContain('staff')
     expect(nav).not.toContain('settings')
@@ -208,9 +218,9 @@ describe('module registry (business type → modules)', () => {
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
-    expect(ALL_NAV_DEFAULT.length).toBe(17)
-    expect(ALL_NAV_HOSPITAL.length).toBe(21)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(13)
+    expect(ALL_NAV_DEFAULT.length).toBe(18)
+    expect(ALL_NAV_HOSPITAL.length).toBe(22)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(14)
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
@@ -227,5 +237,98 @@ describe('module registry (business type → modules)', () => {
     expect(rolesForType('hospital')).toContain('Lab Technician')
     expect(rolesForType('wholesale')).toEqual([])
     expect(rolesForType('manufacturer_importer')).toEqual([])
+  })
+})
+
+describe('getNavGroups (workflow sections)', () => {
+  it('groups every allowed module into exactly one workflow section', () => {
+    const groups = getNavGroups('Owner', 'hospital')
+    const ids = groups.flatMap(g => g.items.map(([id]) => id))
+    const flat = getNavItems('Owner', 'hospital').map(([id]) => id)
+    // Same membership as the flat list — grouping may reorder by section but
+    // must never add or drop items, and each module lands in exactly one group.
+    expect([...ids].sort()).toEqual([...flat].sort())
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(groups.every(g => g.label && g.items.length > 0)).toBe(true)
+  })
+
+  it('preserves section order and drops empty sections', () => {
+    // Pharmacist at a pharmacy never has Finance/People/Admin/Clinical groups.
+    const groups = getNavGroups('Pharmacist', 'pharmacy')
+    const labels = groups.map(g => g.label)
+    expect(labels[0]).toBe('Overview')
+    expect(labels).not.toContain('Finance')
+    expect(labels).not.toContain('People')
+    expect(labels).not.toContain('Admin')
+    expect(labels).not.toContain('Clinical')
+  })
+
+  it('puts hospital clinical modules in the Clinical section', () => {
+    const groups = getNavGroups('Owner', 'hospital')
+    const clinical = groups.find(g => g.id === 'clinical')
+    expect(clinical).toBeTruthy()
+    const ids = clinical.items.map(([id]) => id)
+    expect(ids).toContain('reception')
+    expect(ids).toContain('doctor')
+    expect(ids).toContain('lab')
+  })
+
+  it('respects custom role nav restrictions', () => {
+    // Owner is intentionally immune to custom-role narrowing (business admin),
+    // so exercise the override through a non-Owner role instead.
+    const groups = getNavGroups('Manager', 'pharmacy', { Manager: { nav: ['dashboard', 'pos'] } })
+    const ids = groups.flatMap(g => g.items.map(([id]) => id))
+    expect(ids).toEqual(['dashboard', 'pos'])
+  })
+})
+
+describe('reports hub (EXPERIENCE.md §2 tab taxonomy)', () => {
+  it('maps each canonical tab to a deep-linkable slug and back', () => {
+    expect(REPORT_TABS).toEqual(['reports', 'adr-reports'])
+    expect(REPORT_TAB_SLUGS).toEqual({ reports: 'financial', 'adr-reports': 'adr' })
+    expect(reportTabSlug('reports')).toBe('financial')
+    expect(slugToReportTab['financial']).toBe('reports')
+    expect(slugToReportTab['adr']).toBe('adr-reports')
+  })
+
+  it('exposes only the tabs a role is granted, in canonical order', () => {
+    expect(getReportTabs('Owner', 'pharmacy')).toEqual(['reports', 'adr-reports'])
+    expect(getReportTabs('Manager', 'pharmacy')).toEqual(['reports', 'adr-reports'])
+    // Pharmacist has ADR but not Financial Reports.
+    expect(getReportTabs('Pharmacist', 'pharmacy')).toEqual(['adr-reports'])
+    expect(getReportTabs('Nurse', 'hospital')).toEqual(['adr-reports'])
+    // Receptionist has no report modules at all.
+    expect(getReportTabs('Receptionist', 'hospital')).toEqual([])
+  })
+
+  it('lands clinical staff on ADR and every other role on Financial', () => {
+    expect(getReportDefaultTab('Owner', 'pharmacy')).toBe('reports')
+    expect(getReportDefaultTab('Manager', 'hospital')).toBe('reports')
+    expect(getReportDefaultTab('Pharmacist', 'pharmacy')).toBe('adr-reports')
+    expect(getReportDefaultTab('Nurse', 'hospital')).toBe('adr-reports')
+    expect(getReportDefaultTab('Doctor', 'hospital')).toBe('adr-reports')
+  })
+
+  it('returns no default tab for roles with no report access', () => {
+    expect(getReportDefaultTab('Receptionist', 'hospital')).toBeNull()
+    expect(getReportDefaultTab('Cashier', 'pharmacy')).toBeNull()
+  })
+
+  it('resolves module paths — report modules deep-link to their hub tab', () => {
+    expect(modulePath('reports')).toBe('/dashboard/reports/financial')
+    expect(modulePath('adr-reports')).toBe('/dashboard/reports/adr')
+    expect(modulePath('pos')).toBe('/dashboard/pos')
+  })
+
+  it('keeps the sidebar active on hub deep links and legacy ADR URLs', () => {
+    expect(isModuleActive('reports', '/dashboard/reports')).toBe(true)
+    expect(isModuleActive('reports', '/dashboard/reports/financial')).toBe(true)
+    expect(isModuleActive('reports', '/dashboard/reports/adr')).toBe(false)
+    expect(isModuleActive('adr-reports', '/dashboard/reports/adr')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/adr-reports')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/adr-reports/abc123/detail')).toBe(true)
+    expect(isModuleActive('adr-reports', '/dashboard/reports/financial')).toBe(false)
+    expect(isModuleActive('pos', '/dashboard/pos')).toBe(true)
+    expect(isModuleActive('pos', '/dashboard/reports/financial')).toBe(false)
   })
 })

@@ -1,7 +1,8 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Home, Compass, Newspaper, Wallet, Bookmark, Bell, Plus } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Avatar } from '../ui'
+import { CREATE_PATH, logCreateTap } from '../../modules/social-feed/createSelector.js'
 
 // Desktop/tablet persistent navigation. Maps to CareFind's real, existing
 // routes only — no invented destinations (see main.jsx's <Routes>). The
@@ -57,6 +58,21 @@ function NavRow({ item, active, collapsed, badge }) {
 // collapse behavior for CareHub's sidebar, applied here for consistency).
 export default function LeftSidebar({ user, myUsername, myAvatar, unreadNotifs, onCompose, collapsed = false }) {
   const location = useLocation()
+  const navigate = useNavigate()
+
+  // Same contract as BottomNav: create always opens the selector. Pages that
+  // cannot open it in place (everything except the feed) navigate to the feed
+  // with the create flag rather than dropping the user on a feed that just
+  // sits there.
+  function handleCompose() {
+    if (onCompose) {
+      logCreateTap({ source: 'left-sidebar', route: 'in-place', path: location.pathname })
+      onCompose()
+      return
+    }
+    logCreateTap({ source: 'left-sidebar', route: 'navigate', path: location.pathname })
+    navigate(CREATE_PATH)
+  }
 
   return (
     <nav
@@ -78,7 +94,7 @@ export default function LeftSidebar({ user, myUsername, myAvatar, unreadNotifs, 
     >
       {user && (
         <button
-          onClick={onCompose}
+          onClick={handleCompose}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             minHeight: 44, marginBottom: 16, padding: collapsed ? 0 : '11px 16px',
