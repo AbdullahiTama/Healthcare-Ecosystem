@@ -109,10 +109,17 @@ export default async function handler(req, res) {
     // path in req.url, so such a request has no matching API route — it lands
     // here. Serve per-item Open Graph tags instead of a 404.
     //
-    // The user-agent is re-checked rather than trusted from the rewrite alone:
-    // this is the only thing standing between a normal visitor and a page that
-    // is not the app, so it must hold even if the rewrite is ever loosened.
-    if ((req.method === 'GET' || req.method === 'HEAD') && isCrawlerUserAgent(req.headers['user-agent'])) {
+    // Two guards, both required:
+    //  - the path must NOT be an /api/* path. A genuine typo'd API call must
+    //    still get its 404 JSON, not a cacheable 200 HTML page, whatever
+    //    User-Agent it happens to carry.
+    //  - the User-Agent is re-checked rather than trusted from the rewrite
+    //    alone: this is the only thing standing between a normal visitor and
+    //    a page that is not the app.
+    const isApiPath = /^\/api(\/|$)/.test((req.url || '').split('?')[0])
+    if (!isApiPath
+      && (req.method === 'GET' || req.method === 'HEAD')
+      && isCrawlerUserAgent(req.headers['user-agent'])) {
       return ogHandler(req, res)
     }
     return res.status(404).json({ error: `No handler for /api/${route}` })

@@ -44,16 +44,22 @@ export const REVIEW_MESSAGES = {
 
 // Who should hear about a review of a business? Businesses are not profiles,
 // so the notification goes to the user whose claim on it was approved.
+//
+// This MUST go through the RPC, not a direct read. `business_claims`' SELECT
+// policy is `is_platform_admin() OR user_id = auth.uid() OR business_id IN
+// (current_business_ids())` — a reviewer is none of those for a business they
+// do not own, so a direct read returns zero rows and the notification is
+// silently skipped. Proven by impersonating a real non-claimant: the direct
+// read returned 0 while `business_claim_owner()` returns the right uuid
+// (20260822_business_claim_owner.sql).
 export async function resolveBusinessOwner(supabase, businessId) {
   if (!businessId) return null
-  const { data } = await supabase
-    .from('business_claims')
-    .select('user_id')
-    .eq('business_id', businessId)
-    .eq('status', 'approved')
-    .limit(1)
-    .maybeSingle()
-  return data?.user_id || null
+  const { data, error } = await supabase.rpc('business_claim_owner', { p_business_id: businessId })
+  if (error) {
+    console.error('[review] could not resolve business owner', { businessId, message: error.message })
+    return null
+  }
+  return data || null
 }
 
 // Who owns a product listing? A CareFind seller sets products.owner_id; a

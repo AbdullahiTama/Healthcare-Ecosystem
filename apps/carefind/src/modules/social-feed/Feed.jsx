@@ -10,7 +10,7 @@ import {
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder, REPOST_CONTENT } from './engagement'
-import { CREATE_PARAM, logCreateTap } from './createSelector.js'
+import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
@@ -20,7 +20,7 @@ import {
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
-import { validateArticleForPublish, compareForLoss } from '../news-publishing/articleContent.js'
+import { validateArticleForPublish } from '../news-publishing/articleContent.js'
 import { renderMarkdown } from './markdown.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
@@ -576,13 +576,19 @@ function Feed() {
   useEffect(() => {
     if (createParam !== '1') return
     setCreateOpen(true)
-    logCreateTap({ source: 'feed-create-param', opened: true, path: '/feed' })
     const next = new URLSearchParams(searchParams)
     next.delete(CREATE_PARAM)
     const qs = next.toString()
     window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
     setSearchParams(next, { replace: true })
   }, [createParam])
+
+  // The event that proves a create tap worked. Correlating "[create] tap" with
+  // this in the logs is how a recurrence of issue #2 becomes visible: a tap
+  // with no selector rendered after it is the regression.
+  useEffect(() => {
+    if (createOpen) logCreateSelectorRendered({ source: 'feed' })
+  }, [createOpen])
 
   // Merge extra author profiles into the map without disturbing the ones the
   // feed already loaded. Used when a repost's source has an author who wrote
@@ -1281,25 +1287,21 @@ function Feed() {
     return reactions.some((r) => r.post_id === postId && r.user_id === user.id)
   }
 
-  // Editing runs through the same integrity gate as publishing: an edit that
-  // would drop a block or a paragraph is refused with a message rather than
-  // silently overwriting the author's article with less than they wrote.
+  // Editing runs through the same integrity gate as publishing.
+  //
+  // The gate deliberately compares the body the editor HANDED US against the
+  // body we are about to write — that is, it catches content lost by our own
+  // processing. It must NOT compare against the previously published version:
+  // shortening an article is an ordinary edit, and an author cutting a
+  // redundant paragraph would find every save rejected.
   async function handleEditPost(postId, newContent, postType) {
     if (!newContent || !newContent.trim()) return
     let content = newContent.trim()
 
     if (postType === 'article' || postType === 'premium') {
-      const previous = posts.find((p) => p.id === postId)?.content
       const check = validateArticleForPublish(content)
       if (!check.ok) { toast.show(check.error, { type: 'error' }); return }
       content = check.content
-      if (previous) {
-        const loss = compareForLoss(previous, content)
-        if (!loss.ok) {
-          toast.show(`This edit would remove ${loss.lostChars} characters of your article. Nothing was saved.`, { type: 'error' })
-          return
-        }
-      }
     }
 
     const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)

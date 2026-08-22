@@ -100,6 +100,19 @@ export default function PostCard({
   resolveSource,
   isRepostBody = false,
 }) {
+  // Every hook is declared BEFORE the repost early return below. React
+  // requires an unchanging hook order per component instance, and an instance
+  // can be reused across a repost/non-repost post swap (PostDetailModal
+  // renders an unkeyed PostCard whose `post` changes while it stays mounted) —
+  // hooks placed after the return would throw "Rendered more hooks than
+  // during the previous render" in exactly that case.
+  const bodyRef = useRef(null)
+  const [bodyOverflow, setBodyOverflow] = useState(false)
+  useEffect(() => {
+    const el = bodyRef.current
+    setBodyOverflow(!!el && el.scrollHeight > el.clientHeight)
+  }, [post.content, post.post_type, preview])
+
   // ── Reposts (issues #6/#8) ────────────────────────────────────────────
   // A repost row holds no words of its own: `repost_of` names the post it
   // points at. Render the SOURCE — its author, its content, its post type —
@@ -164,16 +177,10 @@ export default function PostCard({
 
   const locked = isLocked ? isLocked(post) : false
 
-  // Preview clamp: measure the real rendered body once it exists. The clamp
-  // div is rendered only in preview mode, so the ref stays null in the detail
-  // modal and See-more never appears there.
-  const bodyRef = useRef(null)
-  const [bodyOverflow, setBodyOverflow] = useState(false)
-  useEffect(() => {
-    const el = bodyRef.current
-    setBodyOverflow(!!el && el.scrollHeight > el.clientHeight)
-  }, [post.content, post.post_type, preview])
-
+  // Preview clamp: `bodyRef`/`bodyOverflow` are declared with the other hooks
+  // at the top of the component. The clamp div is rendered only in preview
+  // mode, so the ref stays null in the detail modal and See-more never
+  // appears there.
   const clampStyle = {
     display: '-webkit-box',
     WebkitLineClamp: 5,

@@ -7,7 +7,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*(facebookexternalhit|facebookcatalog|meta-externalagent|WhatsApp|LinkedInBot|Twitterbot|Slackbot|Slack-ImgProxy|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|Applebot|Googlebot|bingbot|embedly|iframely|vkShare|Quora Link Preview).*"
+          "value": ".*(facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|WhatsApp|LinkedInBot|Twitterbot|Slackbot|Slack-ImgProxy|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|embedly|iframely|vkShare|Quora Link Preview).*"
         }
       ],
       "destination": "/api/router"

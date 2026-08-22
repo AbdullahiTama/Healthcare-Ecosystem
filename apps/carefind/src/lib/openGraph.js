@@ -32,16 +32,22 @@ export const DEFAULT_DESCRIPTION = 'CareFind - Discover healthcare providers, me
 // ~200 every major platform truncates it anyway.
 export const DESCRIPTION_LIMIT = 200
 
-// Crawlers that read og:/twitter: tags. Matched case-insensitively against the
-// User-Agent. Deliberately a fixed list rather than a "looks like a bot" guess:
-// serving different HTML to a real browser is how an SPA breaks for one user
-// and nobody can reproduce it.
+// LINK-PREVIEW crawlers only — the ones that read og:/twitter: tags to build a
+// share card and do not execute JavaScript. Matched case-insensitively against
+// the User-Agent. Deliberately a fixed list rather than a "looks like a bot"
+// guess: serving different HTML to a real browser is how an SPA breaks for one
+// user and nobody can reproduce it.
+//
+// SEARCH crawlers are deliberately ABSENT (Googlebot, bingbot, Applebot).
+// They render JavaScript, so they already index the real app — and serving
+// them this stub instead would replace every indexed page with the same thin
+// card, since a non-item route has nothing item-specific to say. Adding a
+// search crawler here would be an SEO regression, not an improvement.
 export const CRAWLER_PATTERNS = [
-  'facebookexternalhit', 'facebookcatalog', 'meta-externalagent',
+  'facebookexternalhit', 'facebookcatalog', 'facebot', 'meta-externalagent',
   'whatsapp', 'linkedinbot', 'twitterbot', 'slackbot', 'slack-imgproxy',
   'telegrambot', 'discordbot', 'pinterest', 'redditbot', 'skypeuripreview',
-  'applebot', 'googlebot', 'bingbot', 'embedly', 'iframely', 'quora link preview',
-  'vkshare', 'w3c_validator', 'developers.google.com/+/web/snippet',
+  'embedly', 'iframely', 'quora link preview', 'vkshare',
 ]
 
 export function isCrawlerUserAgent(userAgent) {
@@ -248,10 +254,14 @@ export function escapeHtmlAttribute(value) {
     .replace(/'/g, '&#39;')
 }
 
-// The document a crawler receives. It is not the app: it carries the tags, a
-// human-readable fallback, and a redirect so a person who somehow lands here
-// (a crawler-UA browser extension, a preview-service click-through) still
-// reaches the real page.
+// The document a crawler receives. It is not the app: it carries the tags and
+// a human-readable fallback with a link to the real page.
+//
+// It carries NO meta-refresh. An earlier version had one, reasoning that a
+// person who somehow landed here should be forwarded — but the only way to
+// land here is with a crawler User-Agent, and the refresh target is the same
+// URL, which the edge would rewrite straight back to this handler. That is an
+// infinite refresh, not a fallback. A plain link cannot loop.
 export function renderOgHtml(meta) {
   const e = escapeHtmlAttribute
   const tags = [
@@ -289,7 +299,6 @@ export function renderOgHtml(meta) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 ${tags.join('\n')}
-<meta http-equiv="refresh" content="0; url=${e(target)}" />
 </head>
 <body>
 <h1>${e(meta.title)}</h1>

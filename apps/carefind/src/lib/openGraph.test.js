@@ -28,7 +28,16 @@ describe('isCrawlerUserAgent', () => {
     expect(isCrawlerUserAgent('Slackbot-LinkExpanding 1.0')).toBe(true)
     expect(isCrawlerUserAgent('TelegramBot (like TwitterBot)')).toBe(true)
     expect(isCrawlerUserAgent('Mozilla/5.0 (compatible; Discordbot/2.0)')).toBe(true)
-    expect(isCrawlerUserAgent('Mozilla/5.0 (Macintosh) AppleBot/0.1')).toBe(true)
+    expect(isCrawlerUserAgent('facebookexternalhit/1.1 Facebot Twitterbot/1.0')).toBe(true)
+  })
+
+  // Search crawlers execute JavaScript and already index the real app.
+  // Serving them the stub would replace every indexed page with the same thin
+  // card, because a non-item route has nothing item-specific to say.
+  it('does NOT match search crawlers — they must get the app, not the stub', () => {
+    expect(isCrawlerUserAgent('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')).toBe(false)
+    expect(isCrawlerUserAgent('Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)')).toBe(false)
+    expect(isCrawlerUserAgent('Mozilla/5.0 (Macintosh) AppleBot/0.1')).toBe(false)
   })
 
   it('does NOT match a real browser — a person must always get the app', () => {
@@ -253,10 +262,12 @@ describe('renderOgHtml', () => {
     expect(html).not.toContain('og:image')
   })
 
-  it('sends a human who lands here on to the real page', () => {
+  it('links to the real page but never meta-refreshes to it', () => {
     const html = renderOgHtml(meta)
-    expect(html).toContain(`content="0; url=${CANONICAL}"`)
     expect(html).toContain(`<a href="${CANONICAL}">Open on CareFind</a>`)
+    // A refresh here would target the same URL, which the edge rewrites
+    // straight back to this handler — an infinite loop, not a fallback.
+    expect(html).not.toContain('http-equiv="refresh"')
   })
 
   it('escapes content so a post cannot inject markup into the head', () => {
@@ -329,6 +340,9 @@ describe('vercel.json crawler rewrite agrees with isCrawlerUserAgent', () => {
     expect(re.test('Twitterbot/1.0')).toBe(true)
     expect(re.test('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false)
     expect(re.test('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 Safari/537.36')).toBe(false)
+    // Search crawlers must reach the SPA fallback, not the OG handler.
+    expect(re.test('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)')).toBe(false)
+    expect(re.test('Mozilla/5.0 (compatible; bingbot/2.0)')).toBe(false)
   })
 })
 

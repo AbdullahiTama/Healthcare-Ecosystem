@@ -66,12 +66,12 @@ export default function LeftSidebar({ user, myUsername, myAvatar, unreadNotifs, 
   // sits there.
   function handleCompose() {
     if (onCompose) {
+      logCreateTap({ source: 'left-sidebar', route: 'in-place', path: location.pathname })
       onCompose()
-      logCreateTap({ source: 'left-sidebar', opened: true, path: location.pathname })
       return
     }
+    logCreateTap({ source: 'left-sidebar', route: 'navigate', path: location.pathname })
     navigate(CREATE_PATH)
-    logCreateTap({ source: 'left-sidebar-navigate', opened: true, path: location.pathname })
   }
 
   return (

@@ -56,12 +56,12 @@ function BottomNav({ onCompose }) {
   // place; every other screen navigates to the feed carrying the create flag.
   function handleCompose() {
     if (onCompose) {
+      logCreateTap({ source: 'bottom-nav', route: 'in-place', path: location.pathname })
       onCompose()
-      logCreateTap({ source: 'bottom-nav', opened: true, path: location.pathname })
       return
     }
+    logCreateTap({ source: 'bottom-nav', route: 'navigate', path: location.pathname })
     navigate(CREATE_PATH)
-    logCreateTap({ source: 'bottom-nav-navigate', opened: true, path: location.pathname })
   }
 
   return (

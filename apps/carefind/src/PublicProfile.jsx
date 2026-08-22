@@ -954,14 +954,37 @@ function PublicProfile() {
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
             </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type === 'visual' && !openPost.image_url && (
-              <div style={{ background: visualThemes[openPost.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
-                <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
-              </div>
-            )}
-            {openPost.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>}
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
+            {/* A repost row carries no words of its own — render the post it
+                points at, and say whose it is (issues #6/#8). Reading
+                openPost.content directly here would show an empty modal. */}
+            {(() => {
+              const reposted = isRepost(openPost)
+              const shown = (reposted && openPost.source) || openPost
+              return (
+                <>
+                  {reposted && (
+                    <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: theme.gray500 }}>
+                      <Repeat2 size={14} aria-hidden="true" />
+                      Reposted{openPost.source ? ' from another CareFind member' : ''}
+                    </p>
+                  )}
+                  {reposted && !openPost.source ? (
+                    <p style={{ margin: 0, fontSize: 14, color: theme.gray500 }}>This post is no longer available.</p>
+                  ) : (
+                    <>
+                      {shown.image_url && <img src={shown.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
+                      {shown.post_type === 'visual' && !shown.image_url && (
+                        <div style={{ background: visualThemes[shown.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
+                          <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{shown.content}</p>
+                        </div>
+                      )}
+                      {shown.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(shown.content)))}</div>}
+                      <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{shown.created_at ? timeAgo(shown.created_at) : ''}</p>
+                    </>
+                  )}
+                </>
+              )
+            })()}
           </div>
         </div>
       )}

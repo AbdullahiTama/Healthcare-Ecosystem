@@ -48,20 +48,41 @@ export function withoutCreateParam(search) {
   return rest ? `?${rest}` : ''
 }
 
-// Telemetry for the create tap (issue #2, solution step 5): record every tap
-// and whether the selector actually rendered, so a future regression of this
-// exact shape is visible in the logs instead of only in user reports.
+// Telemetry for the create flow (issue #2, solution step 5).
 //
-// `sink` is injected so tests can assert without touching the console; in the
-// app it is the console, which is what the existing feed instrumentation uses.
-export function logCreateTap({ source, opened, path }, sink = console) {
-  const detail = { source, opened, path }
-  if (opened) {
-    sink.info?.('[create] selector opened', detail)
-  } else {
-    // Not a warning we can recover from automatically, but it must never be
-    // silent: this is precisely the failure the issue describes.
-    sink.warn?.('[create] selector did NOT open', detail)
-  }
+// Two separate events, deliberately. An earlier version logged a single event
+// with `opened: true` hardcoded at both tap sites — including the branch that
+// only NAVIGATES, where the selector has not opened yet and might not. That
+// made the failure path unreachable, so the instrumentation added to catch a
+// recurrence of this exact bug could never have caught it.
+//
+// Now the tap records what it DID (`route`), and the feed records the selector
+// actually rendering. A tap with `route: 'navigate'` that is not followed by a
+// `[create] selector rendered` is the regression signal, and it is visible.
+//
+// `sink` is injected so tests can assert without touching the console.
+
+// A user tapped create. `route` is 'in-place' (this screen opens the selector
+// itself) or 'navigate' (this screen sends them to the feed to open it).
+export function logCreateTap({ source, route, path }, sink = console) {
+  const detail = { source, route, path }
+  sink.info?.('[create] tap', detail)
+  return detail
+}
+
+// The selector is on screen. This is the event that proves the tap worked.
+export function logCreateSelectorRendered({ source }, sink = console) {
+  const detail = { source }
+  sink.info?.('[create] selector rendered', detail)
+  return detail
+}
+
+// The selector was asked for and could not be shown. Nothing in the current
+// code can reach this — the tap handlers have no failure branch left — but it
+// is the shape a future regression would take, and it must be loud rather
+// than silent.
+export function logCreateSelectorFailed({ source, reason }, sink = console) {
+  const detail = { source, reason }
+  sink.warn?.('[create] selector did NOT open', detail)
   return detail
 }

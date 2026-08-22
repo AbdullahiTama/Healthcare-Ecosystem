@@ -644,10 +644,23 @@ export default function AdminPanel() {
   async function openCredential(requestId) {
     setCredentialLoadingId(requestId)
     setCredentialError({ id: null, message: '' })
+
+    // The tab is opened SYNCHRONOUSLY, inside the click's user-activation
+    // window, and pointed at the signed URL once it arrives. Calling
+    // window.open() after the await is blocked by Chrome and Safari, which
+    // would look like the button doing nothing at all.
+    const tab = window.open('', '_blank', 'noopener,noreferrer')
     try {
       const { url } = await callAdminAuth('credential_url', { token: localStorage.getItem('admin_token'), requestId })
-      window.open(url, '_blank', 'noopener,noreferrer')
+      if (tab) {
+        tab.location = url
+      } else {
+        // Popups blocked entirely — hand the reviewer a link rather than
+        // failing silently.
+        setCredentialError({ id: requestId, message: 'Your browser blocked the document window. Allow popups for this site and try again.' })
+      }
     } catch (err) {
+      if (tab) tab.close()
       setCredentialError({ id: requestId, message: `Could not open the document: ${err.message}` })
     } finally {
       setCredentialLoadingId(null)

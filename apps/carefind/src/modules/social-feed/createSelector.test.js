@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  CREATE_PARAM, CREATE_PATH, shouldOpenCreateSelector, withoutCreateParam, logCreateTap,
+  CREATE_PARAM, CREATE_PATH, shouldOpenCreateSelector, withoutCreateParam,
+  logCreateTap, logCreateSelectorRendered, logCreateSelectorFailed,
 } from './createSelector.js'
 
 describe('createSelector signal', () => {
@@ -39,19 +40,38 @@ describe('createSelector signal', () => {
   })
 })
 
-describe('logCreateTap', () => {
-  it('reports a successful open at info level', () => {
+// The instrumentation is two events, not one. A single event with `opened`
+// hardcoded true at both tap sites — which is what shipped first — made the
+// failure path unreachable, so the logging added to catch a recurrence of
+// issue #2 could never have caught it.
+describe('create-flow telemetry', () => {
+  it('records what the tap did, distinguishing opening from navigating', () => {
     const sink = { info: vi.fn(), warn: vi.fn() }
-    logCreateTap({ source: 'bottom-nav', opened: true, path: '/feed' }, sink)
-    expect(sink.info).toHaveBeenCalledTimes(1)
+    const inPlace = logCreateTap({ source: 'bottom-nav', route: 'in-place', path: '/feed' }, sink)
+    const navigating = logCreateTap({ source: 'bottom-nav', route: 'navigate', path: '/profile' }, sink)
+    expect(inPlace.route).toBe('in-place')
+    expect(navigating.route).toBe('navigate')
+    expect(sink.info).toHaveBeenCalledTimes(2)
     expect(sink.warn).not.toHaveBeenCalled()
   })
 
-  it('warns — never stays silent — when the selector did not open', () => {
+  it('records the selector actually rendering as its own event', () => {
     const sink = { info: vi.fn(), warn: vi.fn() }
-    const detail = logCreateTap({ source: 'bottom-nav', opened: false, path: '/profile' }, sink)
+    logCreateSelectorRendered({ source: 'feed' }, sink)
+    expect(sink.info).toHaveBeenCalledWith('[create] selector rendered', { source: 'feed' })
+  })
+
+  it('has a reachable failure path that warns rather than staying silent', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    const detail = logCreateSelectorFailed({ source: 'feed', reason: 'no handler' }, sink)
     expect(sink.warn).toHaveBeenCalledTimes(1)
     expect(sink.info).not.toHaveBeenCalled()
-    expect(detail).toEqual({ source: 'bottom-nav', opened: false, path: '/profile' })
+    expect(detail).toEqual({ source: 'feed', reason: 'no handler' })
+  })
+
+  it('a tap never claims the selector opened — only the render event does', () => {
+    const sink = { info: vi.fn(), warn: vi.fn() }
+    const detail = logCreateTap({ source: 'bottom-nav', route: 'navigate', path: '/profile' }, sink)
+    expect(detail).not.toHaveProperty('opened')
   })
 })

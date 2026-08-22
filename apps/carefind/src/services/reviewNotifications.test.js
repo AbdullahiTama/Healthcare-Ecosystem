@@ -9,9 +9,15 @@ vi.mock('./notify.js', () => ({
 
 import { notifyReview, resolveBusinessOwner, resolveProductOwner, REVIEW_MESSAGES } from './reviewNotifications.js'
 
-// Minimal PostgREST-shaped stub: from(table) -> chainable -> maybeSingle().
-function stubSupabase(tables) {
+// Minimal PostgREST-shaped stub: from(table) -> chainable -> maybeSingle(),
+// plus rpc() for business_claim_owner. `rpcs` maps a business id to its
+// approved claimant, the way the SECURITY DEFINER function does.
+function stubSupabase(tables, rpcs = {}) {
   return {
+    async rpc(name, args) {
+      if (name !== 'business_claim_owner') return { data: null, error: { message: `no rpc ${name}` } }
+      return { data: rpcs[args.p_business_id] ?? null, error: null }
+    },
     from(table) {
       const rows = tables[table] || []
       const filters = {}
@@ -50,16 +56,25 @@ describe('recipient resolution (issue #7: "or with the wrong recipient ID")', ()
   })
 
   it('a review of a business goes to the user whose claim was approved', async () => {
-    const supabase = stubSupabase({
-      business_claims: [
-        { business_id: 'biz1', user_id: 'rejected-user', status: 'rejected' },
-        { business_id: 'biz1', user_id: 'owner-user', status: 'approved' },
-      ],
-    })
+    const supabase = stubSupabase({}, { biz1: 'owner-user' })
     expect(await resolveBusinessOwner(supabase, 'biz1')).toBe('owner-user')
     const result = await notifyReview(supabase, { kind: 'business', actorId: 'reviewer', businessId: 'biz1', rating: 4 })
     expect(result.recipientId).toBe('owner-user')
     expect(result.message).toBe('left a 4-star review on your business')
+  })
+
+  // Regression: reading business_claims directly runs under the REVIEWER's
+  // RLS, which scopes SELECT to the claimant — so it returns nothing and the
+  // notification is silently skipped. Resolution must go through the
+  // SECURITY DEFINER RPC.
+  it('resolves the business owner through the RPC, not a direct table read', async () => {
+    const calls = []
+    const supabase = {
+      async rpc(name, args) { calls.push({ name, args }); return { data: 'owner-user', error: null } },
+      from() { throw new Error('must not read business_claims directly — RLS hides it from the reviewer') },
+    }
+    expect(await resolveBusinessOwner(supabase, 'biz1')).toBe('owner-user')
+    expect(calls).toEqual([{ name: 'business_claim_owner', args: { p_business_id: 'biz1' } }])
   })
 
   it('a review of a product goes to the listing owner', async () => {
@@ -73,7 +88,7 @@ describe('recipient resolution (issue #7: "or with the wrong recipient ID")', ()
 
 describe('cases with nobody to notify', () => {
   it('an unclaimed business notifies nobody, and says why', async () => {
-    const result = await notifyReview(stubSupabase({ business_claims: [] }), {
+    const result = await notifyReview(stubSupabase({}, {}), {
       kind: 'business', actorId: 'reviewer', businessId: 'biz-unclaimed', rating: 5,
     })
     expect(result.sent).toBe(false)
