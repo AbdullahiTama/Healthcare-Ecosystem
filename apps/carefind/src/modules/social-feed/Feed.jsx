@@ -9,8 +9,9 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder } from './engagement'
+import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder, REPOST_CONTENT } from './engagement'
 import { CREATE_PARAM, logCreateTap } from './createSelector.js'
+import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
@@ -26,7 +27,8 @@ import VisualCard from '../../utils/VisualCard.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import GoLive from './GoLive.jsx'
 import UserGoLive from './UserGoLive.jsx'
-import { notify } from '../../services/notify.js'
+import { notify, NOTIF_MESSAGES } from '../../services/notify.js'
+import { notifyReview } from '../../services/reviewNotifications.js'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import Logo from './Logo.jsx'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
@@ -106,6 +108,10 @@ function Feed() {
   // This user's post_reposts rows for the loaded posts (the source posts they
   // reposted), and per-post gift totals surfaced by the batch stats RPC.
   const [repostedPosts, setRepostedPosts] = useState([])
+  // Source posts for the reposts on this page, keyed by id. A repost carries
+  // no content of its own, so without these a repost card has nothing to show
+  // (issues #6/#8).
+  const [repostSources, setRepostSources] = useState({})
   const [giftStats, setGiftStats] = useState({})
   // Phase 6 personalized feed: resolved ranking config (weights/diversity),
   // pool limits, the viewer's region tokens, and the medical-author sets the
@@ -577,6 +583,40 @@ function Feed() {
     window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
     setSearchParams(next, { replace: true })
   }, [createParam])
+
+  // Merge extra author profiles into the map without disturbing the ones the
+  // feed already loaded. Used when a repost's source has an author who wrote
+  // nothing else on this page.
+  const PROFILE_CARD_COLS = 'id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country'
+  async function loadProfilesFor(userIds) {
+    if (!userIds?.length) return
+    const { data } = await supabase.from('profiles').select(PROFILE_CARD_COLS).in('id', userIds)
+    if (data?.length) setProfiles((prev) => ({ ...prev, ...indexPosts(data) }))
+  }
+
+  // Reposts (issues #6/#8): fetch the source of every repost on this page
+  // that is not already loaded, so the card can show the original author's
+  // words under a "Reposted by" banner instead of the reposter's name over a
+  // copy. Runs whenever the loaded posts change; ids already fetched are
+  // skipped, so scrolling does not refetch.
+  useEffect(() => {
+    const wanted = unresolvedSourceIds(posts).filter((id) => !repostSources[id])
+    if (!wanted.length) return
+    let cancelled = false
+    supabase
+      .from('posts')
+      .select(POST_FEED_COLS)
+      .in('id', wanted)
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return
+        setRepostSources((prev) => ({ ...prev, ...indexPosts(data) }))
+        // The source's author may not be in `profiles` yet — without it the
+        // card would credit "CareFind user" instead of the real writer.
+        const missingAuthors = [...new Set(data.map((p) => p.user_id))].filter((id) => id && !profiles[id])
+        if (missingAuthors.length) loadProfilesFor(missingAuthors)
+      })
+    return () => { cancelled = true }
+  }, [posts])
 
   // Item 12 deep link: when the URL carries ?post=<id>, open that post in the
   // detail modal on top of the normal feed, then drop the param. A post
@@ -1134,19 +1174,34 @@ function Feed() {
     // If it's a review and a target is tagged, also write to the intelligence layer
     if (!error && postType === 'review' && reviewTarget) {
       if (reviewTarget.type === 'business') {
-        await supabase.from('reviews').insert({
+        const { error: reviewError } = await supabase.from('reviews').insert({
           business_id: reviewTarget.id,
           user_id: user.id,
           rating: postRating,
-          comment: content.trim(),
+          comment: postContent,
         })
+        // Issue #7: a review posted through the feed composer notified nobody
+        // either — same gap as the business/product/profile review forms.
+        if (!reviewError) {
+          const sent = await notifyReview(supabase, {
+            kind: 'business', actorId: user.id, businessId: reviewTarget.id, rating: postRating,
+            link: `/business/${reviewTarget.id}`,
+          })
+          if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+        }
       } else if (reviewTarget.type === 'product') {
-        await supabase.from('product_reviews').insert({
+        const { error: reviewError } = await supabase.from('product_reviews').insert({
           product_id: reviewTarget.id,
           user_id: user.id,
           rating: postRating,
-          comment: content.trim(),
+          comment: postContent,
         })
+        if (!reviewError) {
+          const sent = await notifyReview(supabase, {
+            kind: 'product', actorId: user.id, productId: reviewTarget.id, rating: postRating, link: '/feed',
+          })
+          if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+        }
       } else if (reviewTarget.type === 'unclaimed') {
         await supabase.from('unclaimed_entities').insert({
           name: reviewTarget.name,
@@ -1576,12 +1631,13 @@ function Feed() {
         return
       }
 
+      // The optimistic row mirrors what writeRepost persists: a reference,
+      // not a copy of the source's words (issues #6/#8).
       const tempRepostPost = {
         id: `temp_repost_${Date.now()}`,
         user_id: user.id,
-        content: `🔁 ${(post.content || '').replace(/\s+/g, ' ').trim()}`,
+        content: REPOST_CONTENT,
         post_type: 'text',
-        image_url: post.image_url || null,
         subscriber_only: post.subscriber_only || false,
         is_premium: post.is_premium || false,
         repost_of: post.id,
@@ -1607,6 +1663,20 @@ function Feed() {
       // Swap temp rows for the real ones so un-repost has valid ids to delete.
       setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
       setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
+      // The source stays available to the card even if it was not on this
+      // page (e.g. reposted from the detail modal).
+      setRepostSources((prev) => (prev[post.id] ? prev : { ...prev, [post.id]: post }))
+
+      // Issue #7: 'repost' was in the notification vocabulary but nothing ever
+      // emitted it, so an author was never told their post had been shared.
+      notify({
+        recipientId: post.user_id,
+        actorId: user.id,
+        type: 'repost',
+        message: NOTIF_MESSAGES.repost,
+        link: `/feed?post=${post.id}`,
+        postId: post.id,
+      })
     } finally {
       repostInFlight.current.delete(post.id)
     }
@@ -1673,6 +1743,9 @@ function Feed() {
     user,
     navigate,
     profiles,
+    // Reposts render their SOURCE post (issues #6/#8). The source is either
+    // already on this page of the feed or was fetched alongside it.
+    resolveSource: (id) => posts.find((p) => p.id === id) || repostSources[id] || null,
     authorName,
     formatCount,
     timeAgo,

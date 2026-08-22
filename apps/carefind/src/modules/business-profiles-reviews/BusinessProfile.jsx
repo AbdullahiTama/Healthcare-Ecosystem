@@ -7,6 +7,7 @@ import {
   Pill as PillIcon, Smile, Sparkles, Star, Store,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -365,6 +366,12 @@ function BusinessProfile() {
     })
 
     if (!error) {
+      // Issue #7: business reviews emitted no notification. The recipient is
+      // whoever claimed the business, not a profile with this id.
+      const sent = await notifyReview(supabase, {
+        kind: 'business', actorId: user.id, businessId: id, rating, link: `/business/${id}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
       setComment('')
       setRating(5)
       toast.show('Review posted — thank you!')

@@ -7,6 +7,7 @@ import {
   Sparkles, Star, ThumbsDown, ThumbsUp,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -122,6 +123,12 @@ function DrugProfile() {
     })
 
     if (!error) {
+      // Issue #7: product reviews emitted no notification. The recipient is
+      // the listing's owner_id (null for CareHub-sourced listings).
+      const sent = await notifyReview(supabase, {
+        kind: 'product', actorId: user.id, productId: selectedProductId, rating, link: `/drug/${encodeURIComponent(name)}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
       setComment('')
       setRating(5)
       loadAll()
