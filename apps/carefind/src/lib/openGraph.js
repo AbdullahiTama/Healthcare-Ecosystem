@@ -114,6 +114,7 @@ function strippedText(content) {
     }
   }
   return text
+    .replace(/\\n/g, '\n')                    // literal "\n" escapes from stored content → real line breaks
     .replace(/==#?[0-9a-zA-Z_-]*\|/g, '')   // highlight openers, valid or malformed
     .replace(/==/g, '')
     .replace(/\*\*/g, '')

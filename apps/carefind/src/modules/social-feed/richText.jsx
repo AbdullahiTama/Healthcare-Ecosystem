@@ -61,7 +61,7 @@ export function RichTextInput({ value, onChange, placeholder, rows = 4 }) {
 export function renderRichText(text) {
   if (!text) return null
   const parts = []
-  let remaining = text
+  let remaining = String(text).replace(/\\n/g, '\n') // stored "\n" escapes → real line breaks
   // Match any of our markers: {h:color}..{/h} {c:color}..{/c} {b}..{/b} {i}..{/i} {s}..{/s} {u}..{/u}
   const regex = /\{(h|c):(\w+)\}([\s\S]*?)\{\/\1\}|\{(b|i|s|u)\}([\s\S]*?)\{\/\4\}/
   let key = 0
@@ -122,7 +122,7 @@ export function stripMarkdown(text) {
 // This pulls out just the readable words for previews, so we never dump raw JSON.
 export function previewText(content) {
   if (!content) return ''
-  const raw = String(content)
+  const raw = String(content).replace(/\\n/g, '\n') // stored "\n" escapes → real line breaks
 
   // Only attempt a parse if it actually looks like a block array
   if (raw.trim().startsWith('[')) {

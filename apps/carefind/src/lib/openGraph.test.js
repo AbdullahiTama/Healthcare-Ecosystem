@@ -121,6 +121,15 @@ describe('plainTextFromContent', () => {
     expect(plainTextFromContent(null)).toBe('')
     expect(plainTextFromContent('[not json')).toBe('[not json')
   })
+
+  it('converts literal backslash-n escapes into readable line breaks, not raw "\\n"', () => {
+    const body = JSON.stringify([
+      { id: 'a', type: 'text', content: 'First line.\\nSecond line.\\n\\nThird line.' },
+    ])
+    const text = plainTextFromContent(body)
+    expect(text).not.toContain('\\n')
+    expect(text).toBe('First line. Second line. Third line.')
+  })
 })
 
 describe('truncate', () => {
