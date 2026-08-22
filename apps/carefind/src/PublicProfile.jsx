@@ -13,6 +13,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from './components/layout/SidebarSection.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
+import { notifyReview } from './services/reviewNotifications.js'
 import { previewText } from './modules/social-feed/richText.jsx'
 import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
@@ -99,14 +100,30 @@ function PublicProfile() {
       }
 
       const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
-        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
+        // repost_of is load-bearing: without it isRepost() misreads every
+        // reference repost as an original post (issue #6).
+        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
         supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
         supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
       ])
 
-      setPosts(postData.data || [])
+      // Resolve each repost to the post it points at, so the grid shows what
+      // was actually shared rather than a bare marker (issues #6/#8).
+      const ownPosts = postData.data || []
+      const sourceIds = [...new Set(ownPosts.filter((p) => p.repost_of).map((p) => p.repost_of))]
+      if (sourceIds.length) {
+        const { data: sources } = await supabase
+          .from('posts')
+          .select('id, content, created_at, post_type, theme, image_url, user_id')
+          .in('id', sourceIds)
+        const byId = {}
+        ;(sources || []).forEach((s) => { byId[s.id] = s })
+        setPosts(ownPosts.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)))
+      } else {
+        setPosts(ownPosts)
+      }
       setFollowerCount(followerData.count || 0)
       setFollowingCount(followingData.count || 0)
       setPostCount(postData.data?.length || 0)
@@ -287,6 +304,15 @@ function PublicProfile() {
       rating: myRating,
       comment: myComment.trim() || null,
     })
+
+    // Issue #7: this is the exact case reported — a 5-star review that
+    // produced no notification. Nothing was ever emitted here.
+    if (!error) {
+      const sent = await notifyReview(supabase, {
+        kind: 'user', actorId: user.id, subjectId: id, rating: myRating, link: `/u/${user.id}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+    }
     setPostingReview(false)
     if (error) { showToast('Could not post review: ' + error.message, { type: 'error' }); return }
     setMyRating(5)

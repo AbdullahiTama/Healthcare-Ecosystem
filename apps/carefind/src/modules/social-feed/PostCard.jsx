@@ -93,7 +93,75 @@ export default function PostCard({
   setEditingPost,
   setConfirmDeleteId,
   onOpenDetail,
+  // Repost support (issues #6/#8). `resolveSource(id)` returns the post a
+  // repost points at, or null if it is not loaded. `isRepostBody` marks the
+  // inner render of a source post inside a repost banner, so the banner is
+  // drawn exactly once and a repost-of-a-repost cannot recurse.
+  resolveSource,
+  isRepostBody = false,
 }) {
+  // ── Reposts (issues #6/#8) ────────────────────────────────────────────
+  // A repost row holds no words of its own: `repost_of` names the post it
+  // points at. Render the SOURCE — its author, its content, its post type —
+  // under a "Reposted by" banner, the way X and every other platform does it,
+  // so the reposter is never mistaken for the writer. Because the inner card
+  // is the source post, every engagement handler below (like, comment, gift,
+  // view) already targets the original rather than the copy.
+  const repostSource = post.repost_of && resolveSource ? resolveSource(post.repost_of) : null
+  if (post.repost_of && !isRepostBody) {
+    const reposterName = authorName(post)
+    return (
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          padding: '0 4px 6px', fontSize: 12, fontWeight: 700, color: theme.gray500,
+        }}>
+          <Repeat2 size={14} color={theme.gray400} aria-hidden="true" />
+          <span>
+            Reposted by{' '}
+            <Link to={`/u/${post.user_id}`} style={{ color: theme.gray600, textDecoration: 'none', fontWeight: 800 }}>
+              {reposterName}
+            </Link>
+          </span>
+          {user && post.user_id === user.id && (
+            <button
+              type="button"
+              onClick={() => toggleRepost(repostSource || { id: post.repost_of })}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 800, color: theme.tealDeep, cursor: 'pointer', fontFamily: theme.fontFamily }}
+            >
+              Undo repost
+            </button>
+          )}
+        </div>
+        {repostSource ? (
+          <PostCard
+            {...{
+              preview, isLocked, user, navigate, profiles, authorName, formatCount, timeAgo,
+              likeCount, userHasLiked, commentTotal, shareCount, saveCount, giftCount,
+              userHasReposted, isSaved, isFollowing, toggleLike, toggleComments, toggleRepost,
+              toggleSave, toggleFollow, sharePost, shareCard, openReport, onGift, handleEditPost,
+              handleCommentAdded, openComments, comments, setComments, editingComment,
+              setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts,
+              myUsername, myAvatar, reportedPosts, sharingId, editingPost, setEditingPost,
+              setConfirmDeleteId, onOpenDetail, resolveSource,
+            }}
+            post={repostSource}
+            isRepostBody
+          />
+        ) : (
+          // The source has not been resolved (or was deleted). Show that
+          // honestly rather than falling back to the repost row, which is
+          // exactly how the reposter got credited as the author.
+          <Card style={{ padding: theme.space[8], borderRadius: theme.radius.xl }}>
+            <p style={{ margin: 0, fontSize: 13, color: theme.gray500 }}>
+              This post is no longer available.
+            </p>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
   const locked = isLocked ? isLocked(post) : false
 
   // Preview clamp: measure the real rendered body once it exists. The clamp

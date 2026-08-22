@@ -1,4 +1,4 @@
-import { FileText, Gem, HelpCircle, MessageSquare, Mic, Star } from 'lucide-react'
+import { FileText, Gem, HelpCircle, MessageSquare, Mic, Repeat2, Star } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { previewText, stripMarkdown } from './richText.jsx'
 
@@ -7,10 +7,15 @@ import { previewText, stripMarkdown } from './richText.jsx'
 // two divergent copies of the same code, which is how the two screens ended
 // up with different type icons for the same post types.
 
-// Reposts are stored with a leading 🔁 in `posts.content`. That's a data
-// convention, not an icon, so it stays — but only these helpers know about it.
+// Reposts. `repost_of` is the real signal — a repost row references the post
+// it points at and carries no words of its own (see reposts.js and issues
+// #6/#8). The leading 🔁 in `posts.content` is the older convention, kept here
+// so a row written before the reference model is still recognised. Profile
+// queries MUST select `repost_of`: a query that omits it silently reclassifies
+// every reference repost as an ordinary post, which is how reposts stopped
+// appearing on the reposter's profile.
 export const REPOST_MARK = '🔁'
-export const isRepost = (post) => (post?.content || '').startsWith(REPOST_MARK)
+export const isRepost = (post) => !!post?.repost_of || (post?.content || '').startsWith(REPOST_MARK)
 export const withoutRepostMark = (content) => (content || '').replace(/^🔁\s*/, '')
 
 // Post-kind icons, matching the feed composer's post-type vocabulary
@@ -26,22 +31,27 @@ export const POST_KIND_ICON = {
 // One tile in a profile's post grid: image if there is one, otherwise a mist
 // tile carrying the post-kind icon; kind label and a three-line preview below.
 export function PostTile({ post, onOpen }) {
-  const KindIcon = POST_KIND_ICON[post.post_type] || MessageSquare
+  // A repost has no content of its own: show the SOURCE it points at, so the
+  // reposter's grid shows what they actually shared rather than a bare 🔁
+  // (issue #6). `post.source` is attached by the profile loader.
+  const reposted = isRepost(post)
+  const shown = (reposted && post.source) || post
+  const KindIcon = POST_KIND_ICON[shown.post_type] || MessageSquare
   // Markdown syntax stripped first so tiles read "bold text", never "**bold**".
-  const preview = previewText(stripMarkdown(withoutRepostMark(post.content)))
+  const preview = previewText(stripMarkdown(withoutRepostMark(shown.content)))
 
   return (
     <button
       onClick={() => onOpen(post)}
-      aria-label={`Open post: ${preview.slice(0, 60)}`}
+      aria-label={`Open ${reposted ? 'repost' : 'post'}: ${preview.slice(0, 60)}`}
       style={{ textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}
     >
       <div style={{
         border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, overflow: 'hidden',
         background: theme.cardBg, height: 156, display: 'flex', flexDirection: 'column',
       }}>
-        {post.image_url ? (
-          <div style={{ height: 84, background: `url(${post.image_url}) center/cover` }} />
+        {shown.image_url ? (
+          <div style={{ height: 84, background: `url(${shown.image_url}) center/cover` }} />
         ) : (
           <div style={{
             height: 84, background: theme.tealMist, color: theme.tealDeep,
@@ -51,12 +61,23 @@ export function PostTile({ post, onOpen }) {
           </div>
         )}
         <div style={{ padding: '9px 11px', flex: 1, overflow: 'hidden' }}>
-          {post.post_type && post.post_type !== 'text' && (
+          {/* A repost is labelled as one, never presented as the profile
+              owner's own writing (issue #8). */}
+          {reposted && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 800,
+              color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.04em',
+              marginRight: 6,
+            }}>
+              <Repeat2 size={11} aria-hidden="true" /> Repost
+            </span>
+          )}
+          {shown.post_type && shown.post_type !== 'text' && (
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 800,
               color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.04em',
             }}>
-              <KindIcon size={11} aria-hidden="true" /> {post.post_type}
+              <KindIcon size={11} aria-hidden="true" /> {shown.post_type}
             </span>
           )}
           <p style={{
