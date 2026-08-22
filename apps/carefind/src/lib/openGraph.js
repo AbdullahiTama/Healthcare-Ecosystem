@@ -110,7 +110,13 @@ function strippedText(content) {
           .join('\n\n')
       }
     } catch {
-      // Not JSON after all — fall through and use it as prose.
+      // Malformed JSON (e.g. raw newlines inside a block): best-effort extract
+      // each block's text so we never print the raw array.
+      const recovered = (trimmed.match(/"content"\s*:\s*"([\s\S]*?)"/g) || [])
+        .map((m) => m.replace(/^"content"\s*:\s*"/, '').replace(/"\s*$/, ''))
+        .join('\n\n')
+      if (recovered.trim()) text = recovered
+      // otherwise fall through and use it as prose
     }
   }
   return text

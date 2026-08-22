@@ -122,9 +122,12 @@ export function stripMarkdown(text) {
 // This pulls out just the readable words for previews, so we never dump raw JSON.
 export function previewText(content) {
   if (!content) return ''
-  const raw = String(content).replace(/\\n/g, '\n') // stored "\n" escapes → real line breaks
+  const raw = String(content)
 
-  // Only attempt a parse if it actually looks like a block array
+  // Only attempt a parse if it actually looks like a block array. NOTE: the
+  // source is parsed as-is — a JSON string's "\n" escapes are valid and become
+  // real line breaks on parse. Normalising "\n" BEFORE parsing would turn those
+  // escapes into raw newlines inside the string and make JSON.parse throw.
   if (raw.trim().startsWith('[')) {
     try {
       const blocks = JSON.parse(raw)
@@ -140,12 +143,17 @@ export function previewText(content) {
           })
           .filter(Boolean)
           .join(' ')
-        return stripMarkers(words)
+        return stripMarkers(words).replace(/\\n/g, '\n') // stored "\n" escapes → real line breaks
       }
     } catch (e) {
-      // not valid JSON — fall through and treat it as plain text
+      // Malformed JSON (e.g. raw newlines inside a block): best-effort extract
+      // each block's text rather than printing the raw array.
+      const recovered = (raw.match(/"content"\s*:\s*"([\s\S]*?)"/g) || [])
+        .map((m) => m.replace(/^"content"\s*:\s*"/, '').replace(/"\s*$/, ''))
+        .join(' ')
+      if (recovered.trim()) return stripMarkers(recovered).replace(/\\n/g, '\n')
     }
   }
 
-  return stripMarkers(raw)
+  return stripMarkers(raw).replace(/\\n/g, '\n')
 }
