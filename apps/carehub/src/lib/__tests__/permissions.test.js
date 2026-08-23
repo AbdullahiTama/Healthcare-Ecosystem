@@ -21,7 +21,29 @@ import {
   getReportDefaultTab,
   modulePath,
   isModuleActive,
+  isManagerRole,
 } from '../permissions.js'
+
+describe('isManagerRole', () => {
+  it('matches the preset role and the custom titles real tenants type', () => {
+    expect(isManagerRole('Manager')).toBe(true)
+    expect(isManagerRole('Regional Manager')).toBe(true)
+    expect(isManagerRole('Four sisters Manager')).toBe(true)
+    expect(isManagerRole('Business Development manager')).toBe(true)
+  })
+
+  it('does not match non-manager roles or missing values', () => {
+    expect(isManagerRole('Medical sales rep')).toBe(false)
+    expect(isManagerRole('Pharmacist')).toBe(false)
+    expect(isManagerRole('')).toBe(false)
+    expect(isManagerRole(null)).toBe(false)
+    expect(isManagerRole(undefined)).toBe(false)
+  })
+
+  it('does not cover the owner, who has no staff row', () => {
+    expect(isManagerRole('Owner')).toBe(false)
+  })
+})
 
 describe('permissions role matrix', () => {
   it('grants the Owner full access', () => {

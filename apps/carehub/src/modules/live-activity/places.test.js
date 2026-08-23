@@ -179,9 +179,16 @@ describe('rep-added facility review workflow (manager confirmation)', () => {
   })
 
   it('addRepAddedFacility flags managers and the owner for review', async () => {
+    // Roles as real Manufacturer/Importer tenants actually store them — typed
+    // per business, never the bare preset "Manager" (issue #1).
     sbFetch
       .mockResolvedValueOnce([{ id: 'new', name: 'NewClinic' }]) // insert
-      .mockResolvedValueOnce([{ id: 'mgr1' }])                    // manager lookup
+      .mockResolvedValueOnce([                                    // staff roster
+        { id: 'mgr1', role: 'Regional Manager' },
+        { id: 'mgr2', role: 'Four sisters Manager' },
+        { id: 'rep1', role: 'Medical sales rep' },
+        { id: 'noRole', role: null },
+      ])
     await addRepAddedFacility('biz', { name: 'NewClinic', lat: 1, lng: 2, category: 'Clinic/Diagnostic' }, 'rep1')
     // the review flag is fired asynchronously (fire-and-forget), so wait for it
     await vi.waitFor(function () { expect(notify).toHaveBeenCalledTimes(1) })
@@ -192,7 +199,21 @@ describe('rep-added facility review workflow (manager confirmation)', () => {
     expect(kind).toBe('facility_review')
     const ids = recipients.map(function (r) { return r.staffId })
     expect(ids).toContain('mgr1')
-    expect(ids).toContain(null)
+    expect(ids).toContain('mgr2')
+    expect(ids).not.toContain('rep1')
+    expect(ids).not.toContain('noRole')
+    expect(ids).toContain(null) // the owner, who has no staff row
+  })
+
+  it('asks for the roster without a role filter, so custom manager titles match', async () => {
+    sbFetch.mockResolvedValueOnce([{ id: 'new' }]).mockResolvedValueOnce([])
+    await addRepAddedFacility('biz', { name: 'X', lat: 1, lng: 2 }, 'rep1')
+    await vi.waitFor(function () { expect(notify).toHaveBeenCalledTimes(1) })
+    const staffUrl = String(sbFetch.mock.calls[1][0])
+    expect(staffUrl).toContain('staff?business_id=eq.biz')
+    expect(staffUrl).toContain('select=id,role')
+    // Regression (issue #1): `role=in.(Manager,Owner)` matched no real row.
+    expect(staffUrl).not.toContain('role=in.')
   })
 })
 

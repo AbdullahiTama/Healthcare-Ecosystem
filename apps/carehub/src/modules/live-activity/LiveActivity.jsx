@@ -17,6 +17,7 @@ import {
   dismissRepAddedFacility,
 } from '../../lib/places.js'
 import FacilityPicker from './FacilityPicker.jsx'
+import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -96,7 +97,9 @@ export default function LiveActivity({ brand }) {
     : 'Owner'
   const isOwner = meStaffId === null
   // Managers (and the owner) get the My Feed / Team Reports split (issue #7).
-  const isManager = isOwner || /manager/i.test((authData.staff && authData.staff.role) || '')
+  // isManagerRole is the shared definition — the facility-review recipient
+  // lookup in places.js uses the same one.
+  const isManager = isOwner || isManagerRole(authData.staff && authData.staff.role)
 
   const [fields, setFields] = useState([])
   const [activities, setActivities] = useState([])

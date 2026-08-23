@@ -17,6 +17,7 @@
 // reverseGeocode/geocodePlace Nominatim calls in services/supabase.js.
 
 import { sbFetch, notify } from '../services/supabase.js'
+import { isManagerRole } from './permissions.js'
 import {
   parseOverpass, rankFacilities, matchesCategory, haversineMeters,
 } from './geo.js'
@@ -177,10 +178,18 @@ export async function addRepAddedFacility(businessId, facility, createdBy) {
 // Notify a business's managers and owner that a rep added a facility needing
 // review. Best-effort: failures are swallowed so they never block the rep.
 async function flagRepAddedForReview(businessId, facilityName) {
-  const managers = await sbFetch(
-    'staff?business_id=eq.' + businessId + '&role=in.(Manager,Owner)&select=id'
-  ).catch(function () { return [] })
-  const recipients = (managers || []).map(function (m) { return { staffId: m.id } })
+  // Fetch the roster and filter with the shared predicate rather than pushing a
+  // role filter into PostgREST. The previous `role=in.(Manager,Owner)` matched
+  // nothing in practice: Manufacturer/Importer tenants type their own role
+  // names ("Regional Manager", "<Brand> Manager"), and an owner has no staff
+  // row at all — so every manager silently missed the review notification.
+  // A business roster is small; this is one small read per rep-added facility.
+  const staff = await sbFetch(
+    'staff?business_id=eq.' + businessId + '&select=id,role'
+  ).catch(function (e) { console.error('Manager lookup failed:', e); return [] })
+  const recipients = (staff || [])
+    .filter(function (m) { return isManagerRole(m.role) })
+    .map(function (m) { return { staffId: m.id } })
   // Owner has no staff row — an is_owner notification uses a null staff_id.
   recipients.push({ staffId: null })
   notify(

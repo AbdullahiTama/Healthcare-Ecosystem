@@ -182,6 +182,22 @@ export function can(role, action, customRoles = {}) {
   return getPerms(role, customRoles)[action] || false
 }
 
+// Is this staff role a manager? Deliberately a substring test, not an equality
+// check against the preset "Manager": Manufacturer/Importer and Wholesale
+// tenants type their own role names (see DEFAULT_STAFF_PERMS above), so real
+// businesses run "Regional Manager", "Area Manager", "<Brand> Manager". An
+// exact match finds none of them.
+//
+// This is the ONE definition — UI gating and any server-side recipient lookup
+// must both go through it. When a lookup needs to filter rows rather than test
+// one value, fetch `id,role` and filter with this predicate rather than
+// re-expressing the rule as a PostgREST filter, which is how the two drifted
+// apart before. Owners are NOT covered here: an owner has no `staff` row at
+// all, so callers handle the owner separately.
+export function isManagerRole(role) {
+  return /manager/i.test(role || '')
+}
+
 // ── Module registry ───────────────────────────────────────────────────────────
 // Single source of truth for which modules exist and which business types may
 // use them. Everything that lists modules — the sidebar, the route guards and
