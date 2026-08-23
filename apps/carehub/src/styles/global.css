@@ -187,6 +187,92 @@ body {
   transition: background 0.12s ease;
 }
 
+/* ── Custom scrollbars (brand-aligned, accessible) ───────────────────────────
+   The app is inline-style-driven, but scrollbar styling cannot be expressed
+   inline, so it lives here. Every scrollable region uses native overflow, so
+   these global rules style the Sidebar, dashboard main content, modals,
+   dropdowns and all module lists consistently. Standard properties
+   (scrollbar-width / scrollbar-color) cover Firefox; the -webkit- pseudo-
+   elements cover Chromium/Safari/Edge. The thumb uses the brand teal so the
+   scroll affordance reads as part of the product, not a foreign OS control. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal-600) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--teal-600);
+  /* transparent border insets the thumb so it never touches the track edge */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--teal-500);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--teal-600);
+}
+
+/* The webkit scrollbar corner (where horizontal + vertical meet) — keep it
+   clean so nested scroll areas don't show a jarring square. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Modal scrollbars (explicit, brand-matched) ─────────────────────────────
+   The shared design-system Modal renders every dialog/drawer/sheet in the
+   ecosystem. The global * rule above already styles these, but we repeat the
+   contract here, scoped to the Modal's own classes, so the brand scrollbar is
+   guaranteed inside modals (the overlay scrolls when a dialog is taller than
+   the viewport; the body scrolls for long content) and stays DRY from the
+   rest of the app's scroll areas. */
+.ds-modal-overlay,
+.ds-modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal-600) transparent;
+}
+
+.ds-modal-overlay::-webkit-scrollbar,
+.ds-modal-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-track,
+.ds-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-thumb,
+.ds-modal-body::-webkit-scrollbar-thumb {
+  background-color: var(--teal-600);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-thumb:hover,
+.ds-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--teal-500);
+}
+
+.ds-modal-overlay::-webkit-scrollbar-corner,
+.ds-modal-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
   .ch-skeleton, .ch-spinner, .ch-toast {

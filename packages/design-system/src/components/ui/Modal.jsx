@@ -103,14 +103,15 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
       aria-modal="true"
       aria-labelledby="ds-modal-title"
       onClick={() => { if (!blocking) onClose?.() }}
+      className="ds-modal-overlay"
       style={{
         position: 'fixed', inset: 0, zIndex: 999, background: theme.overlay,
         display: 'flex', alignItems: v === 'sheet' ? 'flex-end' : 'center', justifyContent: v === 'drawer' ? 'flex-end' : 'center',
-        padding: v === 'sheet' || v === 'drawer' ? 0 : 16, overflowY: 'auto',
+        padding: v === 'sheet' || v === 'drawer' ? 0 : 'clamp(12px, 4vw, 24px)', overflowY: 'auto',
         animation: 'ds-fade-in 200ms ease-out',
       }}
     >
-      <Card ref={cardRef} onClick={(e) => e.stopPropagation()} style={{
+      <Card ref={cardRef} onClick={(e) => e.stopPropagation()} className="ds-modal-card" style={{
         width: '100%', maxWidth: maxW,
         maxHeight: v === 'sheet' ? '88vh' : v === 'drawer' ? '100%' : undefined,
         height: v === 'drawer' ? '100%' : undefined,
@@ -128,7 +129,7 @@ export function Modal({ show, onClose, title, children, footer, wide, sheet, pre
             </button>
           )}
         </div>
-        <div style={{ padding: '20px 24px', maxHeight: v === 'sheet' || v === 'drawer' ? undefined : '65vh', overflowY: 'auto' }}>{children}</div>
+        <div className="ds-modal-body" style={{ padding: '20px 24px', maxHeight: v === 'sheet' || v === 'drawer' ? undefined : '65vh', overflowY: 'auto' }}>{children}</div>
         {footer && <div style={{ padding: '14px 24px', borderTop: `1px solid ${theme.border}`, display: 'flex', gap: theme.space[6], flexShrink: 0 }}>{footer}</div>}
       </Card>
     </div>
