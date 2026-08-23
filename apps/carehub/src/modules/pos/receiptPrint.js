@@ -10,6 +10,7 @@
 // hardware which has no concept of print margins.
 import { esc } from '../../lib/escape.js'
 import { fmt, nowStr } from '../../lib/utils.js'
+import QRCode from 'qrcode'
 
 // Display-only tax. The tax line is a computed total × rate shown on the
 // receipt for the customer's information; the stored sale total and the amount
@@ -32,7 +33,25 @@ export const fmtReceiptDate = (d) => d
 // printer hardware. Body padding is minimal (2mm) for edge-to-edge content.
 const PAPER = { '58': { paper: '58mm', pad: '2mm', fontSize: '10.5px', nameSize: '11px', totalSize: '13px' }, '80': { paper: '80mm', pad: '3mm', fontSize: '11.5px', nameSize: '12px', totalSize: '14px' } }
 
-export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} }) {
+// Build a scannable QR code for a receipt as an inline SVG data URL.
+//
+// Why local generation instead of a third-party image API: the POS must keep
+// working offline (it queues sales when the network is down), and the printed
+// receipt is written to a popup and sent to the printer on a short timer. A
+// remote <img> frequently fails to load in time — or at all, offline — leaving
+// a blank QR on the paper. Generating the SVG locally produces a self-contained
+// data URL with no network dependency and no load race, so it always prints.
+//
+// Encodes settings.qr_code_url when the business configured one (e.g. a verify
+// or reorder page); otherwise falls back to the in-app receipt URL.
+export async function buildReceiptQrDataUrl(receipt = {}, settings = {}) {
+  const r = receipt || {}
+  const target = settings.qr_code_url || `${typeof window !== 'undefined' ? window.location.origin : ''}/receipt/${r.id}`
+  const svg = await QRCode.toString(target, { type: 'svg', margin: 1, width: 120, errorCorrectionLevel: 'M' })
+  return 'data:image/svg+xml,' + encodeURIComponent(svg)
+}
+
+export function buildReceiptHtml({ receipt = {}, business = {}, settings = {}, qrDataUrl = null }) {
   const r = receipt
   const biz = business
   const width = settings.receipt_width === '58' ? '58' : '80'
@@ -101,12 +120,12 @@ export function buildReceiptHtml({ receipt = {}, business = {}, settings = {} })
     '<div style="display:grid;grid-template-columns:1fr auto;gap:0 6px;margin-top:3px"><div>' + label + '</div><div style="text-align:right">' + value + '</div></div>'
 
   // ── QR CODE ──────────────────────────────────────────────────────────────
-  // Generate a QR code data URL for the receipt URL. If no custom URL is
-  // provided, use the receipt ID as a simple identifier. The QR code is
-  // rendered as an image at the bottom of the receipt.
-  const receiptUrl = settings.qr_code_url || `${window.location.origin}/receipt/${r.id}`
-  const qrData = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(receiptUrl)
-  const qrCode = `<img src="${qrData}" alt="QR Code" style="width:40px;height:40px;border:1px solid #999;margin:4px auto;display:block" />`
+  // Prefer a locally-generated SVG data URL (offline-safe, no load race). When
+  // none is supplied (e.g. non-async callers/tests), fall back to a remote
+  // image API so the receipt still renders an <img>.
+  const qrSrc = qrDataUrl
+    || 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=' + encodeURIComponent(settings.qr_code_url || `${typeof window !== 'undefined' ? window.location.origin : ''}/receipt/${r.id}`)
+  const qrCode = `<img src="${qrSrc}" alt="QR Code" style="width:80px;height:80px;border:1px solid #999;margin:4px auto;display:block" />`
 
   return `<!DOCTYPE html><html><head><title>Receipt</title><style>
     *{margin:0;padding:0;box-sizing:border-box}

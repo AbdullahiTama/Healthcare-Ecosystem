@@ -497,10 +497,11 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // Universal fallback path: render an HTML page and let the browser/OS
   // rasterize it via the system print dialog. Always works, but thermal
   // printers print softer than with raw commands.
-  function legacyPrint(r) {
+  async function legacyPrint(r) {
     const w = window.open('', '_blank', 'width=400,height=700')
     if (!w) { showToast('Pop-up blocked — allow pop-ups to print this receipt.', { type: 'warning' }); return }
-    w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {} }))
+    const qrDataUrl = await buildReceiptQrDataUrl(r, settings || {})
+    w.document.write(buildReceiptHtml({ receipt: r, business: brand || {}, settings: settings || {}, qrDataUrl }))
     w.document.close()
     setTimeout(() => { w.focus(); w.print() }, 400)
   }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildReceiptHtml, computeTax, fmtReceiptDate } from './receiptPrint.js'
+import { buildReceiptHtml, buildReceiptQrDataUrl, computeTax, fmtReceiptDate } from './receiptPrint.js'
 
 const base = {
   receipt: {
@@ -117,6 +117,19 @@ describe('buildReceiptHtml', () => {
     // The QR block always renders an <img>, so absence of the logo is asserted
     // on the circular-crop styling unique to the logo rather than on '<img'.
     expect(buildReceiptHtml(base)).not.toContain('border-radius:50%')
+  })
+
+  it('uses a supplied local QR data URL instead of a remote image API', () => {
+    const html = buildReceiptHtml({ ...base, qrDataUrl: 'data:image/svg+xml,%3Csvg%3E%3C/svg%3E' })
+    expect(html).toContain('src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"')
+    expect(html).not.toContain('api.qrserver.com')
+  })
+
+  it('buildReceiptQrDataUrl produces a self-contained SVG data URL', async () => {
+    const url = await buildReceiptQrDataUrl(base.receipt, base.settings)
+    expect(url.startsWith('data:image/svg+xml,')).toBe(true)
+    // Decoding the payload yields a real <svg> QR markup.
+    expect(decodeURIComponent(url.slice('data:image/svg+xml,'.length))).toContain('<svg')
   })
 
   // ── EDGE CASES ──────────────────────────────────────────────────────────
