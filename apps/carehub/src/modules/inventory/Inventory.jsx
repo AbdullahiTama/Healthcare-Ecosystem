@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
-  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
+  FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2, TrendingUp, Percent,
 } from 'lucide-react'
 import { productRepository } from './repositories'
 import { parseInventoryCsv } from './csvImport'
+import { computeInventoryStats } from './inventoryStats'
 import { fmt, todayDate } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
@@ -76,11 +77,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
   const PAGE_SIZE = 50
   const [page, setPage] = useState(0)
   useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
-  const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
-  const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
-  const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
-  const costValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.cost_price || 0) * (p.stock || 0), 0)
-  const onCareFind = products.filter(p => p.list_on_carefind !== false && p.stock > 0).length
+  // Summary figures (issue #3): one pass in inventoryStats.js, recomputed
+  // whenever the product list changes so the KPI row tracks stock live.
+  const { lowStock, outOfStock, stockValue, costValue, profit, margin, missingCost, onCareFind } =
+    useMemo(() => computeInventoryStats(products), [products])
 
   async function reload() {
     try {
@@ -371,10 +371,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '12px', marginBottom: '20px' }}>
+      {/* 6 tiles: auto-fit at a 180px minimum so a 7-figure naira value never
+          gets squeezed — wraps to 3/2/1 columns down to mobile. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Package />} label='Total Products' value={products.length} />
         <StatCard icon={<AlertTriangle />} label='Low Stock' value={lowStock.length} alert={lowStock.length > 0} sub={outOfStock.length + ' out of stock'} />
         <StatCard icon={<DollarSign />} label='Stock Value' value={fmt(stockValue)} sub={'Cost: ' + fmt(costValue)} />
+        <StatCard
+          icon={<TrendingUp />} label='Total Profit' value={(profit < 0 ? '-' : '') + fmt(Math.abs(profit))}
+          tone={profit < 0 ? 'danger' : undefined}
+          sub={missingCost > 0 ? missingCost + ' item(s) have no cost price' : 'Stock Value − Cost'}
+        />
+        <StatCard
+          icon={<Percent />} label='Profit Margin' value={margin === null ? '—' : Math.round(margin) + '%'}
+          tone={margin !== null && margin < 0 ? 'danger' : undefined}
+          sub={margin === null ? 'No stock on hand' : 'Of stock value'}
+        />
         <StatCard icon={<Search />} label='On CareFind' value={onCareFind} sub='Visible to public' />
       </div>
 
