@@ -931,16 +931,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', ...(isMobile ? { maxHeight: 320 } : {}) }}>
           {cart.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 160 }}>
-              {/* `action` renders as a real button, so it needs a handler that
-                  exists: onAction={() => setShowProducts(true)} referenced no
-                  state in this file and threw a ReferenceError into
-                  POSErrorBoundary, replacing the whole POS screen with the
-                  crash page. On mobile the products panel is above the cart,
-                  so both controls focus the search field — the one thing that
-                  actually gets a product into the cart. */}
-              <Empty icon={<Package size={80} strokeWidth={2} />} message="Your cart is empty" action="Search or scan a product to add it" onAction={focusProductSearch} />
-              <button onClick={focusProductSearch}
-                style={{ marginTop: '12px', padding: '8px 16px', borderRadius: theme.radius.md, border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Browse products</button>
+              <Empty icon={<Package size={80} strokeWidth={2} />} message="Your cart is empty" />
             </div>
           ) : cart.map(item => {
             // The catalog price this line was added at — the baseline shown
