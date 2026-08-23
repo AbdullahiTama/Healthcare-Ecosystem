@@ -273,6 +273,64 @@ body {
   background: transparent;
 }
 
+/* ── POS cart polish (carehub) ───────────────────────────────────────────────
+   Cart rows and the payment/charge controls need hover + active feedback and
+   box-shadow elevation that inline styles can't express. These properties live
+   here (not inline) so :hover / :active / :disabled can override them cleanly. */
+.pos-cart-item {
+  background: white;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.pos-cart-item:hover {
+  background: var(--gray-100);
+  box-shadow: var(--elevation-1);
+}
+
+.pos-pay-chip {
+  background: white;
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.pos-pay-chip:hover {
+  border-color: var(--teal-600);
+  color: var(--teal-600);
+}
+.pos-pay-chip.is-active {
+  background: var(--teal-mist);
+  color: var(--teal-600);
+  border-color: var(--teal-600);
+}
+
+.pos-hold {
+  background: white;
+  color: var(--navy-900);
+  border: 1px solid var(--gray-200);
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.pos-hold:hover:not(:disabled) {
+  border-color: var(--teal-600);
+  color: var(--teal-600);
+}
+
+.pos-charge {
+  background: var(--teal-600);
+  color: white;
+  box-shadow: var(--elevation-2);
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.pos-charge:hover:not(:disabled) {
+  background: var(--teal-500);
+  box-shadow: var(--elevation-3);
+}
+.pos-charge:disabled {
+  background: var(--gray-200);
+  color: var(--gray-400);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
   .ch-skeleton, .ch-spinner, .ch-toast {

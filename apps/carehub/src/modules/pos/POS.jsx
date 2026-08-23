@@ -907,16 +907,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
       {/* Cart panel — "Current sale" */}
         <div style={{ width: isMobile ? 'auto' : 340, flexShrink: 0, background: 'white', borderLeft: isMobile ? 'none' : `1px solid ${border}`, borderTop: isMobile ? `1px solid ${border}` : 'none', display: 'flex', flexDirection: 'column', ...(isMobile ? {} : { height: '100%' }) }}>
-        {/* Online status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderBottom: `1px solid ${border}`, color: success, fontSize: 12 }}>
-          <span style={{ width: 8, height: 8, borderRadius: theme.radius.full, background: success, display: 'inline-block' }} aria-hidden='true' />
-          <span style={{ fontWeight: 700 }}>Online</span>
-        </div>
         {/* Header + client */}
         <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: navy, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <ShoppingCart size={18} aria-hidden='true' />
-            Current Sale
+          <div style={{ fontSize: 16, fontWeight: 800, color: navy, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 32, height: 32, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ShoppingCart size={18} aria-hidden='true' /></span>
+            <span>Current Sale</span>
+            {cart.length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 800, color: tealDeep, background: tealMist, borderRadius: theme.radius.full, padding: '2px 8px', flexShrink: 0 }}>
+                {cart.reduce((s, c) => s + c.qty, 0)}
+              </span>
+            )}
           </div>
           <div style={{ position: 'relative' }}>
             <input list='pos-clients' value={client} onChange={e => setClient(e.target.value)} placeholder='Walk-in'
@@ -928,7 +928,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         </div>
 
         {/* Items */}
-        <div style={{ flex: 1, overflowY: 'auto', ...(isMobile ? { maxHeight: 320 } : {}) }}>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px', ...(isMobile ? { maxHeight: 320 } : {}) }}>
           {cart.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: 160 }}>
               {/* `action` renders as a real button, so it needs a handler that
@@ -947,7 +947,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             // next to a one-off override (item.price !== catalogPrice).
             const catalogPrice = products.find(p => p.id === item.id)?.price ?? item.price
             return (
-            <div key={item.id} style={{ padding: '12px 16px', borderBottom: `1px solid ${gray100}` }}>
+            <div key={item.id} className="pos-cart-item" style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${gray100}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
@@ -1004,8 +1004,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
             {PAYMENT_METHODS.map(([m, Icon]) => {
               const on = method === m
               return (
-                <button key={m} onClick={() => setMethod(m)}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '9px 2px', borderRadius: theme.radius.md, border: `1px solid ${on ? tealDeep : border}`, background: on ? tealMist : 'white', color: on ? tealDeep : gray600, cursor: 'pointer', fontWeight: 700 }}>
+                <button key={m} onClick={() => setMethod(m)} className={`pos-pay-chip${on ? ' is-active' : ''}`}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '9px 2px', borderRadius: theme.radius.md, cursor: 'pointer', fontWeight: 700 }}>
                   <Icon size={15} /><span style={{ fontSize: 10 }}>{m}</span>
                 </button>
               )
@@ -1044,8 +1044,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowHoldModal(true)} disabled={!cart.length}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: 700, fontSize: 13, cursor: cart.length ? 'pointer' : 'not-allowed', opacity: cart.length ? 1 : 0.5, flexShrink: 0 }}>
+            <button onClick={() => setShowHoldModal(true)} disabled={!cart.length} className="pos-hold"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderRadius: theme.radius.md, fontWeight: 700, fontSize: 13, opacity: cart.length ? 1 : 0.5, flexShrink: 0 }}>
               <Pause size={14} /> Hold
             </button>
             {/* Credit MUST route to chargeCredit. charge() computes
@@ -1054,8 +1054,8 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 (balance 0, is_credit false), the `creditAmountPaid` the
                 cashier typed would be ignored, and the debt would never be
                 recorded — the balance simply disappears. */}
-            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length}
-              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', background: cart.length ? tealDeep : theme.gray200, color: cart.length ? 'white' : gray400, fontWeight: 800, fontSize: 14, cursor: cart.length ? 'pointer' : 'not-allowed' }}>
+            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length} className="pos-charge"
+              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', fontWeight: 800, fontSize: 14 }}>
               {chargeLabel}
             </button>
           </div>
