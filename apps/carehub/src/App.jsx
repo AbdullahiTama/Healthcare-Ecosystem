@@ -8,6 +8,7 @@ import BusinessDashboard from './pages/dashboard/BusinessDashboard'
 import AgentLogin from './pages/agent/AgentLogin'
 import ApplyAgent from './pages/agent/ApplyAgent'
 import AgentDashboard from './modules/referral-agent/AgentDashboard'
+import ReceiptPage from './pages/ReceiptPage'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
 import AuthProvider from './providers/AuthProvider'
@@ -92,6 +93,7 @@ export default function App() {
           <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
           <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />
           <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
+          <Route path='/receipt/:id' element={<ReceiptPage />} />
           <Route path='*' element={<Navigate to='/' />} />
         </Routes>
       </div>
