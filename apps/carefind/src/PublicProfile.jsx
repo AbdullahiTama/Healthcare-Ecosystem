@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, BadgeCheck, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
+  ArrowLeft, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
   MessageSquare, Play, Repeat2, Star, User, X,
 } from 'lucide-react'
 import { supabase } from './config/supabaseClient'
@@ -25,6 +25,7 @@ import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
 import { Card, CardSkeleton, ConfirmDialog, Empty, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
 import VerifiedBadge from './components/VerifiedBadge.jsx'
+import ProfileHeader from './components/ProfileHeader.jsx'
 import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
 
@@ -625,21 +626,7 @@ function PublicProfile() {
     const big = scale === 'hero'
     return (
       <>
-        <h1 style={{ fontSize: big ? 20 : 17, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
-        {profile.display_name && (
-          <p style={{ margin: '0 0 6px 0', fontSize: big ? 13 : 12.5, color: theme.gray400, fontWeight: 600 }}>@{profile.display_name}</p>
-        )}
-        {profile.is_verified && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
-            fontSize: big ? 11 : 10.5, fontWeight: 800, color: theme.tealDeep,
-            background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
-          }}>
-            {/* The stored label usually already reads "Verified Doctor" —
-                prefixing it printed "Verified Verified Doctor". */}
-            <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
-          </span>
-        )}
+        <ProfileHeader profile={profile} name={displayName} context="profile" size={big ? 20 : 17} />
         {profile.bio && (
           <p style={{ margin: big ? '10px 0 0 0' : '6px 0 0 0', fontSize: big ? 13.5 : 13, color: theme.textMid, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
             {profile.bio}

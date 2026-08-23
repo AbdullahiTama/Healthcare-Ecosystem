@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Award, BadgeCheck, Bookmark, Building2, Check, ChevronRight, Download, Eye,
+  Award, Bookmark, Building2, Check, ChevronRight, Download, Eye,
   Flag, Gift, Heart, Lock, MessageCircle, Pencil, Plus, Repeat2, Share2, Star,
   Trash2,
 } from 'lucide-react'
@@ -12,6 +12,7 @@ import VideoPlayer from '../../components/VideoPlayer.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import { canExportVideo } from '../../utils/voiceCard.js'
 import PostMenu from './PostMenu.jsx'
+import ProfileHeader from '../../components/ProfileHeader.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
 import { Card, Pill, TealBtn, GhostBtn } from '../../components/ui'
 
@@ -245,41 +246,21 @@ export default function PostCard({
         </Link>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-            <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none' }}>
-              <span style={{ fontSize: 14.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
-            </Link>
-            {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
-              <BadgeCheck size={15} color={theme.tealDeep} style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
-            )}
-            {!post.posted_as_type && profiles[post.user_id]?.display_name && (
-              <span style={{ fontSize: 12.5, color: theme.gray400, fontWeight: 600 }}>
-                @{profiles[post.user_id].display_name}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-            {post.posted_as_type ? (
-              <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>
-                {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
-                {' · posted by '}
-                {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
-              </span>
-            ) : (
-              profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                  color: theme.tealDeep, background: theme.tealMist,
-                  padding: '2px 8px', borderRadius: theme.radius.full,
-                }}>
-                  <BadgeCheck size={12} aria-hidden="true" /> {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
-                </span>
-              )
-            )}
-            <span style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
-              <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
-            </span>
+          <ProfileHeader
+            profile={profiles[post.user_id]}
+            name={authorName(post)}
+            context="post"
+            nameHref={`/u/${post.user_id}`}
+          />
+          {post.posted_as_type && (
+            <div style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700, marginTop: 3 }}>
+              {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
+              {' · posted by '}
+              {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600, marginTop: 3 }}>
+            <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
           </div>
         </div>
 
