@@ -107,6 +107,36 @@ export function verifyFacilityMatch(gpsCoords, facilityCoords, thresholdM = FACI
   return d != null && d <= thresholdM
 }
 
+// The three states a logged location can be in. 'pending' is not a weaker
+// 'verified' — it means the question has not been asked yet.
+export const FACILITY_VERIFICATION = {
+  VERIFIED: 'verified',
+  UNVERIFIED: 'unverified',
+  PENDING: 'pending',
+}
+
+/**
+ * Verification state for a chosen facility against the rep's GPS fix.
+ *
+ * A rep-added facility awaiting review CANNOT be verified, however close the
+ * GPS says it is: its coordinates ARE the rep's own GPS (the picker attaches
+ * them), so the distance is 0 by construction and the check would be circular.
+ * Distance can only corroborate a position that came from somewhere else — a
+ * facility detected from the map, or a rep-added one a manager has confirmed.
+ * Until then the honest answer is 'pending', not a green tick on a name the rep
+ * typed themselves.
+ *
+ * Never throws and never blocks a submit: no GPS, no facility, or coordinates
+ * that cannot be compared all read as 'unverified'.
+ */
+export function facilityVerification(gpsCoords, facility, thresholdM = FACILITY_VERIFY_THRESHOLD_M) {
+  if (!facility) return FACILITY_VERIFICATION.UNVERIFIED
+  if (facility.pendingReview) return FACILITY_VERIFICATION.PENDING
+  return verifyFacilityMatch(gpsCoords, { lat: facility.lat, lng: facility.lng }, thresholdM)
+    ? FACILITY_VERIFICATION.VERIFIED
+    : FACILITY_VERIFICATION.UNVERIFIED
+}
+
 // Compose a one-line address from OSM tags. Overpass returns raw `addr:*`
 // sub-keys; we read those and fall back to the bare `road`/`city` shapes used by
 // other geocoders so the function stays useful regardless of source.

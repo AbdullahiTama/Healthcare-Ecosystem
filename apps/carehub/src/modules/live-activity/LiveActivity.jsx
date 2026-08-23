@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, BadgeCheck, AlertTriangle } from 'lucide-react'
+import { MapPin, BadgeCheck, AlertTriangle, Clock } from 'lucide-react'
 import {
   getActivityFields, addActivityField, deleteActivityField,
   getDefaultViewers, setDefaultViewers,
@@ -8,7 +8,7 @@ import {
   uploadActivityVoice, reverseGeocode,
 } from '../../services/supabase'
 // Pure distance helpers for the GPS-driven facility verification.
-import { verifyFacilityMatch, haversineMeters } from '../../lib/geo'
+import { facilityVerification, FACILITY_VERIFICATION, haversineMeters } from '../../lib/geo'
 // GPS-driven facility discovery (issue #1) — replaces free-text Place of Visit.
 import {
   nearbyHealthFacilities,
@@ -505,9 +505,15 @@ export default function LiveActivity({ brand }) {
       // FACILITY_VERIFY_THRESHOLD_M of the chosen facility's coordinates? No GPS
       // or no chosen facility means "unverified", never an error: the log must
       // still go through. We never text-match facility names.
+      //
+      // A facility the rep typed themselves is 'pending', not verified — its
+      // coordinates ARE this GPS fix, so distance proves nothing until a manager
+      // confirms it. facilityVerification owns that rule.
       const facilityCoords = facility ? { lat: facility.lat, lng: facility.lng } : null
       const distanceM = (gps && facilityCoords) ? Math.round(haversineMeters(gps, facilityCoords)) : null
-      const verified = !!(gps && facilityCoords && verifyFacilityMatch(gps, facilityCoords))
+      const verifyState = facilityVerification(gps, facility)
+      const verified = verifyState === FACILITY_VERIFICATION.VERIFIED
+      const pendingReview = verifyState === FACILITY_VERIFICATION.PENDING
 
       await logActivity({
         business_id: brand.id,
@@ -531,6 +537,7 @@ export default function LiveActivity({ brand }) {
         facility_distance_m: distanceM,
         facility_source: facility ? (facility.source || 'detected') : null,
         facility_verified: verified,
+        facility_pending_review: pendingReview,
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -979,16 +986,30 @@ export default function LiveActivity({ brand }) {
                             {a.facility_category || ''}{a.facility_source === 'rep_added' ? ' · rep-added' : ''}
                           </span>
                         )}
+                        {/* Three states. A pending row is awaiting review, not a
+                            failed distance check — don't flag the rep amber for
+                            it. facility_pending_review is stored at log time so
+                            the feed never has to guess (a CONFIRMED rep-added
+                            facility logged from 180 m away is genuinely
+                            unverified, and reads that way). */}
                         {(a.facility_verified != null ? a.facility_verified : a.place_verified) ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
                             <BadgeCheck size={10} /> GPS verified
+                          </span>
+                        ) : a.facility_pending_review ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: infoBg, color: info }}>
+                            <Clock size={10} /> Pending review
                           </span>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
                             <AlertTriangle size={10} /> Unverified
                           </span>
                         )}
-                        {a.facility_distance_m != null && (
+                        {/* A pending place sits at the rep's own GPS, so "0 m
+                            from GPS" is an artefact of how it was created, not
+                            evidence — only show the distance for a facility
+                            positioned independently of this fix. */}
+                        {a.facility_distance_m != null && !a.facility_pending_review && (
                           <span style={{ fontSize: '10px', fontWeight: '700', color: gray400 }}>
                             {a.facility_distance_m} m from GPS
                           </span>

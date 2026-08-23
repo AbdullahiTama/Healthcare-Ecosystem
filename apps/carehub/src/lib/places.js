@@ -105,13 +105,18 @@ async function readCachedNearby(businessId, lat, lng, radius) {
   const repRows = await sbFetch(
     'rep_added_facilities?business_id=eq.' + businessId +
     '&status=in.(confirmed,pending_review)' +
-    '&select=id,name,lat,lng,category'
+    '&select=id,name,lat,lng,category,status'
   ).catch(function (e) { console.error('rep_added_facilities read failed:', e); return [] })
 
+  // A cached row is either map-detected or a manager-confirmed promotion, so it
+  // is always reviewed. Only rows still sitting in the rep queue are pending —
+  // `pendingReview` is what stops a rep's own typed place from counting as GPS
+  // verification (see facilityVerification in geo.js).
   const fromCache = (cacheRows || []).filter(within).map(function (r) {
     return {
       id: r.id, name: r.name, lat: Number(r.lat), lng: Number(r.lng),
       category: r.category, address: r.address || '', source: r.source || 'detected',
+      pendingReview: false,
     }
   })
   const fromRep = (repRows || []).filter(within).map(function (r) {
@@ -119,6 +124,7 @@ async function readCachedNearby(businessId, lat, lng, radius) {
       id: r.id, name: r.name, lat: Number(r.lat), lng: Number(r.lng),
       category: r.category || 'Other health facility', address: '',
       source: 'rep_added',
+      pendingReview: r.status !== 'confirmed',
     }
   })
   return fromCache.concat(fromRep)
@@ -288,6 +294,10 @@ export async function nearbyHealthFacilities(lat, lng, options = {}) {
     }
     if (fresh.length > 0) {
       const ranked = rankFacilities(fresh, gps, { cap: MAX_FACILITIES })
+      // Caching is best-effort on purpose. Non-managers may only write
+      // source='detected' rows (see 20260823_facility_review_authorization.sql),
+      // so an upsert that collides with a manager-promoted row is rejected —
+      // the results below are still returned, just not cached.
       if (businessId) await upsertCachedFacilities(businessId, ranked).catch(function () {})
       pool = mergeFacilities(pool, ranked)
     }

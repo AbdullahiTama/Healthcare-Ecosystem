@@ -3,8 +3,49 @@ import {
   haversineMeters, verifyPlaceMatch,
   formatDistance, categoryFromAmenity, verifyFacilityMatch,
   parseOverpass, rankFacilities, matchesCategory, FACILITY_VERIFY_THRESHOLD_M,
-  FACILITY_CATEGORY,
+  FACILITY_CATEGORY, facilityVerification, FACILITY_VERIFICATION,
 } from './geo.js'
+
+// Issue #1 audit item 4. A rep-added facility is stored AT the rep's own GPS,
+// so the distance check is circular — it must not produce a green tick.
+describe('facilityVerification (three states, not a boolean)', () => {
+  const gps = { lat: 6.5, lng: 3.3 }
+
+  it('verifies a detected facility the rep is standing at', () => {
+    expect(facilityVerification(gps, { lat: 6.5, lng: 3.3, source: 'detected' }))
+      .toBe(FACILITY_VERIFICATION.VERIFIED)
+  })
+
+  it('refuses to verify a rep-added facility awaiting review, even at zero distance', () => {
+    const typedHere = { lat: gps.lat, lng: gps.lng, source: 'rep_added', pendingReview: true }
+    // The distance really is 0 — that is exactly why it proves nothing.
+    expect(haversineMeters(gps, typedHere)).toBe(0)
+    expect(facilityVerification(gps, typedHere)).toBe(FACILITY_VERIFICATION.PENDING)
+  })
+
+  it('verifies a rep-added facility once a manager has confirmed it', () => {
+    expect(facilityVerification(gps, { lat: 6.5, lng: 3.3, source: 'rep_added', pendingReview: false }))
+      .toBe(FACILITY_VERIFICATION.VERIFIED)
+  })
+
+  it('leaves a confirmed facility beyond the threshold unverified, not pending', () => {
+    // ~1.1 km north — a genuine distance failure, not an unreviewed place.
+    expect(facilityVerification(gps, { lat: 6.51, lng: 3.3, source: 'rep_added', pendingReview: false }))
+      .toBe(FACILITY_VERIFICATION.UNVERIFIED)
+  })
+
+  it('reads as unverified when there is no GPS or no facility', () => {
+    expect(facilityVerification(null, { lat: 6.5, lng: 3.3 })).toBe(FACILITY_VERIFICATION.UNVERIFIED)
+    expect(facilityVerification(gps, null)).toBe(FACILITY_VERIFICATION.UNVERIFIED)
+    expect(facilityVerification(gps, { lat: null, lng: null })).toBe(FACILITY_VERIFICATION.UNVERIFIED)
+  })
+
+  it('still honours an explicit threshold', () => {
+    const far = { lat: 6.5018, lng: 3.3 } // ~200 m
+    expect(facilityVerification(gps, far)).toBe(FACILITY_VERIFICATION.UNVERIFIED)
+    expect(facilityVerification(gps, far, 300)).toBe(FACILITY_VERIFICATION.VERIFIED)
+  })
+})
 
 describe('formatDistance', () => {
   it('renders whole metres under a kilometre', () => {

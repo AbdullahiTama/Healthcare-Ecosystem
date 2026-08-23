@@ -110,7 +110,7 @@ describe('nearbyHealthFacilities cache reads', () => {
   // Five cached rows is CACHE_MIN_RESULTS, so Overpass is never consulted and
   // the test stays offline.
   const repRow = function (i) {
-    return { id: 'r' + i, name: 'Rep Clinic ' + i, lat: 6.5, lng: 3.3, category: 'Clinic/Diagnostic' }
+    return { id: 'r' + i, name: 'Rep Clinic ' + i, lat: 6.5, lng: 3.3, category: 'Clinic/Diagnostic', status: 'pending_review' }
   }
 
   it('reads rep-added facilities with the columns the table actually has', async () => {
@@ -121,7 +121,7 @@ describe('nearbyHealthFacilities cache reads', () => {
 
     const repUrl = String(sbFetch.mock.calls[1][0])
     expect(repUrl).toContain('rep_added_facilities?business_id=eq.biz')
-    expect(repUrl).toContain('select=id,name,lat,lng,category')
+    expect(repUrl).toContain('select=id,name,lat,lng,category,status')
     // Regression (issue #1): `address` does not exist on this table. Requesting
     // it made PostgREST reject the read, and the catch turned that into an empty
     // list — rep-added places silently never reached anyone's nearby list.
@@ -137,6 +137,33 @@ describe('nearbyHealthFacilities cache reads', () => {
     sbFetch.mockResolvedValueOnce([]).mockResolvedValueOnce([1, 2, 3, 4, 5].map(repRow))
     await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz' })
     expect(String(sbFetch.mock.calls[1][0])).toContain('status=in.(confirmed,pending_review)')
+  })
+
+  // Issue #1 audit item 4: pendingReview is what stops a place the rep typed
+  // themselves from being counted as GPS verification.
+  it('marks unconfirmed rep-added facilities as pending review, confirmed ones not', async () => {
+    sbFetch.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: 'p', name: 'Pending Place', lat: 6.5, lng: 3.3, category: 'Clinic/Diagnostic', status: 'pending_review' },
+      { id: 'c', name: 'Confirmed Place', lat: 6.5, lng: 3.3, category: 'Clinic/Diagnostic', status: 'confirmed' },
+      repRow(3), repRow(4), repRow(5),
+    ])
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz' })
+    const byName = Object.fromEntries(res.facilities.map(function (f) { return [f.name, f] }))
+    expect(byName['Pending Place'].pendingReview).toBe(true)
+    expect(byName['Confirmed Place'].pendingReview).toBe(false)
+  })
+
+  it('never marks a cached facility as pending — the cache holds reviewed rows only', async () => {
+    sbFetch.mockResolvedValueOnce([
+      { id: 'c1', name: 'Detected', lat: 6.5, lng: 3.3, category: 'Hospital', address: 'Rd', source: 'detected' },
+      { id: 'c2', name: 'Promoted', lat: 6.5, lng: 3.3, category: 'Hospital', address: null, source: 'rep_added' },
+      { id: 'c3', name: 'C3', lat: 6.5, lng: 3.3, source: 'detected' },
+      { id: 'c4', name: 'C4', lat: 6.5, lng: 3.3, source: 'detected' },
+      { id: 'c5', name: 'C5', lat: 6.5, lng: 3.3, source: 'detected' },
+    ]).mockResolvedValueOnce([])
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz' })
+    expect(res.facilities.every(function (f) { return f.pendingReview === false })).toBe(true)
+    expect(res.fromCache).toBe(true)
   })
 })
 

@@ -1,16 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, BadgeCheck, AlertTriangle, Plus, ChevronDown, Search } from 'lucide-react'
+import { MapPin, BadgeCheck, AlertTriangle, Plus, ChevronDown, Search, Clock } from 'lucide-react'
 import { Button } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../styles/theme'
 import {
-  formatDistance, matchesCategory, verifyFacilityMatch,
+  formatDistance, matchesCategory, facilityVerification, FACILITY_VERIFICATION,
 } from '../../lib/geo.js'
 import {
   nearbyHealthFacilities, addRepAddedFacility, FACILITY_FILTERS,
 } from '../../lib/places.js'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50,
-  border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
+  border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, bg } = theme
 
 // Single source of truth for the facility-capture UI, used by:
 //   * the logger (rep is logging a visit, `readOnly=false`) — auto-detects the
@@ -95,6 +95,9 @@ export default function FacilityPicker({
       address: '',
       source: 'rep_added',
       distanceM: 0,
+      // Its coordinates ARE this GPS fix, so a distance check would be
+      // circular — it stays pending until a manager confirms it.
+      pendingReview: true,
     }
     // Persist for everyone near here later; failure must not block the log.
     if (businessId) {
@@ -105,7 +108,9 @@ export default function FacilityPicker({
     setListOpen(false)
   }
 
-  const verified = selected && gps ? verifyFacilityMatch(gps, { lat: selected.lat, lng: selected.lng }) : false
+  // Three states, not a boolean: a place the rep typed themselves is 'pending',
+  // never verified, because its coordinates are this very GPS fix.
+  const verifyState = selected && gps ? facilityVerification(gps, selected) : FACILITY_VERIFICATION.UNVERIFIED
 
   return (
     <div>
@@ -140,18 +145,26 @@ export default function FacilityPicker({
               </div>
             </div>
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              {verified ? (
+              {verifyState === FACILITY_VERIFICATION.VERIFIED && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
                   <BadgeCheck size={10} /> GPS verified
                 </span>
-              ) : (
+              )}
+              {verifyState === FACILITY_VERIFICATION.PENDING && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: infoBg, color: info }}>
+                  <Clock size={10} /> Pending review
+                </span>
+              )}
+              {verifyState === FACILITY_VERIFICATION.UNVERIFIED && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
                   <AlertTriangle size={10} /> Unverified
                 </span>
               )}
               {fromCache && <span style={{ fontSize: '10px', color: gray400 }}>cached</span>}
               {selected.source === 'rep_added' && (
-                <span style={{ fontSize: '10px', color: gray400 }}>rep-added · pending review</span>
+                <span style={{ fontSize: '10px', color: gray400 }}>
+                  rep-added{verifyState === FACILITY_VERIFICATION.PENDING ? ' · a manager must confirm it' : ' · confirmed'}
+                </span>
               )}
             </div>
           </>
