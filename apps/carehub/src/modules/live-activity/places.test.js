@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   buildOverpassQuery, fetchOverpass, MAX_FACILITIES, FACILITY_FILTERS,
   getRepAddedFacilities, confirmRepAddedFacility, dismissRepAddedFacility, addRepAddedFacility,
+  nearbyHealthFacilities,
 } from '../../lib/places.js'
 import {
   formatDistance, categoryFromAmenity, verifyFacilityMatch,
@@ -102,6 +103,43 @@ describe('parseOverpass sample (pure parser)', () => {
   })
 })
 
+describe('nearbyHealthFacilities cache reads', () => {
+  beforeEach(function () { sbFetch.mockResolvedValue([]) })
+  afterEach(function () { vi.clearAllMocks() })
+
+  // Five cached rows is CACHE_MIN_RESULTS, so Overpass is never consulted and
+  // the test stays offline.
+  const repRow = function (i) {
+    return { id: 'r' + i, name: 'Rep Clinic ' + i, lat: 6.5, lng: 3.3, category: 'Clinic/Diagnostic' }
+  }
+
+  it('reads rep-added facilities with the columns the table actually has', async () => {
+    sbFetch
+      .mockResolvedValueOnce([])                                      // facilities_cache
+      .mockResolvedValueOnce([1, 2, 3, 4, 5].map(repRow))             // rep_added_facilities
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz' })
+
+    const repUrl = String(sbFetch.mock.calls[1][0])
+    expect(repUrl).toContain('rep_added_facilities?business_id=eq.biz')
+    expect(repUrl).toContain('select=id,name,lat,lng,category')
+    // Regression (issue #1): `address` does not exist on this table. Requesting
+    // it made PostgREST reject the read, and the catch turned that into an empty
+    // list — rep-added places silently never reached anyone's nearby list.
+    expect(repUrl).not.toContain('address')
+
+    expect(res.facilities).toHaveLength(5)
+    expect(res.facilities[0].name).toBe('Rep Clinic 1')
+    expect(res.facilities[0].source).toBe('rep_added')
+    expect(res.facilities[0].address).toBe('')
+  })
+
+  it('surfaces both confirmed and pending rep-added facilities', async () => {
+    sbFetch.mockResolvedValueOnce([]).mockResolvedValueOnce([1, 2, 3, 4, 5].map(repRow))
+    await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz' })
+    expect(String(sbFetch.mock.calls[1][0])).toContain('status=in.(confirmed,pending_review)')
+  })
+})
+
 describe('rep-added facility review workflow (manager confirmation)', () => {
   beforeEach(function () { sbFetch.mockResolvedValue([]) })
   afterEach(function () { vi.clearAllMocks() })
@@ -116,8 +154,14 @@ describe('rep-added facility review workflow (manager confirmation)', () => {
   })
 
   it('confirmRepAddedFacility flips status and promotes the facility into the cache', async () => {
-    sbFetch.mockResolvedValueOnce([{ name: 'F', lat: 1, lng: 2, category: 'Hospital', address: 'Addr' }])
+    // Shape mirrors the real table: rep_added_facilities has no `address`.
+    sbFetch.mockResolvedValueOnce([{ name: 'F', lat: 1, lng: 2, category: 'Hospital' }])
     await confirmRepAddedFacility('fid', 'biz')
+    // Regression (issue #1): selecting a column the table does not have made
+    // PostgREST reject this read, so Confirm could never succeed.
+    const read = String(sbFetch.mock.calls[0][0])
+    expect(read).toContain('select=name,lat,lng,category')
+    expect(read).not.toContain('address')
     const patch = sbFetch.mock.calls.find(function (c) { return c[1] && c[1].method === 'PATCH' })
     expect(patch[0]).toContain('rep_added_facilities?id=eq.fid')
     expect(patch[1].body).toContain('confirmed')

@@ -94,13 +94,18 @@ async function readCachedNearby(businessId, lat, lng, radius) {
   const cacheRows = await sbFetch(
     'facilities_cache?business_id=eq.' + businessId +
     '&select=id,name,lat,lng,category,address,source'
-  ).catch(function () { return [] })
+  ).catch(function (e) { console.error('facilities_cache read failed:', e); return [] })
 
+  // NOTE: rep_added_facilities has NO `address` column — the rep only ever types
+  // a name (the picker attaches GPS). Selecting one here made PostgREST reject
+  // the whole request, and the catch below swallowed it, so rep-added places
+  // silently never reached anyone's nearby list. Keep this select in step with
+  // 20260822_field_activity_facility_location.sql.
   const repRows = await sbFetch(
     'rep_added_facilities?business_id=eq.' + businessId +
     '&status=in.(confirmed,pending_review)' +
-    '&select=id,name,lat,lng,category,address'
-  ).catch(function () { return [] })
+    '&select=id,name,lat,lng,category'
+  ).catch(function (e) { console.error('rep_added_facilities read failed:', e); return [] })
 
   const fromCache = (cacheRows || []).filter(within).map(function (r) {
     return {
@@ -111,7 +116,7 @@ async function readCachedNearby(businessId, lat, lng, radius) {
   const fromRep = (repRows || []).filter(within).map(function (r) {
     return {
       id: r.id, name: r.name, lat: Number(r.lat), lng: Number(r.lng),
-      category: r.category || 'Other health facility', address: r.address || '',
+      category: r.category || 'Other health facility', address: '',
       source: 'rep_added',
     }
   })
@@ -206,7 +211,9 @@ export async function getRepAddedFacilities(businessId, status) {
  * decides how to surface an error.
  */
 export async function confirmRepAddedFacility(id, businessId) {
-  const rows = await sbFetch('rep_added_facilities?id=eq.' + id + '&select=name,lat,lng,category,address')
+  // No `address` column on this table (see readCachedNearby) — selecting one
+  // made every Confirm fail, so no rep-added facility could ever be promoted.
+  const rows = await sbFetch('rep_added_facilities?id=eq.' + id + '&select=name,lat,lng,category')
   const f = Array.isArray(rows) ? rows[0] : rows
   await sbFetch('rep_added_facilities?id=eq.' + id, {
     method: 'PATCH',
@@ -223,7 +230,7 @@ export async function confirmRepAddedFacility(id, businessId) {
         lat: f.lat,
         lng: f.lng,
         category: f.category,
-        address: f.address || null,
+        address: null,
         source: 'rep_added',
       }]),
     }).catch(function () {})
