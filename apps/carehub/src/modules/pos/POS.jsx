@@ -55,12 +55,12 @@ class POSErrorBoundary extends Component {
           <div style={{ fontWeight: 800, fontSize: 16, color: theme.danger, marginBottom: 10 }}>
             POS page crashed — screenshot this and send it:
           </div>
-          <div style={{ padding: 12, background: theme.dangerBg, border: `1px solid ${theme.border}`, borderRadius: 8, color: theme.danger, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ padding: 12, background: theme.dangerBg, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, color: theme.danger, fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {String(this.state.error?.message || this.state.error)}
             {this.state.error?.stack ? '\n\n' + this.state.error.stack : ''}
           </div>
           <button onClick={() => this.setState({ error: null })}
-            style={{ marginTop: 14, padding: '10px 16px', borderRadius: 8, border: 'none', background: theme.tealDeep, color: 'white', fontWeight: 700 }}>
+            style={{ marginTop: 14, padding: '10px 16px', borderRadius: theme.radius.md, border: 'none', background: theme.tealDeep, color: 'white', fontWeight: 700 }}>
             Try again
           </button>
         </div>
@@ -580,13 +580,13 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const tabBar = (active) => {
     const tabs = [['pos', 'Sell', null], ['held', 'Held', heldSales.length], ['recent', 'Recent', null], ['credit', 'Credit', creditSales.length]]
     return (
-      <div style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}` }}>
+      <div role="tablist" aria-label="POS views" style={{ display: 'flex', gap: 24, borderBottom: `1px solid ${border}` }}>
         {tabs.map(([v, label, count]) => {
           const on = active === v
           return (
-            <button key={v} onClick={() => setView(v)}
+            <button key={v} role="tab" aria-selected={on} onClick={() => setView(v)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '10px 2px', marginBottom: -1, fontSize: 13, fontWeight: on ? 800 : 600, color: on ? tealDeep : gray600, borderBottom: on ? `2px solid ${tealDeep}` : '2px solid transparent', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {label}{count > 0 && <span style={{ background: on ? tealMist : gray100, color: on ? tealDeep : gray500, borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 800 }}>{count}</span>}
+              {label}{count > 0 && <span style={{ background: on ? tealMist : gray100, color: on ? tealDeep : gray500, borderRadius: theme.radius.full, padding: '1px 7px', fontSize: 11, fontWeight: 800 }}>{count}</span>}
             </button>
           )
         })}
@@ -596,7 +596,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // ── RECEIPT VIEW ────────────────────────────────────────────────────────────
   if (receipt) return (
-    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '20px' }}>
+    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '20px' }}>
       <Card style={{ width: '100%', maxWidth: '380px', overflow: 'hidden' }}>
         <div style={{ padding: '24px', textAlign: 'center', borderBottom: `1px solid ${border}` }}>
           <div style={{ fontSize: 44, marginBottom: 8, color: tealDeep, display: 'flex', justifyContent: 'center' }}><CheckCircle /></div>
@@ -623,7 +623,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
               </>
             )}
             {receipt.method === 'Split' && receipt.splitAmounts && (
-              <div style={{ marginTop: '6px', padding: '8px', borderRadius: '8px', background: bg, fontSize: '12px' }}>
+              <div style={{ marginTop: '6px', padding: '8px', borderRadius: theme.radius.md, background: bg, fontSize: '12px' }}>
                 {Object.entries(receipt.splitAmounts).filter(([, v]) => parseFloat(v) > 0).map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}><span>{k}</span><span style={{ fontWeight: '700' }}>{fmt(parseFloat(v))}</span></div>
                 ))}
@@ -633,10 +633,10 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         </div>
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button onClick={() => printReceipt(receipt)} disabled={printing} aria-busy={printing || undefined}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: '12px', border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.65 : 1 }}>
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.65 : 1 }}>
             <Printer size={15} /> {printing ? 'Sending…' : 'Print receipt'}
           </button>
-          <button onClick={newSale} style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', cursor: 'pointer' }}>
+          <button onClick={newSale} style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '700', cursor: 'pointer' }}>
             + New sale
           </button>
         </div>
@@ -647,7 +647,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // ── HELD SALES VIEW ──────────────────────────────────────────────────────────
   if (view === 'held') return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('held')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
         {loadingSales ? (
@@ -665,14 +665,14 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                   <div style={{ fontSize: '11px', color: gray400, marginTop: '2px' }}>{s.created_at?.replace('T', ' ').slice(0, 16)}</div>
                   {s.notes && <div style={{ fontSize: '12px', color: gray600, marginTop: '4px', fontStyle: 'italic' }}>Note: {s.notes}</div>}
                   <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
+                    {items.map((it, i) => <span key={i} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: theme.radius.sm, background: tealMist, color: tealDeep, fontWeight: '600' }}>{it.name} ×{it.qty}</span>)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                   <TealBtn onClick={() => resumeHeld(s)} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6 }}><Play size={13} /> Resume sale</TealBtn>
                   {role === 'Owner' && (
                     <button onClick={() => askDeleteHeldSale(s)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: '8px', border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>
                       <Trash2 size={12} /> Delete
                     </button>
                   )}
@@ -692,11 +692,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // ── RECENT SALES VIEW ────────────────────────────────────────────────────────
   if (view === 'recent') return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('recent')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-        {allSales.filter(s => !s.is_on_hold).slice(0, 50).map(s => {
-          let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
+        {loadingSales ? (
+          <Loading text="Loading recent sales…" />
+        ) : (() => {
+          const recent = allSales.filter(s => !s.is_on_hold)
+          if (recent.length === 0) return <Empty icon={<Clipboard size={40} strokeWidth={1.5} />} message="No sales yet" />
+          return recent.slice(0, 50).map(s => {
+            let items = []; try { items = JSON.parse(s.items || '[]') } catch (e) {}
           return (
             <Card key={s.id} style={{ padding: '14px', marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -728,14 +733,15 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                       date: s.created_at,
                     }
                     printReceipt(receiptData)
-                  }} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
+                  }} disabled={printing} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontWeight: '600', fontSize: '12px', cursor: printing ? 'wait' : 'pointer', opacity: printing ? 0.6 : 1 }}>
                     <Printer size={12} /> {printing ? 'Sending…' : 'Reprint'}
                   </button>
                 </div>
               </div>
             </Card>
           )
-        })}
+        })
+        })()}
       </div>
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
@@ -743,7 +749,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   // ── CREDIT SALES VIEW ────────────────────────────────────────────────────────
   if (view === 'credit') return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: bg }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: bg }}>
       <div style={{ background: 'white', padding: isMobile ? '6px 16px 0' : '8px 24px 0', flexShrink: 0 }}>{tabBar('credit')}</div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
         {creditSales.length === 0 ? (
@@ -771,7 +777,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const chargeLabel = !cart.length ? 'Add products' : method === 'Credit' ? 'Record credit sale' : 'Charge ' + fmt(total)
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : '100vh', minHeight: '100vh', overflow: isMobile ? 'visible' : 'hidden', background: bg }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? 'auto' : '100%', overflow: isMobile ? 'visible' : 'hidden', background: bg }}>
 
       {/* Products panel */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden' }}>
@@ -856,7 +862,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
           <div style={{ margin: isMobile ? '12px 16px 0' : '12px 20px 0', borderRadius: theme.radius.lg, overflow: 'hidden', border: `2px solid ${tealDeep}`, position: 'relative', background: 'black', flexShrink: 0 }}>
             <video id='pos-cam' style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }} autoPlay playsInline muted />
             <button onClick={() => { setScanning(false); const v = document.getElementById('pos-cam'); if (v?.srcObject) { v.srcObject.getTracks().forEach(t => t.stop()); v.srcObject = null } }}
-              style={{ position: 'absolute', top: 8, right: 8, padding: '4px 10px', borderRadius: 8, border: 'none', background: danger, color: 'white', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Stop</button>
+              style={{ position: 'absolute', top: 8, right: 8, padding: '4px 10px', borderRadius: theme.radius.md, border: 'none', background: danger, color: 'white', fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>Stop</button>
           </div>
         )}
 
@@ -881,7 +887,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <div style={{ width: 34, height: 34, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={17} /></div>
-                    {qty > 0 && <div style={{ position: 'absolute', top: -7, right: -7, minWidth: 18, height: 18, padding: '0 4px', borderRadius: 9, background: tealDeep, color: 'white', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>{qty}</div>}
+                    {qty > 0 && <div style={{ position: 'absolute', top: -7, right: -7, minWidth: 18, height: 18, padding: '0 4px', borderRadius: theme.radius.full, background: tealDeep, color: 'white', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>{qty}</div>}
                   </div>
                   <span style={{ padding: '2px 8px', borderRadius: theme.radius.full, background: badge.bg, color: badge.fg, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{badge.t}</span>
                 </div>
@@ -900,16 +906,16 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       </div>
 
       {/* Cart panel — "Current sale" */}
-      <div style={{ width: isMobile ? 'auto' : 340, flexShrink: 0, background: 'white', borderLeft: isMobile ? 'none' : `1px solid ${border}`, borderTop: isMobile ? `1px solid ${border}` : 'none', display: 'flex', flexDirection: 'column', ...(isMobile ? {} : { height: '100vh' }) }}>
+        <div style={{ width: isMobile ? 'auto' : 340, flexShrink: 0, background: 'white', borderLeft: isMobile ? 'none' : `1px solid ${border}`, borderTop: isMobile ? `1px solid ${border}` : 'none', display: 'flex', flexDirection: 'column', ...(isMobile ? {} : { height: '100%' }) }}>
         {/* Online status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderBottom: `1px solid ${border}`, color: success, fontSize: 12 }}>
-          <svg style={{ width: 12, height: 12 }} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><circle cx='3' cy='3' r='2'/><path d='M7 3a5 5 0 0 1 10 0 5 5 0 0 1-10 0Z'/><path d='M12 12a4 4 0 0 0 0 8 4 4 0 0 0 0-8Z'/></svg>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '14px 16px', borderBottom: `1px solid ${border}`, color: success, fontSize: 12 }}>
+          <span style={{ width: 8, height: 8, borderRadius: theme.radius.full, background: success, display: 'inline-block' }} aria-hidden='true' />
           <span style={{ fontWeight: 700 }}>Online</span>
         </div>
         {/* Header + client */}
         <div style={{ padding: '14px 16px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexShrink: 0 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: navy, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg style={{ width: 20, height: 20 }} viewBox='0 0 24 24' fill='currentColor' aria-hidden='true'><path d='M3 3v2h6l9 3v19h-6v-9h2v9h5v-9h2v-5h3v5h5v-5h2v-9h-5v9h-2V6H6v9H3z' /></svg>
+            <ShoppingCart size={18} aria-hidden='true' />
             Current Sale
           </div>
           <div style={{ position: 'relative' }}>
@@ -1109,7 +1115,7 @@ function CollectPayment({ sale, onCollect }) {
   return (
     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
       <input type='number' value={amount} onChange={e => setAmount(e.target.value)} placeholder='Amount'
-        style={{ width: '90px', padding: '6px 8px', borderRadius: '8px', border: `1px solid ${theme.border}`, fontSize: '12px', outline: 'none' }} />
+        style={{ width: '90px', padding: '6px 8px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '12px', outline: 'none' }} />
       <TealBtn onClick={handleCollect} style={{ padding: '6px 12px', fontSize: '12px' }}>{collecting ? '...' : 'Collect'}</TealBtn>
     </div>
   )
