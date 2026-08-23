@@ -16,7 +16,7 @@ import { settingsRepository } from '../settings/repositories'
 // seam yet (clients, consultations).
 import { getClients, getLatestConsultation } from '../../services/supabase'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
-import { buildReceiptHtml } from './receiptPrint'
+import { buildReceiptHtml, buildReceiptQrDataUrl } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
 import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscpos, requestPrinter } from './escposUsb'
 import { theme } from '../../styles/theme'
