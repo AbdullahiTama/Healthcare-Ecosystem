@@ -1,12 +1,14 @@
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Route } from 'react-router-dom'
 import './styles/global.css'
 import { AuthProvider } from './providers/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import BackgroundRoutes from './components/BackgroundRoutes.jsx'
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
 import PostPage from './modules/social-feed/PostPage.jsx'
+import PostModalRoute from './modules/social-feed/PostModalRoute.jsx'
 import Search from './modules/healthcare-discovery/Search.jsx'
 import BusinessProfile from './modules/business-profiles-reviews/BusinessProfile.jsx'
 import Login from './modules/account/Login.jsx'
@@ -49,47 +51,47 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <BrowserRouter>
         <ErrorBoundary>
-          <Routes>
-          {/* Public — no login required */}
-          <Route path="/" element={<ForBusiness />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/feed" element={<Feed />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/business/:id" element={<BusinessProfile />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/u/:id" element={<PublicProfile />} />
-          <Route path="/post/:id" element={<PostPage />} />
-          <Route path="/drug/:name" element={<DrugProfile />} />
-          <Route path="/news" element={<News />} />
-          <Route path="/news/:id" element={<NewsArticle />} />
-          <Route path="/live/:id" element={<LiveSession />} />
-          <Route path="/live-show/:id" element={<LiveShow />} />
-          <Route path="/playlist/:id" element={<PlaylistView />} />
+          <BackgroundRoutes modalRoutes={<Route path="/post/:id" element={<PostModalRoute />} />}>
+            {/* Public — no login required */}
+            <Route path="/" element={<ForBusiness />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/feed" element={<Feed />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/business/:id" element={<BusinessProfile />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/u/:id" element={<PublicProfile />} />
+            <Route path="/post/:id" element={<PostPage />} />
+            <Route path="/drug/:name" element={<DrugProfile />} />
+            <Route path="/news" element={<News />} />
+            <Route path="/news/:id" element={<NewsArticle />} />
+            <Route path="/live/:id" element={<LiveSession />} />
+            <Route path="/live-show/:id" element={<LiveShow />} />
+            <Route path="/playlist/:id" element={<PlaylistView />} />
 
-          {/* Requires a logged-in consumer session */}
-          <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
-          <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-          <Route path="/saved" element={<RequireAuth><SavedPosts /></RequireAuth>} />
-          <Route path="/verify" element={<RequireAuth><VerifyProfessional /></RequireAuth>} />
-          <Route path="/claim-business" element={<RequireAuth><ClaimBusiness /></RequireAuth>} />
-          <Route path="/claim-staff-position" element={<RequireAuth><ClaimStaffPosition /></RequireAuth>} />
-          <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-          <Route path="/business-dashboard" element={<RequireAuth><BusinessDashboard /></RequireAuth>} />
-          <Route path="/professional-dashboard" element={<RequireAuth><ProfessionalDashboard /></RequireAuth>} />
-          <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
-          <Route path="/earn" element={<RequireAuth><ProfessionalMonetization /></RequireAuth>} />
-          <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
-          <Route path="/playlist/create" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
-          <Route path="/playlist/:id/add" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
-          <Route path="/playlist/:id/edit/:partId" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
-          <Route path="/live-dashboard/:id" element={<RequireAuth><LiveDashboard /></RequireAuth>} />
+            {/* Requires a logged-in consumer session */}
+            <Route path="/onboarding" element={<RequireAuth><Onboarding /></RequireAuth>} />
+            <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+            <Route path="/saved" element={<RequireAuth><SavedPosts /></RequireAuth>} />
+            <Route path="/verify" element={<RequireAuth><VerifyProfessional /></RequireAuth>} />
+            <Route path="/claim-business" element={<RequireAuth><ClaimBusiness /></RequireAuth>} />
+            <Route path="/claim-staff-position" element={<RequireAuth><ClaimStaffPosition /></RequireAuth>} />
+            <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="/business-dashboard" element={<RequireAuth><BusinessDashboard /></RequireAuth>} />
+            <Route path="/professional-dashboard" element={<RequireAuth><ProfessionalDashboard /></RequireAuth>} />
+            <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
+            <Route path="/earn" element={<RequireAuth><ProfessionalMonetization /></RequireAuth>} />
+            <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+            <Route path="/playlist/create" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
+            <Route path="/playlist/:id/add" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
+            <Route path="/playlist/:id/edit/:partId" element={<RequireAuth><PlaylistCreate /></RequireAuth>} />
+            <Route path="/live-dashboard/:id" element={<RequireAuth><LiveDashboard /></RequireAuth>} />
 
-          {/* Admin — separate session mechanism (admin_token), not the consumer `user` RequireAuth checks */}
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/admin-login" element={<AdminLogin />} />
-          <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
-        </Routes>
+            {/* Admin — separate session mechanism (admin_token), not the consumer `user` RequireAuth checks */}
+            <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
+          </BackgroundRoutes>
         </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>
