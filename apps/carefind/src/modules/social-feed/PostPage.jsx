@@ -11,17 +11,9 @@ import BottomNav from '../../components/BottomNav.jsx'
 import { CardSkeleton, ConfirmDialog, Empty, Modal, Toast, useToast } from '../../components/ui'
 import { usePostEngagement } from './usePostEngagement.js'
 import { postRepository } from './repositories'
+import { REPORT_REASONS } from './postSelectors.js'
 import PostCard from './PostCard.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
-
-// The four things a reader can actually report — the same closed set Feed
-// offers, so the two surfaces never drift into different vocabularies.
-const REPORT_REASONS = [
-  'Spam',
-  'False medical information',
-  'Harassment',
-  'Inappropriate content',
-]
 
 // A post at its own URL — /post/:id. Second consumer of usePostEngagement;
 // the feed is the first. That's what makes the Task 2-4 extraction a real

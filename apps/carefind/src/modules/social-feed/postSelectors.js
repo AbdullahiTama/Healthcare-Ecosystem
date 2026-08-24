@@ -75,3 +75,17 @@ export function timeAgo(dateStr) {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   return `${Math.floor(diff / 86400)}d ago`
 }
+
+// The four things a reader can actually report — a closed set the moderation
+// queue can group by (free text produced unmoderatable rows like "idk", "").
+// Not a derivation like the rest of this module, but the same three surfaces
+// (Feed, PostPage, PostModalRoute) that share every selector above used to
+// each carry their own copy of this literal array; one shared constant here
+// keeps them from drifting into different vocabularies. Verbatim — do not
+// reword these without updating every surface that shows them.
+export const REPORT_REASONS = [
+  'Spam',
+  'False medical information',
+  'Harassment',
+  'Inappropriate content',
+]

@@ -9,17 +9,9 @@ import { ConfirmDialog, Modal, Toast, useToast } from '../../components/ui'
 import { Flag } from 'lucide-react'
 import { usePostEngagement } from './usePostEngagement.js'
 import { postRepository } from './repositories'
+import { REPORT_REASONS } from './postSelectors.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
-
-// The four things a reader can actually report — kept identical to Feed's and
-// PostPage's so the three surfaces never drift into different vocabularies.
-const REPORT_REASONS = [
-  'Spam',
-  'False medical information',
-  'Harassment',
-  'Inappropriate content',
-]
 
 // A post rendered as an overlay above whatever page is underneath —
 // /post/:id, opened from inside the feed. Mounted only by BackgroundRoutes'

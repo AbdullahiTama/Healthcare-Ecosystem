@@ -11,6 +11,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { createViewRecorder } from './engagement'
 import { usePostEngagement } from './usePostEngagement.js'
+import { REPORT_REASONS } from './postSelectors.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
@@ -220,16 +221,6 @@ function Feed() {
   const pullStartY = useRef(0)
   const [pullDistance, setPullDistance] = useState(0)
   const [pullRefreshing, setPullRefreshing] = useState(false)
-
-  // The four things a reader can actually report. Free text was the old
-  // behaviour and produced unmoderatable rows ("idk", ""), so the reasons are
-  // now a closed set the moderation queue can group by.
-  const REPORT_REASONS = [
-    'Spam',
-    'False medical information',
-    'Harassment',
-    'Inappropriate content',
-  ]
 
   // One place that answers "whose post is this": the header, the follow
   // button's label and the overflow menu's label all have to agree.
