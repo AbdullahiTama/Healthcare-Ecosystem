@@ -167,4 +167,5 @@ export const careHubMessages = {
   [NOTIFICATION_TYPES.BOOKING_CREATED]: 'New appointment booking',
   [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
   [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Appointment confirmed',
+  [NOTIFICATION_TYPES.PRODUCT_EXPIRING_SOON]: 'A product is approaching its expiry date',
 }
