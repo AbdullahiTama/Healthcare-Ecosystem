@@ -262,16 +262,24 @@ export function usePostEngagement({
     // feed load already resolved (and vice versa).
     const wantedSourceIds = unresolvedSourceIds(list).filter((sourceId) => !resolvedSourceIdsRef.current.has(sourceId))
     if (wantedSourceIds.length) {
-      const { data: sourceRows } = await supabase
+      const { data: sourceRows, error: sourceError } = await supabase
         .from('posts')
         .select(REPOST_SOURCE_COLS)
         .in('id', wantedSourceIds)
-      // Marked attempted regardless of outcome — a source that's genuinely
-      // gone (deleted, or RLS-hidden) must not be re-queried on every future
-      // hydrate. `resolveSource` still correctly returns null for it: this
-      // ref only guards the fetch, `repostSources` below only ever holds
-      // rows that were actually found.
-      wantedSourceIds.forEach((id) => resolvedSourceIdsRef.current.add(id))
+      // Marked resolved on a SUCCESSFUL response only, empty or not — a
+      // successful-but-empty response is the genuine "source is gone"
+      // (deleted, or RLS-hidden) case, and that must not be re-queried on
+      // every future hydrate. A failed request (network blip, timeout) must
+      // NOT be marked: unlike Feed's retained effect (which re-checks
+      // `repostSources` state on every posts-list change and so gets another
+      // attempt for free), this ref lives for the hook instance's lifetime —
+      // marking on a transient failure would permanently strand a permalink
+      // on "source no longer available" with no later reload to retry it.
+      // `resolveSource` is unaffected either way: it only reads
+      // `repostSources`, which below only ever holds rows actually found.
+      if (!sourceError) {
+        wantedSourceIds.forEach((id) => resolvedSourceIdsRef.current.add(id))
+      }
       if (sourceRows?.length) {
         setRepostSources((prev) => ({ ...prev, ...indexPosts(sourceRows) }))
         // A source's author may not be loaded yet — without it the card

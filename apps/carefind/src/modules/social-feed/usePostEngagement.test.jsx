@@ -10,6 +10,11 @@ const mockSupabase = vi.hoisted(() => {
     },
     rpcRows: {},
     seq: 0,
+    // One-shot per-table failure injection: set data.errorOnce[table] = true
+    // and the NEXT resolved query against that table returns an error
+    // instead of its rows, then reverts to normal — narrow on purpose, so it
+    // can't leak into any test that doesn't explicitly opt in.
+    errorOnce: {},
   }
   const rows = (t) => data.tables[t] || []
   const matches = (row, cons) =>
@@ -56,9 +61,15 @@ const mockSupabase = vi.hoisted(() => {
       maybeSingle: vi.fn(() => Promise.resolve(
         settle() || { data: rows(table).find((r) => matches(r, cons)) || null, error: null },
       )),
-      then: (res) => Promise.resolve(
-        settle() || { data: rows(table).filter((r) => matches(r, cons)), error: null },
-      ).then(res),
+      then: (res) => {
+        if (data.errorOnce[table]) {
+          data.errorOnce[table] = false
+          return Promise.resolve({ data: null, error: { message: 'boom' } }).then(res)
+        }
+        return Promise.resolve(
+          settle() || { data: rows(table).filter((r) => matches(r, cons)), error: null },
+        ).then(res)
+      },
     }
     return b
   }
@@ -105,6 +116,7 @@ beforeEach(() => {
   Object.keys(mockSupabase.data.tables).forEach((t) => { mockSupabase.data.tables[t] = [] })
   mockSupabase.data.rpcRows = {}
   mockSupabase.data.seq = 0
+  mockSupabase.data.errorOnce = {}
   vi.clearAllMocks()
 })
 
@@ -205,6 +217,31 @@ describe('usePostEngagement.hydrate repost source resolution', () => {
 
     await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
     expect(postsCallCount()).toBe(1) // no second fetch — the entry survived
+    expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
+  })
+
+  // Fix round 2: the first version of this ref marked a source "attempted"
+  // even when the fetch itself failed (network blip, timeout), conflating
+  // "genuinely gone" with "couldn't ask right now". On Feed that was masked
+  // — its retained effect re-checks `repostSources` state on every posts
+  // change and gets another try for free — but the ref backing this hook is
+  // the only guard on PostPage, which has no such fallback: one failed
+  // request on first load would have permanently stranded that permalink on
+  // "source no longer available". Paired with the test above so both
+  // directions are pinned: success must not retry, failure must.
+  it('does not mark a repost source resolved when the fetch fails, and retries it on the next hydrate', async () => {
+    mockSupabase.data.tables.posts = [sourcePost('src1')]
+    mockSupabase.data.errorOnce.posts = true
+    const { result } = setup()
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(postsCallCount()).toBe(1)
+    expect(result.current.engagementProps.resolveSource('src1')).toBeNull()
+
+    // No injected error this time — the retry has to actually run a query,
+    // not be skipped by a false-positive "already resolved" mark left by
+    // the failed attempt.
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(postsCallCount()).toBe(2)
     expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
   })
 
