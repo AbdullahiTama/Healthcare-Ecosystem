@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Clapperboard, Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
@@ -199,6 +199,12 @@ function Feed() {
   // an overlay on top of this page or, on a cold load, PostPage standalone.
   // See onOpenDetail in cardProps below.
   const [searchParams, setSearchParams] = useSearchParams()
+  // Every URL shared before permalinks existed, and every notifications.link
+  // row written before this change, uses /feed?post=<id>. Feed no longer
+  // hosts a modal (Task 6 removed it), so this is read only to redirect to
+  // the post's own URL below — computed here, with the other hooks, because
+  // the early return that uses it must come after every hook has run.
+  const deepLinkPostId = searchParams.get('post')
   // Item 5 bottom-nav Videos entry lands on /feed?tab=video; applied on mount
   // and then cleared so it never fights the persisted tab preference.
   const tabParam = searchParams.get('tab')
@@ -982,6 +988,14 @@ function Feed() {
   }
 
   const { isMobile } = useBreakpoint()
+
+  // Redirect rather than maintain a second way in: every already-shared
+  // /feed?post=<id> link, and every notifications.link row written before
+  // this change, still resolves — just to the post's real URL. This must
+  // come after every hook above has run (hooks can't be conditional), which
+  // is also why it isn't a plain `if (deepLinkPostId) return null` guard
+  // higher up in the component.
+  if (deepLinkPostId) return <Navigate to={`/post/${deepLinkPostId}`} replace />
 
   // #10a Pull-to-refresh. Only engages when the feed is scrolled to the very
   // top, so it never fights normal scrolling. Distance is damped (x0.5) and

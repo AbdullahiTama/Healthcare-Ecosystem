@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
 
 // Minimal fake Supabase: every builder method is a thenable that resolves to
@@ -162,6 +162,28 @@ describe('Feed share URL', () => {
     const url = new URL(arg.url)
     expect(url.pathname).toBe('/feed')
     expect(url.searchParams.get('post')).toBe('p1')
+  })
+})
+
+// Task 7: Task 6 deleted Feed's ?post= handling along with its modal
+// machinery, so every URL already shared publicly and every
+// notifications.link row already written — all in the legacy
+// /feed?post=<id> shape — pointed at nothing on this branch until the
+// redirect below landed. Rendering a bare <Feed /> can't prove the redirect
+// works (there is nowhere for it to land), so this registers the same two
+// routes main.jsx does and asserts the old URL actually reaches the new one.
+describe('legacy ?post= links', () => {
+  it('redirects an old share URL to the permalink', async () => {
+    mockSupabase.data.tables.posts = [makePost({ id: 'p1' })]
+    render(
+      <MemoryRouter initialEntries={['/feed?post=p1']}>
+        <Routes>
+          <Route path="/feed" element={<Feed />} />
+          <Route path="/post/:id" element={<div>permalink page</div>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('permalink page')).toBeInTheDocument()
   })
 })
 
