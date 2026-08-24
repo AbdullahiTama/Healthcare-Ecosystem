@@ -9,13 +9,14 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder, REPOST_CONTENT } from './engagement'
+import { createViewRecorder } from './engagement'
+import { usePostEngagement } from './usePostEngagement.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
-  buildInterestProfile, rankForYou, rankByScore, rankNearby,
+  rankForYou, rankByScore, rankNearby,
 } from './feedEngine'
 import BottomNav from '../../components/BottomNav.jsx'
 import { theme } from '../../styles/theme'
@@ -27,20 +28,16 @@ import VisualCard from '../../utils/VisualCard.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import GoLive from './GoLive.jsx'
 import UserGoLive from './UserGoLive.jsx'
-import { notify, NOTIF_MESSAGES } from '../../services/notify.js'
 import { notifyReview } from '../../services/reviewNotifications.js'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import Logo from './Logo.jsx'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
-import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../../utils/voiceCard.js'
 import DrawingBoard from '../../components/DrawingBoard.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
 import { loadActiveCreatorIds, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
-import { shareOrCopy, mediaToFile } from '../../utils/share.js'
-import { toShareText } from '../../utils/formatShare.js'
 import PostCard from './PostCard.jsx'
 import VideoFeed from './VideoFeed.jsx'
 import PostDetailModal from './PostDetailModal.jsx'
@@ -92,10 +89,6 @@ const recordFeedView = createViewRecorder(supabase)
 
 function Feed() {
   const { user } = useAuth()
-  const [posts, setPosts] = useState([])
-  const [reactions, setReactions] = useState([])
-  const [profiles, setProfiles] = useState({})
-  const [follows, setFollows] = useState([])
   const [subscriberOnly, setSubscriberOnly] = useState(false)
   const [cardAudio, setCardAudio] = useState(null)
   const [myUsername, setMyUsername] = useState('')
@@ -105,14 +98,6 @@ function Feed() {
   // Guards the feed_config tab save until the saved value has been loaded,
   // so the mount-default 'foryou' never overwrites the stored preference.
   const feedConfigLoadedRef = useRef(false)
-  // This user's post_reposts rows for the loaded posts (the source posts they
-  // reposted), and per-post gift totals surfaced by the batch stats RPC.
-  const [repostedPosts, setRepostedPosts] = useState([])
-  // Source posts for the reposts on this page, keyed by id. A repost carries
-  // no content of its own, so without these a repost card has nothing to show
-  // (issues #6/#8).
-  const [repostSources, setRepostSources] = useState({})
-  const [giftStats, setGiftStats] = useState({})
   // Phase 6 personalized feed: resolved ranking config (weights/diversity),
   // pool limits, the viewer's region tokens, and the medical-author sets the
   // Medical tab + ranking boosts rely on. All default to safe fallbacks so a
@@ -134,22 +119,12 @@ function Feed() {
   const [cardVideoPreview, setCardVideoPreview] = useState(null)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [sharingId, setSharingId] = useState(null)
-  const [unlockedCreators, setUnlockedCreators] = useState([])
-  const [savedPosts, setSavedPosts] = useState([])
-  const [userSubscriptions, setUserSubscriptions] = useState([])
-  const [reportedPosts, setReportedPosts] = useState([])
   const [reportingId, setReportingId] = useState(null)
   const [reportPostId, setReportPostId] = useState(null)
   const [giftingPost, setGiftingPost] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
   const [editingPost, setEditingPost] = useState(null) // { id, content }
-  const [editingComment, setEditingComment] = useState(null) // { id, content, post_id }
-  const [replyingTo, setReplyingTo] = useState(null) // { commentId, postId }
   const [deletingId, setDeletingId] = useState(null)
-  const [comments, setComments] = useState({})
-  const [openComments, setOpenComments] = useState({})
-  const openCommentsRef = useRef(openComments)
-  const [commentDrafts, setCommentDrafts] = useState({})
   const [content, setContent] = useState('')
   const [postType, setPostType] = useState('text') // text, visual, question, review, article
   const [visualTheme, setVisualTheme] = useState('teal')
@@ -169,18 +144,48 @@ function Feed() {
   const [profileComplete, setProfileComplete] = useState(true)
   const [canGoLive, setCanGoLive] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
-  const [commentCounts, setCommentCounts] = useState({})
-  // Per-post share and save totals: the same numbers the ranking engine
-  // reads (sCounts/saveCounts), promoted to state so the engagement bar can
-  // display them on each card.
-  const [shareCounts, setShareCounts] = useState({})
-  const [saveCounts, setSaveCounts] = useState({})
   const [latestNews, setLatestNews] = useState([])
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showGoLive, setShowGoLive] = useState(false)
   const [liveSessions, setLiveSessions] = useState([])
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
+
+  // Everything that answers "what is this post's engagement context?" — the
+  // state, the reads that fill it and the handlers that change it — lives in
+  // usePostEngagement. Feed keeps ranking, the composer, the tabs, experiments
+  // and its own chrome.
+  //
+  // The five callbacks are the seams where a handler needs something that
+  // lives only here. Each has a no-op default in the hook, so a missing one
+  // fails silently rather than loudly: all five are required.
+  const engagement = usePostEngagement({
+    user,
+    navigate,
+    toast,
+    // toggleLike / sharePost / toggleSave log a staged-rollout engagement
+    // event. The hook knows nothing about experiments, so the guard and the
+    // payload stay here, exactly as those handlers used to inline them.
+    logEngagement: (postId) => {
+      if (activeExperiment) {
+        logExperimentEvent(supabase, {
+          experimentKey: activeExperiment.key,
+          variant: activeExperiment.variant,
+          eventType: 'engage',
+          postId,
+        }).catch(() => {})
+      }
+    },
+    // shareCard's in-progress marker: PostCard disables the Voice-Card
+    // download button and swaps its label to "Preparing…" off this.
+    onSharingChange: setSharingId,
+    // openReport hands the post to the reason picker below.
+    onReportPost: setReportPostId,
+    // handleEditPost closes the inline editor and refetches after a save.
+    onEditingPostChange: setEditingPost,
+    reloadFeed: loadFeed,
+  })
+  const openCommentsRef = useRef(engagement.state.openComments)
 
   // Detail modal (Item 12): one post rendered in full via the shared PostCard.
   // Opened by a clamped card's "See more" or by a deep link (?post=<id>). The
@@ -229,7 +234,7 @@ function Feed() {
   // button's label and the overflow menu's label all have to agree.
   function authorName(post) {
     if (post.posted_as_type) return post.posted_as_name || 'Business'
-    const p = profiles[post.user_id]
+    const p = engagement.state.profiles[post.user_id]
     return p?.full_name || p?.display_name || 'CareFind user'
   }
 
@@ -306,125 +311,25 @@ function Feed() {
     setCanGoLive(!!(data && data.is_verified))
   }
 
-  // Shared by loadFeed() and in-feed search(): fetch reactions/profiles/
-  // comment counts for a set of posts and store the ranked result.
-  async function enrichAndSetPosts(postData) {
-    const postIds = (postData || []).map((p) => p.id)
-    if (postIds.length === 0) {
-      setPosts([])
-      setReactions([])
-      setProfiles({})
-      setCommentCounts({})
+  // The ranking half of the old enrichAndSetPosts. engagement.hydrate() does
+  // the fetching and owns the state it fills; ranking stays here because it
+  // depends on the feed's tab, its resolved config and the reader's staged
+  // experiment — none of which the hook knows about.
+  async function hydrateAndRank(postData) {
+    const base = await engagement.hydrate(postData, { merge: false })
+    // hydrate() returns null for an empty batch, having cleared the slices it
+    // owns. The post list is the feed's, so the feed clears that one itself —
+    // without this an empty search would leave the previous posts on screen.
+    if (!base) {
+      engagement.state.setPosts([])
       return
     }
 
-    const { data: reactionData } = await supabase
-      .from('post_reactions')
-      .select('id, post_id, user_id')
-      .in('post_id', postIds)
-    setReactions(reactionData || [])
-
-    // This user's reposts of the loaded posts, so repost buttons light up
-    // across both the feed and in-feed search.
-    if (user) {
-      const { data: repostData } = await supabase
-        .from('post_reposts')
-        .select('id, post_id')
-        .eq('user_id', user.id)
-        .in('post_id', postIds)
-      setRepostedPosts(repostData || [])
-    }
-
-    // Gift totals for the whole page in one RPC; skipped (no state change) if
-    // the RPC isn't available.
-    let giftTotals = {}
-    try {
-      const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: postIds })
-      giftRows?.forEach((r) => { giftTotals[r.post_id] = { gift_count: r.gift_count, total_coins: r.total_coins } })
-      setGiftStats(giftTotals)
-    } catch (e) {
-      console.warn('gift stats unavailable:', e)
-    }
-
-    const userIds = [...new Set((postData || []).map((p) => p.user_id))]
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country')
-      .in('id', userIds)
-
-    const profileMap = {}
-    ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
-    setProfiles(profileMap)
-
-    // Comment counts for all loaded posts (for ranking)
-    const { data: commentRows } = await supabase
-      .from('post_comments')
-      .select('post_id, user_id')
-      .in('post_id', postIds)
-    const cCounts = {}
-    ;(commentRows || []).forEach((row) => { cCounts[row.post_id] = (cCounts[row.post_id] || 0) + 1 })
-    setCommentCounts(cCounts)
-
-    // Like counts per post
-    const lCounts = {}
-    ;(reactionData || []).forEach((r) => { lCounts[r.post_id] = (lCounts[r.post_id] || 0) + 1 })
-
-    // Phase 6 engine inputs: share/save totals, posted-as facility rows and
-    // the viewer's own engagement (follows, saves, subscriptions) — the raw
-    // material for the affinity and implicit-interest signals. All fire
-    // together; each table is query-1 for this batch.
-    const postedAsIds = [...new Set((postData || []).map((p) => p.posted_as_id).filter(Boolean))]
-    const [shareRows, saveRows, bizRows, followRows, mySavedRows, mySubRows] = await Promise.all([
-      supabase.from('post_shares').select('post_id').in('post_id', postIds),
-      supabase.from('saved_posts').select('post_id').in('post_id', postIds),
-      supabase.from('businesses')
-        .select('id, business_type, status, city, state, location_label')
-        .in('id', postedAsIds),
-      supabase.from('follows').select('id, follower_id, following_id').in('following_id', userIds),
-      user ? supabase.from('saved_posts').select('post_id').eq('user_id', user.id).in('post_id', postIds) : null,
-      user ? supabase.from('user_subscriptions').select('professional_id').eq('subscriber_id', user.id).eq('status', 'active') : null,
-    ])
-    const sCounts = {}
-    ;(shareRows?.data || []).forEach((r) => { sCounts[r.post_id] = (sCounts[r.post_id] || 0) + 1 })
-    const saveCounts = {}
-    ;(saveRows?.data || []).forEach((r) => { saveCounts[r.post_id] = (saveCounts[r.post_id] || 0) + 1 })
-    setShareCounts(sCounts)
-    setSaveCounts(saveCounts)
-    const businessMap = {}
-    ;(bizRows?.data || []).forEach((b) => { businessMap[b.id] = b })
-    const followRowsArr = followRows?.data || []
-    setFollows(followRowsArr)
-    setSavedPosts(mySavedRows?.data || [])
-    setUserSubscriptions((mySubRows?.data || []).map((s) => s.professional_id))
-
-    // The viewer's own signals (vs. the page-wide counts above).
-    const viewerReactionIds = new Set((reactionData || []).filter((r) => r.user_id === user?.id).map((r) => r.post_id))
-    const viewerCommentIds = new Set((commentRows || []).filter((c) => c.user_id === user?.id).map((c) => c.post_id))
-    const viewerSaveIds = new Set((mySavedRows?.data || []).map((s) => s.post_id))
-    const followedIds = new Set(followRowsArr.filter((f) => f.follower_id === user?.id).map((f) => f.following_id))
-
-    const postMap = {}
-    ;(postData || []).forEach((p) => { postMap[p.id] = p })
-    const interest = buildInterestProfile({
-      postMap,
-      authorProfiles: profileMap,
-      viewer: {
-        reactedPostIds: viewerReactionIds,
-        commentedPostIds: viewerCommentIds,
-        savedPostIds: viewerSaveIds,
-        followedProfileIds: followedIds,
-        subscriptionProfileIds: new Set((mySubRows?.data || []).map((s) => s.professional_id)),
-      },
-    })
-
-    // The engine context — every pure signal the ranking reads. `myRegion` is
-    // the viewer's normalized location (empty when they haven't set one).
-    const context = {
-      lCounts, cCounts, sCounts, saveCounts, giftStats: giftTotals,
-      follows: followedIds, viewerReactionIds, viewerCommentIds, viewerSaveIds,
-      profiles: profileMap, businesses: businessMap, interest,
-      viewerRegion: myRegion, now: Date.now(),
-    }
+    // hydrate() cannot supply either of these: `myRegion` is Feed state that
+    // loadEngineConfig fills, and `now` is per-render. Drop them and nothing
+    // crashes — rankNearby just loses its region signal and the recency weight
+    // reads undefined, so the feed ranks worse, invisibly.
+    const context = { ...base, viewerRegion: myRegion, now: Date.now() }
 
     // For You goes through the full pipeline (pools + diversity), with any
     // staged-rollout treatment overrides merged over the base config. Nearby
@@ -450,82 +355,7 @@ function Feed() {
     } else {
       ranked = byScore
     }
-    setPosts(ranked)
-  }
-
-  // Single-post enrichment for the detail modal (deep link path). Mirrors what
-  // enrichAndSetPosts does for the whole feed, but MERGES into the shared
-  // state instead of overwriting it: a deep-linked post must light up the same
-  // counts the feed cards show (likes, comment totals, gifts, shares, saves,
-  // the author profile, follow/repost state) without ever clobbering the
-  // loaded feed. Returns the (unchanged) post so the caller can open the modal.
-  async function enrichSinglePost(postData) {
-    const post = Array.isArray(postData) ? postData[0] : postData
-    if (!post) return null
-
-    const { data: reactionData } = await supabase
-      .from('post_reactions')
-      .select('id, post_id, user_id')
-      .eq('post_id', post.id)
-    setReactions((prev) => {
-      const seen = new Set(prev.map((r) => r.id))
-      return [...prev, ...(reactionData || []).filter((r) => !seen.has(r.id))]
-    })
-
-    if (user) {
-      const { data: repostData } = await supabase
-        .from('post_reposts')
-        .select('id, post_id')
-        .eq('user_id', user.id)
-        .eq('post_id', post.id)
-      setRepostedPosts((prev) => {
-        const seen = new Set(prev.map((r) => r.post_id))
-        return [...prev, ...(repostData || []).filter((r) => !seen.has(r.post_id))]
-      })
-    }
-
-    // Gift totals for the post in one RPC; skipped (no state change) if the
-    // RPC isn't available.
-    try {
-      const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: [post.id] })
-      if (giftRows?.[0]) setGiftStats((prev) => ({ ...prev, [post.id]: { gift_count: giftRows[0].gift_count, total_coins: giftRows[0].total_coins } }))
-    } catch (e) {
-      console.warn('gift stats unavailable:', e)
-    }
-
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country')
-      .eq('id', post.user_id)
-      .maybeSingle()
-    if (profileData) setProfiles((prev) => ({ ...prev, [profileData.id]: profileData }))
-
-    const { data: commentRows } = await supabase
-      .from('post_comments')
-      .select('post_id, user_id')
-      .eq('post_id', post.id)
-    setCommentCounts((prev) => ({ ...prev, [post.id]: (commentRows || []).length }))
-
-    const [shareRows, saveRows, followRows, mySavedRows] = await Promise.all([
-      supabase.from('post_shares').select('post_id').eq('post_id', post.id),
-      supabase.from('saved_posts').select('post_id').eq('post_id', post.id),
-      supabase.from('follows').select('id, follower_id, following_id').eq('following_id', post.user_id),
-      user ? supabase.from('saved_posts').select('post_id').eq('user_id', user.id).eq('post_id', post.id) : null,
-    ])
-    setShareCounts((prev) => ({ ...prev, [post.id]: (shareRows?.data || []).length }))
-    setSaveCounts((prev) => ({ ...prev, [post.id]: (saveRows?.data || []).length }))
-    setFollows((prev) => {
-      const seen = new Set(prev.map((f) => f.id))
-      return [...prev, ...(followRows?.data || []).filter((f) => !seen.has(f.id))]
-    })
-    if (mySavedRows?.data?.length) {
-      setSavedPosts((prev) => {
-        const seen = new Set(prev.map((s) => s.post_id))
-        return [...prev, ...mySavedRows.data.filter((s) => !seen.has(s.post_id))]
-      })
-    }
-
-    return post
+    engagement.state.setPosts(ranked)
   }
 
   // Detail modal open/close. Both the See-more button and the deep link land
@@ -597,7 +427,7 @@ function Feed() {
   async function loadProfilesFor(userIds) {
     if (!userIds?.length) return
     const { data } = await supabase.from('profiles').select(PROFILE_CARD_COLS).in('id', userIds)
-    if (data?.length) setProfiles((prev) => ({ ...prev, ...indexPosts(data) }))
+    if (data?.length) engagement.state.setProfiles((prev) => ({ ...prev, ...indexPosts(data) }))
   }
 
   // Reposts (issues #6/#8): fetch the source of every repost on this page
@@ -606,7 +436,7 @@ function Feed() {
   // copy. Runs whenever the loaded posts change; ids already fetched are
   // skipped, so scrolling does not refetch.
   useEffect(() => {
-    const wanted = unresolvedSourceIds(posts).filter((id) => !repostSources[id])
+    const wanted = unresolvedSourceIds(engagement.state.posts).filter((id) => !engagement.state.repostSources[id])
     if (!wanted.length) return
     let cancelled = false
     supabase
@@ -615,14 +445,14 @@ function Feed() {
       .in('id', wanted)
       .then(({ data, error }) => {
         if (cancelled || error || !data) return
-        setRepostSources((prev) => ({ ...prev, ...indexPosts(data) }))
+        engagement.state.setRepostSources((prev) => ({ ...prev, ...indexPosts(data) }))
         // The source's author may not be in `profiles` yet — without it the
         // card would credit "CareFind user" instead of the real writer.
-        const missingAuthors = [...new Set(data.map((p) => p.user_id))].filter((id) => id && !profiles[id])
+        const missingAuthors = [...new Set(data.map((p) => p.user_id))].filter((id) => id && !engagement.state.profiles[id])
         if (missingAuthors.length) loadProfilesFor(missingAuthors)
       })
     return () => { cancelled = true }
-  }, [posts])
+  }, [engagement.state.posts])
 
   // Item 12 deep link: when the URL carries ?post=<id>, open that post in the
   // detail modal on top of the normal feed, then drop the param. A post
@@ -632,7 +462,7 @@ function Feed() {
   useEffect(() => {
     if (!deepLinkPostId) return
     let cancelled = false
-    const existing = posts.find((p) => p.id === deepLinkPostId)
+    const existing = engagement.state.posts.find((p) => p.id === deepLinkPostId)
     const resolveTo = (post) => {
       if (cancelled) return
       openPostDetail(post)
@@ -655,7 +485,10 @@ function Feed() {
       .then((data) => {
         if (cancelled) return
         if (!data) { fail(); return }
-        return enrichSinglePost(data).then(() => data)
+        // merge:true — a deep-linked post must light up the same counts the
+        // feed cards show without ever clobbering the loaded feed. It is one
+        // post, so nothing is ranked and the post list is left alone.
+        return engagement.hydrate([data], { merge: true }).then(() => data)
       })
       .then((post) => { if (!cancelled && post) resolveTo(post) })
       .catch(() => { if (!cancelled) fail() })
@@ -667,9 +500,9 @@ function Feed() {
   // that in-memory copy instead of the fetched one.
   useEffect(() => {
     if (!deepLinkPostId || !detailLoading) return
-    const existing = posts.find((p) => p.id === deepLinkPostId)
+    const existing = engagement.state.posts.find((p) => p.id === deepLinkPostId)
     if (existing) { openPostDetail(existing); clearPostParam() }
-  }, [posts, deepLinkPostId, detailLoading])
+  }, [engagement.state.posts, deepLinkPostId, detailLoading])
 
   async function loadFeed() {
     setLoading(true)
@@ -718,19 +551,19 @@ function Feed() {
 
     if (error) {
       console.error('Feed load error:', error)
-      setPosts([])
+      engagement.state.setPosts([])
       setLoading(false)
       return
     }
 
     const postIds = (postData || []).map((p) => p.id)
 
-    // enrichAndSetPosts builds the engine context and ranks (For You:
-    // pools + diversity; Nearby: region view; others: plain weighted score).
+    // hydrateAndRank fetches the engine context and ranks (For You: pools +
+    // diversity; Nearby: region view; others: plain weighted score).
     // Read receipts then mark this batch read so the next refresh doesn't
     // treat the same 50 as new. Requires the 20260813 feed-persistence
     // migration; if it isn't applied the RPC degrades to a no-op.
-    await enrichAndSetPosts(postData)
+    await hydrateAndRank(postData)
     if (user) {
       try {
         await supabase.rpc('read_posts_all', { p_post_ids: postIds })
@@ -898,12 +731,12 @@ function Feed() {
   async function runFeedSearch(q) {
     setFeedSearching(true)
     const data = await searchPosts(q)
-    await enrichAndSetPosts(data)
+    await hydrateAndRank(data)
     setFeedResults(data)
     setFeedSearching(false)
   }
 
-  openCommentsRef.current = openComments
+  openCommentsRef.current = engagement.state.openComments
 
   useEffect(() => {
     const channel = supabase
@@ -920,14 +753,14 @@ function Feed() {
               .single()
               .then(({ data }) => {
                 if (data) {
-                  setComments(prev => {
+                  engagement.engagementProps.setComments(prev => {
                     const existing = prev[data.post_id] || []
                     if (existing.some(c => c.id === data.id)) return prev
                     return { ...prev, [data.post_id]: [...existing, data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) }
                   })
                 }
               })
-            setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
+            engagement.state.setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
           }
         }
       )
@@ -960,15 +793,6 @@ function Feed() {
     setLatestNews(data || [])
   }
 
-  // A post is locked if it's subscriber-only, isn't yours, and you haven't subscribed.
-  function isLocked(post) {
-    // Legacy "premium" posts are treated as subscriber-only too, so nothing is lost.
-    const locked = post.subscriber_only || post.post_type === 'premium'
-    if (!locked) return false
-    if (user && post.user_id === user.id) return false
-    return !unlockedCreators.includes(post.user_id)
-  }
-
   // Short clip as the card backdrop. Kept small on purpose: data is expensive.
   async function handleCardVideo(e) {
     const file = e.target.files[0]
@@ -997,55 +821,6 @@ function Feed() {
     setUploadingVideo(false)
   }
 
-  // Export a Voice Card so it can go out to WhatsApp Status, logo attached.
-  // Tries video (card + voice) first; falls back to a PNG if the browser can't.
-  async function shareCard(post) {
-    setSharingId(post.id)
-    const handle = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const opts = {
-      text: post.content,
-      theme: post.theme,
-      hasVoice: !!post.audio_url,
-      imageUrl: post.image_url,
-      videoUrl: post.video_url,
-      username: handle,
-    }
-
-    try {
-      if (post.audio_url && canExportVideo()) {
-        try {
-          const { blob, ext } = await exportVideo({
-            text: post.content,
-            theme: post.theme,
-            audioUrl: post.audio_url,
-            imageUrl: post.image_url,
-            videoUrl: post.video_url,
-            username: handle,
-          })
-          const result = await shareOrDownload(blob, `carefind-card.${ext}`)
-          setSharingId(null)
-          if (result === 'downloaded') toast.show('Saved with your voice: post it to your WhatsApp Status.')
-          return
-        } catch (e) {
-          // Video failed on this device: fall through to the image so the user still gets something
-          console.warn('Video export failed, falling back to image:', e)
-        }
-      }
-
-      const blob = await exportImage(opts)
-      const result = await shareOrDownload(blob, 'carefind-card.png')
-      setSharingId(null)
-      if (result === 'downloaded') {
-        toast.show(post.audio_url
-          ? "Saved as an image. This phone can't build the video: the voice still plays inside CareFind."
-          : 'Saved: post it to your WhatsApp Status.')
-      }
-    } catch (e) {
-      setSharingId(null)
-      toast.show('Could not prepare the card: ' + (e.message || 'unknown error'))
-    }
-  }
-
   // The banner is for CareFind's own broadcasts only. A user going live
   // shows up in the stories rail and in notifications, not here.
   async function loadPlatformLive() {
@@ -1069,9 +844,9 @@ function Feed() {
   }
 
   async function loadUnlocked() {
-    if (!user) { setUnlockedCreators([]); return }
+    if (!user) { engagement.state.setUnlockedCreators([]); return }
     const ids = await loadActiveCreatorIds(user.id)
-    setUnlockedCreators(ids)
+    engagement.state.setUnlockedCreators(ids)
   }
 
   async function loadUnreadNotifs() {
@@ -1261,11 +1036,11 @@ function Feed() {
   ]
 
   // The tabs answer "what do you want to read?": they slice the same feed.
-  const visiblePosts = posts.filter((p) => {
+  const visiblePosts = engagement.state.posts.filter((p) => {
     if (feedTab === 'foryou') return true
     if (feedTab === 'following') {
       if (!user) return false
-      return follows.some((f) => f.follower_id === user.id && f.following_id === p.user_id)
+      return engagement.state.follows.some((f) => f.follower_id === user.id && f.following_id === p.user_id)
     }
     // Nearby and Medical are dedicated loadFeed queries — the posts state is
     // already exactly that tab's set, so nothing further is sliced out here.
@@ -1276,177 +1051,13 @@ function Feed() {
 
   // When searching, ignore the tab filter and show the raw search hits.
   const isSearching = feedResults !== null
-  const displayPosts = isSearching ? posts : visiblePosts
-
-  function likeCount(postId) {
-    return reactions.filter((r) => r.post_id === postId).length
-  }
-
-  function userHasLiked(postId) {
-    if (!user) return false
-    return reactions.some((r) => r.post_id === postId && r.user_id === user.id)
-  }
-
-  // Editing runs through the same integrity gate as publishing.
-  //
-  // The gate deliberately compares the body the editor HANDED US against the
-  // body we are about to write — that is, it catches content lost by our own
-  // processing. It must NOT compare against the previously published version:
-  // shortening an article is an ordinary edit, and an author cutting a
-  // redundant paragraph would find every save rejected.
-  async function handleEditPost(postId, newContent, postType) {
-    if (!newContent || !newContent.trim()) return
-    let content = newContent.trim()
-
-    if (postType === 'article' || postType === 'premium') {
-      const check = validateArticleForPublish(content)
-      if (!check.ok) { toast.show(check.error, { type: 'error' }); return }
-      content = check.content
-    }
-
-    const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)
-    if (error) {
-      toast.show('Could not save the edit: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-    setEditingPost(null)
-    loadFeed()
-  }
+  const displayPosts = isSearching ? engagement.state.posts : visiblePosts
 
   async function handleDeletePost(postId) {
     setDeletingId(postId)
     await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
     loadFeed()
     setDeletingId(null)
-  }
-
-  async function toggleLike(postId) {
-    if (!user) return
-    const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
-
-    // Optimistic update: instant UI response. Both writes are reconciled
-    // against the DB: the insert returns the real row (so an unlike has a
-    // valid id to delete), a failed write rolls the UI back, and a fast
-    // double-tap hitting the post_reactions_user_post_uniq index reads the
-    // existing row instead of leaving a phantom temp id. Without this, a
-    // silently failed insert made the like vanish on the next feed reload.
-    if (existing) {
-      setReactions((prev) => prev.filter((r) => r.id !== existing.id))
-      const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
-      if (error) {
-        setReactions((prev) => [...prev, existing])
-        toast.show('Could not unlike right now.', { type: 'error' })
-      }
-      return
-    }
-
-    const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
-    setReactions((prev) => [...prev, tempReaction])
-    const { data, error } = await insertRowResolvingConflict(
-      supabase,
-      'post_reactions',
-      { post_id: postId, user_id: user.id, reaction_type: 'like' },
-      ['post_id', 'user_id'],
-    )
-
-    if (error) {
-      setReactions((prev) => prev.filter((r) => r.id !== tempReaction.id))
-      toast.show('Could not like right now.', { type: 'error' })
-      return
-    }
-
-    // Swap the temp row for the real one so an unlike has a valid id to delete.
-    setReactions((prev) => prev.map((r) => (r.id === tempReaction.id ? data : r)))
-
-    if (activeExperiment) {
-      logExperimentEvent(supabase, {
-        experimentKey: activeExperiment.key,
-        variant: activeExperiment.variant,
-        eventType: 'engage',
-        postId,
-      }).catch(() => {})
-    }
-
-    const post = posts.find((p) => p.id === postId)
-    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
-  }
-
-  async function toggleComments(postId) {
-    setOpenComments(prev => ({ ...prev, [postId]: !prev[postId] }))
-
-    if (!openComments[postId] && !comments[postId]) {
-      const { data } = await supabase
-        .from('post_comments')
-        .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
-      setComments(prev => ({ ...prev, [postId]: data || [] }))
-    }
-  }
-
-  async function handleNotifyComment(postId) {
-    const post = posts.find((p) => p.id === postId)
-    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
-  }
-
-  // Called when CommentThread successfully adds a comment or a reply. A top-
-  // level comment notifies the post author; a reply additionally notifies the
-  // author of the comment being replied to. Fire-and-forget either way.
-  function handleCommentAdded({ postId, parentId }) {
-    handleNotifyComment(postId)
-    if (parentId) {
-      const parent = (comments[postId] || []).find((c) => c.id === parentId)
-      if (parent && parent.user_id !== user.id) {
-        notify({ recipientId: parent.user_id, actorId: user.id, type: 'reply', message: 'replied to your comment', link: '/feed', postId })
-      }
-    }
-  }
-
-  function isFollowing(authorId) {
-    if (!user) return false
-    return follows.some((f) => f.follower_id === user.id && f.following_id === authorId)
-  }
-
-  async function toggleFollow(authorId) {
-    if (!user || authorId === user.id) return
-    const existing = follows.find((f) => f.follower_id === user.id && f.following_id === authorId)
-
-    if (existing) {
-      // Optimistic: drop it from local state right away
-      setFollows((prev) => prev.filter((f) => f.id !== existing.id))
-      const { error } = await supabase.from('follows').delete().eq('id', existing.id)
-      if (error) setFollows((prev) => [...prev, existing]) // put it back if it failed
-    } else {
-      // Optimistic: show as followed immediately
-      const temp = { id: `temp_${Date.now()}`, follower_id: user.id, following_id: authorId }
-      setFollows((prev) => [...prev, temp])
-      const { data, error } = await supabase
-        .from('follows')
-        .insert({ follower_id: user.id, following_id: authorId })
-        .select()
-        .maybeSingle()
-      if (error) {
-        setFollows((prev) => prev.filter((f) => f.id !== temp.id)) // roll back
-        return
-      }
-      // Swap the temp row for the real one so a later unfollow has a valid id
-      if (data) setFollows((prev) => prev.map((f) => (f.id === temp.id ? data : f)))
-      notify({ recipientId: authorId, actorId: user.id, type: 'follow', message: 'started following you', link: `/u/${user.id}` })
-    }
-  }
-
-  // Reporting is a two-step flow: the overflow menu opens a reason picker,
-  // the picked reason writes the report. A `window.prompt` (what this used to
-  // be) is unstyled, unlabelled and blocked outright in some mobile browsers,
-  // so a moderation path can't depend on it: and the handler was never
-  // wired to anything, so reporting was unreachable.
-  function openReport(postId) {
-    if (!user) { navigate('/login'); return }
-    if (reportedPosts.includes(postId)) {
-      toast.show('You already reported this post.')
-      return
-    }
-    setReportPostId(postId)
   }
 
   async function submitReport(reason) {
@@ -1468,7 +1079,7 @@ function Feed() {
       return
     }
 
-    setReportedPosts((prev) => [...prev, postId])
+    engagement.state.setReportedPosts((prev) => [...prev, postId])
     toast.show('Thanks: our team will review this post.', { type: 'success' })
 
     // Phase 7 spam signal, tagged with the reader's staged-rollout group.
@@ -1480,223 +1091,6 @@ function Feed() {
         postId,
       }).catch(() => {})
     }
-  }
-
-  // Prefer the thread we've actually loaded (it reflects a just-added or
-  // just-deleted comment); fall back to the count loadFeed already fetched,
-  // so the number is right before the thread is ever opened.
-  function commentTotal(postId) {
-    const loaded = comments[postId]
-    if (loaded) return loaded.length
-    return commentCounts[postId] || 0
-  }
-
-  async function sharePost(post) {
-    const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
-    // Attach the post's media (image/video) to the share where the browser
-    // supports it; the URL is still appended to the clipboard fallback so
-    // WhatsApp recipients always get the media, never just the caption.
-    const mediaUrl = post.image_url || post.video_url || null
-    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/feed?post=${post.id}`, files: file ? [file] : undefined, mediaUrl })
-    if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
-    if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
-
-    // Best-effort share tracking so a post's share count is real rather than
-    // vanished. One row per (post, user, platform): the post_shares unique
-    // index makes repeat shares idempotent for signed-in users. Anonymous
-    // shares are recorded without a user_id.
-    if (result === 'shared' || result === 'copied') {
-      if (activeExperiment) {
-        logExperimentEvent(supabase, {
-          experimentKey: activeExperiment.key,
-          variant: activeExperiment.variant,
-          eventType: 'engage',
-          postId: post.id,
-        }).catch(() => {})
-      }
-      try {
-        await supabase.from('post_shares').insert({
-          post_id: post.id,
-          user_id: user ? user.id : null,
-          platform: result === 'copied' ? 'copy' : 'web',
-        })
-        // Reflect the just-recorded share in the card's count so it doesn't
-        // wait for the next feed reload to appear.
-        setShareCounts((prev) => ({ ...prev, [post.id]: (prev[post.id] || 0) + 1 }))
-      } catch (e) {
-        // Tracking is never allowed to fail the share the user just did.
-        console.warn('Share tracking write failed:', e)
-      }
-    }
-  }
-
-  function isSaved(postId) {
-    return savedPosts.some((s) => s.post_id === postId)
-  }
-
-  async function toggleSave(postId) {
-    if (!user) return
-    const existing = savedPosts.find((s) => s.post_id === postId)
-
-    // Optimistic update with the same reconciliation as toggleLike: the
-    // insert returns the real row, failures roll back, and a double-tap
-    // hitting saved_posts_user_post_uniq resolves to the existing row so the
-    // save survives a reload.
-    if (existing) {
-      setSavedPosts((prev) => prev.filter((s) => s.post_id !== postId))
-      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
-      const { error } = await supabase.from('saved_posts').delete().eq('id', existing.id)
-      if (error) {
-        setSavedPosts((prev) => [...prev, existing])
-        setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
-        toast.show('Could not unsave right now.', { type: 'error' })
-      }
-      return
-    }
-
-    const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
-    setSavedPosts((prev) => [...prev, temp])
-    setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
-    const { data, error } = await insertRowResolvingConflict(
-      supabase,
-      'saved_posts',
-      { user_id: user.id, post_id: postId },
-      ['post_id', 'user_id'],
-    )
-
-    if (error) {
-      setSavedPosts((prev) => prev.filter((s) => s.id !== temp.id))
-      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
-      toast.show('Could not save right now.', { type: 'error' })
-    } else {
-      setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
-      if (activeExperiment) {
-        logExperimentEvent(supabase, {
-          experimentKey: activeExperiment.key,
-          variant: activeExperiment.variant,
-          eventType: 'engage',
-          postId,
-        }).catch(() => {})
-      }
-    }
-  }
-
-  function userHasReposted(postId) {
-    if (!user) return false
-    return repostedPosts.some((r) => r.post_id === postId)
-  }
-
-  function giftCount(postId) {
-    return giftStats[postId]?.gift_count || 0
-  }
-
-  function shareCount(postId) {
-    return shareCounts[postId] || 0
-  }
-
-  function saveCount(postId) {
-    return saveCounts[postId] || 0
-  }
-
-  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
-  // post_reposts reference (writeRepost), so followers see the repost and the
-  // source carries a real count. Undoing removes both (undoRepost). Optimistic
-  // like the other toggles; if the feed-post write fails, the reference is
-  // taken back too and the UI rolls to the pre-tap state.
-  //
-  // In-flight guard: a double-tap in one render tick would otherwise run the
-  // whole async toggle twice. The DB index posts_user_repost_uniq already
-  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
-  // 23505), but the guard stops the second write from being issued at all —
-  // and stops an in-flight repost from being "undone" by a stale second tap.
-  const repostInFlight = useRef(new Set())
-  async function toggleRepost(post) {
-    if (!user) return
-    if (repostInFlight.current.has(post.id)) return
-    repostInFlight.current.add(post.id)
-    try {
-      const existing = repostedPosts.find((r) => r.post_id === post.id)
-
-      if (existing) {
-        const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
-        setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
-        if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
-
-        const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
-        if (postsDelete?.error || refDelete?.error) {
-          setRepostedPosts((prev) => [...prev, existing])
-          if (repostPost) setPosts((prev) => [repostPost, ...prev])
-          toast.show('Could not undo repost right now.', { type: 'error' })
-        }
-        return
-      }
-
-      // The optimistic row mirrors what writeRepost persists: a reference,
-      // not a copy of the source's words (issues #6/#8).
-      const tempRepostPost = {
-        id: `temp_repost_${Date.now()}`,
-        user_id: user.id,
-        content: REPOST_CONTENT,
-        post_type: 'text',
-        subscriber_only: post.subscriber_only || false,
-        is_premium: post.is_premium || false,
-        repost_of: post.id,
-        created_at: new Date().toISOString(),
-        view_count: 0,
-      }
-      const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
-      setRepostedPosts((prev) => [...prev, tempRepostRef])
-      setPosts((prev) => [tempRepostPost, ...prev])
-
-      const { ref, repostPost } = await writeRepost(supabase, { user, post })
-
-      if (repostPost.error || !repostPost.data) {
-        // Feed post failed: take the reference back so the source count doesn't
-        // claim a repost that is not visible anywhere.
-        if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
-        setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
-        setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
-        toast.show('Could not repost right now.', { type: 'error' })
-        return
-      }
-
-      // Swap temp rows for the real ones so un-repost has valid ids to delete.
-      setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
-      setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
-      // The source stays available to the card even if it was not on this
-      // page (e.g. reposted from the detail modal).
-      setRepostSources((prev) => (prev[post.id] ? prev : { ...prev, [post.id]: post }))
-
-      // Issue #7: 'repost' was in the notification vocabulary but nothing ever
-      // emitted it, so an author was never told their post had been shared.
-      notify({
-        recipientId: post.user_id,
-        actorId: user.id,
-        type: 'repost',
-        message: NOTIF_MESSAGES.repost,
-        link: `/feed?post=${post.id}`,
-        postId: post.id,
-      })
-    } finally {
-      repostInFlight.current.delete(post.id)
-    }
-  }
-
-  function formatCount(n) {
-    n = n || 0
-    if (n < 1000) return `${n}`
-    if (n < 1000000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`.replace('.0k', 'k')
-    return `${(n / 1000000).toFixed(1)}M`.replace('.0M', 'M')
-  }
-
-  function timeAgo(dateStr) {
-    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
   }
 
   const { isMobile } = useBreakpoint()
@@ -1733,56 +1127,29 @@ function Feed() {
   // by loadFeed() above, not a new query. No engagement data yet (e.g. right
   // after loadFeed's initial fetch, before reactions/commentCounts settle)
   // just means an empty/neutral sort, which is fine.
-  const trendingPosts = [...posts]
-    .sort((a, b) => (likeCount(b.id) + (commentCounts[b.id] || 0)) - (likeCount(a.id) + (commentCounts[a.id] || 0)))
+  const { likeCount } = engagement.engagementProps
+  const trendingPosts = [...engagement.state.posts]
+    .sort((a, b) => (likeCount(b.id) + (engagement.state.commentCounts[b.id] || 0)) - (likeCount(a.id) + (engagement.state.commentCounts[a.id] || 0)))
     .slice(0, 4)
 
   // Every prop PostCard needs besides `post`/`preview`. Shared verbatim by the
   // feed list and the detail modal so both surfaces render byte-identically
   // (same counts, same handlers, same comment thread state).
+  //
+  // The hook is spread FIRST and its members are never re-listed: every
+  // selector, plus shareCard, handleEditPost and the other handlers, arrive in
+  // engagementProps. A re-listed copy here would shadow the hook and go stale
+  // the next time the hook changes. What follows the spread is Feed's own
+  // chrome only — including `sharingId` and `editingPost`, which the hook
+  // writes through its callbacks but Feed owns and renders.
   const cardProps = {
-    isLocked,
+    ...engagement.engagementProps,
     user,
     navigate,
-    profiles,
-    // Reposts render their SOURCE post (issues #6/#8). The source is either
-    // already on this page of the feed or was fetched alongside it.
-    resolveSource: (id) => posts.find((p) => p.id === id) || repostSources[id] || null,
     authorName,
-    formatCount,
-    timeAgo,
-    likeCount,
-    userHasLiked,
-    commentTotal,
-    shareCount,
-    saveCount,
-    giftCount,
-    userHasReposted,
-    isSaved,
-    isFollowing,
-    toggleLike,
-    toggleComments,
-    toggleRepost,
-    toggleSave,
-    toggleFollow,
-    sharePost,
-    shareCard,
-    openReport,
     onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
-    handleEditPost,
-    handleCommentAdded,
-    openComments,
-    comments,
-    setComments,
-    editingComment,
-    setEditingComment,
-    replyingTo,
-    setReplyingTo,
-    commentDrafts,
-    setCommentDrafts,
     myUsername,
     myAvatar,
-    reportedPosts,
     sharingId,
     editingPost,
     setEditingPost,
@@ -2673,7 +2040,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
               .rpc('post_gift_stats', { p_post_id: postId })
               .then(({ data }) => {
                 if (data?.gift_count != null) {
-                  setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
                 }
               })
               .catch(() => {})
