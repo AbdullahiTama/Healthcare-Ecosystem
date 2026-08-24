@@ -1,7 +1,13 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { buildInterestProfile } from './feedEngine'
 import * as sel from './postSelectors.js'
+import { insertRowResolvingConflict, writeRepost, undoRepost, REPOST_CONTENT } from './engagement'
+import { validateArticleForPublish } from '../news-publishing/articleContent.js'
+import { notify, NOTIF_MESSAGES } from '../../services/notify.js'
+import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../../utils/voiceCard.js'
+import { shareOrCopy, mediaToFile } from '../../utils/share.js'
+import { toShareText } from '../../utils/formatShare.js'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -25,7 +31,28 @@ function applyMap(setter, next, { merge }) {
 // Owns everything that answers "what is this post's engagement context?" —
 // the state, the reads that fill it, and the handlers that change it. Two
 // consumers: the feed (many posts, overwrite) and PostPage (one post, merge).
-export function usePostEngagement({ user, navigate, toast }) {
+//
+// The four callbacks after `toast` are the seams where a handler needs
+// something that lives only in its host page. Each defaults to a no-op, so a
+// consumer that has no such state (PostPage) simply passes nothing and the
+// handler behaves as if that step were absent:
+//   logEngagement(postId)      — the host's staged-rollout experiment logging.
+//                                The hook knows nothing about experiments.
+//   onSharingChange(idOrNull)  — shareCard's in-progress marker; drives the
+//                                card's disabled/spinner state.
+//   onReportPost(postId)       — hands a post to the host's reason picker.
+//   onEditingPostChange(null)  — closes the host's inline editor after a save.
+//   reloadFeed()               — refetches the host's post list after an edit.
+export function usePostEngagement({
+  user,
+  navigate,
+  toast,
+  logEngagement = () => {},
+  onSharingChange = () => {},
+  onReportPost = () => {},
+  onEditingPostChange = () => {},
+  reloadFeed = () => {},
+}) {
   const [reactions, setReactions] = useState([])
   const [profiles, setProfiles] = useState({})
   const [follows, setFollows] = useState([])
@@ -177,6 +204,356 @@ export function usePostEngagement({ user, navigate, toast }) {
     return context
   }, [user])
 
+  // Export a Voice Card so it can go out to WhatsApp Status, logo attached.
+  // Tries video (card + voice) first; falls back to a PNG if the browser can't.
+  async function shareCard(post) {
+    onSharingChange(post.id)
+    const handle = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
+    const opts = {
+      text: post.content,
+      theme: post.theme,
+      hasVoice: !!post.audio_url,
+      imageUrl: post.image_url,
+      videoUrl: post.video_url,
+      username: handle,
+    }
+
+    try {
+      if (post.audio_url && canExportVideo()) {
+        try {
+          const { blob, ext } = await exportVideo({
+            text: post.content,
+            theme: post.theme,
+            audioUrl: post.audio_url,
+            imageUrl: post.image_url,
+            videoUrl: post.video_url,
+            username: handle,
+          })
+          const result = await shareOrDownload(blob, `carefind-card.${ext}`)
+          onSharingChange(null)
+          if (result === 'downloaded') toast.show('Saved with your voice: post it to your WhatsApp Status.')
+          return
+        } catch (e) {
+          // Video failed on this device: fall through to the image so the user still gets something
+          console.warn('Video export failed, falling back to image:', e)
+        }
+      }
+
+      const blob = await exportImage(opts)
+      const result = await shareOrDownload(blob, 'carefind-card.png')
+      onSharingChange(null)
+      if (result === 'downloaded') {
+        toast.show(post.audio_url
+          ? "Saved as an image. This phone can't build the video: the voice still plays inside CareFind."
+          : 'Saved: post it to your WhatsApp Status.')
+      }
+    } catch (e) {
+      onSharingChange(null)
+      toast.show('Could not prepare the card: ' + (e.message || 'unknown error'))
+    }
+  }
+
+  // Editing runs through the same integrity gate as publishing.
+  //
+  // The gate deliberately compares the body the editor HANDED US against the
+  // body we are about to write — that is, it catches content lost by our own
+  // processing. It must NOT compare against the previously published version:
+  // shortening an article is an ordinary edit, and an author cutting a
+  // redundant paragraph would find every save rejected.
+  async function handleEditPost(postId, newContent, postType) {
+    if (!newContent || !newContent.trim()) return
+    let content = newContent.trim()
+
+    if (postType === 'article' || postType === 'premium') {
+      const check = validateArticleForPublish(content)
+      if (!check.ok) { toast.show(check.error, { type: 'error' }); return }
+      content = check.content
+    }
+
+    const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)
+    if (error) {
+      toast.show('Could not save the edit: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+    onEditingPostChange(null)
+    reloadFeed()
+  }
+
+  async function toggleLike(postId) {
+    if (!user) return
+    const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
+
+    // Optimistic update: instant UI response. Both writes are reconciled
+    // against the DB: the insert returns the real row (so an unlike has a
+    // valid id to delete), a failed write rolls the UI back, and a fast
+    // double-tap hitting the post_reactions_user_post_uniq index reads the
+    // existing row instead of leaving a phantom temp id. Without this, a
+    // silently failed insert made the like vanish on the next feed reload.
+    if (existing) {
+      setReactions((prev) => prev.filter((r) => r.id !== existing.id))
+      const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
+      if (error) {
+        setReactions((prev) => [...prev, existing])
+        toast.show('Could not unlike right now.', { type: 'error' })
+      }
+      return
+    }
+
+    const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
+    setReactions((prev) => [...prev, tempReaction])
+    const { data, error } = await insertRowResolvingConflict(
+      supabase,
+      'post_reactions',
+      { post_id: postId, user_id: user.id, reaction_type: 'like' },
+      ['post_id', 'user_id'],
+    )
+
+    if (error) {
+      setReactions((prev) => prev.filter((r) => r.id !== tempReaction.id))
+      toast.show('Could not like right now.', { type: 'error' })
+      return
+    }
+
+    // Swap the temp row for the real one so an unlike has a valid id to delete.
+    setReactions((prev) => prev.map((r) => (r.id === tempReaction.id ? data : r)))
+
+    logEngagement(postId)
+
+    const post = posts.find((p) => p.id === postId)
+    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
+  }
+
+  async function toggleComments(postId) {
+    setOpenComments(prev => ({ ...prev, [postId]: !prev[postId] }))
+
+    if (!openComments[postId] && !comments[postId]) {
+      const { data } = await supabase
+        .from('post_comments')
+        .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true })
+      setComments(prev => ({ ...prev, [postId]: data || [] }))
+    }
+  }
+
+  async function handleNotifyComment(postId) {
+    const post = posts.find((p) => p.id === postId)
+    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
+  }
+
+  // Called when CommentThread successfully adds a comment or a reply. A top-
+  // level comment notifies the post author; a reply additionally notifies the
+  // author of the comment being replied to. Fire-and-forget either way.
+  function handleCommentAdded({ postId, parentId }) {
+    handleNotifyComment(postId)
+    if (parentId) {
+      const parent = (comments[postId] || []).find((c) => c.id === parentId)
+      if (parent && parent.user_id !== user.id) {
+        notify({ recipientId: parent.user_id, actorId: user.id, type: 'reply', message: 'replied to your comment', link: '/feed', postId })
+      }
+    }
+  }
+
+  async function toggleFollow(authorId) {
+    if (!user || authorId === user.id) return
+    const existing = follows.find((f) => f.follower_id === user.id && f.following_id === authorId)
+
+    if (existing) {
+      // Optimistic: drop it from local state right away
+      setFollows((prev) => prev.filter((f) => f.id !== existing.id))
+      const { error } = await supabase.from('follows').delete().eq('id', existing.id)
+      if (error) setFollows((prev) => [...prev, existing]) // put it back if it failed
+    } else {
+      // Optimistic: show as followed immediately
+      const temp = { id: `temp_${Date.now()}`, follower_id: user.id, following_id: authorId }
+      setFollows((prev) => [...prev, temp])
+      const { data, error } = await supabase
+        .from('follows')
+        .insert({ follower_id: user.id, following_id: authorId })
+        .select()
+        .maybeSingle()
+      if (error) {
+        setFollows((prev) => prev.filter((f) => f.id !== temp.id)) // roll back
+        return
+      }
+      // Swap the temp row for the real one so a later unfollow has a valid id
+      if (data) setFollows((prev) => prev.map((f) => (f.id === temp.id ? data : f)))
+      notify({ recipientId: authorId, actorId: user.id, type: 'follow', message: 'started following you', link: `/u/${user.id}` })
+    }
+  }
+
+  // Reporting is a two-step flow: the overflow menu opens a reason picker,
+  // the picked reason writes the report. A `window.prompt` (what this used to
+  // be) is unstyled, unlabelled and blocked outright in some mobile browsers,
+  // so a moderation path can't depend on it: and the handler was never
+  // wired to anything, so reporting was unreachable.
+  function openReport(postId) {
+    if (!user) { navigate('/login'); return }
+    if (reportedPosts.includes(postId)) {
+      toast.show('You already reported this post.')
+      return
+    }
+    onReportPost(postId)
+  }
+
+  async function sharePost(post) {
+    const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
+    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
+    // Attach the post's media (image/video) to the share where the browser
+    // supports it; the URL is still appended to the clipboard fallback so
+    // WhatsApp recipients always get the media, never just the caption.
+    const mediaUrl = post.image_url || post.video_url || null
+    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
+    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/feed?post=${post.id}`, files: file ? [file] : undefined, mediaUrl })
+    if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
+    if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
+
+    // Best-effort share tracking so a post's share count is real rather than
+    // vanished. One row per (post, user, platform): the post_shares unique
+    // index makes repeat shares idempotent for signed-in users. Anonymous
+    // shares are recorded without a user_id.
+    if (result === 'shared' || result === 'copied') {
+      logEngagement(post.id)
+      try {
+        await supabase.from('post_shares').insert({
+          post_id: post.id,
+          user_id: user ? user.id : null,
+          platform: result === 'copied' ? 'copy' : 'web',
+        })
+        // Reflect the just-recorded share in the card's count so it doesn't
+        // wait for the next feed reload to appear.
+        setShareCounts((prev) => ({ ...prev, [post.id]: (prev[post.id] || 0) + 1 }))
+      } catch (e) {
+        // Tracking is never allowed to fail the share the user just did.
+        console.warn('Share tracking write failed:', e)
+      }
+    }
+  }
+
+  async function toggleSave(postId) {
+    if (!user) return
+    const existing = savedPosts.find((s) => s.post_id === postId)
+
+    // Optimistic update with the same reconciliation as toggleLike: the
+    // insert returns the real row, failures roll back, and a double-tap
+    // hitting saved_posts_user_post_uniq resolves to the existing row so the
+    // save survives a reload.
+    if (existing) {
+      setSavedPosts((prev) => prev.filter((s) => s.post_id !== postId))
+      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
+      const { error } = await supabase.from('saved_posts').delete().eq('id', existing.id)
+      if (error) {
+        setSavedPosts((prev) => [...prev, existing])
+        setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
+        toast.show('Could not unsave right now.', { type: 'error' })
+      }
+      return
+    }
+
+    const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
+    setSavedPosts((prev) => [...prev, temp])
+    setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
+    const { data, error } = await insertRowResolvingConflict(
+      supabase,
+      'saved_posts',
+      { user_id: user.id, post_id: postId },
+      ['post_id', 'user_id'],
+    )
+
+    if (error) {
+      setSavedPosts((prev) => prev.filter((s) => s.id !== temp.id))
+      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
+      toast.show('Could not save right now.', { type: 'error' })
+    } else {
+      setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
+      logEngagement(postId)
+    }
+  }
+
+  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
+  // post_reposts reference (writeRepost), so followers see the repost and the
+  // source carries a real count. Undoing removes both (undoRepost). Optimistic
+  // like the other toggles; if the feed-post write fails, the reference is
+  // taken back too and the UI rolls to the pre-tap state.
+  //
+  // In-flight guard: a double-tap in one render tick would otherwise run the
+  // whole async toggle twice. The DB index posts_user_repost_uniq already
+  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
+  // 23505), but the guard stops the second write from being issued at all —
+  // and stops an in-flight repost from being "undone" by a stale second tap.
+  const repostInFlight = useRef(new Set())
+  async function toggleRepost(post) {
+    if (!user) return
+    if (repostInFlight.current.has(post.id)) return
+    repostInFlight.current.add(post.id)
+    try {
+      const existing = repostedPosts.find((r) => r.post_id === post.id)
+
+      if (existing) {
+        const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
+        setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
+        if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
+
+        const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
+        if (postsDelete?.error || refDelete?.error) {
+          setRepostedPosts((prev) => [...prev, existing])
+          if (repostPost) setPosts((prev) => [repostPost, ...prev])
+          toast.show('Could not undo repost right now.', { type: 'error' })
+        }
+        return
+      }
+
+      // The optimistic row mirrors what writeRepost persists: a reference,
+      // not a copy of the source's words (issues #6/#8).
+      const tempRepostPost = {
+        id: `temp_repost_${Date.now()}`,
+        user_id: user.id,
+        content: REPOST_CONTENT,
+        post_type: 'text',
+        subscriber_only: post.subscriber_only || false,
+        is_premium: post.is_premium || false,
+        repost_of: post.id,
+        created_at: new Date().toISOString(),
+        view_count: 0,
+      }
+      const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
+      setRepostedPosts((prev) => [...prev, tempRepostRef])
+      setPosts((prev) => [tempRepostPost, ...prev])
+
+      const { ref, repostPost } = await writeRepost(supabase, { user, post })
+
+      if (repostPost.error || !repostPost.data) {
+        // Feed post failed: take the reference back so the source count doesn't
+        // claim a repost that is not visible anywhere.
+        if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
+        setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
+        setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
+        toast.show('Could not repost right now.', { type: 'error' })
+        return
+      }
+
+      // Swap temp rows for the real ones so un-repost has valid ids to delete.
+      setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
+      setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
+      // The source stays available to the card even if it was not on this
+      // page (e.g. reposted from the detail modal).
+      setRepostSources((prev) => (prev[post.id] ? prev : { ...prev, [post.id]: post }))
+
+      // Issue #7: 'repost' was in the notification vocabulary but nothing ever
+      // emitted it, so an author was never told their post had been shared.
+      notify({
+        recipientId: post.user_id,
+        actorId: user.id,
+        type: 'repost',
+        message: NOTIF_MESSAGES.repost,
+        link: `/feed?post=${post.id}`,
+        postId: post.id,
+      })
+    } finally {
+      repostInFlight.current.delete(post.id)
+    }
+  }
+
   const engagementProps = {
     profiles,
     comments, setComments,
@@ -198,6 +575,16 @@ export function usePostEngagement({ user, navigate, toast }) {
     isFollowing: (authorId) => sel.isFollowing(follows, authorId, user?.id),
     isLocked: (post) => sel.isLocked(post, unlockedCreators, user?.id),
     resolveSource: (id) => sel.resolveSourceFrom(posts, repostSources, id),
+    toggleLike,
+    toggleComments,
+    toggleRepost,
+    toggleSave,
+    toggleFollow,
+    sharePost,
+    shareCard,
+    openReport,
+    handleEditPost,
+    handleCommentAdded,
   }
 
   return {
