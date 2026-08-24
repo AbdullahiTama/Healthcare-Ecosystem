@@ -147,10 +147,10 @@ beforeEach(() => {
 // of replacing it. That combination (Feed's navigate call + BackgroundRoutes
 // + PostModalRoute) is exercised end-to-end in
 // src/components/BackgroundRoutes.test.jsx; sharePost's own URL shape is
-// unchanged by Task 6 (still /feed?post=<id> — Task 7 changes that) and is
-// still covered here.
+// covered here. Task 7 moved that shape itself from /feed?post=<id> to the
+// post's own permalink, /post/<id> — this pins the new contract.
 describe('Feed share URL', () => {
-  it('shares a post with a ?post=<id> URL', async () => {
+  it('shares a post with a /post/<id> URL', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     renderFeed('/feed')
 
@@ -160,8 +160,7 @@ describe('Feed share URL', () => {
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalled())
     const arg = shareOrCopy.mock.calls[0][0]
     const url = new URL(arg.url)
-    expect(url.pathname).toBe('/feed')
-    expect(url.searchParams.get('post')).toBe('p1')
+    expect(url.pathname).toBe('/post/p1')
   })
 })
 
