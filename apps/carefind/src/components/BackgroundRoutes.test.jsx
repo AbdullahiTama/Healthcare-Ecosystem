@@ -183,6 +183,30 @@ describe('/post/:id as an overlay vs a standalone page (Task 6)', () => {
     expect(screen.getByRole('button', { name: /^for you$/i })).toBeInTheDocument()
   })
 
+  // The other half of the split: opening was already proven above, but
+  // nothing closed the overlay back up. Closing is `navigate(-1)`
+  // (PostModalRoute.jsx) — popping the history entry that carried
+  // `state.background` — so this proves the overlay actually goes away
+  // and leaves the same feed (not a fresh, re-fetched one) behind it.
+  it('closing the overlay removes it and leaves the feed mounted underneath', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    postRepository.getPostById.mockResolvedValue(makePost())
+    renderRouted(['/feed'])
+
+    await screen.findByText(/distinctively worded post body/i)
+    fireEvent.click(await screen.findByRole('button', { name: /read the full post by/i }))
+    await screen.findByRole('dialog')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    // The overlay is gone...
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // ...and the feed is still here: its chrome and the post's own body
+    // (now the only copy in the document, not the ">1" from the open assertion).
+    expect(screen.getByRole('button', { name: /^for you$/i })).toBeInTheDocument()
+    expect(screen.getAllByText(/distinctively worded post body/i).length).toBe(1)
+  })
+
   it('a direct load of /post/:id with no background renders PostPage, not the feed', async () => {
     postRepository.getPostById.mockResolvedValue(makePost({ content: 'Standalone permalink body, nothing behind it.' }))
     renderRouted(['/post/p1'])
