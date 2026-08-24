@@ -535,7 +535,7 @@ export function usePostEngagement({
     // WhatsApp recipients always get the media, never just the caption.
     const mediaUrl = post.image_url || post.video_url || null
     const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/feed?post=${post.id}`, files: file ? [file] : undefined, mediaUrl })
+    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/post/${post.id}`, files: file ? [file] : undefined, mediaUrl })
     if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
     if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
 
@@ -677,7 +677,7 @@ export function usePostEngagement({
         actorId: user.id,
         type: 'repost',
         message: NOTIF_MESSAGES.repost,
-        link: `/feed?post=${post.id}`,
+        link: `/post/${post.id}`,
         postId: post.id,
       })
     } finally {

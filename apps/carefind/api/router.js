@@ -105,9 +105,10 @@ export default async function handler(req, res) {
 
   if (!target) {
     // Issue #1: vercel.json rewrites link-preview crawlers from an app route
-    // (e.g. /feed?post=<id>) to this function. Vercel preserves the original
-    // path in req.url, so such a request has no matching API route — it lands
-    // here. Serve per-item Open Graph tags instead of a 404.
+    // (e.g. /post/<id>, or a legacy /feed?post=<id> link still in the wild)
+    // to this function. Vercel preserves the original path in req.url, so
+    // such a request has no matching API route — it lands here. Serve
+    // per-item Open Graph tags instead of a 404.
     //
     // Two guards, both required:
     //  - the path must NOT be an /api/* path. A genuine typo'd API call must

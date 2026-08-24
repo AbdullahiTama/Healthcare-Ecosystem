@@ -48,7 +48,7 @@ export default function RightSidebar({ trending = [], news = [], live = [], plat
                 trending entry is about the post, and for a repost the author
                 is the resharer rather than the writer. */}
             {trending.slice(0, 4).map((p) => (
-              <Link key={p.id} to={`/feed?post=${p.id}`} style={{ textDecoration: 'none' }}>
+              <Link key={p.id} to={`/post/${p.id}`} style={{ textDecoration: 'none' }}>
                 <p style={{ margin: '0 0 3px 0', fontSize: 13, fontWeight: 700, color: theme.navy, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {plainTextFromContent(p.content)}
                 </p>

@@ -6,7 +6,7 @@
 // crawlers — WhatsApp, iMessage, LinkedIn, Facebook, Slack, X — read the raw
 // HTML of the first response and never run JavaScript, so every shared URL
 // produces the same generic card no matter which post it points at. Fetching
-// https://carefind.app/feed?post=<id> shows exactly that.
+// https://carefind.app/post/<id> shows exactly that.
 //
 // THE APPROACH. There is no SSR to add tags to, and rebuilding the app on a
 // framework that has one is not proportionate to a metadata bug. Instead the
