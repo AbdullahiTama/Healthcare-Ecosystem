@@ -1,10 +1,9 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
 
 // Minimal fake Supabase: every builder method is a thenable that resolves to
-// the table's rows filtered by the eq/in constraints accumulated so far. The
-// deep-linked post fetch goes through the mocked postRepository instead.
+// the table's rows filtered by the eq/in constraints accumulated so far.
 const mockSupabase = vi.hoisted(() => {
   const data = {
     tables: {
@@ -66,10 +65,6 @@ vi.mock('../../config/supabaseClient', () => ({
 vi.mock('../../providers/AuthContext', () => ({
   useAuth: () => ({ user: null }),
 }))
-vi.mock('./repositories', () => ({
-  postRepository: { getPostById: vi.fn() },
-  commentRepository: {},
-}))
 
 // Leaf/heavy children: not exercised by these tests.
 vi.mock('../../utils/VisualCard.jsx', () => ({ default: () => <div /> }))
@@ -106,7 +101,6 @@ vi.mock('../../utils/voiceCard.js', () => ({
 vi.mock('../../utils/imageResize.js', () => ({ resizeImage: vi.fn() }))
 
 import Feed from './Feed.jsx'
-import { postRepository } from './repositories'
 import { shareOrCopy } from '../../utils/share.js'
 
 function makePost(overrides = {}) {
@@ -142,11 +136,19 @@ beforeEach(() => {
   mockSupabase.data.tables.posts = []
   mockSupabase.data.tables.profiles = []
   mockSupabase.data.rpcRows = {}
-  postRepository.getPostById.mockReset()
   shareOrCopy.mockClear()
 })
 
-describe('Feed share deep link (Item 12)', () => {
+// Task 6: opening a post ("See more" or a shared link) is no longer Feed's
+// own modal machinery — it is a navigation to the post's permalink
+// (/post/:id), with the current feed location carried as history state so
+// BackgroundRoutes can render it as an overlay on top of this page instead
+// of replacing it. That combination (Feed's navigate call + BackgroundRoutes
+// + PostModalRoute) is exercised end-to-end in
+// src/components/BackgroundRoutes.test.jsx; sharePost's own URL shape is
+// unchanged by Task 6 (still /feed?post=<id> — Task 7 changes that) and is
+// still covered here.
+describe('Feed share URL', () => {
   it('shares a post with a ?post=<id> URL', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     renderFeed('/feed')
@@ -159,24 +161,5 @@ describe('Feed share deep link (Item 12)', () => {
     const url = new URL(arg.url)
     expect(url.pathname).toBe('/feed')
     expect(url.searchParams.get('post')).toBe('p1')
-  })
-
-  it('opens a deep-linked post in the detail modal and clears the param', async () => {
-    postRepository.getPostById.mockResolvedValue(makePost({ content: 'Deep linked body text' }))
-    renderFeed('/feed?post=p1')
-
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/Deep linked body text/)).toBeInTheDocument()
-    expect(postRepository.getPostById).toHaveBeenCalledWith('p1')
-    await waitFor(() => expect(window.location.search).not.toContain('post='))
-  })
-
-  it('closes silently when the deep-linked post is missing', async () => {
-    postRepository.getPostById.mockRejectedValue(new Error('PGRST116'))
-    renderFeed('/feed?post=p1')
-
-    await waitFor(() => expect(postRepository.getPostById).toHaveBeenCalledWith('p1'))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(window.location.search).not.toContain('post=')
   })
 })

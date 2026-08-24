@@ -84,6 +84,16 @@ export function usePostEngagement({
   const [editingComment, setEditingComment] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reportedPosts, setReportedPosts] = useState([])
+  // Feed's ranked DISPLAY list — populated by Feed's own loadFeed/
+  // hydrateAndRank, never by hydrate() below (ranking depends on the tab,
+  // the resolved ranking config and the reader's staged experiment, none of
+  // which this hook knows about). toggleRepost DOES write into it, though
+  // (prepending/removing the optimistic repost row), so as of Task 6 it is
+  // no longer exclusively Feed-written even though it stays Feed-owned:
+  // PostPage and PostModalRoute both reach toggleRepost through PostCard.
+  // Non-Feed consumers must still never READ this — for them it is simply
+  // `[]`, since they have no ranked list of their own. Look a post up by id
+  // through `postsById` instead (declared just below).
   const [posts, setPosts] = useState([])
   const [deletingId, setDeletingId] = useState(null)
   // id -> post, maintained by hydrate for every post it's ever given,

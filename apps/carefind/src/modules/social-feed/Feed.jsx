@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Award, BadgeCheck, Bell, BookOpen, Bookmark, Building2, Camera, Check, ChevronRight,
   Clapperboard, Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
@@ -12,7 +12,6 @@ import { useAuth } from '../../providers/AuthContext'
 import { createViewRecorder } from './engagement'
 import { usePostEngagement } from './usePostEngagement.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
-import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
@@ -40,8 +39,6 @@ import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
 import PostCard from './PostCard.jsx'
 import VideoFeed from './VideoFeed.jsx'
-import PostDetailModal from './PostDetailModal.jsx'
-import { postRepository } from './repositories'
 import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
@@ -93,6 +90,11 @@ function Feed() {
   const [cardAudio, setCardAudio] = useState(null)
   const [myUsername, setMyUsername] = useState('')
   const navigate = useNavigate()
+  // The feed's own location — carried as `state.background` when a card
+  // opens /post/:id, so BackgroundRoutes keeps this page mounted underneath
+  // the overlay instead of unmounting it for the modal route. See
+  // BackgroundRoutes.jsx.
+  const location = useLocation()
   const [showDraw, setShowDraw] = useState(false)
   const [feedTab, setFeedTab] = useState('foryou')
   // Guards the feed_config tab save until the saved value has been loaded,
@@ -189,15 +191,12 @@ function Feed() {
   })
   const openCommentsRef = useRef(engagement.state.openComments)
 
-  // Detail modal (Item 12): one post rendered in full via the shared PostCard.
-  // Opened by a clamped card's "See more" or by a deep link (?post=<id>). The
-  // deep-linked post loads async, so loading/error states live alongside it.
-  const [detailPost, setDetailPost] = useState(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [detailError, setDetailError] = useState('')
-  // Item 12 deep link: ?post=<id> opens that post on top of the normal feed.
+  // Task 6: "See more" on a clamped card and a shared-link deep link both
+  // now navigate to the post's own URL (/post/:id) instead of opening a
+  // modal owned by Feed — BackgroundRoutes decides whether that renders as
+  // an overlay on top of this page or, on a cold load, PostPage standalone.
+  // See onOpenDetail in cardProps below.
   const [searchParams, setSearchParams] = useSearchParams()
-  const deepLinkPostId = searchParams.get('post')
   // Item 5 bottom-nav Videos entry lands on /feed?tab=video; applied on mount
   // and then cleared so it never fights the persisted tab preference.
   const tabParam = searchParams.get('tab')
@@ -360,31 +359,9 @@ function Feed() {
     engagement.state.setPosts(ranked)
   }
 
-  // Detail modal open/close. Both the See-more button and the deep link land
-  // here so every surface opens the post through one path.
-  function openPostDetail(post) {
-    setDetailPost(post)
-    setDetailLoading(false)
-    setDetailError('')
-  }
-
-  function closePostDetail() {
-    setDetailPost(null)
-    setDetailLoading(false)
-    setDetailError('')
-  }
-
-  // Clear the ?post= param after the deep-linked post has been resolved,
-  // without navigating (mirrors BusinessProfile's ?reference= handling).
-  function clearPostParam() {
-    const next = new URLSearchParams(searchParams)
-    next.delete('post')
-    const qs = next.toString()
-    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
-    setSearchParams(next, { replace: true })
-  }
-
-  // Mirrors clearPostParam for the ?tab= landing param (Item 5).
+  // Clears the ?tab= landing param once it has been applied (Item 5), the
+  // same replaceState-without-navigating shape BusinessProfile's ?reference=
+  // handling uses.
   function clearTabParam() {
     const next = new URLSearchParams(searchParams)
     next.delete('tab')
@@ -421,90 +398,6 @@ function Feed() {
   useEffect(() => {
     if (createOpen) logCreateSelectorRendered({ source: 'feed' })
   }, [createOpen])
-
-  // Merge extra author profiles into the map without disturbing the ones the
-  // feed already loaded. Used when a repost's source has an author who wrote
-  // nothing else on this page.
-  const PROFILE_CARD_COLS = 'id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country'
-  async function loadProfilesFor(userIds) {
-    if (!userIds?.length) return
-    const { data } = await supabase.from('profiles').select(PROFILE_CARD_COLS).in('id', userIds)
-    if (data?.length) engagement.state.setProfiles((prev) => ({ ...prev, ...indexPosts(data) }))
-  }
-
-  // Reposts (issues #6/#8): fetch the source of every repost on this page
-  // that is not already loaded, so the card can show the original author's
-  // words under a "Reposted by" banner instead of the reposter's name over a
-  // copy. Runs whenever the loaded posts change; ids already fetched are
-  // skipped, so scrolling does not refetch.
-  useEffect(() => {
-    const wanted = unresolvedSourceIds(engagement.state.posts).filter((id) => !engagement.state.repostSources[id])
-    if (!wanted.length) return
-    let cancelled = false
-    supabase
-      .from('posts')
-      .select(POST_FEED_COLS)
-      .in('id', wanted)
-      .then(({ data, error }) => {
-        if (cancelled || error || !data) return
-        engagement.state.setRepostSources((prev) => ({ ...prev, ...indexPosts(data) }))
-        // The source's author may not be in `profiles` yet — without it the
-        // card would credit "CareFind user" instead of the real writer.
-        const missingAuthors = [...new Set(data.map((p) => p.user_id))].filter((id) => id && !engagement.state.profiles[id])
-        if (missingAuthors.length) loadProfilesFor(missingAuthors)
-      })
-    return () => { cancelled = true }
-  }, [engagement.state.posts])
-
-  // Item 12 deep link: when the URL carries ?post=<id>, open that post in the
-  // detail modal on top of the normal feed, then drop the param. A post
-  // already in the loaded feed list is preferred (no refetch); otherwise it's
-  // fetched + enriched through the same path the feed uses. Missing/deleted
-  // posts close the modal silently — the feed itself is never disturbed.
-  useEffect(() => {
-    if (!deepLinkPostId) return
-    let cancelled = false
-    const existing = engagement.state.posts.find((p) => p.id === deepLinkPostId)
-    const resolveTo = (post) => {
-      if (cancelled) return
-      openPostDetail(post)
-      clearPostParam()
-    }
-    const fail = () => {
-      if (cancelled) return
-      closePostDetail()
-      clearPostParam()
-    }
-
-    if (existing) {
-      resolveTo(existing)
-      return () => { cancelled = true }
-    }
-
-    setDetailLoading(true)
-    postRepository
-      .getPostById(deepLinkPostId)
-      .then((data) => {
-        if (cancelled) return
-        if (!data) { fail(); return }
-        // merge:true — a deep-linked post must light up the same counts the
-        // feed cards show without ever clobbering the loaded feed. It is one
-        // post, so nothing is ranked and the post list is left alone.
-        return engagement.hydrate([data], { merge: true }).then(() => data)
-      })
-      .then((post) => { if (!cancelled && post) resolveTo(post) })
-      .catch(() => { if (!cancelled) fail() })
-    return () => { cancelled = true }
-  }, [deepLinkPostId])
-
-  // The feed loads in parallel with the deep-link fetch. If the deep-linked
-  // post lands in the loaded list while the modal is still loading, swap to
-  // that in-memory copy instead of the fetched one.
-  useEffect(() => {
-    if (!deepLinkPostId || !detailLoading) return
-    const existing = engagement.state.posts.find((p) => p.id === deepLinkPostId)
-    if (existing) { openPostDetail(existing); clearPostParam() }
-  }, [engagement.state.posts, deepLinkPostId, detailLoading])
 
   async function loadFeed() {
     setLoading(true)
@@ -1142,7 +1035,12 @@ function Feed() {
     editingPost,
     setEditingPost,
     setConfirmDeleteId,
-    onOpenDetail: openPostDetail,
+    // Task 6: opening a post is a navigation, not local state — its own URL
+    // (/post/:id) is the source of truth. Carrying this feed's own location
+    // in `state.background` is what tells BackgroundRoutes to render the
+    // post as an overlay on top of this page instead of unmounting it in
+    // favour of the standalone PostPage (BackgroundRoutes.jsx).
+    onOpenDetail: (post) => navigate(`/post/${post.id}`, { state: { background: location } }),
   }
 
   const bodyContent = (
@@ -2071,18 +1969,6 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           ))}
         </div>
       </Modal>
-
-      {/* Item 12 detail modal: full content for one post. Opened by "See
-          more" on a clamped card or by a ?post=<id> deep link; the deep-link
-          post loads async (loading/error states handled inside the modal). */}
-      <PostDetailModal
-        show={!!detailPost || detailLoading}
-        post={detailPost}
-        loading={detailLoading}
-        error={detailError}
-        onClose={closePostDetail}
-        cardProps={cardProps}
-      />
 
       <Toast msg={toast.msg} type={toast.type} />
     </div>
