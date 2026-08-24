@@ -102,6 +102,7 @@ vi.mock('../../utils/imageResize.js', () => ({ resizeImage: vi.fn() }))
 
 import Feed from './Feed.jsx'
 import { shareOrCopy } from '../../utils/share.js'
+import { POSTS_DIRTY_EVENT } from './postSync.js'
 
 function makePost(overrides = {}) {
   return {
@@ -161,5 +162,47 @@ describe('Feed share URL', () => {
     const url = new URL(arg.url)
     expect(url.pathname).toBe('/feed')
     expect(url.searchParams.get('post')).toBe('p1')
+  })
+})
+
+// Task 6's addendum gave PostModalRoute its own usePostEngagement instance,
+// so a mutation made inside the /post/:id overlay never touches this Feed's
+// copy of the same post. postSync.js bridges that gap: the overlay dispatches
+// POSTS_DIRTY_EVENT on window when it closes dirty, and Feed is supposed to
+// answer by reloading (see the listener at Feed.jsx around loadFeedRef).
+// These tests exercise the RECEIVING half directly against this real Feed
+// instance — dispatching the event and asserting an actual refetch happens —
+// rather than trusting a spy on some internal, so they fail if the listener
+// is removed, if its effect never attaches, or if the imported event name
+// drifts from the one Feed listens for.
+describe('postSync: Feed reloads on POSTS_DIRTY_EVENT', () => {
+  function postsFetchCount() {
+    return mockSupabase.supabase.from.mock.calls.filter((call) => call[0] === 'posts').length
+  }
+
+  it('refetches posts when the overlay dispatches POSTS_DIRTY_EVENT', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+    await screen.findByText(/A shareable post body/i)
+
+    const before = postsFetchCount()
+
+    window.dispatchEvent(new Event(POSTS_DIRTY_EVENT))
+
+    await waitFor(() => expect(postsFetchCount()).toBeGreaterThan(before))
+  })
+
+  it('does not refetch posts when no dirty event fires', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+    await screen.findByText(/A shareable post body/i)
+
+    const before = postsFetchCount()
+
+    // Nothing dispatches POSTS_DIRTY_EVENT here — give any stray async work a
+    // tick, then confirm no extra 'posts' query was issued.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(postsFetchCount()).toBe(before)
   })
 })
