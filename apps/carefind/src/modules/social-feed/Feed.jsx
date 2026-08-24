@@ -12,6 +12,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { createViewRecorder } from './engagement'
 import { usePostEngagement } from './usePostEngagement.js'
 import { REPORT_REASONS } from './postSelectors.js'
+import { POSTS_DIRTY_EVENT } from './postSync.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
@@ -477,6 +478,21 @@ function Feed() {
     loadSeries()
     loadLiveSessions()
   }, [user])
+
+  // The /post/:id overlay (PostModalRoute) owns its own engagement state
+  // (deliberately — see that file), so a mutation made inside it never
+  // touches this feed's copy of the same post. On close, if the overlay was
+  // dirty, it dispatches this event; reload the same way any other refresh
+  // does. A ref holds the current loadFeed so this listener — attached once,
+  // for the component's whole lifetime — never calls a stale closure from
+  // whatever feedTab/medicalContext was active on mount.
+  const loadFeedRef = useRef(loadFeed)
+  loadFeedRef.current = loadFeed
+  useEffect(() => {
+    function handlePostsDirty() { loadFeedRef.current() }
+    window.addEventListener(POSTS_DIRTY_EVENT, handlePostsDirty)
+    return () => window.removeEventListener(POSTS_DIRTY_EVENT, handlePostsDirty)
+  }, [])
 
   // Phase 6: load the personalized-feed config (weights, pools) and the
   // signals the engine needs that aren't part of the posts query — the

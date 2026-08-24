@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -10,6 +10,7 @@ import { Flag } from 'lucide-react'
 import { usePostEngagement } from './usePostEngagement.js'
 import { postRepository } from './repositories'
 import { REPORT_REASONS } from './postSelectors.js'
+import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 
@@ -24,6 +25,12 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 // which is exactly what the Task 1-4 extraction made possible. `useLocation()`
 // inside the Feed behind this modal still reads the BACKGROUND location
 // (`/feed`), never `/post/:id` — see BackgroundRoutes.jsx.
+//
+// Owning a separate instance means a mutation in here (edit, delete, like,
+// comment, save, repost) never touches Feed's copy of the same post —
+// dirtyRef + close()'s markPostsDirty() below is what tells Feed to reload
+// once the overlay closes. See postSync.js for why that's a DOM event rather
+// than router or React state.
 //
 // Deleted and RLS-hidden posts render identically on purpose, same reasoning
 // as PostPage: distinguishing "removed" from "you can't see this" would leak
@@ -56,11 +63,26 @@ export default function PostModalRoute() {
   const [sharingId, setSharingId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
 
+  // Whether any mutation happened during this overlay's lifetime (edit,
+  // delete, like, comment, save, repost). Feed mounted underneath owns none
+  // of this overlay's engagement state (see the file comment above), so it
+  // has no way to know a card it's showing just went stale — this is how it
+  // finds out. A ref, not state: it needs to be readable from `close()`
+  // without triggering a re-render of its own, and nothing here ever renders
+  // off it.
+  const dirtyRef = useRef(false)
+  function markDirty() { dirtyRef.current = true }
+
   // Closing this overlay is always `navigate(-1)`: it pops the history entry
   // that carried `state.background`, which reveals the page underneath at its
   // untouched location and scroll position. There is always a previous entry
   // to pop back to, because this component only mounts when one exists.
+  //
+  // If a mutation happened while the overlay was open, Feed's copy of the
+  // post it's about to reveal is stale (worst case: deleted outright, see
+  // postSync.js) — signal it to reload before popping back to it.
   function close() {
+    if (dirtyRef.current) markPostsDirty()
     navigate(-1)
   }
 
@@ -154,8 +176,22 @@ export default function PostModalRoute() {
     toast.show("Thanks: our team will review this post.", { type: 'success' })
   }
 
+  // Mutations PostCard can fire straight into the hook (like/save/repost/edit/
+  // comment) — the ones Finding 20 calls out as needing to reach Feed. Wrapped
+  // here, not inside usePostEngagement itself: the hook's other consumers
+  // (Feed, PostPage) have no "host underneath" to tell, so the dirty tracking
+  // belongs at this call site, not in shared code. Delete goes through
+  // ConfirmDialog's onConfirm below instead of this object, since PostCard
+  // only ever opens the confirm dialog (setConfirmDeleteId), never deletes
+  // directly.
+  const { toggleLike, toggleSave, toggleRepost, handleEditPost, handleCommentAdded, ...restEngagementProps } = engagement.engagementProps
   const cardProps = {
-    ...engagement.engagementProps,
+    ...restEngagementProps,
+    toggleLike: (...args) => { markDirty(); return toggleLike(...args) },
+    toggleSave: (...args) => { markDirty(); return toggleSave(...args) },
+    toggleRepost: (...args) => { markDirty(); return toggleRepost(...args) },
+    handleEditPost: (...args) => { markDirty(); return handleEditPost(...args) },
+    handleCommentAdded: (...args) => { markDirty(); return handleCommentAdded(...args) },
     user,
     navigate,
     authorName,
@@ -201,7 +237,15 @@ export default function PostModalRoute() {
       <ConfirmDialog
         show={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
-        onConfirm={() => { engagement.engagementProps.handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        onConfirm={() => {
+          // Marked before the delete resolves, not inside handleDeletePost's
+          // onPostDeleted callback (which is `close` itself): close() reads
+          // dirtyRef synchronously, so it must already be true by the time
+          // that callback runs.
+          markDirty()
+          engagement.engagementProps.handleDeletePost(confirmDeleteId)
+          setConfirmDeleteId(null)
+        }}
         title="Delete this post?"
         consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
         confirmLabel="Delete"
