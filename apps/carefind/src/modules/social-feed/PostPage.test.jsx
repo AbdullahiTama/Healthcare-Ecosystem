@@ -117,7 +117,16 @@ describe('PostPage', () => {
   it('renders the conversation below the post', async () => {
     postRepository.getPostById.mockResolvedValue(post({ content: 'x' }))
     renderAt()
-    expect(await screen.findByText('comments')).toBeInTheDocument()
+    // Unlike the plain "post body renders" assertion above, "comments"
+    // only appears after a SECOND round trip: the initial load resolves,
+    // the post-load effect fires toggleComments(post.id), which itself
+    // awaits a `post_comments` select before the (mocked) CommentThread
+    // mounts. That extra hop is what lost the race against findByText's
+    // default 1000ms timeout in a full-suite run under jsdom contention
+    // (320s run vs. the usual ~90-120s) despite passing every time in
+    // isolation — raise the timeout rather than the flakiness surviving
+    // as a "just re-run it" test.
+    expect(await screen.findByText('comments', {}, { timeout: 5000 })).toBeInTheDocument()
   })
 
   it('shows the not-available state when the post is missing', async () => {
@@ -167,7 +176,12 @@ describe('PostPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(await screen.findByText('Updated body')).toBeInTheDocument()
+    // Same pattern as "renders the conversation below the post": the save
+    // triggers reloadFeed() -> refetchThisPost(), a second full
+    // getPostById + hydrate round trip, not just a local state flip. Give
+    // it the same longer timeout so this doesn't lose the same race under
+    // full-suite contention.
+    expect(await screen.findByText('Updated body', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Edit post' })).not.toBeInTheDocument()
   })
 
