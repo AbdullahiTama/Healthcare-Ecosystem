@@ -8,26 +8,41 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockUseAuth = vi.fn(() => ({ user: null }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => mockUseAuth() }))
 
-// A builder that supports the read AND write chains PostPage's hooks issue
-// (select/update/delete/insert), always settling empty/no-op so hydrate()
-// never throws. Individual tests only care that the calls resolve, not what
-// they return — postRepository.getPostById (mocked separately below) is
-// what actually drives what's on screen.
+// usePostEngagement now issues a couple of real reads beyond the post itself:
+// `hydrate` resolves repost sources via `supabase.from('posts')...in('id', ids)`,
+// and a separate effect resolves the viewer's unlocked creators via
+// `supabase.from('creator_subscriptions')...eq('subscriber_id', id)`. Both
+// tables are backed by this small controllable registry (constraint-filtered,
+// the same way usePostEngagement.test.jsx's own harness works) instead of the
+// flat always-empty response every other table gets — everything else in
+// PostPage's flow (its own edits/deletes/reports) only cares that the call
+// resolves, not what it returns.
+const mockTables = vi.hoisted(() => ({ posts: [], creator_subscriptions: [] }))
+
 vi.mock('../../config/supabaseClient', () => {
-  function builder() {
+  function matches(row, cons) {
+    return Object.entries(cons).every(([col, vals]) => vals.flat().some((v) => row[col] === v))
+  }
+  function builder(table) {
+    const cons = {}
     const b = {
-      select: vi.fn(() => b), eq: vi.fn(() => b), in: vi.fn(() => b),
+      select: vi.fn(() => b),
+      eq: vi.fn((col, val) => { (cons[col] = cons[col] || []).push(val); return b }),
+      in: vi.fn((col, vals) => { (cons[col] = cons[col] || []).push(vals); return b }),
       order: vi.fn(() => b), limit: vi.fn(() => b),
       update: vi.fn(() => b), delete: vi.fn(() => b), insert: vi.fn(() => b),
       maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
       single: vi.fn(() => Promise.resolve({ data: null, error: null })),
-      then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      then: (resolve) => {
+        const rows = (mockTables[table] || []).filter((row) => matches(row, cons))
+        return Promise.resolve({ data: rows, error: null }).then(resolve)
+      },
     }
     return b
   }
   return {
     supabase: {
-      from: vi.fn(() => builder()),
+      from: vi.fn((table) => builder(table)),
       rpc: vi.fn(() => Promise.resolve({ data: [], error: null })),
     },
   }
@@ -82,6 +97,8 @@ const post = (overrides = {}) => ({
 beforeEach(() => {
   postRepository.getPostById.mockReset()
   mockUseAuth.mockReturnValue({ user: null })
+  mockTables.posts = []
+  mockTables.creator_subscriptions = []
 })
 
 describe('PostPage', () => {
@@ -164,5 +181,56 @@ describe('PostPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
 
     expect(await screen.findByText('feed landing')).toBeInTheDocument()
+  })
+
+  // Fix round 1: a permalink to a repost used to fall through to "This post
+  // is no longer available" — resolveSource(post.repost_of) only ever found
+  // anything when Feed's own effect had populated repostSources, which never
+  // ran on PostPage. usePostEngagement.hydrate now resolves it directly.
+  it('a permalink to a repost renders the source post body, not the unavailable state', async () => {
+    mockTables.posts = [
+      {
+        id: 'src1', user_id: 'a9', post_type: 'text',
+        content: 'The original words, written by someone else.',
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+    ]
+    postRepository.getPostById.mockResolvedValue({
+      id: 'r1', user_id: 'u1', post_type: 'text', content: '🔁',
+      repost_of: 'src1', created_at: '2026-01-02T00:00:00.000Z',
+    })
+    renderAt('r1')
+
+    expect(await screen.findByText(/the original words, written by someone else/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no longer available/i)).not.toBeInTheDocument()
+  })
+
+  // Fix round 1 (C1): unlockedCreators used to be permanently empty on
+  // PostPage (only Feed's loadUnlocked ever populated it), so a subscriber
+  // hit the paywall for content they had already paid for. The hook now
+  // resolves it itself via a `user`-keyed effect.
+  it('renders a subscriber-only post body when the viewer has an active subscription to its author', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u1' } })
+    mockTables.creator_subscriptions = [
+      { creator_id: 'a1', subscriber_id: 'u1', expires_at: '2099-01-01T00:00:00.000Z' },
+    ]
+    postRepository.getPostById.mockResolvedValue(post({ subscriber_only: true, content: 'Subscriber-only body.' }))
+    renderAt()
+
+    expect(await screen.findByText('Subscriber-only body.')).toBeInTheDocument()
+    expect(screen.queryByText(/subscriber-only content/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the paywall for a subscriber-only post when the viewer has no active subscription', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u1' } })
+    mockTables.creator_subscriptions = []
+    postRepository.getPostById.mockResolvedValue(post({ subscriber_only: true, content: 'Subscriber-only body.' }))
+    renderAt()
+
+    // The teaser deliberately shows an opening snippet of the body above the
+    // gate (PostCard.jsx), so the real locked/unlocked signal is the gate
+    // itself — its "Subscribe to..." CTA only renders while still locked.
+    expect(await screen.findByText(/subscriber-only content/i)).toBeInTheDocument()
+    expect(screen.getByText(/subscribe to .* to read the rest/i)).toBeInTheDocument()
   })
 })

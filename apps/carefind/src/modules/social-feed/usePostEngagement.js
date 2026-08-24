@@ -1,13 +1,15 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { buildInterestProfile } from './feedEngine'
 import * as sel from './postSelectors.js'
 import { insertRowResolvingConflict, writeRepost, undoRepost, REPOST_CONTENT } from './engagement'
+import { unresolvedSourceIds, indexPosts } from './reposts.js'
 import { validateArticleForPublish } from '../news-publishing/articleContent.js'
 import { notify, NOTIF_MESSAGES } from '../../services/notify.js'
 import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../../utils/voiceCard.js'
 import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
+import { loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -27,6 +29,14 @@ function applyRows(setter, next, { merge, key = 'id' }) {
 function applyMap(setter, next, { merge }) {
   setter((prev) => (merge ? { ...prev, ...next } : next))
 }
+
+// Same shape PostCard needs to render any post — a resolved repost source is
+// rendered exactly like a normal card (issues #6/#8), so it needs the same
+// columns. Mirrors Feed.jsx's (pre-existing, now-redundant) POST_FEED_COLS;
+// duplicated rather than imported because Feed's constant isn't exported and
+// this task's scope is "don't touch Feed's block", not "wire Feed and the
+// hook together" — retiring Feed's copy is a follow-up (see hydrate below).
+const REPOST_SOURCE_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
 
 // Owns everything that answers "what is this post's engagement context?" —
 // the state, the reads that fill it, and the handlers that change it. Two
@@ -76,6 +86,39 @@ export function usePostEngagement({
   const [reportedPosts, setReportedPosts] = useState([])
   const [posts, setPosts] = useState([])
   const [deletingId, setDeletingId] = useState(null)
+  // id -> post, maintained by hydrate for every post it's ever given,
+  // separate from `posts` (Feed's ranked DISPLAY list, written only by
+  // Feed's loadFeed/toggleRepost). toggleLike/handleNotifyComment need "the
+  // post this id points at" to notify its author; scanning `posts` for that
+  // answers "is it on screen right now", which is empty on PostPage and
+  // would wrongly stay empty even once posts is populated elsewhere for a
+  // different purpose. Keeping this a separate identity cache means display
+  // ordering and lookup-by-id never fight over the same array.
+  const [postsById, setPostsById] = useState({})
+
+  // Which creators this viewer has an active paid subscription to — gates
+  // `isLocked` for subscriber-only/premium posts. Viewer-scoped, not
+  // post-scoped, so this lives in its own effect rather than inside hydrate:
+  // every consumer (Feed, PostPage, Task 6's PostModalRoute) needs the same
+  // answer to "can THIS viewer read locked content" regardless of which
+  // posts happen to be loaded. Previously only Feed populated this (its own
+  // loadUnlocked, now removed), so every other consumer's unlockedCreators
+  // stayed permanently empty and isLocked was permanently true — a paying
+  // subscriber hit the paywall for content they'd already paid for.
+  useEffect(() => {
+    let cancelled = false
+    if (!user) { setUnlockedCreators([]); return }
+    loadActiveCreatorIds(user.id).then((ids) => { if (!cancelled) setUnlockedCreators(ids) })
+    return () => { cancelled = true }
+  }, [user])
+
+  // Which repost sources hydrate has already resolved. A ref, not a read of
+  // `repostSources` state: hydrate is a useCallback memoized on [user], so a
+  // closure over `repostSources` would go stale the moment the first source
+  // resolves (the callback is never recreated just because that state
+  // changed) and every later hydrate would re-fetch every source it had
+  // already found. Mirrors the toggleRepost in-flight ref below, same reason.
+  const resolvedSourceIdsRef = useRef(new Set())
 
   // Fetches and stores the engagement context (reactions, profiles, comment/
   // share/save/gift counts, follows, the viewer's own signals) for the given
@@ -90,6 +133,12 @@ export function usePostEngagement({
       if (!merge) { setReactions([]); setProfiles({}); setCommentCounts({}) }
       return null
     }
+
+    // Identity cache (see postsById above): every post this call is given,
+    // keyed by id, added regardless of `merge` — an overwrite here would
+    // drop the ability to notify about a post that scrolled out of the
+    // feed's current display list but a reader still has open elsewhere.
+    setPostsById((prev) => ({ ...prev, ...indexPosts(list) }))
 
     const { data: reactionData } = await supabase
       .from('post_reactions')
@@ -195,6 +244,53 @@ export function usePostEngagement({
         subscriptionProfileIds: new Set((mySubRows?.data || []).map((s) => s.professional_id)),
       },
     })
+
+    // Reposts (issues #6/#8): resolve the source of any repost in THIS batch
+    // whose source isn't already known, so the card can show the original
+    // author's words under a "Reposted by" banner instead of falling through
+    // to "no longer available". Feed used to be the only place this ran
+    // (its own effect over `unresolvedSourceIds(engagement.state.posts)`);
+    // centralising it here means every consumer — Feed, PostPage, and Task
+    // 6's PostModalRoute — gets correct repost rendering without a third
+    // (or second) copy of the fetch. Feed's own effect is left in place for
+    // this round: it will simply find nothing left to fetch once this runs
+    // first, so it's redundant but harmless — retiring it is a follow-up.
+    //
+    // Always merges into repostSources regardless of `merge`: unlike the
+    // per-batch slices above, this is a pure resolved-source cache that only
+    // grows, so a deep-linked single post must never clobber sources a full
+    // feed load already resolved (and vice versa).
+    const wantedSourceIds = unresolvedSourceIds(list).filter((sourceId) => !resolvedSourceIdsRef.current.has(sourceId))
+    if (wantedSourceIds.length) {
+      const { data: sourceRows } = await supabase
+        .from('posts')
+        .select(REPOST_SOURCE_COLS)
+        .in('id', wantedSourceIds)
+      // Marked attempted regardless of outcome — a source that's genuinely
+      // gone (deleted, or RLS-hidden) must not be re-queried on every future
+      // hydrate. `resolveSource` still correctly returns null for it: this
+      // ref only guards the fetch, `repostSources` below only ever holds
+      // rows that were actually found.
+      wantedSourceIds.forEach((id) => resolvedSourceIdsRef.current.add(id))
+      if (sourceRows?.length) {
+        setRepostSources((prev) => ({ ...prev, ...indexPosts(sourceRows) }))
+        // A source's author may not be loaded yet — without it the card
+        // would credit "CareFind user" instead of the real writer.
+        const missingAuthorIds = [...new Set(sourceRows.map((p) => p.user_id))]
+          .filter((uid) => uid && !profileMap[uid] && !profiles[uid])
+        if (missingAuthorIds.length) {
+          const { data: extraProfiles } = await supabase
+            .from('profiles')
+            .select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url, location, country')
+            .in('id', missingAuthorIds)
+          if (extraProfiles?.length) {
+            const extraMap = {}
+            extraProfiles.forEach((p) => { extraMap[p.id] = p })
+            setProfiles((prev) => ({ ...prev, ...extraMap }))
+          }
+        }
+      }
+    }
 
     // The engine context — every pure signal the ranking reads. Ranking
     // itself (and anything, like viewer region, that only ranking needs)
@@ -336,7 +432,7 @@ export function usePostEngagement({
 
     logEngagement(postId)
 
-    const post = posts.find((p) => p.id === postId)
+    const post = postsById[postId]
     if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
   }
 
@@ -354,7 +450,7 @@ export function usePostEngagement({
   }
 
   async function handleNotifyComment(postId) {
-    const post = posts.find((p) => p.id === postId)
+    const post = postsById[postId]
     if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
   }
 
@@ -609,7 +705,7 @@ export function usePostEngagement({
     hydrate,
     engagementProps,
     state: {
-      posts, setPosts, reactions, setReactions, follows, setFollows,
+      posts, setPosts, postsById, reactions, setReactions, follows, setFollows,
       savedPosts, setSavedPosts, repostedPosts, setRepostedPosts,
       repostSources, setRepostSources, giftStats, setGiftStats,
       commentCounts, setCommentCounts, shareCounts, setShareCounts,

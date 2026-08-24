@@ -34,7 +34,7 @@ import Logo from './Logo.jsx'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import DrawingBoard from '../../components/DrawingBoard.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
-import { loadActiveCreatorIds, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
+import { coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
@@ -589,7 +589,6 @@ function Feed() {
     checkProfileComplete()
     loadLatestNews()
     loadUnreadNotifs()
-    loadUnlocked()
     loadPlatformLive()
     loadSeries()
     loadLiveSessions()
@@ -843,12 +842,6 @@ function Feed() {
       .order('created_at', { ascending: false })
       .limit(30)
     setSeriesList(data || [])
-  }
-
-  async function loadUnlocked() {
-    if (!user) { engagement.state.setUnlockedCreators([]); return }
-    const ids = await loadActiveCreatorIds(user.id)
-    engagement.state.setUnlockedCreators(ids)
   }
 
   async function loadUnreadNotifs() {

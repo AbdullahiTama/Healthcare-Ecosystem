@@ -6,7 +6,7 @@ const mockSupabase = vi.hoisted(() => {
     tables: {
       posts: [], post_reactions: [], post_reposts: [], profiles: [], post_comments: [],
       post_shares: [], saved_posts: [], follows: [], user_subscriptions: [],
-      businesses: [],
+      businesses: [], creator_subscriptions: [],
     },
     rpcRows: {},
     seq: 0,
@@ -171,6 +171,78 @@ describe('usePostEngagement.hydrate', () => {
   })
 })
 
+// Fix round 1: a permalink to a repost used to fall straight through to
+// "This post is no longer available" — resolveSource(post.repost_of) only
+// ever found anything once Feed's own effect (unresolvedSourceIds over
+// engagement.state.posts) had populated repostSources, and that effect never
+// ran anywhere but Feed. hydrate now resolves it directly, for every
+// consumer, using the same unresolvedSourceIds/indexPosts helpers Feed used.
+describe('usePostEngagement.hydrate repost source resolution', () => {
+  const repost = (id, sourceId, userId = 'u9') => ({
+    id, user_id: userId, repost_of: sourceId, post_type: 'text', content: '🔁',
+    created_at: '2026-01-02T00:00:00.000Z',
+  })
+  const sourcePost = (id, userId = 'a1') => ({
+    id, user_id: userId, post_type: 'text', content: 'original words',
+    created_at: '2026-01-01T00:00:00.000Z',
+  })
+  const postsCallCount = () => mockSupabase.supabase.from.mock.calls.filter(([t]) => t === 'posts').length
+
+  it('fetches a repost source not present in the batch and exposes it via resolveSource', async () => {
+    mockSupabase.data.tables.posts = [sourcePost('src1')]
+    const { result } = setup()
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(result.current.engagementProps.resolveSource('src1')).toEqual(
+      expect.objectContaining({ id: 'src1', content: 'original words' }),
+    )
+  })
+
+  it('does not re-fetch a repost source that is already resolved', async () => {
+    mockSupabase.data.tables.posts = [sourcePost('src1')]
+    const { result } = setup()
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(postsCallCount()).toBe(1)
+
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(postsCallCount()).toBe(1) // no second fetch — the entry survived
+    expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
+  })
+
+  it('merge:true does not clobber a repost source an earlier hydrate already resolved', async () => {
+    mockSupabase.data.tables.posts = [sourcePost('src1'), sourcePost('src2', 'a2')]
+    const { result } = setup()
+    await act(async () => { await result.current.hydrate([repost('r1', 'src1')]) })
+    expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
+
+    // A deep-linked repost arriving after (PostPage's merge:true) must not
+    // drop the source the first hydrate already resolved.
+    await act(async () => { await result.current.hydrate([repost('r2', 'src2', 'u8')], { merge: true }) })
+    expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
+    expect(result.current.engagementProps.resolveSource('src2')).toEqual(expect.objectContaining({ id: 'src2' }))
+  })
+})
+
+// Fix round 1 (C1): unlockedCreators — which creators the viewer has an
+// active paid subscription to — used to be populated exclusively by Feed's
+// own loadUnlocked effect, so it stayed permanently empty on every other
+// consumer and isLocked was permanently true: a paying subscriber hit the
+// paywall for content they'd already paid for. The hook now loads it itself.
+describe('usePostEngagement unlockedCreators', () => {
+  it('loads the active creator subscription on mount', async () => {
+    mockSupabase.data.tables.creator_subscriptions = [
+      { creator_id: 'a1', subscriber_id: 'u1', expires_at: '2099-01-01T00:00:00.000Z' },
+    ]
+    const { result } = setup()
+    await waitFor(() => { expect(result.current.state.unlockedCreators).toEqual(['a1']) })
+  })
+
+  it('clears unlockedCreators for a logged-out viewer', async () => {
+    const { result } = renderHook(() =>
+      usePostEngagement({ user: null, navigate: vi.fn(), toast: { show: vi.fn() } }))
+    await waitFor(() => { expect(result.current.state.unlockedCreators).toEqual([]) })
+  })
+})
+
 describe('usePostEngagement handlers', () => {
   it('optimistically likes and reconciles against the insert', async () => {
     mockSupabase.data.tables.post_reactions = []
@@ -183,6 +255,21 @@ describe('usePostEngagement handlers', () => {
     // The temp row was swapped for the persisted one, so an unlike has a real
     // id to delete rather than a phantom temp id.
     expect(result.current.state.reactions.every((r) => !String(r.id).startsWith('temp_'))).toBe(true)
+  })
+
+  // Fix round 1 (I1): toggleLike used to look the post up in `posts`, which
+  // only Feed's loadFeed/toggleRepost ever populate — PostPage hydrates a
+  // post without ever calling setPosts, so the author was never notified of
+  // a like from a permalink. It now reads the postsById identity cache
+  // hydrate maintains instead, exactly PostPage's flow: hydrate, then like.
+  it('notifies the post author on a like from a host that only ever called hydrate (never setPosts)', async () => {
+    mockSupabase.data.tables.post_reactions = []
+    const { result } = setup()
+    await act(async () => { await result.current.hydrate([post('p1', 'a1')]) })
+    expect(result.current.state.posts).toEqual([])
+
+    await act(async () => { await result.current.engagementProps.toggleLike('p1') })
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ recipientId: 'a1', actorId: 'u1', type: 'like' }))
   })
 
   it('unlikes on a second tap', async () => {
@@ -215,7 +302,10 @@ describe('usePostEngagement handlers', () => {
 
   it('notifies the post author when a comment is added, and the parent author on a reply', async () => {
     const { result } = setup()
-    act(() => { result.current.state.setPosts([post('p1', 'a1')]) })
+    // handleNotifyComment reads the postsById identity cache hydrate
+    // maintains, not the ranked `posts` display list (PostPage never
+    // populates that list, so the lookup has to work without it).
+    await act(async () => { await result.current.hydrate([post('p1', 'a1')]) })
     act(() => {
       result.current.engagementProps.setComments({ p1: [{ id: 'c1', user_id: 'a2' }] })
     })
