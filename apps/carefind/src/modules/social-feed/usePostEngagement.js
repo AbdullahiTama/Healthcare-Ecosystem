@@ -32,7 +32,7 @@ function applyMap(setter, next, { merge }) {
 // the state, the reads that fill it, and the handlers that change it. Two
 // consumers: the feed (many posts, overwrite) and PostPage (one post, merge).
 //
-// The four callbacks after `toast` are the seams where a handler needs
+// The five callbacks after `toast` are the seams where a handler needs
 // something that lives only in its host page. Each defaults to a no-op, so a
 // consumer that has no such state (PostPage) simply passes nothing and the
 // handler behaves as if that step were absent:

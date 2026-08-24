@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockSupabase = vi.hoisted(() => {
   const data = {
     tables: {
-      post_reactions: [], post_reposts: [], profiles: [], post_comments: [],
+      posts: [], post_reactions: [], post_reposts: [], profiles: [], post_comments: [],
       post_shares: [], saved_posts: [], follows: [], user_subscriptions: [],
       businesses: [],
     },
@@ -276,5 +276,55 @@ describe('usePostEngagement handlers', () => {
     const { result } = setup({ onSharingChange })
     await act(async () => { await result.current.engagementProps.shareCard(post('p1')) })
     expect(onSharingChange.mock.calls).toEqual([['p1'], [null]])
+  })
+})
+
+// The in-flight guard inside toggleRepost is the only thing stopping a
+// double-tap from issuing two full repost toggles. Until Task 4 it lived in
+// Feed.jsx and nothing covered it — raceConditions.test.js scopes it out
+// explicitly as "Feed's", PostCard passes the handler in as a stub. Now that
+// the hook holds the sole implementation, these two tests are what would go
+// red if a future edit dropped the ref.
+describe('usePostEngagement toggleRepost in-flight guard', () => {
+  const reposts = (sourceId) => (mockSupabase.data.tables.posts || []).filter((p) => p.repost_of === sourceId)
+
+  it('issues one repost, not two, for a double-tap in the same tick', async () => {
+    const { result } = setup()
+    const source = post('p1')
+    await act(async () => { await result.current.hydrate([source]) })
+
+    // Both calls start before either awaits its first write, which is exactly
+    // the double-tap the guard exists for.
+    await act(async () => {
+      await Promise.all([
+        result.current.engagementProps.toggleRepost(source),
+        result.current.engagementProps.toggleRepost(source),
+      ])
+    })
+
+    expect(mockSupabase.data.tables.post_reposts).toHaveLength(1)
+    expect(reposts('p1')).toHaveLength(1)
+    expect(result.current.engagementProps.userHasReposted('p1')).toBe(true)
+  })
+
+  it('releases the guard once a toggle settles, on both the repost and undo paths', async () => {
+    const { result } = setup()
+    const source = post('p1')
+    await act(async () => { await result.current.hydrate([source]) })
+
+    await act(async () => { await result.current.engagementProps.toggleRepost(source) })
+    expect(result.current.engagementProps.userHasReposted('p1')).toBe(true)
+
+    // A leaked ref would swallow this tap and leave the repost standing. The
+    // undo path returns from inside the try, so only the `finally` clears it.
+    await act(async () => { await result.current.engagementProps.toggleRepost(source) })
+    expect(result.current.engagementProps.userHasReposted('p1')).toBe(false)
+    expect(mockSupabase.data.tables.post_reposts).toHaveLength(0)
+    expect(reposts('p1')).toHaveLength(0)
+
+    // ...and the undo released it too, so the post can be reposted again.
+    await act(async () => { await result.current.engagementProps.toggleRepost(source) })
+    expect(result.current.engagementProps.userHasReposted('p1')).toBe(true)
+    expect(mockSupabase.data.tables.post_reposts).toHaveLength(1)
   })
 })
