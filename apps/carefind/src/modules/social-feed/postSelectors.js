@@ -17,9 +17,19 @@ export function countFrom(map, postId) {
   return (map || {})[postId] || 0
 }
 
-export const commentTotal = countFrom
+// Prefer the thread we've actually loaded (it reflects a just-added or
+// just-deleted comment); fall back to the count already fetched, so the
+// number is right before the thread is ever opened. Moved verbatim from
+// Feed.jsx:1488-1492 — `comments` and `commentCounts` are two different state
+// slices, not one map, so this cannot be `countFrom`.
+export function commentTotal(comments, commentCounts, postId) {
+  const loaded = (comments || {})[postId]
+  if (loaded) return loaded.length
+  return (commentCounts || {})[postId] || 0
+}
 
-export function userHasReposted(repostedPosts, postId) {
+export function userHasReposted(repostedPosts, postId, userId) {
+  if (!userId) return false
   return (repostedPosts || []).some((r) => r.post_id === postId)
 }
 

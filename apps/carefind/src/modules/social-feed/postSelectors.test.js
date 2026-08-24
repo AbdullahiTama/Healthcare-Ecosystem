@@ -25,15 +25,24 @@ describe('postSelectors', () => {
   })
 
   it('reads counts out of a keyed map, defaulting to 0', () => {
-    expect(commentTotal({ p1: 3 }, 'p1')).toBe(3)
-    expect(commentTotal({}, 'p1')).toBe(0)
     expect(countFrom({ p1: 7 }, 'p1')).toBe(7)
     expect(countFrom(undefined, 'p1')).toBe(0)
   })
 
+  it('prefers a loaded comment thread over the count map, falling back through both', () => {
+    // Thread loaded: its length wins, even if the count map disagrees.
+    expect(commentTotal({ p1: [{ id: 'c1' }, { id: 'c2' }] }, { p1: 99 }, 'p1')).toBe(2)
+    // No thread loaded for this post: falls back to the count map.
+    expect(commentTotal({}, { p1: 3 }, 'p1')).toBe(3)
+    // Absent from both: zero.
+    expect(commentTotal({}, {}, 'p1')).toBe(0)
+  })
+
   it('reports repost and save membership', () => {
-    expect(userHasReposted([{ post_id: 'p1' }], 'p1')).toBe(true)
-    expect(userHasReposted([], 'p1')).toBe(false)
+    expect(userHasReposted([{ post_id: 'p1' }], 'p1', 'u1')).toBe(true)
+    expect(userHasReposted([], 'p1', 'u1')).toBe(false)
+    // A logged-out viewer has reposted nothing.
+    expect(userHasReposted([{ post_id: 'p1' }], 'p1', null)).toBe(false)
     expect(isSaved([{ post_id: 'p1' }], 'p1')).toBe(true)
     expect(isSaved([{ post_id: 'p2' }], 'p1')).toBe(false)
   })
