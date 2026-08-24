@@ -14,8 +14,12 @@ describe('SectionHeading', () => {
   })
 
   it('omits intro paragraph when not provided', () => {
-    wrap(<SectionHeading eyebrow="Team" title="The people" />)
-    expect(screen.queryByText('Mission')).not.toBeInTheDocument()
+    const { unmount } = wrap(<SectionHeading eyebrow="Team" title="The people" />)
+    expect(screen.queryByText('To connect people.')).not.toBeInTheDocument()
+    unmount()
+    wrap(<SectionHeading title="The people" />)
+    expect(screen.queryByText('Team')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'The people' })).toBeInTheDocument()
   })
 })
 
