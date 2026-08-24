@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { fireEvent } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SectionHeading from './SectionHeading'
 import Marquee from './Marquee'
+import LandingNav from './LandingNav'
+import SiteFooter from './SiteFooter'
+import CtaBand from './CtaBand'
 
 export const wrap = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>)
 
@@ -30,5 +34,73 @@ describe('Marquee', () => {
     expect(copies).toHaveLength(2)
     expect(copies[1].closest('[aria-hidden="true"]')).not.toBeNull()
     expect(screen.getByLabelText('What you can find')).toBeInTheDocument()
+  })
+})
+
+describe('LandingNav', () => {
+  it('renders anchor links and both action buttons', () => {
+    wrap(
+      <LandingNav
+        links={[{ label: 'Features', target: '#features' }, { label: 'About', target: '/about' }]}
+        signInTo="/login"
+        getStartedTo="/search"
+      />,
+    )
+    expect(screen.getByRole('link', { name: 'Features' })).toHaveAttribute('href', '#features')
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Get started' })).toBeInTheDocument()
+  })
+
+  it('navigates to getStartedTo when Get started is clicked', () => {
+    // Supplies its own MemoryRouter (for initialEntries + Routes), so bypasses
+    // the wrap helper to avoid nesting two routers.
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<LandingNav links={[]} signInTo="/login" getStartedTo="/search" />} />
+          <Route path="/search" element={<div>search page marker</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Get started' }))
+    expect(screen.getByText('search page marker')).toBeInTheDocument()
+  })
+
+  it('renders as a banner landmark', () => {
+    wrap(<LandingNav links={[]} signInTo="/login" getStartedTo="/search" />)
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+  })
+})
+
+describe('SiteFooter', () => {
+  it('renders brand line and links inside a contentinfo landmark', () => {
+    wrap(
+      <SiteFooter
+        brandLine="(c) 2026 CareFind"
+        links={[{ label: 'About', to: '/about' }, { label: 'Top', to: '#top' }]}
+      />,
+    )
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+    expect(screen.getByText('(c) 2026 CareFind')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about')
+    expect(screen.getByRole('link', { name: 'Top' })).toHaveAttribute('href', '#top')
+  })
+})
+
+describe('CtaBand', () => {
+  it('renders title, body and both actions as links', () => {
+    wrap(
+      <CtaBand
+        title="Ready to find care?"
+        body="Join thousands."
+        primary={{ label: 'Start searching', to: '/search', variant: 'solid' }}
+        secondary={{ label: 'Browse feed', to: '/feed', variant: 'ghost' }}
+      />,
+    )
+    expect(screen.getByRole('heading', { name: 'Ready to find care?' })).toBeInTheDocument()
+    expect(screen.getByText('Join thousands.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Start searching' })).toHaveAttribute('href', '/search')
+    expect(screen.getByRole('link', { name: 'Browse feed' })).toHaveAttribute('href', '/feed')
   })
 })
