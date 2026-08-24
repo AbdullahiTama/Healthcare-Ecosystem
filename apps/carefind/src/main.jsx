@@ -6,6 +6,7 @@ import { AuthProvider } from './providers/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
+import PostPage from './modules/social-feed/PostPage.jsx'
 import Search from './modules/healthcare-discovery/Search.jsx'
 import BusinessProfile from './modules/business-profiles-reviews/BusinessProfile.jsx'
 import Login from './modules/account/Login.jsx'
@@ -58,6 +59,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/u/:id" element={<PublicProfile />} />
+          <Route path="/post/:id" element={<PostPage />} />
           <Route path="/drug/:name" element={<DrugProfile />} />
           <Route path="/news" element={<News />} />
           <Route path="/news/:id" element={<NewsArticle />} />
