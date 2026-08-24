@@ -70,6 +70,9 @@ export function parseShareTarget(rawUrl) {
   const segments = path.split('/').filter(Boolean)
   const params = new URLSearchParams(query)
 
+  if (segments[0] === 'post' && segments[1]) {
+    return UUID.test(segments[1]) ? { kind: 'post', id: segments[1] } : null
+  }
   if (segments[0] === 'feed') {
     const postId = params.get('post')
     return UUID.test(postId || '') ? { kind: 'post', id: postId } : null

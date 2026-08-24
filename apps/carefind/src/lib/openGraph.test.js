@@ -57,7 +57,11 @@ describe('isCrawlerUserAgent', () => {
 })
 
 describe('parseShareTarget', () => {
-  it('reads a post id from the URL named in the issue', () => {
+  it('reads a post id from the permalink', () => {
+    expect(parseShareTarget(`/post/${POST_ID}`)).toEqual({ kind: 'post', id: POST_ID })
+  })
+
+  it('still reads a post id from the legacy ?post= URL — links already shared must keep previewing', () => {
     expect(parseShareTarget(`/feed?post=${POST_ID}`)).toEqual({ kind: 'post', id: POST_ID })
   })
 
@@ -78,9 +82,15 @@ describe('parseShareTarget', () => {
     expect(parseShareTarget('')).toBeNull()
   })
 
+  it('rejects a permalink that is not a uuid rather than querying with it', () => {
+    expect(parseShareTarget('/post/not-a-uuid')).toBeNull()
+    expect(parseShareTarget('/post/')).toBeNull()
+  })
+
   it('rejects anything that is not a uuid rather than querying with it', () => {
     expect(parseShareTarget('/u/../../etc/passwd')).toBeNull()
     expect(parseShareTarget('/feed?post=1 OR 1=1')).toBeNull()
+    expect(parseShareTarget('/post/1 OR 1=1')).toBeNull()
     expect(parseShareTarget('/news/abc')).toBeNull()
   })
 })
