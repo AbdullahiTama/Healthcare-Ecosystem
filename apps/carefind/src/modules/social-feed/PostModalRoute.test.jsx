@@ -224,4 +224,31 @@ describe('PostModalRoute', () => {
       window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
     }
   })
+
+  // Delete marks dirty through a different code path than the like/save/
+  // repost/edit/comment mutations above: ConfirmDialog's onConfirm calls
+  // markDirty() directly (PostModalRoute.jsx), not one of the cardProps
+  // wrappers. It reaches close() via handleDeletePost's onPostDeleted
+  // callback (close itself), rather than a user tapping "Close" — so this is
+  // genuinely separate logic from the like-path test above, not the same
+  // path exercised twice.
+  it('confirming delete dispatches the dirty event once the overlay closes', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'a1' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    const onDirty = vi.fn()
+    window.addEventListener(POSTS_DIRTY_EVENT, onDirty)
+    try {
+      renderAt('p1', { from: '/saved', fromLabel: 'the saved-posts screen' })
+      await screen.findByRole('dialog')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete post' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+
+      expect(await screen.findByText('the saved-posts screen')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(onDirty).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
+    }
+  })
 })
