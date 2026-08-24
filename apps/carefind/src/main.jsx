@@ -32,7 +32,7 @@ import LiveShow from './modules/live-streaming/LiveShow.jsx'
 import PlaylistCreate from './modules/playlists/PlaylistCreate.jsx'
 import PlaylistView from './modules/playlists/PlaylistView.jsx'
 import LiveDashboard from './modules/live-streaming/LiveDashboard.jsx'
-import ForBusiness from './modules/marketing/ForBusiness.jsx'
+import Home from './modules/marketing/Home.jsx'
 import About from './modules/marketing/About.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
@@ -50,7 +50,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <ErrorBoundary>
           <Routes>
           {/* Public — no login required */}
-          <Route path="/" element={<ForBusiness />} />
+          <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/feed" element={<Feed />} />
           <Route path="/search" element={<Search />} />
