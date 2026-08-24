@@ -32,7 +32,7 @@ function applyMap(setter, next, { merge }) {
 // the state, the reads that fill it, and the handlers that change it. Two
 // consumers: the feed (many posts, overwrite) and PostPage (one post, merge).
 //
-// The five callbacks after `toast` are the seams where a handler needs
+// The six callbacks after `toast` are the seams where a handler needs
 // something that lives only in its host page. Each defaults to a no-op, so a
 // consumer that has no such state (PostPage) simply passes nothing and the
 // handler behaves as if that step were absent:
@@ -43,6 +43,8 @@ function applyMap(setter, next, { merge }) {
 //   onReportPost(postId)       — hands a post to the host's reason picker.
 //   onEditingPostChange(null)  — closes the host's inline editor after a save.
 //   reloadFeed()               — refetches the host's post list after an edit.
+//   onPostDeleted()            — the aftermath of a delete: the feed reloads
+//                                its list, a permalink page navigates away.
 export function usePostEngagement({
   user,
   navigate,
@@ -52,6 +54,7 @@ export function usePostEngagement({
   onReportPost = () => {},
   onEditingPostChange = () => {},
   reloadFeed = () => {},
+  onPostDeleted = () => {},
 }) {
   const [reactions, setReactions] = useState([])
   const [profiles, setProfiles] = useState({})
@@ -72,6 +75,7 @@ export function usePostEngagement({
   const [replyingTo, setReplyingTo] = useState(null)
   const [reportedPosts, setReportedPosts] = useState([])
   const [posts, setPosts] = useState([])
+  const [deletingId, setDeletingId] = useState(null)
 
   // Fetches and stores the engagement context (reactions, profiles, comment/
   // share/save/gift counts, follows, the viewer's own signals) for the given
@@ -277,6 +281,19 @@ export function usePostEngagement({
     }
     onEditingPostChange(null)
     reloadFeed()
+  }
+
+  // Not one of the ten handlers Task 3 moved — it stayed behind in Feed.jsx
+  // until Task 5 needed a second host. The write and the `deletingId` state
+  // are identical for every host; only the aftermath differs, so that's the
+  // one thing left injected. `.eq('user_id', user.id)` is the client-side
+  // half of the ownership check — RLS is the other half — and must not be
+  // simplified away.
+  async function handleDeletePost(postId) {
+    setDeletingId(postId)
+    await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
+    onPostDeleted()
+    setDeletingId(null)
   }
 
   async function toggleLike(postId) {
@@ -584,6 +601,7 @@ export function usePostEngagement({
     shareCard,
     openReport,
     handleEditPost,
+    handleDeletePost,
     handleCommentAdded,
   }
 
@@ -598,6 +616,13 @@ export function usePostEngagement({
       saveCounts, setSaveCounts, userSubscriptions, setUserSubscriptions,
       unlockedCreators, setUnlockedCreators, openComments, setOpenComments,
       reportedPosts, setReportedPosts, profiles, setProfiles,
+      // Normalises the asymmetry the Task 4 review flagged: every other
+      // array/map slice above is reachable from `state`; these four were
+      // reachable only via `engagementProps`. Left there too — Feed already
+      // reads them from that side and this task must not churn Feed.
+      comments, setComments, commentDrafts, setCommentDrafts,
+      editingComment, setEditingComment, replyingTo, setReplyingTo,
+      deletingId, setDeletingId,
     },
   }
 }

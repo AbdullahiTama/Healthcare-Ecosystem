@@ -124,7 +124,6 @@ function Feed() {
   const [giftingPost, setGiftingPost] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
   const [editingPost, setEditingPost] = useState(null) // { id, content }
-  const [deletingId, setDeletingId] = useState(null)
   const [content, setContent] = useState('')
   const [postType, setPostType] = useState('text') // text, visual, question, review, article
   const [visualTheme, setVisualTheme] = useState('teal')
@@ -184,6 +183,9 @@ function Feed() {
     // handleEditPost closes the inline editor and refetches after a save.
     onEditingPostChange: setEditingPost,
     reloadFeed: loadFeed,
+    // handleDeletePost's aftermath: the feed reloads its list. PostPage (the
+    // hook's other consumer) navigates away instead — there is no list there.
+    onPostDeleted: loadFeed,
   })
   const openCommentsRef = useRef(engagement.state.openComments)
 
@@ -1052,13 +1054,6 @@ function Feed() {
   // When searching, ignore the tab filter and show the raw search hits.
   const isSearching = feedResults !== null
   const displayPosts = isSearching ? engagement.state.posts : visiblePosts
-
-  async function handleDeletePost(postId) {
-    setDeletingId(postId)
-    await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
-    loadFeed()
-    setDeletingId(null)
-  }
 
   async function submitReport(reason) {
     const postId = reportPostId
@@ -2051,7 +2046,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       <ConfirmDialog
         show={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
-        onConfirm={() => { handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        onConfirm={() => { engagement.engagementProps.handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
         title="Delete this post?"
         consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
         confirmLabel="Delete"
