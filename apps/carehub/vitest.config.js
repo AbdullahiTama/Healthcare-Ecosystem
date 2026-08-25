@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{js,jsx}'],
     globals: true,
+    setupFiles: ['./src/test/setup.js'],
   },
   // Mirrors vite.config.js so tests resolve the shared design-system package
   // the same way the build does (Vitest does not read Vite's resolve.alias).
