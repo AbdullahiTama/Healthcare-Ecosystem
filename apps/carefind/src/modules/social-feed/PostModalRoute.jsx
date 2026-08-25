@@ -14,6 +14,28 @@ import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 
+// The members of usePostEngagement's `engagementProps` that CANNOT make Feed's
+// copy of a post stale — the only ones this overlay hands to PostCard
+// unwrapped (see `wrapMutations` and the cardProps comment below).
+//
+// Two kinds, and nothing else belongs here:
+//  - Pure readers. Every selector derives a number or a boolean from state
+//    already held; several are called during PostCard's render, so wrapping
+//    them would mark the overlay dirty just for drawing it.
+//  - View-local state that no other surface shows: whether this overlay's
+//    comment panel is open, the draft text in its comment box, which comment
+//    it is editing, and which one it is replying to. Feed keeps its own.
+//    `toggleComments` fetches, but a fetch is not a mutation.
+//
+// Adding a name here is a claim that Feed cannot be showing anything that
+// member changes. Everything absent is treated as a mutation.
+const READ_ONLY_ENGAGEMENT_MEMBERS = new Set([
+  'formatCount', 'timeAgo', 'likeCount', 'userHasLiked', 'commentTotal',
+  'shareCount', 'saveCount', 'giftCount', 'userHasReposted', 'isSaved',
+  'isFollowing', 'isLocked', 'resolveSource',
+  'toggleComments', 'setCommentDrafts', 'setEditingComment', 'setReplyingTo',
+])
+
 // A post rendered as an overlay above whatever page is underneath —
 // /post/:id, opened from inside the feed. Mounted only by BackgroundRoutes'
 // second <Routes> (no `location` prop, so it matches the real URL), which
@@ -26,8 +48,9 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 // inside the Feed behind this modal still reads the BACKGROUND location
 // (`/feed`), never `/post/:id` — see BackgroundRoutes.jsx.
 //
-// Owning a separate instance means a mutation in here (edit, delete, like,
-// comment, save, repost) never touches Feed's copy of the same post —
+// Owning a separate instance means NO mutation made in here — like, save,
+// repost, follow, share, gift, report, edit, delete, or anything done to a
+// comment — ever touches Feed's copy of the same post;
 // dirtyRef + close()'s markPostsDirty() below is what tells Feed to reload
 // once the overlay closes. See postSync.js for why that's a DOM event rather
 // than router or React state.
@@ -63,15 +86,31 @@ export default function PostModalRoute() {
   const [sharingId, setSharingId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
 
-  // Whether any mutation happened during this overlay's lifetime (edit,
-  // delete, like, comment, save, repost). Feed mounted underneath owns none
-  // of this overlay's engagement state (see the file comment above), so it
-  // has no way to know a card it's showing just went stale — this is how it
-  // finds out. A ref, not state: it needs to be readable from `close()`
-  // without triggering a re-render of its own, and nothing here ever renders
-  // off it.
+  // Whether any mutation happened during this overlay's lifetime — see
+  // `wrapMutations` and cardProps below for how that is decided, and
+  // submitReport / GiftPanel's onClose for the two the overlay owns itself.
+  // The Feed mounted underneath owns none of this overlay's engagement state
+  // (see the file comment above), so it has no way to know a card it's showing
+  // just went stale — this is how it finds out. A ref, not state: it needs to
+  // be readable from `close()` without triggering a re-render of its own, and
+  // nothing here ever renders off it.
   const dirtyRef = useRef(false)
   function markDirty() { dirtyRef.current = true }
+
+  // Re-exposes an engagement surface with every mutating member marking this
+  // overlay dirty before it runs. Non-functions (state slices like `profiles`
+  // or `comments`) and the read-only members above pass through untouched;
+  // return values are preserved, so an awaited handler still resolves to what
+  // the hook returned.
+  function wrapMutations(props) {
+    const wrapped = {}
+    for (const [name, value] of Object.entries(props)) {
+      wrapped[name] = typeof value === 'function' && !READ_ONLY_ENGAGEMENT_MEMBERS.has(name)
+        ? (...args) => { markDirty(); return value(...args) }
+        : value
+    }
+    return wrapped
+  }
 
   // Closing this overlay is always `navigate(-1)`: it pops the history entry
   // that carried `state.background`, which reveals the page underneath at its
@@ -172,26 +211,34 @@ export default function PostModalRoute() {
       return
     }
 
+    // Reporting is one of the two mutations this overlay owns itself rather
+    // than borrowing from the hook, so `wrapMutations` cannot see it: mark
+    // dirty here, on success only. Feed renders the post's menu item as
+    // "Reported" off the same `reportedPosts` list.
+    markDirty()
     engagement.state.setReportedPosts((prev) => [...prev, postId])
     toast.show("Thanks: our team will review this post.", { type: 'success' })
   }
 
-  // Mutations PostCard can fire straight into the hook (like/save/repost/edit/
-  // comment) — the ones Finding 20 calls out as needing to reach Feed. Wrapped
-  // here, not inside usePostEngagement itself: the hook's other consumers
-  // (Feed, PostPage) have no "host underneath" to tell, so the dirty tracking
-  // belongs at this call site, not in shared code. Delete goes through
-  // ConfirmDialog's onConfirm below instead of this object, since PostCard
-  // only ever opens the confirm dialog (setConfirmDeleteId), never deletes
-  // directly.
-  const { toggleLike, toggleSave, toggleRepost, handleEditPost, handleCommentAdded, ...restEngagementProps } = engagement.engagementProps
+  // Everything the hook exposes to PostCard is wrapped to mark this overlay
+  // dirty before it runs, EXCEPT the members named as read-only above. Wrapped
+  // here rather than inside usePostEngagement: the hook's other consumers
+  // (Feed, PostPage) have no host underneath to tell, so dirty tracking
+  // belongs at this call site, not in shared code.
+  //
+  // Derived by exclusion, deliberately. This started as an allow-list of five
+  // handler names and had already drifted by the time it was reviewed —
+  // toggleFollow (which changes Feed's Following-tab MEMBERSHIP, not just a
+  // count), sharePost, and every comment edit/delete arriving through
+  // setComments were all reachable from in here and none of them marked
+  // dirty. Naming five more would leave the same trap for the next handler
+  // added to the hook, so the default is now "a hook member mutates", and a
+  // new one is covered by construction. The two failure modes are not
+  // symmetric: guessing wrong in this direction costs Feed one redundant
+  // loadFeed on close, guessing wrong the other way leaves a reader looking
+  // at a stale feed with no way to know.
   const cardProps = {
-    ...restEngagementProps,
-    toggleLike: (...args) => { markDirty(); return toggleLike(...args) },
-    toggleSave: (...args) => { markDirty(); return toggleSave(...args) },
-    toggleRepost: (...args) => { markDirty(); return toggleRepost(...args) },
-    handleEditPost: (...args) => { markDirty(); return handleEditPost(...args) },
-    handleCommentAdded: (...args) => { markDirty(); return handleCommentAdded(...args) },
+    ...wrapMutations(engagement.engagementProps),
     user,
     navigate,
     authorName,
@@ -221,6 +268,14 @@ export default function PostModalRoute() {
           recipientId={giftingPost.authorId}
           onClose={() => {
             const { postId } = giftingPost
+            // Gifting is the overlay's other own mutation (see submitReport),
+            // invisible to `wrapMutations`. Marked here, synchronously and
+            // unconditionally, rather than after the stats read below tells us
+            // whether the count actually moved: the reader can close the
+            // overlay before that read resolves, and close() samples dirtyRef
+            // on the spot. Over-marking costs Feed one reload after a reader
+            // opened the gift sheet and sent nothing.
+            markDirty()
             setGiftingPost(null)
             supabase
               .rpc('post_gift_stats', { p_post_id: postId })
@@ -238,12 +293,14 @@ export default function PostModalRoute() {
         show={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={() => {
-          // Marked before the delete resolves, not inside handleDeletePost's
-          // onPostDeleted callback (which is `close` itself): close() reads
-          // dirtyRef synchronously, so it must already be true by the time
-          // that callback runs.
-          markDirty()
-          engagement.engagementProps.handleDeletePost(confirmDeleteId)
+          // The wrapped handler, not the raw one: it marks dirty before the
+          // delete is even issued, which is what this path needs. Delete
+          // reaches close() through handleDeletePost's own onPostDeleted
+          // callback (`close` itself) rather than a tap on Close, and close()
+          // samples dirtyRef synchronously — so it has to already be true by
+          // the time the write resolves. PostCard never deletes directly; it
+          // only opens this dialog (setConfirmDeleteId).
+          cardProps.handleDeletePost(confirmDeleteId)
           setConfirmDeleteId(null)
         }}
         title="Delete this post?"

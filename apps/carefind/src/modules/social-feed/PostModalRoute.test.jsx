@@ -56,7 +56,19 @@ vi.mock('../../config/supabaseClient', () => {
   }
 })
 vi.mock('./repositories', () => ({ postRepository: { getPostById: vi.fn() }, commentRepository: {} }))
-vi.mock('./components/CommentThread.jsx', () => ({ CommentThread: () => <div>comments</div> }))
+// The real thread's edit/delete/like handlers all end the same way — a fresh
+// fetch handed back through `onCommentsChange`, which PostCard turns into the
+// engagement hook's `setComments`. That callback is the only thing
+// PostModalRoute can observe them by without reaching into CommentThread's
+// internals, so the stub exposes it as a button rather than swallowing it.
+vi.mock('./components/CommentThread.jsx', () => ({
+  CommentThread: ({ onCommentsChange }) => (
+    <div>
+      comments
+      <button type="button" onClick={() => onCommentsChange([])}>simulate a comment removed</button>
+    </div>
+  ),
+}))
 vi.mock('../../utils/VisualCard.jsx', () => ({ default: () => <div /> }))
 vi.mock('../news-publishing/ArticleEditor.jsx', () => ({ default: () => <div /> }))
 // Rendered as plain buttons (not a real dropdown) so the edit/delete/report
@@ -225,13 +237,112 @@ describe('PostModalRoute', () => {
     }
   })
 
+  // Fix round 2 (I1): the dirty bridge used to wrap an allow-list of five
+  // named handlers, and follow was not one of them — so this exact sequence
+  // silently broke. Follow is the worst of the five that were missing because
+  // it changes list MEMBERSHIP rather than a count: Feed filters visiblePosts
+  // for the Following tab on engagement.state.follows, so unfollowing an
+  // author in here and closing left the feed still listing their posts, with
+  // the button still reading "Following". The wrapping is now derived by
+  // exclusion (READ_ONLY_ENGAGEMENT_MEMBERS in PostModalRoute.jsx), which is
+  // what stops the next handler added to the hook from re-opening this hole —
+  // but this is the path that actually regressed, so it gets its own test.
+  it('following the author in the overlay and closing dispatches the dirty event', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post({ user_id: 'a1' }))
+    const onDirty = vi.fn()
+    window.addEventListener(POSTS_DIRTY_EVENT, onDirty)
+    try {
+      renderAt()
+      const dialog = await screen.findByRole('dialog')
+
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Follow / }))
+      await within(dialog).findByRole('button', { name: /^Unfollow / })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+      expect(onDirty).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
+    }
+  })
+
+  // Comment ADDs already marked dirty (handleCommentAdded was in the old
+  // allow-list); edits, deletes and comment likes did not, because they never
+  // touch that callback — they come back through onCommentsChange, i.e. the
+  // hook's setComments, which the old list did not wrap. Opening the panel is
+  // deliberately not a mutation (toggleComments is named read-only), so this
+  // also pins the exclusion: open, change nothing, and Feed is not disturbed.
+  it('a comment edited or deleted in the overlay marks it dirty; merely opening the thread does not', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    const onDirty = vi.fn()
+    window.addEventListener(POSTS_DIRTY_EVENT, onDirty)
+    try {
+      renderAt()
+      const dialog = await screen.findByRole('dialog')
+
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Comments on/ }))
+      const removed = await screen.findByRole('button', { name: 'simulate a comment removed' })
+      fireEvent.click(removed)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(onDirty).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
+    }
+  })
+
+  it('opening the comment thread and changing nothing leaves the feed alone', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    const onDirty = vi.fn()
+    window.addEventListener(POSTS_DIRTY_EVENT, onDirty)
+    try {
+      renderAt()
+      const dialog = await screen.findByRole('dialog')
+
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Comments on/ }))
+      await screen.findByRole('button', { name: 'simulate a comment removed' })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(onDirty).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
+    }
+  })
+
+  // The other half of the same finding: reporting is one of the two mutations
+  // PostModalRoute owns itself rather than borrowing from the hook, so no
+  // amount of wrapping engagementProps can cover it — submitReport has to say
+  // so at its own call site. Feed shows the result (the menu item reads
+  // "Reported") off the same reportedPosts list.
+  it('reporting the post in the overlay and closing dispatches the dirty event', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    const onDirty = vi.fn()
+    window.addEventListener(POSTS_DIRTY_EVENT, onDirty)
+    try {
+      renderAt()
+      await screen.findByRole('dialog')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Report post' }))
+      fireEvent.click(await screen.findByRole('button', { name: /^Spam/ }))
+
+      await screen.findByText(/our team will review this post/i)
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+      expect(onDirty).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener(POSTS_DIRTY_EVENT, onDirty)
+    }
+  })
+
   // Delete marks dirty through a different code path than the like/save/
-  // repost/edit/comment mutations above: ConfirmDialog's onConfirm calls
-  // markDirty() directly (PostModalRoute.jsx), not one of the cardProps
-  // wrappers. It reaches close() via handleDeletePost's onPostDeleted
-  // callback (close itself), rather than a user tapping "Close" — so this is
-  // genuinely separate logic from the like-path test above, not the same
-  // path exercised twice.
+  // repost/edit/comment mutations above: it reaches close() via
+  // handleDeletePost's own onPostDeleted callback (close itself), rather than
+  // a user tapping "Close" — so this is genuinely separate logic from the
+  // like-path test above, not the same path exercised twice.
   it('confirming delete dispatches the dirty event once the overlay closes', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'a1' } })
     postRepository.getPostById.mockResolvedValue(post())
