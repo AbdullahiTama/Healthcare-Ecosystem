@@ -804,6 +804,13 @@ export function usePostEngagement({
   return {
     hydrate,
     engagementProps,
+    // `state` is the escape hatch, not the contract. `engagementProps` is what
+    // a consumer should reach for; everything here is raw internals exposed so
+    // the three hosts can drive edge cases the props surface does not cover
+    // (Feed's ranked list, a direct setter in a test, the report's in-flight
+    // marker). Reaching into it from new code is a sign the thing you need
+    // belongs on `engagementProps` instead — add it there and every consumer
+    // gets it, rather than growing another dependency on the hook's insides.
     state: {
       posts, setPosts, postsById, reactions, setReactions, follows, setFollows,
       savedPosts, setSavedPosts, repostedPosts, setRepostedPosts,

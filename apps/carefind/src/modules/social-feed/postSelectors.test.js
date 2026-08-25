@@ -96,3 +96,32 @@ describe('postSelectors', () => {
     expect(resolveSourceFrom(posts, sources, 's3')).toBeNull()
   })
 })
+
+// Deferred from Task 1: every selector carries a defensive `(x || [])`, and
+// isLocked an `if (!post)` guard, none of which were covered. They exist
+// because hydrate populates these slices asynchronously — a card can render
+// against undefined state on the first frame of a permalink page, before the
+// fetch resolves. Pinning them so a "tidy-up" that drops the fallback fails
+// here rather than crashing that first render.
+describe('selectors tolerate un-hydrated state', () => {
+  it('likeCount and userHasLiked survive undefined reactions', () => {
+    expect(likeCount(undefined, 'p1')).toBe(0)
+    expect(likeCount(null, 'p1')).toBe(0)
+    expect(userHasLiked(undefined, 'p1', 'u1')).toBe(false)
+  })
+
+  it('isSaved and isFollowing survive undefined slices', () => {
+    expect(isSaved(undefined, 'p1')).toBe(false)
+    expect(isFollowing(undefined, 'a1', 'u1')).toBe(false)
+  })
+
+  it('isLocked returns false for a missing post rather than throwing', () => {
+    expect(isLocked(undefined, [], 'u1')).toBe(false)
+    expect(isLocked(null, [], 'u1')).toBe(false)
+  })
+
+  it('isLocked survives undefined unlockedCreators for a locked post', () => {
+    const locked = { id: 'p1', user_id: 'a1', subscriber_only: true }
+    expect(isLocked(locked, undefined, 'u1')).toBe(true)
+  })
+})

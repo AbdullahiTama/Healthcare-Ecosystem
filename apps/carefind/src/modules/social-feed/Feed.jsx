@@ -198,11 +198,9 @@ function Feed() {
   // an overlay on top of this page or, on a cold load, PostPage standalone.
   // See onOpenDetail in cardProps below.
   const [searchParams, setSearchParams] = useSearchParams()
-  // Every URL shared before permalinks existed, and every notifications.link
-  // row written before this change, uses /feed?post=<id>. Feed no longer
-  // hosts a modal (Task 6 removed it), so this is read only to redirect to
-  // the post's own URL below — computed here, with the other hooks, because
-  // the early return that uses it must come after every hook has run.
+  // The legacy /feed?post=<id> shape. Feed no longer hosts a modal (Task 6
+  // removed it), so this is read only to redirect — the early return that
+  // consumes it, further down, explains why it has to sit down there.
   const deepLinkPostId = searchParams.get('post')
   // Item 5 bottom-nav Videos entry lands on /feed?tab=video; applied on mount
   // and then cleared so it never fights the persisted tab preference.

@@ -227,3 +227,27 @@ describe('postSync: Feed reloads on POSTS_DIRTY_EVENT', () => {
     expect(postsFetchCount()).toBe(before)
   })
 })
+// Deferred from Task 4. hydrate() returns null for an empty batch, having
+// cleared the slices it owns — but the post LIST belongs to Feed, so Feed has
+// to clear that one itself. Without the `if (!base) setPosts([])` guard in
+// hydrateAndRank, a search that matches nothing leaves the previous results on
+// screen under a "0 results" heading, which reads as a broken search rather
+// than an empty one.
+describe('Feed search with no results', () => {
+  it('clears the previous posts instead of leaving them on screen', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+    await screen.findByText(/A shareable post body/i)
+
+    // The search runs against an empty table, so it comes back with nothing.
+    mockSupabase.data.tables.posts = []
+    fireEvent.change(screen.getByPlaceholderText('Search posts…'), {
+      target: { value: 'nothing matches this' },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/0 results for/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/A shareable post body/i)).not.toBeInTheDocument()
+  })
+})
