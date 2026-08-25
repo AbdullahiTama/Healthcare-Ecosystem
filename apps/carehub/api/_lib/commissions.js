@@ -39,7 +39,7 @@ export async function computeCommission(supabase, { paymentId, businessId, naira
     return { commission: null, flag: true }
   }
 
-  const type = isFirst ? 'referral_bonus' : 'residual'
+  const type = isFirstPayment ? 'referral_bonus' : 'residual'
   const rate = REFERRAL_RATES[type]
   const amount = Math.round((Number(nairaCharged) || 0) * rate * 100) / 100
 
