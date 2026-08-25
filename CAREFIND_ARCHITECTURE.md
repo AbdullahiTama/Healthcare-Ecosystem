@@ -27,8 +27,10 @@ updated 2026-08-24 for the post-permalinks work.
   open therefore lands on the standalone page, not the modal. The legacy
   `/feed?post=<id>` shape — already-shared links and every pre-existing
   `notifications.link` row — redirects to `/post/:id` via
-  `<Navigate replace>` inside `Feed.jsx`; newly written notification links
-  emit the new shape directly.
+  `<Navigate replace>` inside `Feed.jsx`. Notification rows still STORE the
+  legacy `link` (`/`, `/feed`); `Notifications.jsx` derives the destination
+  from `post_id` at render for post-linked types, so already-written rows
+  resolve to the permalink too — no backfill needed.
 - **Page modules** under `src/modules/*`: `social-feed` (Feed, Stories,
   FollowersSheet, SavedPosts), `healthcare-discovery` (Search, DrugProfile),
   `news-publishing` (News, NewsArticle, ArticleEditor), `account` (Profile,
