@@ -7,7 +7,6 @@ import {
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../../styles/theme'
-import { useBreakpoint } from '../../hooks/useBreakpoint'
 import LandingNav from './components/LandingNav'
 import SectionHeading from './components/SectionHeading'
 import CtaBand from './components/CtaBand'
@@ -23,6 +22,17 @@ gsap.registerPlugin(ScrollTrigger)
 const ICONS = { Building2, Compass, Eye, HeartHandshake, MessageCircle, Newspaper, Star, Target, Users }
 
 const { tealDeep, navy, navySoft, bg, cardBg, border, textDark, textMid, textLight } = theme
+
+// Column tracks, not breakpoint branches. The page previously switched on
+// useBreakpoint's `isMobile`, which is only true below 768 — so at exactly
+// tablet width the five-across pillar and team grids still rendered five
+// columns, about 93px of content each for a 130-character description. auto-fit
+// reflows on the space actually available at every width instead.
+const GRID = {
+  pair: 'repeat(auto-fit, minmax(280px, 1fr))',
+  pillars: 'repeat(auto-fit, minmax(170px, 1fr))',
+  team: 'repeat(auto-fit, minmax(150px, 1fr))',
+}
 
 function Eyebrow({ children }) {
   return (
@@ -80,7 +90,6 @@ function IconTile({ name, dark = false }) {
 }
 
 export default function About() {
-  const { isMobile } = useBreakpoint()
   const pageRef = useRef(null)
 
   // Hero entrance only. Every scroll-driven reveal belongs to the shared hook,
@@ -190,7 +199,7 @@ export default function About() {
 
       <section id="mission" style={{ padding: '80px 24px 90px', maxWidth: 1000, margin: '0 auto' }}>
         <SectionHeading {...ABOUT.missionVision.heading} />
-        <div data-reveal style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18 }}>
+        <div data-reveal style={{ display: 'grid', gridTemplateColumns: GRID.pair, gap: 18 }}>
           <div style={cardSurface}>
             <IconTile name={ABOUT.missionVision.mission.icon} />
             <h3 style={{ fontFamily: theme.fontDisplay, fontWeight: 800, fontSize: 18, color: textDark, margin: '0 0 10px' }}>
@@ -212,7 +221,7 @@ export default function About() {
       <section style={{ padding: '80px 24px 96px', background: cardBg }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <SectionHeading {...ABOUT.offerings.heading} />
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: GRID.pair, gap: 18 }}>
             {ABOUT.offerings.items.map((item) => (
               <div key={item.title} data-reveal style={{ ...cardSurface, padding: 28 }}>
                 <IconTile name={item.icon} />
@@ -228,7 +237,7 @@ export default function About() {
       <section style={{ padding: '80px 24px 96px' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <SectionHeading {...ABOUT.pillars.heading} />
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: GRID.pillars, gap: 14 }}>
             {ABOUT.pillars.items.map((pillar, i) => {
               const Icon = ICONS[pillar.icon]
               return (
@@ -267,7 +276,7 @@ export default function About() {
 
       <section id="team" style={{ padding: '80px 24px 96px', maxWidth: 1000, margin: '0 auto' }}>
         <SectionHeading {...ABOUT.team.heading} />
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRID.team, gap: 14 }}>
           {ABOUT.team.founders.map((person) => (
             <div key={person.name} data-reveal style={{ background: cardBg, borderRadius: theme.radius.lg, padding: 20, textAlign: 'center', border: `1px solid ${border}` }}>
               <div style={{

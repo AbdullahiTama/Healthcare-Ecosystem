@@ -47,6 +47,22 @@ describe('About', () => {
     expect(team.getByText('Bolu Zulaikha')).toBeInTheDocument()
   })
 
+  // jsdom does no layout, so this asserts the mechanism rather than the pixels:
+  // the five-across grids must reflow on available width. They used to switch on
+  // useBreakpoint's `isMobile`, true only below 768, so a 768px tablet got five
+  // columns of ~93px each. A fixed repeat(5, …) track here is that bug returning.
+  it('lays the five-across grids out on auto-fit tracks, not a breakpoint flag', () => {
+    const { container } = renderAbout()
+    const tracks = [...container.querySelectorAll('[style*="grid-template-columns"]')]
+      .map((el) => el.style.gridTemplateColumns)
+
+    expect(tracks).toHaveLength(4) // mission/vision, offerings, pillars, team
+    tracks.forEach((track) => {
+      expect(track).toMatch(/auto-fit/)
+      expect(track).not.toMatch(/repeat\(5/)
+    })
+  })
+
   it('composes on the shared primitives: nav, CTA band and footer', () => {
     renderAbout()
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument()
