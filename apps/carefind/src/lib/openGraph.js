@@ -89,6 +89,21 @@ export function parseShareTarget(rawUrl) {
   return null
 }
 
+// The canonical URL a preview should advertise. Ordinarily that is just the
+// request path — a crawler that asked for /u/<id> should canonicalise to
+// /u/<id>. Posts are the one exception: /feed?post=<id> is a legacy shape
+// kept alive only by the redirect in the app, so a preview of that link must
+// NOT advertise itself as canonical — it must point at the permalink
+// (/post/<id>) instead, so link equity (search ranking, cached previews)
+// consolidates on the one URL going forward. A /post/<id> request already IS
+// that shape, so this is a no-op for it.
+export function canonicalUrlFor(target, origin, requestCanonicalUrl) {
+  if (target && target.kind === 'post') {
+    return origin ? `${origin}/post/${target.id}` : `/post/${target.id}`
+  }
+  return requestCanonicalUrl
+}
+
 // Article bodies are a JSON array of blocks; ordinary posts are plain text.
 // Either way a preview needs readable prose, with the markup stripped — a card
 // reading "**Movement Is Medicine**" looks broken.

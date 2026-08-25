@@ -24,8 +24,8 @@
 // page at all.
 
 import {
-  parseShareTarget, buildPostMeta, buildProfileMeta, buildNewsMeta,
-  buildBusinessMeta, defaultMeta, renderOgHtml,
+  parseShareTarget, canonicalUrlFor, buildPostMeta, buildProfileMeta,
+  buildNewsMeta, buildBusinessMeta, defaultMeta, renderOgHtml,
 } from '../../src/lib/openGraph.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
@@ -112,17 +112,21 @@ async function metaFor(target, context) {
 export default async function handler(req, res) {
   const origin = originOf(req)
   const path = req.url || '/'
-  const canonicalUrl = origin ? `${origin}${path}` : path
+  // The request's own URL, mirrored — correct for every kind EXCEPT a legacy
+  // /feed?post= link, which must not advertise itself as canonical. See
+  // canonicalUrlFor in src/lib/openGraph.js.
+  const requestCanonicalUrl = origin ? `${origin}${path}` : path
 
   let meta
   try {
     const target = parseShareTarget(path)
+    const canonicalUrl = canonicalUrlFor(target, origin, requestCanonicalUrl)
     meta = target
       ? await metaFor(target, { origin, canonicalUrl })
       : defaultMeta(canonicalUrl)
   } catch (err) {
     console.error('[og] falling back to site tags', { path, error: err?.message })
-    meta = defaultMeta(canonicalUrl)
+    meta = defaultMeta(requestCanonicalUrl)
   }
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')

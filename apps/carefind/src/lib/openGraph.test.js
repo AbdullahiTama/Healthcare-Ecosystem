@@ -2,15 +2,23 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  isCrawlerUserAgent, parseShareTarget, plainTextFromContent, titleFromContent,
-  truncate, absoluteUrl, buildPostMeta, buildProfileMeta, buildNewsMeta,
-  buildBusinessMeta, renderOgHtml, escapeHtmlAttribute, DEFAULT_DESCRIPTION,
-  DEFAULT_TITLE, DESCRIPTION_LIMIT,
+  isCrawlerUserAgent, parseShareTarget, canonicalUrlFor, plainTextFromContent,
+  titleFromContent, truncate, absoluteUrl, buildPostMeta, buildProfileMeta,
+  buildNewsMeta, buildBusinessMeta, renderOgHtml, escapeHtmlAttribute,
+  DEFAULT_DESCRIPTION, DEFAULT_TITLE, DESCRIPTION_LIMIT,
 } from './openGraph.js'
 
 const ORIGIN = 'https://carefind.app'
 const POST_ID = '25410ee8-56dc-40de-93b9-fc82d5857be9'
-const CANONICAL = `${ORIGIN}/feed?post=${POST_ID}`
+
+// The URL a post now canonicalises to, regardless of which shape a crawler
+// requested it by. By the time buildPostMeta/renderOgHtml run, og.js has
+// already resolved the canonical via canonicalUrlFor — so this is what those
+// "plumbing" tests below should thread through, matching real traffic.
+const POST_CANONICAL = `${ORIGIN}/post/${POST_ID}`
+// The legacy request shape — still shared in the wild, still previews, but
+// must no longer be the thing that gets advertised as canonical.
+const LEGACY_POST_URL = `${ORIGIN}/feed?post=${POST_ID}`
 
 describe('isCrawlerUserAgent', () => {
   it('matches the crawlers named in the issue', () => {
@@ -92,6 +100,36 @@ describe('parseShareTarget', () => {
     expect(parseShareTarget('/feed?post=1 OR 1=1')).toBeNull()
     expect(parseShareTarget('/post/1 OR 1=1')).toBeNull()
     expect(parseShareTarget('/news/abc')).toBeNull()
+  })
+})
+
+describe('canonicalUrlFor', () => {
+  it('an old /feed?post= request advertises the NEW permalink as canonical — link equity consolidates on one URL', () => {
+    // parseShareTarget takes a path+query, the way og.js's req.url arrives —
+    // canonicalUrlFor's third argument is the already-computed request
+    // canonical (origin + path), matching how the handler calls it.
+    const target = parseShareTarget(`/feed?post=${POST_ID}`)
+    expect(canonicalUrlFor(target, ORIGIN, LEGACY_POST_URL)).toBe(POST_CANONICAL)
+  })
+
+  it('a /post/:id request is already canonical — no-op', () => {
+    const target = parseShareTarget(`/post/${POST_ID}`)
+    expect(canonicalUrlFor(target, ORIGIN, POST_CANONICAL)).toBe(POST_CANONICAL)
+  })
+
+  it('leaves non-post kinds pointed at the request path — their URL shape is unchanged by this work', () => {
+    const profileUrl = `${ORIGIN}/u/${POST_ID}`
+    const target = parseShareTarget(`/u/${POST_ID}`)
+    expect(canonicalUrlFor(target, ORIGIN, profileUrl)).toBe(profileUrl)
+  })
+
+  it('falls back to the request-path canonical for a non-item page (null target)', () => {
+    expect(canonicalUrlFor(null, ORIGIN, `${ORIGIN}/search`)).toBe(`${ORIGIN}/search`)
+  })
+
+  it('degrades to a relative permalink when there is no origin', () => {
+    const target = parseShareTarget(`/feed?post=${POST_ID}`)
+    expect(canonicalUrlFor(target, '', `/feed?post=${POST_ID}`)).toBe(`/post/${POST_ID}`)
   })
 })
 
@@ -178,30 +216,30 @@ describe('buildPostMeta', () => {
   }
 
   it('describes the actual post, not the site', () => {
-    const meta = buildPostMeta(post, { origin: ORIGIN, canonicalUrl: CANONICAL, author: { full_name: 'Maryam Abdulazeez' } })
+    const meta = buildPostMeta(post, { origin: ORIGIN, canonicalUrl: POST_CANONICAL, author: { full_name: 'Maryam Abdulazeez' } })
     expect(meta.title).toContain('Movement Is Medicine')
     expect(meta.description).toContain('medicines we take when we are sick')
     expect(meta.image).toBe('https://cdn.example/post.jpg')
-    expect(meta.url).toBe(CANONICAL)
+    expect(meta.url).toBe(POST_CANONICAL)
     expect(meta.type).toBe('article')
     expect(meta.title).not.toBe(DEFAULT_TITLE)
     expect(meta.description).not.toBe(DEFAULT_DESCRIPTION)
   })
 
   it('never describes a subscriber-only post — a crawler is anonymous', () => {
-    const meta = buildPostMeta({ ...post, subscriber_only: true }, { origin: ORIGIN, canonicalUrl: CANONICAL })
+    const meta = buildPostMeta({ ...post, subscriber_only: true }, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
     expect(meta.description).not.toContain('Movement')
     expect(meta.image).toBeNull()
     expect(meta.title).toMatch(/subscriber-only/i)
   })
 
   it('never describes a premium post either', () => {
-    const meta = buildPostMeta({ ...post, is_premium: true }, { origin: ORIGIN, canonicalUrl: CANONICAL })
+    const meta = buildPostMeta({ ...post, is_premium: true }, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
     expect(meta.description).not.toContain('Movement')
   })
 
   it('falls back to site tags for a missing post', () => {
-    expect(buildPostMeta(null, { canonicalUrl: CANONICAL }).title).toBe(DEFAULT_TITLE)
+    expect(buildPostMeta(null, { canonicalUrl: POST_CANONICAL }).title).toBe(DEFAULT_TITLE)
   })
 })
 
@@ -257,7 +295,7 @@ describe('renderOgHtml', () => {
     title: 'Movement Is Medicine',
     description: 'There are medicines we take when we are sick.',
     image: 'https://cdn.example/post.jpg',
-    url: CANONICAL,
+    url: POST_CANONICAL,
     type: 'article',
     authorName: 'Maryam Abdulazeez',
   }
@@ -267,7 +305,7 @@ describe('renderOgHtml', () => {
     expect(html).toContain('<meta property="og:title" content="Movement Is Medicine" />')
     expect(html).toContain('<meta property="og:description" content="There are medicines we take when we are sick." />')
     expect(html).toContain('<meta property="og:image" content="https://cdn.example/post.jpg" />')
-    expect(html).toContain(`<meta property="og:url" content="${CANONICAL}" />`)
+    expect(html).toContain(`<meta property="og:url" content="${POST_CANONICAL}" />`)
     expect(html).toContain('<meta property="og:type" content="article" />')
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
     expect(html).toContain('<meta name="twitter:title" content="Movement Is Medicine" />')
@@ -283,7 +321,7 @@ describe('renderOgHtml', () => {
 
   it('links to the real page but never meta-refreshes to it', () => {
     const html = renderOgHtml(meta)
-    expect(html).toContain(`<a href="${CANONICAL}">Open on CareFind</a>`)
+    expect(html).toContain(`<a href="${POST_CANONICAL}">Open on CareFind</a>`)
     // A refresh here would target the same URL, which the edge rewrites
     // straight back to this handler — an infinite loop, not a fallback.
     expect(html).not.toContain('http-equiv="refresh"')
@@ -402,7 +440,7 @@ describe('titleFromContent (the card headline)', () => {
       id: 'a', type: 'text',
       content: '**Seven Everyday Things That Could Be Damaging Your Kidneys**\n\nYour kidneys are working every minute to clean your blood and keep your body balanced.',
     }])
-    const meta = buildPostMeta({ content: body }, { origin: ORIGIN, canonicalUrl: CANONICAL })
+    const meta = buildPostMeta({ content: body }, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
     expect(meta.title).not.toBe(meta.description)
     expect(meta.description.startsWith(meta.title)).toBe(true)
   })
