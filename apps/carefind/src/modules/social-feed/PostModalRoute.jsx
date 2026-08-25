@@ -8,7 +8,7 @@ import { theme } from '../../styles/theme'
 import { ConfirmDialog, Modal, Toast, useToast } from '../../components/ui'
 import { Flag } from 'lucide-react'
 import { usePostEngagement } from './usePostEngagement.js'
-import { postRepository } from './repositories'
+import { isPostMissingError, postRepository } from './repositories'
 import { REPORT_REASONS } from './postSelectors.js'
 import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
@@ -29,6 +29,11 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 //
 // Adding a name here is a claim that Feed cannot be showing anything that
 // member changes. Everything absent is treated as a mutation.
+// One wording for a post that is gone and a post the viewer cannot see — the
+// whole point being that the reader cannot tell which they are looking at.
+const NOT_AVAILABLE = "This post isn't available. It may have been removed, or you may not have access to it."
+const LOAD_FAILED = "We couldn't load this post. Check your connection and try again."
+
 const READ_ONLY_ENGAGEMENT_MEMBERS = new Set([
   'formatCount', 'timeAgo', 'likeCount', 'userHasLiked', 'commentTotal',
   'shareCount', 'saveCount', 'giftCount', 'userHasReposted', 'isSaved',
@@ -58,7 +63,14 @@ const READ_ONLY_ENGAGEMENT_MEMBERS = new Set([
 // Deleted and RLS-hidden posts render identically on purpose, same reasoning
 // as PostPage: distinguishing "removed" from "you can't see this" would leak
 // whether a private post exists. getPostById throws (PGRST116) for both, so
-// both land in the same catch here.
+// both land on the same message here, via isPostMissingError.
+//
+// A request that FAILED is a third thing and says so, with a retry — the post
+// may be perfectly visible and the fetch simply never completed. Folding it
+// into "isn't available", which is what every catch used to do, told the
+// reader a lie and left them no way out. Distinguishing it leaks nothing: the
+// pair that must stay indistinguishable is deleted-vs-hidden, and those are
+// still the same code landing on the same words.
 //
 // PostCard renders a Gift button for every viewer and Edit/Delete/Report menu
 // items depending on who's looking — passing no-ops here would leave those
@@ -75,6 +87,11 @@ export default function PostModalRoute() {
   const [post, setPost] = useState(null)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
+  // Whether `errorMsg` describes a failed request (retryable) rather than a
+  // post that isn't available (retrying would say the same thing again), and
+  // the counter Retry bumps to re-run the fetch effect.
+  const [canRetry, setCanRetry] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   // Chrome this overlay owns (mirrors PostPage's / Feed's equivalents): which
   // post is mid-gift, mid-delete-confirm or mid-report, and the Voice-Card
@@ -156,23 +173,32 @@ export default function PostModalRoute() {
     let cancelled = false
     setLoading(true)
     setErrorMsg('')
+    setCanRetry(false)
     fetchAndHydrate()
       .then((data) => {
         if (cancelled) return
-        if (!data) { setErrorMsg("This post isn't available. It may have been removed, or you may not have access to it."); setLoading(false); return }
+        if (!data) { setErrorMsg(NOT_AVAILABLE); setLoading(false); return }
         setPost(data)
         setLoading(false)
       })
-      .catch(() => {
+      .catch((e) => {
         if (cancelled) return
-        setErrorMsg("This post isn't available. It may have been removed, or you may not have access to it.")
+        // Gone or hidden — the two the reader must not be able to tell apart.
+        // Anything else is the request itself failing, which is a different
+        // fact and a retryable one.
+        if (isPostMissingError(e)) {
+          setErrorMsg(NOT_AVAILABLE)
+        } else {
+          setErrorMsg(LOAD_FAILED)
+          setCanRetry(true)
+        }
         setLoading(false)
       })
     return () => { cancelled = true }
     // `user` is included so a viewer whose auth resolves just after this
     // overlay mounts gets their own signals (liked/saved/reposted) folded in
     // on the next run, same as PostPage and Feed's initial loads.
-  }, [id, user])
+  }, [id, user, retryCount])
 
   async function refetchThisPost() {
     try {
@@ -258,6 +284,7 @@ export default function PostModalRoute() {
         post={post}
         loading={loading}
         error={errorMsg}
+        onRetry={canRetry ? () => setRetryCount((n) => n + 1) : undefined}
         onClose={close}
         cardProps={cardProps}
       />

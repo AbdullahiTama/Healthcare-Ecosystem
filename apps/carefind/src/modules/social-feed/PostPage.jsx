@@ -8,9 +8,9 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { theme } from '../../styles/theme'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { CardSkeleton, ConfirmDialog, Empty, Modal, Toast, useToast } from '../../components/ui'
+import { CardSkeleton, ConfirmDialog, Empty, ErrorState, Modal, Toast, useToast } from '../../components/ui'
 import { usePostEngagement } from './usePostEngagement.js'
-import { postRepository } from './repositories'
+import { isPostMissingError, postRepository } from './repositories'
 import { REPORT_REASONS } from './postSelectors.js'
 import PostCard from './PostCard.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
@@ -22,7 +22,16 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 // Deleted and RLS-hidden posts render identically on purpose: distinguishing
 // "removed" from "you can't see this" would leak whether a private post
 // exists. getPostById throws (PGRST116) when RLS hides a row and also when
-// the row is genuinely gone, so both land in the same catch.
+// the row is genuinely gone, so both land in the same not-available state via
+// isPostMissingError.
+//
+// A fetch that FAILED is a third thing, and it used to be folded into the same
+// state: every catch set notFound, so a dropped connection told the reader
+// that a post which exists "isn't available", on the app's primary entry point
+// for shared links, with no way to try again. It gets its own state and a
+// retry. That leaks nothing — the property that has to hold is
+// deleted-vs-hidden being indistinguishable, and both of those are still the
+// same PGRST116 landing on the same message.
 //
 // PostCard renders a Gift button for every viewer and Edit/Delete/Report menu
 // items depending on who's looking — passing no-ops here would leave those
@@ -38,6 +47,10 @@ export default function PostPage() {
   const [post, setPost] = useState(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  // Bumped by the error state's Retry: the fetch lives in an effect, so
+  // re-running it means changing something the effect depends on.
+  const [retryCount, setRetryCount] = useState(0)
   const headingRef = useRef(null)
   const hasFocusedRef = useRef(false)
 
@@ -81,6 +94,7 @@ export default function PostPage() {
     let cancelled = false
     setLoading(true)
     setNotFound(false)
+    setLoadFailed(false)
     fetchAndHydrate()
       .then((data) => {
         if (cancelled) return
@@ -88,12 +102,20 @@ export default function PostPage() {
         setPost(data)
         setLoading(false)
       })
-      .catch(() => { if (!cancelled) { setNotFound(true); setLoading(false) } })
+      .catch((e) => {
+        if (cancelled) return
+        // Gone or hidden — the two the reader must not be able to tell apart.
+        // Anything else is the request itself failing, which is worth saying
+        // out loud and worth a retry.
+        if (isPostMissingError(e)) setNotFound(true)
+        else setLoadFailed(true)
+        setLoading(false)
+      })
     return () => { cancelled = true }
     // `user` is included so a viewer whose auth resolves just after this
     // page mounts gets their own signals (liked/saved/reposted) folded in on
     // the next run, the same way Feed's initial load depends on [user].
-  }, [id, user])
+  }, [id, user, retryCount])
 
   async function refetchThisPost() {
     try {
@@ -182,6 +204,16 @@ export default function PostPage() {
         </div>
       )}
 
+      {/* Design §5: a fetch that failed gets an error state with a retry, not
+          the not-available message — the post may be perfectly fine. */}
+      {!loading && loadFailed && (
+        <ErrorState
+          variant="app"
+          message="We couldn't load this post. Check your connection and try again."
+          onRetry={() => setRetryCount((n) => n + 1)}
+        />
+      )}
+
       {!loading && notFound && (
         <Empty
           message={
@@ -199,7 +231,7 @@ export default function PostPage() {
         />
       )}
 
-      {!loading && !notFound && post && (
+      {!loading && !notFound && !loadFailed && post && (
         <>
           {/* Visually hidden: PostCard already renders the author header
               visibly, so a second visible title would duplicate it. This

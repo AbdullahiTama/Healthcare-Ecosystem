@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -47,7 +47,15 @@ vi.mock('../../config/supabaseClient', () => {
     },
   }
 })
-vi.mock('./repositories', () => ({ postRepository: { getPostById: vi.fn() }, commentRepository: {} }))
+// Only the data access is stubbed. `isPostMissingError` — which decides
+// whether a rejected fetch is a missing post or a failed request — is kept
+// real, because a hand-written copy of it in here would pass whatever the
+// component does.
+vi.mock('./repositories', async (importOriginal) => ({
+  ...(await importOriginal()),
+  postRepository: { getPostById: vi.fn() },
+  commentRepository: {},
+}))
 vi.mock('./components/CommentThread.jsx', () => ({ CommentThread: () => <div>comments</div> }))
 vi.mock('../../components/BottomNav.jsx', () => ({ default: () => null }))
 // The real AppShell renders <DesktopHeader/> + <main>{children}</main>; this
@@ -130,10 +138,58 @@ describe('PostPage', () => {
     expect(await screen.findByText('comments')).toBeInTheDocument()
   })
 
+  // The shape supabase-js actually throws from `.single()` when it did not get
+  // exactly one row: a PostgREST error carrying the code, not a bare Error
+  // whose message happens to read PGRST116. The code is what tells a missing
+  // post apart from a failed request (isPostMissingError), so the fixture has
+  // to carry it or the distinction is never really exercised.
+  const noRowsError = () =>
+    Object.assign(new Error('JSON object requested, multiple (or no) rows returned'), { code: 'PGRST116' })
+
   it('shows the not-available state when the post is missing', async () => {
-    postRepository.getPostById.mockRejectedValue(new Error('PGRST116'))
+    postRepository.getPostById.mockRejectedValue(noRowsError())
     renderAt()
     expect(await screen.findByText(/isn't available/i)).toBeInTheDocument()
+  })
+
+  // Fix round 2 (I6): every catch used to set notFound, so a dropped
+  // connection told the reader that a post which exists "isn't available" —
+  // on the app's primary entry point for shared links, with no way to try
+  // again. Design §5 asks for an error state with a retry, and this is it.
+  it('a failed request gets its own error state with a retry, not the not-available message', async () => {
+    postRepository.getPostById.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderAt()
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/couldn't load this post/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.queryByText(/isn't available/i)).not.toBeInTheDocument()
+  })
+
+  it('Retry re-issues the fetch and renders the post once it succeeds', async () => {
+    postRepository.getPostById
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(post())
+    renderAt()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+
+    expect(await screen.findByText(/body of a permalinked post/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+  })
+
+  // The other side of that split, and the property that must not regress: a
+  // post that is gone and a post RLS hides both arrive as the same PGRST116
+  // and must stay one indistinguishable message. Telling a reader "something
+  // went wrong, try again" for one and "isn't available" for the other would
+  // make the permalink an existence oracle.
+  it('a missing post is not offered a retry, and reads the same as a hidden one', async () => {
+    postRepository.getPostById.mockRejectedValue(noRowsError())
+    renderAt()
+
+    await screen.findByText(/isn't available/i)
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/couldn't load this post/i)).not.toBeInTheDocument()
   })
 
   it('does not distinguish a deleted post from a hidden one', async () => {

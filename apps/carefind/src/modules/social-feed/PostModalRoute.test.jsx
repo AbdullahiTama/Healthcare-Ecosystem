@@ -55,7 +55,15 @@ vi.mock('../../config/supabaseClient', () => {
     },
   }
 })
-vi.mock('./repositories', () => ({ postRepository: { getPostById: vi.fn() }, commentRepository: {} }))
+// Only the data access is stubbed. `isPostMissingError` — which decides
+// whether a rejected fetch is a missing post or a failed request — is kept
+// real, because a hand-written copy of it in here would pass whatever the
+// component does.
+vi.mock('./repositories', async (importOriginal) => ({
+  ...(await importOriginal()),
+  postRepository: { getPostById: vi.fn() },
+  commentRepository: {},
+}))
 // The real thread's edit/delete/like handlers all end the same way — a fresh
 // fetch handed back through `onCommentsChange`, which PostCard turns into the
 // engagement hook's `setComments`. That callback is the only thing
@@ -148,11 +156,56 @@ describe('PostModalRoute', () => {
     expect(within(alert).getByText(/isn't available/i)).toBeInTheDocument()
   })
 
+  // The shape supabase-js actually throws from `.single()` when it did not get
+  // exactly one row: a PostgREST error carrying the code, not a bare Error
+  // whose message happens to read PGRST116. The code is what tells a missing
+  // post apart from a failed request (isPostMissingError), so the fixture has
+  // to carry it or the distinction is never really exercised.
+  const noRowsError = () =>
+    Object.assign(new Error('JSON object requested, multiple (or no) rows returned'), { code: 'PGRST116' })
+
   it('renders the same not-found alert when getPostById throws (RLS-hidden or deleted)', async () => {
-    postRepository.getPostById.mockRejectedValue(new Error('PGRST116'))
+    postRepository.getPostById.mockRejectedValue(noRowsError())
     renderAt()
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText(/isn't available/i)).toBeInTheDocument()
+  })
+
+  // Fix round 2 (I6), the overlay's half: a failed request is not a missing
+  // post. Same reasoning as PostPage — and the same limit on it, asserted
+  // below: deleted and RLS-hidden stay one message with no retry, so nothing
+  // here reveals whether a post the viewer cannot see exists.
+  it('a failed request gets its own retryable error, not the not-available message', async () => {
+    postRepository.getPostById.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderAt()
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/couldn't load this post/i)).toBeInTheDocument()
+    expect(within(alert).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.queryByText(/isn't available/i)).not.toBeInTheDocument()
+  })
+
+  it('Retry re-issues the fetch and renders the post once it succeeds', async () => {
+    postRepository.getPostById
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue(post())
+    renderAt()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByText(/body of a permalinked post/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+  })
+
+  it('a missing post is not offered a retry, and reads the same as a hidden one', async () => {
+    postRepository.getPostById.mockRejectedValue(noRowsError())
+    renderAt()
+
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText(/isn't available/i)).toBeInTheDocument()
+    expect(within(alert).queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(alert.textContent).not.toMatch(/couldn't load/i)
   })
 
   it('does not distinguish a deleted post from a hidden one', async () => {

@@ -1,5 +1,22 @@
 import { supabase } from '../../../config/supabaseClient'
 
+// PostgREST's code for "`.single()` did not get exactly one row", which is what
+// getPostById throws when a post is gone AND when RLS hides it. Those two must
+// stay indistinguishable to the reader — telling them apart would turn a
+// permalink into an existence oracle for private posts — so callers collapse
+// both into one "isn't available" message.
+//
+// A transport failure is a different thing: the row may be perfectly visible
+// and the request simply never completed. It carries no PostgREST code, so a
+// caller can tell it apart and offer a retry instead of declaring the post
+// unavailable. Kept here rather than in a component because the code is this
+// module's own error contract; nothing above it should have to know it.
+const NO_SINGLE_ROW = 'PGRST116'
+
+export function isPostMissingError(error) {
+  return error?.code === NO_SINGLE_ROW
+}
+
 export const postRepository = {
   async getFeed(feedTab, limit = 20, offset = 0) {
     let query = supabase
