@@ -6,7 +6,7 @@
 //
 //   type              emitted from                            status
 //   ────────────────  ──────────────────────────────────────  ─────────
-//   like              Feed.jsx, useFeed.js                    working
+//   like              usePostEngagement.js                    working
 //   comment / reply   Feed.jsx                                working
 //   comment_like      CommentThread.jsx                       working
 //   mention           CommentThread.jsx                       working
@@ -22,7 +22,7 @@
 //   product_available —                                       unused
 //
 // `repost` had a message defined and no emitter; reviews had neither. Reposts
-// are fixed in Feed.jsx's toggleRepost. The three review surfaces are fixed
+// are fixed in toggleRepost. The three review surfaces are fixed
 // through this module, which exists because each of them has a DIFFERENT
 // recipient and none of them is the row's own user_id:
 //
