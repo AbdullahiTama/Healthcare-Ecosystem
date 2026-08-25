@@ -252,6 +252,26 @@ describe('usePostEngagement.hydrate repost source resolution', () => {
     expect(result.current.engagementProps.resolveSource('src1')).toEqual(expect.objectContaining({ id: 'src1' }))
   })
 
+  // Deferred from Task 5: the third case, and the one that separates "gone"
+  // from "couldn't ask". A SUCCESSFUL response with zero rows is the genuine
+  // deleted-or-RLS-hidden source and must still count as resolved — otherwise
+  // every future hydrate re-queries a row that is never coming back. Marking
+  // is unconditional on row count today, so this cannot regress separately
+  // from the success case above, but the invariant was implicit; a
+  // well-meaning `if (sourceRows?.length)` wrapped around the marking would
+  // fail here.
+  it('marks a source resolved when the read succeeds with no rows, and does not re-query it', async () => {
+    mockSupabase.data.tables.posts = [] // the source is genuinely gone
+    const { result } = setup()
+
+    await act(async () => { await result.current.hydrate([repost('r1', 'src_gone')]) })
+    expect(postsCallCount()).toBe(1)
+    expect(result.current.engagementProps.resolveSource('src_gone')).toBeNull()
+
+    await act(async () => { await result.current.hydrate([repost('r1', 'src_gone')]) })
+    expect(postsCallCount()).toBe(1) // no second attempt
+  })
+
   it('merge:true does not clobber a repost source an earlier hydrate already resolved', async () => {
     mockSupabase.data.tables.posts = [sourcePost('src1'), sourcePost('src2', 'a2')]
     const { result } = setup()
@@ -544,5 +564,48 @@ describe('submitReport', () => {
     mockSupabase.data.errorOnce.reports = true
     await act(async () => { await result.current.engagementProps.submitReport('p2', 'Spam') })
     expect(result.current.state.reportingId).toBeNull()
+  })
+})
+
+// The other half of M1: the single-post gift-stats refresh was copied verbatim
+// into all three hosts' GiftPanel onClose, even though the hook already owns
+// giftStats and batch-loads them during hydrate.
+describe('refreshGiftStats', () => {
+  it('merges the refreshed count for one post without disturbing the others', async () => {
+    const { result } = setup()
+    act(() => {
+      result.current.state.setGiftStats({
+        p1: { gift_count: 1, total_coins: 10 },
+        p2: { gift_count: 5, total_coins: 50 },
+      })
+    })
+
+    mockSupabase.data.rpcRows.post_gift_stats = { gift_count: 4, total_coins: 40 }
+    await act(async () => { await result.current.engagementProps.refreshGiftStats('p1') })
+
+    expect(result.current.state.giftStats).toEqual({
+      p1: { gift_count: 4, total_coins: 40 },
+      p2: { gift_count: 5, total_coins: 50 },
+    })
+  })
+
+  // The reader can open the gift sheet and send nothing; the RPC then answers
+  // with no count and the existing figure must stand rather than be blanked.
+  it('leaves the existing count alone when the read returns no count', async () => {
+    const { result } = setup()
+    act(() => { result.current.state.setGiftStats({ p1: { gift_count: 3, total_coins: 30 } }) })
+
+    mockSupabase.data.rpcRows.post_gift_stats = null
+    await act(async () => { await result.current.engagementProps.refreshGiftStats('p1') })
+
+    expect(result.current.state.giftStats.p1).toEqual({ gift_count: 3, total_coins: 30 })
+  })
+
+  it('never rejects when the stats read fails', async () => {
+    const { result } = setup()
+    mockSupabase.supabase.rpc.mockImplementationOnce(() => Promise.reject(new Error('network')))
+    await act(async () => {
+      await expect(result.current.engagementProps.refreshGiftStats('p1')).resolves.toBeUndefined()
+    })
   })
 })

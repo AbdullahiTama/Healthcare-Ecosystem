@@ -1918,15 +1918,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           onClose={() => {
             const { postId } = giftingPost
             setGiftingPost(null)
-            // Reflect a just-sent gift in the card's count.
-            supabase
-              .rpc('post_gift_stats', { p_post_id: postId })
-              .then(({ data }) => {
-                if (data?.gift_count != null) {
-                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
-                }
-              })
-              .catch(() => {})
+            engagement.engagementProps.refreshGiftStats(postId)
           }}
         />
       )}

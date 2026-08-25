@@ -584,6 +584,29 @@ export function usePostEngagement({
     logReportEvent(supabase, { userId: user.id, postId })
   }
 
+  // Re-read one post's gift totals. The hook already owns giftStats and fills
+  // them in batch during hydrate (post_gift_stats_batch); this is the
+  // single-post refresh a host needs after its gift sheet closes, and it was
+  // copied verbatim into all three of them.
+  //
+  // A null gift_count leaves the existing figure standing rather than blanking
+  // it: the reader can open the sheet and send nothing. Never rejects — a
+  // failed refresh must not surface as a broken gift flow.
+  async function refreshGiftStats(postId) {
+    if (!postId) return
+    try {
+      const { data } = await supabase.rpc('post_gift_stats', { p_post_id: postId })
+      if (data?.gift_count != null) {
+        setGiftStats((prev) => ({
+          ...prev,
+          [postId]: { gift_count: data.gift_count, total_coins: data.total_coins },
+        }))
+      }
+    } catch {
+      // Swallowed deliberately — see above.
+    }
+  }
+
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
     const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
@@ -772,6 +795,7 @@ export function usePostEngagement({
     shareCard,
     openReport,
     submitReport,
+    refreshGiftStats,
     handleEditPost,
     handleDeletePost,
     handleCommentAdded,

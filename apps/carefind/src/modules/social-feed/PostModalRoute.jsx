@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -12,6 +11,11 @@ import ReportDialog from './ReportDialog.jsx'
 import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+
+// One wording for a post that is gone and a post the viewer cannot see — the
+// whole point being that the reader cannot tell which they are looking at.
+const NOT_AVAILABLE = "This post isn't available. It may have been removed, or you may not have access to it."
+const LOAD_FAILED = "We couldn't load this post. Check your connection and try again."
 
 // The members of usePostEngagement's `engagementProps` that CANNOT make Feed's
 // copy of a post stale — the only ones this overlay hands to PostCard
@@ -28,11 +32,6 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 //
 // Adding a name here is a claim that Feed cannot be showing anything that
 // member changes. Everything absent is treated as a mutation.
-// One wording for a post that is gone and a post the viewer cannot see — the
-// whole point being that the reader cannot tell which they are looking at.
-const NOT_AVAILABLE = "This post isn't available. It may have been removed, or you may not have access to it."
-const LOAD_FAILED = "We couldn't load this post. Check your connection and try again."
-
 const READ_ONLY_ENGAGEMENT_MEMBERS = new Set([
   'formatCount', 'timeAgo', 'likeCount', 'userHasLiked', 'commentTotal',
   'shareCount', 'saveCount', 'giftCount', 'userHasReposted', 'isSaved',
@@ -219,10 +218,13 @@ export default function PostModalRoute() {
   // The write, the reported-list update, the toast and the Phase-7 report
   // signal live in the hook now; this only closes the picker.
   //
-  // Reporting is no longer one of the mutations this overlay owns by hand:
-  // `submitReport` reaches it through engagementProps, so wrapMutations marks
-  // the overlay dirty by construction — which is exactly the point of deriving
-  // that wrapper by exclusion rather than from a list of names.
+  // No markDirty() here, and NOT because this call is wrapped — it reaches the
+  // hook's raw handler, not the wrapped copy in cardProps. `openReport` is what
+  // is wrapped, so the overlay is already marked dirty the moment the reader
+  // taps "Report post" in the menu, before any of this runs. That marks on a
+  // cancelled report too, which is the over-marking side of the trade and the
+  // safe one: it costs Feed a redundant reload, where under-marking would leave
+  // a stale card with no way to know.
   async function submitReport(postId, reason) {
     await engagement.engagementProps.submitReport(postId, reason)
     setReportPostId(null)
@@ -277,23 +279,16 @@ export default function PostModalRoute() {
           recipientId={giftingPost.authorId}
           onClose={() => {
             const { postId } = giftingPost
-            // Gifting is the overlay's other own mutation (see submitReport),
-            // invisible to `wrapMutations`. Marked here, synchronously and
-            // unconditionally, rather than after the stats read below tells us
-            // whether the count actually moved: the reader can close the
-            // overlay before that read resolves, and close() samples dirtyRef
-            // on the spot. Over-marking costs Feed one reload after a reader
-            // opened the gift sheet and sent nothing.
+            // Gifting is the overlay's own mutation: the gift sheet is host
+            // chrome, so nothing it does passes through `wrapMutations`. Marked
+            // here, synchronously and unconditionally, rather than after the
+            // refresh tells us whether the count actually moved — the reader
+            // can close the overlay before that read resolves, and close()
+            // samples dirtyRef on the spot. Over-marking costs Feed one reload
+            // after a reader opened the sheet and sent nothing.
             markDirty()
             setGiftingPost(null)
-            supabase
-              .rpc('post_gift_stats', { p_post_id: postId })
-              .then(({ data }) => {
-                if (data?.gift_count != null) {
-                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
-                }
-              })
-              .catch(() => {})
+            engagement.engagementProps.refreshGiftStats(postId)
           }}
         />
       )}
