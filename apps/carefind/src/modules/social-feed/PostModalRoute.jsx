@@ -5,11 +5,10 @@ import { useAuth } from '../../providers/AuthContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { theme } from '../../styles/theme'
-import { ConfirmDialog, Modal, Toast, useToast } from '../../components/ui'
-import { Flag } from 'lucide-react'
+import { ConfirmDialog, Toast, useToast } from '../../components/ui'
 import { usePostEngagement } from './usePostEngagement.js'
 import { isPostMissingError, postRepository } from './repositories'
-import { REPORT_REASONS } from './postSelectors.js'
+import ReportDialog from './ReportDialog.jsx'
 import { markPostsDirty } from './postSync.js'
 import PostDetailModal from './PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
@@ -99,7 +98,6 @@ export default function PostModalRoute() {
   const [giftingPost, setGiftingPost] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [reportPostId, setReportPostId] = useState(null)
-  const [reportingId, setReportingId] = useState(null)
   const [sharingId, setSharingId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
 
@@ -218,32 +216,16 @@ export default function PostModalRoute() {
     return prof?.full_name || prof?.display_name || 'CareFind user'
   }
 
-  async function submitReport(reason) {
-    const postId = reportPostId
-    if (!user || !postId) return
-    setReportingId(postId)
-
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
+  // The write, the reported-list update, the toast and the Phase-7 report
+  // signal live in the hook now; this only closes the picker.
+  //
+  // Reporting is no longer one of the mutations this overlay owns by hand:
+  // `submitReport` reaches it through engagementProps, so wrapMutations marks
+  // the overlay dirty by construction — which is exactly the point of deriving
+  // that wrapper by exclusion rather than from a list of names.
+  async function submitReport(postId, reason) {
+    await engagement.engagementProps.submitReport(postId, reason)
     setReportPostId(null)
-
-    if (error) {
-      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-
-    // Reporting is one of the two mutations this overlay owns itself rather
-    // than borrowing from the hook, so `wrapMutations` cannot see it: mark
-    // dirty here, on success only. Feed renders the post's menu item as
-    // "Reported" off the same `reportedPosts` list.
-    markDirty()
-    engagement.state.setReportedPosts((prev) => [...prev, postId])
-    toast.show("Thanks: our team will review this post.", { type: 'success' })
   }
 
   // Everything the hook exposes to PostCard is wrapped to mark this overlay
@@ -335,31 +317,13 @@ export default function PostModalRoute() {
         confirmLabel="Delete"
       />
 
-      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
-        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
-          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {REPORT_REASONS.map((reason) => (
-            <button
-              key={reason}
-              type="button"
-              onClick={() => submitReport(reason)}
-              disabled={!!reportingId}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
-                padding: '11px 14px', borderRadius: theme.radius.md,
-                border: `1px solid ${theme.gray200}`, background: '#fff',
-                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
-                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
-              }}
-            >
-              <Flag size={16} color={theme.gray400} aria-hidden="true" />
-              {reason}
-            </button>
-          ))}
-        </div>
-      </Modal>
+      <ReportDialog
+        postId={reportPostId}
+        onClose={() => setReportPostId(null)}
+        onSubmit={submitReport}
+        busy={!!engagement.state.reportingId}
+        sheet={isMobile}
+      />
 
       <Toast msg={toast.msg} type={toast.type} />
     </>

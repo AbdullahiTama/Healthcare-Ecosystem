@@ -81,7 +81,12 @@ vi.mock('../subscriptions-monetization/GiftPanel.jsx', () => ({
   default: ({ postId }) => <div>Gift panel open for {postId}</div>,
 }))
 
+// Stubbed so the assertion is about WHETHER the page reaches the signal, not
+// about the experiments table; logReportEvent has its own unit coverage.
+vi.mock('./distributionExperiments', () => ({ logReportEvent: vi.fn(async () => {}) }))
+
 import PostPage from './PostPage.jsx'
+import { logReportEvent } from './distributionExperiments'
 import { postRepository } from './repositories'
 
 function renderAt(id = 'p1') {
@@ -303,5 +308,42 @@ describe('PostPage', () => {
     // itself — its "Subscribe to..." CTA only renders while still locked.
     expect(await screen.findByText(/subscriber-only content/i)).toBeInTheDocument()
     expect(screen.getByText(/subscribe to .* to read the rest/i)).toBeInTheDocument()
+  })
+})
+
+// M1, the whole point of moving the write into the hook: this page had its own
+// copy of submitReport and that copy never logged the Phase-7 signal, because
+// only Feed ever held a resolved experiment. A report filed from a shared link
+// reached moderation and vanished from the metric.
+describe('PostPage reporting', () => {
+  it('files the report and logs it against the reporter experiment group', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    renderAt()
+    await screen.findByText(/body of a permalinked post/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report post' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Spam/ }))
+
+    await screen.findByText(/our team will review this post/i)
+    expect(logReportEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'u2', postId: 'p1' },
+    )
+  })
+
+  // The report menu item is the reader's, not the author's — but the signal is
+  // the same either way, so the guard above must not depend on who is looking.
+  it('does not offer a retry-shaped second report once filed', async () => {
+    mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
+    postRepository.getPostById.mockResolvedValue(post())
+    renderAt()
+    await screen.findByText(/body of a permalinked post/i)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report post' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Spam/ }))
+    await screen.findByText(/our team will review this post/i)
+
+    expect(screen.getByRole('button', { name: 'Reported' })).toBeInTheDocument()
   })
 })

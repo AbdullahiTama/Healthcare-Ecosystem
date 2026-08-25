@@ -10,6 +10,7 @@ import {
   resolveExperiment,
   applyExperimentConfig,
   logExperimentEvent,
+  logReportEvent,
 } from './distributionExperiments'
 
 const NOW = Date.parse('2026-08-13T12:00:00Z')
@@ -213,5 +214,79 @@ describe('logExperimentEvent', () => {
   it('never rejects when the RPC fails (fire-and-forget)', async () => {
     const client = { rpc: () => Promise.reject(new Error('network')) }
     await expect(logExperimentEvent(client, { experimentKey: 'exp', variant: 'treatment', eventType: 'feed_view' })).rejects.toThrow('network')
+  })
+})
+// M1: a report filed from a permalink page or the /post/:id overlay used to
+// reach no experiment at all — only Feed had an activeExperiment in hand, and
+// each surface carried its own copy of the report write. This resolves the
+// reporter's group on demand so the signal is complete wherever it is filed.
+describe('logReportEvent', () => {
+  const experimentRow = {
+    key: 'foryou_engine_v1',
+    label: 'For You engine v1',
+    enabled: true,
+    rollout_pct: 100,
+    variant: 'treatment',
+    config: {},
+    start_at: null,
+    end_at: null,
+  }
+
+  const clientWith = (rows) => {
+    const calls = { rpc: [], selected: null }
+    return {
+      calls,
+      from: (table) => ({
+        select: (cols) => {
+          calls.selected = { table, cols }
+          return Promise.resolve({ data: rows, error: null })
+        },
+      }),
+      rpc: (name, params) => { calls.rpc.push({ name, params }); return Promise.resolve({ error: null }) },
+    }
+  }
+
+  it('resolves the reporter group and logs a report event for the post', async () => {
+    const client = clientWith([experimentRow])
+    await logReportEvent(client, { userId: 'u_1', postId: 'p_1' })
+    expect(client.calls.selected.table).toBe('content_distribution_experiments')
+    expect(client.calls.rpc).toEqual([{
+      name: 'log_distribution_event',
+      params: { p_experiment_key: 'foryou_engine_v1', p_variant: 'treatment', p_event_type: 'report', p_post_id: 'p_1' },
+    }])
+  })
+
+  it('logs nothing when no experiment is staged', async () => {
+    const client = clientWith([])
+    await logReportEvent(client, { userId: 'u_1', postId: 'p_1' })
+    expect(client.calls.rpc).toEqual([])
+  })
+
+  // Buckets on userId, never sessionId: submitReport requires a signed-in user,
+  // so the reporter's group is the same one Feed would have resolved.
+  it('buckets on the user id, so every surface agrees on the group', async () => {
+    const partial = { ...experimentRow, rollout_pct: 50 }
+    const a = clientWith([partial])
+    const b = clientWith([partial])
+    await logReportEvent(a, { userId: 'stable-user', postId: 'p_1' })
+    await logReportEvent(b, { userId: 'stable-user', postId: 'p_2' })
+    expect(a.calls.rpc.map((c) => c.params.p_variant))
+      .toEqual(b.calls.rpc.map((c) => c.params.p_variant))
+  })
+
+  it('does nothing without a user or a post', async () => {
+    const client = clientWith([experimentRow])
+    await logReportEvent(client, { userId: null, postId: 'p_1' })
+    await logReportEvent(client, { userId: 'u_1', postId: null })
+    expect(client.calls.rpc).toEqual([])
+    expect(client.calls.selected).toBeNull()
+  })
+
+  it('never rejects when the experiments read fails — metrics must not break a report', async () => {
+    const client = {
+      from: () => ({ select: () => Promise.reject(new Error('network')) }),
+      rpc: () => Promise.resolve({ error: null }),
+    }
+    await expect(logReportEvent(client, { userId: 'u_1', postId: 'p_1' })).resolves.toBeUndefined()
   })
 })

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Flag } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -8,10 +7,10 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { theme } from '../../styles/theme'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { CardSkeleton, ConfirmDialog, Empty, ErrorState, Modal, Toast, useToast } from '../../components/ui'
+import { CardSkeleton, ConfirmDialog, Empty, ErrorState, Toast, useToast } from '../../components/ui'
 import { usePostEngagement } from './usePostEngagement.js'
 import { isPostMissingError, postRepository } from './repositories'
-import { REPORT_REASONS } from './postSelectors.js'
+import ReportDialog from './ReportDialog.jsx'
 import PostCard from './PostCard.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 
@@ -60,7 +59,6 @@ export default function PostPage() {
   const [giftingPost, setGiftingPost] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [reportPostId, setReportPostId] = useState(null)
-  const [reportingId, setReportingId] = useState(null)
   const [sharingId, setSharingId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
 
@@ -156,27 +154,13 @@ export default function PostPage() {
     return prof?.full_name || prof?.display_name || 'CareFind user'
   }
 
-  async function submitReport(reason) {
-    const postId = reportPostId
-    if (!user || !postId) return
-    setReportingId(postId)
-
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
+  // The write, the reported-list update, the toast and the Phase-7 report
+  // signal live in the hook now; this only closes the picker. Filing from this
+  // page used to reach moderation but never the spam signal — only Feed's copy
+  // of this function logged it.
+  async function submitReport(postId, reason) {
+    await engagement.engagementProps.submitReport(postId, reason)
     setReportPostId(null)
-
-    if (error) {
-      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-
-    engagement.state.setReportedPosts((prev) => [...prev, postId])
-    toast.show("Thanks: our team will review this post.", { type: 'success' })
   }
 
   const cardProps = {
@@ -281,32 +265,13 @@ export default function PostPage() {
         confirmLabel="Delete"
       />
 
-      {/* Report reasons: a closed set, one tap each — same wording as Feed. */}
-      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
-        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
-          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {REPORT_REASONS.map((reason) => (
-            <button
-              key={reason}
-              type="button"
-              onClick={() => submitReport(reason)}
-              disabled={!!reportingId}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
-                padding: '11px 14px', borderRadius: theme.radius.md,
-                border: `1px solid ${theme.gray200}`, background: '#fff',
-                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
-                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
-              }}
-            >
-              <Flag size={16} color={theme.gray400} aria-hidden="true" />
-              {reason}
-            </button>
-          ))}
-        </div>
-      </Modal>
+      <ReportDialog
+        postId={reportPostId}
+        onClose={() => setReportPostId(null)}
+        onSubmit={submitReport}
+        busy={!!engagement.state.reportingId}
+        sheet={isMobile}
+      />
 
       <Toast msg={toast.msg} type={toast.type} />
     </>

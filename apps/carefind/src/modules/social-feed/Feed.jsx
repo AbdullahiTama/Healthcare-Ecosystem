@@ -5,13 +5,13 @@ import {
   Clapperboard, Download, Eye, FileText, Film, Gift, Hand, Heart, HelpCircle, Image as ImageIcon,
   Lock, MapPin, MessageCircle, MessageSquare, Mic, Moon, Newspaper, Pen, Pencil, Pill as PillIcon,
   Plus, Radio, Repeat2, Search as SearchIcon, Share2, ShoppingCart, Sparkles, Sprout, Star,
-  Stethoscope, Trash2, Trees, Unlock, Waves, X, Flag,
+  Stethoscope, Trash2, Trees, Unlock, Waves, X,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { createViewRecorder } from './engagement'
 import { usePostEngagement } from './usePostEngagement.js'
-import { REPORT_REASONS } from './postSelectors.js'
+import ReportDialog from './ReportDialog.jsx'
 import { POSTS_DIRTY_EVENT } from './postSync.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
@@ -123,7 +123,6 @@ function Feed() {
   const [cardVideoPreview, setCardVideoPreview] = useState(null)
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [sharingId, setSharingId] = useState(null)
-  const [reportingId, setReportingId] = useState(null)
   const [reportPostId, setReportPostId] = useState(null)
   const [giftingPost, setGiftingPost] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
@@ -954,37 +953,14 @@ function Feed() {
   const isSearching = feedResults !== null
   const displayPosts = isSearching ? engagement.state.posts : visiblePosts
 
-  async function submitReport(reason) {
-    const postId = reportPostId
-    if (!user || !postId) return
-    setReportingId(postId)
-
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
+  // The write, the reported-list update, the toast and the Phase-7 spam signal
+  // live in the hook now; this only closes the picker. The signal moved with
+  // it: this page resolved an experiment as a side effect of loading its
+  // ranking config, which is exactly why the other two surfaces never logged
+  // one. logReportEvent resolves the reporter's group itself instead.
+  async function submitReport(postId, reason) {
+    await engagement.engagementProps.submitReport(postId, reason)
     setReportPostId(null)
-
-    if (error) {
-      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-
-    engagement.state.setReportedPosts((prev) => [...prev, postId])
-    toast.show('Thanks: our team will review this post.', { type: 'success' })
-
-    // Phase 7 spam signal, tagged with the reader's staged-rollout group.
-    if (activeExperiment) {
-      logExperimentEvent(supabase, {
-        experimentKey: activeExperiment.key,
-        variant: activeExperiment.variant,
-        eventType: 'report',
-        postId,
-      }).catch(() => {})
-    }
   }
 
   const { isMobile } = useBreakpoint()
@@ -1965,31 +1941,13 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       />
 
       {/* Report reasons: a closed set, one tap each. */}
-      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
-        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
-          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {REPORT_REASONS.map((reason) => (
-            <button
-              key={reason}
-              type="button"
-              onClick={() => submitReport(reason)}
-              disabled={!!reportingId}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
-                padding: '11px 14px', borderRadius: theme.radius.md,
-                border: `1px solid ${theme.gray200}`, background: '#fff',
-                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
-                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
-              }}
-            >
-              <Flag size={16} color={theme.gray400} aria-hidden="true" />
-              {reason}
-            </button>
-          ))}
-        </div>
-      </Modal>
+      <ReportDialog
+        postId={reportPostId}
+        onClose={() => setReportPostId(null)}
+        onSubmit={submitReport}
+        busy={!!engagement.state.reportingId}
+        sheet={isMobile}
+      />
 
       <Toast msg={toast.msg} type={toast.type} />
     </div>

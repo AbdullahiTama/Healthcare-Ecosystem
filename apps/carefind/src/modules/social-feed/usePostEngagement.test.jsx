@@ -6,7 +6,7 @@ const mockSupabase = vi.hoisted(() => {
     tables: {
       posts: [], post_reactions: [], post_reposts: [], profiles: [], post_comments: [],
       post_shares: [], saved_posts: [], follows: [], user_subscriptions: [],
-      businesses: [], creator_subscriptions: [],
+      businesses: [], creator_subscriptions: [], reports: [],
     },
     rpcRows: {},
     seq: 0,
@@ -96,7 +96,14 @@ vi.mock('../../utils/voiceCard.js', () => ({
   shareOrDownload: vi.fn(async () => 'downloaded'),
 }))
 
+// The report's experiment logging is its own tested unit
+// (distributionExperiments.test.js). Here we only assert the hook hands it the
+// right reporter and post — stubbing it keeps the experiments read out of this
+// harness's table fixtures.
+vi.mock('./distributionExperiments', () => ({ logReportEvent: vi.fn(async () => {}) }))
+
 import { usePostEngagement } from './usePostEngagement.js'
+import { logReportEvent } from './distributionExperiments'
 import { notify } from '../../services/notify.js'
 
 const USER = { id: 'u1' }
@@ -486,5 +493,56 @@ describe('usePostEngagement toggleRepost in-flight guard', () => {
     await act(async () => { await result.current.engagementProps.toggleRepost(source) })
     expect(result.current.engagementProps.userHasReposted('p1')).toBe(true)
     expect(mockSupabase.data.tables.post_reposts).toHaveLength(1)
+  })
+})
+
+// M1: the report WRITE lived in Feed, PostPage and PostModalRoute as three
+// copies, and only Feed's logged the Phase-7 signal. One implementation here,
+// so every surface files the same report and logs the same event.
+describe('submitReport', () => {
+  it('writes the report, marks the post reported and confirms it', async () => {
+    const { result, toast } = setup()
+    await act(async () => { await result.current.engagementProps.submitReport('p1', 'Spam') })
+
+    expect(mockSupabase.data.tables.reports).toEqual([
+      { id: 'row_1', reporter_id: 'u1', post_id: 'p1', reason: 'Spam' },
+    ])
+    expect(result.current.engagementProps.reportedPosts).toContain('p1')
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/review this post/i), { type: 'success' })
+  })
+
+  it('logs the report against the reporter experiment group', async () => {
+    const { result } = setup()
+    await act(async () => { await result.current.engagementProps.submitReport('p1', 'Spam') })
+    expect(logReportEvent).toHaveBeenCalledWith(expect.anything(), { userId: 'u1', postId: 'p1' })
+  })
+
+  it('surfaces a failed write and does not mark the post reported', async () => {
+    const { result, toast } = setup()
+    mockSupabase.data.errorOnce.reports = true
+    await act(async () => { await result.current.engagementProps.submitReport('p1', 'Spam') })
+
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/could not send the report/i), { type: 'error' })
+    expect(result.current.engagementProps.reportedPosts).not.toContain('p1')
+    expect(logReportEvent).not.toHaveBeenCalled()
+  })
+
+  it('does nothing without a signed-in user', async () => {
+    const { result } = renderHook(() =>
+      usePostEngagement({ user: null, navigate: vi.fn(), toast: { show: vi.fn() } }))
+    await act(async () => { await result.current.engagementProps.submitReport('p1', 'Spam') })
+    expect(mockSupabase.data.tables.reports).toEqual([])
+  })
+
+  // Clears whether the write succeeded or failed — a stuck spinner would leave
+  // the reason picker permanently disabled.
+  it('clears the in-flight marker on both paths', async () => {
+    const { result } = setup()
+    await act(async () => { await result.current.engagementProps.submitReport('p1', 'Spam') })
+    expect(result.current.state.reportingId).toBeNull()
+
+    mockSupabase.data.errorOnce.reports = true
+    await act(async () => { await result.current.engagementProps.submitReport('p2', 'Spam') })
+    expect(result.current.state.reportingId).toBeNull()
   })
 })

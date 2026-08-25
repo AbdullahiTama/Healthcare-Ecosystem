@@ -365,11 +365,13 @@ describe('PostModalRoute', () => {
     }
   })
 
-  // The other half of the same finding: reporting is one of the two mutations
-  // PostModalRoute owns itself rather than borrowing from the hook, so no
-  // amount of wrapping engagementProps can cover it — submitReport has to say
-  // so at its own call site. Feed shows the result (the menu item reads
-  // "Reported") off the same reportedPosts list.
+  // The other half of the same finding. Reporting used to be one of the two
+  // mutations PostModalRoute owned itself, so wrapMutations could not see it
+  // and submitReport marked dirty by hand. It now reaches the write through
+  // engagementProps, which means the wrapper covers it by construction — this
+  // asserts that still holds, and would fail if the write drifted back out of
+  // the hook. Feed shows the result (the menu item reads "Reported") off the
+  // same reportedPosts list.
   it('reporting the post in the overlay and closing dispatches the dirty event', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'u2' } })
     postRepository.getPostById.mockResolvedValue(post())

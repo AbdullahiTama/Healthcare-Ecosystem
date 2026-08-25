@@ -113,3 +113,38 @@ export function logExperimentEvent(client, { experimentKey, variant, eventType, 
     p_post_id: postId || null,
   }))
 }
+
+// Log a report tagged with the reporter's staged-rollout group, resolving that
+// group on demand rather than requiring the caller to already hold one.
+//
+// Reports are filed from three surfaces — the feed, the /post/:id page and the
+// in-feed overlay — but only the feed ever had an experiment resolved, because
+// resolution was a side effect of loading its ranking config. A report from a
+// permalink therefore reached the spam signal as nothing at all. Threading
+// experiment state into two more pages would have each of them doing this same
+// read anyway.
+//
+// Resolving here is sound because submitReport requires a signed-in user and
+// resolveExperiment buckets on `userId || sessionId`: with a user id present
+// every surface computes the same group the feed would have. The cost is one
+// select on a rare, deliberate action.
+//
+// Never rejects: a metric must not turn a successful report into a failed one.
+export async function logReportEvent(client, { userId, postId }) {
+  if (!userId || !postId) return
+  try {
+    const { data: rows } = await client
+      .from('content_distribution_experiments')
+      .select('key, label, enabled, rollout_pct, variant, config, start_at, end_at')
+    const experiment = resolveExperiment({ experiments: rows || [], userId })
+    if (!experiment) return
+    await logExperimentEvent(client, {
+      experimentKey: experiment.key,
+      variant: experiment.variant,
+      eventType: 'report',
+      postId,
+    })
+  } catch {
+    // Swallowed deliberately — see above.
+  }
+}

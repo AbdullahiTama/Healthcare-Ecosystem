@@ -10,6 +10,7 @@ import { exportImage, exportVideo, canExportVideo, shareOrDownload } from '../..
 import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
+import { logReportEvent } from './distributionExperiments'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -84,6 +85,9 @@ export function usePostEngagement({
   const [editingComment, setEditingComment] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reportedPosts, setReportedPosts] = useState([])
+  // Which post's report is in flight — drives the reason picker's disabled
+  // state on all three surfaces, which each used to keep their own copy.
+  const [reportingId, setReportingId] = useState(null)
   // Feed's ranked DISPLAY list — populated by Feed's own loadFeed/
   // hydrateAndRank, never by hydrate() below (ranking depends on the tab,
   // the resolved ranking config and the reader's staged experiment, none of
@@ -548,6 +552,38 @@ export function usePostEngagement({
     onReportPost(postId)
   }
 
+  // The second step of that flow, and the one that used to live three times
+  // over — in Feed, PostPage and PostModalRoute — as byte-similar copies that
+  // had already drifted: only Feed's logged the Phase-7 spam signal, so a
+  // report filed from a permalink or the overlay reached moderation but never
+  // reached the metric. One implementation, so every surface does both.
+  //
+  // Being on `engagementProps` also means the overlay's mutation wrapper sees
+  // it, which is why PostModalRoute no longer marks itself dirty by hand here.
+  async function submitReport(postId, reason) {
+    if (!user || !postId) return
+    setReportingId(postId)
+
+    const { error } = await supabase.from('reports').insert({
+      reporter_id: user.id,
+      post_id: postId,
+      reason,
+    })
+
+    setReportingId(null)
+
+    if (error) {
+      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+
+    setReportedPosts((prev) => [...prev, postId])
+    toast.show('Thanks: our team will review this post.', { type: 'success' })
+
+    // Fire-and-forget, and already non-rejecting; the report itself is done.
+    logReportEvent(supabase, { userId: user.id, postId })
+  }
+
   async function sharePost(post) {
     const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
     const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
@@ -735,6 +771,7 @@ export function usePostEngagement({
     sharePost,
     shareCard,
     openReport,
+    submitReport,
     handleEditPost,
     handleDeletePost,
     handleCommentAdded,
@@ -750,7 +787,7 @@ export function usePostEngagement({
       commentCounts, setCommentCounts, shareCounts, setShareCounts,
       saveCounts, setSaveCounts, userSubscriptions, setUserSubscriptions,
       unlockedCreators, setUnlockedCreators, openComments, setOpenComments,
-      reportedPosts, setReportedPosts, profiles, setProfiles,
+      reportedPosts, setReportedPosts, reportingId, profiles, setProfiles,
       // Normalises the asymmetry the Task 4 review flagged: every other
       // array/map slice above is reachable from `state`; these four were
       // reachable only via `engagementProps`. Left there too — Feed already
