@@ -378,6 +378,39 @@ describe('usePostEngagement handlers', () => {
     expect(result.current.engagementProps.saveCount('p1')).toBe(0)
   })
 
+  it('deletes the post and runs the host aftermath once the write succeeds', async () => {
+    mockSupabase.data.tables.posts = [post('p1', 'u1')]
+    const onPostDeleted = vi.fn()
+    const { result, toast } = setup({ onPostDeleted })
+
+    await act(async () => { await result.current.engagementProps.handleDeletePost('p1') })
+
+    expect(mockSupabase.data.tables.posts).toHaveLength(0)
+    expect(onPostDeleted).toHaveBeenCalledTimes(1)
+    expect(toast.show).not.toHaveBeenCalled()
+    expect(result.current.state.deletingId).toBeNull()
+  })
+
+  // Fix round 2 (I3): the aftermath used to fire unconditionally. Every host's
+  // aftermath used to be `loadFeed()`, so a failed delete visibly put the post
+  // back; now PostPage navigates to /feed and PostModalRoute closes the
+  // overlay, which would tell the reader a still-public post was gone. The
+  // aftermath must therefore be reachable ONLY from a clean write.
+  it('does not run the host aftermath when the delete fails, and says so', async () => {
+    mockSupabase.data.tables.posts = [post('p1', 'u1')]
+    mockSupabase.data.errorOnce.posts = true
+    const onPostDeleted = vi.fn()
+    const { result, toast } = setup({ onPostDeleted })
+
+    await act(async () => { await result.current.engagementProps.handleDeletePost('p1') })
+
+    expect(onPostDeleted).not.toHaveBeenCalled()
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/could not delete/i), { type: 'error' })
+    // The card has to become interactive again — a stuck `deletingId` would
+    // leave the reader looking at a permanently mid-delete post.
+    expect(result.current.state.deletingId).toBeNull()
+  })
+
   it('routes a logged-out report to login and an already-reported post to a toast', async () => {
     const onReportPost = vi.fn()
     const loggedOutNavigate = vi.fn()

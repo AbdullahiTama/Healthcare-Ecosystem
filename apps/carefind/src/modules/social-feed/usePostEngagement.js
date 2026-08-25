@@ -403,11 +403,32 @@ export function usePostEngagement({
   // one thing left injected. `.eq('user_id', user.id)` is the client-side
   // half of the ownership check — RLS is the other half — and must not be
   // simplified away.
+  //
+  // The write's `error` is read rather than discarded, and the aftermath runs
+  // only on success. That was survivable while every host's aftermath was
+  // `loadFeed()` — a failed delete simply put the post back on screen — but
+  // the aftermath is now navigation: PostPage leaves for /feed and
+  // PostModalRoute closes the overlay. Firing either unconditionally makes a
+  // delete that the network or the database rejected look exactly like one
+  // that worked, while the post is still public.
+  //
+  // Caveat worth knowing before trusting this: PostgREST reports a delete that
+  // matched no rows as a plain success, so an RLS policy that merely filters
+  // the row out arrives here as `error: null`. Detecting that needs the delete
+  // to return its rows (`.select()`) and a length check — a wider change than
+  // this fix, recorded in CODE_AUDIT.md. What is caught here is every failure
+  // that does surface an error: transport failures, and any database error.
   async function handleDeletePost(postId) {
     setDeletingId(postId)
-    await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
-    onPostDeleted()
+    const { error } = await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
     setDeletingId(null)
+
+    if (error) {
+      toast.show('Could not delete the post: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+
+    onPostDeleted()
   }
 
   async function toggleLike(postId) {
