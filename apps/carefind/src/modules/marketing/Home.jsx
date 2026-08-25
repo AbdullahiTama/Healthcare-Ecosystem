@@ -64,7 +64,7 @@ export default function Home() {
       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, rgba(11,74,62,0.95) 0%, rgba(11,74,62,0.3) 60%, rgba(11,74,62,0.1) 100%)' }} />
       <div style={{ position: 'relative', zIndex: 1, padding: isMobile ? 20 : 24, width: '100%' }}>
         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: 11, fontWeight: 800, marginBottom: 10 }}>{index + 1}</div>
-        <div style={{ fontWeight: 800, fontSize: active ? 18 : 15, color: '#fff', marginBottom: active ? 8 : 0, transition: 'all 0.4s ease' }}>{step.title}</div>
+        <div className="cf-step-title" style={{ fontWeight: 800, fontSize: active ? 18 : 15, color: '#fff', marginBottom: active ? 8 : 0, transition: 'all 0.4s ease' }}>{step.title}</div>
         {active && <div style={{ fontSize: isMobile ? 12.5 : 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, maxWidth: 360 }}>{step.desc}</div>}
       </div>
     </>
@@ -100,10 +100,10 @@ export default function Home() {
           </p>
           <div data-hero style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <Link to="/search" style={{ padding: '16px 32px', borderRadius: 60, textDecoration: 'none', border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              Start searching <ArrowRight size={18} aria-hidden="true" />
+              {HOME.cta.primary.label} <ArrowRight size={18} aria-hidden="true" />
             </Link>
             <Link to="/feed" style={{ padding: '16px 32px', borderRadius: 60, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
-              Browse feed
+              {HOME.cta.secondary.label}
             </Link>
           </div>
           <div data-hero style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center', marginTop: 36 }}>
@@ -134,12 +134,17 @@ export default function Home() {
       </section>
 
       <section id="how-it-works" style={{ padding: '80px 24px 96px', background: cardBg }}>
+        <style>{`
+          @media (prefers-reduced-motion: reduce) {
+            .cf-step-panel, .cf-step-title { transition: none !important; }
+          }
+        `}</style>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <SectionHeading {...HOME.steps.heading} />
           <div data-reveal style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12, minHeight: isMobile ? undefined : 360 }}>
             {isMobile
               ? HOME.steps.items.map((step, i) => (
-                <div key={step.title} style={stepSurface}>
+                <div key={step.title} className="cf-step-panel" style={stepSurface}>
                   {renderStepBody(step, i, { active: true })}
                 </div>
               ))
@@ -147,6 +152,7 @@ export default function Home() {
                 <button
                   key={step.title}
                   type="button"
+                  className="cf-step-panel"
                   aria-expanded={activeStep === i}
                   onMouseEnter={() => setActiveStep(i)}
                   onFocus={() => setActiveStep(i)}
