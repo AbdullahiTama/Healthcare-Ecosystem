@@ -644,6 +644,17 @@ function Feed() {
 
   openCommentsRef.current = engagement.state.openComments
 
+  // Destructured so the subscription below depends on the two setters it
+  // actually calls, instead of closing over a render-0 `engagement` and
+  // reaching them through two object hops. Both are raw useState setters, so
+  // their identity is stable and the channel is still created exactly once —
+  // but that is a fact about the hook's internals, not something this effect
+  // should silently depend on. Named in the deps, a setter that ever becomes a
+  // derived function re-subscribes the channel rather than leaving this one
+  // calling a stale copy forever.
+  const { setComments } = engagement.engagementProps
+  const { setCommentCounts } = engagement.state
+
   useEffect(() => {
     const channel = supabase
       .channel('post-comments-realtime')
@@ -659,14 +670,14 @@ function Feed() {
               .single()
               .then(({ data }) => {
                 if (data) {
-                  engagement.engagementProps.setComments(prev => {
+                  setComments(prev => {
                     const existing = prev[data.post_id] || []
                     if (existing.some(c => c.id === data.id)) return prev
                     return { ...prev, [data.post_id]: [...existing, data].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) }
                   })
                 }
               })
-            engagement.state.setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
+            setCommentCounts(prev => ({ ...prev, [newComment.post_id]: (prev[newComment.post_id] || 0) + 1 }))
           }
         }
       )
@@ -677,7 +688,7 @@ function Feed() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [setComments, setCommentCounts])
 
   async function loadLiveSessions() {
     const { data } = await supabase
