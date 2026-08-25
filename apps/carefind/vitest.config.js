@@ -16,5 +16,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.js'],
     include: ['src/**/*.test.{js,jsx}'],
     globals: true,
+    // Above the 5000ms `asyncUtilTimeout` configured in src/test/setup.js (see
+    // the reasoning there): when a findBy* runs out of time it must fail with
+    // RTL's own message, which names the element it could not find, rather
+    // than vitest's generic "test timed out" — which only holds while the test
+    // timeout stays clear of the async-util one. A hung test still fails in 15s.
+    testTimeout: 15000,
   },
 })
