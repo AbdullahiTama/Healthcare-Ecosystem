@@ -24,6 +24,7 @@ import { theme } from '../../styles/theme'
 import { wrapBold, wrapItalic, wrapHighlight, renderArticleHtml } from '../news-publishing/articleFormat'
 import { validateArticleForPublish } from '../news-publishing/articleContent.js'
 import { renderMarkdown } from './markdown.jsx'
+import { POST_FEED_COLS, POST_FEED_COLS_FALLBACK } from './postColumns.js'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
@@ -35,7 +36,6 @@ import Logo from './Logo.jsx'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import DrawingBoard from '../../components/DrawingBoard.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
-import { coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import SupportPrompt from '../../components/SupportPrompt.jsx'
 import Stories from './Stories.jsx'
 import { getActiveIdentity } from '../../lib/activeIdentity'
@@ -70,12 +70,6 @@ async function searchPosts(query, { limit = 30 } = {}) {
   return fb || []
 }
 
-// The columns the feed reads. repost_of/repost_count need the 20260813
-// reposts migration; until it's applied they don't exist, so loadFeed and
-// searchPosts fall back to the older set (same graceful-degradation pattern
-// as the search_vector fallback above) instead of breaking the feed.
-const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
-const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
 
 // Explicit view-event mechanism (engagement spec §7): each qualifying view
 // writes a post_view_events row and the DB bumps posts.view_count via

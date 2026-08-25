@@ -11,6 +11,7 @@ import { shareOrCopy, mediaToFile } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
 import { loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
 import { logReportEvent } from './distributionExperiments'
+import { POST_FEED_COLS } from './postColumns.js'
 
 // Merge-by-key for the array slices. `merge:false` replaces outright (a feed
 // refetch must drop rows belonging to posts that fell out of the batch);
@@ -31,13 +32,6 @@ function applyMap(setter, next, { merge }) {
   setter((prev) => (merge ? { ...prev, ...next } : next))
 }
 
-// Same shape PostCard needs to render any post — a resolved repost source is
-// rendered exactly like a normal card (issues #6/#8), so it needs the same
-// columns. Mirrors Feed.jsx's (pre-existing, now-redundant) POST_FEED_COLS;
-// duplicated rather than imported because Feed's constant isn't exported and
-// this task's scope is "don't touch Feed's block", not "wire Feed and the
-// hook together" — retiring Feed's copy is a follow-up (see hydrate below).
-const REPOST_SOURCE_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
 
 // Owns everything that answers "what is this post's engagement context?" —
 // the state, the reads that fill it, and the handlers that change it. Two
@@ -278,7 +272,7 @@ export function usePostEngagement({
     if (wantedSourceIds.length) {
       const { data: sourceRows, error: sourceError } = await supabase
         .from('posts')
-        .select(REPOST_SOURCE_COLS)
+        .select(POST_FEED_COLS)
         .in('id', wantedSourceIds)
       // Marked resolved on a SUCCESSFUL response only, empty or not — a
       // successful-but-empty response is the genuine "source is gone"
