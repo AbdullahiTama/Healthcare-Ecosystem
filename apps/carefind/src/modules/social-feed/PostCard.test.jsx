@@ -210,3 +210,41 @@ describe('PostCard preview clamp + See more', () => {
     expect(screen.getByRole('button', { name: /share this post/i })).toBeInTheDocument()
   })
 })
+// Finding 11 from the permalinks review, pre-existing and left open there.
+// renderMarkdown emits BLOCK elements — <p> per paragraph, and headings and
+// lists too — so wrapping its output in a <p> is invalid nesting for every one
+// of them. The video-caption branch was the only call site still doing it;
+// every other one already wraps in a <div>.
+//
+// The browser's parser silently closes the outer <p> at the first inner block
+// and carries on, which is why the symptom was wrong spacing rather than a
+// crash — and why only React's validateDOMNesting warning ever named it.
+describe('PostCard body markup (no invalid nesting)', () => {
+  const multiParagraph = 'First paragraph.\n\nSecond paragraph.\n\n# A heading\n\n- a list item'
+
+  const nestedBlockIn = (container) => container.querySelector(
+    'p p, p h1, p h2, p h3, p h4, p h5, p h6, p ul, p ol, p blockquote, p pre, p div',
+  )
+
+  it('does not nest block elements inside a <p> for a video caption', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PostCard
+          post={makePost({ post_type: 'video', video_url: 'https://example.test/v.mp4', content: multiParagraph })}
+          {...makeCardProps()}
+        />
+      </MemoryRouter>
+    )
+    expect(container.querySelector('p')).not.toBeNull() // markdown really did render blocks
+    expect(nestedBlockIn(container)).toBeNull()
+  })
+
+  it('does not nest block elements inside a <p> for a text post body', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PostCard post={makePost({ content: multiParagraph })} {...makeCardProps()} preview={false} />
+      </MemoryRouter>
+    )
+    expect(nestedBlockIn(container)).toBeNull()
+  })
+})

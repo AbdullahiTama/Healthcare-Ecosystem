@@ -363,9 +363,13 @@ export default function PostCard({
           </div>
           {post.content && (
             <div style={{ margin: '10px 16px 0' }}>
-              <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              {/* A div, not a p: renderMarkdown emits BLOCK elements — one <p>
+                  per paragraph, plus headings and lists — and none of those may
+                  live inside a <p>. Every other call site already wraps in a
+                  div; this caption was the last one that did not. */}
+              <div style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                 {renderMarkdown(post.content)}
-              </p>
+              </div>
             </div>
           )}
         </div>
