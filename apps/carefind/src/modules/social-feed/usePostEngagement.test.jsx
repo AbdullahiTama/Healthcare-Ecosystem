@@ -34,8 +34,13 @@ const mockSupabase = vi.hoisted(() => {
     const settle = () => {
       if (mode === 'insert') return { data: inserted, error: null }
       if (mode === 'delete') {
+        // Faithful to PostgREST with `.select()`: a DELETE answers with the
+        // rows it actually removed, which is the ONLY way a caller can tell a
+        // real delete from one an RLS policy filtered down to nothing (both
+        // carry error:null).
+        const removed = rows(table).filter((r) => matches(r, cons))
         data.tables[table] = rows(table).filter((r) => !matches(r, cons))
-        return { data: null, error: null }
+        return { data: removed, error: null }
       }
       if (mode === 'update') {
         data.tables[table] = rows(table).map((r) => (matches(r, cons) ? { ...r, ...patch } : r))
@@ -435,6 +440,30 @@ describe('usePostEngagement handlers', () => {
     expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/could not delete/i), { type: 'error' })
     // The card has to become interactive again — a stuck `deletingId` would
     // leave the reader looking at a permanently mid-delete post.
+    expect(result.current.state.deletingId).toBeNull()
+  })
+
+  // The third delete outcome, and the one PostgREST hides: a DELETE that
+  // matched NO rows is reported as a plain success, so an RLS policy that
+  // merely filters the row out arrives as error:null. Indistinguishable from a
+  // real delete unless the write returns its rows — which is why it now does.
+  // Unreachable through today's UI (the client-side .eq('user_id') scoping
+  // means a reader can only hit it by deleting a post they do not own), but a
+  // moderation or business-owned-posts policy would make it reachable, and the
+  // aftermath is navigation: the reader would be told a still-public post was
+  // gone.
+  it('treats a delete that removed nothing as a failure, not a success', async () => {
+    // The post exists but belongs to someone else, so the scoped delete
+    // matches no rows and PostgREST answers with a clean, empty success.
+    mockSupabase.data.tables.posts = [{ ...post('p1', 'someone_else'), user_id: 'someone_else' }]
+    const onPostDeleted = vi.fn()
+    const { result, toast } = setup({ onPostDeleted })
+
+    await act(async () => { await result.current.engagementProps.handleDeletePost('p1') })
+
+    expect(onPostDeleted).not.toHaveBeenCalled()
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/could not delete/i), { type: 'error' })
+    expect(mockSupabase.data.tables.posts).toHaveLength(1) // still there
     expect(result.current.state.deletingId).toBeNull()
   })
 

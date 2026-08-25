@@ -418,11 +418,26 @@ export function usePostEngagement({
   // that does surface an error: transport failures, and any database error.
   async function handleDeletePost(postId) {
     setDeletingId(postId)
-    const { error } = await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
+    // `.select()` so the write answers with the rows it removed. Without it a
+    // DELETE that matched NOTHING is reported by PostgREST as a plain success
+    // — indistinguishable from a real delete — so an RLS policy that merely
+    // filters the row out would fire the aftermath and tell the reader a
+    // still-public post was gone.
+    const { data: removed, error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId)
+      .eq('user_id', user.id)
+      .select('id')
     setDeletingId(null)
 
     if (error) {
       toast.show('Could not delete the post: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+
+    if (!removed?.length) {
+      toast.show('Could not delete the post: it may no longer be yours to remove.', { type: 'error' })
       return
     }
 

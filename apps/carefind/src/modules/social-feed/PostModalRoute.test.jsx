@@ -24,6 +24,7 @@ vi.mock('../../config/supabaseClient', () => {
   }
   function builder(table) {
     const cons = {}
+    let deleting = false
     // Unlike the flat "always null" response most tables get, an insert
     // echoes back the row it was given (with a generated id) so a real write
     // (toggleLike/toggleSave's insertRowResolvingConflict, which does
@@ -37,11 +38,20 @@ vi.mock('../../config/supabaseClient', () => {
       eq: vi.fn((col, val) => { (cons[col] = cons[col] || []).push(val); return b }),
       in: vi.fn((col, vals) => { (cons[col] = cons[col] || []).push(vals); return b }),
       order: vi.fn(() => b), limit: vi.fn(() => b),
-      update: vi.fn(() => b), delete: vi.fn(() => b),
+      update: vi.fn(() => b),
+      // A DELETE answers with the rows it removed (PostgREST + `.select()`),
+      // which is how handleDeletePost tells a real delete from one an RLS
+      // policy filtered down to nothing. These suites keep no posts table, so
+      // the delete reports back the row its own constraints targeted.
+      delete: vi.fn(() => { deleting = true; return b }),
       insert: vi.fn((row) => { insertedRow = { id: `ins_${table}`, ...row }; return b }),
       maybeSingle: vi.fn(() => Promise.resolve({ data: insertedRow, error: null })),
       single: vi.fn(() => Promise.resolve({ data: insertedRow, error: null })),
       then: (resolve) => {
+        if (deleting) {
+          const id = (cons.id || []).flat()[0]
+          return Promise.resolve({ data: id ? [{ id }] : [], error: null }).then(resolve)
+        }
         const rows = (mockTables[table] || []).filter((row) => matches(row, cons))
         return Promise.resolve({ data: rows, error: null }).then(resolve)
       },
