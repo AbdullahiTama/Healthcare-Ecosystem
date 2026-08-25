@@ -39,7 +39,11 @@ export default function LandingNav({
   )
 
   return (
-    <nav role="banner" style={{
+    // No role="banner" here: the pages wrap this in <header>, which is the
+    // banner landmark, and claiming it a second time both duplicated that
+    // landmark and overrode the <nav>'s own implicit navigation role — so the
+    // page exposed two banners and no navigation landmark at all.
+    <nav aria-label="Primary" style={{
       position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
       background: scrolled ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.08)',
       backdropFilter: scrolled ? 'blur(16px)' : 'blur(0px)',

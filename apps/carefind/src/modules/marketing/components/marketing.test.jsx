@@ -67,9 +67,13 @@ describe('LandingNav', () => {
     expect(screen.getByText('search page marker')).toBeInTheDocument()
   })
 
-  it('renders as a banner landmark', () => {
+  // A navigation landmark, NOT a banner. The pages wrap this in <header>,
+  // which is the banner; role="banner" here made a second one and suppressed
+  // the nav's own implicit role, leaving the page with no navigation landmark.
+  it('renders as a labelled navigation landmark, not a second banner', () => {
     wrap(<LandingNav links={[]} signInTo="/login" getStartedTo="/search" />)
-    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument()
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
   })
 })
 
