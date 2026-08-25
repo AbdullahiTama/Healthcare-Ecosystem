@@ -104,6 +104,7 @@ export const TYPE = {
 export const DUOTONE =
   'linear-gradient(180deg, rgba(11,74,62,0.55) 0%, rgba(11,74,62,0.85) 100%)'
 
+export { prefersReducedMotion } from './useRevealOnScroll'
 export { theme }
 ```
 

@@ -622,9 +622,9 @@ Composition order:
 7. **Pricing** id="pricing": heading + 4 plan cards (popular = Growth, teal gradient, MOST POPULAR pill, Naira amounts) exactly as today's data; each card's CTA is a Link to `/register` (Enterprise -> label "Talk to us", same route).
 8. **Referral Agent** section: eyebrow pill, heading, body (40% first payment / 5% renewals bolded), Link `/apply-agent` teal button, three CheckIcon bullets.
 9. **CtaBand** {...LANDING.cta} with primary `{ label: 'Get started free', to: '/register', variant: 'solid' }`.
-10. **SiteFooter** brandLine + links (Features #features, Pricing #pricing, CareFind https://carefind (external anchor target _blank rel noreferrer), support@carehub.ng mailto anchor).
+10. **SiteFooter** brandLine + links (Features #features, Pricing #pricing, CareFind rendered as PLAIN TEXT — same as today's footer, no external URL is fabricated, support@carehub.ng as mailto anchor).
 
-Requirements: `useRevealOnScroll(pageRef)` active; every animation reduced-motion-gated; all images except hero get `loading="lazy"` inside aspect-ratio boxes; semantic sections with ids preserved (`#features`, #pricing targets must exist for nav anchors).
+Requirements: `useRevealOnScroll(pageRef)` active; every animation reduced-motion-gated; all images except hero get `loading="lazy"` inside aspect-ratio boxes; semantic sections with ids preserved (`#features`, #pricing targets must exist for nav anchors). The hero "See pricing" action is a native `<a href="#pricing">` with preventDefault + smooth scrollIntoView (same behavior contract as nav anchor targets) — NOT a react-router Link, which would push a hash route.
 
 Also update `index.html`: inside `<head>`, add `<link rel="preconnect" href="https://images.unsplash.com" crossorigin />` (spec §6).
 
