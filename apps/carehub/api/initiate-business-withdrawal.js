@@ -61,6 +61,12 @@ export default async function handler(req, res) {
 
   const reference = prior?.paystack_reference || transferReference(businessId)
 
+  let pendingRequestId = null
+  // Flipped once Paystack has ACCEPTED the transfer. Past that point a failure
+  // must NOT refund: the money is already in flight, and the webhook's
+  // transfer.failed handler owns the refund for anything that goes wrong after.
+  let transferInitiated = false
+
   try {
     // Create or reuse the Paystack transfer recipient for this business.
     const recipientCode = await createTransferRecipient({
@@ -88,6 +94,20 @@ export default async function handler(req, res) {
       })
     }
 
+    // Capture the request id so a transfer failure after the wallet debit can be
+    // refunded via reject_business_withdrawal (same refund path the webhook's
+    // transfer.failed handler uses — idempotency guard inside the RPC prevents
+    // double-refund if both fire).
+    const { data: newRequest } = await supabase
+      .from('business_withdrawal_requests')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('paystack_reference', reference)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    pendingRequestId = newRequest?.id ?? null
+
     // Initiate the Paystack transfer (idempotent by reference).
     const { transferCode } = await initiateTransfer({
       recipientCode,
@@ -95,6 +115,7 @@ export default async function handler(req, res) {
       reason: `CareHub business withdrawal: ₦${(amountKobo / 100).toLocaleString()}`,
       reference,
     })
+    transferInitiated = true
 
     // Attach transfer details by reference (unique), not "latest pending".
     await supabase
@@ -114,6 +135,18 @@ export default async function handler(req, res) {
       amount: amountKobo,
     })
   } catch (err) {
+    // Only reached with the wallet already debited and Paystack never having
+    // accepted the transfer, so the reservation is stranded and nothing will
+    // ever settle it — refund it here. reject_business_withdrawal is safe to
+    // race with the webhook: it takes the row FOR UPDATE and returns
+    // already_<status> unless the request is still pending or processing.
+    if (pendingRequestId && !transferInitiated) {
+      try {
+        await supabase.rpc('reject_business_withdrawal', { p_request_id: pendingRequestId })
+      } catch (refundErr) {
+        console.error('Business withdrawal refund failed:', refundErr)
+      }
+    }
     return res.status(502).json({ error: err.message || 'Payment provider error' })
   }
 }
