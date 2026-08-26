@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { renderMarkdown } from './markdown.jsx'
+import { imagesOf } from './postDisplay.jsx'
 import VisualCard from '../../utils/VisualCard.jsx'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
@@ -137,6 +138,17 @@ export default function PostCard({
               {reposterName}
             </Link>
           </span>
+          {/* Issue #2: name the original author explicitly, so even a reader
+              who never scrolls into the source card below cannot mistake the
+              reposter for the writer. */}
+          {repostSource && (
+            <span>
+              · Originally posted by{' '}
+              <Link to={`/u/${repostSource.user_id}`} style={{ color: theme.gray600, textDecoration: 'none', fontWeight: 800 }}>
+                {authorName(repostSource)}
+              </Link>
+            </span>
+          )}
           {user && post.user_id === user.id && (
             <button
               type="button"
@@ -445,9 +457,23 @@ export default function PostCard({
             </button>
           )}
 
-          {post.image_url && post.post_type !== 'visual' && (
-            <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
-          )}
+          {/* Issue #7 — one photo renders as before; two or more render as a
+              square-cropped grid. The voice-card/video types own their media
+              slot above and never fall through to here. */}
+          {(() => {
+            const gallery = imagesOf(post)
+            if (!gallery.length || post.post_type === 'visual' || post.post_type === 'video') return null
+            if (gallery.length === 1) {
+              return <img src={gallery[0]} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
+            }
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 8 }}>
+                {gallery.slice(0, 6).map((url) => (
+                  <img key={url} src={url} alt="post" loading="lazy" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: theme.radius.sm }} />
+                ))}
+              </div>
+            )
+          })()}
         </>
       )}
       {/* Engagement bar. Reading actions (react, reply, pass on) group

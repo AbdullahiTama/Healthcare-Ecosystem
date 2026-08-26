@@ -102,3 +102,15 @@ export function PostTileGrid({ posts, onOpen, isMobile }) {
     </div>
   )
 }
+
+// Issue #7 — every image a post carries, in order. image_urls is the
+// canonical multi-image list; the legacy single image_url is the fallback
+// so posts written before the column exist keep rendering.
+export function imagesOf(post) {
+  if (!post) return []
+  const list = Array.isArray(post.image_urls)
+    ? post.image_urls.filter((u) => typeof u === 'string' && u)
+    : []
+  if (list.length) return list
+  return post.image_url ? [post.image_url] : []
+}

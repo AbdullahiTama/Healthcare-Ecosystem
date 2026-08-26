@@ -101,9 +101,9 @@ export function useFeed() {
     }
   }, [user, reactions, posts, notify])
 
-  const userHasLiked = useCallback((postId) => reactions.some(r => r.post_id === postId && r.user_id === user?.id), [reactions, user])
-  const likeCount = useCallback((postId) => reactions.filter(r => r.post_id === postId).length, [reactions])
-  const commentTotal = useCallback((postId) => commentCounts[postId] || 0, [commentCounts])
+  const userHasLiked = useCallback((postId) => (reactions || []).some(r => r.post_id === postId && r.user_id === user?.id), [reactions, user])
+  const likeCount = useCallback((postId) => (reactions || []).filter(r => r.post_id === postId).length, [reactions])
+  const commentTotal = useCallback((postId) => (commentCounts || {})[postId] || 0, [commentCounts])
 
   return {
     posts,

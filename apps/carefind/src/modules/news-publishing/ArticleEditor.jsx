@@ -397,6 +397,34 @@ function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
           boxSizing: 'border-box', color: theme.textDark,
         }}
       />
+      {/* Issue #8 — live WYSIWYG preview. Formatting used to be invisible while
+          writing: the author saw literal ** and ==#hex| markers and only
+          discovered how the article looked after publishing. This pane runs the
+          exact renderer the published article uses (renderArticleHtml), so what
+          it shows IS what will publish — actual bold, actual italic, actual
+          colour — updating on every keystroke. It reads the same block content,
+          so there is no second source of truth and no format change. */}
+      {!readOnly && hasText && (
+        <div
+          data-testid="article-preview"
+          style={{
+            marginTop: 6, border: `1px dashed ${theme.border}`, borderRadius: 12,
+            padding: '10px 12px', background: '#fff',
+          }}
+        >
+          <p style={{
+            margin: '0 0 6px 0', fontSize: 10.5, fontWeight: 800,
+            color: theme.textLight, letterSpacing: '0.05em', textTransform: 'uppercase',
+          }}>
+            Preview — exactly as it will publish
+          </p>
+          <div
+            className="article-preview-body"
+            dangerouslySetInnerHTML={{ __html: renderArticleHtml(block.content) }}
+            style={{ fontFamily: 'Georgia, serif', fontSize: 15, lineHeight: 1.75, color: theme.textDark }}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -527,6 +555,14 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
 
   return (
     <div>
+      {/* Preview typography mirrors the published article's classes
+          (.article-body strong/mark) so the pane is a faithful stand-in. */}
+      <style>{`
+        .article-preview-body p { margin: 0 0 12px 0; }
+        .article-preview-body p:last-child { margin-bottom: 0; }
+        .article-preview-body strong { font-weight: 800; color: ${theme.navy}; }
+        .article-preview-body mark { padding: 1px 4px; border-radius: 4px; }
+      `}</style>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button type="button" onClick={() => wrapActive('**')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontWeight: 900, fontSize: 13 }}>B</button>

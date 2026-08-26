@@ -1029,9 +1029,15 @@ function Feed() {
   // by loadFeed() above, not a new query. No engagement data yet (e.g. right
   // after loadFeed's initial fetch, before reactions/commentCounts settle)
   // just means an empty/neutral sort, which is fine.
-  const { likeCount } = engagement.engagementProps
-  const trendingPosts = [...engagement.state.posts]
-    .sort((a, b) => (likeCount(b.id) + (engagement.state.commentCounts[b.id] || 0)) - (likeCount(a.id) + (engagement.state.commentCounts[a.id] || 0)))
+  const { likeCount } = engagement.engagementProps ?? {}
+  const trendingPosts = [...(engagement.state?.posts ?? [])]
+    .sort((a, b) => {
+      const bLikes = typeof likeCount === 'function' ? (likeCount(b?.id) ?? 0) : 0
+      const aLikes = typeof likeCount === 'function' ? (likeCount(a?.id) ?? 0) : 0
+      const bComments = engagement.state?.commentCounts?.[b?.id] ?? 0
+      const aComments = engagement.state?.commentCounts?.[a?.id] ?? 0
+      return (bLikes + bComments) - (aLikes + aComments)
+    })
     .slice(0, 4)
 
   // Every prop PostCard needs besides `post`/`preview`. Shared verbatim by the
