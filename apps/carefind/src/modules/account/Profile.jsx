@@ -146,7 +146,8 @@ function Profile() {
     setEditingPost,
     setConfirmDeleteId,
     onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
-    onOpenDetail: setDetailPost,
+    // See more now expands inline in PostCard; full post view is /post/:id via PostPage
+    onOpenDetail: undefined,
     resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
   }
 

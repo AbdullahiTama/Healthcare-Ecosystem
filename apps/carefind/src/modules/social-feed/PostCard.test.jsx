@@ -107,8 +107,9 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps()} />
       </MemoryRouter>
     )
-    const seeMore = await screen.findByRole('button', { name: /read the full post by dr test/i })
+    const seeMore = await screen.findByRole('button', { name: /expand the full post by dr test/i })
     expect(seeMore).toBeInTheDocument()
+    expect(seeMore).toHaveTextContent(/see more/i)
   })
 
   it('never shows See more when the body fits', async () => {
@@ -119,10 +120,10 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps()} />
       </MemoryRouter>
     )
-    await waitFor(() => expect(screen.queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument())
   })
 
-  it('See more calls onOpenDetail with the post', async () => {
+  it('See more expands inline and then collapses with Show less (no navigation)', async () => {
     scrollH = 100
     clientH = 50
     const onOpenDetail = vi.fn()
@@ -131,8 +132,14 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps({ onOpenDetail })} />
       </MemoryRouter>
     )
-    fireEvent.click(await screen.findByRole('button', { name: /read the full post by dr test/i }))
-    expect(onOpenDetail).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
+    const seeMore = await screen.findByRole('button', { name: /expand the full post by dr test/i })
+    fireEvent.click(seeMore)
+    // Expands: Show less appears, onOpenDetail is NOT called (inline, not modal)
+    expect(await screen.findByRole('button', { name: /collapse post by dr test/i })).toBeInTheDocument()
+    expect(onOpenDetail).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /collapse post by dr test/i })).toHaveTextContent(/show less/i)
+    fireEvent.click(screen.getByRole('button', { name: /collapse post by dr test/i }))
+    expect(await screen.findByRole('button', { name: /expand the full post by dr test/i })).toBeInTheDocument()
   })
 
   it('the detail modal renders the full post with no See more button', async () => {
@@ -152,7 +159,8 @@ describe('PostCard preview clamp + See more', () => {
     )
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/The complete post body shown in full inside the modal/)).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /collapse post by dr test/i })).not.toBeInTheDocument()
   })
 
   it('the detail modal shows its loading and error states', async () => {
@@ -196,7 +204,8 @@ describe('PostCard preview clamp + See more', () => {
     expect(container.textContent).not.toContain('**')
     expect(container.querySelector('strong')).not.toBeNull()
     expect(container.querySelector('strong').textContent).toBe('bold')
-    expect(screen.queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /collapse post by dr test/i })).not.toBeInTheDocument()
   })
 
   it('still shows the engagement bar and its Share action', async () => {

@@ -15,7 +15,7 @@ import { canExportVideo } from '../../utils/voiceCard.js'
 import PostMenu from './PostMenu.jsx'
 import ProfileHeader from '../../components/ProfileHeader.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
-import { Card, Pill, TealBtn, GhostBtn } from '../../components/ui'
+import { Card, Pill, TealBtn, GhostBtn, ConfirmDialog } from '../../components/ui'
 
 // One pill per post, never two. `text` posts deliberately have no pill:
 // labelling the default kind adds noise without adding information. Kept here
@@ -110,10 +110,25 @@ export default function PostCard({
   // during the previous render" in exactly that case.
   const bodyRef = useRef(null)
   const [bodyOverflow, setBodyOverflow] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     const el = bodyRef.current
     setBodyOverflow(!!el && el.scrollHeight > el.clientHeight)
-  }, [post.content, post.post_type, preview])
+  }, [post.content, post.post_type, preview, expanded])
+  useEffect(() => {
+    // Reset expansion when the card is recycled for a different post (PostDetailModal reuses unkeyed instance)
+    setExpanded(false)
+  }, [post.id])
+  const [pendingRepost, setPendingRepost] = useState(null)
+  function requestRepostToggle(targetPost) {
+    if (!user) { navigate('/login'); return }
+    const already = userHasReposted ? userHasReposted(targetPost.id) : false
+    if (already) {
+      setPendingRepost(targetPost)
+    } else {
+      toggleRepost(targetPost)
+    }
+  }
 
   // ── Reposts (issues #6/#8) ────────────────────────────────────────────
   // A repost row holds no words of its own: `repost_of` names the post it
@@ -152,7 +167,7 @@ export default function PostCard({
           {user && post.user_id === user.id && (
             <button
               type="button"
-              onClick={() => toggleRepost(repostSource || { id: post.repost_of })}
+              onClick={() => setPendingRepost(repostSource || { id: post.repost_of })}
               style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 800, color: theme.tealDeep, cursor: 'pointer', fontFamily: theme.fontFamily }}
             >
               Undo repost
@@ -184,6 +199,18 @@ export default function PostCard({
             </p>
           </Card>
         )}
+        <ConfirmDialog
+          show={!!pendingRepost}
+          onClose={() => setPendingRepost(null)}
+          onConfirm={() => {
+            const target = pendingRepost
+            setPendingRepost(null)
+            if (target) toggleRepost(target)
+          }}
+          title="Undo repost?"
+          consequence="This will remove the repost from your profile and your followers' feeds."
+          confirmLabel="Undo repost"
+        />
       </div>
     )
   }
@@ -202,7 +229,8 @@ export default function PostCard({
   }
 
   return (
-    <Card style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
+    <>
+      <Card style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
       {/* Card header: identity left, one kind pill + overflow menu right.
           Identity reads name → verified badge → handle → credential →
           time, i.e. "who is this, and can I trust them" before anything
@@ -422,7 +450,7 @@ export default function PostCard({
           )}
           {post.post_type === 'article' || post.post_type === 'premium' ? (
             <div style={{ margin: '10px 0 12px 0' }}>
-              {preview ? (
+              {preview && !expanded ? (
                 <div ref={bodyRef} style={clampStyle}>
                   <ArticleEditor value={post.content} readOnly />
                 </div>
@@ -432,7 +460,7 @@ export default function PostCard({
             </div>
           ) : (
             <div style={{ margin: '8px 0 10px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>
-              {preview ? (
+              {preview && !expanded ? (
                 <div ref={bodyRef} style={clampStyle}>
                   {renderMarkdown(post.content)}
                 </div>
@@ -442,11 +470,11 @@ export default function PostCard({
             </div>
           )}
 
-          {preview && bodyOverflow && (
+          {preview && !expanded && bodyOverflow && (
             <button
               type="button"
-              onClick={() => onOpenDetail && onOpenDetail(post)}
-              aria-label={`Read the full post by ${authorName(post)}`}
+              onClick={() => setExpanded(true)}
+              aria-label={`Expand the full post by ${authorName(post)}`}
               style={{
                 background: 'none', border: 'none', padding: 0, margin: '0 0 10px 0',
                 color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer',
@@ -454,6 +482,20 @@ export default function PostCard({
               }}
             >
               See more <ChevronRight size={14} style={{ transform: 'rotate(90deg)' }} aria-hidden="true" />
+            </button>
+          )}
+          {preview && expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label={`Collapse post by ${authorName(post)}`}
+              style={{
+                background: 'none', border: 'none', padding: 0, margin: '0 0 10px 0',
+                color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: theme.fontFamily,
+              }}
+            >
+              Show less <ChevronRight size={14} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true" />
             </button>
           )}
 
@@ -523,11 +565,11 @@ export default function PostCard({
           </button>
 
           {/* Repost: hidden on reposts themselves — a repost of a
-              repost would fan out the same content twice. */}
+              repost would fan out the same content twice. Twitter-like: one tap to repost, second tap confirms undo. */}
           {!post.repost_of && (
             <button
               className="cf-eng-item"
-              onClick={() => (user ? toggleRepost(post) : navigate('/login'))}
+              onClick={() => requestRepostToggle(post)}
               aria-pressed={userHasReposted(post.id)}
               aria-label={userHasReposted(post.id) ? 'Undo repost' : 'Repost this post'}
               style={{ color: userHasReposted(post.id) ? theme.tealDeep : theme.gray500 }}
@@ -594,5 +636,18 @@ export default function PostCard({
         />
       )}
     </Card>
+      <ConfirmDialog
+        show={!!pendingRepost && !post.repost_of}
+        onClose={() => setPendingRepost(null)}
+        onConfirm={() => {
+          const target = pendingRepost
+          setPendingRepost(null)
+          if (target) toggleRepost(target)
+        }}
+        title="Undo repost?"
+        consequence="This will remove the repost from your profile and your followers' feeds."
+        confirmLabel="Undo repost"
+      />
+    </>
   )
 }

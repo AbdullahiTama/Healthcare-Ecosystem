@@ -1062,12 +1062,10 @@ function Feed() {
     editingPost,
     setEditingPost,
     setConfirmDeleteId,
-    // Task 6: opening a post is a navigation, not local state — its own URL
-    // (/post/:id) is the source of truth. Carrying this feed's own location
-    // in `state.background` is what tells BackgroundRoutes to render the
-    // post as an overlay on top of this page instead of unmounting it in
-    // favour of the standalone PostPage (BackgroundRoutes.jsx).
-    onOpenDetail: (post) => navigate(`/post/${post.id}`, { state: { background: location } }),
+    // See more now expands inline within PostCard (no modal). /post/:id
+    // remains the canonical URL for shares, direct links and legacy
+    // ?post= redirects, but feed cards no longer navigate for expansion.
+    onOpenDetail: undefined,
   }
 
   const bodyContent = (

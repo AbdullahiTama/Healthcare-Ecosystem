@@ -1,14 +1,12 @@
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './styles/global.css'
 import { AuthProvider } from './providers/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
-import BackgroundRoutes from './components/BackgroundRoutes.jsx'
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
 import PostPage from './modules/social-feed/PostPage.jsx'
-import PostModalRoute from './modules/social-feed/PostModalRoute.jsx'
 import Search from './modules/healthcare-discovery/Search.jsx'
 import BusinessProfile from './modules/business-profiles-reviews/BusinessProfile.jsx'
 import Login from './modules/account/Login.jsx'
@@ -51,7 +49,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <BrowserRouter>
         <ErrorBoundary>
-          <BackgroundRoutes modalRoutes={<Route path="/post/:id" element={<PostModalRoute />} />}>
+          <Routes>
             {/* Public — no login required */}
             <Route path="/" element={<ForBusiness />} />
             <Route path="/about" element={<About />} />
@@ -91,7 +89,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
-          </BackgroundRoutes>
+          </Routes>
         </ErrorBoundary>
       </BrowserRouter>
     </AuthProvider>

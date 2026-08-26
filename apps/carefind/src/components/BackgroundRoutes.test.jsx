@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { MemoryRouter, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Task 6: one URL, /post/:id, serves two surfaces depending on how the
@@ -139,15 +139,15 @@ function makePost(overrides = {}) {
   }
 }
 
-// The same route shape main.jsx registers for these two paths — see
-// main.jsx's BackgroundRoutes usage — without its other, unrelated routes.
+// After inline-expand change, /post/:id is always a full page (PostPage);
+// feed See more no longer navigates to a modal overlay.
 function renderRouted(initialEntries) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
-      <BackgroundRoutes modalRoutes={<Route path="/post/:id" element={<PostModalRoute />} />}>
+      <Routes>
         <Route path="/feed" element={<Feed />} />
         <Route path="/post/:id" element={<PostPage />} />
-      </BackgroundRoutes>
+      </Routes>
     </MemoryRouter>
   )
 }
@@ -160,7 +160,7 @@ beforeEach(() => {
 })
 
 describe('/post/:id as an overlay vs a standalone page (Task 6)', () => {
-  it('opening a post from the feed keeps the feed mounted underneath and shows the overlay', async () => {
+  it('opening a post from the feed expands inline and keeps the feed mounted (no modal)', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     postRepository.getPostById.mockResolvedValue(makePost())
     renderRouted(['/feed'])
@@ -168,41 +168,37 @@ describe('/post/:id as an overlay vs a standalone page (Task 6)', () => {
     // The feed rendered the post for real (through the real PostCard, not a stub).
     await screen.findByText(/distinctively worded post body/i)
 
-    const seeMore = await screen.findByRole('button', { name: /read the full post by/i })
+    const seeMore = await screen.findByRole('button', { name: /expand the full post by/i })
     fireEvent.click(seeMore)
 
-    // The overlay opened with the post's full content...
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/distinctively worded post body/i)).toBeInTheDocument()
+    // No modal dialog — See more expands inline to Show less
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /collapse post by/i })).toBeInTheDocument()
 
-    // ...and the feed underneath is still mounted (its own copy of the body
-    // is still in the document), not unmounted in favour of the overlay.
-    expect(screen.getAllByText(/distinctively worded post body/i).length).toBeGreaterThan(1)
-
-    // The feed's own chrome (its tab strip) is still there too.
+    // Feed chrome still mounted, still only one copy of the body (expanded in place)
+    expect(screen.getAllByText(/distinctively worded post body/i).length).toBe(1)
     expect(screen.getByRole('button', { name: /^for you$/i })).toBeInTheDocument()
+
+    // Collapse back
+    fireEvent.click(screen.getByRole('button', { name: /collapse post by/i }))
+    expect(await screen.findByRole('button', { name: /expand the full post by/i })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  // The other half of the split: opening was already proven above, but
-  // nothing closed the overlay back up. Closing is `navigate(-1)`
-  // (PostModalRoute.jsx) — popping the history entry that carried
-  // `state.background` — so this proves the overlay actually goes away
-  // and leaves the same feed (not a fresh, re-fetched one) behind it.
-  it('closing the overlay removes it and leaves the feed mounted underneath', async () => {
+  // Inline expand is reversible via Show less; no overlay to close.
+  it('collapsing after expand keeps the feed mounted', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     postRepository.getPostById.mockResolvedValue(makePost())
     renderRouted(['/feed'])
 
     await screen.findByText(/distinctively worded post body/i)
-    fireEvent.click(await screen.findByRole('button', { name: /read the full post by/i }))
-    await screen.findByRole('dialog')
+    fireEvent.click(await screen.findByRole('button', { name: /expand the full post by/i }))
+    await screen.findByRole('button', { name: /collapse post by/i })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: /collapse post by/i }))
 
-    // The overlay is gone...
+    // No dialog ever appeared, feed still here
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    // ...and the feed is still here: its chrome and the post's own body
-    // (now the only copy in the document, not the ">1" from the open assertion).
     expect(screen.getByRole('button', { name: /^for you$/i })).toBeInTheDocument()
     expect(screen.getAllByText(/distinctively worded post body/i).length).toBe(1)
   })
