@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../config/supabaseClient'
 import { useAuth } from '../../../providers/AuthContext'
@@ -13,6 +13,44 @@ import { Heart, Pencil, Trash2, X } from 'lucide-react'
 
 function getCommentName(comment) {
   return comment.profiles?.full_name || comment.profiles?.display_name || 'CareFind User'
+}
+
+// A multi-line comment box that grows with its content (issue #6). CareFind
+// comments used to be a single-line <input>, which silently truncated anything
+// longer than one visual line and gave authors no way to write a paragraph.
+// This wraps naturally, has no word/character limit, and sends on Enter while
+// Shift+Enter inserts a newline — the same affordance the reply box had.
+function AutoTextarea({ value, onChange, onSend, placeholder, ariaLabel, rows = 1 }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          const text = value.trim()
+          if (text) onSend(text)
+        }
+      }}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      rows={rows}
+      style={{
+        flex: 1, padding: '8px 12px', fontSize: 13, lineHeight: 1.45,
+        border: `1px solid ${theme.border}`, borderRadius: 20, outline: 'none',
+        resize: 'none', fontFamily: 'inherit', maxHeight: 180, overflowY: 'auto',
+        boxSizing: 'border-box',
+      }}
+    />
+  )
 }
 
 // Build the @username -> user id map used to link mentions in a comment body.
@@ -205,16 +243,14 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                 <div style={{ fontSize: 10.5, color: theme.textLight, fontWeight: 600, marginBottom: 4 }}>
                   Replying to <span style={{ color: theme.tealDeep }}>@{getCommentName(comment)}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input
-                    type="text"
+                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                  <AutoTextarea
                     value={commentDrafts[`${postId}_reply_${comment.id}`] || ''}
-                    onChange={e => setCommentDrafts(prev => ({ ...prev, [`${postId}_reply_${comment.id}`]: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter') { const txt = commentDrafts[`${postId}_reply_${comment.id}`] || ''; if (txt.trim()) handleAddComment(comment.id, txt) } }}
-                    placeholder="Write a reply..." aria-label="Write a reply"
-                    style={{ flex: 1, padding: '6px 10px', fontSize: 12, border: `1px solid ${theme.border}`, borderRadius: 16, outline: 'none' }}
+                    onChange={(v) => setCommentDrafts(prev => ({ ...prev, [`${postId}_reply_${comment.id}`]: v }))}
+                    onSend={(txt) => handleAddComment(comment.id, txt)}
+                    placeholder="Write a reply..." ariaLabel="Write a reply"
                   />
-                  <button onClick={() => { const txt = commentDrafts[`${postId}_reply_${comment.id}`] || ''; if (txt.trim()) handleAddComment(comment.id, txt) }} style={{ padding: '6px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 16, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reply</button>
+                  <button onClick={() => { const txt = commentDrafts[`${postId}_reply_${comment.id}`] || ''; if (txt.trim()) handleAddComment(comment.id, txt) }} style={{ padding: '6px 12px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 16, fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Reply</button>
                 </div>
               </div>
             )}
@@ -230,15 +266,13 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
       {topLevel.map(c => renderComment(c, 0))}
 
       {user ? (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'flex-end' }}>
           <Avatar name={myUsername || user.email} src={myAvatar} size={28} />
-          <input
-            type="text"
+          <AutoTextarea
             value={commentDrafts[postId] || ''}
-            onChange={e => setCommentDrafts(prev => ({ ...prev, [postId]: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && handleAddComment(null, e.target.value)}
-            placeholder="Add a comment" aria-label="Add a comment"
-            style={{ flex: 1, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, outline: 'none' }}
+            onChange={(v) => setCommentDrafts(prev => ({ ...prev, [postId]: v }))}
+            onSend={() => handleAddComment(null)}
+            placeholder="Add a comment" ariaLabel="Add a comment"
           />
           <TealBtn onClick={() => handleAddComment(null)} style={{ padding: '10px 16px', borderRadius: 20, fontSize: 12 }} disabled={isLoading}>
             {isLoading ? 'Posting...' : 'Post'}

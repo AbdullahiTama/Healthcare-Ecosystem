@@ -12,6 +12,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { insertRowResolvingConflict, writeRepost, undoRepost, createViewRecorder, REPOST_CONTENT } from './engagement'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
 import { unresolvedSourceIds, indexPosts } from './reposts.js'
+import { MAX_POST_IMAGES, MAX_VIDEO_BYTES, MAX_VIDEO_MB, validateVideoFile, probeVideoDuration } from './mediaLimits'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
@@ -44,6 +45,7 @@ import { toShareText } from '../../utils/formatShare.js'
 import PostCard from './PostCard.jsx'
 import VideoFeed from './VideoFeed.jsx'
 import PostDetailModal from './PostDetailModal.jsx'
+import { usePostEngagement, formatCount, timeAgo } from './usePostEngagement'
 import { postRepository } from './repositories'
 import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -93,9 +95,8 @@ const recordFeedView = createViewRecorder(supabase)
 function Feed() {
   const { user } = useAuth()
   const [posts, setPosts] = useState([])
-  const [reactions, setReactions] = useState([])
   const [profiles, setProfiles] = useState({})
-  const [follows, setFollows] = useState([])
+
   const [subscriberOnly, setSubscriberOnly] = useState(false)
   const [cardAudio, setCardAudio] = useState(null)
   const [myUsername, setMyUsername] = useState('')
@@ -105,14 +106,6 @@ function Feed() {
   // Guards the feed_config tab save until the saved value has been loaded,
   // so the mount-default 'foryou' never overwrites the stored preference.
   const feedConfigLoadedRef = useRef(false)
-  // This user's post_reposts rows for the loaded posts (the source posts they
-  // reposted), and per-post gift totals surfaced by the batch stats RPC.
-  const [repostedPosts, setRepostedPosts] = useState([])
-  // Source posts for the reposts on this page, keyed by id. A repost carries
-  // no content of its own, so without these a repost card has nothing to show
-  // (issues #6/#8).
-  const [repostSources, setRepostSources] = useState({})
-  const [giftStats, setGiftStats] = useState({})
   // Phase 6 personalized feed: resolved ranking config (weights/diversity),
   // pool limits, the viewer's region tokens, and the medical-author sets the
   // Medical tab + ranking boosts rely on. All default to safe fallbacks so a
@@ -133,29 +126,20 @@ function Feed() {
   const [cardVideo, setCardVideo] = useState(null)        // uploaded URL
   const [cardVideoPreview, setCardVideoPreview] = useState(null)
   const [uploadingVideo, setUploadingVideo] = useState(false)
-  const [sharingId, setSharingId] = useState(null)
   const [unlockedCreators, setUnlockedCreators] = useState([])
-  const [savedPosts, setSavedPosts] = useState([])
   const [userSubscriptions, setUserSubscriptions] = useState([])
-  const [reportedPosts, setReportedPosts] = useState([])
-  const [reportingId, setReportingId] = useState(null)
-  const [reportPostId, setReportPostId] = useState(null)
   const [giftingPost, setGiftingPost] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false) // { postId, authorId }
-  const [editingPost, setEditingPost] = useState(null) // { id, content }
-  const [editingComment, setEditingComment] = useState(null) // { id, content, post_id }
-  const [replyingTo, setReplyingTo] = useState(null) // { commentId, postId }
-  const [deletingId, setDeletingId] = useState(null)
-  const [comments, setComments] = useState({})
-  const [openComments, setOpenComments] = useState({})
-  const openCommentsRef = useRef(openComments)
-  const [commentDrafts, setCommentDrafts] = useState({})
   const [content, setContent] = useState('')
   const [postType, setPostType] = useState('text') // text, visual, question, review, article
   const [visualTheme, setVisualTheme] = useState('teal')
   const [postRating, setPostRating] = useState(5)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
+  // Issue #7 — up to five photos per post (every type except the voice card,
+  // whose backdrop stays a single image). First photo also fills image_url.
+  const [imageFiles, setImageFiles] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -169,17 +153,10 @@ function Feed() {
   const [profileComplete, setProfileComplete] = useState(true)
   const [canGoLive, setCanGoLive] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
-  const [commentCounts, setCommentCounts] = useState({})
-  // Per-post share and save totals: the same numbers the ranking engine
-  // reads (sCounts/saveCounts), promoted to state so the engagement bar can
-  // display them on each card.
-  const [shareCounts, setShareCounts] = useState({})
-  const [saveCounts, setSaveCounts] = useState({})
   const [latestNews, setLatestNews] = useState([])
   const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showGoLive, setShowGoLive] = useState(false)
   const [liveSessions, setLiveSessions] = useState([])
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
 
   // Detail modal (Item 12): one post rendered in full via the shared PostCard.
@@ -188,6 +165,64 @@ function Feed() {
   const [detailPost, setDetailPost] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+
+  // ── Engagement layer (issues #3/#4) ─────────────────────────────────────
+  // Every like/comment/save/repost/share/follow/report/edit/delete handler
+  // and its state live once in usePostEngagement, shared with the profile
+  // surface so both render the same full-featured PostCard. Only the
+  // feed-list side of a repost — the optimistic 🔁 row that appears in THIS
+  // user's feed — stays here, wired in via repostList.
+  const getPostById = (id) => posts.find((p) => p.id === id) || null
+  const getProfileName = (id) => {
+    const p = profiles[id]
+    return p?.display_name || p?.full_name || ''
+  }
+  const repostList = {
+    findBySource: (sourceId) => posts.find((p) => p.repost_of === sourceId && p.user_id === user?.id),
+    onAdded: (tempPost) => setPosts((prev) => [tempPost, ...prev]),
+    onRemoved: (id) => setPosts((prev) => prev.filter((p) => p.id !== id)),
+    onRestored: (row) => setPosts((prev) => [row, ...prev]),
+    onConfirmed: (tempId, real) => setPosts((prev) => prev.map((p) => (p.id === tempId ? real : p))),
+  }
+  const {
+    reactions, follows, savedPosts, repostedPosts,
+    commentCounts, shareCounts, saveCounts, giftStats,
+    setLoader: {
+      setReactions, setFollows, setSavedPosts, setRepostedPosts,
+      setCommentCounts, setShareCounts, setSaveCounts, setGiftStats,
+    },
+    repostSources, setRepostSources,
+    comments, setComments, openComments, commentDrafts, setCommentDrafts,
+    editingComment, setEditingComment,
+    replyingTo, setReplyingTo,
+    editingPost, setEditingPost,
+    confirmDeleteId, setConfirmDeleteId,
+    sharingId, reportedPosts, reportPostId, reportingId,
+    likeCount, userHasLiked, commentTotal, shareCount, saveCount, giftCount,
+    userHasReposted, isSaved, isFollowing,
+    toggleLike, toggleComments, handleCommentAdded, toggleFollow,
+    openReport, submitReport, sharePost, toggleSave, toggleRepost,
+    handleEditPost, handleDeletePost,
+  } = usePostEngagement({
+    user,
+    navigate,
+    toast,
+    getPostById,
+    getProfileName,
+    onEngage: (postId) => {
+      if (activeExperiment) {
+        logExperimentEvent(supabase, {
+          experimentKey: activeExperiment.key,
+          variant: activeExperiment.variant,
+          eventType: 'engage',
+          postId,
+        }).catch(() => {})
+      }
+    },
+    onPostMutated: () => loadFeed(),
+    repostList,
+  })
+  const openCommentsRef = useRef(openComments)
   // Item 12 deep link: ?post=<id> opens that post on top of the normal feed.
   const [searchParams, setSearchParams] = useSearchParams()
   const deepLinkPostId = searchParams.get('post')
@@ -973,8 +1008,16 @@ function Feed() {
   async function handleCardVideo(e) {
     const file = e.target.files[0]
     if (!file) return
-    if (file.size > 12 * 1024 * 1024) {
-      toast.show('That clip is too large. Please choose one under 12MB (about 15 seconds).')
+    // Issue #7 — the duration is read from the clip's own metadata instead of
+    // being implied by a size number, and the ceiling is explicit seconds.
+    if (file.size > MAX_VIDEO_BYTES) {
+      toast.show(`That clip is too large. Please choose one under ${MAX_VIDEO_MB}MB.`)
+      return
+    }
+    const duration = await probeVideoDuration(file)
+    const tooLong = validateVideoFile({ size: file.size, duration })
+    if (tooLong) {
+      toast.show(tooLong)
       return
     }
     setUploadingVideo(true)
@@ -1097,6 +1140,28 @@ function Feed() {
     setImagePreview(null)
   }
 
+  // Issue #7 — multi-photo selection for every non-visual post type.
+  function handleImagesSelect(e) {
+    const room = MAX_POST_IMAGES - imageFiles.length
+    if (room <= 0) return
+    const picked = [...(e.target.files || [])].filter((f) => f.type.startsWith('image/')).slice(0, room)
+    if (!picked.length) return
+    setImageFiles((prev) => [...prev, ...picked])
+    setImagePreviews((prev) => [...prev, ...picked.map((f) => URL.createObjectURL(f))])
+  }
+
+  function removeImageAt(index) {
+    if (imagePreviews[index]) URL.revokeObjectURL(imagePreviews[index])
+    setImageFiles((prev) => prev.filter((_, i) => i !== index))
+    setImagePreviews((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function clearAllImages() {
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url))
+    setImageFiles([])
+    setImagePreviews([])
+  }
+
   async function handlePost(e) {
     e.preventDefault()
     if (!user) return
@@ -1125,6 +1190,34 @@ function Feed() {
     setPosting(true)
 
     let imageUrl = null
+    // Issue #7 — every selected photo uploads; the first also fills the legacy
+    // image_url column so older readers and link previews still get one image.
+    const uploadedImageUrls = []
+
+    for (const file of imageFiles) {
+      setUploadingImage(true)
+
+      // Shrink first: a full-size phone photo is often 5-8MB and the upload dies on it.
+      const resized = await resizeImage(file, 1400, 0.85)
+      const filePath = `${user.id}-${Date.now()}-${uploadedImageUrls.length}.jpg`
+
+      const { error: uploadError } = await supabase.storage
+        .from('post-images')
+        .upload(filePath, resized, { contentType: 'image/jpeg' })
+
+      if (uploadError) {
+        setUploadingImage(false)
+        // Never post silently without the photos the user chose.
+        setPosting(false)
+        toast.show('Could not upload a photo: ' + uploadError.message)
+        return
+      }
+
+      const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(filePath)
+      uploadedImageUrls.push(urlData.publicUrl)
+    }
+    setUploadingImage(false)
+    if (uploadedImageUrls.length) imageUrl = uploadedImageUrls[0]
 
     if (imageFile) {
       setUploadingImage(true)
@@ -1171,6 +1264,7 @@ function Feed() {
       theme: postType === 'visual' ? visualTheme : null,
       rating: postType === 'review' ? postRating : null,
       image_url: imageUrl,
+      ...(uploadedImageUrls.length ? { image_urls: uploadedImageUrls } : {}),
       posted_as_type: identity ? identity.type : null,
       posted_as_id: identity ? (identity.type === 'business' ? identity.id : identity.staffId) : null,
       posted_as_name: identity ? (identity.type === 'business' ? identity.name : identity.businessName) : null,
@@ -1224,6 +1318,7 @@ function Feed() {
       setContent('')
       setImageFile(null)
       setImagePreview(null)
+      clearAllImages()
       setPostRating(5)
       setSubscriberOnly(false)
       setCardAudio(null)
@@ -1277,427 +1372,6 @@ function Feed() {
   // When searching, ignore the tab filter and show the raw search hits.
   const isSearching = feedResults !== null
   const displayPosts = isSearching ? posts : visiblePosts
-
-  function likeCount(postId) {
-    return reactions.filter((r) => r.post_id === postId).length
-  }
-
-  function userHasLiked(postId) {
-    if (!user) return false
-    return reactions.some((r) => r.post_id === postId && r.user_id === user.id)
-  }
-
-  // Editing runs through the same integrity gate as publishing.
-  //
-  // The gate deliberately compares the body the editor HANDED US against the
-  // body we are about to write — that is, it catches content lost by our own
-  // processing. It must NOT compare against the previously published version:
-  // shortening an article is an ordinary edit, and an author cutting a
-  // redundant paragraph would find every save rejected.
-  async function handleEditPost(postId, newContent, postType) {
-    if (!newContent || !newContent.trim()) return
-    let content = newContent.trim()
-
-    if (postType === 'article' || postType === 'premium') {
-      const check = validateArticleForPublish(content)
-      if (!check.ok) { toast.show(check.error, { type: 'error' }); return }
-      content = check.content
-    }
-
-    const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)
-    if (error) {
-      toast.show('Could not save the edit: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-    setEditingPost(null)
-    loadFeed()
-  }
-
-  async function handleDeletePost(postId) {
-    setDeletingId(postId)
-    await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
-    loadFeed()
-    setDeletingId(null)
-  }
-
-  async function toggleLike(postId) {
-    if (!user) return
-    const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
-
-    // Optimistic update: instant UI response. Both writes are reconciled
-    // against the DB: the insert returns the real row (so an unlike has a
-    // valid id to delete), a failed write rolls the UI back, and a fast
-    // double-tap hitting the post_reactions_user_post_uniq index reads the
-    // existing row instead of leaving a phantom temp id. Without this, a
-    // silently failed insert made the like vanish on the next feed reload.
-    if (existing) {
-      setReactions((prev) => prev.filter((r) => r.id !== existing.id))
-      const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
-      if (error) {
-        setReactions((prev) => [...prev, existing])
-        toast.show('Could not unlike right now.', { type: 'error' })
-      }
-      return
-    }
-
-    const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
-    setReactions((prev) => [...prev, tempReaction])
-    const { data, error } = await insertRowResolvingConflict(
-      supabase,
-      'post_reactions',
-      { post_id: postId, user_id: user.id, reaction_type: 'like' },
-      ['post_id', 'user_id'],
-    )
-
-    if (error) {
-      setReactions((prev) => prev.filter((r) => r.id !== tempReaction.id))
-      toast.show('Could not like right now.', { type: 'error' })
-      return
-    }
-
-    // Swap the temp row for the real one so an unlike has a valid id to delete.
-    setReactions((prev) => prev.map((r) => (r.id === tempReaction.id ? data : r)))
-
-    if (activeExperiment) {
-      logExperimentEvent(supabase, {
-        experimentKey: activeExperiment.key,
-        variant: activeExperiment.variant,
-        eventType: 'engage',
-        postId,
-      }).catch(() => {})
-    }
-
-    const post = posts.find((p) => p.id === postId)
-    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
-  }
-
-  async function toggleComments(postId) {
-    setOpenComments(prev => ({ ...prev, [postId]: !prev[postId] }))
-
-    if (!openComments[postId] && !comments[postId]) {
-      const { data } = await supabase
-        .from('post_comments')
-        .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
-      setComments(prev => ({ ...prev, [postId]: data || [] }))
-    }
-  }
-
-  async function handleNotifyComment(postId) {
-    const post = posts.find((p) => p.id === postId)
-    if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'comment', message: 'commented on your post', link: '/feed', postId })
-  }
-
-  // Called when CommentThread successfully adds a comment or a reply. A top-
-  // level comment notifies the post author; a reply additionally notifies the
-  // author of the comment being replied to. Fire-and-forget either way.
-  function handleCommentAdded({ postId, parentId }) {
-    handleNotifyComment(postId)
-    if (parentId) {
-      const parent = (comments[postId] || []).find((c) => c.id === parentId)
-      if (parent && parent.user_id !== user.id) {
-        notify({ recipientId: parent.user_id, actorId: user.id, type: 'reply', message: 'replied to your comment', link: '/feed', postId })
-      }
-    }
-  }
-
-  function isFollowing(authorId) {
-    if (!user) return false
-    return follows.some((f) => f.follower_id === user.id && f.following_id === authorId)
-  }
-
-  async function toggleFollow(authorId) {
-    if (!user || authorId === user.id) return
-    const existing = follows.find((f) => f.follower_id === user.id && f.following_id === authorId)
-
-    if (existing) {
-      // Optimistic: drop it from local state right away
-      setFollows((prev) => prev.filter((f) => f.id !== existing.id))
-      const { error } = await supabase.from('follows').delete().eq('id', existing.id)
-      if (error) setFollows((prev) => [...prev, existing]) // put it back if it failed
-    } else {
-      // Optimistic: show as followed immediately
-      const temp = { id: `temp_${Date.now()}`, follower_id: user.id, following_id: authorId }
-      setFollows((prev) => [...prev, temp])
-      const { data, error } = await supabase
-        .from('follows')
-        .insert({ follower_id: user.id, following_id: authorId })
-        .select()
-        .maybeSingle()
-      if (error) {
-        setFollows((prev) => prev.filter((f) => f.id !== temp.id)) // roll back
-        return
-      }
-      // Swap the temp row for the real one so a later unfollow has a valid id
-      if (data) setFollows((prev) => prev.map((f) => (f.id === temp.id ? data : f)))
-      notify({ recipientId: authorId, actorId: user.id, type: 'follow', message: 'started following you', link: `/u/${user.id}` })
-    }
-  }
-
-  // Reporting is a two-step flow: the overflow menu opens a reason picker,
-  // the picked reason writes the report. A `window.prompt` (what this used to
-  // be) is unstyled, unlabelled and blocked outright in some mobile browsers,
-  // so a moderation path can't depend on it: and the handler was never
-  // wired to anything, so reporting was unreachable.
-  function openReport(postId) {
-    if (!user) { navigate('/login'); return }
-    if (reportedPosts.includes(postId)) {
-      toast.show('You already reported this post.')
-      return
-    }
-    setReportPostId(postId)
-  }
-
-  async function submitReport(reason) {
-    const postId = reportPostId
-    if (!user || !postId) return
-    setReportingId(postId)
-
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
-    setReportPostId(null)
-
-    if (error) {
-      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
-      return
-    }
-
-    setReportedPosts((prev) => [...prev, postId])
-    toast.show('Thanks: our team will review this post.', { type: 'success' })
-
-    // Phase 7 spam signal, tagged with the reader's staged-rollout group.
-    if (activeExperiment) {
-      logExperimentEvent(supabase, {
-        experimentKey: activeExperiment.key,
-        variant: activeExperiment.variant,
-        eventType: 'report',
-        postId,
-      }).catch(() => {})
-    }
-  }
-
-  // Prefer the thread we've actually loaded (it reflects a just-added or
-  // just-deleted comment); fall back to the count loadFeed already fetched,
-  // so the number is right before the thread is ever opened.
-  function commentTotal(postId) {
-    const loaded = comments[postId]
-    if (loaded) return loaded.length
-    return commentCounts[postId] || 0
-  }
-
-  async function sharePost(post) {
-    const author = profiles[post.user_id]?.display_name || profiles[post.user_id]?.full_name || ''
-    const text = author ? `“${toShareText(post.content)}” — ${author} on CareFind` : toShareText(post.content)
-    // Attach the post's media (image/video) to the share where the browser
-    // supports it; the URL is still appended to the clipboard fallback so
-    // WhatsApp recipients always get the media, never just the caption.
-    const mediaUrl = post.image_url || post.video_url || null
-    const file = mediaUrl ? await mediaToFile(mediaUrl) : null
-    const result = await shareOrCopy({ title: 'CareFind', text, url: `${window.location.origin}/feed?post=${post.id}`, files: file ? [file] : undefined, mediaUrl })
-    if (result === 'copied') toast.show('Post copied: paste it anywhere to share.', { type: 'success' })
-    if (result === 'failed') toast.show("This browser won't let us share or copy from here.", { type: 'error' })
-
-    // Best-effort share tracking so a post's share count is real rather than
-    // vanished. One row per (post, user, platform): the post_shares unique
-    // index makes repeat shares idempotent for signed-in users. Anonymous
-    // shares are recorded without a user_id.
-    if (result === 'shared' || result === 'copied') {
-      if (activeExperiment) {
-        logExperimentEvent(supabase, {
-          experimentKey: activeExperiment.key,
-          variant: activeExperiment.variant,
-          eventType: 'engage',
-          postId: post.id,
-        }).catch(() => {})
-      }
-      try {
-        await supabase.from('post_shares').insert({
-          post_id: post.id,
-          user_id: user ? user.id : null,
-          platform: result === 'copied' ? 'copy' : 'web',
-        })
-        // Reflect the just-recorded share in the card's count so it doesn't
-        // wait for the next feed reload to appear.
-        setShareCounts((prev) => ({ ...prev, [post.id]: (prev[post.id] || 0) + 1 }))
-      } catch (e) {
-        // Tracking is never allowed to fail the share the user just did.
-        console.warn('Share tracking write failed:', e)
-      }
-    }
-  }
-
-  function isSaved(postId) {
-    return savedPosts.some((s) => s.post_id === postId)
-  }
-
-  async function toggleSave(postId) {
-    if (!user) return
-    const existing = savedPosts.find((s) => s.post_id === postId)
-
-    // Optimistic update with the same reconciliation as toggleLike: the
-    // insert returns the real row, failures roll back, and a double-tap
-    // hitting saved_posts_user_post_uniq resolves to the existing row so the
-    // save survives a reload.
-    if (existing) {
-      setSavedPosts((prev) => prev.filter((s) => s.post_id !== postId))
-      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
-      const { error } = await supabase.from('saved_posts').delete().eq('id', existing.id)
-      if (error) {
-        setSavedPosts((prev) => [...prev, existing])
-        setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
-        toast.show('Could not unsave right now.', { type: 'error' })
-      }
-      return
-    }
-
-    const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id }
-    setSavedPosts((prev) => [...prev, temp])
-    setSaveCounts((prev) => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }))
-    const { data, error } = await insertRowResolvingConflict(
-      supabase,
-      'saved_posts',
-      { user_id: user.id, post_id: postId },
-      ['post_id', 'user_id'],
-    )
-
-    if (error) {
-      setSavedPosts((prev) => prev.filter((s) => s.id !== temp.id))
-      setSaveCounts((prev) => ({ ...prev, [postId]: Math.max((prev[postId] || 0) - 1, 0) }))
-      toast.show('Could not save right now.', { type: 'error' })
-    } else {
-      setSavedPosts((prev) => prev.map((s) => (s.id === temp.id ? data : s)))
-      if (activeExperiment) {
-        logExperimentEvent(supabase, {
-          experimentKey: activeExperiment.key,
-          variant: activeExperiment.variant,
-          eventType: 'engage',
-          postId,
-        }).catch(() => {})
-      }
-    }
-  }
-
-  function userHasReposted(postId) {
-    if (!user) return false
-    return repostedPosts.some((r) => r.post_id === postId)
-  }
-
-  function giftCount(postId) {
-    return giftStats[postId]?.gift_count || 0
-  }
-
-  function shareCount(postId) {
-    return shareCounts[postId] || 0
-  }
-
-  function saveCount(postId) {
-    return saveCounts[postId] || 0
-  }
-
-  // Classic repost: a 🔁-marked post in the reposter's feed PLUS a
-  // post_reposts reference (writeRepost), so followers see the repost and the
-  // source carries a real count. Undoing removes both (undoRepost). Optimistic
-  // like the other toggles; if the feed-post write fails, the reference is
-  // taken back too and the UI rolls to the pre-tap state.
-  //
-  // In-flight guard: a double-tap in one render tick would otherwise run the
-  // whole async toggle twice. The DB index posts_user_repost_uniq already
-  // collapses a duplicate 🔁 post to the existing row (writeRepost reconciles
-  // 23505), but the guard stops the second write from being issued at all —
-  // and stops an in-flight repost from being "undone" by a stale second tap.
-  const repostInFlight = useRef(new Set())
-  async function toggleRepost(post) {
-    if (!user) return
-    if (repostInFlight.current.has(post.id)) return
-    repostInFlight.current.add(post.id)
-    try {
-      const existing = repostedPosts.find((r) => r.post_id === post.id)
-
-      if (existing) {
-        const repostPost = posts.find((p) => p.repost_of === post.id && p.user_id === user.id)
-        setRepostedPosts((prev) => prev.filter((r) => r.id !== existing.id))
-        if (repostPost) setPosts((prev) => prev.filter((p) => p.id !== repostPost.id))
-
-        const { postsDelete, refDelete } = await undoRepost(supabase, { user, sourcePostId: post.id, repostRefId: existing.id })
-        if (postsDelete?.error || refDelete?.error) {
-          setRepostedPosts((prev) => [...prev, existing])
-          if (repostPost) setPosts((prev) => [repostPost, ...prev])
-          toast.show('Could not undo repost right now.', { type: 'error' })
-        }
-        return
-      }
-
-      // The optimistic row mirrors what writeRepost persists: a reference,
-      // not a copy of the source's words (issues #6/#8).
-      const tempRepostPost = {
-        id: `temp_repost_${Date.now()}`,
-        user_id: user.id,
-        content: REPOST_CONTENT,
-        post_type: 'text',
-        subscriber_only: post.subscriber_only || false,
-        is_premium: post.is_premium || false,
-        repost_of: post.id,
-        created_at: new Date().toISOString(),
-        view_count: 0,
-      }
-      const tempRepostRef = { id: `temp_ref_${Date.now()}`, post_id: post.id, user_id: user.id }
-      setRepostedPosts((prev) => [...prev, tempRepostRef])
-      setPosts((prev) => [tempRepostPost, ...prev])
-
-      const { ref, repostPost } = await writeRepost(supabase, { user, post })
-
-      if (repostPost.error || !repostPost.data) {
-        // Feed post failed: take the reference back so the source count doesn't
-        // claim a repost that is not visible anywhere.
-        if (ref?.data?.id && !ref.error) await supabase.from('post_reposts').delete().eq('id', ref.data.id)
-        setRepostedPosts((prev) => prev.filter((r) => r.id !== tempRepostRef.id))
-        setPosts((prev) => prev.filter((p) => p.id !== tempRepostPost.id))
-        toast.show('Could not repost right now.', { type: 'error' })
-        return
-      }
-
-      // Swap temp rows for the real ones so un-repost has valid ids to delete.
-      setRepostedPosts((prev) => prev.map((r) => (r.id === tempRepostRef.id ? (ref?.data || r) : r)))
-      setPosts((prev) => prev.map((p) => (p.id === tempRepostPost.id ? repostPost.data : p)))
-      // The source stays available to the card even if it was not on this
-      // page (e.g. reposted from the detail modal).
-      setRepostSources((prev) => (prev[post.id] ? prev : { ...prev, [post.id]: post }))
-
-      // Issue #7: 'repost' was in the notification vocabulary but nothing ever
-      // emitted it, so an author was never told their post had been shared.
-      notify({
-        recipientId: post.user_id,
-        actorId: user.id,
-        type: 'repost',
-        message: NOTIF_MESSAGES.repost,
-        link: `/feed?post=${post.id}`,
-        postId: post.id,
-      })
-    } finally {
-      repostInFlight.current.delete(post.id)
-    }
-  }
-
-  function formatCount(n) {
-    n = n || 0
-    if (n < 1000) return `${n}`
-    if (n < 1000000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`.replace('.0k', 'k')
-    return `${(n / 1000000).toFixed(1)}M`.replace('.0M', 'M')
-  }
-
-  function timeAgo(dateStr) {
-    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
-  }
 
   const { isMobile } = useBreakpoint()
 
@@ -2101,7 +1775,7 @@ function Feed() {
                   <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>
                     {uploadingVideo ? 'Uploading…' : 'Choose a video'}
                   </span>
-                  <span style={{ fontSize: 11, color: theme.textLight }}>Up to 12MB (about 15 seconds)</span>
+                  <span style={{ fontSize: 11, color: theme.textLight }}>Up to {MAX_VIDEO_MB}MB · {MAX_VIDEO_SECONDS / 60} minutes</span>
                   <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
                 </label>
               )}
@@ -2405,17 +2079,21 @@ function Feed() {
             </>
           )}
 
-          {postType !== 'visual' && imagePreview && (
-            <div style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
-              <img src={imagePreview} alt="Selected photo preview" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: theme.radius.md, display: 'block' }} />
-              <button
-                type="button"
-                onClick={clearImage}
-                aria-label="Remove photo"
-                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(15,23,42,0.75)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
+          {postType !== 'visual' && imagePreviews.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {imagePreviews.map((url, i) => (
+                <div key={url} style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={url} alt={`Selected photo ${i + 1}`} style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: theme.radius.md, display: 'block' }} />
+                  <button
+                    type="button"
+                    onClick={() => removeImageAt(i)}
+                    aria-label={`Remove photo ${i + 1}`}
+                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(15,23,42,0.75)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -2426,10 +2104,15 @@ function Feed() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
             marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.border}`,
           }}>
-            {postType !== 'visual' && !imagePreview ? (
+            {postType !== 'visual' && imagePreviews.length === 0 ? (
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
-                <Camera size={17} aria-hidden="true" /> Add a photo
-                <input type="file" accept="image/*" onChange={handleImageSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+                <Camera size={17} aria-hidden="true" /> Add photos
+                <input type="file" accept="image/*" multiple onChange={handleImagesSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+              </label>
+            ) : postType !== 'visual' && imagePreviews.length < MAX_POST_IMAGES ? (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
+                <Camera size={17} aria-hidden="true" /> Add another ({imagePreviews.length}/{MAX_POST_IMAGES})
+                <input type="file" accept="image/*" multiple onChange={handleImagesSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
             ) : <span />}
 

@@ -4,7 +4,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
-  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Link2, Lock, MapPin, Menu,
+  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Flag, Link2, Lock, MapPin, Menu,
   MessageSquare, Repeat2,
   Plus, Radio, ShoppingCart, Star, Stethoscope, Wallet as WalletIcon, X,
 } from 'lucide-react'
@@ -18,11 +18,15 @@ import { renderMarkdown } from '../social-feed/markdown.jsx'
 import ProductUpload from './ProductUpload.jsx'
 import FollowersSheet from '../social-feed/FollowersSheet.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
-import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
+import { MAX_PRICE_COINS, coinsToNaira, loadActiveCreatorIds } from '../subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
-import { Card, CardSkeleton, Empty, Stars, Toast, useToast } from '../../components/ui'
+import { Card, CardSkeleton, Empty, Modal, ConfirmDialog, Stars, Toast, useToast } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
-import { PostTileGrid, isRepost, withoutRepostMark } from '../social-feed/postDisplay.jsx'
+import { isRepost } from '../social-feed/postDisplay.jsx'
+import PostCard from '../social-feed/PostCard.jsx'
+import PostDetailModal from '../social-feed/PostDetailModal.jsx'
+import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+import { usePostEngagement, formatCount } from '../social-feed/usePostEngagement'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 
 function Profile() {
@@ -58,10 +62,18 @@ function Profile() {
   const [myReviews, setMyReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [tabLoading, setTabLoading] = useState(false)
-  const [openPost, setOpenPost] = useState(null)
   // Authors of the posts this profile has reposted, so a repost can name and
   // link the person who actually wrote it (issue #8).
   const [sourceAuthors, setSourceAuthors] = useState({})
+  // Issues #3/#4: every post on this profile renders through the SAME
+  // full-featured PostCard the feed uses — like, comment, share, gift, save,
+  // and (on your own posts) Edit/Delete — driven by the same engagement layer,
+  // not a degraded tile grid.
+  const [unlockedCreators, setUnlockedCreators] = useState([])
+  const [giftingPost, setGiftingPost] = useState(null) // { postId, authorId }
+  const [detailPost, setDetailPost] = useState(null)
+  // The four things a reader can report (same closed set as the feed).
+  const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
   const [menuOpen, setMenuOpen] = useState(false)
   const [myStories, setMyStories] = useState([])
   const [myShows, setMyShows] = useState([])
@@ -78,6 +90,117 @@ function Profile() {
   const [productUpload, setProductUpload] = useState(false)
   const [sheetKind, setSheetKind] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  // ── Engagement layer (issues #3/#4) ─────────────────────────────────────
+  // One instance of the feed's engagement logic drives every PostCard on this
+  // profile. The post index also contains the SOURCES of reposts, so an
+  // interaction on a reposted article targets the original post.
+  const postIndex = []
+  {
+    const seen = new Set()
+    for (const p of [...savedPosts, ...myPosts]) {
+      if (p && !seen.has(p.id)) { seen.add(p.id); postIndex.push(p) }
+      if (p?.source && !seen.has(p.source.id)) { seen.add(p.source.id); postIndex.push(p.source) }
+    }
+  }
+  const profilesMap = { ...(profile && user ? { [user.id]: profile } : {}), ...sourceAuthors }
+  function authorName(post) {
+    if (post.posted_as_type) return post.posted_as_name || 'Business'
+    const p = profilesMap[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
+  }
+  // Same lock rule as the feed: subscriber-only content stays gated unless it
+  // is yours or you subscribe to its creator.
+  function isLockedPost(post) {
+    const locked = post.subscriber_only || post.post_type === 'premium'
+    if (!locked) return false
+    if (user && post.user_id === user.id) return false
+    return !unlockedCreators.includes(post.user_id)
+  }
+  const {
+    comments, setComments, openComments, commentDrafts, setCommentDrafts,
+    editingComment, setEditingComment,
+    replyingTo, setReplyingTo,
+    editingPost, setEditingPost,
+    confirmDeleteId, setConfirmDeleteId,
+    sharingId, reportedPosts, reportPostId, reportingId,
+    likeCount, userHasLiked, commentTotal, shareCount, saveCount, giftCount,
+    userHasReposted, isSaved, isFollowing,
+    toggleLike, toggleComments, handleCommentAdded, toggleFollow,
+    openReport, submitReport, sharePost, toggleSave, toggleRepost,
+    handleEditPost, handleDeletePost,
+    setLoader: { setGiftStats },
+  } = usePostEngagement({
+    user,
+    navigate,
+    toast: { show: showToast },
+    getPostById: (id) => postIndex.find((p) => p.id === id) || null,
+    getProfileName: (id) => {
+      const p = profilesMap[id]
+      return p?.display_name || p?.full_name || ''
+    },
+    onPostMutated: () => { loadMyPosts(); loadSavedPosts() },
+    // No feed list here: a repost from the profile writes only the reference
+    // and the 🔁 row appears in the user's FEED, exactly as designed.
+  })
+  useEffect(() => {
+    if (!user) return
+    loadActiveCreatorIds(user.id).then(setUnlockedCreators).catch(() => {})
+  }, [user])
+
+  // Every prop PostCard needs besides `post`/`preview` — mirrors Feed.jsx so
+  // both surfaces render byte-identically. Voice-card export stays a
+  // feed-only affordance (it needs the export canvas); on a profile the
+  // visual card's download button shares the post normally instead.
+  async function shareCardFallback(post) { await sharePost(post) }
+  const cardProps = {
+    isLocked: isLockedPost,
+    user,
+    navigate,
+    profiles: profilesMap,
+    resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
+    authorName,
+    formatCount,
+    timeAgo,
+    likeCount,
+    userHasLiked,
+    commentTotal,
+    shareCount,
+    saveCount,
+    giftCount,
+    userHasReposted,
+    isSaved,
+    isFollowing,
+    toggleLike,
+    toggleComments,
+    toggleRepost,
+    toggleSave,
+    toggleFollow,
+    sharePost,
+    shareCard: shareCardFallback,
+    openReport,
+    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
+    handleEditPost,
+    handleCommentAdded,
+    openComments,
+    comments,
+    setComments,
+    editingComment,
+    setEditingComment,
+    replyingTo,
+    setReplyingTo,
+    commentDrafts,
+    setCommentDrafts,
+    myUsername,
+    myAvatar,
+    reportedPosts,
+    sharingId,
+    editingPost,
+    setEditingPost,
+    setConfirmDeleteId,
+    onOpenDetail: (p) => setDetailPost(p),
+  }
+
 
   useEffect(() => {
     if (!user) { navigate('/login'); return }
@@ -924,8 +1047,13 @@ function Profile() {
           }
 
           return (
-            <div style={{ marginBottom: 16 }}>
-              <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
+            // Issues #3/#4: full PostCards, not tiles — every interaction the
+            // feed offers works here too, including Edit/Delete on your own
+            // posts via each card's overflow menu.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              {list.map((p) => (
+                <PostCard key={p.id} post={p} preview {...cardProps} />
+              ))}
             </div>
           )
         })()}
@@ -961,41 +1089,72 @@ function Profile() {
         </button>
       </div>
 
-      {openPost && (
-        <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
-            </div>
-            {/* A repost shows the source's words and says whose they are
-                (issue #8) — never the reposter's name over someone else's
-                writing. */}
-            {(() => {
-              const shown = (isRepost(openPost) && openPost.source) || openPost
-              const sourceAuthor = isRepost(openPost) && openPost.source ? sourceAuthors[openPost.source.user_id] : null
-              return (
-                <>
-                  {isRepost(openPost) && (
-                    <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: theme.gray500 }}>
-                      <Repeat2 size={14} aria-hidden="true" />
-                      You reposted{sourceAuthor ? ' ' : ''}
-                      {sourceAuthor && (
-                        <Link to={`/u/${openPost.source.user_id}`} style={{ color: theme.tealDeep, textDecoration: 'none', fontWeight: 800 }}>
-                          {sourceAuthor.full_name || sourceAuthor.display_name || 'a CareFind user'}
-                        </Link>
-                      )}
-                    </p>
-                  )}
-                  {shown.image_url && <img src={shown.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-                  {shown.post_type && shown.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{shown.post_type}</span>}
-                  <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(shown.content)))}</div>
-                  <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{shown.created_at ? new Date(shown.created_at).toLocaleDateString() : ''}</p>
-                </>
-              )
-            })()}
-          </div>
-        </div>
+      {/* Issues #3/#4 — the detail view, gifting, reporting and deletion all
+          run through the same components the feed uses. */}
+      <PostDetailModal
+        show={!!detailPost}
+        post={detailPost}
+        loading={false}
+        error=""
+        onClose={() => setDetailPost(null)}
+        cardProps={cardProps}
+      />
+
+      {giftingPost && (
+        <GiftPanel
+          postId={giftingPost.postId}
+          recipientId={giftingPost.authorId}
+          onClose={() => {
+            const { postId } = giftingPost
+            setGiftingPost(null)
+            // Reflect a just-sent gift in the card's count.
+            supabase
+              .rpc('post_gift_stats', { p_post_id: postId })
+              .then(({ data }) => {
+                if (data?.gift_count != null) {
+                  setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                }
+              })
+              .catch(() => {})
+          }}
+        />
       )}
+
+      <ConfirmDialog
+        show={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        title="Delete this post?"
+        consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
+        confirmLabel="Delete"
+      />
+
+      {/* Report reasons: a closed set, one tap each (same as the feed). */}
+      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
+        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
+          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => submitReport(reason)}
+              disabled={!!reportingId}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
+                padding: '11px 14px', borderRadius: theme.radius.md,
+                border: `1px solid ${theme.gray200}`, background: '#fff',
+                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
+                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
+              }}
+            >
+              <Flag size={16} color={theme.gray400} aria-hidden="true" />
+              {reason}
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       {/* Story composer */}
       {storyComposer && (

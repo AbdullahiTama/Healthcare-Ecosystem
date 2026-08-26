@@ -64,7 +64,7 @@ async function metaFor(target, context) {
     case 'post': {
       const post = await selectOne(
         'posts',
-        'id,content,image_url,subscriber_only,is_premium,post_type,user_id,repost_of',
+        'id,content,image_url,image_urls,subscriber_only,is_premium,post_type,user_id,repost_of',
         { id: `eq.${target.id}` }
       )
       if (!post) return defaultMeta(context.canonicalUrl)
@@ -72,7 +72,7 @@ async function metaFor(target, context) {
       // A repost carries no words of its own (issues #6/#8) — preview the post
       // it points at, credited to whoever actually wrote it.
       const subject = post.repost_of
-        ? (await selectOne('posts', 'id,content,image_url,subscriber_only,is_premium,post_type,user_id', { id: `eq.${post.repost_of}` })) || post
+        ? (await selectOne('posts', 'id,content,image_url,image_urls,subscriber_only,is_premium,post_type,user_id', { id: `eq.${post.repost_of}` })) || post
         : post
 
       const author = subject.user_id

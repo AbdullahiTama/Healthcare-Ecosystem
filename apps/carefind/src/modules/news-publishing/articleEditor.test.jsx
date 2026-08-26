@@ -87,3 +87,48 @@ describe('colour formatting (issue #3)', () => {
     })
   })
 })
+
+// Issue #8 — WYSIWYG. While writing, the author used to see only the raw
+// markers (** and ==#hex|) with no idea how the article would publish. The
+// editor now renders a live preview through the SAME renderer the published
+// article uses, so the pane shows real bold/italic/colour as they type.
+describe('ArticleEditor live WYSIWYG preview (issue #8)', () => {
+  it('shows rendered formatting — not markers — while editing', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**Bold** and *italic* prose"}]' onChange={() => {}} />)
+    const preview = screen.getByTestId('article-preview')
+    expect(preview.querySelector('strong')).not.toBeNull()
+    expect(preview.querySelector('strong').textContent).toBe('Bold')
+    expect(preview.querySelector('em')).not.toBeNull()
+    expect(preview.textContent).not.toContain('**')
+  })
+
+  it('renders a colour highlight as an actual mark in the preview', () => {
+    render(
+      <ArticleEditor
+        value='[{"id":"a","type":"text","content":"before ==#fde68a|highlighted== after"}]'
+        onChange={() => {}}
+      />
+    )
+    const preview = screen.getByTestId('article-preview')
+    const mark = preview.querySelector('mark')
+    expect(mark).not.toBeNull()
+    expect(mark.textContent).toBe('highlighted')
+    expect(preview.textContent).not.toContain('==')
+  })
+
+  it('updates on every keystroke', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":""}]' onChange={() => {}} />)
+    // No content → no preview pane at all.
+    expect(screen.queryByTestId('article-preview')).not.toBeInTheDocument()
+    const textarea = screen.getByPlaceholderText('Write here...')
+    fireEvent.change(textarea, { target: { value: 'now **bold**' } })
+    const preview = screen.getByTestId('article-preview')
+    expect(preview.querySelector('strong')).not.toBeNull()
+    expect(preview.textContent).toContain('now bold')
+  })
+
+  it('never renders a preview in read-only mode (the article body is already rendered)', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**published**"}]' readOnly />)
+    expect(screen.queryByTestId('article-preview')).not.toBeInTheDocument()
+  })
+})

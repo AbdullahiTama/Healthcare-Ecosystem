@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { PostTile } from './postDisplay.jsx'
+import { PostTile, imagesOf } from './postDisplay.jsx'
 
 describe('PostTile (Feature 7 — no markdown leak in grid tiles)', () => {
   it('renders the preview with markdown syntax stripped (no literal asterisks)', () => {
@@ -17,5 +17,28 @@ describe('PostTile (Feature 7 — no markdown leak in grid tiles)', () => {
   it('keeps stripping the repost mark and legacy bracket markers', () => {
     render(<PostTile post={{ id: 'p3', content: '🔁 {b}Reposted note{/b}', post_type: 'text' }} onOpen={vi.fn()} />)
     expect(screen.getByText('Reposted note')).toBeInTheDocument()
+  })
+})
+
+// Issue #7 — multi-image posts. image_urls is the canonical list; the legacy
+// single image_url is the fallback so pre-column posts keep rendering.
+describe('imagesOf (issue #7)', () => {
+  it('returns the image_urls list in order', () => {
+    const post = { image_urls: ['a.jpg', 'b.jpg', 'c.jpg'], image_url: 'a.jpg' }
+    expect(imagesOf(post)).toEqual(['a.jpg', 'b.jpg', 'c.jpg'])
+  })
+
+  it('filters non-string and empty entries', () => {
+    const post = { image_urls: ['ok.jpg', null, '', 42, 'also-ok.jpg'] }
+    expect(imagesOf(post)).toEqual(['ok.jpg', 'also-ok.jpg'])
+  })
+
+  it('falls back to the legacy single image_url', () => {
+    expect(imagesOf({ image_url: 'legacy.jpg' })).toEqual(['legacy.jpg'])
+  })
+
+  it('returns empty for a text-only post or a missing post', () => {
+    expect(imagesOf({})).toEqual([])
+    expect(imagesOf(null)).toEqual([])
   })
 })

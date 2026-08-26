@@ -210,3 +210,49 @@ describe('PostCard preview clamp + See more', () => {
     expect(screen.getByRole('button', { name: /share this post/i })).toBeInTheDocument()
   })
 })
+
+// Issue #2 — a repost must name BOTH who shared it and who wrote it. The
+// reposter's name sits above the source card, and the explicit "Originally
+// posted by Y" clause means even a reader who never scrolls into the source
+// card cannot mistake the reposter for the writer.
+describe('PostCard repost attribution (issue #2)', () => {
+  const source = makePost({ id: 'p0', user_id: 'author-1', content: 'The original words of the article.' })
+  const namesByUser = (p) => (p.user_id === 'author-1' ? 'Dr Original' : 'Ms Reposter')
+
+  function renderRepost({ resolveSource }) {
+    return render(
+      <MemoryRouter>
+        <PostCard
+          post={makePost({ id: 'p9', user_id: 'reposter-1', repost_of: 'p0', content: '', image_url: null })}
+          {...makeCardProps({ authorName: namesByUser })}
+          resolveSource={resolveSource}
+        />
+      </MemoryRouter>
+    )
+  }
+
+  it('credits the reposter AND the original author', () => {
+    scrollH = 50
+    clientH = 100
+    const { container } = renderRepost({ resolveSource: (id) => (id === 'p0' ? source : null) })
+    const text = container.textContent
+    expect(text).toContain('Reposted by')
+    expect(text).toContain('Ms Reposter')
+    expect(text).toContain('Originally posted by')
+    expect(text).toContain('Dr Original')
+    // The body shown is the SOURCE's words, not the repost row's emptiness.
+    expect(text).toContain('The original words of the article.')
+  })
+
+  it('keeps the reposter credit honest when the source cannot be resolved', () => {
+    scrollH = 50
+    clientH = 100
+    const { container } = renderRepost({ resolveSource: () => null })
+    const text = container.textContent
+    expect(text).toContain('Reposted by')
+    expect(text).toContain('Ms Reposter')
+    expect(text).toContain('This post is no longer available.')
+    // Never fall back to crediting the reposter as the writer.
+    expect(text).not.toContain('Originally posted by')
+  })
+})

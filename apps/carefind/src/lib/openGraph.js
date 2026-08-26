@@ -200,10 +200,14 @@ export function buildPostMeta(post, { origin, canonicalUrl, author } = {}) {
 
   const authorName = author?.full_name || author?.display_name || null
   const body = plainTextFromContent(post.content)
+  // Issue #7: a multi-image post previews with its first photo.
+  const previewImage = Array.isArray(post.image_urls) && post.image_urls.length
+    ? post.image_urls[0]
+    : post.image_url
   return {
     title: titleFromContent(post.content, authorName ? `${authorName} on CareFind` : DEFAULT_TITLE),
     description: truncate(body) || DEFAULT_DESCRIPTION,
-    image: absoluteUrl(origin, post.image_url),
+    image: absoluteUrl(origin, previewImage),
     url: canonicalUrl,
     type: 'article',
     authorName,
