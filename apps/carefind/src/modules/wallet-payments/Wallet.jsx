@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
@@ -46,6 +46,8 @@ function Wallet() {
   const [wdAccountName, setWdAccountName] = useState('')
   const [wdPin, setWdPin] = useState('')
   const [wdSubmitting, setWdSubmitting] = useState(false)
+  const [wdAccountResolving, setWdAccountResolving] = useState(false)
+  const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -136,6 +138,46 @@ function Wallet() {
     }
     loadBanks()
   }, [])
+
+  // Resolve account name when bank code and 10-digit account number are both set.
+  // Debounced to avoid firing on every keystroke — only resolves after the user
+  // pauses typing or pastes a complete 10-digit number.
+  const resolveTimer = useRef(null)
+  useEffect(() => {
+    if (resolveTimer.current) clearTimeout(resolveTimer.current)
+
+    // Clear resolved state when inputs change
+    setWdAccountResolved(false)
+    setWdAccountName('')
+
+    if (!wdBankCode || !wdAccountNumber || wdAccountNumber.length !== 10) return
+
+    resolveTimer.current = setTimeout(async () => {
+      setWdAccountResolving(true)
+      try {
+        const res = await fetch('/api/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bankCode: wdBankCode, accountNumber: wdAccountNumber }),
+        })
+        const data = await res.json()
+        if (res.ok && data.accountName) {
+          setWdAccountName(data.accountName)
+          setWdAccountResolved(true)
+        } else {
+          setWdAccountResolved(false)
+          showToast(data.error || 'Could not verify account name. Check your bank and account number.', { type: 'error' })
+        }
+      } catch {
+        setWdAccountResolved(false)
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      } finally {
+        setWdAccountResolving(false)
+      }
+    }, 500)
+
+    return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
+  }, [wdBankCode, wdAccountNumber])
 
   async function handleTopUp(pkg) {
     if (!user) return
@@ -469,7 +511,23 @@ function Wallet() {
                   )}
                 </label>
                 <Inp label="Account number" value={wdAccountNumber} onChange={setWdAccountNumber} placeholder="0123456789" required />
-                <Inp label="Account name" value={wdAccountName} onChange={setWdAccountName} placeholder="As it appears on your bank account" required />
+                <div>
+                  <Inp
+                    label={wdAccountResolving ? 'Account name (resolving…)' : 'Account name'}
+                    value={wdAccountName}
+                    onChange={setWdAccountName}
+                    placeholder={wdAccountResolving ? 'Verifying account…' : 'Enter bank and account number first'}
+                    readOnly={wdAccountResolved || wdAccountResolving}
+                    required
+                    style={wdAccountResolved ? { background: '#f0fdf4', borderColor: '#22c55e' } : undefined}
+                  />
+                  {wdAccountResolving && (
+                    <span style={{ fontSize: 11, color: theme.textLight }}>Verifying account name with your bank…</span>
+                  )}
+                  {wdAccountResolved && wdAccountName && (
+                    <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Account name verified</span>
+                  )}
+                </div>
                 <Inp
                   label="Withdrawal PIN"
                   type="password"
@@ -484,11 +542,11 @@ function Wallet() {
                 />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
