@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { FileText, Gem, HelpCircle, MessageSquare, Mic, Repeat2, Star } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { previewText, stripMarkdown } from './richText.jsx'
@@ -31,6 +32,7 @@ export const POST_KIND_ICON = {
 // One tile in a profile's post grid: image if there is one, otherwise a mist
 // tile carrying the post-kind icon; kind label and a three-line preview below.
 export function PostTile({ post, onOpen }) {
+  const navigate = useNavigate()
   // A repost has no content of its own: show the SOURCE it points at, so the
   // reposter's grid shows what they actually shared rather than a bare 🔁
   // (issue #6). `post.source` is attached by the profile loader.
@@ -42,7 +44,7 @@ export function PostTile({ post, onOpen }) {
 
   return (
     <button
-      onClick={() => onOpen(post)}
+      onClick={() => navigate(`/post/${shown.id}`)}
       aria-label={`Open ${reposted ? 'repost' : 'post'}: ${preview.slice(0, 60)}`}
       style={{ textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}
     >

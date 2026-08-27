@@ -230,7 +230,10 @@ export default function PostCard({
 
   return (
     <>
-      <Card style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
+      <Card
+        style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl, ...(onOpenDetail ? { cursor: 'pointer' } : {}) }}
+        {...(onOpenDetail ? { onClick: (e) => { if (e.target.closest('button, a, input, textarea, [role="button"]')) return; onOpenDetail(post) } } : {})}
+      >
       {/* Card header: identity left, one kind pill + overflow menu right.
           Identity reads name → verified badge → handle → credential →
           time, i.e. "who is this, and can I trust them" before anything

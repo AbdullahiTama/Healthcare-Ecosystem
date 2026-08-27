@@ -24,7 +24,6 @@ import { Card, CardSkeleton, Empty, Modal, ConfirmDialog, Stars, Toast, useToast
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { isRepost } from '../social-feed/postDisplay.jsx'
 import PostCard from '../social-feed/PostCard.jsx'
-import PostDetailModal from '../social-feed/PostDetailModal.jsx'
 import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import { usePostEngagement } from '../social-feed/usePostEngagement'
 import { formatCount } from '../social-feed/postSelectors'
@@ -72,7 +71,6 @@ function Profile() {
   // not a degraded tile grid.
   const [unlockedCreators, setUnlockedCreators] = useState([])
   const [giftingPost, setGiftingPost] = useState(null) // { postId, authorId }
-  const [detailPost, setDetailPost] = useState(null)
   // The four things a reader can report (same closed set as the feed).
   const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
   const [menuOpen, setMenuOpen] = useState(false)
@@ -163,8 +161,8 @@ function Profile() {
     setEditingPost,
     setConfirmDeleteId,
     onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
-    // See more now expands inline in PostCard; full post view is /post/:id via PostPage
-    onOpenDetail: undefined,
+    // See more now expands inline in PostCard; tapping the post navigates to /post/:id
+    onOpenDetail: (p) => navigate(`/post/${p.id}`),
     resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
   }
 
@@ -309,11 +307,18 @@ function Profile() {
     if (!user) return
     const { data } = await supabase
       .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at')
+      .select('id, title, body, image_url, bg_color, created_at, position, view_count')
       .eq('user_id', user.id)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
-    setMyStories(data || [])
+    const sorted = (data || []).sort((a, b) => {
+      const pa = a.position ?? Infinity
+      const pb = b.position ?? Infinity
+      if (pa !== pb) return pa - pb
+      if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+    setMyStories(sorted)
   }
 
   // Sequential story viewer: progress bar, auto-advance, tap zones. Mirrors
@@ -563,15 +568,40 @@ function Profile() {
         </div>
         <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
           <div style={{ position: 'relative', width: 88, height: 88 }}>
-            <div style={{
-              width: 88, height: 88, borderRadius: '50%',
-              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
-              border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 30, fontWeight: 800,
-            }}>
-              {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
-            </div>
+            {myStories.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setViewerIndex(0)}
+                aria-label="View your story"
+                style={{
+                  width: 88, height: 88, borderRadius: '50%', padding: 3,
+                  background: theme.tealDeep, border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', boxSizing: 'border-box',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                }}
+              >
+                <div style={{
+                  width: 82, height: 82, borderRadius: '50%',
+                  background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                  border: '3px solid #fff', boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 30, fontWeight: 800,
+                }}>
+                  {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+                </div>
+              </button>
+            ) : (
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%',
+                background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 30, fontWeight: 800,
+              }}>
+                {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+              </div>
+            )}
 
             {/* Change photo */}
             <label style={{
@@ -586,6 +616,11 @@ function Profile() {
               <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </label>
           </div>
+          {myStories.length > 0 && (
+            <span style={{ display: 'block', textAlign: 'center', fontSize: 10, fontWeight: 800, color: theme.tealDeep, marginTop: 2 }}>
+              Tap to view story
+            </span>
+          )}
         </div>
       </div>
 
@@ -650,8 +685,10 @@ function Profile() {
           </div>
         )}
 
-        {/* My Stories — at the top of the profile, Instagram-style (Phase 5).
-            Add-story first, then live/upcoming shows, then your stories. */}
+        {/* WhatsApp-style: story ring lives on avatar. This row now holds
+            only the Add-story action and live/upcoming shows — not story
+            circles. Tapping the avatar (with ring) opens the sequential viewer. */}
+        {(myShows.length > 0) && (
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
           <button onClick={() => setStoryComposer(true)} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
             <div style={{ width: 58, height: 58, borderRadius: '50%', background: theme.bg, border: `2px dashed ${theme.tealDeep}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}><Plus size={24} aria-hidden="true" /></div>
@@ -686,16 +723,19 @@ function Profile() {
               </Link>
             )
           })}
-
-          {myStories.map((s, i) => (
-            <button key={s.id} onClick={() => setViewerIndex(i)} aria-label={`View story${s.title ? `: ${s.title}` : ''}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-              <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: theme.tealDeep }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>{!s.image_url && (s.title?.[0]?.toUpperCase() || <BookOpen size={18} aria-hidden="true" />)}</div>
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Story'}</span>
-            </button>
-          ))}
         </div>
+        )}
+        {/* Keep Add story visible even when no shows — but without story circles */}
+        {myShows.length === 0 && (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 6, marginBottom: 12 }}>
+            <button onClick={() => setStoryComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: theme.tealDeep, cursor: 'pointer' }}>
+              <Plus size={16} aria-hidden="true" /> Add to story
+            </button>
+            {myStories.length > 0 && (
+              <span style={{ fontSize: 11, color: theme.textLight, alignSelf: 'center' }}>Tap your photo to view {myStories.length} stor{myStories.length === 1 ? 'y' : 'ies'}</span>
+            )}
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
@@ -1056,16 +1096,8 @@ function Profile() {
         </button>
       </div>
 
-      {/* Issues #3/#4 — the detail view, gifting, reporting and deletion all
-          run through the same components the feed uses. */}
-      <PostDetailModal
-        show={!!detailPost}
-        post={detailPost}
-        loading={false}
-        error=""
-        onClose={() => setDetailPost(null)}
-        cardProps={cardProps}
-      />
+      {/* Issues #3/#4 — gifting, reporting and deletion use the same
+          components the feed uses. */}
 
       {giftingPost && (
         <GiftPanel

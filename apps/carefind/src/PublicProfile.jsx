@@ -14,7 +14,6 @@ import { StickySidebar, SidebarSection } from './components/layout/SidebarSectio
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
 import { notifyReview } from './services/reviewNotifications.js'
-import { previewText } from './modules/social-feed/richText.jsx'
 import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 import {
@@ -26,7 +25,7 @@ import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/st
 import { Card, CardSkeleton, ConfirmDialog, Empty, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
 import VerifiedBadge from './components/VerifiedBadge.jsx'
 import ProfileHeader from './components/ProfileHeader.jsx'
-import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
+import { PostTileGrid, isRepost } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
 
 function PublicProfile() {
@@ -63,17 +62,8 @@ function PublicProfile() {
   const [confirmConsultOpen, setConfirmConsultOpen] = useState(false)
   const [consultPayMethod, setConsultPayMethod] = useState('coins')
   const [bookingConsult, setBookingConsult] = useState(false)
-  const [openPost, setOpenPost] = useState(null)
   const [confirmSubOpen, setConfirmSubOpen] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-
-  const visualThemes = {
-    teal: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
-    sunset: 'linear-gradient(135deg, #f97316, #db2777)',
-    ocean: 'linear-gradient(135deg, #0ea5e9, #1e3a8a)',
-    purple: 'linear-gradient(135deg, #7c3aed, #4c1d95)',
-    forest: 'linear-gradient(135deg, #16a34a, #14532d)',
-  }
 
   useEffect(() => {
     async function load() {
@@ -513,43 +503,11 @@ function PublicProfile() {
     </div>
   )
 
-  // Menu-item look for the story chooser, matching PostMenu's menu styling.
-  const storyMenuItemStyle = {
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-    padding: '9px 10px', borderRadius: theme.radius.sm, border: 'none',
-    background: 'transparent', cursor: 'pointer', textAlign: 'left',
-    fontSize: 13, fontWeight: 600, fontFamily: theme.fontFamily, color: theme.gray600,
-  }
-
-  // The avatar, wearing a teal ring when there's an unexpired story to open.
-  // One definition, two sizes: large over the mobile cover, small in the
-  // desktop sidebar card. Tapping the ring opens a two-option chooser (View
-  // Stories / View Profile) instead of jumping straight into the viewer —
-  // a story ring that is also the identity avatar shouldn't force playback.
-  // With no stories the ring is plain identity chrome, not a button.
+  // WhatsApp Status-style avatar ring. When the profile has unexpired
+  // stories, the avatar wears a teal (or grey when all seen) ring and
+  // tapping it opens the sequential viewer directly. No separate tile,
+  // no chooser — the ring IS the affordance.
   function StoryAvatar({ size, fontSize, borderWidth = 3, style = {} }) {
-    const [chooserOpen, setChooserOpen] = useState(false)
-    const wrapRef = useRef(null)
-
-    useEffect(() => {
-      if (!chooserOpen) return
-      function onDocClick(e) {
-        if (!wrapRef.current?.contains(e.target)) setChooserOpen(false)
-      }
-      function onKeyDown(e) {
-        if (e.key === 'Escape') {
-          setChooserOpen(false)
-          wrapRef.current?.querySelector('button')?.focus()
-        }
-      }
-      document.addEventListener('mousedown', onDocClick)
-      document.addEventListener('keydown', onKeyDown)
-      return () => {
-        document.removeEventListener('mousedown', onDocClick)
-        document.removeEventListener('keydown', onKeyDown)
-      }
-    }, [chooserOpen])
-
     const ringPad = hasStory ? Math.round(size * 0.045) + 2 : 0
     const face = (
       <div style={{
@@ -573,48 +531,14 @@ function PublicProfile() {
     if (!hasStory) return <div style={ringStyle}>{face}</div>
 
     return (
-      <div ref={wrapRef} style={{ position: 'relative', ...style }}>
-        <button
-          type="button"
-          onClick={() => setChooserOpen(true)}
-          aria-label={`View ${displayName}'s story`}
-          aria-haspopup="menu"
-          aria-expanded={chooserOpen}
-          style={{ ...ringStyle, cursor: 'pointer' }}
-        >
-          {face}
-        </button>
-
-        {chooserOpen && (
-          <div
-            role="menu"
-            aria-label={`${displayName} options`}
-            style={{
-              position: 'absolute', top: size + 6, left: 0, zIndex: 30, minWidth: 184,
-              background: theme.cardBg, border: `1px solid ${theme.gray200}`,
-              borderRadius: theme.radius.md, boxShadow: theme.elevation[3],
-              padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
-            }}
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { setChooserOpen(false); setViewerIndex(0) }}
-              style={storyMenuItemStyle}
-            >
-              <Play size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Stories
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { setChooserOpen(false); scrollToProfileContent() }}
-              style={storyMenuItemStyle}
-            >
-              <User size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Profile
-            </button>
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => setViewerIndex(0)}
+        aria-label={`View ${displayName}'s story`}
+        style={{ ...ringStyle, cursor: 'pointer', ...style }}
+      >
+        {face}
+      </button>
     )
   }
 
@@ -774,31 +698,9 @@ function PublicProfile() {
           </div>
         )}
 
-        {/* Story rail — a quick-access TikTok-style row, read-only mirror of
-            the own-profile rail (Profile.jsx). One circle per story, ordered
-            position → views → newest. Empty profiles render nothing. */}
-        {userStories.length > 0 && (
-          <div className="cf-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
-            {userStories.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setViewerIndex(i)}
-                aria-label={`View story${s.title ? `: ${s.title}` : ''}`}
-                style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: allSeen ? theme.gray300 : theme.tealDeep }}>
-                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>
-                    {!s.image_url && (s.title?.[0]?.toUpperCase() || displayName[0]?.toUpperCase() || '?')}
-                  </div>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.title || 'Story'}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* WhatsApp-style: no separate story rail. Stories are accessed via the
+            avatar ring — tapping the ring opens the sequential viewer which
+            auto-advances through all stories. */}
 
         {/* Content tabs */}
         <div role="group" aria-label="Profile sections" className="cf-hscroll" style={{ display: 'flex', borderBottom: `1px solid ${theme.gray200}`, marginBottom: 14, WebkitOverflowScrolling: 'touch' }}>
@@ -930,51 +832,9 @@ function PublicProfile() {
               />
             )
           }
-          return <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
+          return <PostTileGrid posts={list} isMobile={isMobile} />
         })()}
       </div>
-
-      {/* Expanded post */}
-      {openPost && (
-        <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
-            </div>
-            {/* A repost row carries no words of its own — render the post it
-                points at, and say whose it is (issues #6/#8). Reading
-                openPost.content directly here would show an empty modal. */}
-            {(() => {
-              const reposted = isRepost(openPost)
-              const shown = (reposted && openPost.source) || openPost
-              return (
-                <>
-                  {reposted && (
-                    <p style={{ margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: theme.gray500 }}>
-                      <Repeat2 size={14} aria-hidden="true" />
-                      Reposted{openPost.source ? ' from another CareFind member' : ''}
-                    </p>
-                  )}
-                  {reposted && !openPost.source ? (
-                    <p style={{ margin: 0, fontSize: 14, color: theme.gray500 }}>This post is no longer available.</p>
-                  ) : (
-                    <>
-                      {shown.image_url && <img src={shown.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-                      {shown.post_type === 'visual' && !shown.image_url && (
-                        <div style={{ background: visualThemes[shown.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
-                          <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{shown.content}</p>
-                        </div>
-                      )}
-                      {shown.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(shown.content)))}</div>}
-                      <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{shown.created_at ? timeAgo(shown.created_at) : ''}</p>
-                    </>
-                  )}
-                </>
-              )
-            })()}
-          </div>
-        </div>
-      )}
 
       {/* Story viewer */}
       {viewerIndex !== null && userStories[viewerIndex] && (
