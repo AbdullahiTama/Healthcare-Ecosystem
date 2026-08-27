@@ -105,6 +105,10 @@ function Profile() {
   }
   const postKey = postIndex.map((p) => p.id).join(',')
   const [sharingId, setSharingId] = useState(null)
+  const [reportPostId, setReportPostId] = useState(null)
+  const [reportingId, setReportingId] = useState(null)
+  const [editingPost, setEditingPost] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const engagement = usePostEngagement({
     user,
     navigate,
@@ -116,6 +120,19 @@ function Profile() {
     reloadFeed: () => { loadMyPosts(); loadSavedPosts() },
     onPostDeleted: () => { loadMyPosts(); loadSavedPosts() },
   })
+  async function submitReport(reason) {
+    const postId = reportPostId
+    if (!user || !postId) return
+    setReportingId(postId)
+    const { error } = await supabase.from('reports').insert({ reporter_id: user.id, post_id: postId, reason })
+    setReportingId(null)
+    setReportPostId(null)
+    if (error) {
+      showToast('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+    showToast('Thanks: our team will review this post.', { type: 'success' })
+  }
   // Counts, likes, saves, follows for these posts live in the hook's slices;
   // hydrate fills them whenever the loaded set changes.
   useEffect(() => {
@@ -1062,7 +1079,7 @@ function Profile() {
               .rpc('post_gift_stats', { p_post_id: postId })
               .then(({ data }) => {
                 if (data?.gift_count != null) {
-                  setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
                 }
               })
               .catch(() => {})
@@ -1073,7 +1090,7 @@ function Profile() {
       <ConfirmDialog
         show={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
-        onConfirm={() => { handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        onConfirm={() => { engagement.engagementProps.handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
         title="Delete this post?"
         consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
         confirmLabel="Delete"
