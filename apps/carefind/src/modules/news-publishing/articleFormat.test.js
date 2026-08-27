@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   wrapSelection, wrapBold, wrapItalic, wrapHighlight, renderArticleHtml,
-  findMalformedHighlights, stripMalformedHighlights,
+  findMalformedHighlights, stripMalformedHighlights, htmlToArticleMarkers,
 } from './articleFormat.js'
 
 describe('wrapSelection', () => {
@@ -153,5 +153,84 @@ describe('malformed highlight markers (issue #3)', () => {
     expect(markup).toBe('==#fde68a|hello== world')
     expect(findMalformedHighlights(markup)).toEqual([])
     expect(renderArticleHtml(markup)).toContain('<mark style="background:#fde68a;color:#1f2937;padding:1px 4px;border-radius:4px;">hello</mark>')
+  })
+})
+
+describe('htmlToArticleMarkers', () => {
+  it('converts bold markup', () => {
+    expect(htmlToArticleMarkers('<p><strong>hello</strong> world</p>')).toBe('**hello** world')
+  })
+
+  it('converts italic markup', () => {
+    expect(htmlToArticleMarkers('<p><em>hello</em> world</p>')).toBe('*hello* world')
+  })
+
+  it('converts highlight with colour', () => {
+    expect(htmlToArticleMarkers('<p><mark style="background:#fde68a">hello</mark> world</p>')).toBe('==#fde68a|hello== world')
+  })
+
+  it('converts highlight without colour', () => {
+    expect(htmlToArticleMarkers('<p><mark>hello</mark> world</p>')).toBe('==hello== world')
+  })
+
+  it('converts multiple paragraphs', () => {
+    expect(htmlToArticleMarkers('<p>one</p><p>two</p>')).toBe('one\n\ntwo')
+  })
+
+  it('converts <br> to newline', () => {
+    expect(htmlToArticleMarkers('<p>line1<br>line2</p>')).toBe('line1\nline2')
+  })
+
+  it('handles <b> and <i> tags', () => {
+    expect(htmlToArticleMarkers('<p><b>bold</b> and <i>italic</i></p>')).toBe('**bold** and *italic*')
+  })
+
+  it('handles nested formatting', () => {
+    expect(htmlToArticleMarkers('<p><strong><em>nested</em></strong></p>')).toBe('**nested**')
+  })
+
+  it('strips unknown tags', () => {
+    expect(htmlToArticleMarkers('<p><span style="color:red">hello</span></p>')).toBe('hello')
+  })
+
+  it('returns empty string for empty/null input', () => {
+    expect(htmlToArticleMarkers('')).toBe('')
+    expect(htmlToArticleMarkers(null)).toBe('')
+    expect(htmlToArticleMarkers(undefined)).toBe('')
+  })
+
+  it('round-trips through renderArticleHtml for bold', () => {
+    const original = '**hello** world'
+    const html = renderArticleHtml(original)
+    const markers = htmlToArticleMarkers(html)
+    expect(markers).toBe(original)
+  })
+
+  it('round-trips through renderArticleHtml for italic', () => {
+    const original = '*hello* world'
+    const html = renderArticleHtml(original)
+    const markers = htmlToArticleMarkers(html)
+    expect(markers).toBe(original)
+  })
+
+  it('round-trips through renderArticleHtml for colour highlight', () => {
+    const original = '==#fde68a|hello== world'
+    const html = renderArticleHtml(original)
+    const markers = htmlToArticleMarkers(html)
+    expect(markers).toBe(original)
+  })
+
+  it('round-trips through renderArticleHtml for multi-paragraph', () => {
+    const original = 'one\n\ntwo'
+    const html = renderArticleHtml(original)
+    const markers = htmlToArticleMarkers(html)
+    expect(markers).toBe(original)
+  })
+
+  it('round-trips through renderArticleHtml for combined formatting', () => {
+    const original = '**bold** and *italic* and ==#a7f3d0|highlighted=='
+    const html = renderArticleHtml(original)
+    const markers = htmlToArticleMarkers(html)
+    expect(markers).toBe(original)
   })
 })

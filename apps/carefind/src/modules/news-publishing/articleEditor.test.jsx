@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import ArticleEditor from './ArticleEditor.jsx'
 
@@ -41,6 +41,7 @@ describe('ArticleEditor read-only rendering (Feature 3 regression)', () => {
     expect(() => render(<ArticleEditor value={arr} readOnly />)).not.toThrow()
   })
 })
+
 describe('colour formatting (issue #3)', () => {
   const CORRUPTED = JSON.stringify([{
     id: 'a', type: 'text',
@@ -58,23 +59,13 @@ describe('colour formatting (issue #3)', () => {
   it('repairs a corrupted article on load so it can be edited and reposted', () => {
     let emitted = null
     render(<ArticleEditor value={CORRUPTED} onChange={(v) => { emitted = v }} />)
+    // The initial onChange fires with the repaired content
     expect(emitted).not.toBeNull()
     expect(emitted).not.toContain('==color|')
     const blocks = JSON.parse(emitted)
     expect(blocks).toHaveLength(1)
     expect(blocks[0].content).toContain('Why does a wound itch?')
     expect(blocks[0].content).toContain('Because new skin forms.')
-  })
-
-  it('applies a colour as a valid highlight, not literal characters', () => {
-    let emitted = null
-    render(<ArticleEditor value='[{"id":"a","type":"text","content":"hello world"}]' onChange={(v) => { emitted = v }} />)
-    const textarea = screen.getByPlaceholderText('Write here...')
-    fireEvent.click(textarea)
-    textarea.setSelectionRange(0, 5)
-    fireEvent.click(screen.getByLabelText('Highlight in yellow'))
-    const blocks = JSON.parse(emitted)
-    expect(blocks[0].content).toBe('==#fde68a|hello== world')
   })
 
   it('offers six real colour swatches, none of them undefined', () => {
@@ -88,47 +79,71 @@ describe('colour formatting (issue #3)', () => {
   })
 })
 
-// Issue #8 — WYSIWYG. While writing, the author used to see only the raw
-// markers (** and ==#hex|) with no idea how the article would publish. The
-// editor now renders a live preview through the SAME renderer the published
-// article uses, so the pane shows real bold/italic/colour as they type.
-describe('ArticleEditor live WYSIWYG preview (issue #8)', () => {
-  it('shows rendered formatting — not markers — while editing', () => {
-    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**Bold** and *italic* prose"}]' onChange={() => {}} />)
-    const preview = screen.getByTestId('article-preview')
-    expect(preview.querySelector('strong')).not.toBeNull()
-    expect(preview.querySelector('strong').textContent).toBe('Bold')
-    expect(preview.querySelector('em')).not.toBeNull()
-    expect(preview.textContent).not.toContain('**')
+// WYSIWYG: the editing surface now renders formatted text directly — there is
+// no separate preview pane. contentEditable is seeded from stored markers via
+// renderArticleHtml, and the toolbar applies formatting via execCommand.
+describe('ArticleEditor WYSIWYG contentEditable', () => {
+  beforeEach(() => {
+    // Mock execCommand for JSDOM (not natively supported)
+    document.execCommand = vi.fn()
   })
 
-  it('renders a colour highlight as an actual mark in the preview', () => {
-    render(
-      <ArticleEditor
-        value='[{"id":"a","type":"text","content":"before ==#fde68a|highlighted== after"}]'
-        onChange={() => {}}
-      />
-    )
-    const preview = screen.getByTestId('article-preview')
-    const mark = preview.querySelector('mark')
-    expect(mark).not.toBeNull()
-    expect(mark.textContent).toBe('highlighted')
-    expect(preview.textContent).not.toContain('==')
+  it('renders a contentEditable div with article content', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**Hello** world"}]' onChange={() => {}} />)
+    const editor = screen.getByTestId('article-editor')
+    expect(editor).toBeInTheDocument()
+    expect(editor.getAttribute('contenteditable')).toBe('true')
+    expect(editor.innerHTML).toContain('<strong>')
+    expect(editor.textContent).toContain('Hello')
   })
 
-  it('updates on every keystroke', () => {
-    render(<ArticleEditor value='[{"id":"a","type":"text","content":""}]' onChange={() => {}} />)
-    // No content → no preview pane at all.
+  it('does not show a separate preview pane', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**Bold** text"}]' onChange={() => {}} />)
     expect(screen.queryByTestId('article-preview')).not.toBeInTheDocument()
-    const textarea = screen.getByPlaceholderText('Write here...')
-    fireEvent.change(textarea, { target: { value: 'now **bold**' } })
-    const preview = screen.getByTestId('article-preview')
-    expect(preview.querySelector('strong')).not.toBeNull()
-    expect(preview.textContent).toContain('now bold')
+  })
+
+  it('bold button calls execCommand', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"hello"}]' onChange={() => {}} />)
+    const boldBtn = screen.getByRole('button', { name: 'B' })
+    fireEvent.click(boldBtn)
+    expect(document.execCommand).toHaveBeenCalledWith('bold', false, null)
+  })
+
+  it('italic button calls execCommand', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"hello"}]' onChange={() => {}} />)
+    const italicBtn = screen.getByRole('button', { name: 'I' })
+    fireEvent.click(italicBtn)
+    expect(document.execCommand).toHaveBeenCalledWith('italic', false, null)
+  })
+
+  it('highlight button calls execCommand with hiliteColor', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"hello"}]' onChange={() => {}} />)
+    const yellowBtn = screen.getByLabelText('Highlight in yellow')
+    fireEvent.click(yellowBtn)
+    expect(document.execCommand).toHaveBeenCalledWith('hiliteColor', false, '#fde68a')
+  })
+
+  it('seeds editor HTML from stored markers on mount', () => {
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"**bold** and *italic*"}]' onChange={() => {}} />)
+    const editor = screen.getByTestId('article-editor')
+    expect(editor.innerHTML).toContain('<strong>bold</strong>')
+    expect(editor.innerHTML).toContain('<em>italic</em>')
+  })
+
+  it('emits markers on blur after editing', () => {
+    let emitted = null
+    render(<ArticleEditor value='[{"id":"a","type":"text","content":"hello"}]' onChange={(v) => { emitted = v }} />)
+    const editor = screen.getByTestId('article-editor')
+    // Simulate user typing by changing innerHTML directly
+    editor.innerHTML = '<p><strong>hello world</strong></p>'
+    fireEvent.blur(editor)
+    const blocks = JSON.parse(emitted)
+    expect(blocks[0].content).toBe('**hello world**')
   })
 
   it('never renders a preview in read-only mode (the article body is already rendered)', () => {
     render(<ArticleEditor value='[{"id":"a","type":"text","content":"**published**"}]' readOnly />)
     expect(screen.queryByTestId('article-preview')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('article-editor')).not.toBeInTheDocument()
   })
 })

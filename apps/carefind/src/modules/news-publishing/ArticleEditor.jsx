@@ -1,7 +1,7 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react'
 import { Trash2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { renderArticleHtml, stripMalformedHighlights } from './articleFormat'
+import { renderArticleHtml, stripMalformedHighlights, htmlToArticleMarkers } from './articleFormat'
 
 // The highlight palette, as literal hex. See the toolbar for why these are
 // not theme tokens.
@@ -335,96 +335,112 @@ function DrawingBlock({ block, onChange, onDelete, readOnly }) {
 
 
 // ─────────────────────────────────────────────
-//  Text Block
+//  Text Block (WYSIWYG via contentEditable)
 // ─────────────────────────────────────────────
-function TextBlock({ block, onChange, onDelete, readOnly, textareaRef }) {
-  // Issue #4: this control used to be `opacity: 0`, revealed only by
-  // mouseenter, while sitting directly over the top-right corner of the
-  // textarea — and it was fully clickable the whole time. A phone has no
-  // hover, so a tap near the corner of a paragraph silently deleted the
-  // entire block, with no confirmation and no undo. That is content
-  // disappearing between writing and publishing.
-  //
-  // It is now a visible, labelled control placed outside the typing area, and
-  // deleting a section that has text in it takes two taps — the first arms it,
-  // the second removes it. (Two-step rather than a dialog: the project bans
-  // native confirm(), and a section delete does not warrant a modal.)
+function TextBlock({ block, onChange, onDelete, readOnly, editorRef }) {
+  // Issue #4: delete button is visible, labelled, and two-tap on content.
   const hasText = !!(block.content || '').trim()
   const [armed, setArmed] = useState(false)
+  const localRef = useRef(null)
+  const isFocused = useRef(false)
+  const lastEmitted = useRef(null)
+
+  // Seed the contentEditable once on mount from the stored marker content.
+  useEffect(() => {
+    const el = localRef.current
+    if (!el) return
+    const html = renderArticleHtml(block.content || '')
+    el.innerHTML = html
+    lastEmitted.current = block.content || ''
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync contentEditable DOM → markers on blur and on unmount.
+  // While focused, the DOM is the source of truth — we never overwrite
+  // innerHTML during active editing, preserving caret position.
+  useEffect(() => {
+    const el = localRef.current
+    if (!el) return undefined
+    return () => {
+      if (el === null || el === undefined) return
+      const html = el.innerHTML || ''
+      const markers = htmlToArticleMarkers(html)
+      if (markers !== lastEmitted.current) {
+        lastEmitted.current = markers
+        onChange({ ...block, content: markers })
+      }
+    }
+  }) // Runs on every unmount/re-render cleanup
+
+  function handleBlur() {
+    isFocused.current = false
+    const el = localRef.current
+    if (!el) return
+    const html = el.innerHTML || ''
+    const markers = htmlToArticleMarkers(html)
+    if (markers !== lastEmitted.current) {
+      lastEmitted.current = markers
+      onChange({ ...block, content: markers })
+    }
+  }
+
+  // Paste interception: strip all HTML, insert plain text only.
+  function handlePaste(e) {
+    e.preventDefault()
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain')
+    document.execCommand('insertText', false, text)
+  }
+
   useEffect(() => {
     if (!armed) return undefined
     const t = setTimeout(() => setArmed(false), 4000)
     return () => clearTimeout(t)
   }, [armed])
 
+  if (readOnly) return null
+
   return (
     <div style={{ position: 'relative', marginBottom: 4 }}>
-      {!readOnly && (
-        <button
-          type="button"
-          aria-label={armed ? 'Confirm delete this section' : 'Delete this section'}
-          title={armed ? 'Tap again to delete' : 'Delete this section'}
-          onClick={() => {
-            if (hasText && !armed) { setArmed(true); return }
-            onDelete()
-          }}
-          style={{
-            position: 'absolute', top: -10, right: 4, zIndex: 2,
-            height: 26, minWidth: 26, padding: armed ? '0 9px' : 0,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-            background: armed ? theme.dangerBg : '#fff',
-            border: `1px solid ${armed ? theme.alert : theme.border}`,
-            borderRadius: 13, fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit',
-            color: armed ? theme.alert : theme.gray400, cursor: 'pointer',
-          }}
-        >
-          <Trash2 size={13} aria-hidden="true" />
-          {armed && 'Tap again'}
-        </button>
-      )}
-      <textarea
-        ref={textareaRef}
-        value={block.content}
-        onChange={e => onChange({ ...block, content: e.target.value })}
-        readOnly={readOnly}
-        placeholder="Write here..."
-        rows={4}
+      <button
+        type="button"
+        aria-label={armed ? 'Confirm delete this section' : 'Delete this section'}
+        title={armed ? 'Tap again to delete' : 'Delete this section'}
+        onClick={() => {
+          if (hasText && !armed) { setArmed(true); return }
+          onDelete()
+        }}
+        style={{
+          position: 'absolute', top: -10, right: 4, zIndex: 2,
+          height: 26, minWidth: 26, padding: armed ? '0 9px' : 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          background: armed ? theme.dangerBg : '#fff',
+          border: `1px solid ${armed ? theme.alert : theme.border}`,
+          borderRadius: 13, fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit',
+          color: armed ? theme.alert : theme.gray400, cursor: 'pointer',
+        }}
+      >
+        <Trash2 size={13} aria-hidden="true" />
+        {armed && 'Tap again'}
+      </button>
+      <div
+        ref={(el) => { localRef.current = el; if (editorRef) editorRef.current = el }}
+        contentEditable={!readOnly}
+        suppressContentEditableWarning
+        onFocus={() => { isFocused.current = true }}
+        onBlur={handleBlur}
+        onPaste={handlePaste}
+        role="textbox"
+        aria-label="Article text"
+        aria-multiline="true"
+        data-testid="article-editor"
         style={{
           width: '100%', padding: '10px 12px', fontSize: 15, lineHeight: 1.7,
           border: readOnly ? 'none' : `1px solid ${theme.border}`,
-          borderRadius: 12, fontFamily: 'Georgia, serif', resize: 'vertical',
+          borderRadius: 12, fontFamily: 'Georgia, serif',
           background: readOnly ? 'transparent' : '#fff', outline: 'none',
           boxSizing: 'border-box', color: theme.textDark,
+          minHeight: 80, whiteSpace: 'pre-wrap', wordWrap: 'break-word',
         }}
       />
-      {/* Issue #8 — live WYSIWYG preview. Formatting used to be invisible while
-          writing: the author saw literal ** and ==#hex| markers and only
-          discovered how the article looked after publishing. This pane runs the
-          exact renderer the published article uses (renderArticleHtml), so what
-          it shows IS what will publish — actual bold, actual italic, actual
-          colour — updating on every keystroke. It reads the same block content,
-          so there is no second source of truth and no format change. */}
-      {!readOnly && hasText && (
-        <div
-          data-testid="article-preview"
-          style={{
-            marginTop: 6, border: `1px dashed ${theme.border}`, borderRadius: 12,
-            padding: '10px 12px', background: '#fff',
-          }}
-        >
-          <p style={{
-            margin: '0 0 6px 0', fontSize: 10.5, fontWeight: 800,
-            color: theme.textLight, letterSpacing: '0.05em', textTransform: 'uppercase',
-          }}>
-            Preview — exactly as it will publish
-          </p>
-          <div
-            className="article-preview-body"
-            dangerouslySetInnerHTML={{ __html: renderArticleHtml(block.content) }}
-            style={{ fontFamily: 'Georgia, serif', fontSize: 15, lineHeight: 1.75, color: theme.textDark }}
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -471,7 +487,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
   const [blocks, setBlocks] = useState(() => parseBlocks(value))
   const [highlightColor, setHighlightColor] = useState('#fde68a')
   const [activeBlockId, setActiveBlockId] = useState(blocks[0]?.id)
-  const lastTextareaRef = useRef(null)
+  const activeEditorRef = useRef(null)
 
   // Sync blocks → parent onChange as JSON string
   useEffect(() => {
@@ -505,38 +521,11 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
     setActiveBlockId(textBlock.id)
   }
 
-  // Apply a formatting mark to the selection in the active text block.
-  //
-  // `before` and `after` are separate because not every mark is symmetric:
-  // bold and italic are (`**`…`**`), but a highlight carries its colour in
-  // the OPENER only (`==#fde68a|`…`==`). The colour buttons used to call this
-  // with a single marker, which wrapped the selection as
-  // `==color|text==color|` — literal characters in the body instead of
-  // colour, and an article that no longer round-tripped through the editor
-  // (issue #3). See articleFormat.js for the markup contract.
-  function wrapActive(before, after = before) {
-    setBlocks(prev => prev.map(b => {
-      if (b.id !== activeBlockId || b.type !== 'text') return b
-      const ta = lastTextareaRef.current
-      if (!ta) return b
-      const s = ta.selectionStart; const e = ta.selectionEnd
-      const sel = b.content.slice(s, e)
-      const wrapped = `${before}${sel}${after}`
-      const next = b.content.slice(0, s) + wrapped + b.content.slice(e)
-      // Empty selection: park the caret between the markers so the next
-      // keystroke lands inside them. Non-empty: select the wrapped run so a
-      // second mark can be applied on top without re-selecting by hand.
-      setTimeout(() => {
-        if (sel) {
-          ta.selectionStart = s + before.length
-          ta.selectionEnd = s + before.length + sel.length
-        } else {
-          ta.selectionStart = ta.selectionEnd = s + before.length
-        }
-        ta.focus()
-      }, 0)
-      return { ...b, content: next }
-    }))
+  // Apply formatting via document.execCommand on the active contentEditable.
+  // execCommand is deprecated but universally supported and the safest way to
+  // preserve browser caret state during inline formatting.
+  function applyFormat(command, value) {
+    document.execCommand(command, false, value || null)
   }
 
   // Render for read mode
@@ -551,28 +540,15 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
     )
   }
 
-  const activeBlock = blocks.find(b => b.id === activeBlockId)
-
   return (
     <div>
-      {/* Preview typography mirrors the published article's classes
-          (.article-body strong/mark) so the pane is a faithful stand-in. */}
-      <style>{`
-        .article-preview-body p { margin: 0 0 12px 0; }
-        .article-preview-body p:last-child { margin-bottom: 0; }
-        .article-preview-body strong { font-weight: 800; color: ${theme.navy}; }
-        .article-preview-body mark { padding: 1px 4px; border-radius: 4px; }
-      `}</style>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" onClick={() => wrapActive('**')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontWeight: 900, fontSize: 13 }}>B</button>
-        <button type="button" onClick={() => wrapActive('*')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontStyle: 'italic', fontSize: 13 }}>I</button>
+        <button type="button" onClick={() => applyFormat('bold')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontWeight: 900, fontSize: 13 }}>B</button>
+        <button type="button" onClick={() => applyFormat('italic')} style={{ padding: '5px 12px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.bg, fontStyle: 'italic', fontSize: 13 }}>I</button>
         {/* Highlight colours are literal hex, not theme tokens: they are
             persisted into the article markup (==#RRGGBB|…==) and must stay
-            stable for already-published articles even if the palette moves.
-            The old list included theme.dangerBorder, which does not exist on
-            the theme — it evaluated to undefined and rendered a colourless
-            swatch. */}
+            stable for already-published articles even if the palette moves. */}
         <div role="group" aria-label="Highlight colour" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {HIGHLIGHT_COLORS.map(({ hex, label }) => (
             <button
@@ -580,7 +556,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
               key={hex}
               aria-label={`Highlight in ${label}`}
               aria-pressed={highlightColor === hex}
-              onClick={() => { setHighlightColor(hex); wrapActive(`==${hex}|`, '==') }}
+              onClick={() => { setHighlightColor(hex); applyFormat('hiliteColor', hex) }}
               style={{ width: 18, height: 18, borderRadius: '50%', background: hex, border: highlightColor === hex ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer', padding: 0 }}
             />
           ))}
@@ -605,7 +581,7 @@ export default function ArticleEditor({ value, onChange, readOnly = false }) {
                 onChange={updated => updateBlock(block.id, updated)}
                 onDelete={() => deleteBlock(block.id)}
                 readOnly={false}
-                textareaRef={activeBlockId === block.id ? lastTextareaRef : null}
+                editorRef={activeBlockId === block.id ? activeEditorRef : null}
               />
             ) : (
               <DrawingBlock

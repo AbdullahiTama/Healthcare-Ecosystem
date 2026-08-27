@@ -111,3 +111,67 @@ export function renderArticleHtml(content) {
     })
     .join('')
 }
+
+// ── HTML → article markers (inverse of renderArticleHtml) ──────────────────
+// Converts DOM HTML produced by contentEditable back to the marker dialect
+// stored in the database. Restricted to the tags renderArticleHtml emits:
+// <p>, <br>, <strong>, <em>, <mark>. Everything else is flattened to text.
+export function htmlToArticleMarkers(html) {
+  if (html == null) return ''
+  const text = typeof html === 'string' ? html : String(html)
+  if (!text.trim()) return ''
+
+  const container = document.createElement('div')
+  container.innerHTML = text
+
+  function processInline(node) {
+    if (node.nodeType === 3) return node.textContent
+    if (node.nodeType !== 1) return ''
+
+    const tag = node.tagName
+    const inner = Array.from(node.childNodes).map(processInline).join('')
+
+    if (tag === 'STRONG' || tag === 'B') return inner.startsWith('**') && inner.endsWith('**') ? inner : `**${inner.replace(/^\*+|\*+$/g, '')}**`
+    if (tag === 'EM' || tag === 'I') return inner.startsWith('*') && inner.endsWith('*') && !inner.startsWith('**') ? inner : `*${inner.replace(/^\*+|\*+$/g, '')}*`
+    if (tag === 'MARK' || tag === 'SPAN') {
+      const style = node.getAttribute('style') || ''
+      const bgMatch = style.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,8})/)
+      if (bgMatch) return `==${bgMatch[1]}|${inner}==`
+      if (tag === 'MARK') return `==${inner}==`
+      // <span> without background: flatten to inner text
+      return inner
+    }
+    if (tag === 'BR') return '\n'
+    // <span> and other inline tags: flatten to inner text
+    return inner
+  }
+
+  const blocks = []
+  for (const child of Array.from(container.childNodes)) {
+    if (child.nodeType === 3) {
+      const t = child.textContent.trim()
+      if (t) blocks.push(t)
+    } else if (child.nodeType === 1) {
+      const tag = child.tagName
+      if (tag === 'P' || tag === 'DIV') {
+        const content = Array.from(child.childNodes).map(processInline).join('')
+        if (content.trim()) blocks.push(content)
+      } else {
+        // Block-level tag we don't recognise — treat as inline
+        const content = Array.from(child.childNodes).map(processInline).join('')
+        if (content.trim()) blocks.push(content)
+      }
+    }
+  }
+
+  // If container has direct text nodes (no wrapping <p>), treat as single block
+  if (blocks.length === 0) {
+    const directText = Array.from(container.childNodes)
+      .filter(n => n.nodeType === 3)
+      .map(n => n.textContent)
+      .join('')
+    if (directText.trim()) blocks.push(directText.trim())
+  }
+
+  return blocks.join('\n\n')
+}
