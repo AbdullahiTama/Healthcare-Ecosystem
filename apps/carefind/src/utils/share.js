@@ -9,8 +9,8 @@
 // Media posts (visual/image/video) can pass `files` — real File objects —
 // which are handed to the Web Share API on capable browsers so WhatsApp and
 // friends receive the actual image/video. Where the Web Share API is missing
-// or rejects the files, the caller-supplied `mediaUrl` is appended to the
-// clipboard text so the recipient still gets the media as a link.
+// or rejects the files, the clipboard fallback copies only the post URL —
+// the OG tags on that URL already carry the image for link previews.
 //
 // Returns: 'shared' | 'copied' | 'dismissed' | 'failed'
 //
@@ -57,8 +57,11 @@ export async function shareOrCopy({ title, text, url, files, mediaUrl }) {
   }
 
   try {
-    const mediaLine = mediaUrl ? `\n\n${mediaUrl}` : ''
-    await navigator.clipboard.writeText(text ? `${text}\n\n${target}${mediaLine}` : `${target}${mediaLine}`)
+    // The post URL already carries og:image tags so WhatsApp/Telegram/etc.
+    // render the image inside the link preview card. Appending the raw
+    // mediaUrl as a second line caused two separate previews (image + link)
+    // when pasted into WhatsApp — the image and text appeared split.
+    await navigator.clipboard.writeText(text ? `${text}\n\n${target}` : `${target}`)
     return 'copied'
   } catch {
     return 'failed'

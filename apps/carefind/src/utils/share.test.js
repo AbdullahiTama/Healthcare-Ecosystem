@@ -114,11 +114,11 @@ describe('shareOrCopy', () => {
     expect(clipboard).toHaveBeenCalled()
   })
 
-  it('appends the media URL to clipboard text so recipients still get the media', async () => {
+  it('does not append the media URL to clipboard text (OG tags carry the image)', async () => {
     const clipboard = vi.fn().mockResolvedValue()
     Object.assign(global.navigator, { share: undefined, clipboard: { writeText: clipboard } })
     await shareOrCopy({ text: 'hi', url: 'http://x.test', mediaUrl: 'http://x.test/pic.jpg' })
-    expect(clipboard).toHaveBeenCalledWith('hi\n\nhttp://x.test\n\nhttp://x.test/pic.jpg')
+    expect(clipboard).toHaveBeenCalledWith('hi\n\nhttp://x.test')
   })
 })
 
