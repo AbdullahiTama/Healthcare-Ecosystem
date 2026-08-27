@@ -14,14 +14,19 @@ export default async function resolveAccountHandler(req, res) {
     return res.status(400).json({ error: 'Bank code and account number are required' })
   }
 
-  if (!/^\d{10}$/.test(accountNumber)) {
-    return res.status(400).json({ error: 'Account number must be 10 digits' })
+  const acct = String(accountNumber).trim()
+  if (!/^\d{10}$/.test(acct)) {
+    return res.status(400).json({ error: 'Account number must be exactly 10 digits' })
   }
 
   try {
-    const result = await resolveAccount({ bankCode, accountNumber })
+    const result = await resolveAccount({ bankCode: String(bankCode).trim(), accountNumber: acct })
     return res.status(200).json({ accountName: result.accountName })
   } catch (err) {
-    return res.status(400).json({ error: err.message || 'Could not resolve account name' })
+    console.error('[resolve-account] Failed:', err.message, '| bankCode:', bankCode, '| accountNumber:', acct)
+    return res.status(400).json({
+      error: 'Could not verify account. Check that the bank and account number are correct.',
+      detail: err.message || String(err),
+    })
   }
 }

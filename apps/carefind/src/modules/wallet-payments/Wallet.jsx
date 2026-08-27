@@ -166,7 +166,7 @@ function Wallet() {
           setWdAccountResolved(true)
         } else {
           setWdAccountResolved(false)
-          showToast(data.error || 'Could not verify account name. Check your bank and account number.', { type: 'error' })
+          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
         }
       } catch {
         setWdAccountResolved(false)
