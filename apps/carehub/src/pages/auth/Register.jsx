@@ -260,6 +260,7 @@ export default function Register() {
                   ['Business Hours', data.businessHours],
                   ['Owner', (data.firstName || '') + ' ' + (data.lastName || '')],
                   ['Login Email', data.ownerEmail],
+                  ['Plan', data.businessType === 'hospital' ? 'Growth — ₦100,000/year (hospitals start here)' : 'Basic — ₦60,000/year'],
                   ['CareFind', data.visibleOnCareFind !== false ? 'Yes - Listed publicly' : 'No'],
                 ].filter(([, v]) => v).map(([l, v], i) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? theme.gray50 : '#fff', fontSize: '13px' }}>
@@ -267,6 +268,11 @@ export default function Register() {
                   </div>
                 ))}
               </div>
+              {data.businessType === 'hospital' && (
+                <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${tealDeep}`, fontSize: '12.5px', color: tealDeep, lineHeight: '1.6' }}>
+                  Hospitals start from <strong>Growth</strong> — you’ll be placed on Growth (₦100,000/year, up to 5 locations, unlimited staff/products). Basic is not available for hospitals.
+                </div>
+              )}
               <div style={{ marginTop: '16px', padding: '14px', borderRadius: '12px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
                 After submitting, admin will review and approve your account within 24 hours.
               </div>

@@ -6,7 +6,7 @@ import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
 import { authClient } from '../../lib/authClient'
-import { PLAN_LABELS, PLAN_MONTHLY_NAIRA } from '../../lib/planLimits'
+import { PLAN_LABELS, PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA, PLAN_LIMITS, isPlanAllowedForBusinessType } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
 import { sbUpload } from '../../services/supabase'
 import { Card, Loading, SectionHead, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast, Toast } from '../../components/ui'
@@ -221,10 +221,13 @@ export default function Settings({ brand, role, perms }) {
   )
 
   const planKey = brand?.plan || 'basic'
+  const yearlyPrice = PLAN_YEARLY_NAIRA[planKey] ?? PLAN_YEARLY_NAIRA.basic
   const monthlyPrice = PLAN_MONTHLY_NAIRA[planKey] || PLAN_MONTHLY_NAIRA.basic
+  const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.basic
   const expiresAt = brand?.plan_expires_at ? new Date(brand.plan_expires_at) : null
   const daysLeft = expiresAt ? Math.ceil((expiresAt - new Date()) / 86400000) : null
   const isExpired = daysLeft !== null && daysLeft < 0
+  const hospitalBlocked = brand?.business_type === 'hospital' && planKey === 'basic'
 
   if (loading) return <Loading text="Loading settings..." />
 
@@ -237,10 +240,20 @@ export default function Settings({ brand, role, perms }) {
         <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px', color: navy }}>Billing</div>
         <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>Your plan and renewal</div>
 
+        {hospitalBlocked && (
+          <div style={{ marginBottom: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '13px', fontWeight: '600' }}>
+            Hospitals start from Growth — Basic is not available for hospital accounts. Please upgrade to Growth or higher.
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '14px 16px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, marginBottom: '16px' }}>
           <div>
             <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{PLAN_LABELS[planKey] || 'Basic'} plan</div>
-            <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>₦{monthlyPrice.toLocaleString()}/month</div>
+            <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
+              {yearlyPrice ? `₦${yearlyPrice.toLocaleString()}/year` : 'Custom pricing'} {yearlyPrice ? <span style={{ color: gray400 }}>· ₦{monthlyPrice.toLocaleString()}/month</span> : null}
+            </div>
+            <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>
+              {limits.maxLocations === Infinity ? 'Unlimited locations' : `Up to ${limits.maxLocations} locations`} · {limits.maxStaff === Infinity ? 'Unlimited staff' : `Up to ${limits.maxStaff} staff`} · {limits.maxProducts === Infinity ? 'Unlimited products' : `Up to ${limits.maxProducts.toLocaleString()} products`}
+            </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontWeight: '700', fontSize: '13px', color: isExpired ? danger : (daysLeft !== null && daysLeft <= 7) ? warning : success }}>
@@ -253,14 +266,20 @@ export default function Settings({ brand, role, perms }) {
         </div>
 
         {isOwner ? (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
-              {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
-            </TealBtn>
-            <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
-              {renewing ? 'Redirecting…' : `Renew 12 months, pay for 10 — ₦${(monthlyPrice * 10).toLocaleString()}`}
-            </GhostBtn>
-          </div>
+          yearlyPrice ? (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
+                {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
+              </TealBtn>
+              <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
+                {renewing ? 'Redirecting…' : `Renew 12 months — ₦${yearlyPrice.toLocaleString()}`}
+              </GhostBtn>
+            </div>
+          ) : (
+            <div style={{ padding: '14px', borderRadius: theme.radius.md, background: theme.gray50, border: `1px solid ${border}`, fontSize: '13px', color: gray600 }}>
+              Custom plan — pricing is tailored to your organization. Contact <strong>support@carehub.ng</strong> to discuss your requirements.
+            </div>
+          )
         ) : (
           <p style={{ fontSize: '12px', color: gray400 }}>Only the business Owner can renew the plan.</p>
         )}

@@ -13,6 +13,7 @@ import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidF
 import { findDuplicate, findAllDuplicateGroups } from '../../lib/productMatches'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Textarea, Toggle, GhostBtn, TealBtn, RedBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray300, border, danger, dangerBg, warning, warningBg, success, successBg, bg } = theme
 
@@ -107,6 +108,12 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
       }
 
       if (!isEdit) {
+        // Enforce product cap for Basic (5,000)
+        const limit = planLimitsFor(brand?.plan)
+        if (limit.maxProducts !== Infinity && products.length >= limit.maxProducts) {
+          showToast(`Your ${PLAN_LABELS[brand?.plan] || 'Basic'} plan allows up to ${limit.maxProducts.toLocaleString()} products. Upgrade your plan in Settings to add more.`, { type: 'warning' })
+          return
+        }
         // Check for duplicate — but only if name is specific enough (more than 3 chars)
         const name = (productData.name || '').trim()
         const generic = (productData.generic_name || '').trim()
@@ -292,6 +299,20 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         emoji: '💊',
         business_id: brand.id,
       })
+    }
+    // Enforce Basic 5k cap on bulk import
+    const importLimit = planLimitsFor(brand?.plan)
+    if (importLimit.maxProducts !== Infinity) {
+      const remaining = importLimit.maxProducts - products.length
+      if (remaining <= 0) {
+        showToast(`Your ${PLAN_LABELS[brand?.plan] || 'Basic'} plan allows up to ${importLimit.maxProducts.toLocaleString()} products. Upgrade to import more.`, { type: 'warning' })
+        setImporting(false)
+        return
+      }
+      if (fresh.length > remaining) {
+        fresh.splice(remaining)
+        showToast(`Basic plan allows ${importLimit.maxProducts.toLocaleString()} products — importing first ${remaining} of ${fresh.length + (fresh.length - remaining)} new products. Upgrade for more.`, { type: 'warning' })
+      }
     }
     const BATCH = 20
     for (let i = 0; i < fresh.length; i += BATCH) {

@@ -29,10 +29,11 @@ const FEATURES = [
 ]
 
 const PLANS = [
-  ['Basic', '10,000', '/month', ['Single location', 'Up to 5 staff', 'All core features'], false],
-  ['Growth', '25,000', '/month', ['Up to 5 branches', 'Unlimited staff', 'Cross-branch reports'], true],
-  ['Hospital', '35,000', '/month', ['Full hospital workflow', 'Lab & imaging', 'E-prescriptions'], false],
-  ['Enterprise', '60,000', '/month', ['Unlimited locations', 'Large hospitals', 'Priority support'], false],
+  ['Basic', '60,000', '/year', ['Up to 2 locations', 'Up to 5 staff', 'Up to 5,000 products', 'All core features', 'Hospitals excluded'], false],
+  ['Growth', '100,000', '/year', ['Up to 5 locations', 'Unlimited products', 'Unlimited staff', 'All core features', 'Hospitals start here'], true],
+  ['Premium', '150,000', '/year', ['Up to 10 locations', 'Unlimited products', 'Unlimited staff', 'All core features', 'Premium features'], false],
+  ['Enterprise', '250,000', '/year', ['Up to 30 locations', 'Unlimited products', 'Unlimited staff', 'Personalized support', 'For large orgs & importers'], false],
+  ['Custom', 'Custom', '', ['Bespoke to your org', 'Tailored locations & volume', 'Personalized support', 'Contact sales'], false],
 ]
 
 const STEPS_DATA = [
@@ -405,7 +406,7 @@ export default function Landing() {
           </div>
           <div className="pricing-grid" style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(180px, 1fr))',
             gap: 12,
           }}>
             {PLANS.map(([name, price, period, items, popular]) => (
@@ -428,8 +429,14 @@ export default function Landing() {
                 )}
                 <div style={{ fontWeight: 800, fontSize: 14, color: popular ? '#fff' : navy, marginBottom: 10 }}>{name}</div>
                 <div style={{ marginBottom: 16 }}>
-                  <span style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 28, color: popular ? '#fff' : navy }}>&#8358;{price}</span>
-                  <span style={{ fontSize: 12, color: popular ? 'rgba(255,255,255,0.6)' : gray400 }}>{period}</span>
+                  {price === 'Custom' ? (
+                    <span style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 22, color: popular ? '#fff' : navy }}>Custom</span>
+                  ) : (
+                    <>
+                      <span style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 28, color: popular ? '#fff' : navy }}>&#8358;{price}</span>
+                      <span style={{ fontSize: 12, color: popular ? 'rgba(255,255,255,0.6)' : gray400 }}>{period}</span>
+                    </>
+                  )}
                 </div>
                 <div style={{ marginBottom: 20, flex: 1 }}>
                   {items.map((it, i) => (
@@ -450,7 +457,7 @@ export default function Landing() {
                   onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.opacity = '0.9' } }}
                   onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.opacity = '1' } }}
                 >
-                  {name === 'Enterprise' ? 'Talk to us' : `Start with ${name}`}
+                  {name === 'Enterprise' || name === 'Custom' ? 'Talk to us' : `Start with ${name}`}
                 </button>
               </div>
             ))}
