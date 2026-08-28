@@ -525,59 +525,57 @@ function BusinessProfile() {
 
   const bodyContent = (
     <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 40 } : { fontFamily: theme.fontFamily }}>
-      <div style={{
-        background: theme.navy, color: '#fff',
+      <div role="img" aria-label={`${biz.name} — Black-owned ${biz.business_type} in ${biz.city}, Nigeria, verified on CareHub`} style={{
+        background: `linear-gradient(135deg, ${theme.deepTeal}E6 0%, ${theme.tealDeep}D9 100%), url(${biz.cover_url || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop'}) center/cover`,
+        color: '#fff', position: 'relative', overflow: 'hidden',
         ...(isMobile
           ? { padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px' }
-          : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
-        ...(biz.cover_url ? { padding: '0 0 24px 0', overflow: 'hidden' } : {}),
+          : { padding: '28px 32px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {biz.cover_url && (
-          <div style={{
-            height: isMobile ? 96 : 132,
-            background: `url(${biz.cover_url}) center/cover`,
-            marginBottom: isMobile ? 16 : 20,
-          }} role="img" aria-label={`${biz.name} banner`} />
-        )}
-        {isMobile && (
-          <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700, ...(biz.cover_url ? { marginLeft: 20 } : {}) }}>
-            <ArrowLeft size={15} aria-hidden="true" /> Back to search
-          </Link>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: isMobile ? 16 : 0, ...(biz.cover_url ? { marginLeft: isMobile ? 20 : 28, marginRight: isMobile ? 20 : 28 } : {}) }}>
-          <span style={{
-            width: 46, height: 46, borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden',
-          }}>
-            {biz.logo_url
-              ? <img src={biz.logo_url} alt={`${biz.name} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
-              : <TypeIcon size={22} aria-hidden="true" />}
-          </span>
-          <div>
-            <h1 style={{ fontSize: 19, fontWeight: 900, margin: '0 0 2px 0', letterSpacing: '-0.01em' }}>{biz.name}</h1>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', textTransform: 'capitalize' }}>
-              {biz.business_type} · {biz.city}, {biz.state}
-            </p>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.06) 0%, transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {isMobile && (
+            <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.82)', textDecoration: 'none', fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
+              <ArrowLeft size={15} aria-hidden="true" /> Back to search
+            </Link>
+          )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', backdropFilter: 'blur(6px)', marginBottom: 12 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} /> Verified on CareHub · {biz.business_type} · {biz.city}
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4 }}>
+            <span style={{
+              width: 52, height: 52, borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', backdropFilter: 'blur(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)'
+            }}>
+              {biz.logo_url
+                ? <img src={biz.logo_url} alt={`${biz.name} logo — Black-owned business in Nigeria`} width={52} height={52} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                : <TypeIcon size={24} aria-hidden="true" />}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 900, margin: '0 0 3px 0', letterSpacing: '-0.02em', lineHeight: 1.15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{biz.name} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.18)', fontSize: 10, fontWeight: 800, letterSpacing: '0.04em' }}>✓ Verified</span></h1>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.78)', textTransform: 'capitalize', fontWeight: 600 }}>
+                {biz.business_type} · {biz.city}, {biz.state} {biz.hours ? `· ${biz.hours}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {isMobile && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{avgRating || '—'}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Avg Rating</p>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{reviews.length}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Reviews</p>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{products.length}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Products</p>
+              </div>
+            </div>
+          )}
         </div>
-
-        {isMobile && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 16, ...(biz.cover_url ? { marginLeft: 20, marginRight: 20 } : {}) }}>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
-            </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{reviews.length}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Reviews</p>
-            </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{products.length}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Products</p>
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
