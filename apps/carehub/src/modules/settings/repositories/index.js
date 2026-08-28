@@ -97,6 +97,67 @@ export function createSettingsRepository(request = sbFetch) {
         prefer: 'return=minimal',
       })
     },
+
+    // ── Services — per-business service catalog for professional booking ─────
+    async getServices(businessId) {
+      try {
+        return await request(`business_services?business_id=eq.${businessId}&order=name.asc&select=*`)
+      } catch (e) {
+        // Table not yet migrated — return empty so UI shows empty state, not error
+        if (String(e.message).includes('business_services')) return []
+        throw e
+      }
+    },
+
+    async createService(businessId, service) {
+      return request('business_services', {
+        method: 'POST',
+        body: JSON.stringify({ ...service, business_id: businessId }),
+      })
+    },
+
+    async updateService(serviceId, businessId, updates) {
+      return request(`business_services?id=eq.${serviceId}&business_id=eq.${businessId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+        prefer: 'return=minimal',
+      })
+    },
+
+    async deleteService(serviceId, businessId) {
+      return request(`business_services?id=eq.${serviceId}&business_id=eq.${businessId}`, {
+        method: 'DELETE',
+        prefer: 'return=minimal',
+      })
+    },
+
+    // Date-specific availability per service (optional override over daily slots)
+    async getAvailability(businessId, serviceId) {
+      try {
+        const q = serviceId ? `&service_id=eq.${serviceId}` : ''
+        return await request(`service_availability?business_id=eq.${businessId}${q}&order=date.asc,time.asc&select=*`)
+      } catch (e) {
+        if (String(e.message).includes('service_availability')) return []
+        throw e
+      }
+    },
+
+    async saveAvailability(businessId, rows) {
+      // rows: [{service_id, date, time}]
+      if (!rows || rows.length === 0) return
+      return request('service_availability', {
+        method: 'POST',
+        body: JSON.stringify(rows.map(r => ({ business_id: businessId, service_id: r.service_id || null, date: r.date, time: r.time }))),
+        prefer: 'return=minimal',
+      })
+    },
+
+    async deleteAvailability(id, businessId) {
+      return request(`service_availability?id=eq.${id}&business_id=eq.${businessId}`, {
+        method: 'DELETE',
+        prefer: 'return=minimal',
+      })
+    },
   }
 }
 

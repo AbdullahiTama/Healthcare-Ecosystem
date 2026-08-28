@@ -10,7 +10,7 @@ import {
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','adr-reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -236,6 +236,7 @@ export const MODULES = {
   // lives at /dashboard/reports; each report module deep-links to its tab via
   // `path`. More tabs (operational, client & sales, compliance, scheduled) are
   // appended to the registry + REPORT_TABS as their modules ship (Phase 2/3).
+  wallet: { label: 'Wallet', icon: Landmark, types: ALL_TYPES, section: 'finance' },
   reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
   'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
   settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
@@ -277,9 +278,9 @@ export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 
 // legacy nav lists ordered their modules differently and nothing should
 // depend on a reorder happening silently.
 const NAV_ORDER = {
-   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
-   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'reports', 'adr-reports', 'carefind', 'settings'],
+   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
+   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'settings'],
+   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'carefind', 'settings'],
 }
 
 function familyOf(businessType) {

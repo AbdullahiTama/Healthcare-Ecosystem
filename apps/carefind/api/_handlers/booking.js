@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       name: clientName,
       phone,
       service,
+      service_id: serviceId,
       date,
       time,
       booking_type: bookingType,
@@ -86,9 +87,18 @@ export default async function handler(req, res) {
     if (clash) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
 
     // 6. Determine the fee for this appointment type (kobo). NULL = free.
-    const feeKobo = wantType === 'online'
+    // If a service is selected, its price takes precedence (professional services).
+    let feeKobo = wantType === 'online'
       ? business.online_consultation_fee
       : business.physical_consultation_fee
+    let serviceName = (service || '').trim() || 'Consultation'
+    if (serviceId) {
+      const { data: svc } = await supabase.from('business_services').select('id,name,price_kobo').eq('id', serviceId).eq('business_id', businessId).maybeSingle()
+      if (svc) {
+        serviceName = svc.name
+        if (svc.price_kobo != null) feeKobo = svc.price_kobo
+      }
+    }
     const hasFee = feeKobo != null && feeKobo > 0
 
     // 7. Insert the appointment. Paid bookings start as 'unpaid'; free ones land
@@ -99,7 +109,7 @@ export default async function handler(req, res) {
         business_id: businessId,
         client_name: clientName.trim(),
         client_id: null,
-        service: (service || '').trim() || 'Consultation',
+        service: serviceName,
         date,
         time,
         status: 'pending',

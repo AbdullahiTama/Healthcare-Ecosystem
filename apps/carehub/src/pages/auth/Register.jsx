@@ -52,6 +52,7 @@ export default function Register() {
   const submit = async () => {
     setSaving(true)
     const ownerEmail = data.ownerEmail.toLowerCase()
+    const referralInput = data.noReferrer ? null : (data.referrerCode?.trim() ? data.referrerCode.trim().toUpperCase() : (refCode ? refCode.toUpperCase() : null))
     try {
       await registerBusiness({
         name: data.businessName,
@@ -70,7 +71,7 @@ export default function Register() {
         lng: parseFloat(data.lng) || 0,
         website: data.website || '',
         visible_on_carefind: data.visibleOnCareFind !== false,
-        referral_code_used: refCode || null,
+        referral_code_used: referralInput,
       })
       // The register_business RPC mints the owner's CONFIRMED Supabase Auth
       // account in the same transaction that creates the pending business row —
@@ -241,6 +242,15 @@ export default function Register() {
               <div style={{ padding: '14px', borderRadius: '12px', background: theme.cardBg, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
                 <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: theme.tealDeep }}>Free</div><div style={{ fontSize: '11px', color: theme.textLight }}>for now</div></div>
+              </div>
+              <div style={{ padding: '14px', borderRadius: '12px', background: bg, border: `1px solid ${border}` }}>
+                <div style={{ fontSize: '13px', fontWeight: '800', color: navy, marginBottom: '8px' }}>Referrer (optional)</div>
+                <div style={{ fontSize: '12px', color: gray600, marginBottom: '10px', lineHeight: '1.6' }}>If someone referred you to CareHub, enter their referral code. If no one referred you, check “No Referrer”.</div>
+                <CInp label="Referrer Code" value={data.referrerCode ?? refCode} onChange={v => f('referrerCode', v)} placeholder="e.g. CH-8F3K2Q" disabled={!!data.noReferrer} />
+                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer', alignItems: 'center', marginTop: '10px' }}>
+                  <input type="checkbox" checked={!!data.noReferrer} onChange={e => f('noReferrer', e.target.checked)} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: theme.textMid, fontWeight: '600' }}>No Referrer — I was not referred by anyone</span>
+                </label>
               </div>
               <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', alignItems: 'flex-start' }}>
                 <input type='checkbox' checked={data.agreedTerms || false} onChange={e => f('agreedTerms', e.target.checked)} style={{ marginTop: '2px', flexShrink: 0 }} />

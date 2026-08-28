@@ -30,6 +30,19 @@ function BookingCard({ biz }) {
   const [phone, setPhone] = useState('')
   const [booking, setBooking] = useState(false)
   const [done, setDone] = useState(false)
+  const [services, setServices] = useState([])
+  const [selectedService, setSelectedService] = useState('')
+
+  useEffect(() => {
+    let live = true
+    supabase.from('business_services').select('id,name,price_kobo,duration_minutes').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
+      if (live) {
+        setServices(data || [])
+        if (data && data.length === 1) setSelectedService(data[0].id)
+      }
+    }).catch(() => {})
+    return () => { live = false }
+  }, [biz.id])
 
   // Return from Paystack: the client was redirected here after paying for this
   // booking. Verify server-side (amount, appointment, Paystack status) and only
@@ -70,8 +83,9 @@ function BookingCard({ biz }) {
   const today = new Date().toISOString().split('T')[0]
   const isToday = date === today
 
-  // ADR-005: CareCoins price for this appointment type, for display only.
-  const feeKobo = apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee
+  const selectedSvc = services.find(s => s.id === selectedService) || null
+  // Per-service price takes precedence; fallback to consultation fee for backward compat
+  const feeKobo = selectedSvc?.price_kobo != null ? selectedSvc.price_kobo : (apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee)
   const coinCost = feeKobo ? Math.ceil(feeKobo / 20000) : 0
 
   // booking_slots may arrive as a real array OR as a raw comma-separated
@@ -107,6 +121,7 @@ function BookingCard({ biz }) {
   async function submitBooking(e) {
     e.preventDefault()
     if (!date || !slot || !name.trim() || !phone.trim()) return
+    if (services.length > 0 && !selectedService) { toast.show('Please select a service.'); return }
     setBooking(true)
     try {
       const res = await fetch('/api/booking', {
@@ -120,6 +135,8 @@ function BookingCard({ biz }) {
           booking_type: apptType,
           name: name.trim(),
           phone: phone.trim(),
+          service_id: selectedService || null,
+          service: selectedSvc ? selectedSvc.name : undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -168,6 +185,17 @@ function BookingCard({ biz }) {
         <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
       ) : (
         <form onSubmit={submitBooking}>
+          {services.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>Service</label>
+              <select value={selectedService} onChange={e => setSelectedService(e.target.value)} required={services.length > 0} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: `1px solid ${theme.border}`, background: '#fff', fontSize: 13, color: theme.navy }}>
+                <option value="">Select a service</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} {s.price_kobo != null ? `— ₦${(s.price_kobo / 100).toLocaleString()}` : '— Free'} {s.duration_minutes ? `· ${s.duration_minutes} min` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div style={{ flex: 1 }}>
               <Inp

@@ -26,6 +26,7 @@ import Clients from '../../modules/clients/Clients'
 import Appointments from '../../modules/appointments/Appointments'
 import Expenses from '../../modules/expenses/Expenses'
 import Debts from '../../modules/debts/Debts'
+import Wallet from '../../modules/wallet/Wallet'
 import Purchases from '../../modules/purchases/Purchases'
 import Demand from '../../modules/demand/Demand'
 import Staff from '../../modules/staff/Staff'
@@ -196,6 +197,7 @@ export default function BusinessDashboard() {
             <Route path='consultation' element={guard('consultation', <><TopBar title='Consultations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Consultation {...pageProps} /></div></>)} />
             <Route path='expenses' element={guard('expenses', <><TopBar title='Expenses' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Expenses {...pageProps} /></div></>)} />
             <Route path='debts' element={guard('debts', <><TopBar title='Debts' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Debts {...pageProps} /></div></>)} />
+            <Route path='wallet' element={guard('wallet', <><TopBar title='Wallet' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Wallet {...pageProps} /></div></>)} />
             <Route path='purchases' element={guard('purchases', <><TopBar title='Purchases' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Purchases {...pageProps} /></div></>)} />
             <Route path='demand' element={guard('demand', <><TopBar title='Demand' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Demand {...pageProps} /></div></>)} />
             <Route path='staff' element={guard('staff', <><TopBar title='Staff' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Staff {...pageProps} /></div></>)} />
