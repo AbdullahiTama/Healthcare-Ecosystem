@@ -2,7 +2,6 @@
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
-import { emailAdminNewRegistration } from '../../lib/email'
 import { Card, Inp, Sel, TealBtn, DarkBtn, GhostBtn, Toggle, useToast, Toast, Logo } from '../../components/ui/index'
 import { DARK, businessName } from '../../lib/utils'
 import { BUSINESS_TYPES, NIG_STATES } from '../../config/constants'
@@ -78,15 +77,20 @@ export default function Register() {
       // there is no separate provisioning step any more (businesses.password
       // was dropped in C2). New owners can sign in immediately and see the
       // honest pending state.
-      // Send email notification to admin
+      // Fire-and-forget server-side emails (owner confirmation + admin alert).
+      // Registration must succeed even if email fails — never block on this.
       try {
-        await emailAdminNewRegistration({
-          businessName: data.businessName,
-          ownerName: (data.firstName + ' ' + data.lastName).trim(),
-          businessType: data.businessType || 'skincare',
-          state: data.state || '',
-          email: ownerEmail,
-        })
+        fetch('/api/notify-registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: data.businessName,
+            ownerName: (data.firstName + ' ' + data.lastName).trim(),
+            businessType: data.businessType || 'skincare',
+            state: data.state || '',
+            email: ownerEmail,
+          }),
+        }).catch(() => {})
       } catch (e) {}
       setDone(true)
     } catch (e) {
@@ -105,7 +109,7 @@ export default function Register() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Hourglass size={48} color={tealDeep} /></div>
         <div style={{ fontFamily: fontDisplay, fontSize: '26px', fontWeight: '700', color: navy, marginBottom: '8px' }}>Registration submitted</div>
         <div style={{ fontSize: '14px', color: gray600, lineHeight: '1.8', marginBottom: '24px' }}>
-          Thank you <strong>{data.firstName}</strong>! Your business <strong>{data.businessName}</strong> has been submitted for review. You will be notified within 24 hours.
+          Thank you <strong>{data.firstName}</strong>! Your business <strong>{data.businessName}</strong> has been submitted for review. We’ve sent a confirmation email to <strong>{data.ownerEmail}</strong> — please check your inbox (and spam folder). You will be notified within 24 hours once your account is reviewed.
         </div>
         <div style={{ background: theme.tealMist, borderRadius: theme.radius.lg, padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
           {[['done', 'Registration submitted'], ['pending', 'Admin review in progress'], ['wait', 'Approval notification sent to your email'], ['wait2', 'Dashboard unlocked, start using CareHub']].map(([k, l]) => {

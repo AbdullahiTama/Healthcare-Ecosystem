@@ -34,3 +34,15 @@
 - source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
   summary: Add component-level test harness (@testing-library/react) and cover POS.jsx printReceipt branching plus Recent-sales reprint mapping.
   evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx; verification-gap review showed no test observes the WebUSB-first decision matrix, duplicate-receipt guard, printing lock, or the sales-row to receipt-object reconstruction — repo has no component test harness.
+- source_spec: none
+  summary: Pricing Structure update — Basic ₦60k/yr (2 locs/5 staff/5k products), Growth ₦100k/yr (5 locs), Premium ₦150k/yr (10 locs), Enterprise ₦250k/yr (30 locs), Custom; hospitals start at Growth.
+  evidence: Split from CareFindHub Phase 2 Corrections mega-intent (5 goals) — pricing is isolated to planLimits + subscription enforcement + billing display, independently shippable from email/appointments/wallet/referrer.
+- source_spec: none
+  summary: Appointment & Service Booking — services CRUD, fees, dates/slots, customer selection, advance payment, slot unavailability, payment fix on business profile.
+  evidence: Split from CareFindHub Phase 2 Corrections — appointment booking is isolated to Settings/services/booking domain, independently shippable from email/pricing/wallet/referrer.
+- source_spec: none
+  summary: Wallet & Payment — business wallet section (payments received, transaction history, available balance, withdrawal) + functional payment options + appointment payment connectivity.
+  evidence: Split from CareFindHub Phase 2 Corrections — wallet/payments is isolated to finance/wallet domain, independently shippable from email/pricing/appointments/referrer.
+- source_spec: none
+  summary: Referrer System — unique referrer codes, Referrer Code/No Referrer field at registration, auto-link, referrer dashboard (referred businesses, earnings paid/outstanding), admin tracking/commissions.
+  evidence: Split from CareFindHub Phase 2 Corrections — referral is isolated to registration/referral domain, independently shippable from email/pricing/appointments/wallet.

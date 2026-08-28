@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import { getBusinesses, getAdminTeam, updateBusiness, addAdminTeam, removeAdminTeam } from '../../services/supabase'
-import { emailBusinessApproved, emailBusinessRejected } from '../../lib/email'
+import { authClient } from '../../lib/authClient'
 import { businessLucideIcon, businessName, DARK } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo } from '../../components/ui'
@@ -34,28 +34,20 @@ export default function AdminDashboard() {
   async function updateStatus(id, status, msg) {
     try {
       await updateBusiness(id, { status })
-      const biz = businesses.find(b => b.id === id)
       setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b))
       setSel(null)
       showToast(msg)
-      // Send email notification
-      if (biz) {
-        try {
-          if (status === 'active') {
-            await emailBusinessApproved({
-              businessName: biz.name,
-              ownerName: biz.owner,
-              ownerEmail: biz.email,
-            })
-          } else if (status === 'rejected') {
-            await emailBusinessRejected({
-              businessName: biz.name,
-              ownerName: biz.owner,
-              ownerEmail: biz.email,
-            })
-          }
-        } catch (e) {}
-      }
+      // Fire-and-forget owner notification via server (never blocks status change)
+      try {
+        const { data: { session } } = await authClient.auth.getSession()
+        if (session?.access_token) {
+          fetch('/api/notify-business-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ businessId: id, status }),
+          }).catch(() => {})
+        }
+      } catch (e) {}
     } catch (e) { showToast('Error updating status.') }
   }
   const [sel, setSel] = useState(null)

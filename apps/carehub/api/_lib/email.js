@@ -1,8 +1,44 @@
-// CareHub Email templates — client-side pure HTML builders only.
-// Actual sending is server-side via api/_lib/email.js (Resend, server env).
-// This file must never contain the Resend key or call the Resend API directly.
+// Server-only Resend email helper. Never imported by client code.
+// Reads RESEND_API_KEY from process.env (server env), not Vite.
 
-const ADMIN_EMAIL = 'admin@carehub.ng'
+const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <onboarding@resend.dev>'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carehub.ng'
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
+
+export async function sendEmail({ to, subject, html }) {
+  if (!RESEND_API_KEY) {
+    console.warn('[email] RESEND_API_KEY missing — skipping send to', Array.isArray(to) ? to.join(',') : to)
+    return { success: false, error: 'RESEND_API_KEY not configured' }
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + RESEND_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      console.error('[email] Resend error', res.status, data)
+      return { success: false, error: data?.message || `Resend ${res.status}`, data }
+    }
+    return { success: true, data }
+  } catch (e) {
+    console.error('[email] send error', e)
+    return { success: false, error: e.message }
+  }
+}
+
+// ── Templates (shared HTML) ──────────────────────────────────────────────────
 
 const baseStyle = `
   font-family: system-ui, -apple-system, sans-serif;
@@ -52,8 +88,6 @@ function footer() {
   `
 }
 
-// ── Pure HTML builders (no IO) ─────────────────────────────────────────────
-
 export function buildRegistrationOwnerHtml({ businessName, ownerName }) {
   return `
     <div style="${baseStyle}">
@@ -68,6 +102,9 @@ export function buildRegistrationOwnerHtml({ businessName, ownerName }) {
           <p style="margin: 0; color: #555; font-size: 13px; line-height: 1.7;">
             Your application is <strong>under review</strong> by the CareHub admin team. You will receive an email within <strong>24 hours</strong> once your account is approved or if any action is required.
           </p>
+        </div>
+        <div style="background: #f9fafb; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <p style="margin: 0; color: #888; font-size: 12px; line-height: 1.6;">You can sign in now to see your pending status. Full access unlocks after approval.</p>
         </div>
         <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to Sign In →</a>
       </div>
@@ -130,13 +167,14 @@ export function buildBusinessApprovedHtml({ businessName, ownerName, ownerEmail 
           <p style="margin: 0; font-size: 13px; color: #555;"><strong>Password:</strong> The password you set during registration</p>
         </div>
         <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Log In to Your Dashboard →</a>
+        <p style="margin-top: 20px; font-size: 12px; color: #aaa; text-align: center;">Need help? Reply to this email or contact support@carehub.ng</p>
       </div>
       ${footer()}
     </div>
   `
 }
 
-export function buildBusinessRejectedHtml({ businessName, ownerName, reason }) {
+export function buildBusinessRejectedHtml({ businessName, ownerName, ownerEmail, reason }) {
   return `
     <div style="${baseStyle}">
       ${logoHeader()}
@@ -153,73 +191,35 @@ export function buildBusinessRejectedHtml({ businessName, ownerName, reason }) {
   `
 }
 
-// Legacy wrappers kept for backward imports — they now delegate to server endpoints
-// instead of calling Resend directly. New code should call the /api routes directly.
-
-export async function emailAdminNewRegistration(args) {
-  try {
-    const res = await fetch('/api/notify-registration', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(args),
-    })
-    const data = await res.json().catch(() => ({}))
-    return { success: res.ok, data }
-  } catch (e) {
-    console.error('[email] client notify-registration failed', e)
-    return { success: false, error: e.message }
-  }
-}
-
-export async function emailBusinessApproved(args) {
-  console.warn('[email] emailBusinessApproved should be called server-side via /api/notify-business-status; client stub doing nothing')
-  return { success: false, error: 'Use server endpoint' }
-}
-
-export async function emailBusinessRejected(args) {
-  console.warn('[email] emailBusinessRejected should be called server-side; client stub')
-  return { success: false, error: 'Use server endpoint' }
-}
-
-export async function emailAppointmentConfirmed(args) {
-  const html = `
+export function buildBusinessStatusHtml({ businessName, ownerName, ownerEmail, status, reason }) {
+  if (status === 'active') return buildBusinessApprovedHtml({ businessName, ownerName, ownerEmail })
+  if (status === 'rejected') return buildBusinessRejectedHtml({ businessName, ownerName, ownerEmail, reason })
+  if (status === 'suspended') {
+    return `
     <div style="${baseStyle}">
       ${logoHeader()}
       <div style="${cardStyle}">
-        <div style="text-align: center; margin-bottom: 24px;">
-          <div style="font-size: 48px; margin-bottom: 12px;">📅</div>
-          <h2 style="color: #0f172a; margin: 0 0 8px;">Appointment Confirmed!</h2>
-          <p style="color: #888; margin: 0;">Hi ${args.clientName}, your appointment has been booked.</p>
-        </div>
-        <div style="background: #FDFBF7; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-          <table style="width: 100%; border-collapse: collapse;">
-            ${[
-              ['Business', args.businessName],
-              ['Service', args.service || 'Consultation'],
-              ['Date', args.date],
-              ['Time', args.time],
-              ['Staff', args.staffName || 'To be assigned'],
-            ].map(([l, v]) => `
-              <tr>
-                <td style="padding: 8px 0; color: #888; font-weight: 600; font-size: 13px; width: 40%;">${l}</td>
-                <td style="padding: 8px 0; color: #0f172a; font-size: 13px; font-weight: 600;">${v || '—'}</td>
-              </tr>
-            `).join('')}
-          </table>
-        </div>
+        <h2 style="color: #0f172a; margin: 0 0 8px;">Account Suspended</h2>
+        <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your business <strong>${businessName}</strong> has been suspended. ${reason ? `<br/><strong>Reason:</strong> ${reason}` : ''}</p>
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please contact support@carehub.ng if you have questions.</p>
       </div>
       ${footer()}
-    </div>
-  `
-  return { html, subject: `Appointment Confirmed — ${args.businessName} on ${args.date}` }
+    </div>`
+  }
+  // pending review / requires action generic
+  return `
+    <div style="${baseStyle}">
+      ${logoHeader()}
+      <div style="${cardStyle}">
+        <h2 style="color: #0f172a; margin: 0 0 8px;">Application Update — Action Required</h2>
+        <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your application for <strong>${businessName}</strong> requires attention. ${reason ? `<br/><strong>Details:</strong> ${reason}` : ''}</p>
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please log in or contact support@carehub.ng for next steps.</p>
+        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to CareHub →</a>
+      </div>
+      ${footer()}
+    </div>`
 }
 
-export async function emailCreditReminder(args) {
-  if (!args.clientEmail) return { success: false, error: 'No client email' }
-  return { success: false, error: 'Use server endpoint' }
-}
-export async function emailStaffWelcome(args) { return { success: false, error: 'Use server endpoint' } }
-export async function emailAgentApproved(args) { return { success: false, error: 'Use server endpoint' } }
-export async function emailAgentRejected(args) { return { success: false, error: 'Use server endpoint' } }
-
-export { ADMIN_EMAIL }
+export { ADMIN_EMAIL, FROM_EMAIL }
