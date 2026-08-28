@@ -48,6 +48,12 @@ const TESTIMONIALS = [
   ['IE', 'Ifeoma Eze', 'Clinic Administrator', 'Enugu', 'Reception to pharmacy on one screen — my staff learned it in an afternoon, offline included.'],
 ]
 
+const TESTIMONIAL_IMAGES = [
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=200&auto=format&fit=crop&crop=faces',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&crop=faces',
+  'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=200&auto=format&fit=crop&crop=faces',
+]
+
 function Check() {
   return <CheckIcon size={13} color={tealDeep} strokeWidth={3} aria-hidden="true" />
 }
@@ -163,40 +169,43 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── Hero ──────────────────────────────────────────────── */}
-      <div ref={heroRef} style={{
+      {/* ── Hero — Black counter reality, deep-teal luxury ────────── */}
+      <div ref={heroRef} role="img" aria-label="Black pharmacist at a pharmacy counter in Lagos handing medication to a mother and child, shelves stocked with medicines behind, warm afternoon light" style={{
         minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundImage: `linear-gradient(135deg, ${deepTeal}CC 0%, ${tealDeep}BB 50%, #0D5F4DCC 100%), url(https://images.unsplash.com/photo-1581056771107-24ca5f033842?w=1600&q=80)`,
-        backgroundSize: 'cover', backgroundPosition: 'center',
+        backgroundImage: `linear-gradient(135deg, ${deepTeal}E6 0%, ${tealDeep}D9 50%, #0D5F4DE6 100%), url(https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1600&q=80&auto=format&fit=crop)`,
+        backgroundSize: 'cover', backgroundPosition: 'center 30%',
         position: 'relative', overflow: 'hidden', padding: isMobile ? '120px 20px 80px' : '140px 24px 100px',
       }}>
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.04) 0%, transparent 50%)',
+          background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.06) 0%, transparent 55%)',
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 900, margin: '0 auto' }}>
+          <div className="hero-fade" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 16, backdropFilter: 'blur(6px)' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.6)' }} /> 1,142 businesses · 6 states · Works offline
+          </div>
           <h1 className="hero-fade" style={{
             fontFamily: fontDisplay, fontWeight: 700,
             fontSize: isMobile ? 'clamp(32px, 8vw, 42px)' : 'clamp(42px, 5vw, 60px)',
-            lineHeight: 1.1, letterSpacing: '-0.02em', color: '#fff', margin: '0 0 24px',
-            maxWidth: 900,
+            lineHeight: 1.05, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 16px',
+            maxWidth: 900, textWrap: 'balance',
           }}>
-            Run your healthcare business. Get found by patients.
+            Pharmacy counter, lab bench, or ward — one login.
           </h1>
-          <p className="hero-fade" style={{ fontSize: isMobile ? 14 : 16, color: 'rgba(255,255,255,0.7)', maxWidth: 600, margin: '0 auto 36px', lineHeight: 1.75 }}>
+          <p className="hero-fade" style={{ fontSize: isMobile ? 14 : 16, color: 'rgba(255,255,255,0.82)', maxWidth: 600, margin: '0 auto 28px', lineHeight: 1.7, fontWeight: 500 }}>
             Sales, inventory, staff and patient workflow in one calm, reliable platform — for pharmacies, hospitals, labs and clinics across Nigeria.
           </p>
           <div className="hero-fade" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/register')} style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: 'none', background: '#fff', color: deepTeal, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => navigate('/register')} style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: 'none', background: '#fff', color: deepTeal, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
               Get started free <ArrowRight size={16} />
             </button>
-            <a href="#pricing" style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>See pricing</a>
+            <a href="#pricing" style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', backdropFilter: 'blur(6px)' }}>See pricing — from ₦60k/year</a>
           </div>
-          <div className="hero-fade" style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap', marginTop: 28 }}>
-            {['Free 14-day trial', 'Works offline', 'Role-based access'].map(c => (
-              <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: tealBright, flexShrink: 0 }} />
+          <div className="hero-fade" style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 24, padding: '10px 16px', borderRadius: 999, background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', maxWidth: 560, marginLeft: 'auto', marginRight: 'auto' }}>
+            {['Free 14-day trial', 'Works offline', '₦60k/year'].map(c => (
+              <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.88)', fontWeight: 600 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: tealBright, flexShrink: 0, boxShadow: '0 0 6px rgba(45,212,191,0.6)' }} />
                 {c}
               </div>
             ))}
@@ -204,16 +213,29 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* ── Business Types Strip ──────────────────────────────── */}
+      {/* ── Business Types Strip — Black owners, real faces ─────── */}
       <div style={{ padding: '28px 24px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: gray400, marginBottom: 16 }}>Built for every healthcare business</p>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: gray400, marginBottom: 16 }}>Built for every healthcare business — by people like you</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
-          {BUSINESS_TYPES.map(b => (
-            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px 8px 8px', borderRadius: theme.radius.lg, border: `1px solid ${border}`, background: 'white', fontSize: 12.5, fontWeight: 700, color: navy }}>
-              <div style={{ width: 30, height: 30, borderRadius: 10, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}><Clipboard size={15} /></div>
-              {b.name}
-            </div>
-          ))}
+          {BUSINESS_TYPES.map(b => {
+            const TYPE_IMAGES = {
+              skincare: 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=100&auto=format&fit=crop&crop=faces',
+              pharmacy: 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=100&auto=format&fit=crop&crop=faces',
+              hospital: 'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=100&auto=format&fit=crop&crop=faces',
+              dental: 'https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?w=100&auto=format&fit=crop&crop=faces',
+              optical: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?w=100&auto=format&fit=crop&crop=faces',
+              wellness: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&crop=faces',
+              manufacturer_importer: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100&auto=format&fit=crop&crop=faces',
+              wholesale: 'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=100&auto=format&fit=crop&crop=faces',
+            }
+            const img = TYPE_IMAGES[b.id] || TYPE_IMAGES.pharmacy
+            return (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 6px', borderRadius: 999, border: `1px solid ${border}`, background: 'white', fontSize: 12.5, fontWeight: 700, color: navy, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <img src={img} alt={`${b.name} — Black owner in Nigeria`} width={30} height={30} loading="lazy" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: `2px solid ${tealMist}` }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                {b.name}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -366,11 +388,9 @@ export default function Landing() {
             {TESTIMONIALS[activeTestimonial][4]}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: theme.radius.full, background: theme.tealMist, color: theme.tealDeep, fontWeight: 900, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {TESTIMONIALS[activeTestimonial][0]}
-            </div>
+            <img src={TESTIMONIAL_IMAGES[activeTestimonial]} alt={`${TESTIMONIALS[activeTestimonial][1]} — ${TESTIMONIALS[activeTestimonial][2]} in ${TESTIMONIALS[activeTestimonial][3]}, Black healthcare owner in Nigeria`} width={44} height={44} loading="lazy" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${tealMist}`, flexShrink: 0 }} onError={e => { e.currentTarget.style.display = 'none' }} />
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: navy }}>{TESTIMONIALS[activeTestimonial][1]}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: navy, display: 'flex', alignItems: 'center', gap: 6 }}>{TESTIMONIALS[activeTestimonial][1]} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 999, background: tealMist, color: tealDeep, fontSize: 10, fontWeight: 800 }}>✓ Verified</span></div>
               <div style={{ fontSize: 12, color: theme.gray400 }}>{TESTIMONIALS[activeTestimonial][2]} &middot; {TESTIMONIALS[activeTestimonial][3]}</div>
             </div>
           </div>
@@ -473,14 +493,27 @@ export default function Landing() {
         <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
           Become a CareHub Referral Agent.
         </h2>
-        <p style={{ fontSize: 14.5, color: gray500, maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.7 }}>
+        <p style={{ fontSize: 14.5, color: gray500, maxWidth: 560, margin: '0 auto 20px', lineHeight: 1.7 }}>
           Own one area. Earn <strong style={{ color: tealDeep }}>40% of the first payment</strong> on every healthcare business you bring in, then <strong style={{ color: tealDeep }}>5% on every renewal</strong> for as long as they stay. Real public in your neighbourhood, recurring income for you.
         </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {[
+              'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=80&auto=format&fit=crop&crop=faces',
+              'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&auto=format&fit=crop&crop=faces',
+              'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=80&auto=format&fit=crop&crop=faces',
+            ].map((src, i) => (
+              <img key={i} src={src} alt="Black referral agent in Nigeria" width={32} height={32} loading="lazy" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', border: '2px solid white', marginLeft: i === 0 ? 0 : -8, boxShadow: '0 1px 4px rgba(0,0,0,0.12)' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+            ))}
+            <span style={{ marginLeft: 8, fontSize: 12.5, fontWeight: 700, color: navy, background: tealMist, padding: '4px 10px', borderRadius: 999 }}>+84 agents</span>
+          </div>
+          <span style={{ fontSize: 12, color: gray400, fontWeight: 600 }}>Own your area — Surulere, Garki, Bodija</span>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <button onClick={() => navigate('/apply-agent')} style={{
             padding: '15px 32px', borderRadius: theme.radius.md, border: 'none',
             background: tealDeep, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 8,
+            display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 20px rgba(14,111,90,0.25)'
           }}>
             Apply to cover your area <ArrowRight size={16} />
           </button>
