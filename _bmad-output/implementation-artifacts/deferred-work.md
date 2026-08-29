@@ -34,3 +34,30 @@
 - source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
   summary: Add component-level test harness (@testing-library/react) and cover POS.jsx printReceipt branching plus Recent-sales reprint mapping.
   evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx; verification-gap review showed no test observes the WebUSB-first decision matrix, duplicate-receipt guard, printing lock, or the sales-row to receipt-object reconstruction â€” repo has no component test harness.
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Add rate limiting and bot protection to public booking endpoint
+  evidence: Public POST /api/booking has no throttle per IP/phone; blind-hunter flagged as abuse vector — pre-existing, not in spec acceptance criteria, requires infra decision (e.g., Upstash, Turnstile).
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Implement TTL/expiry for unpaid pending appointments and held balance cleanup
+  evidence: Unpaid pending appointments block slots indefinitely with no timeout; spec §10 defers cancellation policy to product — surfaced in blind-hunter review.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Implement wallet refund/reversal on appointment cancellation
+  evidence: free_slot_on_cancel frees service_availability but no wallet held?refund movement; spec §10 defers refund policy — blind-hunter flagged as missing reversal.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Enforce strict appointment status transition state machine at DB level
+  evidence: Direct PATCH via appointmentRepository.update allows any status transition; confirm RPC guards pending?confirmed but other paths do not — blind-hunter noted missing state machine, requires product-defined allowed transitions.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Add patient-facing booking confirmations and cancellation notifications
+  evidence: Business is notified on confirm, but patient receives no creation/cancel notification; spec §11 says integrate where available — requires product channel decision.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Add handler-level tests for booking service validation, fee snapshot, and concurrent 409
+  evidence: Verification-gap review found POST /api/booking service active/fee/availableTimes branches and double-book 409 have no executing test — requires api test harness not present in repo.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
+  summary: Add component tests for BookingCard availability filtering and review dialog
+  evidence: BusinessProfile BookingCard per-service availability filtering, past-time drop, and review dialog 409 refresh have no observable test — verification-gap noted no BusinessProfile.test file.

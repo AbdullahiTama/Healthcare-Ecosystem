@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -32,10 +32,25 @@ function BookingCard({ biz }) {
   const [done, setDone] = useState(false)
   const [services, setServices] = useState([])
   const [selectedService, setSelectedService] = useState('')
+  const [serviceAvailability, setServiceAvailability] = useState([])
+  const [availLoading, setAvailLoading] = useState(false)
+  const [showReview, setShowReview] = useState(false)
+  const [reviewData, setReviewData] = useState(null)
+  const reviewCancelRef = useRef(null)
+
+  // Dialog accessibility: ESC closes, focus management
+  useEffect(() => {
+    if (!showReview) return
+    const onKey = (e) => { if (e.key === 'Escape') setShowReview(false) }
+    window.addEventListener('keydown', onKey)
+    // Focus first focusable in dialog
+    setTimeout(() => reviewCancelRef.current?.focus(), 0)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showReview])
 
   useEffect(() => {
     let live = true
-    supabase.from('business_services').select('id,name,price_kobo,duration_minutes').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
+    supabase.from('business_services').select('id,name,price_kobo,duration_minutes,is_active').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
       if (live) {
         setServices(data || [])
         if (data && data.length === 1) setSelectedService(data[0].id)
@@ -43,6 +58,21 @@ function BookingCard({ biz }) {
     }).catch(() => {})
     return () => { live = false }
   }, [biz.id])
+
+  // Load service-specific availability when service and date are selected
+  useEffect(() => {
+    if (!selectedService || !date) { setServiceAvailability([]); setAvailLoading(false); return }
+    let live = true
+    setAvailLoading(true)
+    supabase.from('service_availability').select('id,date,time,start_time,end_time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data, error }) => {
+      if (live) {
+        if (!error && data) setServiceAvailability(data)
+        else setServiceAvailability([])
+        setAvailLoading(false)
+      }
+    }).catch(() => { if (live) { setServiceAvailability([]); setAvailLoading(false) } })
+    return () => { live = false }
+  }, [biz.id, selectedService, date])
 
   // Return from Paystack: the client was redirected here after paying for this
   // booking. Verify server-side (amount, appointment, Paystack status) and only
@@ -80,18 +110,16 @@ function BookingCard({ biz }) {
     return () => { cancelled = true }
   }, [searchParams])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA')
   const isToday = date === today
 
   const selectedSvc = services.find(s => s.id === selectedService) || null
   // Per-service price takes precedence; fallback to consultation fee for backward compat
+  // Price is snapshotted server-side — displayed price is for review only, not trusted for payment.
   const feeKobo = selectedSvc?.price_kobo != null ? selectedSvc.price_kobo : (apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee)
   const coinCost = feeKobo ? Math.ceil(feeKobo / 20000) : 0
 
-  // booking_slots may arrive as a real array OR as a raw comma-separated
-  // string (CareFind Hub's "Available time slots" field is a plain text
-  // input) — normalize to an array of trimmed, non-empty strings first,
-  // or .filter() below throws on a string and blanks the whole page.
+  // booking_slots may arrive as a real array OR as a raw comma-separated string
   const rawSlots = biz.booking_slots
   const slotList = Array.isArray(rawSlots)
     ? rawSlots
@@ -99,12 +127,20 @@ function BookingCard({ biz }) {
       ? rawSlots.split(',').map((s) => s.trim()).filter(Boolean)
       : []
 
-  // Drop already-passed times when booking for today
-  const slots = slotList.filter((t) => {
+  // Prefer service-specific availability when it exists for the selected service+date; otherwise fallback to daily slots
+  const hasServiceSpecificSlots = selectedService && serviceAvailability.length > 0
+  const effectiveSlotList = hasServiceSpecificSlots
+    ? serviceAvailability.filter(a => a.status !== 'booked' && !a.is_booked).map(a => a.time || a.start_time)
+    : slotList
+
+  // Drop already-passed times when booking for today and filter out booked slots; also guard malformed times
+  const slots = effectiveSlotList.filter((t) => {
+    if (!t || !/^\d{2}:\d{2}$/.test(String(t))) return false
+    const [hh, mm] = String(t).split(':').map(Number)
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return false
     if (!isToday) return true
     const now = new Date()
-    const [h, m] = String(t).split(':')
-    return Number(h) * 60 + Number(m) > now.getHours() * 60 + now.getMinutes()
+    return hh * 60 + mm > now.getHours() * 60 + now.getMinutes()
   })
 
   async function payWithCredits(appointmentId) {
@@ -118,11 +154,27 @@ function BookingCard({ biz }) {
     return res
   }
 
-  async function submitBooking(e) {
+  function openReview(e) {
     e.preventDefault()
+    if (!date || !slot || !name.trim() || !phone.trim()) { toast.show('Please fill date, time, name and phone.'); return }
+    if (services.length > 0 && !selectedService) { toast.show('Please select a service.'); return }
+    // Show review screen with snapshot of current selections (spec §5 review)
+    setReviewData({
+      businessName: biz.name,
+      serviceName: selectedSvc ? selectedSvc.name : (biz.booking_type === 'online' ? 'Online Consultation' : 'Consultation'),
+      date,
+      time: slot,
+      priceKobo: feeKobo,
+      priceLabel: feeKobo != null ? `₦${(feeKobo/100).toLocaleString()}` : 'Free',
+    })
+    setShowReview(true)
+  }
+
+  async function submitBooking() {
     if (!date || !slot || !name.trim() || !phone.trim()) return
     if (services.length > 0 && !selectedService) { toast.show('Please select a service.'); return }
     setBooking(true)
+    setShowReview(false)
     try {
       const res = await fetch('/api/booking', {
         method: 'POST',
@@ -141,7 +193,18 @@ function BookingCard({ biz }) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.show(data.error || 'Could not send booking request.')
+        const errMsg = data.error || 'Could not send booking request.'
+        toast.show(errMsg)
+        // If slot just taken (409), refresh availability
+        if (errMsg.toLowerCase().includes('taken') || errMsg.toLowerCase().includes('booked')) {
+          if (selectedService && date) {
+            supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+              if (data) setServiceAvailability(data)
+            })
+          }
+          setSlot('')
+        }
+        setBooking(false)
         return
       }
 
@@ -184,7 +247,7 @@ function BookingCard({ biz }) {
       {done ? (
         <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
       ) : (
-        <form onSubmit={submitBooking}>
+        <form onSubmit={openReview}>
           {services.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>Service</label>
@@ -267,14 +330,17 @@ function BookingCard({ biz }) {
           )}
 
           <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Preferred time
+            Preferred time {availLoading && <span style={{ fontWeight: 400, textTransform: 'none', color: theme.textLight }}>(loading...)</span>}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {slots.length === 0 && <span style={{ fontSize: 12.5, color: theme.textLight }}>No times left for this date — pick another day.</span>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }} role="group" aria-label="Available time slots">
+            {slots.length === 0 && !availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>{hasServiceSpecificSlots ? 'No available times for this service on this date — try another day.' : 'No times left for this date — pick another day.'}</span>}
+            {availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>Loading availability...</span>}
             {slots.map((t) => (
               <button
                 key={t}
                 type="button"
+                aria-pressed={slot === t}
+                aria-label={`Select time ${t}`}
                 onClick={() => setSlot(t)}
                 style={{
                   padding: '7px 12px', borderRadius: 10, border: '1px solid',
@@ -289,10 +355,30 @@ function BookingCard({ biz }) {
             ))}
           </div>
 
-          <TealBtn type="submit" disabled={booking}>
-            {booking ? 'Sending...' : 'Request Appointment'}
+          <TealBtn type="submit" disabled={booking || slots.length === 0}>
+            Review Booking
           </TealBtn>
         </form>
+      )}
+      {showReview && reviewData && (
+        <div role="dialog" aria-modal="true" aria-label="Review booking details" onClick={() => setShowReview(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800, color: theme.navy }}>Review your booking</h3>
+            <p style={{ margin: '0 0 14px 0', fontSize: 12.5, color: theme.textLight }}>Please confirm details before paying. Price is fixed at booking time and won't change later.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, padding: 12, borderRadius: 12, background: theme.bg, border: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Business</span><span style={{ fontWeight: 700, color: theme.navy }}>{reviewData.businessName}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Service</span><span style={{ fontWeight: 700, color: theme.navy }}>{reviewData.serviceName}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Date</span><span style={{ fontWeight: 700 }}>{reviewData.date}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Time</span><span style={{ fontWeight: 700 }}>{reviewData.time}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderTop: `1px solid ${theme.border}`, paddingTop: 8 }}><span style={{ color: theme.textMid, fontWeight: 700 }}>Price</span><span style={{ fontWeight: 800, color: theme.tealDeep }}>{reviewData.priceLabel}</span></div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button ref={reviewCancelRef} onClick={() => setShowReview(false)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff', color: theme.textMid, fontWeight: 700, cursor: 'pointer' }}>Back</button>
+              <button onClick={submitBooking} disabled={booking} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: theme.tealDeep, color: '#fff', fontWeight: 800, cursor: booking ? 'wait' : 'pointer', opacity: booking ? 0.7 : 1 }}>{booking ? 'Processing...' : (reviewData.priceKobo > 0 ? 'Pay Now' : 'Confirm Booking')}</button>
+            </div>
+            <p style={{ margin: '10px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>{reviewData.priceKobo > 0 ? 'You will be redirected to secure payment. Your slot is held only after verified payment.' : 'Free booking — no payment needed.'}</p>
+          </div>
+        </div>
       )}
     </Card>
   )

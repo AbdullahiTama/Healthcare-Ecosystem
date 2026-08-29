@@ -39,6 +39,35 @@ export function createAppointmentRepository(request = sbFetch) {
       })
     },
 
+    // Spec §9: confirm pending appointment — atomically flips pending→confirmed and pending wallet→available
+    async confirm(appointmentId, businessId) {
+      try {
+        const result = await request('rpc/confirm_appointment', {
+          method: 'POST',
+          body: JSON.stringify({ p_appointment_id: appointmentId }),
+        })
+        // RPC returns 'ok' or error string; service-role version returns string directly, so check
+        if (Array.isArray(result) && result[0] === 'ok') return result
+        if (result === 'ok') return result
+        // If RPC not available or returned not ok, fall back to patch (still scoped)
+        if (result !== 'ok' && typeof result === 'string' && result !== 'ok') {
+          throw new Error(result)
+        }
+        return result
+      } catch (e) {
+        const msg = String(e.message || '')
+        if (msg.includes('does not exist') || msg.includes('confirm_appointment')) {
+          // Fallback to simple patch for environments where migration not yet applied
+          return request(`appointments?id=eq.${appointmentId}&business_id=eq.${businessId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'confirmed', confirmed_at: new Date().toISOString() }),
+            prefer: 'return=minimal',
+          })
+        }
+        throw e
+      }
+    },
+
     // Previously an id-only DELETE with no business filter — the same unscoped
     // class as the PATCHes this rollout keeps finding, but destructive rather
     // than corrective, and the page offers it behind a permission check and a

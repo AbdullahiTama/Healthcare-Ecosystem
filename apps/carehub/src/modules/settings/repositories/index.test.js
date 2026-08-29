@@ -167,8 +167,103 @@ describe('settingsRepository', () => {
       })
     })
 
+  describe('services', () => {
+    function serviceSeeded() {
+      const client = createInMemoryClient({
+        business_services: [
+          { id: 'svc1', business_id: A, name: 'Consultation', price_kobo: 50000, is_active: true, duration_minutes: 30 },
+          { id: 'svc2', business_id: A, name: 'Old Service', price_kobo: 20000, is_active: false, duration_minutes: 15 },
+          { id: 'svc9', business_id: B, name: 'Other tenant svc', price_kobo: 30000, is_active: true },
+        ],
+        service_availability: [
+          { id: 'av1', business_id: A, service_id: 'svc1', date: '2026-12-01', time: '09:00', is_booked: false, status: 'available' },
+          { id: 'av2', business_id: A, service_id: 'svc1', date: '2026-12-01', time: '10:00', is_booked: true, status: 'booked', appointment_id: 'apt1' },
+        ],
+      })
+      return { client, repo: createSettingsRepository(client) }
+    }
+
+    it('getServices returns only calling tenant', async () => {
+      const { repo } = serviceSeeded()
+      const rows = await repo.getServices(A)
+      expect(rows.map(r => r.id).sort()).toEqual(['svc1', 'svc2'])
+    })
+
+    it('getActiveServices filters to active only', async () => {
+      const { repo } = serviceSeeded()
+      const rows = await repo.getActiveServices(A)
+      expect(rows.map(r => r.id)).toEqual(['svc1'])
+    })
+
+    it('createService validates name required', async () => {
+      const { repo } = serviceSeeded()
+      await expect(repo.createService(A, { name: '', price_kobo: 10000 })).rejects.toThrow('Service name is required')
+      await expect(repo.createService(A, { name: '   ', price_kobo: 10000 })).rejects.toThrow('Service name is required')
+    })
+
+    it('createService validates price non-negative', async () => {
+      const { repo } = serviceSeeded()
+      await expect(repo.createService(A, { name: 'Test', price_kobo: -100 })).rejects.toThrow('Price must be')
+    })
+
+    it('createService validates duration positive', async () => {
+      const { repo } = serviceSeeded()
+      await expect(repo.createService(A, { name: 'Test', duration_minutes: 0 })).rejects.toThrow('Duration')
+    })
+
+    it('createService stamps business_id', async () => {
+      const { calls, repo } = recording()
+      await repo.createService(A, { name: 'New', price_kobo: 10000 })
+      expect(calls[0].body).toEqual(expect.objectContaining({ name: 'New', business_id: A }))
+    })
+
+    it('deleteService soft-deactivates (PATCH is_active false, not DELETE)', async () => {
+      const { calls, repo } = recording()
+      await repo.deleteService('svc1', A)
+      expect(calls[0].method).toBe('PATCH')
+      expect(calls[0].body).toEqual({ is_active: false })
+      expect(calls[0].path).toContain('business_services')
+    })
+
+    it('saveAvailability rejects past dates', async () => {
+      const { repo } = serviceSeeded()
+      const past = new Date()
+      past.setDate(past.getDate() - 1)
+      const pastStr = past.toISOString().split('T')[0]
+      await expect(repo.saveAvailability(A, [{ service_id: 'svc1', date: pastStr, time: '09:00' }])).rejects.toThrow('past')
+    })
+
+    it('saveAvailability rejects end before start', async () => {
+      const { repo } = serviceSeeded()
+      const future = '2026-12-10'
+      await expect(repo.saveAvailability(A, [{ service_id: 'svc1', date: future, start_time: '10:00', end_time: '09:00', time: '10:00' }])).rejects.toThrow('End time must be after start time')
+    })
+
+    it('saveAvailability rejects duplicate in payload', async () => {
+      const { repo } = serviceSeeded()
+      const future = '2026-12-10'
+      await expect(repo.saveAvailability(A, [
+        { service_id: 'svc1', date: future, time: '09:00' },
+        { service_id: 'svc1', date: future, time: '09:00' },
+      ])).rejects.toThrow('Duplicate')
+    })
+
+    it('getAvailableSlots filters to available not booked and date >= today', async () => {
+      const { repo } = serviceSeeded()
+      const rows = await repo.getAvailableSlots(A, 'svc1')
+      // av1 is available, av2 is booked; only av1 should return (if date >= today)
+      // 2026-12-01 is future relative to today in test, so av1 passes
+      expect(rows.map(r => r.id)).toEqual(['av1'])
+    })
+
+    it('deleteAvailability prevents deleting booked slot', async () => {
+      const { repo } = serviceSeeded()
+      await expect(repo.deleteAvailability('av2', A)).rejects.toThrow('Cannot delete a booked slot')
+    })
+  })
+
   it('exports a default settingsRepository instance', () => {
-    for (const m of ['get', 'save', 'saveBusinessProfile', 'saveBookingConfig']) {
+    for (const m of ['get', 'save', 'saveBusinessProfile', 'saveBookingConfig', 'getServices', 'getActiveServices', 'createService', 'updateService', 'deleteService', 'getAvailability', 'getAvailableSlots', 'saveAvailability', 'deleteAvailability']) {
       expect(typeof settingsRepository[m]).toBe('function')
     }
   })

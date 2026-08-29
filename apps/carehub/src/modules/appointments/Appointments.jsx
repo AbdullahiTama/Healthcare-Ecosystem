@@ -108,14 +108,32 @@ export default function Appointments({ brand, role, perms }) {
   async function updateStatus(id, status) {
     try {
       const appt = appointments.find(a => a.id === id)
-      await appointmentRepository.update(id, brand.id, { status })
-      // Surface the acknowledgement to the business owner's notification feed
-      // so it appears alongside booking/payment alerts. Never blocks the action.
+      if (!appt) { showToast('Appointment not found.', { type: 'error' }); return }
+      // Spec §9: confirm must be atomic — appointment + wallet pending→available together via RPC
+      if (status === 'confirmed' && appt.status === 'pending') {
+        const res = await appointmentRepository.confirm(id, brand.id)
+        const errMsg = typeof res === 'string' ? res : null
+        if (errMsg && errMsg !== 'ok') {
+          if (errMsg === 'not_pending') showToast('Only pending appointments can be confirmed.', { type: 'warning' })
+          else if (errMsg === 'forbidden') showToast('You do not own this appointment.', { type: 'error' })
+          else showToast('Could not confirm appointment. Please try again.', { type: 'error' })
+          return
+        }
+        // Notify patient and refresh wallet
+        notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        // Refresh wallet balances (held→available moved)
+        sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
+          if (Array.isArray(w) && w[0]) setWallet(w[0])
+        }).catch(() => {})
+        load(); showToast('Appointment confirmed — revenue moved to available balance.', { type: 'success' })
+        return
+      }
+      await appointmentRepository.update(id, brand.id, { status, ...(status === 'confirmed' ? { confirmed_at: new Date().toISOString() } : {}), ...(status === 'cancelled' ? { cancelled_at: new Date().toISOString() } : {}), ...(status === 'completed' ? { completed_at: new Date().toISOString() } : {}) })
       if (appt && status === 'confirmed') {
         notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
       }
       load(); showToast('Status updated!', { type: 'success' })
-    } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not update status. Please try again.', { type: 'error' }) }
   }
 
   function askDelete(appt) { setDeleteTarget(appt) }

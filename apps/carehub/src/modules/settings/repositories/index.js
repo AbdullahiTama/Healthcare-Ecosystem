@@ -103,13 +103,28 @@ export function createSettingsRepository(request = sbFetch) {
       try {
         return await request(`business_services?business_id=eq.${businessId}&order=name.asc&select=*`)
       } catch (e) {
-        // Table not yet migrated — return empty so UI shows empty state, not error
         if (String(e.message).includes('business_services')) return []
         throw e
       }
     },
 
+    async getActiveServices(businessId) {
+      try {
+        return await request(`business_services?business_id=eq.${businessId}&is_active=eq.true&order=name.asc&select=*`)
+      } catch (e) {
+        if (String(e.message).includes('business_services')) return []
+        throw e
+      }
+    },
+
+    _validateService(service) {
+      if (!service.name || !String(service.name).trim()) throw new Error('Service name is required')
+      if (service.price_kobo != null && (typeof service.price_kobo !== 'number' || service.price_kobo < 0)) throw new Error('Price must be a non-negative integer in kobo')
+      if (service.duration_minutes != null && (typeof service.duration_minutes !== 'number' || service.duration_minutes <= 0)) throw new Error('Duration must be a positive number of minutes')
+    },
+
     async createService(businessId, service) {
+      this._validateService(service)
       return request('business_services', {
         method: 'POST',
         body: JSON.stringify({ ...service, business_id: businessId }),
@@ -117,6 +132,9 @@ export function createSettingsRepository(request = sbFetch) {
     },
 
     async updateService(serviceId, businessId, updates) {
+      if (updates.name !== undefined && (!updates.name || !String(updates.name).trim())) throw new Error('Service name is required')
+      if (updates.price_kobo !== undefined && updates.price_kobo != null && updates.price_kobo < 0) throw new Error('Price must be non-negative')
+      if (updates.duration_minutes !== undefined && updates.duration_minutes != null && updates.duration_minutes <= 0) throw new Error('Duration must be positive')
       return request(`business_services?id=eq.${serviceId}&business_id=eq.${businessId}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
@@ -124,7 +142,16 @@ export function createSettingsRepository(request = sbFetch) {
       })
     },
 
+    // Soft-delete: deactivate instead of hard delete to preserve historical appointments per spec §3.2
     async deleteService(serviceId, businessId) {
+      return request(`business_services?id=eq.${serviceId}&business_id=eq.${businessId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: false }),
+        prefer: 'return=minimal',
+      })
+    },
+
+    async hardDeleteService(serviceId, businessId) {
       return request(`business_services?id=eq.${serviceId}&business_id=eq.${businessId}`, {
         method: 'DELETE',
         prefer: 'return=minimal',
@@ -142,17 +169,70 @@ export function createSettingsRepository(request = sbFetch) {
       }
     },
 
+    async getAvailableSlots(businessId, serviceId) {
+      try {
+        const today = new Date().toLocaleDateString('en-CA')
+        const svcFilter = serviceId ? `&service_id=eq.${serviceId}` : ''
+        return await request(`service_availability?business_id=eq.${businessId}${svcFilter}&status=eq.available&is_booked=eq.false&date=gte.${today}&order=date.asc,time.asc&select=*`)
+      } catch (e) {
+        if (String(e.message).includes('service_availability')) return []
+        throw e
+      }
+    },
+
     async saveAvailability(businessId, rows) {
-      // rows: [{service_id, date, time}]
       if (!rows || rows.length === 0) return
+      const today = new Date().toLocaleDateString('en-CA')
+      for (const r of rows) {
+        if (!r.date || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || isNaN(Date.parse(r.date))) throw new Error('Invalid date format (YYYY-MM-DD required)')
+        if (r.date < today) throw new Error('Cannot create slots in the past')
+        if (!r.time && !r.start_time) throw new Error('Time is required')
+        if (r.start_time && r.end_time && r.start_time >= r.end_time) throw new Error('End time must be after start time')
+        const t = r.time || r.start_time
+        if (t) {
+          if (!/^\d{2}:\d{2}$/.test(t)) throw new Error('Time must be HH:MM')
+          const [hh, mm] = t.split(':').map(Number)
+          if (hh < 0 || hh > 23 || mm < 0 || mm > 59) throw new Error('Time must be valid HH:MM (00:00-23:59)')
+        }
+        if (r.end_time && !/^\d{2}:\d{2}$/.test(r.end_time)) throw new Error('End time must be HH:MM')
+        if (r.end_time) {
+          const [eh, em] = r.end_time.split(':').map(Number)
+          if (eh < 0 || eh > 23 || em < 0 || em > 59) throw new Error('End time must be valid HH:MM (00:00-23:59)')
+        }
+      }
+      // Check for duplicates in payload itself
+      const seen = new Set()
+      for (const r of rows) {
+        const key = `${r.service_id || 'general'}|${r.date}|${r.time || r.start_time}`
+        if (seen.has(key)) throw new Error('Duplicate slot in request')
+        seen.add(key)
+      }
       return request('service_availability', {
         method: 'POST',
-        body: JSON.stringify(rows.map(r => ({ business_id: businessId, service_id: r.service_id || null, date: r.date, time: r.time }))),
+        body: JSON.stringify(rows.map(r => ({
+          business_id: businessId,
+          service_id: r.service_id || null,
+          date: r.date,
+          time: r.time || r.start_time,
+          start_time: r.start_time || r.time || null,
+          end_time: r.end_time || null,
+          status: 'available',
+          is_booked: false,
+        }))),
         prefer: 'return=minimal',
       })
     },
 
     async deleteAvailability(id, businessId) {
+      // Prevent deleting booked slots
+      try {
+        const rows = await request(`service_availability?id=eq.${id}&business_id=eq.${businessId}&select=is_booked,status,appointment_id`)
+        const row = rows && rows[0]
+        if (row && (row.is_booked || row.status === 'booked' || row.appointment_id)) throw new Error('Cannot delete a booked slot')
+      } catch (e) {
+        if (e.message.includes('Cannot delete a booked slot')) throw e
+        // If check fails due to missing table, fall through to delete attempt
+      }
       return request(`service_availability?id=eq.${id}&business_id=eq.${businessId}`, {
         method: 'DELETE',
         prefer: 'return=minimal',
