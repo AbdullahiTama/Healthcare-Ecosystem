@@ -1,6 +1,6 @@
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './styles/global.css'
 import { AuthProvider } from './providers/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -35,6 +35,8 @@ import PlaylistView from './modules/playlists/PlaylistView.jsx'
 import LiveDashboard from './modules/live-streaming/LiveDashboard.jsx'
 import ForBusiness from './modules/marketing/ForBusiness.jsx'
 import About from './modules/marketing/About.jsx'
+import Shop from './modules/shop/Shop.jsx'
+import ProductDetail from './modules/shop/ProductDetail.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
@@ -55,6 +57,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/about" element={<About />} />
             <Route path="/feed" element={<Feed />} />
             <Route path="/search" element={<Search />} />
+            <Route path="/shop" element={<Navigate to="/search?tab=shop" replace />} />
+            <Route path="/shop/:productId" element={<ProductDetail />} />
             <Route path="/business/:id" element={<BusinessProfile />} />
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />

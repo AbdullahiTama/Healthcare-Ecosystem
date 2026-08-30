@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import Shop from '../shop/Shop'
 import { useAuth } from '../../providers/AuthContext'
 import {
   BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
@@ -49,8 +50,9 @@ const distanceMeters = (p, u) => {
   return d == null ? Infinity : d
 }
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const [tab, setTab] = useState('products')
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'products')
   const [stateFilter, setStateFilter] = useState('')
   const [saleTypeFilter, setSaleTypeFilter] = useState('')
   const [nearMe, setNearMe] = useState(false)
@@ -87,6 +89,23 @@ const distanceMeters = (p, u) => {
 
   useEffect(() => { loadFeatured() }, [])
   useEffect(() => { runSearch() }, [tab, stateFilter, saleTypeFilter, specialtyFilter, nearMe])
+
+  // Keep URL in sync with tab (deep linkable Shop)
+  useEffect(() => {
+    const cur = searchParams.get('tab')
+    if (cur !== tab) {
+      const next = new URLSearchParams(searchParams)
+      if (tab === 'products') next.delete('tab')
+      else next.set('tab', tab)
+      setSearchParams(next, { replace: true })
+    }
+  }, [tab])
+
+  // Handle initial ?tab=shop deep link
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    if (t && ['products','businesses','professionals','shop'].includes(t) && t !== tab) setTab(t)
+  }, [])
 
   async function loadFeatured() {
     const { data } = await supabase
@@ -148,6 +167,11 @@ const distanceMeters = (p, u) => {
 
   async function runSearch(e) {
     if (e) e.preventDefault()
+    if (tab === 'shop') {
+      setLoading(false)
+      setProducts([]); setBusinesses([]); setProfessionals([])
+      return
+    }
     setLoading(true)
     const q = query.trim()
     let resultCount = 0
@@ -226,6 +250,7 @@ const distanceMeters = (p, u) => {
     { key: 'products', label: 'Products', Icon: PillIcon },
     { key: 'businesses', label: 'Health Facilities', Icon: Building2 },
     { key: 'professionals', label: 'Professionals', Icon: Stethoscope },
+    { key: 'shop', label: 'Shop', Icon: ShoppingBag },
   ]
 
   const bodyContent = (
@@ -384,6 +409,8 @@ const distanceMeters = (p, u) => {
         {!loading && tab === 'professionals' && professionals.length === 0 && (
           <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another specialty or state.</div></>} />
         )}
+
+        {!loading && tab === 'shop' && <Shop segment={saleTypeFilter} query={query} />}
 
         {/* Laptop+: multi-column result grid — RESPONSIVENESS.md calls this out
             explicitly as a desktop-appropriate expansion once there's width for
