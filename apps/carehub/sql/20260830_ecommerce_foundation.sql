@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Shop Foundation — Vendor onboarding and product activation
 --
--- Status: NOT YET APPLIED — run via Supabase SQL editor / psql.
+-- Status: APPLIED — 2026-08-30
 --
 -- Part of Combined Ecommerce Spec A2-A4, A19: onboarding application,
 -- inventory-linked ecommerce_products, ordered multi-image set.
