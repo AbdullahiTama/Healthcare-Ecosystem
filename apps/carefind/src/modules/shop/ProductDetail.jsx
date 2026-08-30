@@ -4,15 +4,18 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag } from 'luci
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
+import { useCart } from './CartProvider'
 
 const shopRepository = createShopRepository()
 
 export default function ProductDetail() {
   const { productId } = useParams()
+  const { addItem } = useCart()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [current, setCurrent] = useState(0)
+  const [addedToCart, setAddedToCart] = useState(false)
   const touchStartX = useRef(null)
 
   useEffect(() => { load() }, [productId])
@@ -45,6 +48,22 @@ export default function ProductDetail() {
     if (diff > 50) prev()
     else if (diff < -50) next()
     touchStartX.current = null
+  }
+
+  const handleAddToCart = () => {
+    if (!product || !p) return
+    
+    addItem({
+      ecommerce_product_id: product.id,
+      product_name: p.name,
+      unit_price_kobo: priceKobo,
+      quantity: 1,
+      image_url: images[0]?.url || p.image_url || null,
+      vendor_id: product.business_id
+    })
+    
+    setAddedToCart(true)
+    setTimeout(() => setAddedToCart(false), 2000)
   }
 
   return (
@@ -99,10 +118,29 @@ export default function ProductDetail() {
         <div style={{ fontSize: 13, color: theme.textMid, lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 12 }}>{product.description || p.description || 'No description available.'}</div>
         {product.category && <div style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}><b>Category:</b> {product.category}</div>}
         {p.stock != null && <div style={{ fontSize: 12, color: theme.textLight, marginBottom: 12 }}><b>Availability:</b> {p.stock > 0 ? `${p.stock} in stock` : 'Out of stock'}</div>}
-        <button disabled style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: theme.gray200, color: theme.textLight, fontWeight: 700, cursor: 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <ShoppingBag size={16} /> Add to Cart — Coming in checkout
+        <button 
+          onClick={handleAddToCart}
+          disabled={!p.stock || p.stock <= 0}
+          style={{ 
+            width: '100%', 
+            padding: '12px', 
+            borderRadius: 12, 
+            border: 'none', 
+            background: addedToCart ? theme.success : (p.stock > 0 ? theme.tealDeep : theme.gray200), 
+            color: addedToCart ? '#fff' : (p.stock > 0 ? '#fff' : theme.textLight), 
+            fontWeight: 700, 
+            cursor: p.stock > 0 ? 'pointer' : 'not-allowed', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 8,
+            transition: 'background 0.2s'
+          }}
+        >
+          <ShoppingBag size={16} />
+          {addedToCart ? 'Added to Cart!' : (p.stock > 0 ? 'Add to Cart' : 'Out of Stock')}
         </button>
-        <div style={{ fontSize: 11, color: theme.textLight, textAlign: 'center', marginTop: 8 }}>Cart, checkout and delivery pricing (Goal 3) will enable purchase.</div>
+        {p.stock > 0 && <div style={{ fontSize: 11, color: theme.textLight, textAlign: 'center', marginTop: 8 }}>Click to add to cart, then proceed to checkout</div>}
       </Card>
     </div>
   )

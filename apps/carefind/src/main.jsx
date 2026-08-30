@@ -37,6 +37,11 @@ import ForBusiness from './modules/marketing/ForBusiness.jsx'
 import About from './modules/marketing/About.jsx'
 import Shop from './modules/shop/Shop.jsx'
 import ProductDetail from './modules/shop/ProductDetail.jsx'
+import Cart from './modules/shop/Cart.jsx'
+import Checkout from './modules/shop/Checkout.jsx'
+import OrderDetail from './modules/shop/OrderDetail.jsx'
+import OrderList from './modules/shop/OrderList.jsx'
+import { CartProvider } from './modules/shop/CartProvider.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
@@ -49,9 +54,10 @@ const Loading = () => (
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
-      <BrowserRouter>
-        <ErrorBoundary>
-          <Routes>
+      <CartProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <Routes>
             {/* Public — no login required */}
             <Route path="/" element={<ForBusiness />} />
             <Route path="/about" element={<About />} />
@@ -93,9 +99,16 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
+
+            {/* Shop Cart & Checkout - requires auth */}
+            <Route path="/cart" element={<RequireAuth><Cart /></RequireAuth>} />
+            <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
+            <Route path="/orders" element={<RequireAuth><OrderList /></RequireAuth>} />
+            <Route path="/orders/:orderId" element={<RequireAuth><OrderDetail /></RequireAuth>} />
           </Routes>
         </ErrorBoundary>
       </BrowserRouter>
-    </AuthProvider>
-  </React.StrictMode>,
+    </CartProvider>
+  </AuthProvider>
+</React.StrictMode>,
 )

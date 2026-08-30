@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ShoppingBag, Package, Star } from 'lucide-react'
+import { ShoppingBag, Package, Star, ShoppingCart } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Empty, Pill } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
+import { useCart } from './CartProvider'
 
 const shopRepository = createShopRepository()
 
 export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '' }) {
+  const { count } = useCart()
   const [segment, setSegment] = useState(initialSegment)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +50,48 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     </div>
   )
 
-  if (products.length === 0) return (
-    <Empty icon={<ShoppingBag size={40} color={theme.gray300} />} message="No products in Shop yet" action="Browse MedMarket" onAction={() => window.location.href = '/search'} />
-  )
-
   return (
-    <div>
+    <div style={{ padding: 16 }}>
+      {/* Cart link */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+        <Link 
+          to="/cart" 
+          style={{ 
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 16px',
+            borderRadius: 8,
+            background: theme.tealDeep,
+            color: '#fff',
+            textDecoration: 'none',
+            fontWeight: 600
+          }}
+        >
+          <ShoppingCart size={20} />
+          Cart
+          {count > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: -8,
+              right: -8,
+              background: theme.danger,
+              color: '#fff',
+              borderRadius: '50%',
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 700
+            }}>
+              {count}
+            </span>
+          )}
+        </Link>
+      </div>
       {/* Segment filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }} role="group" aria-label="Segment filter">
         {[
