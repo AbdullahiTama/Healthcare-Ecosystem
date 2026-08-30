@@ -9,7 +9,7 @@ export function createShopRepository(client = supabase) {
       // Fetch Active ecommerce_products with joined product and business check
       const { data, error } = await client
         .from('ecommerce_products')
-        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at, products(id,name,generic_name,price,stock,cat,category,price_unit,sale_type,emoji,image_url)')
+        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url)')
         .eq('status', 'Active')
         .order('active_at', { ascending: false })
         .limit(limit)
@@ -30,7 +30,7 @@ export function createShopRepository(client = supabase) {
       if (segment && segment !== 'all') {
         const seg = String(segment).toLowerCase()
         rows = rows.filter(r => {
-          const cat = String(r.category || r.products?.category || r.products?.cat || '').toLowerCase()
+          const cat = String(r.category || r.products?.category || '').toLowerCase()
           const saleType = String(r.products?.sale_type || '').toLowerCase()
           if (seg === 'retail') return cat.includes('medicine') || saleType === 'retail' || !cat
           if (seg === 'wholesale') return saleType === 'wholesale' || cat.includes('wholesale')
@@ -52,7 +52,7 @@ export function createShopRepository(client = supabase) {
       // productId is ecommerce_products.id
       const { data, error } = await client
         .from('ecommerce_products')
-        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at, products(id,name,generic_name,price,stock,cat,category,price_unit,sale_type,emoji,image_url,description)')
+        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
         .eq('id', productId)
         .eq('status', 'Active')
         .maybeSingle()
