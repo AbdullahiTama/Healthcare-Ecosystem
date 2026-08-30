@@ -61,3 +61,14 @@
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Add component tests for BookingCard availability filtering and review dialog
   evidence: BusinessProfile BookingCard per-service availability filtering, past-time drop, and review dialog 409 refresh have no observable test — verification-gap noted no BusinessProfile.test file.
+- source_spec: none
+  summary: Shop Goal 2 — Shop browse grid + product gallery (MedMarket 4th tab Shop, 2-per-row catalog + featured row, multi-photo swipe gallery)
+  evidence: Split from Shop spec per SCOPE STANDARD — independently shippable browse without checkout; deferred to keep Goal 1 (onboarding+activation) as single 900-1600 token spec.
+
+- source_spec: none
+  summary: Shop Goal 3 — Cart, Checkout, Orders + inventory sync (cart, stock re-check, order creation with price snapshot, vendor notification, order management)
+  evidence: Split from Shop spec per SCOPE STANDARD — requires Goal 1 tables (ecommerce_products) but shippable after; deferred.
+
+- source_spec: none
+  summary: Shop Goal 4 — Pickup-station pricing engine (commission 10/5/2.5, fulfilment MAX, delivery FREE =3km else ?600/3km, Maps distance)
+  evidence: Split from Shop spec per SCOPE STANDARD — pure engine testable before checkout wiring; deferred per user choice Pure engine first, but after Goal 1.
