@@ -35,7 +35,7 @@ import Settings from '../../modules/settings/Settings'
 import CareFind from '../../modules/carefind/CareFind'
 import Locations from '../../modules/locations/Locations'
 import MasterCatalog from '../../modules/master-catalog/MasterCatalog'
-// import Ecommerce
+import Ecommerce from '../../modules/ecommerce/Ecommerce'
 import Warehouses from '../../modules/warehouses/Warehouses'
 import Territories from '../../modules/territories/Territories'
 import Messages from '../../modules/messages/Messages'
@@ -213,7 +213,8 @@ export default function BusinessDashboard() {
             <Route path='carefind' element={guard('carefind', <><TopBar title='CareFind Profile' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><CareFind {...pageProps} /></div></>)} />
             <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
             <Route path='mastercatalog' element={guard('mastercatalog', <><TopBar title='Master Catalog' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MasterCatalog {...pageProps} /></div></>)} />
-                        <Route path='warehouses' element={bareGuard('warehouses', <Warehouses {...pageProps} />)} />
+            <Route path='ecommerce' element={guard('ecommerce', <><TopBar title='E-commerce' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
+            <Route path='warehouses' element={bareGuard('warehouses', <Warehouses {...pageProps} />)} />
             <Route path='territories' element={bareGuard('territories', <Territories {...pageProps} />)} />
             <Route path='messages' element={bareGuard('messages', <Messages {...pageProps} />)} />
             <Route path='stock' element={bareGuard('stock', <Stock {...pageProps} />)} />
