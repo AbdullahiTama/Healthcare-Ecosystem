@@ -102,6 +102,9 @@ export default function AdminPanel() {
   const [promoImage, setPromoImage] = useState(null)
   const [savingPromo, setSavingPromo] = useState(false)
   const [searchLogs, setSearchLogs] = useState([])
+  const [ecomApps, setEcomApps] = useState([])
+  const [ecomProductsAdmin, setEcomProductsAdmin] = useState([])
+  const [shopOrdersAdmin, setShopOrdersAdmin] = useState([])
   const [liveTitle, setLiveTitle] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [trailerFile, setTrailerFile] = useState(null)
@@ -235,7 +238,33 @@ export default function AdminPanel() {
     setLoading(false)
   }
 
-  useEffect(() => { if (adminUser) { loadStories(); loadNews(); loadPromotions(); loadSearchLogs(); loadActiveShows() } }, [adminUser])
+  useEffect(() => { if (adminUser) { loadStories(); loadNews(); loadPromotions(); loadSearchLogs(); loadActiveShows(); loadShopAdmin() } }, [adminUser])
+
+  async function loadShopAdmin() {
+    try {
+      const token = localStorage.getItem('admin_token')
+      const [appsRes, prodsRes, ordersRes] = await Promise.all([
+        callAdminAuth('list_ecommerce_applications', { token }).catch(()=>({ data: [] })),
+        callAdminAuth('list_ecommerce_products_admin', { token }).catch(()=>({ data: [] })),
+        callAdminAuth('list_shop_orders_admin', { token }).catch(()=>({ data: [] })),
+      ])
+      setEcomApps(appsRes.data || [])
+      setEcomProductsAdmin(prodsRes.data || [])
+      setShopOrdersAdmin(ordersRes.data || [])
+    } catch { /* ignore */ }
+  }
+  async function updateEcomApp(id, status) {
+    try {
+      await callAdminAuth('update_ecommerce_application', { token: localStorage.getItem('admin_token'), id, status })
+      showToast(`Application ${status}`, { type: 'success' }); loadShopAdmin()
+    } catch (e) { showToast(e.message, { type: 'error' }) }
+  }
+  async function moderateProduct(id, patch) {
+    try {
+      await callAdminAuth('moderate_ecommerce_product', { token: localStorage.getItem('admin_token'), id, ...patch })
+      showToast('Product updated', { type: 'success' }); loadShopAdmin()
+    } catch (e) { showToast(e.message, { type: 'error' }) }
+  }
 
   async function loadActiveShows() {
     const { data } = await supabase
@@ -826,6 +855,7 @@ export default function AdminPanel() {
     { key: 'searches', label: `🔎 Searches (${searchLogs.filter(s => !s.found).length})` },
     { key: 'golive', label: `📡 Go Live (${activeShows.length})` },
     { key: 'notifications', label: `🔔 All Alerts (${notifCount})` },
+    { key: 'shop', label: `🛒 Shop (${ecomApps.filter(a=>a.status==='Submitted'||a.status==='Under Review').length})` },
   ]
 
   const btnStyle = (active) => ({
@@ -2010,6 +2040,60 @@ export default function AdminPanel() {
                   {creatingShow ? 'Scheduling…' : '📅 Schedule Show'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'shop' && (
+          <div>
+            <div style={{ ...card, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20` }}>
+              <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>🛒 Shop / E-commerce (A18)</p>
+              <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Approve vendor applications, moderate products, monitor orders and delivery/fulfilment exceptions.</p>
+            </div>
+            <div style={{ ...card }}>
+              <p style={{ margin: '0 0 8px 0', fontWeight: 800, fontSize: 12, color: theme.navy }}>Seller Applications ({ecomApps.length})</p>
+              {ecomApps.length===0 ? <p style={{ color: theme.textLight, fontSize:12 }}>No applications yet.</p> : ecomApps.map(a=>(
+                <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:`1px solid ${theme.border}` }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{a.businesses?.name || a.business_id.slice(0,8)} · {a.businesses?.business_type||''} · {a.businesses?.city||''}</div>
+                    <div style={{ fontSize:11, color:theme.textLight }}>{a.seller_info?.contactName||''} {a.seller_info?.contactPhone||''} · {new Date(a.created_at).toLocaleDateString()}</div>
+                    <span style={{ fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:10, background: a.status==='Approved'?theme.tealMist:a.status==='Rejected'?theme.dangerBg:theme.amberBg, color: a.status==='Approved'?theme.tealDeep:a.status==='Rejected'?theme.alert:theme.amberText }}>{a.status}</span>
+                  </div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {a.status!=='Approved' && <button onClick={()=>updateEcomApp(a.id,'Approved')} style={{ padding:'6px 10px', background:theme.tealGradient, color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:11 }}>Approve</button>}
+                    {a.status!=='Rejected' && <button onClick={()=>updateEcomApp(a.id,'Rejected')} style={{ padding:'6px 10px', background:theme.dangerBg, color:theme.alert, border:'none', borderRadius:8, fontWeight:700, fontSize:11 }}>Reject</button>}
+                    {a.status!=='Suspended' && <button onClick={()=>updateEcomApp(a.id,'Suspended')} style={{ padding:'6px 10px', background:theme.bg, color:theme.textMid, border:`1px solid ${theme.border}`, borderRadius:8, fontWeight:700, fontSize:11 }}>Suspend</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ ...card }}>
+              <p style={{ margin:'0 0 8px 0', fontWeight:800, fontSize:12, color:theme.navy }}>Products for moderation ({ecomProductsAdmin.length})</p>
+              {ecomProductsAdmin.length===0 ? <p style={{ color:theme.textLight, fontSize:12 }}>No products yet.</p> : ecomProductsAdmin.slice(0,20).map(p=>(
+                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:`1px solid ${theme.border}` }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{p.products?.name} · <span style={{ fontWeight:400, color:theme.textLight }}>{p.category}</span> {p.is_restricted && <span style={{ fontSize:9, background:theme.dangerBg, color:theme.alert, padding:'1px 6px', borderRadius:10 }}>RESTRICTED</span>}</div>
+                    <div style={{ fontSize:11, color:theme.textLight }}>{p.businesses?.name} · {p.status} · stock {p.products?.stock ?? '—'} {p.prescription_required ? '· Rx' : ''}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {p.is_restricted ? <button onClick={()=>moderateProduct(p.id,{ is_restricted:false })} style={{ padding:'6px 8px', background:theme.tealMist, color:theme.tealDeep, border:'none', borderRadius:8, fontSize:11, fontWeight:700 }}>Unrestrict</button> : <button onClick={()=>moderateProduct(p.id,{ is_restricted:true })} style={{ padding:'6px 8px', background:theme.dangerBg, color:theme.alert, border:'none', borderRadius:8, fontSize:11, fontWeight:700 }}>Restrict</button>}
+                    {p.status==='Active' && <button onClick={()=>moderateProduct(p.id,{ status:'Paused' })} style={{ padding:'6px 8px', background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:8, fontSize:11 }}>Pause</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ ...card }}>
+              <p style={{ margin:'0 0 8px 0', fontWeight:800, fontSize:12, color:theme.navy }}>Recent Shop Orders ({shopOrdersAdmin.length})</p>
+              {shopOrdersAdmin.length===0 ? <p style={{ color:theme.textLight, fontSize:12 }}>No shop orders yet.</p> : shopOrdersAdmin.map(o=>(
+                <div key={o.id} style={{ padding:'8px 0', borderBottom:`1px solid ${theme.border}` }}>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}>
+                    <span style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{o.order_ref} · {o.status}</span>
+                    <span style={{ fontSize:11, color:theme.textMid }}>₦{(o.total_kobo/100).toLocaleString()}</span>
+                  </div>
+                  <div style={{ fontSize:11, color:theme.textLight }}>{o.customer_name||o.customer_id.slice(0,8)} → {o.vendor_business_id.slice(0,8)} · {o.delivery_preference} {o.is_approved_city===false?'(quote pending)':''} · {new Date(o.created_at).toLocaleDateString()}</div>
+                  <div style={{ fontSize:10, color:theme.textLight }}>{(o.shop_order_items||[]).map(i=>`${i.product_name}×${i.quantity}`).join(', ')}</div>
+                </div>
+              ))}
             </div>
           </div>
         )}

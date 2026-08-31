@@ -39,7 +39,8 @@ export function createAppointmentRepository(request = sbFetch) {
       })
     },
 
-    // Spec §9: confirm pending appointment — atomically flips pending→confirmed and pending wallet→available
+    // Spec §9: confirm pending appointment — flips pending→confirmed.
+    // Funds are released from held→available only on completion.
     async confirm(appointmentId, businessId) {
       try {
         const result = await request('rpc/confirm_appointment', {
@@ -61,6 +62,32 @@ export function createAppointmentRepository(request = sbFetch) {
           return request(`appointments?id=eq.${appointmentId}&business_id=eq.${businessId}`, {
             method: 'PATCH',
             body: JSON.stringify({ status: 'confirmed', confirmed_at: new Date().toISOString() }),
+            prefer: 'return=minimal',
+          })
+        }
+        throw e
+      }
+    },
+
+    // Complete appointment and release held funds to available balance.
+    async complete(appointmentId, businessId) {
+      try {
+        const result = await request('rpc/complete_appointment_and_release', {
+          method: 'POST',
+          body: JSON.stringify({ p_appointment_id: appointmentId }),
+        })
+        if (Array.isArray(result) && result[0] === 'ok') return result
+        if (result === 'ok') return result
+        if (result !== 'ok' && typeof result === 'string' && result !== 'ok') {
+          throw new Error(result)
+        }
+        return result
+      } catch (e) {
+        const msg = String(e.message || '')
+        if (msg.includes('does not exist') || msg.includes('complete_appointment_and_release')) {
+          return request(`appointments?id=eq.${appointmentId}&business_id=eq.${businessId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'completed', completed_at: new Date().toISOString() }),
             prefer: 'return=minimal',
           })
         }

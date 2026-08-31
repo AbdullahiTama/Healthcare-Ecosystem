@@ -209,6 +209,26 @@ export async function deleteProductsBulk(ids) {
   return sbFetch('products?id=in.(' + ids.join(',') + ')', { method: 'DELETE', prefer: 'return=minimal' })
 }
 
+
+
+// SERVICES
+export async function getBusinessServices(businessId) {
+  return sbFetch('business_services?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*')
+}
+
+export async function addService(data) { return sbFetch('business_services', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
+
+export async function updateService(id, data) { return sbFetch('business_services?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
+export async function deleteService(id) { return sbFetch('business_services?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+export async function getServiceAvailability(serviceId, businessId) {
+  return sbFetch('service_availability?service_id=eq.' + serviceId + '&business_id=eq.' + businessId + '&order=date.asc,time.asc&select=*')
+}
+export async function addServiceAvailability(data) { return sbFetch('service_availability', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
+export async function updateServiceAvailability(id, data) { return sbFetch('service_availability?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+export async function deleteServiceAvailability(id) { return sbFetch('service_availability?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
 // SALES
 // NOTE: `updateSale(id, data)` used to live here — a PATCH on the sales table
 // filtered by id alone. POS was its only caller and now goes through

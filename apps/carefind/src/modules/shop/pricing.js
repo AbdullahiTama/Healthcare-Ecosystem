@@ -43,9 +43,10 @@ export function calculateCommission(segment, orderTotalKobo) {
  * Calculate customer fulfilment fee (covers pick, pack, deliver to pickup station)
  * @param {string} segment - 'retail' | 'wholesale' | 'distributor'
  * @param {number} orderTotalKobo - order total in kobo (integer)
+ * @param {object|number} opts - { cartonCount?: number } or cartonCount for distributor
  * @returns {number} fulfilment fee in kobo
  */
-export function calculateFulfilmentFee(segment, orderTotalKobo) {
+export function calculateFulfilmentFee(segment, orderTotalKobo, opts = {}) {
   if (!SEGMENTS.includes(segment)) {
     throw new Error(`Invalid segment: ${segment}. Must be one of: ${SEGMENTS.join(', ')}`)
   }
@@ -54,8 +55,14 @@ export function calculateFulfilmentFee(segment, orderTotalKobo) {
   }
   
   const { min, rate } = FULFILMENT_RATES[segment]
+  let effectiveMin = min
+  // Distributor: MAX(₦350/carton, 1%) — min scales with carton count (Spec B24.2)
+  if (segment === 'distributor') {
+    const cartonCount = typeof opts === 'number' ? opts : (opts.cartonCount ?? 1)
+    if (cartonCount > 1) effectiveMin = min * cartonCount
+  }
   const percentage = Math.round(orderTotalKobo * rate)
-  return Math.max(min, percentage)
+  return Math.max(effectiveMin, percentage)
 }
 
 /**
@@ -93,11 +100,12 @@ export function calculateDeliveryFee(distanceKm, segment) {
  * @param {number} params.orderTotalKobo - order total in kobo
  * @param {number} params.distanceKm - distance in kilometers (for delivery)
  * @param {boolean} params.includeDelivery - whether to include delivery fee (default: false)
+ * @param {number} params.cartonCount - distributor carton count (default 1)
  * @returns {Object} { commission, fulfilment, delivery, total } all in kobo
  */
-export function calculateTotalFees({ segment, orderTotalKobo, distanceKm = 0, includeDelivery = false }) {
+export function calculateTotalFees({ segment, orderTotalKobo, distanceKm = 0, includeDelivery = false, cartonCount = 1 }) {
   const commission = calculateCommission(segment, orderTotalKobo)
-  const fulfilment = calculateFulfilmentFee(segment, orderTotalKobo)
+  const fulfilment = calculateFulfilmentFee(segment, orderTotalKobo, { cartonCount })
   const delivery = includeDelivery ? calculateDeliveryFee(distanceKm, segment) : 0
   
   return {

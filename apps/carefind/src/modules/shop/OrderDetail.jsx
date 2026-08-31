@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { orderRepository } from './orderRepository'
+import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
@@ -10,12 +11,17 @@ import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, S
 
 const STATUS_CONFIG = {
   pending_payment: { label: 'Pending Payment', icon: Clock, color: theme.warning },
+  delivery_quote_pending: { label: 'Quote Pending', icon: Truck, color: theme.warning },
   paid: { label: 'Paid', icon: CheckCircle, color: theme.success },
   accepted: { label: 'Accepted', icon: CheckCircle, color: theme.success },
   processing: { label: 'Processing', icon: Package, color: theme.tealDeep },
   ready_for_pickup: { label: 'Ready for Pickup', icon: MapPin, color: theme.tealDeep },
+  in_transit: { label: 'In Transit', icon: Truck, color: theme.tealDeep },
   delivered: { label: 'Delivered', icon: CheckCircle, color: theme.success },
-  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger }
+  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger },
+  refund_requested: { label: 'Refund Requested', icon: Clock, color: theme.warning },
+  refunded: { label: 'Refunded', icon: Clock, color: theme.textMid },
+  disputed: { label: 'Disputed', icon: Clock, color: theme.danger }
 }
 
 export default function OrderDetail() {
@@ -29,6 +35,7 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [station, setStation] = useState(null)
 
   useEffect(() => {
     loadOrder()
@@ -39,14 +46,16 @@ export default function OrderDetail() {
     setError('')
     try {
       const data = await orderRepository.getById(orderId)
-      if (!data) {
-        throw new Error('Order not found')
-      }
+      if (!data) throw new Error('Order not found')
       setOrder(data)
-      
-      // Load messages
       const msgs = await orderRepository.getMessages(orderId)
       setMessages(msgs)
+      if (data.pickup_station_id) {
+        try {
+          const { data: st } = await supabase.from('shop_pickup_stations').select('id,name,address,city,state').eq('id', data.pickup_station_id).maybeSingle()
+          setStation(st || null)
+        } catch {}
+      }
     } catch (err) {
       console.error('Failed to load order:', err)
       setError(err.message || 'Failed to load order')
@@ -59,13 +68,32 @@ export default function OrderDetail() {
     setUpdating(true)
     try {
       await orderRepository.updateStatus(orderId, newStatus, user.id)
-      await loadOrder() // Reload to get updated status and history
+      await loadOrder()
     } catch (err) {
       console.error('Failed to update status:', err)
       setError(err.message || 'Failed to update status')
     } finally {
       setUpdating(false)
     }
+  }
+  async function handleVerifyPayment() {
+    const ref = prompt('Enter Paystack reference (simulated — in prod this comes from Paystack callback):')
+    if (!ref || !ref.trim()) return
+    setUpdating(true)
+    try {
+      await orderRepository.verifyPayment(orderId, ref.trim())
+      await loadOrder()
+    } catch (err) {
+      setError(err.message || 'Payment verification failed')
+    } finally { setUpdating(false) }
+  }
+  async function handleCancel() {
+    if (!confirm('Cancel this order? Stock will be restored.')) return
+    setUpdating(true)
+    try {
+      await orderRepository.cancel(orderId, user.id)
+      await loadOrder()
+    } catch (err) { setError(err.message || 'Cancel failed') } finally { setUpdating(false) }
   }
 
   async function handleSendMessage(e) {
@@ -104,7 +132,7 @@ export default function OrderDetail() {
 
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending_payment
   const StatusIcon = statusConfig.icon
-  const isVendor = order.vendor_id === user.id // TODO: Check if user is vendor owner
+  const isVendor = order.vendor_business_id && user?.email ? false : order.vendor_id === user.id // vendor view lives in CareHub; CareFind consumers are customers
   const isCustomer = order.customer_id === user.id
 
   return (
@@ -134,10 +162,10 @@ export default function OrderDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.navy, marginBottom: 8 }}>
-                Order #{order.id.slice(0, 8).toUpperCase()}
+                Order #{order.order_ref || order.id.slice(0, 8).toUpperCase()}
               </h1>
               <p style={{ fontSize: 14, color: theme.textMid }}>
-                {new Date(order.created_at).toLocaleString()}
+                {new Date(order.created_at).toLocaleString()} {order.payment_reference && <span>· Ref {order.payment_reference}</span>}
               </p>
             </div>
             <div style={{
@@ -157,16 +185,24 @@ export default function OrderDetail() {
           </div>
 
           {/* Delivery Info */}
-          <div style={{ display: 'flex', gap: 24, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}`, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
               <div style={{ fontSize: 12, color: theme.textMid, marginBottom: 4 }}>Delivery Address</div>
-              <div style={{ fontSize: 14, color: theme.navy }}>{order.delivery_address}</div>
+              <div style={{ fontSize: 14, color: theme.navy }}>{order.delivery_address} {order.delivery_city ? `, ${order.delivery_city}` : ''} {order.delivery_state ? `, ${order.delivery_state}` : ''}</div>
+              {order.delivery_phone && <div style={{ fontSize: 12, color: theme.textMid }}>Phone: {order.delivery_phone}</div>}
+              {order.delivery_email && <div style={{ fontSize: 12, color: theme.textMid }}>Email: {order.delivery_email}</div>}
+              {order.customer_name && <div style={{ fontSize: 12, color: theme.textMid }}>Customer: {order.customer_name}</div>}
+              {order.delivery_instructions && <div style={{ fontSize: 12, color: theme.textMid, fontStyle:'italic' }}>Note: {order.delivery_instructions}</div>}
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ fontSize: 12, color: theme.textMid, marginBottom: 4 }}>Delivery Method</div>
               <div style={{ fontSize: 14, color: theme.navy }}>
                 {order.delivery_preference === 'pickup' ? 'Pickup from Station' : 'Home Delivery'}
               </div>
+              {station && <div style={{ fontSize: 12, color: theme.tealDeep, fontWeight:600 }}>{station.name} — {station.address}, {station.city}</div>}
+              {order.distance_km != null && <div style={{ fontSize: 12, color: theme.textMid }}>{order.distance_km} km {order.is_approved_city === false ? '(quote pending)' : ''}</div>}
+              {order.status === 'delivery_quote_pending' && <div style={{ fontSize: 12, color: theme.warning, fontWeight: 600 }}>Delivery quote pending — we will contact you within 24h</div>}
+              {order.paystack_reference && <div style={{ fontSize: 11, color: theme.textLight }}>Paystack: {order.paystack_reference}</div>}
             </div>
           </div>
         </Card>
@@ -204,17 +240,34 @@ export default function OrderDetail() {
               <span style={{ color: theme.textMid }}>Fulfilment Fee</span>
               <span>₦{(order.fulfilment_kobo / 100).toLocaleString()}</span>
             </div>
-            {order.delivery_kobo > 0 && (
+            {order.delivery_kobo > 0 ? (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
                 <span style={{ color: theme.textMid }}>Delivery Fee</span>
                 <span>₦{(order.delivery_kobo / 100).toLocaleString()}</span>
               </div>
-            )}
+            ) : order.status==='delivery_quote_pending' ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
+                <span style={{ color: theme.textMid }}>Delivery Fee</span>
+                <span style={{ color: theme.warning, fontWeight:600 }}>PENDING</span>
+              </div>
+            ) : null}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
               <span style={{ color: theme.navy }}>Total</span>
               <span style={{ color: theme.tealDeep }}>₦{(order.total_kobo / 100).toLocaleString()}</span>
             </div>
+            <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
           </div>
+          {order.status==='pending_payment' && isCustomer && (
+            <div style={{ display:'flex', gap:8, marginTop:12 }}>
+              <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1 }}>Verify Paystack Payment (simulate)</Button>
+              <Button variant="secondary" onClick={handleCancel} disabled={updating}>Cancel Order</Button>
+            </div>
+          )}
+          {order.status==='delivery_quote_pending' && isCustomer && (
+            <div style={{ padding:10, borderRadius:8, background:theme.amberBg || '#FFF7ED', border:`1px solid ${theme.warning}30`, color:theme.warning, fontSize:12, marginTop:12 }}>
+              Outside standard zone — our team will quote delivery within 24h via WhatsApp/Email. You have paid for products + fulfilment. Delivery will be added before dispatch.
+            </div>
+          )}
         </Card>
 
         {/* Status Timeline */}
@@ -223,8 +276,9 @@ export default function OrderDetail() {
             Order Timeline
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {order.order_status_history.map((history, idx) => {
-              const config = STATUS_CONFIG[history.status] || STATUS_CONFIG.pending_payment
+            {(order.shop_order_status_history || order.order_status_history || []).map((history, idx) => {
+              const statusKey = history.to_status || history.status
+              const config = STATUS_CONFIG[statusKey] || STATUS_CONFIG.pending_payment
               const Icon = config.icon
               return (
                 <div key={history.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -243,10 +297,10 @@ export default function OrderDetail() {
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: theme.navy }}>
-                      {config.label}
+                      {config.label} {history.from_status ? <span style={{ fontWeight:400, color: theme.textMid }}>({history.from_status} → {history.to_status})</span> : null}
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMid }}>
-                      {new Date(history.changed_at).toLocaleString()}
+                      {new Date(history.created_at || history.changed_at).toLocaleString()} {history.note ? `· ${history.note}` : ''}
                     </div>
                   </div>
                 </div>

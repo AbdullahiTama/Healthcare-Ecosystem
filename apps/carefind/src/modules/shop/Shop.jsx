@@ -125,11 +125,12 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
               const p = row.products
               const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
               const priceLabel = priceKobo != null ? `₦${(priceKobo/100).toLocaleString()}` : 'Ask for price'
+              const thumb = row.primary_image_url || p.image_url || null
               return (
                 <Link key={row.id} to={`/shop/${row.id}`} style={{ textDecoration: 'none', flex: '0 0 160px' }} role="listitem">
                   <Card style={{ padding: 10, height: 180, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ height: 80, borderRadius: 8, background: p.image_url ? `url(${p.image_url}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}>
-                      {!p.image_url && <Package size={24} />}
+                    <div style={{ height: 80, borderRadius: 8, background: thumb ? `url(${thumb}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}>
+                      {!thumb && <Package size={24} />}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 700, color: theme.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
                     <div style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>{priceLabel}</div>
@@ -148,11 +149,12 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
           const p = row.products
           const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
           const priceLabel = priceKobo != null ? `₦${(priceKobo/100).toLocaleString()}` : 'Ask for price'
+          const thumb = row.primary_image_url || p.image_url || null
           return (
             <Link key={row.id} to={`/shop/${row.id}`} style={{ textDecoration: 'none' }} role="listitem">
               <Card style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6, height: '100%' }}>
-                <div style={{ height: 120, borderRadius: 8, background: p.image_url ? `url(${p.image_url}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}>
-                  {!p.image_url && <Package size={28} />}
+                <div style={{ height: 120, borderRadius: 8, background: thumb ? `url(${thumb}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}>
+                  {!thumb && <Package size={28} />}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: theme.navy, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 32 }}>{p.name}</div>
                 {p.generic_name && <div style={{ fontSize: 11, color: theme.textLight, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.generic_name}</div>}

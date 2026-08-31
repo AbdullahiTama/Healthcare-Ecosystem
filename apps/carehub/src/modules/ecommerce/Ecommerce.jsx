@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Filter, Upload, Trash2 } from 'lucide-react'
 import { createEcommerceRepository } from './repositories'
+import { createShopVendorRepository } from './shopVendorRepository'
 import { sbFetch, sbUpload } from '../../services/supabase'
 import { theme } from '../../styles/theme'
 import { Card, SectionHead, DataTable, Empty, Pill, Inp, Textarea, Sel, TealBtn, GhostBtn, Loading, useToast, Toast } from '../../components/ui'
@@ -8,6 +9,7 @@ import { Card, SectionHead, DataTable, Empty, Pill, Inp, Textarea, Sel, TealBtn,
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, success, warning, bg } = theme
 
 const ecommerceRepository = createEcommerceRepository({ request: sbFetch, upload: sbUpload })
+const shopVendorRepository = createShopVendorRepository({ request: sbFetch })
 
 export default function Ecommerce({ brand, role }) {
   const isOwner = role === 'Owner'
@@ -24,14 +26,39 @@ export default function Ecommerce({ brand, role }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selected, setSelected] = useState(null)
-  const [ecomForm, setEcomForm] = useState({ description: '', category: '', ecommerce_price: '' })
+  const [ecomForm, setEcomForm] = useState({ description: '', category: '', ecommerce_price: '', prescription_required: false, warnings: '', restrictions: '', is_restricted: false })
   const [images, setImages] = useState([])
   const [savingProduct, setSavingProduct] = useState(false)
   const [activating, setActivating] = useState(false)
+  const [orders, setOrders] = useState([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersError, setOrdersError] = useState('')
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderStatus, setOrderStatus] = useState('all')
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [orderDetail, setOrderDetail] = useState(null)
+  const [orderMsg, setOrderMsg] = useState('')
 
   const { msg, type, show: showToast } = useToast()
 
-  useEffect(() => { loadApp(); loadInventory() }, [brand?.id])
+  useEffect(() => { loadApp(); loadInventory(); loadOrders() }, [brand?.id])
+  useEffect(() => { if (app?.status === 'Approved') loadOrders() }, [app?.status])
+  async function loadOrders() {
+    if (!brand?.id) return
+    setOrdersLoading(true); setOrdersError('')
+    try {
+      const rows = await shopVendorRepository.listOrders(brand.id, { status: orderStatus !== 'all' ? orderStatus : undefined, search: orderSearch || undefined })
+      setOrders(rows || [])
+    } catch (e) { setOrdersError('Could not load orders'); setOrders([]) }
+    setOrdersLoading(false)
+  }
+  async function openOrder(o) {
+    setSelectedOrder(o)
+    try {
+      const d = await shopVendorRepository.getOrder(o.id)
+      setOrderDetail(d)
+    } catch { setOrderDetail(null) }
+  }
 
   async function loadApp() {
     setAppLoading(true); setAppError('')
@@ -71,6 +98,10 @@ export default function Ecommerce({ brand, role }) {
       description: e?.description || '',
       category: e?.category || '',
       ecommerce_price: e?.ecommerce_price_kobo != null ? String(e.ecommerce_price_kobo / 100) : (row.product.price != null ? String(row.product.price) : ''),
+      prescription_required: !!e?.prescription_required,
+      warnings: e?.warnings || '',
+      restrictions: e?.restrictions || '',
+      is_restricted: !!e?.is_restricted,
     })
     if (e?.id) {
       ecommerceRepository.getImages(e.id).then(setImages).catch(() => setImages([]))
@@ -81,6 +112,7 @@ export default function Ecommerce({ brand, role }) {
     if (!selected) return
     if (!ecomForm.description || ecomForm.description.trim().length < 10) { showToast('Description must be at least 10 characters', { type: 'warning' }); return }
     if (!ecomForm.category) { showToast('Category is required', { type: 'warning' }); return }
+    if (ecomForm.is_restricted) { showToast('Restricted products cannot be saved as publishable — clear restricted flag or contact admin', { type: 'warning' }); }
     setSavingProduct(true)
     try {
       const priceKobo = ecomForm.ecommerce_price ? Math.round(parseFloat(ecomForm.ecommerce_price) * 100) : null
@@ -89,6 +121,10 @@ export default function Ecommerce({ brand, role }) {
         description: ecomForm.description.trim(),
         category: ecomForm.category,
         ecommerce_price_kobo: priceKobo,
+        prescription_required: !!ecomForm.prescription_required,
+        warnings: ecomForm.warnings?.trim() || null,
+        restrictions: ecomForm.restrictions?.trim() || null,
+        is_restricted: !!ecomForm.is_restricted,
       })
       showToast('Product information saved', { type: 'success' })
       loadInventory()
@@ -127,6 +163,12 @@ export default function Ecommerce({ brand, role }) {
     try {
       await ecommerceRepository.deleteImage(id)
       setImages(prev => prev.filter(i => i.id !== id))
+      // Compact positions server-side to avoid UNIQUE gaps
+      if (selected?.ecommerce?.id) {
+        try { await ecommerceRepository.updateImagePositionAfterDelete(selected.ecommerce.id) } catch {}
+        const imgs = await ecommerceRepository.getImages(selected.ecommerce.id)
+        setImages(imgs || [])
+      }
       showToast('Image removed', { type: 'success' })
     } catch (e) { showToast('Could not delete image', { type: 'error' }) }
   }
@@ -176,6 +218,7 @@ export default function Ecommerce({ brand, role }) {
     if (s === 'Paused') return 'amber'
     if (s === 'Incomplete') return 'red'
     if (s === 'Out of Stock') return 'gray'
+    if (s === 'Restricted') return 'red'
     return 'gray'
   }
 
@@ -245,7 +288,7 @@ export default function Ecommerce({ brand, role }) {
             <Search size={14} color={gray400} />
             <input aria-label="Search products" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search products..." style={{ flex: 1, border: 'none', outline: 'none', padding: '8px 0', fontSize: 13 }} />
           </div>
-          <Sel value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, { value: 'Active', label: 'Active' }, { value: 'Not Activated', label: 'Not Activated' }, { value: 'Incomplete', label: 'Incomplete' }, { value: 'Paused', label: 'Paused' }, { value: 'Out of Stock', label: 'Out of Stock' }]} />
+          <Sel value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: 'All statuses' }, { value: 'Active', label: 'Active' }, { value: 'Not Activated', label: 'Not Activated' }, { value: 'Incomplete', label: 'Incomplete' }, { value: 'Paused', label: 'Paused' }, { value: 'Out of Stock', label: 'Out of Stock' }, { value: 'Restricted', label: 'Restricted' }]} />
           <button onClick={loadInventory} style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${border}`, background: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Refresh</button>
         </div>
         <DataTable
@@ -291,6 +334,105 @@ export default function Ecommerce({ brand, role }) {
         />
       </Card>
 
+      {/* Orders — vendor order inbox (A8/A9) */}
+      <Card style={{ padding: 20, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap:'wrap' }}>
+          <Package size={18} color={tealDeep} />
+          <div style={{ fontWeight: 800, color: navy }}>Orders</div>
+          <span style={{ fontSize: 11, color: gray400 }}>{orders.length} orders</span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems:'center' }}>
+            <div style={{ display: 'flex', alignItems:'center', gap: 6, border:`1px solid ${border}`, borderRadius: 8, padding: '0 10px', background:'#fff' }}>
+              <Search size={14} color={gray400} />
+              <input aria-label="Search orders" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') loadOrders() }} placeholder="Order ref, customer, product..." style={{ border:'none', outline:'none', padding:'6px 0', fontSize: 12, minWidth: 140 }} />
+            </div>
+            <Sel value={orderStatus} onChange={v=>{ setOrderStatus(v); setTimeout(loadOrders,0) }} options={[{value:'all',label:'All'},{value:'pending_payment',label:'Pending Payment'},{value:'delivery_quote_pending',label:'Quote Pending'},{value:'paid',label:'Paid'},{value:'accepted',label:'Accepted'},{value:'processing',label:'Processing'},{value:'ready_for_pickup',label:'Ready for Pickup'},{value:'in_transit',label:'In Transit'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
+            <button onClick={loadOrders} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${border}`, background:'#fff', cursor:'pointer', fontSize:11, fontWeight:700 }}>Search</button>
+          </div>
+        </div>
+        {ordersLoading ? <Loading text="Loading orders..." /> : ordersError ? (
+          <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={loadOrders} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
+        ) : orders.length === 0 ? (
+          <Empty icon={<ShoppingBag size={32} />} message={orderSearch||orderStatus!=='all' ? 'No orders match this filter' : 'No Shop orders yet — activate products and share your Shop.'} />
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
+            {orders.map(o=>(
+              <div key={o.id} onClick={()=>openOrder(o)} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:`1px solid ${border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>
+                <div>
+                  <div style={{ fontWeight:800, color:navy, fontSize:13 }}>{o.order_ref}</div>
+                  <div style={{ fontSize:11, color:gray500 }}>{o.customer_name || o.customer_id?.slice(0,8)} · {new Date(o.created_at).toLocaleDateString()} · {o.delivery_preference==='pickup'?'Pickup':'Home'} {o.is_approved_city===false && <span style={{ color:warning }}>(quote pending)</span>}</div>
+                  <div style={{ fontSize:11, color:gray500, marginTop:2 }}>{(o.shop_order_items||[]).slice(0,2).map(i=>`${i.product_name}×${i.quantity}`).join(', ')}{(o.shop_order_items||[]).length>2?'…':''}</div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <Pill label={o.status} type={o.status==='paid'||o.status==='delivered'?'green':o.status==='pending_payment'||o.status==='delivery_quote_pending'?'amber':o.status==='cancelled'?'red':'gray'} />
+                  <div style={{ fontWeight:800, color:tealDeep, fontSize:12, marginTop:4 }}>₦{(o.total_kobo/100).toLocaleString()}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Order detail drawer (vendor ↔ CareFind communication A9) */}
+      {selectedOrder && (
+        <div role="dialog" aria-modal="true" aria-label={`Order ${selectedOrder.order_ref}`} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:16, overflowY:'auto' }}>
+          <Card style={{ maxWidth: 640, width:'100%', maxHeight:'90vh', overflowY:'auto', padding:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div style={{ fontWeight:800, color:navy }}>{selectedOrder.order_ref} <span style={{ fontWeight:400, color:gray500, fontSize:11 }}>{selectedOrder.status}</span></div>
+              <button onClick={()=>{ setSelectedOrder(null); setOrderDetail(null) }} aria-label="Close" style={{ background:'none', border:`1px solid ${border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer' }}>×</button>
+            </div>
+            {orderDetail ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div style={{ fontSize:12, color:gray600 }}>
+                  <div><b>Customer:</b> {orderDetail.customer_name || orderDetail.customer_id} · {orderDetail.delivery_phone || ''} {orderDetail.delivery_email || ''}</div>
+                  <div><b>Address:</b> {orderDetail.delivery_address} {orderDetail.delivery_city?`, ${orderDetail.delivery_city}`:''} {orderDetail.delivery_state?`, ${orderDetail.delivery_state}`:''}</div>
+                  <div><b>Preference:</b> {orderDetail.delivery_preference} {orderDetail.distance_km!=null?`· ${orderDetail.distance_km}km`:''} {orderDetail.is_approved_city===false?'(quote pending)':''}</div>
+                  <div><b>Payment:</b> {orderDetail.payment_status} · Ref {orderDetail.payment_reference}</div>
+                </div>
+                <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
+                  <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Items (price snapshot)</div>
+                  {(orderDetail.items||[]).map(it=>(
+                    <div key={it.id} style={{ display:'flex', justifyContent:'space-between', fontSize:12, padding:'4px 0', borderBottom:`1px solid ${bg}` }}>
+                      <span>{it.product_name} ×{it.quantity}</span><span>₦{(it.unit_price_kobo/100).toLocaleString()} = ₦{(it.line_total_kobo/100).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginTop:8 }}><span>Subtotal</span><span>₦{(orderDetail.subtotal_kobo/100).toLocaleString()}</span></div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}><span>Fulfilment</span><span>₦{(orderDetail.fulfilment_kobo/100).toLocaleString()}</span></div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}><span>Delivery</span><span>{orderDetail.delivery_kobo===0 && orderDetail.is_approved_city===false ? 'PENDING' : `₦${(orderDetail.delivery_kobo/100).toLocaleString()}`}</span></div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:tealDeep, fontSize:13, borderTop:`1px solid ${border}`, paddingTop:6, marginTop:6 }}><span>Total</span><span>₦{(orderDetail.total_kobo/100).toLocaleString()}</span></div>
+                  <div style={{ fontSize:11, color:gray400, marginTop:4 }}>Commission ₦{(orderDetail.commission_kobo/100).toLocaleString()} deducted from vendor payout (Fulfilment + Delivery paid by customer)</div>
+                </div>
+                <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
+                  <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Status history (audit trail)</div>
+                  {(orderDetail.history||[]).map(h=>(
+                    <div key={h.id} style={{ fontSize:11, color:gray600, padding:'2px 0' }}>{new Date(h.created_at).toLocaleString()} — {h.from_status||'—'} → <b>{h.to_status}</b> {h.note?`· ${h.note}`:''}</div>
+                  ))}
+                  <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+                    {orderDetail.status==='paid' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'accepted','Accepted by vendor'); loadOrders(); const d=await shopVendorRepository.getOrder(orderDetail.id); setOrderDetail(d); setSelectedOrder(d) }} style={{ padding:'6px 10px', fontSize:11 }}>Accept</TealBtn>}
+                    {orderDetail.status==='accepted' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'processing'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Processing</TealBtn>}
+                    {orderDetail.status==='processing' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'ready_for_pickup'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Ready for Pickup</TealBtn>}
+                    {orderDetail.status==='ready_for_pickup' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'in_transit'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
+                    {orderDetail.status==='in_transit' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'delivered'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
+                    {orderDetail.is_approved_city===false && orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={async()=>{ const q=prompt('Enter delivery quote (₦)'); if(q==null) return; const kobo=Math.round(parseFloat(q)*100); await shopVendorRepository.updateStatus(orderDetail.id,'pending_payment',`Delivery quoted ₦${q}`); loadOrders(); }} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
+                  </div>
+                </div>
+                <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
+                  <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Order Communication (vendor ↔ CareFind)</div>
+                  <div style={{ maxHeight:160, overflowY:'auto', border:`1px solid ${border}`, borderRadius:8, padding:8, background:bg, display:'flex', flexDirection:'column', gap:6 }}>
+                    {(orderDetail.messages||[]).length===0 ? <div style={{ fontSize:11, color:gray400, textAlign:'center', padding:12 }}>No messages yet — instructions from CareFind will appear here</div> : orderDetail.messages.map(m=>(
+                      <div key={m.id} style={{ fontSize:11, background: m.sender_role==='vendor' ? tealMist : '#fff', border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px' }}><b style={{ color:navy }}>{m.sender_role}</b> · {new Date(m.created_at).toLocaleString()}<div style={{ color:gray600 }}>{m.message}</div></div>
+                    ))}
+                  </div>
+                  <div style={{ display:'flex', gap:6, marginTop:6 }}>
+                    <input value={orderMsg} onChange={e=>setOrderMsg(e.target.value)} placeholder="Reply with fulfilment info..." style={{ flex:1, border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }} />
+                    <TealBtn onClick={async()=>{ if(!orderMsg.trim()) return; await shopVendorRepository.sendMessage(orderDetail.id,orderMsg.trim()); setOrderMsg(''); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 12px', fontSize:11 }}>Send</TealBtn>
+                  </div>
+                </div>
+              </div>
+            ) : <Loading text="Loading order..." />}
+          </Card>
+        </div>
+      )}
+
       {/* Product setup modal */}
       {selected && (
         <div role="dialog" aria-modal="true" aria-label={`Setup ${selected.product.name}`} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16, overflowY: 'auto' }}>
@@ -303,6 +445,16 @@ export default function Ecommerce({ brand, role }) {
               <Textarea label="Description *" value={ecomForm.description} onChange={v => setEcomForm(p => ({ ...p, description: v }))} placeholder="Brief product description (min 10 chars)" rows={2} />
               <Sel label="Category *" value={ecomForm.category} onChange={v => setEcomForm(p => ({ ...p, category: v }))} options={[{ value: '', label: 'Select category' }, { value: 'medicine', label: 'Medicine' }, { value: 'device', label: 'Medical Device' }, { value: 'cosmetics', label: 'Cosmetics' }, { value: 'wellness', label: 'Wellness' }, { value: 'other', label: 'Other' }]} />
               <Inp label="E-commerce Price (₦)" type="number" value={ecomForm.ecommerce_price} onChange={v => setEcomForm(p => ({ ...p, ecommerce_price: v }))} placeholder="Leave blank to use inventory price" />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: navy }}>
+                <input type="checkbox" checked={ecomForm.prescription_required} onChange={e => setEcomForm(p => ({ ...p, prescription_required: e.target.checked }))} />
+                Prescription required
+              </label>
+              <Textarea label="Warnings / Usage Information" value={ecomForm.warnings} onChange={v => setEcomForm(p => ({ ...p, warnings: v }))} placeholder="Dosage guidance, contraindications, storage..." rows={2} />
+              <Textarea label="Restrictions" value={ecomForm.restrictions} onChange={v => setEcomForm(p => ({ ...p, restrictions: v }))} placeholder="Age limit, prescription note, legal restriction..." rows={2} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: danger }}>
+                <input type="checkbox" checked={ecomForm.is_restricted} onChange={e => setEcomForm(p => ({ ...p, is_restricted: e.target.checked }))} />
+                Restricted / Blocked from Shop (admin/compliance)
+              </label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <TealBtn onClick={handleSaveProduct} disabled={savingProduct} style={{ flex: 1, padding: 10 }}>{savingProduct ? 'Saving...' : 'Save Product Info'}</TealBtn>
               </div>

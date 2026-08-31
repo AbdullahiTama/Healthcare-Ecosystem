@@ -4,6 +4,7 @@ import {
   ShoppingCart, Package, Clipboard, Heart, BarChart2,
   Search, Users, WifiOff, MapPin, Check as CheckIcon,
   ArrowRight, Star, ChevronLeft, ChevronRight,
+  Clock, Banknote, Wallet, CheckCircle,
 } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -315,6 +316,125 @@ export default function Landing() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── Services ──────────────────────────────────────────── */}
+      <div style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Services, your way
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+              List what you offer, set your availability, and let clients book — all from one place.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { icon: Clipboard, title: 'Create & list services', desc: 'Add services with pricing, duration and descriptions. Edit anytime.' },
+              { icon: Clock, title: 'Set your availability', desc: 'Control which days and hours clients can book. No more double-bookings.' },
+              { icon: BarChart2, title: 'Track bookings & revenue', desc: 'See upcoming appointments, completed sessions and earnings at a glance.' },
+            ].map((item, i) => (
+              <div key={i} className="feature-card" style={{
+                background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`,
+                padding: 24, display: 'flex', flexDirection: 'column', gap: 14,
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              }}
+                onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = theme.elevation[3] } }}
+                onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}
+              >
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <item.icon size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: navy, marginBottom: 6 }}>{item.title}</div>
+                  <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.6 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Appointment Flow ───────────────────────────────────── */}
+      <div style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Book, pay, complete — all in one flow
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+              Your clients pick a service, choose a time, pay securely, and you confirm — done.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              { icon: Search, title: 'Select a service', desc: 'Clients browse your listed services and pick one.' },
+              { icon: Clock, title: 'Pick a date & time', desc: 'Available slots show automatically based on your schedule.' },
+              { icon: Banknote, title: 'Pay securely with card', desc: 'Payments are processed instantly via Paystack.' },
+              { icon: CheckCircle, title: 'Confirm & complete', desc: 'You confirm the booking. Funds are held until the session is done.' },
+              { icon: ArrowRight, title: 'Withdraw to your bank', desc: 'Earnings move to your wallet and out to your bank within 24 hours.' },
+            ].map((item, i) => (
+              <div key={i} className="step-card" style={{
+                background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`,
+                padding: isMobile ? 20 : 24, display: 'flex', alignItems: 'flex-start', gap: 16,
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              }}
+                onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateX(6px)'; e.currentTarget.style.boxShadow = theme.elevation[3] } }}
+                onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateX(0)'; e.currentTarget.style.boxShadow = 'none' } }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: theme.radius.full,
+                  background: tealMist, color: tealDeep,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 900, flexShrink: 0,
+                }}>{i + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: isMobile ? 15 : 16, color: navy, marginBottom: 4 }}>{item.title}</div>
+                  <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.6 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Payment & Payout ───────────────────────────────────── */}
+      <div style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Get paid fast, stay in control
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+              Payments are held safely, released when you confirm, and withdrawn on your terms.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { icon: Wallet, title: 'Funds held safely', desc: 'Client payments are secured in your business wallet until the appointment is complete.' },
+              { icon: CheckIcon, title: 'Released on completion', desc: 'Once you confirm the session, funds move to your available balance instantly.' },
+              { icon: Banknote, title: 'Withdraw to bank', desc: 'Request a payout anytime. Funds arrive in your bank account within 24 hours.' },
+            ].map((item, i) => (
+              <div key={i} className="feature-card" style={{
+                background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`,
+                padding: 24, display: 'flex', flexDirection: 'column', gap: 14,
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              }}
+                onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = theme.elevation[3] } }}
+                onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}
+              >
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <item.icon size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: navy, marginBottom: 6 }}>{item.title}</div>
+                  <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.6 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

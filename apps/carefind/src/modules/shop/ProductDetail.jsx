@@ -59,7 +59,10 @@ export default function ProductDetail() {
       unit_price_kobo: priceKobo,
       quantity: 1,
       image_url: images[0]?.url || p.image_url || null,
-      vendor_id: product.business_id
+      vendor_id: product.business_id,
+      vendor_business_id: product.business_id,
+      sale_type: p.sale_type || null,
+      prescription_required: !!product.prescription_required
     })
     
     setAddedToCart(true)
@@ -117,6 +120,9 @@ export default function ProductDetail() {
         {p.sale_type && <Pill label={p.sale_type} type="gray" style={{ marginBottom: 8 }} />}
         <div style={{ fontSize: 13, color: theme.textMid, lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 12 }}>{product.description || p.description || 'No description available.'}</div>
         {product.category && <div style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}><b>Category:</b> {product.category}</div>}
+        {product.prescription_required && <div style={{ fontSize: 12, color: theme.warning, fontWeight: 700, marginBottom: 6 }}>⚠️ Prescription required</div>}
+        {product.warnings && <div style={{ fontSize: 12, color: theme.textMid, marginBottom: 6, borderLeft: `3px solid ${theme.warning}`, paddingLeft: 8 }}><b>Warnings:</b> {product.warnings}</div>}
+        {product.restrictions && <div style={{ fontSize: 12, color: theme.danger, marginBottom: 6 }}><b>Restrictions:</b> {product.restrictions}</div>}
         {p.stock != null && <div style={{ fontSize: 12, color: theme.textLight, marginBottom: 12 }}><b>Availability:</b> {p.stock > 0 ? `${p.stock} in stock` : 'Out of stock'}</div>}
         <button 
           onClick={handleAddToCart}

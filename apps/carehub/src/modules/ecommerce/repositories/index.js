@@ -62,13 +62,13 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
           const e = byProduct.get(p.id)
           let status = 'Not Activated'
           if (e) {
-            // Map DB status to UI status, with Out of Stock override
-            if ((p.stock ?? 0) <= 0) status = 'Out of Stock'
+            if (e.is_restricted) status = 'Restricted'
+            else if ((p.stock ?? 0) <= 0) status = 'Out of Stock'
             else status = e.status
           } else if ((p.stock ?? 0) <= 0) {
             status = 'Out of Stock'
           }
-          return { product: p, ecommerce: e || null, status, isActive: e?.status === 'Active' }
+          return { product: p, ecommerce: e || null, status, isActive: e?.status === 'Active' && !(e.is_restricted) && (p.stock ?? 0) > 0 }
         })
       } catch (e) {
         if (String(e.message).includes('products')) return []
@@ -86,7 +86,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
       }
     },
 
-    async upsertEcommerceProduct(businessId, productId, { description, category, ecommerce_price_kobo, attributes }) {
+    async upsertEcommerceProduct(businessId, productId, { description, category, ecommerce_price_kobo, attributes, prescription_required, warnings, restrictions, is_restricted }) {
       if (ecommerce_price_kobo != null && ecommerce_price_kobo < 0) throw new Error('Price must be non-negative')
       const payload = {
         business_id: businessId,
@@ -95,6 +95,10 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
         category: category || null,
         ecommerce_price_kobo: ecommerce_price_kobo ?? null,
         attributes: attributes || null,
+        prescription_required: !!prescription_required,
+        warnings: warnings || null,
+        restrictions: restrictions || null,
+        is_restricted: !!is_restricted,
       }
       // Check if exists
       let existing = null
@@ -128,13 +132,16 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
 
     async addImage(ecommerceProductId, file, contentType) {
       if (!file) throw new Error('File is required')
-      // Validate mime/size before upload (5MB, image/*)
+      // Validate mime/size before upload (5MB, image/*, dimensions placeholder)
       const allowed = ['image/jpeg','image/png','image/webp','image/gif']
       if (contentType && !allowed.includes(contentType) && !String(contentType).startsWith('image/')) throw new Error('Unsupported image format')
+      if (file.size && file.size > 5 * 1024 * 1024) throw new Error('Image must be ≤ 5MB')
       // Determine next position
       const existing = await this.getImages(ecommerceProductId)
       const nextPos = (existing?.length || 0)
-      const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random()*100000)}.jpg`
+      const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'jpg').replace(/[^a-z0-9]/g,'') || 'jpg'
+      const safeExt = ['jpg','jpeg','png','webp','gif'].includes(ext) ? ext : 'jpg'
+      const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random()*100000)}.${safeExt}`
       const url = await up('ecommerce-images', path, file, contentType || 'image/jpeg', 'Image upload failed')
       return request('ecommerce_product_images', {
         method: 'POST',
@@ -167,7 +174,30 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
       })
     },
 
-    // Activation gate: must be Approved, complete (description+category+image), not restricted
+    async updateImagePositionAfterDelete(ecommerceProductId) {
+      // Compact positions to 0..n-1 after delete (prevents UNIQUE gaps)
+      const imgs = await this.getImages(ecommerceProductId)
+      for (let i = 0; i < imgs.length; i++) {
+        if (imgs[i].position !== i) {
+          await request(`ecommerce_product_images?id=eq.${imgs[i].id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ position: 1000 + i }),
+            prefer: 'return=minimal',
+          })
+        }
+      }
+      for (let i = 0; i < imgs.length; i++) {
+        if (imgs[i].position !== i) {
+          await request(`ecommerce_product_images?id=eq.${imgs[i].id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ position: i }),
+            prefer: 'return=minimal',
+          })
+        }
+      }
+    },
+
+    // Activation gate: must be Approved, complete (description+category+image), not restricted (A4.4 + A12)
     async activate(businessId, productId) {
       // Check application eligibility
       const app = await this.getApplication(businessId)
@@ -175,8 +205,12 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
       // Check completeness
       const ecom = await this.getEcommerceProduct(businessId, productId)
       if (!ecom) throw new Error('Complete product information before activation')
+      if (ecom.is_restricted) throw new Error('Product is restricted and cannot be activated')
       if (!ecom.description || String(ecom.description).trim().length < 10) throw new Error('Description is required (min 10 chars)')
       if (!ecom.category || !String(ecom.category).trim()) throw new Error('Category is required')
+      if (ecom.prescription_required && (!ecom.warnings || !String(ecom.warnings).trim())) {
+        // Non-blocking warning for prescription products without warnings, but allow activation — admin can enforce stricter later
+      }
       const images = await this.getImages(ecom.id)
       if (!images || images.length === 0) throw new Error('At least one product image is required')
       // All good — activate

@@ -10,12 +10,17 @@ import { Package, Clock, CheckCircle, Truck, MapPin, Filter } from 'lucide-react
 
 const STATUS_CONFIG = {
   pending_payment: { label: 'Pending Payment', icon: Clock, color: theme.warning },
+  delivery_quote_pending: { label: 'Quote Pending', icon: Truck, color: theme.warning },
   paid: { label: 'Paid', icon: CheckCircle, color: theme.success },
   accepted: { label: 'Accepted', icon: CheckCircle, color: theme.success },
   processing: { label: 'Processing', icon: Package, color: theme.tealDeep },
   ready_for_pickup: { label: 'Ready for Pickup', icon: MapPin, color: theme.tealDeep },
+  in_transit: { label: 'In Transit', icon: Truck, color: theme.tealDeep },
   delivered: { label: 'Delivered', icon: CheckCircle, color: theme.success },
-  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger }
+  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger },
+  refund_requested: { label: 'Refund Requested', icon: Clock, color: theme.warning },
+  refunded: { label: 'Refunded', icon: Clock, color: theme.textMid },
+  disputed: { label: 'Disputed', icon: Clock, color: theme.danger }
 }
 
 export default function OrderList() {
@@ -147,7 +152,7 @@ export default function OrderList() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 600, color: theme.navy, marginBottom: 4 }}>
-                      Order #{order.id.slice(0, 8).toUpperCase()}
+                      Order #{order.order_ref || order.id.slice(0, 8).toUpperCase()}
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMid }}>
                       {new Date(order.created_at).toLocaleString()}

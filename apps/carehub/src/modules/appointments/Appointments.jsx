@@ -109,7 +109,7 @@ export default function Appointments({ brand, role, perms }) {
     try {
       const appt = appointments.find(a => a.id === id)
       if (!appt) { showToast('Appointment not found.', { type: 'error' }); return }
-      // Spec §9: confirm must be atomic — appointment + wallet pending→available together via RPC
+      // Confirm: flip pending→confirmed. Funds released on completion.
       if (status === 'confirmed' && appt.status === 'pending') {
         const res = await appointmentRepository.confirm(id, brand.id)
         const errMsg = typeof res === 'string' ? res : null
@@ -121,17 +121,31 @@ export default function Appointments({ brand, role, perms }) {
         }
         // Notify patient and refresh wallet
         notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
-        // Refresh wallet balances (held→available moved)
+        // Refresh wallet balances
         sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
           if (Array.isArray(w) && w[0]) setWallet(w[0])
         }).catch(() => {})
-        load(); showToast('Appointment confirmed — revenue moved to available balance.', { type: 'success' })
+        load(); showToast('Appointment confirmed.', { type: 'success' })
         return
       }
-      await appointmentRepository.update(id, brand.id, { status, ...(status === 'confirmed' ? { confirmed_at: new Date().toISOString() } : {}), ...(status === 'cancelled' ? { cancelled_at: new Date().toISOString() } : {}), ...(status === 'completed' ? { completed_at: new Date().toISOString() } : {}) })
-      if (appt && status === 'confirmed') {
-        notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+      // Complete: release held funds to available balance via RPC
+      if (status === 'completed' && appt.status === 'confirmed') {
+        const res = await appointmentRepository.complete(id, brand.id)
+        const errMsg = typeof res === 'string' ? res : null
+        if (errMsg && errMsg !== 'ok') {
+          if (errMsg === 'not_found') showToast('Appointment not found.', { type: 'error' })
+          else if (errMsg === 'not_paid') showToast('Payment not confirmed yet.', { type: 'warning' })
+          else showToast('Could not complete appointment. Please try again.', { type: 'error' })
+          return
+        }
+        notify(brand.id, [{ }], 'booking_completed', `Appointment completed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
+          if (Array.isArray(w) && w[0]) setWallet(w[0])
+        }).catch(() => {})
+        load(); showToast('Appointment completed — funds released to available balance.', { type: 'success' })
+        return
       }
+      await appointmentRepository.update(id, brand.id, { status, confirmed_at: status === 'confirmed' ? new Date().toISOString() : undefined, cancelled_at: status === 'cancelled' ? new Date().toISOString() : undefined, completed_at: status === 'completed' ? new Date().toISOString() : undefined })
       load(); showToast('Status updated!', { type: 'success' })
     } catch (e) { showToast(e.message || 'Could not update status. Please try again.', { type: 'error' }) }
   }

@@ -1,148 +1,150 @@
-// Order repository - manages orders with atomic inventory decrement
-// Uses Supabase client for database operations
+// Order repository — shop_orders family with row-locked inventory decrement
+// Uses new create_shop_order RPC (idempotent on payment_reference, price-validated)
 
 import { supabase } from '../../config/supabaseClient'
 
 export function createOrderRepository(supabaseClient = supabase) {
-  // Create order with atomic inventory decrement
-  async function create({ customer_id, vendor_id, items, total_kobo, commission_kobo, fulfilment_kobo, delivery_kobo, delivery_address, delivery_preference, payment_reference }) {
-    const { data, error } = await supabaseClient.rpc('create_order_with_inventory_decrement', {
+  async function create({
+    customer_id,
+    vendor_business_id,
+    vendor_id, // alias
+    items, // [{ecommerce_product_id, quantity, unit_price_kobo}]
+    subtotal_kobo,
+    total_kobo,
+    commission_kobo,
+    fulfilment_kobo,
+    delivery_kobo,
+    delivery_address,
+    delivery_city,
+    delivery_state,
+    delivery_phone,
+    delivery_email,
+    delivery_instructions,
+    delivery_preference,
+    distance_km,
+    is_approved_city,
+    customer_name,
+    payment_reference,
+    pickup_station_id
+  }) {
+    const vendorBusinessId = vendor_business_id || vendor_id
+    const subtotal = subtotal_kobo ?? total_kobo ?? items.reduce((s, i) => s + i.unit_price_kobo * i.quantity, 0)
+    const total = total_kobo ?? (subtotal + (fulfilment_kobo||0) + (delivery_kobo||0))
+    const { data, error } = await supabaseClient.rpc('create_shop_order', {
       p_customer_id: customer_id,
-      p_vendor_id: vendor_id,
-      p_items: items,
-      p_total_kobo: total_kobo,
-      p_commission_kobo: commission_kobo,
-      p_fulfilment_kobo: fulfilment_kobo,
-      p_delivery_kobo: delivery_kobo,
+      p_vendor_business_id: vendorBusinessId,
+      p_items: items.map(i => ({ ecommerce_product_id: i.ecommerce_product_id, quantity: i.quantity, unit_price_kobo: i.unit_price_kobo })),
+      p_subtotal_kobo: subtotal,
+      p_commission_kobo: commission_kobo || 0,
+      p_fulfilment_kobo: fulfilment_kobo || 0,
+      p_delivery_kobo: delivery_kobo || 0,
+      p_total_kobo: total,
       p_delivery_address: delivery_address,
-      p_delivery_preference: delivery_preference,
-      p_payment_reference: payment_reference
+      p_delivery_city: delivery_city || null,
+      p_delivery_state: delivery_state || null,
+      p_delivery_phone: delivery_phone || null,
+      p_delivery_email: delivery_email || null,
+      p_delivery_instructions: delivery_instructions || null,
+      p_delivery_preference: delivery_preference || 'pickup',
+      p_distance_km: distance_km ?? null,
+      p_is_approved_city: is_approved_city ?? true,
+      p_customer_name: customer_name || null,
+      p_payment_reference: payment_reference,
+      p_pickup_station_id: pickup_station_id || null
     })
-
     if (error) {
-      if (error.message.includes('Insufficient stock')) {
-        throw new Error('INSUFFICIENT_STOCK')
-      }
+      if (error.message && error.message.includes('Insufficient stock')) throw new Error('INSUFFICIENT_STOCK')
+      if (error.message && error.message.includes('Price mismatch')) throw new Error('PRICE_CHANGED: ' + error.message)
       throw error
     }
-
-    return data // Returns order_id
+    return data
   }
 
-  // Get order by ID (with items and status history)
   async function getById(orderId) {
     const { data: order, error: orderError } = await supabaseClient
-      .from('orders')
-      .select(`
-        *,
-        order_items(*),
-        order_status_history(*)
-      `)
+      .from('shop_orders')
+      .select('*')
       .eq('id', orderId)
       .single()
-
     if (orderError) throw orderError
     if (!order) return null
-
-    return order
+    const [{ data: items }, { data: history }] = await Promise.all([
+      supabaseClient.from('shop_order_items').select('*').eq('order_id', orderId),
+      supabaseClient.from('shop_order_status_history').select('*').eq('order_id', orderId).order('created_at', { ascending: true })
+    ])
+    return { ...order, shop_order_items: items || [], order_items: items || [], shop_order_status_history: history || [], order_status_history: history || [] }
   }
 
-  // Get orders by customer ID
   async function getByCustomer(customerId, { status, limit = 50, offset = 0 } = {}) {
     let query = supabaseClient
-      .from('orders')
-      .select(`
-        *,
-        order_items(*)
-      `)
+      .from('shop_orders')
+      .select('*, shop_order_items(*)')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
+    if (status) query = query.eq('status', status)
     const { data, error } = await query
     if (error) throw error
-
-    return data || []
+    // Normalize for OrderList which expects order_items
+    return (data || []).map(o => ({ ...o, order_items: o.shop_order_items || [] }))
   }
 
-  // Get orders by vendor ID
-  async function getByVendor(vendorId, { status, limit = 50, offset = 0 } = {}) {
+  async function getByVendor(vendorBusinessId, { status, limit = 50, offset = 0 } = {}) {
     let query = supabaseClient
-      .from('orders')
-      .select(`
-        *,
-        order_items(*),
-        profiles:customer_id(id, full_name, email)
-      `)
-      .eq('vendor_id', vendorId)
+      .from('shop_orders')
+      .select('*, shop_order_items(*), profiles:customer_id(id, full_name, email)')
+      .eq('vendor_business_id', vendorBusinessId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
-
-    if (status) {
-      query = query.eq('status', status)
-    }
-
+    if (status) query = query.eq('status', status)
     const { data, error } = await query
     if (error) throw error
-
-    return data || []
+    return (data || []).map(o => ({ ...o, order_items: o.shop_order_items || [] }))
   }
 
-  // Update order status
-  async function updateStatus(orderId, status, changedBy) {
-    const { error } = await supabaseClient.rpc('update_order_status', {
+  async function updateStatus(orderId, status, changedBy, note) {
+    const { error } = await supabaseClient.rpc('update_shop_order_status', {
       p_order_id: orderId,
-      p_status: status,
-      p_changed_by: changedBy
+      p_to_status: status,
+      p_changed_by: changedBy,
+      p_note: note || null
     })
-
     if (error) throw error
   }
 
-  // Cancel order (restores inventory)
-  async function cancel(orderId, changedBy) {
-    // First restore inventory
-    const { error: restoreError } = await supabaseClient.rpc('restore_inventory_on_cancel', {
-      p_order_id: orderId
+  async function cancel(orderId, changedBy, reason) {
+    const { data, error } = await supabaseClient.rpc('cancel_shop_order', {
+      p_order_id: orderId,
+      p_reason: reason || null
     })
-
-    if (restoreError) throw restoreError
-
-    // Then update status
-    await updateStatus(orderId, 'cancelled', changedBy)
+    if (error) throw error
+    if (data && data !== 'ok' && data.startsWith('already')) throw new Error(data)
   }
 
-  // Add message to order
-  async function addMessage(orderId, senderId, message) {
-    const { data, error } = await supabaseClient
-      .from('order_messages')
-      .insert({
-        order_id: orderId,
-        sender_id: senderId,
-        message: message
-      })
-      .select()
-      .single()
-
+  async function addMessage(orderId, senderId, message, senderRole = 'customer') {
+    // Use RPC so server derives sender_role and auth.uid() correctly
+    const { data, error } = await supabaseClient.rpc('shop_add_message', {
+      p_order_id: orderId,
+      p_message: message
+    })
+    if (error) throw error
+    return data
+  }
+  async function verifyPayment(orderId, paystackReference) {
+    const { data, error } = await supabaseClient.rpc('verify_shop_payment', {
+      p_order_id: orderId,
+      p_paystack_reference: paystackReference
+    })
     if (error) throw error
     return data
   }
 
-  // Get messages for order
   async function getMessages(orderId) {
     const { data, error } = await supabaseClient
-      .from('order_messages')
-      .select(`
-        *,
-        profiles:sender_id(id, full_name)
-      `)
+      .from('shop_order_messages')
+      .select('*, profiles:sender_id(id, full_name)')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true })
-
     if (error) throw error
     return data || []
   }
@@ -155,9 +157,9 @@ export function createOrderRepository(supabaseClient = supabase) {
     updateStatus,
     cancel,
     addMessage,
-    getMessages
+    getMessages,
+    verifyPayment
   }
 }
 
-// Singleton instance
 export const orderRepository = createOrderRepository()
