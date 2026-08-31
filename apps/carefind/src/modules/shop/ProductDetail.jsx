@@ -1,12 +1,15 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
 import { useCart } from './CartProvider'
 import { useWishlist } from './WishlistProvider'
 import { pushRecent } from './recentlyViewed'
+import { reviewsRepository } from './reviewsRepository'
+import { qaRepository } from './qaRepository'
+import { useAuth } from '../../providers/AuthContext'
 
 const shopRepository = createShopRepository()
 
@@ -14,6 +17,7 @@ export default function ProductDetail() {
   const { productId } = useParams()
   const { addItem } = useCart()
   const { has, toggle } = useWishlist()
+  const { user } = useAuth()
   const [product, setProduct] = useState(null)
   const [related, setRelated] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,12 +25,32 @@ export default function ProductDetail() {
   const [current, setCurrent] = useState(0)
   const [qty, setQty] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
+  const [reviews, setReviews] = useState([])
+  const [avg, setAvg] = useState({ avg: 0, count: 0 })
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [rating, setRating] = useState(5)
+  const [reviewText, setReviewText] = useState('')
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
+  const [qa, setQa] = useState([])
+  const [qaQuestion, setQaQuestion] = useState('')
+  const [qaSubmitting, setQaSubmitting] = useState(false)
   const touchStartX = useRef(null)
 
   useEffect(() => { load() }, [productId])
-  useEffect(() => { if (product) { pushRecent(product.id); loadRelated() } }, [product?.id])
+  useEffect(() => { if (product) { pushRecent(product.id); loadRelated(); loadReviews(); loadQa() } }, [product?.id])
+
   async function loadRelated() {
     try { const rows = await shopRepository.getActiveProducts({ segment: 'all', limit: 20 }); setRelated((rows||[]).filter(r=>r.id!==productId).slice(0,4)) } catch {}
+  }
+  async function loadReviews() {
+    const list = await reviewsRepository.list(productId)
+    setReviews(list || [])
+    const a = await reviewsRepository.avg(productId)
+    setAvg(a)
+  }
+  async function loadQa() {
+    const list = await qaRepository.list(productId)
+    setQa(list || [])
   }
 
   async function load() {
@@ -62,6 +86,28 @@ export default function ProductDetail() {
     if (!product || !p) return
     addItem({ ecommerce_product_id: product.id, product_name: p.name, unit_price_kobo: priceKobo, quantity: qty, image_url: images[0]?.url || p.image_url || null, vendor_id: product.business_id, vendor_business_id: product.business_id, sale_type: p.sale_type || null, prescription_required: !!product.prescription_required })
     setAddedToCart(true); setTimeout(() => setAddedToCart(false), 2000)
+  }
+  const handleSubmitReview = async () => {
+    if (!rating || rating <1 || rating>5) return
+    if (!reviewText.trim() || reviewText.trim().length < 3) { alert('Review must be at least 3 characters'); return }
+    setReviewSubmitting(true)
+    await reviewsRepository.upsert(productId, { rating, text: reviewText.trim() })
+    setReviewText(''); setRating(5); setShowReviewModal(false)
+    await loadReviews()
+    setReviewSubmitting(false)
+  }
+  const handleDeleteReview = async (id) => {
+    if (!confirm('Delete your review?')) return
+    await reviewsRepository.remove(productId, id)
+    await loadReviews()
+  }
+  const handleAsk = async () => {
+    if (!qaQuestion.trim() || qaQuestion.trim().length < 5) return
+    setQaSubmitting(true)
+    await qaRepository.ask(productId, qaQuestion.trim())
+    setQaQuestion('')
+    await loadQa()
+    setQaSubmitting(false)
   }
 
   return (
@@ -106,7 +152,7 @@ export default function ProductDetail() {
       <Card style={{ padding: 16, marginBottom: 12 }}>
         <div style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'flex-start' }}>
           <div style={{ fontSize: 18, fontWeight: 800, color: theme.navy, flex:1 }}>{p.name}</div>
-          <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color:theme.warning, background:'#fffbeb', border:`1px solid ${theme.warning}30`, padding:'4px 8px', borderRadius:999 }}><Star size={12}/> 4.8 · 24 reviews</span>
+          <button onClick={()=>setShowReviewModal(true)} style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, color: avg.count>0 ? theme.warning : theme.textLight, background:'#fffbeb', border:`1px solid ${theme.warning}30`, padding:'4px 8px', borderRadius:999, cursor:'pointer' }}><Star size={12} fill={avg.count>0 ? theme.starAmber : 'none'} color={theme.starAmber}/> {avg.count>0 ? `${avg.avg} · ${avg.count}` : 'No reviews'} · {avg.count} {avg.count===1?'review':'reviews'}</button>
         </div>
         {p.generic_name && <div style={{ fontSize: 13, color: theme.textLight, fontStyle: 'italic', marginBottom: 8 }}>{p.generic_name}</div>}
         <div style={{ fontSize: 18, fontWeight: 800, color: theme.tealDeep, marginBottom: 8 }}>{priceLabel} {p.price_unit && <span style={{ fontSize:11, color:theme.textLight, fontWeight:500 }}>per {p.price_unit}</span>}</div>
@@ -118,7 +164,6 @@ export default function ProductDetail() {
         {product.restrictions && <div style={{ fontSize: 12, color: theme.danger, marginBottom: 6 }}><b>Restrictions:</b> {product.restrictions}</div>}
         {p.stock != null && <div style={{ fontSize: 12, color: p.stock>5 ? theme.success : theme.warning, fontWeight:600, marginBottom: 12 }}>{p.stock > 0 ? `${p.stock} in stock` : 'Out of stock'} {p.stock>0 && p.stock<=5 && '· Low stock'}</div>}
 
-        {/* Quantity + trust */}
         <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom: 12 }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, border:`1px solid ${theme.border}`, borderRadius:10, padding:'4px 6px', background:'#fff' }}>
             <button onClick={()=>setQty(q=>Math.max(1,q-1))} style={{ width:28, height:28, border:`1px solid ${theme.border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>−</button>
@@ -138,19 +183,58 @@ export default function ProductDetail() {
         </div>
       </Card>
 
-      {/* Reviews stub + cross-sell */}
+      {/* Reviews — fully functional */}
       <Card style={{ padding:16, marginBottom:12 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-          <b style={{ color:theme.navy }}>Reviews</b><span style={{ fontSize:12, color:theme.textLight }}>4.8 · 24 · 98% positive</span>
+          <b style={{ color:theme.navy }}>Reviews · {avg.count} {avg.count===1?'review':'reviews'} {avg.count>0 && `· ${avg.avg}★`}</b>
+          <button onClick={()=>setShowReviewModal(true)} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${theme.tealDeep}`, background: theme.tealDeep, color:'#fff', fontWeight:700, fontSize:12, cursor:'pointer' }}>Write a review</button>
         </div>
-        <div style={{ display:'flex', gap:6, marginBottom:8 }}>{[1,2,3,4,5].map(i=> <Star key={i} size={14} fill={i<=5 ? theme.starAmber : 'none'} color={theme.starAmber} />)}<span style={{ fontSize:11, color:theme.textLight, marginLeft:6 }}>Based on pharmacy sales</span></div>
-        <div style={{ borderTop:`1px solid ${theme.border}`, paddingTop:10, display:'flex', flexDirection:'column', gap:8 }}>
-          <div style={{ fontSize:12, color:theme.textMid }}><b style={{ color:theme.navy }}>Aisha</b> · Verified buyer · 2d ago<br/>“Authentic, delivered to Yaba Hub next day.”</div>
-          <div style={{ fontSize:12, color:theme.textMid }}><b style={{ color:theme.navy }}>Emeka</b> · 5d ago<br/>“Price matched inventory, no hidden fee.”</div>
+        <div style={{ display:'flex', gap:6, marginBottom:8 }}>{[1,2,3,4,5].map(i=> <Star key={i} size={14} fill={avg.avg>=i ? theme.starAmber : avg.avg>=i-0.5 ? theme.starAmber : 'none'} color={theme.starAmber} />)}<span style={{ fontSize:11, color:theme.textLight, marginLeft:6 }}>{avg.count>0 ? `${avg.avg} average` : 'No ratings yet — be the first'}</span></div>
+        {reviews.length===0 ? <div style={{ fontSize:12, color:theme.textLight, textAlign:'center', padding:12, border:`1px dashed ${theme.border}`, borderRadius:8 }}>No reviews yet. Your review helps others choose.</div> : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:8 }}>
+            {reviews.map(r=>(
+              <div key={r.id} style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:10, background:'#fff' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                  <span style={{ display:'inline-flex', gap:4 }}>{[1,2,3,4,5].map(i=> <Star key={i} size={12} fill={i<=r.rating ? theme.starAmber : 'none'} color={theme.starAmber} />)}</span>
+                  <span style={{ fontSize:10, color:theme.textLight }}>{new Date(r.created_at).toLocaleDateString()} {r.user_id===user?.id && <button onClick={()=>handleDeleteReview(r.id)} style={{ marginLeft:8, background:'none', border:`1px solid ${theme.danger}30`, color:theme.danger, borderRadius:6, padding:'2px 6px', fontSize:10, cursor:'pointer' }}><Trash2 size={10}/> Delete</button>}</span>
+                </div>
+                <div style={{ fontSize:13, color:theme.textMid, whiteSpace:'pre-wrap' }}>{r.text}</div>
+                <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>{r.user_id===user?.id ? 'You' : `User ${String(r.user_id).slice(0,6)}`} · Verified buyer</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {showReviewModal && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', display:'grid', placeItems:'center', zIndex:70, padding:16 }}>
+            <div style={{ background:'#fff', borderRadius:14, padding:16, width:'min(420px, 100%)', border:`1px solid ${theme.border}` }}>
+              <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>Write a review — {p.name}</div>
+              <div style={{ display:'flex', gap:6, marginBottom:10 }}>{[1,2,3,4,5].map(i=> <button key={i} onClick={()=>setRating(i)} style={{ background:'none', border:'none', cursor:'pointer' }}><Star size={24} fill={i<=rating ? theme.starAmber : 'none'} color={theme.starAmber} /></button>)}<span style={{ fontSize:12, color:theme.textLight, marginLeft:6 }}>{rating}★</span></div>
+              <textarea value={reviewText} onChange={e=>setReviewText(e.target.value)} placeholder="What did you like? Was it authentic? Delivery?" rows={3} style={{ width:'100%', padding:10, border:`1px solid ${theme.border}`, borderRadius:10, fontFamily:'inherit', fontSize:13, boxSizing:'border-box' }} />
+              <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                <button onClick={()=>setShowReviewModal(false)} style={{ flex:1, padding:10, border:`1px solid ${theme.border}`, borderRadius:10, background:'#fff', fontWeight:700, cursor:'pointer' }}>Cancel</button>
+                <button onClick={handleSubmitReview} disabled={reviewSubmitting || !reviewText.trim() || reviewText.trim().length<3} style={{ flex:1, padding:10, border:'none', borderRadius:10, background: reviewText.trim().length>=3 ? theme.tealDeep : theme.gray200, color: reviewText.trim().length>=3 ? '#fff' : theme.textLight, fontWeight:800, cursor:'pointer' }}>{reviewSubmitting ? 'Saving…' : 'Submit review'}</button>
+              </div>
+              <div style={{ fontSize:11, color:theme.textLight, marginTop:6 }}>One review per product — submitting again replaces your previous review.</div>
+            </div>
+          </div>
+        )}
+        <div style={{ marginTop:12, borderTop:`1px solid ${theme.border}`, paddingTop:12 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:theme.navy, display:'flex', alignItems:'center', gap:6 }}><MessageCircle size={14}/> Q&A</div>
+          <div style={{ display:'flex', gap:6, marginTop:8 }}>
+            <input value={qaQuestion} onChange={e=>setQaQuestion(e.target.value)} placeholder="Ask a question about this product..." style={{ flex:1, padding:'8px 10px', border:`1px solid ${theme.border}`, borderRadius:8, fontSize:12 }} />
+            <button onClick={handleAsk} disabled={qaSubmitting || !qaQuestion.trim() || qaQuestion.trim().length<5} style={{ padding:'8px 12px', borderRadius:8, border:'none', background: qaQuestion.trim().length>=5 ? theme.tealDeep : theme.gray200, color: qaQuestion.trim().length>=5 ? '#fff' : theme.textLight, fontWeight:700, cursor:'pointer' }}><Send size={14}/></button>
+          </div>
+          {qa.length>0 && (
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:10 }}>
+              {qa.map(q=>(
+                <div key={q.id} style={{ border:`1px solid ${theme.border}`, borderRadius:10, padding:10, background: theme.cardBg }}>
+                  <div style={{ fontSize:13, color:theme.navy }}><b>Q:</b> {q.question} <span style={{ fontSize:10, color:theme.textLight }}>· {new Date(q.created_at).toLocaleDateString()}</span></div>
+                  {q.answer ? <div style={{ fontSize:13, color:theme.tealDeep, marginTop:4 }}><b>A:</b> {q.answer} {q.answered_at && <span style={{ fontSize:10, color:theme.textLight }}>· {new Date(q.answered_at).toLocaleDateString()}</span>}</div> : <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Awaiting vendor answer — you’ll be notified.</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <button style={{ marginTop:10, width:'100%', padding:10, border:`1px solid ${theme.border}`, borderRadius:10, background:'#fff', fontWeight:700, fontSize:12, color:theme.navy }}>Write a review</button>
-        <div style={{ marginTop:12, fontSize:12, fontWeight:700, color:theme.navy }}>Q&A</div>
-        <div style={{ fontSize:12, color:theme.textMid }}>Q: Is this suitable for children? <br/><span style={{ color:theme.tealDeep, fontWeight:600 }}>A: Check warnings — consult pharmacist if under 12.</span></div>
       </Card>
 
       {related.length>0 && (

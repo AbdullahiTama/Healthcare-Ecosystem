@@ -8,6 +8,7 @@ import { useCart } from './CartProvider'
 import { useWishlist } from './WishlistProvider'
 import MiniCart from './MiniCart'
 import { getRecent } from './recentlyViewed'
+import { reviewsRepository } from './reviewsRepository'
 
 const shopRepository = createShopRepository()
 
@@ -27,9 +28,23 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [inStockOnly, setInStockOnly] = useState(true)
   const [sort, setSort] = useState('popular')
   const [recentIds, setRecentIds] = useState([])
+  const [ratings, setRatings] = useState({}) // id -> {avg,count}
 
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { load(); setRecentIds(getRecent()) }, [segment, externalQuery])
+  useEffect(() => {
+    if (products.length===0) return
+    let cancelled=false
+    Promise.all(products.slice(0,30).map(async r=>{
+      const a = await reviewsRepository.avg(r.id).catch(()=>({avg:0,count:0}))
+      return [r.id, a]
+    })).then(pairs=>{
+      if (cancelled) return
+      const m={}; pairs.forEach(([id,a])=>{ if(a.count>0) m[id]=a })
+      setRatings(m)
+    })
+    return ()=> { cancelled=true }
+  }, [products])
 
   async function load() {
     setLoading(true); setError('')
@@ -64,9 +79,9 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     if (sort === 'price_asc') rows.sort((a,b) => (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0) - (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0))
     else if (sort === 'price_desc') rows.sort((a,b) => (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0) - (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0))
     else if (sort === 'newest') rows.sort((a,b) => new Date(b.active_at) - new Date(a.active_at))
-    else if (sort === 'rating') rows.sort((a,b) => (b.avg_rating||0) - (a.avg_rating||0))
+    else if (sort === 'rating') rows.sort((a,b) => (ratings[b.id]?.avg||0) - (ratings[a.id]?.avg||0))
     return rows
-  }, [products, brand, priceMin, priceMax, showRxOnly, inStockOnly, sort])
+  }, [products, brand, priceMin, priceMax, showRxOnly, inStockOnly, sort, ratings])
 
   const featured = filtered.slice(0, 6)
   const grid = filtered
@@ -192,7 +207,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
                   {p.generic_name && <div style={{ fontSize: 11, color: theme.textLight, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.generic_name}</div>}
                   {row.prescription_required && <span style={{ fontSize:10, fontWeight:700, color:theme.warning, border:`1px solid ${theme.warning}30`, background:'#fffbeb', padding:'2px 6px', borderRadius:6, alignSelf:'flex-start' }}>Rx</span>}
                   <div style={{ fontSize: 13, fontWeight: 800, color: theme.tealDeep, marginTop: 'auto' }}>{priceLabel}</div>
-                  <div style={{ display:'flex', gap:4, alignItems:'center' }}>{p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : p.sale_type === 'wholesale' ? 'Wholesale' : 'Distributor'} type="gray" style={{ fontSize: 9, alignSelf: 'flex-start' }} />}<span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:10, color:theme.textLight }}><Star size={11}/> 4.8</span></div>
+                  <div style={{ display:'flex', gap:4, alignItems:'center' }}>{p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : p.sale_type === 'wholesale' ? 'Wholesale' : 'Distributor'} type="gray" style={{ fontSize: 9, alignSelf: 'flex-start' }} />}<span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:10, color:ratings[row.id]?.count ? theme.warning : theme.textLight }}><Star size={11} fill={ratings[row.id]?.count ? theme.starAmber : 'none'} color={ratings[row.id]?.count ? theme.starAmber : theme.textLight}/>{ratings[row.id]?.count ? `${ratings[row.id].avg} · ${ratings[row.id].count}` : 'No reviews'}</span></div>
                 </Card>
               </Link>
               <button onClick={()=>toggleWishlist(row.id)} aria-label={wished ? 'Remove wishlist' : 'Add wishlist'} style={{ position:'absolute', top:8, right:8, width:28, height:28, borderRadius:'50%', border:`1px solid ${theme.border}`, background: wished ? theme.tealDeep : 'rgba(255,255,255,0.95)', color: wished ? '#fff' : theme.navy, display:'grid', placeItems:'center', cursor:'pointer' }}><Heart size={14} fill={wished ? '#fff' : 'none'} /></button>
