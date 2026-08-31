@@ -144,9 +144,14 @@ export default function Cart() {
             ₦{(total / 100).toLocaleString()}
           </span>
         </div>
-        <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 16 }}>
+        <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 12 }}>
           Delivery and fulfilment fees will be calculated at checkout
         </p>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>✓ CareFind Authentic</span>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>↩ 7-day return</span>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}>⚡ Pickup FREE ≤3km</span>
+        </div>
         <Button
           onClick={handleCheckout}
           style={{
@@ -163,6 +168,7 @@ export default function Cart() {
           Proceed to Checkout
           <ArrowRight size={20} />
         </Button>
+        <div style={{ fontSize:11, color:theme.textLight, textAlign:'center', marginTop:8 }}>Secure by Paystack · 256-bit SSL</div>
       </Card>
     </div>
   )

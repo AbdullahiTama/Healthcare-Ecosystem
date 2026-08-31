@@ -41,7 +41,9 @@ import Cart from './modules/shop/Cart.jsx'
 import Checkout from './modules/shop/Checkout.jsx'
 import OrderDetail from './modules/shop/OrderDetail.jsx'
 import OrderList from './modules/shop/OrderList.jsx'
+import Wishlist from './modules/shop/Wishlist.jsx'
 import { CartProvider } from './modules/shop/CartProvider.jsx'
+import { WishlistProvider } from './modules/shop/WishlistProvider.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 
@@ -54,6 +56,7 @@ const Loading = () => (
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
+      <WishlistProvider>
       <CartProvider>
         <BrowserRouter>
           <ErrorBoundary>
@@ -105,10 +108,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/checkout" element={<RequireAuth><Checkout /></RequireAuth>} />
             <Route path="/orders" element={<RequireAuth><OrderList /></RequireAuth>} />
             <Route path="/orders/:orderId" element={<RequireAuth><OrderDetail /></RequireAuth>} />
+            <Route path="/wishlist" element={<RequireAuth><Wishlist /></RequireAuth>} />
           </Routes>
         </ErrorBoundary>
       </BrowserRouter>
     </CartProvider>
+    </WishlistProvider>
   </AuthProvider>
 </React.StrictMode>,
 )

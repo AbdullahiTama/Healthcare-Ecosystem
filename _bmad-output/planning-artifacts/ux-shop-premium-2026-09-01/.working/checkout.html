@@ -1,0 +1,39 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{--teal:#0E6F5A;--ink:#182722;--muted:#8B978F;--border:#ECEAE0;--card:#FBFAF6;--bg:#F7F5EF;--warn:#d97706}
+body{margin:0;font-family:Geist,system-ui;background:var(--bg);color:var(--ink)}
+.wrap{max-width:800px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;box-sizing:border-box;font-family:inherit}
+label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.total{font-size:18px;font-weight:800;display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:12px;margin-top:12px}
+.btn{width:100%;padding:16px;background:var(--teal);color:#fff;border:0;border-radius:10px;font-weight:800;font-size:16px}
+.pending{background:#fffbeb;border:1px solid #fcd34d;color:var(--warn);padding:12px;border-radius:10px;display:flex;gap:8px;font-size:13px}
+</style>
+<div class="wrap">
+  <h1>Checkout</h1>
+  <div class="card">
+    <div style="font-weight:800">Delivery Address</div>
+    <div class="row"><label>Customer Name*<input value="Ada"></label><label>Phone*<input value="080..."></label></div>
+    <label>Email*<input value="ada@example.com"></label>
+    <label>Street*<input value="123 Herbert Macaulay"></label>
+    <div class="row"><label>City*<input value="Ibadan"></label><label>State*<input value="Oyo"></label></div>
+    <div class="pending">⚠️ Outside standard zone — we will quote delivery within 24h via WhatsApp/Email. You can proceed to pay for products now.</div>
+  </div>
+  <div class="card">
+    <div style="font-weight:800">Delivery Preference</div>
+    <label style="display:flex;gap:12px;align:center"><input type="radio" checked> Pickup from Station (FREE)</label>
+    <select><option>Yaba Hub — 123 Herbert Macaulay, Yaba</option><option>Lekki Hub</option><option>Abuja Hub</option></select>
+    <label style="display:flex;gap:12px;margin-top:12px"><input type="radio"> Home Delivery (quote pending)</label>
+  </div>
+  <div class="card">
+    <div style="font-weight:800">Order Summary</div>
+    <div style="display:flex;justify-content:space-between;font-size:14px"><span>Subtotal (2 items)</span><span>₦3,500</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:14px"><span>Fulfilment MAX(₦600,3%)</span><span>₦600</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:14px"><span>Delivery</span><span style="color:var(--warn);font-weight:700">PENDING</span></div>
+    <div class="total"><span>Subtotal</span><span style="color:var(--teal)">₦4,100</span></div>
+    <div style="font-size:11px;color:var(--muted);text-align:right">Plus delivery to be quoted</div>
+  </div>
+  <button class="btn">Proceed to Pay for Products Now</button>
+  <p style="font-size:11px;color:var(--muted);text-align:center">Paystack cards/bank/mobile — idempotent via payment_reference</p>
+</div>
