@@ -18,6 +18,94 @@ import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Inp, Textarea, Empty, StarPicker, Stars, Toast, useToast, CardSkeleton } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
+function PatientAppointmentLookup({ bizId }) {
+  const toast = useToast()
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [appointments, setAppointments] = useState(null)
+  const [error, setError] = useState('')
+
+  async function lookup(e) {
+    e.preventDefault()
+    if (!phone.trim()) return
+    setLoading(true)
+    setError('')
+    setAppointments(null)
+    try {
+      const res = await fetch('/api/lookup-appointment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: bizId, phone: phone.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'No appointments found')
+      } else {
+        setAppointments(data.appointments)
+      }
+    } catch (err) {
+      setError('Could not look up appointments. Please try again.')
+    }
+    setLoading(false)
+  }
+
+  const statusColor = (s) => {
+    if (s === 'confirmed') return theme.success
+    if (s === 'completed') return theme.tealDeep
+    if (s === 'cancelled') return theme.danger
+    return theme.gray500
+  }
+
+  return (
+    <Card style={{ padding: 14, marginBottom: 26 }}>
+      <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
+        My Appointments
+      </p>
+      <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
+        Look up your bookings by phone number.
+      </p>
+      <form onSubmit={lookup} style={{ display: 'flex', gap: 8, marginBottom: appointments ? 12 : 0 }}>
+        <input
+          type="tel"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="Enter your phone number"
+          required
+          style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, fontSize: 13, color: theme.navy }}
+        />
+        <button type="submit" disabled={loading} style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: theme.tealDeep, color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+          {loading ? 'Looking...' : 'Find'}
+        </button>
+      </form>
+      {error && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: theme.danger }}>{error}</p>}
+      {appointments && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          {appointments.map(a => (
+            <div key={a.id} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: theme.navy }}>{a.service || 'Consultation'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(a.status), textTransform: 'capitalize' }}>{a.status}</span>
+              </div>
+              <div style={{ fontSize: 12, color: theme.textMid }}>
+                {a.date} at {a.time}
+                {a.fee_amount ? ` — ₦${(a.fee_amount / 100).toLocaleString()}` : ' — Free'}
+              </div>
+              <div style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>
+                {a.payment_status === 'paid' && <span style={{ color: theme.success }}>Paid</span>}
+                {a.payment_status === 'unpaid' && <span style={{ color: theme.danger }}>Unpaid</span>}
+                {!a.payment_status && <span>—</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {appointments && appointments.length === 0 && (
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: theme.textLight }}>No appointments found for this phone number.</p>
+      )}
+    </Card>
+  )
+}
+
 function BookingCard({ biz }) {
   const toast = useToast()
   const { user } = useAuth()
@@ -36,6 +124,8 @@ function BookingCard({ biz }) {
   const [availLoading, setAvailLoading] = useState(false)
   const [showReview, setShowReview] = useState(false)
   const [reviewData, setReviewData] = useState(null)
+  const [bookedAppt, setBookedAppt] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
   const reviewCancelRef = useRef(null)
 
   // Dialog accessibility: ESC closes, focus management
@@ -96,6 +186,7 @@ function BookingCard({ biz }) {
             toast.show(data.error || 'Could not confirm your payment. If you were charged, keep your reference and contact support.', { type: 'error' })
             return
           }
+          setBookedAppt({ id: data.id, phone: phone || '' })
           setDone(true)
           toast.show('Payment confirmed — the business will confirm your appointment.', { type: 'success' })
         }
@@ -217,6 +308,7 @@ function BookingCard({ biz }) {
           toast.show(payData.error || 'Could not complete payment.')
           return
         }
+        setBookedAppt({ id: data.id, phone: phone.trim() })
         setDone(true)
         toast.show('Booking paid with your CareCoins — the business will confirm.')
         return
@@ -226,6 +318,7 @@ function BookingCard({ biz }) {
         return
       }
 
+      setBookedAppt({ id: data.id, phone: phone.trim() })
       setDone(true)
       toast.show('Request sent — the business will confirm your appointment.')
     } catch (err) {
@@ -245,7 +338,45 @@ function BookingCard({ biz }) {
       </p>
 
       {done ? (
-        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+          {bookedAppt?.id && (
+            <button
+              onClick={async () => {
+                if (!confirm('Are you sure you want to cancel this appointment?')) return
+                setCancelling(true)
+                try {
+                  const res = await fetch('/api/cancel-appointment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appointment_id: bookedAppt.id, cancelled_by: 'patient', reason: 'Cancelled by patient' }),
+                  })
+                  const data = await res.json().catch(() => ({}))
+                  if (res.ok) {
+                    setDone(false)
+                    setBookedAppt(null)
+                    toast.show('Appointment cancelled.', { type: 'success' })
+                    // Refresh availability
+                    if (selectedService && date) {
+                      supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+                        if (data) setServiceAvailability(data)
+                      })
+                    }
+                  } else {
+                    toast.show(data.error || 'Could not cancel appointment.', { type: 'error' })
+                  }
+                } catch (err) {
+                  toast.show('Could not cancel appointment.', { type: 'error' })
+                }
+                setCancelling(false)
+              }}
+              disabled={cancelling}
+              style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${theme.danger}`, background: '#fff', color: theme.danger, fontWeight: 700, fontSize: 12, cursor: cancelling ? 'wait' : 'pointer', opacity: cancelling ? 0.7 : 1 }}
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+            </button>
+          )}
+        </div>
       ) : (
         <form onSubmit={openReview}>
           {services.length > 0 && (
@@ -723,6 +854,8 @@ function BusinessProfile() {
         )}
 
         {biz.booking_enabled && <BookingCard biz={biz} />}
+
+        {biz.booking_enabled && <PatientAppointmentLookup bizId={biz.id} />}
 
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Available Products
