@@ -10,6 +10,8 @@ import { pushRecent } from './recentlyViewed'
 import { reviewsRepository } from './reviewsRepository'
 import { qaRepository } from './qaRepository'
 import { useAuth } from '../../providers/AuthContext'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import BottomNav from '../../components/BottomNav.jsx'
 
 const shopRepository = createShopRepository()
 
@@ -18,6 +20,7 @@ export default function ProductDetail() {
   const { addItem } = useCart()
   const { has, toggle } = useWishlist()
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
   const [product, setProduct] = useState(null)
   const [related, setRelated] = useState([])
   const [loading, setLoading] = useState(true)
@@ -111,7 +114,7 @@ export default function ProductDetail() {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: 16 }}>
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: 16, ...(isMobile ? { overflowX: 'hidden', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : {}) }}>
       <Link to="/search?tab=shop" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: theme.tealDeep, textDecoration: 'none', fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
         <ArrowLeft size={14} /> Back to Shop
       </Link>
@@ -253,6 +256,8 @@ export default function ProductDetail() {
           </div>
         </div>
       )}
+
+      {isMobile && <BottomNav />}
     </div>
   )
 }

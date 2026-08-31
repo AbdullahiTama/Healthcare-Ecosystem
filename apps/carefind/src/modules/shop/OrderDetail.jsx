@@ -377,7 +377,7 @@ export default function OrderDetail() {
           <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: 8 }}>
             <Input
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(v) => setNewMessage(v)}
               placeholder="Type a message..."
               style={{ flex: 1 }}
             />

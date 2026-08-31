@@ -312,6 +312,149 @@ body {
   background: var(--gray-400);
 }
 
+/* ── Left sidebar (premium nav rail) ──────────────────────────────────────── */
+
+.cf-left-sidebar {
+  box-shadow: var(--elevation-1);
+  border-right: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-300) transparent;
+}
+
+.cf-left-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.cf-left-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cf-left-sidebar::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-page);
+}
+.cf-left-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
+.cf-nav-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  padding: 6px 14px 4px;
+  user-select: none;
+}
+
+.cf-nav-row {
+  position: relative;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.cf-nav-row:hover {
+  background: var(--gray-50);
+}
+
+.cf-nav-row--active {
+  background: var(--teal-mist);
+}
+
+.cf-nav-row--active:hover {
+  background: #d6e6dc;
+}
+
+.cf-nav-row--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--teal-600);
+}
+
+.cf-nav-row:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: -2px;
+}
+
+.cf-create-btn {
+  background: linear-gradient(135deg, var(--teal-600), var(--navy-900));
+  border-radius: var(--radius-full);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.cf-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(14, 111, 90, 0.25);
+}
+
+.cf-create-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.cf-create-btn:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: 2px;
+}
+
+.cf-profile-link {
+  transition: background var(--motion-fast) var(--ease-out);
+  border-radius: var(--radius-md);
+}
+
+.cf-profile-link:hover {
+  background: var(--gray-50);
+}
+
+.cf-profile-link:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: -2px;
+}
+
+.cf-notif-badge {
+  box-shadow: 0 0 0 2px var(--bg-page);
+}
+
+.cf-collapsed-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--gray-900);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+  z-index: 50;
+}
+
+.cf-collapsed-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--gray-900);
+}
+
+.cf-nav-row:hover .cf-collapsed-tooltip {
+  opacity: 1;
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
   .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {
@@ -323,6 +466,16 @@ body {
   }
   .cf-eng-item:active {
     transform: none;
+  }
+  .cf-nav-row,
+  .cf-create-btn,
+  .cf-profile-link,
+  .cf-collapsed-tooltip {
+    transition: none;
+  }
+  .cf-create-btn:hover {
+    transform: none;
+    box-shadow: none;
   }
   * {
     scroll-behavior: auto !important;

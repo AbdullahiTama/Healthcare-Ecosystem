@@ -17,6 +17,7 @@ function BottomNav({ onCompose }) {
   const itemStyle = (active) => ({
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
     color: active ? theme.tealDeep : theme.textLight, textDecoration: 'none', fontSize: 10, fontWeight: 700,
+    minWidth: 0, flexShrink: 1, overflow: 'hidden',
   })
 
   // iOS-style tab: the active icon sits in a soft teal capsule so the current
@@ -71,6 +72,7 @@ function BottomNav({ onCompose }) {
       display: 'flex', justifyContent: 'space-around', alignItems: 'flex-start', gap: 2,
       padding: '8px 6px calc(8px + env(safe-area-inset-bottom)) 6px',
       boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
+      overflow: 'hidden', boxSizing: 'border-box',
     }}>
       <Link to="/feed" style={itemStyle(isHomeActive)}>
         <span style={iconCapsule(isHomeActive)}>

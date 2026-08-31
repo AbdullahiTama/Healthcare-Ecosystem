@@ -182,14 +182,14 @@ export default function Checkout() {
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Input label="Customer Name *" value={formData.customer_name} onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })} placeholder="Full name" required />
-                <Input label="Phone *" value={formData.customer_phone} onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })} placeholder="080..." required />
+                <Input label="Customer Name *" value={formData.customer_name} onChange={(v) => setFormData({ ...formData, customer_name: v })} placeholder="Full name" required />
+                <Input label="Phone *" value={formData.customer_phone} onChange={(v) => setFormData({ ...formData, customer_phone: v })} placeholder="080..." required />
               </div>
-              <Input label="Email *" value={formData.customer_email} onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })} placeholder="you@example.com" required />
+              <Input label="Email *" value={formData.customer_email} onChange={(v) => setFormData({ ...formData, customer_email: v })} placeholder="you@example.com" required />
               <Input
                 label="Street Address *"
                 value={formData.street}
-                onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                onChange={(v) => setFormData({ ...formData, street: v })}
                 placeholder="123 Main Street"
                 required
               />
@@ -197,14 +197,14 @@ export default function Checkout() {
                 <Input
                   label="City *"
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(v) => setFormData({ ...formData, city: v })}
                   placeholder="Lagos"
                   required
                 />
                 <Input
                   label="State *"
                   value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  onChange={(v) => setFormData({ ...formData, state: v })}
                   placeholder="Lagos State"
                   required
                 />
@@ -280,7 +280,7 @@ export default function Checkout() {
                     label="Distance from vendor (km) — Phase 2 will auto-calc via Maps"
                     type="number"
                     value={distanceKm}
-                    onChange={(e) => setDistanceKm(Number(e.target.value))}
+                    onChange={(v) => setDistanceKm(Number(v))}
                     placeholder="5"
                     min="0"
                     step="0.1"
