@@ -32,28 +32,36 @@ function renderNav(initialPath, props = {}) {
   )
 }
 
-describe('BottomNav (five destinations)', () => {
+describe('BottomNav (four destinations — CareFind marketplace redesign)', () => {
   beforeEach(() => {
     auth.user = null
     supabaseMock.from.mockClear()
   })
 
-  it('renders the five core destinations', () => {
-    renderNav('/')
+  it('renders the four core destinations', () => {
+    renderNav('/feed', { onCompose: vi.fn() })
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'MedMarket' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'News' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Browse' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Shop' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create post' })).toBeInTheDocument()
-    // Video access lives in the feed's top tab bar, not the bottom nav.
+    // Legacy MedMarket/News destinations are now inside the marketplace / header, not bottom nav
+    expect(screen.queryByRole('link', { name: 'MedMarket' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'News' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Videos' })).not.toBeInTheDocument()
   })
 
+  it('keeps Shop highlighted inside the marketplace', () => {
+    renderNav('/search?tab=shop')
+    expect(screen.getByRole('link', { name: 'Shop' }).style.color).toBe('rgb(14, 111, 90)')
+    expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(139, 151, 143)')
+  })
+
   it('keeps Home highlighted on the plain feed', () => {
-    renderNav('/feed')
+    renderNav('/feed', { onCompose: vi.fn() })
     // jsdom reports inline hex colors in rgb() form: tealDeep=#0E6F5A, textLight=#8B978F (unified)
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(14, 111, 90)')
-    expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(139, 151, 143)')
+    expect(screen.getByRole('link', { name: 'Shop' }).style.color).toBe('rgb(139, 151, 143)')
   })
 
   it('does not render the More overflow menu — logout lives on the Profile page', () => {
