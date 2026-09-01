@@ -105,6 +105,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
         cost_price: parseFloat(data.cost_price) || 0,
         stock: category === 'Services' ? 999 : parseInt(data.stock) || 0,
         reorder_level: parseInt(data.reorder_level) || 5,
+        shelf_label: data.shelf_label || null,
       }
 
       if (!isEdit) {
@@ -477,6 +478,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
               },
             },
             {
+              key: 'shelf_label', label: 'Shelf', sortable: true,
+              render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.shelf_label || '—'}</span>
+            },
+            {
               key: 'generic_name', label: 'Generic Name', sortable: true,
               render: p => <span style={{ fontSize: '12px', color: gray500 }}>{p.generic_name || p.genericName || '—'}</span>,
             },
@@ -793,6 +798,7 @@ function ProductModal({ product, perms, onSave, onClose, showToast }) {
         )}
         {!canEditPrice && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '8px', background: warningBg, fontSize: '12px', color: warning }}><AlertTriangle size={13} /> Only the Owner can edit prices</div>}
         <Inp label='Barcode (optional)' value={form.barcode} onChange={v => f('barcode', v)} placeholder='Scan or type barcode' />
+        <Inp label='Shelf Label' value={form.shelf_label} onChange={v => f('shelf_label', v)} placeholder='e.g. A-03, Rack B Shelf 3' />
         {isEdit && !form.expiry_date && form.cat !== 'Services' && (
           <div role="status" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, fontSize: '13px', color: warning, lineHeight: 1.6 }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />

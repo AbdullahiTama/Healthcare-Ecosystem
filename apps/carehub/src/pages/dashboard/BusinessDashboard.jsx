@@ -22,6 +22,7 @@ import { MOBILE_MENU_TOP, MOBILE_MENU_LEFT, MOBILE_MENU_SIZE, MOBILE_MENU_CLEAR 
 import DashboardHome from '../../modules/dashboard-home/DashboardHome'
 import POS from '../../modules/pos/POS'
 import Inventory from '../../modules/inventory/Inventory'
+import StockManagement from '../../modules/stock-management/StockManagement'
 import Clients from '../../modules/clients/Clients'
 import Appointments from '../../modules/appointments/Appointments'
 import Expenses from '../../modules/expenses/Expenses'
@@ -192,7 +193,7 @@ export default function BusinessDashboard() {
                 standard content padding — see DashboardHome.jsx. */}
             <Route path='dashboard' element={guard('dashboard', <DashboardHome {...pageProps} />)} />
             <Route path='pos' element={guard('pos', <POS {...pageProps} />)} />
-            <Route path='inventory' element={guard('inventory', <><TopBar title='Inventory' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Inventory {...pageProps} /></div></>)} />
+            <Route path='inventory' element={guard('inventory', <><TopBar title='Stock Management' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><StockManagement {...pageProps} /></div></>)} />
             <Route path='clients' element={guard('clients', <><TopBar title={brand?.business_type === 'hospital' ? 'Patients' : 'Clients'} brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Clients {...pageProps} /></div></>)} />
             <Route path='appointments' element={guard('appointments', <><TopBar title='Appointments' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Appointments {...pageProps} /></div></>)} />
             <Route path='consultation' element={guard('consultation', <><TopBar title='Consultations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Consultation {...pageProps} /></div></>)} />

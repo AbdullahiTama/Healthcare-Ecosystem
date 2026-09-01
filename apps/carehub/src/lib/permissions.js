@@ -220,7 +220,7 @@ export const MODULES = {
   dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES, section: 'overview' },
   overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES, section: 'overview' },
   pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES, section: 'operations' },
-  inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES, section: 'operations' },
+  inventory: { label: 'Stock Management', icon: Package, types: ALL_TYPES, section: 'operations' },
   mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES, section: 'ecosystem' },
   clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' }, section: 'patients' },
   appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES, section: 'operations' },
