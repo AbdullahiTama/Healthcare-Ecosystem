@@ -240,10 +240,10 @@ describe('module registry (business type → modules)', () => {
 
   it('produces the same nav tuples the legacy exported lists carried', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
-    // Counts reflect wallet + mastercatalog being ALL_TYPES (added after initial registry).
-    expect(ALL_NAV_DEFAULT.length).toBe(19)
-    expect(ALL_NAV_HOSPITAL.length).toBe(23)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(15)
+    // Counts reflect wallet + mastercatalog + ecommerce being ALL_TYPES (added after initial registry).
+    expect(ALL_NAV_DEFAULT.length).toBe(20)
+    expect(ALL_NAV_HOSPITAL.length).toBe(24)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(16)
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
