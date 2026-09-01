@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
-import { Home, Compass, ShoppingBag, User, Plus } from 'lucide-react'
+import { Home, Compass, Newspaper, User, Plus } from 'lucide-react'
 import { theme } from '../styles/theme'
 import { useAuth } from '../providers/AuthContext'
 import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
@@ -15,14 +15,13 @@ function BottomNav({ onCompose }) {
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
   const isSearch = location.pathname === '/search'
-  const isShopRoute = location.pathname === '/shop' || location.pathname.startsWith('/shop/') || location.pathname.startsWith('/cart') || location.pathname.startsWith('/wishlist') || location.pathname.startsWith('/orders')
+  const isNews = location.pathname === '/news' || location.pathname.startsWith('/news/')
 
-  // Consistent 4-item: Home | Browse | Shop | Profile
-  // Browse → Facilities browse, Shop → commerce. Top tabs are Shop|Products|Facilities|Professionals
-  // Bottom Browse highlights when top is Products/Facilities/Professionals, Shop when top is Shop
+  // 4-item: Home | Browse | News | Profile — per latest instruction Shop replaced by News
+  // Home → /feed, Browse → marketplace (any /search tab), News → /news, Profile → /profile
   const isHomeActive = isFeed
-  const browseActive = isSearch && ['products', 'businesses', 'professionals'].includes(tab)
-  const shopActive = (isSearch && tab === 'shop') || isShopRoute
+  const browseActive = isSearch
+  const isNewsActive = isNews
   const isProfileActive = isProfile
 
   function handleCompose() {
@@ -133,14 +132,14 @@ function BottomNav({ onCompose }) {
           Browse
         </Link>
         <Link
-          to="/shop"
-          style={itemStyle(shopActive)}
-          aria-current={shopActive ? 'page' : undefined}
+          to="/news"
+          style={itemStyle(isNewsActive)}
+          aria-current={isNewsActive ? 'page' : undefined}
         >
-          <span style={iconCapsule(shopActive)}>
-            <ShoppingBag size={20} strokeWidth={shopActive ? 2.4 : 2} aria-hidden="true" />
+          <span style={iconCapsule(isNewsActive)}>
+            <Newspaper size={20} strokeWidth={isNewsActive ? 2.4 : 2} aria-hidden="true" />
           </span>
-          Shop
+          News
         </Link>
         <Link to="/profile" style={itemStyle(isProfileActive)} aria-current={isProfileActive ? 'page' : undefined}>
           <span style={iconCapsule(isProfileActive)}>
