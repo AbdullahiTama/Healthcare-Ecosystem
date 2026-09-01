@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Package, Heart, ShoppingCart, SlidersHorizontal } from 'lucide-react'
+import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card } from '../../components/ui'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { createShopRepository } from './shopRepository'
 import { useCart } from './CartProvider'
 import { useWishlist } from './WishlistProvider'
@@ -29,6 +30,8 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [sort, setSort] = useState('popular')
   const [recentIds, setRecentIds] = useState([])
   const [ratings, setRatings] = useState({})
+  const { isMobile } = useBreakpoint()
+  const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { load(); setRecentIds(getRecent()) }, [segment, externalQuery])
@@ -164,12 +167,39 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         </div>
       )}
 
-      {/* Faceted filters — lighter, not a heavy boxed card when embedded */}
+      {/* Faceted filters — collapsible on mobile so med-market grid is immediately visible */}
+      {isMobile && (
+        <button
+          onClick={() => setShowFilters((v) => !v)}
+          aria-expanded={showFilters}
+          aria-controls="shop-faceted-filters"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            minHeight: 44,
+            padding: '8px 14px',
+            borderRadius: 999,
+            border: `1px solid ${theme.border}`,
+            background: showFilters ? theme.tealMist : '#fff',
+            color: showFilters ? theme.tealDeep : theme.navy,
+            fontWeight: 800,
+            fontSize: 12,
+            cursor: 'pointer',
+            marginBottom: showFilters ? 10 : 12,
+          }}
+        >
+          <SlidersHorizontal size={14} aria-hidden="true" /> Filters <ChevronDown size={14} aria-hidden="true" style={{ transform: showFilters ? 'rotate(180deg)' : 'none', transition: `transform ${theme.motion.fast}` }} />
+        </button>
+      )}
       <div
+        id="shop-faceted-filters"
         style={
-          embedded
-            ? { display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom: 10, padding: '2px 0' }
-            : { display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom: 12, padding:10, border:`1px solid ${theme.border}`, borderRadius:12, background: theme.cardBg }
+          isMobile
+            ? { display: showFilters ? 'flex' : 'none', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, padding: '2px 0' }
+            : embedded
+              ? { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, padding: '2px 0' }
+              : { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, padding: 10, border: `1px solid ${theme.border}`, borderRadius: 12, background: theme.cardBg }
         }
       >
         {/* Hide Filters label when embedded to reduce chrome — keep compact */}

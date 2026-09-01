@@ -9,19 +9,21 @@ function BottomNav({ onCompose }) {
   const [searchParams] = useSearchParams()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const tab = searchParams.get('tab')
+  const rawTab = searchParams.get('tab')
+  const tab = rawTab || 'shop' // default marketplace tab is Shop per spec
 
-  const isMarketplace = location.pathname === '/search' || location.pathname === '/shop' || location.pathname.startsWith('/shop/')
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
+  const isSearch = location.pathname === '/search'
+  const isShopRoute = location.pathname === '/shop' || location.pathname.startsWith('/shop/') || location.pathname.startsWith('/cart') || location.pathname.startsWith('/wishlist') || location.pathname.startsWith('/orders')
 
-  // Spec §30: Home | Browse | Shop | Profile — Shop active inside marketplace
-  // Home → /feed, Browse → /search (general browse), Shop → /shop (/search?tab=shop), Profile → /profile
-  // Inside marketplace (/search) Shop is highlighted regardless of top tab per spec's strict wording
+  // Consistent 4-item: Home | Browse | Shop | Profile
+  // Browse → Facilities browse, Shop → commerce. Top tabs are Shop|Products|Facilities|Professionals
+  // Bottom Browse highlights when top is Products/Facilities/Professionals, Shop when top is Shop
   const isHomeActive = isFeed
-  const isShopActive = isMarketplace
-  const browseActive = !isShopActive && location.pathname === '/search' && tab && tab !== 'shop'
-  const shopActive = isShopActive
+  const browseActive = isSearch && ['products', 'businesses', 'professionals'].includes(tab)
+  const shopActive = (isSearch && tab === 'shop') || isShopRoute
+  const isProfileActive = isProfile
 
   function handleCompose() {
     if (onCompose) {
@@ -59,6 +61,9 @@ function BottomNav({ onCompose }) {
     transition: `background ${theme.motion.fast} ${theme.motion.easeOut}`,
   })
 
+  // Show create as floating action, not inside flex row, so Browse and Shop stay adjacent and consistent
+  const showCreate = !!(onCompose || ['/feed', '/profile', '/news'].includes(location.pathname))
+
   return (
     <div
       role="navigation"
@@ -73,75 +78,77 @@ function BottomNav({ onCompose }) {
         background: theme.cardBg,
         borderTop: `1px solid ${theme.border}`,
         display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'flex-start',
-        gap: 2,
-        padding: '8px 6px calc(8px + env(safe-area-inset-bottom)) 6px',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 0,
+        padding: showCreate ? '6px 6px calc(8px + env(safe-area-inset-bottom)) 6px' : '8px 6px calc(8px + env(safe-area-inset-bottom)) 6px',
         boxShadow: '0 -2px 10px rgba(0,0,0,0.04)',
         zIndex: 100,
-        overflow: 'hidden',
+        overflow: 'visible',
         boxSizing: 'border-box',
       }}
     >
-      <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
-        <span style={iconCapsule(isHomeActive)}>
-          <Home size={20} strokeWidth={isHomeActive ? 2.4 : 2} aria-hidden="true" />
-        </span>
-        Home
-      </Link>
-      <Link
-        to="/search"
-        style={itemStyle(browseActive)}
-        aria-current={browseActive ? 'page' : undefined}
-      >
-        <span style={iconCapsule(browseActive)}>
-          <Compass size={20} strokeWidth={browseActive ? 2.4 : 2} aria-hidden="true" />
-        </span>
-        Browse
-      </Link>
-      {/* Create action — not a navigation destination, kept for feed's in-place selector */}
-      {(onCompose || location.pathname === '/feed' || location.pathname === '/profile' || location.pathname === '/news') && (
-        <button
-          onClick={handleCompose}
-          aria-label="Create post"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: theme.radius.md,
-            background: theme.tealDeep,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: theme.elevation[2],
-            flexShrink: 0,
-            margin: '0 2px',
-            transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}`,
-          }}
-          onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)' }}
-          onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
-        >
-          <Plus size={22} strokeWidth={2.6} aria-hidden="true" />
-        </button>
+      {/* Floating Create — centered above the bar, not between Browse and Shop */}
+      {showCreate && (
+        <div style={{ position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', zIndex: 2 }}>
+          <button
+            onClick={handleCompose}
+            aria-label="Create post"
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 16,
+              background: theme.tealDeep,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              border: `3px solid ${theme.cardBg}`,
+              cursor: 'pointer',
+              boxShadow: theme.elevation[2],
+              transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}`,
+            }}
+            onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)' }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            <Plus size={24} strokeWidth={2.6} aria-hidden="true" />
+          </button>
+        </div>
       )}
-      <Link
-        to="/shop"
-        style={itemStyle(shopActive)}
-        aria-current={shopActive ? 'page' : undefined}
-      >
-        <span style={iconCapsule(shopActive)}>
-          <ShoppingBag size={20} strokeWidth={shopActive ? 2.4 : 2} aria-hidden="true" />
-        </span>
-        Shop
-      </Link>
-      <Link to="/profile" style={itemStyle(isProfile)} aria-current={isProfile ? 'page' : undefined}>
-        <span style={iconCapsule(isProfile)}>
-          <User size={20} strokeWidth={isProfile ? 2.4 : 2} aria-hidden="true" />
-        </span>
-        Profile
-      </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-start', gap: 2, width: '100%' }}>
+        <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
+          <span style={iconCapsule(isHomeActive)}>
+            <Home size={20} strokeWidth={isHomeActive ? 2.4 : 2} aria-hidden="true" />
+          </span>
+          Home
+        </Link>
+        <Link
+          to="/search?tab=businesses"
+          style={itemStyle(browseActive)}
+          aria-current={browseActive ? 'page' : undefined}
+        >
+          <span style={iconCapsule(browseActive)}>
+            <Compass size={20} strokeWidth={browseActive ? 2.4 : 2} aria-hidden="true" />
+          </span>
+          Browse
+        </Link>
+        <Link
+          to="/shop"
+          style={itemStyle(shopActive)}
+          aria-current={shopActive ? 'page' : undefined}
+        >
+          <span style={iconCapsule(shopActive)}>
+            <ShoppingBag size={20} strokeWidth={shopActive ? 2.4 : 2} aria-hidden="true" />
+          </span>
+          Shop
+        </Link>
+        <Link to="/profile" style={itemStyle(isProfileActive)} aria-current={isProfileActive ? 'page' : undefined}>
+          <span style={iconCapsule(isProfileActive)}>
+            <User size={20} strokeWidth={isProfileActive ? 2.4 : 2} aria-hidden="true" />
+          </span>
+          Profile
+        </Link>
+      </div>
     </div>
   )
 }
