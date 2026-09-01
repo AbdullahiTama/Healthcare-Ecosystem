@@ -45,8 +45,8 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
             {!thumb && <Package size={28} aria-hidden="true" />}
           </div>
 
-          <div style={{ padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-            {/* Name — 2 line clamp */}
+          <div style={{ padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
+            {/* Name — 2 line clamp, break long tokens on mobile */}
             <div
               style={{
                 fontSize: 13,
@@ -58,20 +58,22 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
                 minHeight: 34,
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
               }}
               title={p.name}
             >
               {p.name}
             </div>
             {p.generic_name && (
-              <div style={{ fontSize: 11, color: theme.textLight, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 11, color: theme.textLight, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {p.generic_name}
               </div>
             )}
 
             {/* Seller / location compact */}
             {(p.seller_location || row.business_id || p.businesses?.name) && (
-              <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {row.businesses?.name || p.businesses?.name || ''}{p.seller_location ? ` · ${p.seller_location}` : row.businesses?.state ? ` · ${row.businesses.state}` : ''}
               </div>
             )}
@@ -103,27 +105,37 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
               </div>
             ) : null}
 
-            {/* Add to Cart bar */}
+            {/* Add to Cart bar — tappable 44h min on mobile */}
             <div style={{ marginTop: 6 }}>
-              <span
-                aria-hidden="true"
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault(); e.stopPropagation()
+                  const k = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
+                  if (k != null) onAddToCart?.({ ecommerce_product_id: row.id || p.id, product_name: p.name, unit_price_kobo: k, quantity: 1, image_url: thumb, vendor_id: row.business_id, sale_type: p.sale_type })
+                }}
+                aria-label={`Add ${p.name} to cart`}
                 style={{
+                  width: '100%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 6,
-                  minHeight: 36,
+                  minHeight: 44,
                   borderRadius: 10,
                   background: theme.tealDeep,
                   color: '#fff',
                   fontSize: 12.5,
                   fontWeight: 800,
                   padding: '0 10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
                 }}
               >
                 <ShoppingCart size={14} aria-hidden="true" />
                 Add to Cart
-              </span>
+              </button>
             </div>
           </div>
         </div>
@@ -157,15 +169,16 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
         <Heart size={14} fill={wished ? '#fff' : 'none'} aria-hidden="true" />
       </button>
 
-      {/* Cart hit-target overlay for keyboard/a11y — actual action is wrapping Link's Add to Cart area, but keep quick cart */}
+      {/* Remove transparent overlay — it intercepted scroll/taps on narrow 2-col cards on mobile. Cart action is now the visible button below. */}
       <button
         type="button"
         onClick={(e) => {
-          e.preventDefault()
+          e.preventDefault(); e.stopPropagation()
           const k = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
           if (k != null) onAddToCart?.({ ecommerce_product_id: row.id || p.id, product_name: p.name, unit_price_kobo: k, quantity: 1, image_url: thumb, vendor_id: row.business_id, sale_type: p.sale_type })
         }}
         aria-label={`Add ${p.name} to cart`}
+        tabIndex={-1}
         style={{
           position: 'absolute',
           left: 10,
@@ -176,6 +189,8 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
+          // keep hit-target but not block scroll — pointerEvents only on visible bar area handled by the Link's span; this is now non-blocking
+          pointerEvents: 'none',
         }}
       />
     </div>

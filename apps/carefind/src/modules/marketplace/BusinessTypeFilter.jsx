@@ -25,11 +25,14 @@ export default function BusinessTypeFilter({ value, onChange, nearMe, onNearMeTo
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
           scrollSnapType: 'x proximity',
-          paddingBottom: 2,
+          paddingBottom: 6,
+          touchAction: 'pan-x',
+          overscrollBehaviorX: 'contain',
         }}
       >
         <style>{`
           div[role="group"][aria-label="Business type filter"]::-webkit-scrollbar { display: none; height: 0; }
+          div[role="group"][aria-label="Business type filter"] { -webkit-overflow-scrolling: touch; }
         `}</style>
         {FILTERS.map((f) => {
           const active = value === f.key
@@ -41,7 +44,7 @@ export default function BusinessTypeFilter({ value, onChange, nearMe, onNearMeTo
               style={{
                 flex: '0 0 auto',
                 scrollSnapAlign: 'start',
-                minHeight: 32,
+                minHeight: 44,
                 padding: '0 14px',
                 borderRadius: 999,
                 border: active ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
@@ -51,6 +54,7 @@ export default function BusinessTypeFilter({ value, onChange, nearMe, onNearMeTo
                 fontWeight: 800,
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
+                touchAction: 'manipulation',
               }}
             >
               {f.label}
@@ -71,8 +75,8 @@ export default function BusinessTypeFilter({ value, onChange, nearMe, onNearMeTo
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            minHeight: 32,
-            padding: '0 12px',
+            minHeight: 44,
+            padding: '0 14px',
             borderRadius: 999,
             border: nearMe ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
             background: nearMe ? theme.tealMist : '#fff',
@@ -81,6 +85,7 @@ export default function BusinessTypeFilter({ value, onChange, nearMe, onNearMeTo
             fontWeight: 800,
             cursor: userCoords ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
+            touchAction: 'manipulation',
           }}
         >
           <MapPin size={14} strokeWidth={nearMe ? 2.4 : 2} aria-hidden="true" />

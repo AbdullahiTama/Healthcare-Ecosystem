@@ -174,15 +174,15 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
       >
         {/* Hide Filters label when embedded to reduce chrome — keep compact */}
         {!embedded && <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, color:theme.navy }}><SlidersHorizontal size={14}/> Filters</span>}
-        <select value={brand} onChange={e=>setBrand(e.target.value)} aria-label="Filter by brand" style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12 }}>
+        <select value={brand} onChange={e=>setBrand(e.target.value)} aria-label="Filter by brand" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
           {brands.map(b => <option key={b} value={b}>{b==='all' ? 'All brands' : b}</option>)}
         </select>
-        <input placeholder="Min ₦" value={priceMin} onChange={e=>setPriceMin(e.target.value)} inputMode="numeric" aria-label="Minimum price" style={{ width:90, padding:'6px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12 }} />
-        <input placeholder="Max ₦" value={priceMax} onChange={e=>setPriceMax(e.target.value)} inputMode="numeric" aria-label="Maximum price" style={{ width:90, padding:'6px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12 }} />
-        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy }}><input type="checkbox" checked={showRxOnly} onChange={e=>setShowRxOnly(e.target.checked)} /> Rx only</label>
-        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy }}><input type="checkbox" checked={inStockOnly} onChange={e=>setInStockOnly(e.target.checked)} /> In stock</label>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-          Sort <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort products" style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff' }}>
+        <input placeholder="Min ₦" value={priceMin} onChange={e=>setPriceMin(e.target.value)} inputMode="numeric" aria-label="Minimum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
+        <input placeholder="Max ₦" value={priceMax} onChange={e=>setPriceMax(e.target.value)} inputMode="numeric" aria-label="Maximum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
+        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={showRxOnly} onChange={e=>setShowRxOnly(e.target.checked)} /> Rx only</label>
+        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={inStockOnly} onChange={e=>setInStockOnly(e.target.checked)} /> In stock</label>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontSize:12, minHeight:44 }}>
+          Sort <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort products" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', minHeight:44 }}>
             <option value="popular">Popular</option><option value="newest">Newest</option><option value="price_asc">Price ↑</option><option value="price_desc">Price ↓</option><option value="rating">Rating</option>
           </select>
         </div>

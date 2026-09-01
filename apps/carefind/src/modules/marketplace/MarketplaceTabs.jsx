@@ -22,13 +22,15 @@ export default function MarketplaceTabs({ activeTab, onChange }) {
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
-        padding: '2px 16px 2px',
+        padding: '2px 16px 6px',
         scrollSnapType: 'x proximity',
-        // hide scrollbar visually but keep scroll
+        touchAction: 'pan-x',
+        overscrollBehaviorX: 'contain',
       }}
     >
       <style>{`
         div[role="tablist"]::-webkit-scrollbar { display: none; height: 0; }
+        div[role="tablist"] { -webkit-overflow-scrolling: touch; }
       `}</style>
       {TAB_CONFIG.map(({ key, label, Icon }) => {
         const active = activeTab === key
@@ -46,7 +48,7 @@ export default function MarketplaceTabs({ activeTab, onChange }) {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 7,
-              minHeight: 36,
+              minHeight: 44,
               padding: '0 16px',
               borderRadius: 999,
               border: active ? `2px solid ${theme.tealDeep}` : `1px solid ${theme.border}`,
@@ -57,6 +59,7 @@ export default function MarketplaceTabs({ activeTab, onChange }) {
               letterSpacing: '-0.01em',
               whiteSpace: 'nowrap',
               cursor: 'pointer',
+              touchAction: 'manipulation',
               transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}`,
             }}
           >

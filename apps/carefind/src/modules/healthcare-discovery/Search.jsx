@@ -214,7 +214,7 @@ function Search() {
   const showingFeatured = tab === 'products' && !query.trim()
 
   const bodyContent = (
-    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh' } : { fontFamily: theme.fontFamily }}>
+    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(100px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh', overflowX: 'hidden', boxSizing: 'border-box' } : { fontFamily: theme.fontFamily }}>
       <style>{`
         @keyframes medmarket-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
@@ -242,13 +242,14 @@ function Search() {
                 width: '100%',
                 minHeight: 44,
                 padding: '11px 12px 11px 38px',
-                fontSize: 14,
+                fontSize: isMobile ? 16 : 14,
                 border: `1px solid ${theme.border}`,
                 borderRadius: 12,
                 boxSizing: 'border-box',
                 fontFamily: theme.fontFamily,
                 background: isMobile ? '#fff' : theme.cardBg,
                 outline: 'none',
+                WebkitTextSizeAdjust: '100%',
               }}
             />
           </div>
@@ -279,7 +280,7 @@ function Search() {
       </div>
 
       {/* 3 — Marketplace Navigation — Shop first, one line, never wrap */}
-      <div style={{ padding: '10px 0 8px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none', position: isMobile ? 'sticky' : 'static', top: isMobile ? 57 : undefined, zIndex: isMobile ? 30 : undefined }}>
+      <div style={{ padding: '10px 0 8px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none', position: isMobile ? 'sticky' : 'static', top: isMobile ? 64 : undefined, zIndex: isMobile ? 30 : undefined }}>
         <MarketplaceTabs activeTab={tab} onChange={setTab} />
       </div>
 
@@ -299,7 +300,7 @@ function Search() {
               width: '100%',
               minHeight: 44,
               padding: '11px 12px 11px 36px',
-              fontSize: 13.5,
+              fontSize: isMobile ? 16 : 13.5,
               border: `1px solid ${theme.border}`,
               borderRadius: 12,
               boxSizing: 'border-box',
@@ -312,7 +313,7 @@ function Search() {
           {NG_STATES.map(s => <option key={s} value={s} />)}
         </datalist>
         {tab === 'professionals' && (
-          <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" aria-label="Filter by specialty" style={{ marginTop: 8, width: '100%', minHeight: 44, padding: 11, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: theme.fontFamily, background: theme.cardBg }} />
+          <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" aria-label="Filter by specialty" style={{ marginTop: 8, width: '100%', minHeight: 44, padding: 11, fontSize: isMobile ? 16 : 13, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: theme.fontFamily, background: theme.cardBg }} />
         )}
         {stateFilter && (
           <button onClick={() => setStateFilter('')} style={{ marginTop: 8, minHeight: 32, padding: '4px 12px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 999, fontSize: 11, fontWeight: 700, color: theme.textLight, cursor: 'pointer' }}>Clear location</button>
@@ -406,20 +407,17 @@ function Search() {
           </div>
         )}
 
-        {/* Products: 2-col grid on mobile, 3 tablet, 4 desktop */}
+        {/* Products: 2-col grid on mobile, 3 tablet, 4 desktop — CSS media, not JS, so first paint is correct */}
         {!loading && tab === 'products' && products.length > 0 && (
-          <div
-            role="tabpanel"
-            id="marketplace-panel-products"
-            aria-labelledby="marketplace-tab-products"
-            style={{
-              display: 'grid',
-              gap: 10,
-              // mobile first 2 cols, upgraded via media via inline JS breakpoint
-              gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : isMobile === false && typeof window !== 'undefined' && window.innerWidth < 1024 ? 'repeat(3, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
-              alignItems: 'stretch',
-            }}
-          >
+          <>
+            <style>{`
+              .mp-products-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+              @media (min-width: 768px) { .mp-products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+              @media (min-width: 1024px) { .mp-products-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+              .mp-products-grid > * { min-width: 0; }
+            `}</style>
+            <div role="tabpanel" id="marketplace-panel-products" aria-labelledby="marketplace-tab-products" className="mp-products-grid">
+
             {products.map((p, idx) => {
               const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
               const callLink = telLink(sellerPhone(p))
@@ -430,12 +428,12 @@ function Search() {
                     <div style={{ height: 118, background: p.image_url ? `url(${p.image_url}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep, flexShrink: 0, borderBottom: `1px solid ${theme.hairline}` }}>
                       {!p.image_url && <PillIcon size={26} aria-hidden="true" />}
                     </div>
-                    <div style={{ padding: '9px 10px 8px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, lineHeight: 1.32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34 }} title={p.name}>
+                    <div style={{ padding: '9px 10px 8px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, lineHeight: 1.32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34, wordBreak: 'break-word', overflowWrap: 'anywhere' }} title={p.name}>
                         {p.name}{p.category && <Pill label={p.category} type="teal" style={{ fontSize: 9, padding: '1px 6px', marginLeft: 6 }} />}
                       </div>
-                      {p.generic_name && <div style={{ fontSize: 11, color: theme.textMid, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.generic_name}</div>}
-                      <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {p.generic_name && <div style={{ fontSize: 11, color: theme.textMid, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{p.generic_name}</div>}
+                      <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                         {p.business_id ? (
                           <span style={{ color: theme.tealDeep, fontWeight: 700 }}>{sellerName(p)}</span>
                         ) : p.owner_id ? (
@@ -460,14 +458,14 @@ function Search() {
                     </div>
                   </Link>
                   {(waLink || callLink) && (
-                    <div style={{ display: 'flex', gap: 6, padding: '0 10px 10px' }}>
+                    <div style={{ display: 'flex', gap: 6, padding: '0 10px 10px', flexWrap: 'wrap' }}>
                       {waLink && (
-                        <a href={waLink} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'whatsapp' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 32, padding: '6px 8px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none' }}>
+                        <a href={waLink} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'whatsapp' })} style={{ flex: '1 1 90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, padding: '8px 8px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none', touchAction: 'manipulation' }}>
                           <MessageCircle size={13} aria-hidden="true" /> WhatsApp
                         </a>
                       )}
                       {callLink && (
-                        <a href={callLink} onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'call' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 32, padding: '6px 8px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none' }}>
+                        <a href={callLink} onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'call' })} style={{ flex: '1 1 90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, padding: '8px 8px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none', touchAction: 'manipulation' }}>
                           <Phone size={13} aria-hidden="true" /> Call
                         </a>
                       )}
@@ -476,7 +474,8 @@ function Search() {
                 </div>
               )
             })}
-          </div>
+            </div>
+          </>
         )}
 
         {!loading && tab === 'businesses' && businesses.length > 0 && (

@@ -47,15 +47,15 @@ export default function MarketplaceHeader({ userCoords }) {
         />
       </Link>
 
-      {/* Right: location + profile */}
+      {/* Right: location + profile — 44px min tap per WCAG/a11y */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           type="button"
           aria-label={userCoords ? 'Location enabled' : 'Location'}
           title={userCoords ? 'Location enabled' : 'Enable location for Near me'}
           style={{
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: 999,
             border: `1px solid ${theme.border}`,
             background: userCoords ? theme.tealMist : '#fff',
@@ -63,6 +63,7 @@ export default function MarketplaceHeader({ userCoords }) {
             display: 'grid',
             placeItems: 'center',
             cursor: 'pointer',
+            flexShrink: 0,
           }}
         >
           <MapPin size={18} strokeWidth={2.1} aria-hidden="true" />
@@ -71,8 +72,8 @@ export default function MarketplaceHeader({ userCoords }) {
           to="/profile"
           aria-label="Profile"
           style={{
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: 999,
             border: `1px solid ${theme.border}`,
             background: '#fff',
@@ -80,6 +81,7 @@ export default function MarketplaceHeader({ userCoords }) {
             display: 'grid',
             placeItems: 'center',
             textDecoration: 'none',
+            flexShrink: 0,
           }}
         >
           <User size={18} strokeWidth={2} aria-hidden="true" />

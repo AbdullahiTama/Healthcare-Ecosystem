@@ -6,14 +6,7 @@ import ProductCard from './ProductCard'
 
 function GridSkeleton() {
   return (
-    <div
-      style={{
-        display: 'grid',
-        // mobile-first 2 cols; JS breakpoint upgrades to 3/4
-        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-        gap: 10,
-      }}
-    >
+    <div className="mp-grid mp-grid--skeleton" style={{ display: 'grid', gap: 10 }}>
       {Array.from({ length: 6 }).map((_, i) => (
         <Card key={i} style={{ padding: 10, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
           <div style={{ height: 122, background: theme.gray100, borderRadius: 8, marginBottom: 8 }} />
@@ -39,13 +32,6 @@ export default function ProductGrid({
   emptyTitle = 'No products found',
   emptyHint = 'Try another search or filter.',
 }) {
-  const { isMobile, isTablet } = useBreakpoint()
-  const [cols, setCols] = useState(2)
-  useEffect(() => {
-    if (isMobile) setCols(2)
-    else if (isTablet) setCols(3)
-    else setCols(4)
-  }, [isMobile, isTablet])
 
   if (loading) return <GridSkeleton />
   if (error)
@@ -64,16 +50,15 @@ export default function ProductGrid({
   }
 
   return (
-    <div
-      role="list"
-      aria-label="Products"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-        gap: 10,
-        alignItems: 'stretch',
-      }}
-    >
+    <>
+      <style>{`
+        .mp-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+        @media (min-width: 768px) { .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        @media (min-width: 1024px) { .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+        .mp-grid > * { min-width: 0; }
+      `}</style>
+      <div role="list" aria-label="Products" className="mp-grid" style={{ alignItems: 'stretch' }}>
+
       {rows.map((row) => {
         const id = row.id || row.products?.id
         return (
@@ -88,6 +73,7 @@ export default function ProductGrid({
           </div>
         )
       })}
-    </div>
+      </div>
+    </>
   )
 }
