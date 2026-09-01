@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { History, ArrowLeft } from 'lucide-react'
+import { History, ArrowLeft, Loader2 } from 'lucide-react'
 import { stockValidationRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { DataTable, Pill, Empty } from '../../components/ui'
@@ -8,6 +8,7 @@ export default function StockHistory({ brand }) {
   const [sessions, setSessions] = useState([])
   const [selectedSession, setSelectedSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     if (!brand?.id) return
@@ -26,12 +27,23 @@ export default function StockHistory({ brand }) {
   }
 
   async function handleSessionClick(session) {
+    setDetailLoading(true)
     try {
       const detail = await stockValidationRepository.getSessionById(session.id, brand.id)
       setSelectedSession(detail)
     } catch (error) {
       console.error('handleSessionClick error:', error)
     }
+    setDetailLoading(false)
+  }
+
+  if (detailLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px', gap: '12px' }}>
+        <Loader2 size={20} className="spin" style={{ animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ fontSize: '14px', color: theme.gray500 }}>Loading session...</span>
+      </div>
+    )
   }
 
   if (selectedSession) {

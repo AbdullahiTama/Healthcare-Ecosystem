@@ -20,7 +20,7 @@ export default function StockManagement(props) {
 
   return (
     <>
-      <div style={{ 
+      <div role="tablist" style={{ 
         display: 'flex', 
         gap: '8px', 
         marginBottom: '20px',
@@ -32,6 +32,8 @@ export default function StockManagement(props) {
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
               onClick={() => handleTabChange(tab.id)}
               style={{
                 padding: '10px 16px',
