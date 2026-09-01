@@ -16,7 +16,7 @@
 CREATE TABLE IF NOT EXISTS stock_validation_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id uuid NOT NULL REFERENCES businesses(id),
-  user_id uuid NOT NULL REFERENCES auth.users(id),
+  user_id uuid REFERENCES auth.users(id),
   user_name text NOT NULL,
   products_checked int NOT NULL DEFAULT 0,
   products_adjusted int NOT NULL DEFAULT 0,
