@@ -5,7 +5,7 @@ import Shop from '../shop/Shop'
 import { useAuth } from '../../providers/AuthContext'
 import {
   BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
-  Search as SearchIcon, SearchX, Sparkles, Star, Stethoscope,
+  Search as SearchIcon, SearchX, ShoppingBag, Sparkles, Star, Stethoscope,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -17,9 +17,10 @@ import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../
 import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
-import MarketplaceHeader from '../marketplace/MarketplaceHeader.jsx'
 import MarketplaceTabs from '../marketplace/MarketplaceTabs.jsx'
 import BusinessTypeFilter from '../marketplace/BusinessTypeFilter.jsx'
+import Logo from '../social-feed/Logo.jsx'
+import { useCart } from '../shop/CartProvider'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
@@ -33,6 +34,7 @@ function Search() {
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const { coords: userCoords } = useGeolocation()
+  const { count: cartCount } = useCart()
 
   const distanceMeters = (p, u) => {
     const c = productCoords(p)
@@ -225,8 +227,44 @@ function Search() {
         .hide-scrollbar { scrollbar-width:none; -ms-overflow-style:none; }
       `}</style>
 
-      {/* 1 — CareFind Header (mobile) — AppShell provides desktop header */}
-      {isMobile && <MarketplaceHeader userCoords={userCoords} />}
+      {/* 1 — CareFind Header (mobile) — matches home page style */}
+      {isMobile && (
+        <div style={{
+          background: theme.heroGradient,
+          margin: '-20px -20px 0 -20px',
+          padding: '14px 16px 0',
+          borderRadius: '0 0 24px 24px',
+          color: '#fff',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Link to="/feed" style={{ textDecoration: 'none', flexShrink: 0 }}>
+              <Logo size={30} />
+            </Link>
+            <div style={{ flex: 1 }} />
+            <Link to="/cart" style={{
+              width: 36, height: 36, borderRadius: theme.radius.md,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(255,255,255,0.1)', color: '#fff',
+              textDecoration: 'none', position: 'relative',
+            }}>
+              <ShoppingBag size={18} aria-hidden="true" />
+              {cartCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -4,
+                  minWidth: 16, height: 16, padding: '0 4px',
+                  borderRadius: theme.radius.sm, background: theme.danger,
+                  color: '#fff', fontSize: 9, fontWeight: 900,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxSizing: 'border-box', border: '1.5px solid rgba(14,111,90,0.7)',
+                }}>{cartCount > 99 ? '99+' : cartCount}</span>
+              )}
+            </Link>
+            <Link to={user ? '/profile' : '/login'} style={{ textDecoration: 'none' }}>
+              <Avatar name={myUsername} src={myAvatar} size={36} style={{ border: '2px solid rgba(255,255,255,0.28)' }} />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* 2 — Main Search — prominent, integrated */}
       <div style={{ padding: isMobile ? '14px 16px 12px' : '18px 0 14px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none' }}>

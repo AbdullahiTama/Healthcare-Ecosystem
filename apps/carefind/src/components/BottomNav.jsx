@@ -1,5 +1,5 @@
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
-import { Home, Compass, Newspaper, User, Plus } from 'lucide-react'
+import { Home, Store, Newspaper, User, Plus } from 'lucide-react'
 import { theme } from '../styles/theme'
 import { useAuth } from '../providers/AuthContext'
 import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
@@ -10,19 +10,20 @@ function BottomNav({ onCompose }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const rawTab = searchParams.get('tab')
-  const tab = rawTab || 'shop' // default marketplace tab is Shop per spec
+  const tab = rawTab || 'shop'
 
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
   const isSearch = location.pathname === '/search'
   const isNews = location.pathname === '/news' || location.pathname.startsWith('/news/')
 
-  // 4-item: Home | Browse | News | Profile — per latest instruction Shop replaced by News
-  // Home → /feed, Browse → marketplace (any /search tab), News → /news, Profile → /profile
   const isHomeActive = isFeed
-  const browseActive = isSearch
+  const isMedMarketActive = isSearch
   const isNewsActive = isNews
   const isProfileActive = isProfile
+
+  // Hide Create button when on MedMarket (/search)
+  const showCreate = !!(onCompose || ['/feed', '/profile', '/news'].includes(location.pathname))
 
   function handleCompose() {
     if (onCompose) {
@@ -38,20 +39,21 @@ function BottomNav({ onCompose }) {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 3,
+    justifyContent: 'center',
+    gap: 2,
     color: active ? theme.tealDeep : theme.textLight,
     textDecoration: 'none',
     fontSize: 10,
     fontWeight: 800,
-    minWidth: 0,
     flex: 1,
-    padding: '4px 0',
+    padding: '6px 0 2px',
+    WebkitTapHighlightColor: 'transparent',
   })
 
   const iconCapsule = (active) => ({
-    width: 38,
-    height: 26,
-    borderRadius: 9,
+    width: 40,
+    height: 28,
+    borderRadius: 10,
     flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
@@ -60,11 +62,8 @@ function BottomNav({ onCompose }) {
     transition: `background ${theme.motion.fast} ${theme.motion.easeOut}`,
   })
 
-  // Straight line: all items in one horizontal row, equally spaced, no floating
-  const showCreate = !!(onCompose || ['/feed', '/profile', '/news'].includes(location.pathname))
-
   return (
-    <div
+    <nav
       role="navigation"
       aria-label="Primary"
       style={{
@@ -77,13 +76,10 @@ function BottomNav({ onCompose }) {
         background: theme.cardBg,
         borderTop: `1px solid ${theme.border}`,
         display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        gap: 2,
-        padding: '8px 6px calc(8px + env(safe-area-inset-bottom)) 6px',
+        alignItems: 'stretch',
+        padding: '6px 4px calc(6px + env(safe-area-inset-bottom)) 4px',
         boxShadow: '0 -2px 10px rgba(0,0,0,0.04)',
         zIndex: 100,
-        overflow: 'hidden',
         boxSizing: 'border-box',
       }}
     >
@@ -94,14 +90,14 @@ function BottomNav({ onCompose }) {
         Home
       </Link>
       <Link
-        to="/search?tab=businesses"
-        style={itemStyle(browseActive)}
-        aria-current={browseActive ? 'page' : undefined}
+        to="/search?tab=shop"
+        style={itemStyle(isMedMarketActive)}
+        aria-current={isMedMarketActive ? 'page' : undefined}
       >
-        <span style={iconCapsule(browseActive)}>
-          <Compass size={20} strokeWidth={browseActive ? 2.4 : 2} aria-hidden="true" />
+        <span style={iconCapsule(isMedMarketActive)}>
+          <Store size={20} strokeWidth={isMedMarketActive ? 2.4 : 2} aria-hidden="true" />
         </span>
-        Browse
+        MedMarket
       </Link>
       {showCreate && (
         <button
@@ -112,7 +108,6 @@ function BottomNav({ onCompose }) {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            flex: 1,
           }}
         >
           <span
@@ -143,7 +138,7 @@ function BottomNav({ onCompose }) {
         </span>
         Profile
       </Link>
-    </div>
+    </nav>
   )
 }
 

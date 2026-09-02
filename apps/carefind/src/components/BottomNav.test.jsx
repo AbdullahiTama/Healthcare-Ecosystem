@@ -41,18 +41,18 @@ describe('BottomNav (four destinations — CareFind marketplace redesign)', () =
   it('renders the four core destinations', () => {
     renderNav('/feed', { onCompose: vi.fn() })
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Browse' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'MedMarket' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'News' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create post' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'MedMarket' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Shop' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Videos' })).not.toBeInTheDocument()
   })
 
-  it('keeps Browse highlighted inside the marketplace', () => {
-    renderNav('/search?tab=businesses')
-    expect(screen.getByRole('link', { name: 'Browse' }).style.color).toBe('rgb(14, 111, 90)')
+  it('keeps MedMarket highlighted inside the marketplace', () => {
+    renderNav('/search?tab=shop')
+    expect(screen.getByRole('link', { name: 'MedMarket' }).style.color).toBe('rgb(14, 111, 90)')
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(139, 151, 143)')
   })
 
@@ -69,6 +69,11 @@ describe('BottomNav (four destinations — CareFind marketplace redesign)', () =
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Wallet' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Notifications' })).not.toBeInTheDocument()
+  })
+
+  it('hides the Create button when on the MedMarket page', () => {
+    renderNav('/search?tab=shop')
+    expect(screen.queryByRole('button', { name: 'Create post' })).not.toBeInTheDocument()
   })
 
   // Issue #2 regression suite. The old behaviour scrolled to #post-composer
