@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon, Wallet } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
@@ -37,6 +37,26 @@ export default function Landing() {
       gsap.from('.visibility-section', {
         scrollTrigger: { trigger: '.visibility-section', start: 'top 85%' },
         y: 30, opacity: 0, duration: 0.7, ease: 'power2.out',
+      })
+
+      gsap.from('.inventory-card', {
+        scrollTrigger: { trigger: '.inventory-section', start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.6, stagger: 0.08, ease: 'power2.out',
+      })
+
+      gsap.from('.ai-section', {
+        scrollTrigger: { trigger: '.ai-section', start: 'top 85%' },
+        scale: 0.95, opacity: 0, duration: 0.8, ease: 'power2.out',
+      })
+
+      gsap.from('.ecom-step', {
+        scrollTrigger: { trigger: '.ecom-section', start: 'top 85%' },
+        y: 40, opacity: 0, duration: 0.6, stagger: 0.15, ease: 'power2.out',
+      })
+
+      gsap.from('.bi-card', {
+        scrollTrigger: { trigger: '.bi-section', start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out',
       })
 
       ScrollTrigger.create({
@@ -257,6 +277,120 @@ export default function Landing() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ── Inventory & Operations ──────────────────────────────── */}
+      <div className="inventory-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Know What You Have. Know What You Need.
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
+              CareHub helps businesses maintain better control over products and stock, monitor activity, identify what needs attention and make more informed purchasing and operational decisions.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { icon: Package, text: 'Track inventory and stock levels' },
+              { icon: BarChart2, text: 'Monitor product movement' },
+              { icon: Search, text: 'Identify products requiring attention' },
+              { icon: Clipboard, text: 'Support restocking decisions' },
+              { icon: MapPin, text: 'Manage inventory across locations' },
+              { icon: ShoppingCart, text: 'Connect eligible products to e-commerce' },
+            ].map((item, i) => (
+              <div key={i} className="inventory-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <item.icon size={20} />
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: navy, lineHeight: 1.4 }}>{item.text}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Intelligent Technology ─────────────────────────────── */}
+      <div className="ai-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 800, margin: '0 auto' }}>
+          <div style={{ background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: isMobile ? 32 : 48, textAlign: 'center', color: 'white' }}>
+            <div style={{ display: 'inline-block', padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 20 }}>INTELLIGENT TECHNOLOGY</div>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 30, margin: '0 0 16px', lineHeight: 1.2 }}>
+              Built With Intelligent Technology for Modern Businesses.
+            </h2>
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'rgba(255,255,255,0.85)', maxWidth: 600, margin: '0 auto 20' }}>
+              CareHub uses AI and intelligent technology as part of its vision for smarter business operations. The platform helps businesses turn operational information into useful insights, reduce guesswork and support better decisions.
+            </p>
+            <p style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>
+              Less guesswork. More control. Better decisions.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── E-Commerce ─────────────────────────────────────────── */}
+      <div className="ecom-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Turn Your Inventory Into an Online Storefront.
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+              Businesses can select eligible products from their inventory and make them available through the CareFind Shop.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {[
+              { title: 'Select eligible products', desc: 'Choose products from your inventory that you want to sell online.' },
+              { title: 'Complete product information', desc: 'Add the required product image and description for the CareFind Shop.' },
+              { title: 'Activate for visibility', desc: 'Once activated, customers can discover and purchase through CareFind.' },
+            ].map((step, i) => (
+              <div key={i}>
+                <div className="ecom-step" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: isMobile ? 20 : 24, display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: theme.radius.full, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 900, flexShrink: 0 }}>{i + 1}</div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: isMobile ? 15 : 16, color: navy, marginBottom: 4 }}>{step.title}</div>
+                    <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.6 }}>{step.desc}</div>
+                  </div>
+                </div>
+                {i < 2 && <div style={{ width: 2, height: 16, background: border, margin: '0 auto' }} />}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Business Intelligence ──────────────────────────────── */}
+      <div className="bi-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Don't Just Run Your Business. Understand It.
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
+              CareHub helps transform everyday business activity into useful information so owners and managers can better understand sales, inventory, expenses, debts, demand and financial performance.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+            {[
+              { icon: BarChart2, title: 'Revenue', desc: 'Track sales and revenue trends' },
+              { icon: Package, title: 'Inventory', desc: 'Monitor stock levels and movement' },
+              { icon: Wallet, title: 'Expenses', desc: 'Track and categorize expenses' },
+              { icon: Search, title: 'Demand', desc: 'Understand demand patterns' },
+            ].map((item, i) => (
+              <div key={i} className="bi-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 12 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <item.icon size={22} />
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: navy }}>{item.title}</div>
+                <div style={{ fontSize: 12.5, color: gray500, lineHeight: 1.5 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: 'center', marginTop: 32, fontWeight: 800, fontSize: 15, color: tealDeep }}>
+            Make decisions based on your business data, not guesswork.
+          </p>
         </div>
       </div>
 
