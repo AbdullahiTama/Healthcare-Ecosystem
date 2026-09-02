@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
@@ -27,6 +27,11 @@ export default function Landing() {
       gsap.from('.business-type-pill', {
         scrollTrigger: { trigger: '.business-types-strip', start: 'top 90%' },
         x: -40, opacity: 0, duration: 0.6, stagger: 0.06, ease: 'power2.out',
+      })
+
+      gsap.from('.feature-card', {
+        scrollTrigger: { trigger: '#features', start: 'top 82%' },
+        y: 40, opacity: 0, duration: 0.8, stagger: 0.12, ease: 'power2.out',
       })
 
       ScrollTrigger.create({
@@ -125,6 +130,83 @@ export default function Landing() {
               {b.name}
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── Core Positioning Bento Grid ───────────────────────── */}
+      <div id="features" style={{ padding: '60px 24px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
+            Everything Your Business Needs. In One Place.
+          </h2>
+          <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+            CareHub brings the essential tools required to manage modern healthcare and related businesses into one connected platform.
+          </p>
+        </div>
+        <div style={{ display: 'grid', gridAutoFlow: 'dense', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+          {/* Featured: Inventory Management */}
+          <div className="feature-card" style={{ gridColumn: isMobile ? 'span 1' : 'span 2', gridRow: isMobile ? 'span 1' : 'span 2', background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: 32, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: '#fff' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(255,255,255,0.15)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Package size={22} />
+            </div>
+            <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>Inventory Management</div>
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.65 }}>Track stock levels, cost prices, margins, reorder points and product movement across all your locations.</div>
+          </div>
+          {/* Sales & POS */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ShoppingCart size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Sales & Point of Sale</div></div>
+          </div>
+          {/* Staff Management */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Users size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Staff Management</div></div>
+          </div>
+          {/* Client Management */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Heart size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Client Management</div></div>
+          </div>
+          {/* Financial Management */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><BarChart2 size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Financial Management</div></div>
+          </div>
+          {/* Reporting */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Clipboard size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Reporting</div></div>
+          </div>
+          {/* Demand Intelligence */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Search size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Demand Intelligence</div></div>
+          </div>
+          {/* Appointments */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Clock size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Appointments</div></div>
+          </div>
+          {/* Multi-location */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><MapPin size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Multi-location</div></div>
+          </div>
+          {/* E-commerce */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><ShoppingCart size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>E-commerce</div></div>
+          </div>
+          {/* CareFind Visibility */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Eye size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>CareFind Visibility</div></div>
+          </div>
+          {/* Pharmacovigilance */}
+          <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><AlertCircle size={20} /></div>
+            <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Pharmacovigilance</div></div>
+          </div>
         </div>
       </div>
 
