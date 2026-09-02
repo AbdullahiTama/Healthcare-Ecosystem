@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
@@ -32,6 +32,11 @@ export default function Landing() {
       gsap.from('.feature-card', {
         scrollTrigger: { trigger: '#features', start: 'top 82%' },
         y: 40, opacity: 0, duration: 0.8, stagger: 0.12, ease: 'power2.out',
+      })
+
+      gsap.from('.visibility-section', {
+        scrollTrigger: { trigger: '.visibility-section', start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.7, ease: 'power2.out',
       })
 
       ScrollTrigger.create({
@@ -206,6 +211,51 @@ export default function Landing() {
           <div className="feature-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 20, display: 'flex', alignItems: 'center', gap: 14, transition: 'transform 0.3s ease, box-shadow 0.3s ease' }} onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = theme.elevation[2] } }} onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' } }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><AlertCircle size={20} /></div>
             <div><div style={{ fontWeight: 800, fontSize: 13, color: navy }}>Pharmacovigilance</div></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Business Visibility ───────────────────────────────── */}
+      <div className="visibility-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 40 : 48 }}>
+          {/* Left: text */}
+          <div style={{ flex: isMobile ? '1 1 100%' : '1 1 66%' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Don't Just Manage Your Business. Get Discovered.
+            </h2>
+            <p style={{ fontSize: 14, color: gray500, lineHeight: 1.7, marginBottom: 20 }}>
+              CareHub gives businesses greater visibility across the CareFind health social platform, helping potential customers discover the business, its services, products and relevant information.
+            </p>
+            {[
+              'Your business appears in CareFind search results',
+              'Customers discover your services, products and information',
+              'Managed directly from your CareHub dashboard',
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: gray600, padding: '5px 0' }}>
+                <CheckIcon size={14} color={tealDeep} strokeWidth={3} />
+                {item}
+              </div>
+            ))}
+            <p style={{ fontWeight: 800, fontSize: 15, color: tealDeep, marginTop: 16 }}>
+              Manage your business with CareHub. Get discovered through CareFind.
+            </p>
+          </div>
+          {/* Right: visual */}
+          <div style={{ flex: isMobile ? '1 1 100%' : '1 1 34%', width: isMobile ? '100%' : 'auto' }}>
+            <div style={{ background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 200, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16 }}>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>CareFind</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>Health Social Platform</div>
+              {/* Abstract search results */}
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.1)' }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ height: 8, width: `${60 + i * 10}%`, borderRadius: 4, background: 'rgba(255,255,255,0.3)', marginBottom: 6 }} />
+                    <div style={{ height: 6, width: `${40 + i * 8}%`, borderRadius: 3, background: 'rgba(255,255,255,0.15)' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
