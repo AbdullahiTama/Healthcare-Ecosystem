@@ -1,16 +1,10 @@
-import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
-import { Home, Store, Newspaper, User, Plus } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Home, Store, Newspaper, User } from 'lucide-react'
 import { theme } from '../styles/theme'
-import { useAuth } from '../providers/AuthContext'
-import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 
-function BottomNav({ onCompose }) {
+function BottomNav() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const rawTab = searchParams.get('tab')
-  const tab = rawTab || 'shop'
 
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
@@ -21,19 +15,6 @@ function BottomNav({ onCompose }) {
   const isMedMarketActive = isSearch
   const isNewsActive = isNews
   const isProfileActive = isProfile
-
-  // Hide Create button when on MedMarket (/search)
-  const showCreate = !!(onCompose || ['/feed', '/profile', '/news'].includes(location.pathname))
-
-  function handleCompose() {
-    if (onCompose) {
-      logCreateTap({ source: 'bottom-nav', route: 'in-place', path: location.pathname })
-      onCompose()
-      return
-    }
-    logCreateTap({ source: 'bottom-nav', route: 'navigate', path: location.pathname })
-    navigate(CREATE_PATH)
-  }
 
   const itemStyle = (active) => ({
     display: 'flex',
@@ -99,29 +80,6 @@ function BottomNav({ onCompose }) {
         </span>
         MedMarket
       </Link>
-      {showCreate && (
-        <button
-          onClick={handleCompose}
-          aria-label="Create post"
-          style={{
-            ...itemStyle(false),
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <span
-            style={{
-              ...iconCapsule(false),
-              background: theme.tealDeep,
-              color: '#fff',
-            }}
-          >
-            <Plus size={18} strokeWidth={2.6} aria-hidden="true" color="#fff" />
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 800, color: theme.textLight }}>Create</span>
-        </button>
-      )}
       <Link
         to="/news"
         style={itemStyle(isNewsActive)}

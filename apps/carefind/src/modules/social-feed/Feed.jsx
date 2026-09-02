@@ -1938,7 +1938,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
 
       {showGoLive && <UserGoLive onClose={() => setShowGoLive(false)} />}
       <SupportPrompt creatorName="CareFind creators" />
-      {isMobile && <BottomNav onCompose={() => setCreateOpen(true)} />}
+      {isMobile && <BottomNav />}
       {giftingPost && (
         <GiftPanel
           postId={giftingPost.postId}

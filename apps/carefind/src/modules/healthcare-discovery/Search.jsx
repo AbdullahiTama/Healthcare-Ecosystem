@@ -216,7 +216,7 @@ function Search() {
   const showingFeatured = tab === 'products' && !query.trim()
 
   const bodyContent = (
-    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(100px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh', overflowX: 'hidden', boxSizing: 'border-box' } : { fontFamily: theme.fontFamily }}>
+    <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: '0 16px', paddingBottom: 'calc(100px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh', overflowX: 'hidden', boxSizing: 'border-box' } : { fontFamily: theme.fontFamily }}>
       <style>{`
         @keyframes medmarket-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
@@ -232,7 +232,7 @@ function Search() {
         <div style={{
           background: theme.heroGradient,
           margin: '-20px -20px 0 -20px',
-          padding: '14px 16px 0',
+          padding: '14px 16px 14px',
           borderRadius: '0 0 24px 24px',
           color: '#fff',
         }}>
