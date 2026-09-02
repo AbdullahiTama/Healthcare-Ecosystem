@@ -36,39 +36,54 @@
   evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx; verification-gap review showed no test observes the WebUSB-first decision matrix, duplicate-receipt guard, printing lock, or the sales-row to receipt-object reconstruction â€” repo has no component test harness.
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Add rate limiting and bot protection to public booking endpoint
-  evidence: Public POST /api/booking has no throttle per IP/phone; blind-hunter flagged as abuse vector — pre-existing, not in spec acceptance criteria, requires infra decision (e.g., Upstash, Turnstile).
+  evidence: Public POST /api/booking has no throttle per IP/phone; blind-hunter flagged as abuse vector â€” pre-existing, not in spec acceptance criteria, requires infra decision (e.g., Upstash, Turnstile).
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Implement TTL/expiry for unpaid pending appointments and held balance cleanup
-  evidence: Unpaid pending appointments block slots indefinitely with no timeout; spec §10 defers cancellation policy to product — surfaced in blind-hunter review.
+  evidence: Unpaid pending appointments block slots indefinitely with no timeout; spec 10 defers cancellation policy to product â€” surfaced in blind-hunter review.
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Implement wallet refund/reversal on appointment cancellation
-  evidence: free_slot_on_cancel frees service_availability but no wallet held?refund movement; spec §10 defers refund policy — blind-hunter flagged as missing reversal.
+  evidence: free_slot_on_cancel frees service_availability but no wallet held refund movement; spec 10 defers refund policy â€” blind-hunter flagged as missing reversal.
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Enforce strict appointment status transition state machine at DB level
-  evidence: Direct PATCH via appointmentRepository.update allows any status transition; confirm RPC guards pending?confirmed but other paths do not — blind-hunter noted missing state machine, requires product-defined allowed transitions.
+  evidence: Direct PATCH via appointmentRepository.update allows any status transition; confirm RPC guards pending confirmed but other paths do not â€” blind-hunter noted missing state machine, requires product-defined allowed transitions.
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Add patient-facing booking confirmations and cancellation notifications
-  evidence: Business is notified on confirm, but patient receives no creation/cancel notification; spec §11 says integrate where available — requires product channel decision.
+  evidence: Business is notified on confirm, but patient receives no creation/cancel notification; spec 11 says integrate where available â€” requires product channel decision.
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Add handler-level tests for booking service validation, fee snapshot, and concurrent 409
-  evidence: Verification-gap review found POST /api/booking service active/fee/availableTimes branches and double-book 409 have no executing test — requires api test harness not present in repo.
+  evidence: Verification-gap review found POST /api/booking service active/fee/availableTimes branches and double-book 409 have no executing test â€” requires api test harness not present in repo.
 
 - source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
   summary: Add component tests for BookingCard availability filtering and review dialog
-  evidence: BusinessProfile BookingCard per-service availability filtering, past-time drop, and review dialog 409 refresh have no observable test — verification-gap noted no BusinessProfile.test file.
+  evidence: BusinessProfile BookingCard per-service availability filtering, past-time drop, and review dialog 409 refresh have no observable test â€” verification-gap noted no BusinessProfile.test file.
 - source_spec: none
-  summary: Shop Goal 2 — Shop browse grid + product gallery (MedMarket 4th tab Shop, 2-per-row catalog + featured row, multi-photo swipe gallery)
-  evidence: Split from Shop spec per SCOPE STANDARD — independently shippable browse without checkout; deferred to keep Goal 1 (onboarding+activation) as single 900-1600 token spec.
+  summary: Shop Goal 2 â€” Shop browse grid + product gallery (MedMarket 4th tab Shop, 2-per-row catalog + featured row, multi-photo swipe gallery)
+  evidence: Split from Shop spec per SCOPE STANDARD â€” independently shippable browse without checkout; deferred to keep Goal 1 (onboarding+activation) as single 900-1600 token spec.
 
 - source_spec: none
-  summary: Shop Goal 3 — Cart, Checkout, Orders + inventory sync (cart, stock re-check, order creation with price snapshot, vendor notification, order management)
-  evidence: Split from Shop spec per SCOPE STANDARD — requires Goal 1 tables (ecommerce_products) but shippable after; deferred.
+  summary: Shop Goal 3 â€” Cart, Checkout, Orders + inventory sync (cart, stock re-check, order creation with price snapshot, vendor notification, order management)
+  evidence: Split from Shop spec per SCOPE STANDARD â€” requires Goal 1 tables (ecommerce_products) but shippable after; deferred.
 
 - source_spec: none
-  summary: Shop Goal 4 — Pickup-station pricing engine (commission 10/5/2.5, fulfilment MAX, delivery FREE =3km else ?600/3km, Maps distance)
-  evidence: Split from Shop spec per SCOPE STANDARD — pure engine testable before checkout wiring; deferred per user choice Pure engine first, but after Goal 1.
+  summary: Shop Goal 4 â€” Pickup-station pricing engine (commission 10/5/2.5, fulfilment MAX, delivery FREE =3km else 600/3km, Maps distance)
+  evidence: Split from Shop spec per SCOPE STANDARD â€” pure engine testable before checkout wiring; deferred per user choice Pure engine first, but after Goal 1.
+- source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
+  summary: Integration test for RLS hard gate (unapproved POST via PostgREST rejected 42501) and DELETE gate for ecommerce_products/images
+  evidence: In-memory adapter does not evaluate is_ecommerce_vendor_approved; blind-hunter and verification-gap flagged that dropping WITH CHECK would still pass all 41 unit tests â€” requires Supabase live/PostgREST integration harness not present.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
+  summary: Component test for Ecommerce.jsx mandatory gate (segment-specific terms, Apply disabled until checkbox, blocked banner and CTA scroll)
+  evidence: Verification-gap found no render test for Ecommerce.jsx â€” retail 10% vs wholesale 5% vs distributor 2.5% disclosure, disabled Apply, and Setup Locked vs E_COMMERCE_NOT_APPROVED â€” repo has no component harness for CareHub modules beyond repository tests.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
+  summary: Backfill and NOT NULL hardening for existing ecommerce_applications after adding segment/terms_version_id/audit columns
+  evidence: Migration adds nullable columns with no backfill; legacy rows remain ambiguous for is_ecommerce_vendor_approved and audit trail â€” requires data backfill decision and follow-up NOT NULL constraints per review defer.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
+  summary: Server-side audit enforcement (auth.uid() for applicant_user_id, commission_rate parity trigger, audit_metadata JSON schema)
+  evidence: applicant_user_id and audit_metadata currently trusted from client getSession; blind-hunter flagged spoofable audit and commission drift between terms row and accepted rate â€” needs DB trigger/RPC to stamp auth.uid() and validate parity server-side.

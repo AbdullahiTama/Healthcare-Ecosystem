@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
-import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Filter, Upload, Trash2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Upload, Trash2, ShieldCheck } from 'lucide-react'
 import { createEcommerceRepository } from './repositories'
 import { createShopVendorRepository } from './shopVendorRepository'
 import { sbFetch, sbUpload } from '../../services/supabase'
+import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Card, SectionHead, DataTable, Empty, Pill, Inp, Textarea, Sel, TealBtn, GhostBtn, Loading, useToast, Toast } from '../../components/ui'
+import { resolveEcommerceSegment, SEGMENT_RATES, SEGMENT_LABELS, SEGMENT_COMMISSION_LABELS, commissionExample } from '../../lib/ecommerceSegments'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, success, warning, bg } = theme
 
@@ -19,6 +21,10 @@ export default function Ecommerce({ brand, role }) {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [sellerInfo, setSellerInfo] = useState({ contactName: '', contactPhone: '', contactEmail: '', businessDescription: '' })
   const [submittingApp, setSubmittingApp] = useState(false)
+  const [terms, setTerms] = useState(null)
+  const [termsLoading, setTermsLoading] = useState(true)
+  const [termsError, setTermsError] = useState('')
+  const termsRef = useRef(null)
 
   const [inventory, setInventory] = useState([])
   const [invLoading, setInvLoading] = useState(true)
@@ -41,8 +47,28 @@ export default function Ecommerce({ brand, role }) {
 
   const { msg, type, show: showToast } = useToast()
 
+  const segment = resolveEcommerceSegment(brand?.business_type, brand?.ecommerce_segment)
+  const segmentLabel = SEGMENT_LABELS[segment] || segment
+  const commissionLabel = SEGMENT_COMMISSION_LABELS[segment] || ''
+  const commissionRate = SEGMENT_RATES[segment]
+  const example = commissionExample(segment)
+
   useEffect(() => { loadApp(); loadInventory(); loadOrders() }, [brand?.id])
   useEffect(() => { if (app?.status === 'Approved') loadOrders() }, [app?.status])
+  useEffect(() => { loadTerms() }, [segment])
+
+  async function loadTerms() {
+    setTermsLoading(true); setTermsError('')
+    try {
+      const t = await ecommerceRepository.getTermsForSegment(segment)
+      if (!t) setTermsError('No active Terms for this segment — contact support')
+      setTerms(t || null)
+    } catch (e) {
+      setTermsError('Could not load Terms & Conditions')
+    }
+    setTermsLoading(false)
+  }
+
   async function loadOrders() {
     if (!brand?.id) return
     setOrdersLoading(true); setOrdersError('')
@@ -81,17 +107,51 @@ export default function Ecommerce({ brand, role }) {
 
   async function handleSubmitApp() {
     if (!termsAccepted) { showToast('You must accept the terms and conditions', { type: 'warning' }); return }
-    if (!sellerInfo.contactName || !sellerInfo.contactPhone) { showToast('Contact name and phone are required', { type: 'warning' }); return }
+    if (!String(sellerInfo.contactName || '').trim() || !String(sellerInfo.contactPhone || '').trim()) { showToast('Contact name and phone are required', { type: 'warning' }); return }
+    if (!terms) { showToast('Terms not loaded — please retry', { type: 'warning' }); return }
     setSubmittingApp(true)
     try {
-      await ecommerceRepository.submitApplication(brand.id, { terms_accepted: true, seller_info: sellerInfo })
-      showToast('Application submitted — CareFind will review shortly.', { type: 'success' })
-      loadApp()
+      let applicantUserId = null
+      try {
+        const { data } = await authClient.auth.getSession()
+        applicantUserId = data?.session?.user?.id || null
+      } catch {}
+      const auditMetadata = {
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        timestamp: new Date().toISOString(),
+        segment,
+        terms_version_id: terms.id,
+      }
+      await ecommerceRepository.submitApplication(brand.id, {
+        terms_accepted: true,
+        seller_info: sellerInfo,
+        segment,
+        terms_version_id: terms.id,
+        applicant_user_id: applicantUserId,
+        audit_metadata: auditMetadata,
+      })
+      showToast('Application approved — E-commerce setup unlocked.', { type: 'success' })
+      setTermsAccepted(false)
+      await loadApp()
+      await loadInventory()
     } catch (e) { showToast(e.message || 'Could not submit application', { type: 'error' }) }
     setSubmittingApp(false)
   }
 
+  function scrollToTerms() {
+    termsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function handleSetupBlocked() {
+    showToast('E-commerce application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.', { type: 'warning' })
+    scrollToTerms()
+  }
+
   function openProduct(row) {
+    if (app?.status !== 'Approved') {
+      handleSetupBlocked()
+      return
+    }
     setSelected(row)
     const e = row.ecommerce
     setEcomForm({
@@ -110,6 +170,7 @@ export default function Ecommerce({ brand, role }) {
 
   async function handleSaveProduct() {
     if (!selected) return
+    if (app?.status !== 'Approved') { handleSetupBlocked(); return }
     if (!ecomForm.description || ecomForm.description.trim().length < 10) { showToast('Description must be at least 10 characters', { type: 'warning' }); return }
     if (!ecomForm.category) { showToast('Category is required', { type: 'warning' }); return }
     if (ecomForm.is_restricted) { showToast('Restricted products cannot be saved as publishable — clear restricted flag or contact admin', { type: 'warning' }); }
@@ -128,7 +189,6 @@ export default function Ecommerce({ brand, role }) {
       })
       showToast('Product information saved', { type: 'success' })
       loadInventory()
-      // reload ecom row
       const updated = await ecommerceRepository.getEcommerceProduct(brand.id, selected.product.id)
       if (updated) {
         setSelected(prev => ({ ...prev, ecommerce: updated, status: updated.status }))
@@ -140,7 +200,7 @@ export default function Ecommerce({ brand, role }) {
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]
     if (!file || !selected) return
-    // Ensure ecommerce row exists
+    if (app?.status !== 'Approved') { handleSetupBlocked(); e.target.value = ''; return }
     let ecom = selected.ecommerce
     if (!ecom) {
       try {
@@ -163,14 +223,13 @@ export default function Ecommerce({ brand, role }) {
     try {
       await ecommerceRepository.deleteImage(id)
       setImages(prev => prev.filter(i => i.id !== id))
-      // Compact positions server-side to avoid UNIQUE gaps
       if (selected?.ecommerce?.id) {
         try { await ecommerceRepository.updateImagePositionAfterDelete(selected.ecommerce.id) } catch {}
         const imgs = await ecommerceRepository.getImages(selected.ecommerce.id)
         setImages(imgs || [])
       }
       showToast('Image removed', { type: 'success' })
-    } catch (e) { showToast('Could not delete image', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not delete image', { type: 'error' }) }
   }
 
   async function handleReorder(from, to) {
@@ -222,6 +281,9 @@ export default function Ecommerce({ brand, role }) {
     return 'gray'
   }
 
+  const isApproved = app?.status === 'Approved'
+  const needsApplication = !app || ['Not Applied','Draft','Rejected','Suspended'].includes(app.status)
+
   if (!isOwner) return (
     <div style={{ padding: 32, textAlign: 'center', color: gray400 }}>
       <ShoppingBag size={40} style={{ margin: '0 auto 12px', display: 'block' }} />
@@ -233,55 +295,107 @@ export default function Ecommerce({ brand, role }) {
     <div>
       <SectionHead title="E-commerce" sub="Prepare inventory for CareFind Shop — onboarding, product setup, and activation" />
 
-      {/* Application */}
+      {/* Application — segment-specific mandatory gate */}
       <Card style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <Package size={18} color={tealDeep} />
           <div style={{ fontWeight: 800, color: navy }}>Seller Application</div>
-          {app && <Pill label={app.status} type={app.status === 'Approved' ? 'green' : app.status === 'Submitted' ? 'amber' : app.status === 'Rejected' ? 'red' : 'gray'} />}
+          {app && <Pill label={app.status} type={isApproved ? 'green' : app.status === 'Submitted' || app.status === 'Under Review' ? 'amber' : app.status === 'Rejected' ? 'red' : 'gray'} />}
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: gray500, background: bg, border: `1px solid ${border}`, padding: '3px 8px', borderRadius: 20 }}>{segmentLabel} • {commissionLabel}</span>
         </div>
         {appLoading ? <Loading text="Loading application..." /> : appError ? (
           <div role="alert" style={{ padding: 10, borderRadius: 8, background: danger + '10', border: `1px solid ${danger}30`, color: danger, fontSize: 13 }}>{appError} <button onClick={loadApp} style={{ marginLeft: 8, background: 'none', border: `1px solid ${danger}`, color: danger, borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>Retry</button></div>
-        ) : !app || app.status === 'Not Applied' || app.status === 'Draft' ? (
+        ) : isApproved ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ padding: 12, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 13, color: gray600 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Terms & Seller Obligations</div>
-              <p style={{ margin: 0, fontSize: 12, color: gray500 }}>By applying you accept CareFind seller terms, fulfilment/delivery rules, cancellation/refund policy and compliance requirements. Application does not make products public — you must still activate each product individually after approval.</p>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, cursor: 'pointer' }}>
-                <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} aria-label="Accept terms and conditions" />
-                <span style={{ fontSize: 12, fontWeight: 600 }}>I accept the mandatory terms and conditions</span>
-              </label>
+            <div style={{ padding: 12, borderRadius: 8, background: success + '10', border: `1px solid ${success}40`, color: success, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle size={16} /> Approved — you can now activate products for Shop.</div>
+            {app.segment && (
+              <div style={{ padding: 10, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 12, color: gray600 }}>
+                <div style={{ fontWeight: 700, color: navy, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={14} color={tealDeep} /> Accepted Terms</div>
+                <div>Segment: <b>{app.segment}</b> • Commission: <b>{app.accepted_commission_rate != null ? `${(app.accepted_commission_rate * 100).toFixed(app.accepted_commission_rate === 0.025 ? 1 : 0)}%` : (commissionRate*100)+ '%'}</b> {app.terms_version_id ? `• Version: ${app.terms_version_id.slice(0,8)}` : ''}</div>
+                <div style={{ fontSize: 11, color: gray400, marginTop: 2 }}>Accepted: {app.acceptance_timestamp ? new Date(app.acceptance_timestamp).toLocaleString() : '—'} • Approved: {app.approval_timestamp ? new Date(app.approval_timestamp).toLocaleString() : (app.submitted_at ? new Date(app.submitted_at).toLocaleString() : '—')}</div>
+              </div>
+            )}
+            <details style={{ border: `1px solid ${border}`, borderRadius: 8, background: '#fff', padding: 10 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700, color: navy, fontSize: 12 }}>View accepted Terms & Conditions ({segmentLabel})</summary>
+              {termsLoading ? <Loading text="Loading terms..." /> : terms ? (
+                <div style={{ marginTop: 8, maxHeight: 260, overflowY: 'auto', background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontWeight: 800, color: navy, fontSize: 13, marginBottom: 6 }}>{terms.title}</div>
+                  <div style={{ fontSize: 11, color: gray500, marginBottom: 8 }}>Segment: <b>{segmentLabel}</b> • Commission: <b>{commissionLabel}</b> • Example: {example.label}</div>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 11, color: gray600, margin: 0, lineHeight: 1.5 }}>{terms.content}</pre>
+                </div>
+              ) : <div style={{ fontSize: 12, color: gray500 }}>Terms not available</div>}
+            </details>
+          </div>
+        ) : needsApplication ? (
+          <div ref={termsRef} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {app?.status === 'Rejected' && (
+              <div role="alert" style={{ padding: 10, borderRadius: 8, background: danger + '10', border: `1px solid ${danger}30`, color: danger, fontSize: 12 }}>
+                Rejected{app.rejection_reason ? `: ${app.rejection_reason}` : ''} — review the terms and re-apply below.
+              </div>
+            )}
+            {/* Full Terms — dedicated scrollable gate */}
+            <div role="region" aria-label="Terms & Conditions" style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+              <div style={{ padding: '10px 14px', borderBottom: `1px solid ${border}`, background: bg, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <ShieldCheck size={16} color={tealDeep} />
+                <span style={{ fontWeight: 800, color: navy, fontSize: 13 }}>{terms?.title || `${segmentLabel} Terms & Conditions`}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, color: navy, background: warning + '18', border: `1px solid ${warning}40`, padding: '2px 8px', borderRadius: 20 }}>{commissionLabel}</span>
+              </div>
+              {termsLoading ? <div style={{ padding: 16 }}><Loading text="Loading Terms & Conditions..." /></div> : termsError ? (
+                <div role="alert" style={{ padding: 12, color: danger, fontSize: 12 }}>{termsError} <button onClick={loadTerms} style={{ marginLeft: 8, background: 'none', border: `1px solid ${danger}`, color: danger, borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>Retry</button></div>
+              ) : terms ? (
+                <div style={{ padding: 14 }}>
+                  <div style={{ padding: 10, borderRadius: 8, background: tealMist, border: `1px solid ${tealDeep}20`, fontSize: 12, color: navy, marginBottom: 10 }}>
+                    <div style={{ fontWeight: 800, marginBottom: 4 }}>Commission Disclosure — {segmentLabel}</div>
+                    <div>Commission: <b>{commissionLabel}</b> — paid by the vendor and deducted from vendor payout.</div>
+                    <div style={{ marginTop: 4, fontSize: 11, color: gray600 }}>Example: {example.label}</div>
+                    <div style={{ marginTop: 4, fontSize: 11, color: gray500 }}>Customer fulfilment and optional delivery fees are separate customer charges under the applicable pricing rules.</div>
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto', border: `1px solid ${border}`, borderRadius: 8, background: bg, padding: 12 }}>
+                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 11, color: gray600, margin: 0, lineHeight: 1.6 }}>{terms.content}</pre>
+                  </div>
+                  <div style={{ fontSize: 11, color: gray400, marginTop: 8 }}>Scroll to read the complete terms. The commission above is disclosed before you agree.</div>
+                </div>
+              ) : <div style={{ padding: 12, fontSize: 12, color: gray500 }}>No Terms available for segment {segment}</div>}
             </div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', padding: '8px 4px' }}>
+              <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} aria-label="Accept terms and conditions" style={{ marginTop: 2 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: navy }}>I have read, understood and agree to the Terms & Conditions applicable to my E-commerce business segment.</span>
+            </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Inp label="Contact Name *" value={sellerInfo.contactName} onChange={v => setSellerInfo(p => ({ ...p, contactName: v }))} placeholder="Full name" />
               <Inp label="Contact Phone *" value={sellerInfo.contactPhone} onChange={v => setSellerInfo(p => ({ ...p, contactPhone: v }))} placeholder="080..." />
             </div>
             <Inp label="Contact Email" value={sellerInfo.contactEmail} onChange={v => setSellerInfo(p => ({ ...p, contactEmail: v }))} placeholder="seller@business.com" />
             <Textarea label="Business Description" value={sellerInfo.businessDescription} onChange={v => setSellerInfo(p => ({ ...p, businessDescription: v }))} placeholder="What you sell, specialties..." rows={2} />
-            <TealBtn onClick={handleSubmitApp} disabled={submittingApp} style={{ alignSelf: 'flex-start', padding: '10px 20px' }}>{submittingApp ? 'Submitting...' : 'Submit Application'}</TealBtn>
-            <div style={{ fontSize: 11, color: gray400 }}>Status: Not Applied — submit to start review. CareFind Admin will approve/reject.</div>
+            <TealBtn onClick={handleSubmitApp} disabled={submittingApp || !termsAccepted || !terms} aria-disabled={!termsAccepted || !terms} style={{ alignSelf: 'flex-start', padding: '10px 20px', opacity: (!termsAccepted || !terms) ? 0.55 : 1 }}>{submittingApp ? 'Submitting...' : 'Apply'}</TealBtn>
+            {!termsAccepted && <div style={{ fontSize: 11, color: warning }}>Check the box above to enable Apply.</div>}
+            <div style={{ fontSize: 11, color: gray400 }}>By clicking Apply you will be automatically approved for E-commerce setup. Products still require at least one image and explicit activation before Shop visibility.</div>
           </div>
         ) : app.status === 'Submitted' || app.status === 'Under Review' ? (
           <div style={{ padding: 12, borderRadius: 8, background: tealMist, border: `1px solid ${tealDeep}30`, color: navy, fontSize: 13 }}>
             Application <b>{app.status}</b> — our team is reviewing your submission. You will be notified when approved. Product activation remains blocked until Approved.
-          </div>
-        ) : app.status === 'Approved' ? (
-          <div style={{ padding: 12, borderRadius: 8, background: success + '10', border: `1px solid ${success}40`, color: success, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><CheckCircle size={16} /> Approved — you can now activate products for Shop.</div>
-        ) : app.status === 'Rejected' ? (
-          <div style={{ padding: 12, borderRadius: 8, background: danger + '10', border: `1px solid ${danger}30`, color: danger, fontSize: 13 }}>
-            Rejected{app.rejection_reason ? `: ${app.rejection_reason}` : ''} — contact support to reapply.
           </div>
         ) : (
           <div style={{ padding: 12, borderRadius: 8, background: bg, border: `1px solid ${border}`, fontSize: 13 }}>Status: {app.status}</div>
         )}
       </Card>
 
+      {/* Blocked setup banner when not Approved */}
+      {!isApproved && !appLoading && (
+        <Card style={{ padding: 14, marginBottom: 20, background: warning + '10', border: `1px solid ${warning}40` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: warning, fontWeight: 800, fontSize: 13 }}><AlertTriangle size={16} /> E-commerce application required.</div>
+          <div style={{ fontSize: 12, color: gray600, marginTop: 4 }}>E-commerce application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>
+          <TealBtn onClick={scrollToTerms} style={{ marginTop: 8, padding: '8px 14px', fontSize: 12 }}>Apply for E-commerce</TealBtn>
+        </Card>
+      )}
+
       {/* Inventory */}
-      <Card style={{ padding: 20, marginBottom: 20 }}>
+      <Card style={{ padding: 20, marginBottom: 20, opacity: isApproved ? 1 : 0.78 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <ShoppingBag size={18} color={tealDeep} />
           <div style={{ fontWeight: 800, color: navy }}>Inventory → E-commerce</div>
           <span style={{ fontSize: 11, color: gray400, marginLeft: 8 }}>{filtered.length} products</span>
+          {!isApproved && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, color: warning, background: warning + '14', border: `1px solid ${warning}30`, padding: '2px 6px', borderRadius: 20 }}>Locked — apply above</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 180, display: 'flex', alignItems: 'center', gap: 8, border: `1px solid ${border}`, borderRadius: 8, padding: '0 10px', background: '#fff' }}>
@@ -320,15 +434,14 @@ export default function Ecommerce({ brand, role }) {
               const missing = []
               if (!r.ecommerce?.description) missing.push('description')
               if (!r.ecommerce?.category) missing.push('category')
-              // image hint requires ecommerce row; we show generic
               if (!r.ecommerce) missing.push('setup')
               return missing.length ? <span style={{ fontSize: 11, color: warning }}>{missing.join(', ')}</span> : <span style={{ fontSize: 11, color: success }}>ready</span>
             }},
           ]}
           actions={r => (
             <div style={{ display: 'flex', gap: 6 }}>
-              <TealBtn onClick={() => openProduct(r)} style={{ padding: '6px 10px', fontSize: 11 }}>Setup</TealBtn>
-              {r.status === 'Active' ? <GhostBtn onClick={() => { setSelected(r); handlePause() }} style={{ padding: '6px 10px', fontSize: 11 }}>Pause</GhostBtn> : null}
+              <TealBtn onClick={() => openProduct(r)} style={{ padding: '6px 10px', fontSize: 11 }}>{isApproved ? 'Setup' : 'Locked'}</TealBtn>
+              {r.status === 'Active' ? <GhostBtn onClick={() => { if (!isApproved) { handleSetupBlocked(); return } setSelected(r); handlePause() }} style={{ padding: '6px 10px', fontSize: 11 }}>Pause</GhostBtn> : null}
             </div>
           )}
         />
@@ -412,7 +525,7 @@ export default function Ecommerce({ brand, role }) {
                     {orderDetail.status==='processing' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'ready_for_pickup'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Ready for Pickup</TealBtn>}
                     {orderDetail.status==='ready_for_pickup' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'in_transit'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
                     {orderDetail.status==='in_transit' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'delivered'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
-                    {orderDetail.is_approved_city===false && orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={async()=>{ const q=prompt('Enter delivery quote (₦)'); if(q==null) return; const kobo=Math.round(parseFloat(q)*100); await shopVendorRepository.updateStatus(orderDetail.id,'pending_payment',`Delivery quoted ₦${q}`); loadOrders(); }} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
+                    {orderDetail.is_approved_city===false && orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={async()=>{ const q=prompt('Enter delivery quote (₦)'); if(q==null) return; await shopVendorRepository.updateStatus(orderDetail.id,'pending_payment',`Delivery quoted ₦${q}`); loadOrders(); }} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
                   </div>
                 </div>
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
@@ -495,7 +608,7 @@ export default function Ecommerce({ brand, role }) {
                   <TealBtn onClick={handleActivate} disabled={activating || app?.status !== 'Approved'} style={{ flex: 1, padding: 10 }}>{activating ? 'Activating...' : 'Activate for Shop'}</TealBtn>
                 )}
               </div>
-              {app?.status !== 'Approved' && <div style={{ fontSize: 11, color: warning, textAlign: 'center' }}>Business must be Approved to activate — current status: {app?.status || 'Not Applied'}</div>}
+              {app?.status !== 'Approved' && <div style={{ fontSize: 11, color: danger, textAlign: 'center' }}>Business must be Approved to activate — application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>}
             </div>
           </Card>
         </div>
