@@ -23,14 +23,28 @@ import {
 } from './geo.js'
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
-// Health amenities we care about. `healthcare=*` is accepted as a fallback tag
-// inside parseOverpass but the Overpass query keys off `amenity`.
-const AMENITY_REGEX = 'hospital|pharmacy|clinic|doctors|dentist|health_post|dispensary|birthing_center'
+// Healthcare facilities to discover via Overpass. We query amenity, healthcare
+// and shop tags so a pharmacy, a laboratory, a physiotherapy centre, an eye
+// clinic (optician), a beauty/spa facility and all other CareFind healthcare
+// categories are discoverable — not just hospitals. The regex is intentionally
+// broad so Manufacturer/Importer users can find the same complete set of
+// facilities as any other business type. business_type never restricts which
+// categories are queried: the GPS and the map are the only filters.
+const AMENITY_REGEX = 'hospital|pharmacy|clinic|doctors|dentist|health_post|dispensary|birthing_center|laboratory'
+const HEALTHCARE_REGEX = 'hospital|pharmacy|clinic|doctor|dentist|laboratory|physiotherapist|optician|centre|hospice|alternative|rehabilitation|primary|health_care|vaccination|blood_donation'
+const SHOP_REGEX = 'beauty|cosmetics|optician|medical_supply|spa'
 const DEFAULT_RADIUS = 200
 const CACHE_MIN_RESULTS = 5
 export const MAX_FACILITIES = 150
 
 // Picker filter buckets (UI order). `key` is what matchesCategory understands.
+// These four buckets + All cover the 13 detailed healthcare facility categories
+// (Hospital, Pharmacy, Lab/Diagnostic, Clinic, Medical Centre, Aesthetic,
+// Cosmetics & Spa, Specialist, Dental, Eye, Physio/Rehab, Primary/Community,
+// Other) without restricting by the user's business_type. Manufacturer/Importer
+// users see the same pills as every other business type — the facility visited
+// list is not gated by business_type, only by GPS proximity and the chosen
+// filter pill.
 export const FACILITY_FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'hospital', label: 'Hospital' },
@@ -41,11 +55,17 @@ export const FACILITY_FILTERS = [
 
 // Build an Overpass QL query for a radius around a point. `out center` gives us
 // way centroids so polygons (hospitals are often mapped as ways) still resolve.
+// The query covers amenity, healthcare and shop tags so every CareFind
+// healthcare facility category — not just Hospital — is discoverable via GPS.
 export function buildOverpassQuery(lat, lng, radius) {
   const bbox = '(around:' + radius + ',' + lat + ',' + lng + ')'
   return '[out:json][timeout:25];(' +
     'node["amenity"~"' + AMENITY_REGEX + '"]' + bbox + ';' +
     'way["amenity"~"' + AMENITY_REGEX + '"]' + bbox + ';' +
+    'node["healthcare"~"' + HEALTHCARE_REGEX + '"]' + bbox + ';' +
+    'way["healthcare"~"' + HEALTHCARE_REGEX + '"]' + bbox + ';' +
+    'node["shop"~"' + SHOP_REGEX + '"]' + bbox + ';' +
+    'way["shop"~"' + SHOP_REGEX + '"]' + bbox + ';' +
     ');out center 150;'
 }
 
@@ -272,6 +292,13 @@ export async function dismissRepAddedFacility(id) {
  *    cache. A failed Overpass call degrades gracefully to the cache alone.
  * 3. Filters by `category` and returns the nearest-first, capped list plus a
  *    `fromCache` flag the UI can show ("live" vs "cached").
+ *
+ * IMPORTANT: This function does NOT filter by the caller's business_type.
+ * A Manufacturer/Importer near a pharmacy, laboratory, aesthetic clinic or any
+ * other healthcare facility will see it when the GPS and the category pill
+ * allow — the only eligibility is distance + chosen filter, not who the user
+ * works for. Pass `category: 'all'` to return every healthcare facility
+ * category; pass a specific filter key to narrow within that GPS radius.
  */
 export async function nearbyHealthFacilities(lat, lng, options = {}) {
   const { radius = DEFAULT_RADIUS, category = 'all', businessId } = options

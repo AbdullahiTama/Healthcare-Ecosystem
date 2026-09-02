@@ -71,10 +71,20 @@ describe('categoryFromAmenity', () => {
     expect(categoryFromAmenity('pharmacy')).toBe(FACILITY_CATEGORY.PHARMACY)
     expect(categoryFromAmenity('clinic')).toBe(FACILITY_CATEGORY.CLINIC)
     expect(categoryFromAmenity('doctors')).toBe(FACILITY_CATEGORY.CLINIC)
-    expect(categoryFromAmenity('health_post')).toBe(FACILITY_CATEGORY.CLINIC)
-    expect(categoryFromAmenity('dispensary')).toBe(FACILITY_CATEGORY.CLINIC)
-    expect(categoryFromAmenity('birthing_center')).toBe(FACILITY_CATEGORY.CLINIC)
-    expect(categoryFromAmenity('dentist')).toBe(FACILITY_CATEGORY.OTHER)
+    // Primary health facilities are now distinct from generic clinics
+    expect(categoryFromAmenity('health_post')).toBe(FACILITY_CATEGORY.PRIMARY)
+    expect(categoryFromAmenity('dispensary')).toBe(FACILITY_CATEGORY.PRIMARY)
+    expect(categoryFromAmenity('birthing_center')).toBe(FACILITY_CATEGORY.PRIMARY)
+    expect(categoryFromAmenity('dentist')).toBe(FACILITY_CATEGORY.DENTAL)
+  })
+  it('maps expanded healthcare facility categories (Manufacturer/Importer fix)', () => {
+    expect(categoryFromAmenity('laboratory')).toBe(FACILITY_CATEGORY.LABORATORY)
+    expect(categoryFromAmenity('physiotherapist')).toBe(FACILITY_CATEGORY.PHYSIO)
+    expect(categoryFromAmenity('optician')).toBe(FACILITY_CATEGORY.EYE)
+    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS_SPA)
+    expect(categoryFromAmenity('aesthetic')).toBe(FACILITY_CATEGORY.AESTHETIC_CLINIC)
+    expect(categoryFromAmenity('medical_centre')).toBe(FACILITY_CATEGORY.MEDICAL_CENTRE)
+    expect(categoryFromAmenity('specialist')).toBe(FACILITY_CATEGORY.SPECIALIST_CLINIC)
   })
   it('falls back to Other for anything unrecognised or missing', () => {
     expect(categoryFromAmenity('vaccination_centre')).toBe(FACILITY_CATEGORY.OTHER)
@@ -193,6 +203,27 @@ describe('matchesCategory', () => {
     expect(matchesCategory(pharm, 'hospital')).toBe(false)
     expect(matchesCategory(clinic, 'pharmacy')).toBe(false)
     expect(matchesCategory(other, 'clinic')).toBe(false)
+  })
+  it('buckets expanded categories for Manufacturer/Importer facility filtering', () => {
+    // Clinic bucket includes lab, medical centre, specialist
+    expect(matchesCategory({ category: FACILITY_CATEGORY.LABORATORY }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.MEDICAL_CENTRE }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.SPECIALIST_CLINIC }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.CLINIC_DIAGNOSTIC_LEGACY }, 'clinic')).toBe(true)
+    // Other bucket includes dental, eye, physio, primary, aesthetic, spa
+    expect(matchesCategory({ category: FACILITY_CATEGORY.DENTAL }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.EYE }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.PHYSIO }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.PRIMARY }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.AESTHETIC_CLINIC }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.COSMETICS_SPA }, 'other')).toBe(true)
+    // Hospital/pharmacy are exclusive
+    expect(matchesCategory({ category: FACILITY_CATEGORY.DENTAL }, 'hospital')).toBe(false)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.LABORATORY }, 'hospital')).toBe(false)
+  })
+  it('legacy clinic/other values still map to correct buckets', () => {
+    expect(matchesCategory({ category: 'Clinic/Diagnostic' }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: 'Other health facility' }, 'other')).toBe(true)
   })
 })
 

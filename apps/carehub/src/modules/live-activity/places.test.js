@@ -41,7 +41,13 @@ describe('categoryFromAmenity (places-facing)', () => {
     expect(categoryFromAmenity('hospital')).toBe(FACILITY_CATEGORY.HOSPITAL)
     expect(categoryFromAmenity('pharmacy')).toBe(FACILITY_CATEGORY.PHARMACY)
     expect(categoryFromAmenity('clinic')).toBe(FACILITY_CATEGORY.CLINIC)
-    expect(categoryFromAmenity('dentist')).toBe(FACILITY_CATEGORY.OTHER)
+    expect(categoryFromAmenity('dentist')).toBe(FACILITY_CATEGORY.DENTAL)
+  })
+  it('maps expanded facility categories for Manufacturer/Importer visits', () => {
+    expect(categoryFromAmenity('laboratory')).toBe(FACILITY_CATEGORY.LABORATORY)
+    expect(categoryFromAmenity('optician')).toBe(FACILITY_CATEGORY.EYE)
+    expect(categoryFromAmenity('physiotherapist')).toBe(FACILITY_CATEGORY.PHYSIO)
+    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS_SPA)
   })
 })
 
@@ -263,5 +269,119 @@ describe('fetchOverpass (network, mocked)', () => {
   it('throws on a non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
     await expect(fetchOverpass(6.5, 3.3)).rejects.toThrow(/Overpass lookup failed/)
+  })
+})
+
+describe('Manufacturer/Importer GPS facility filtering (fix verification)', () => {
+  beforeEach(function () { sbFetch.mockResolvedValue([]) })
+  afterEach(function () { vi.clearAllMocks() })
+
+  it('buildOverpassQuery now includes healthcare and shop tags so all facility types are discoverable', () => {
+    const q = buildOverpassQuery(6.5, 3.3, 200)
+    expect(q).toContain('"healthcare"~"')
+    expect(q).toContain('"shop"~"')
+    // Still contains original amenity check
+    expect(q).toContain('"amenity"~"hospital|pharmacy|clinic')
+  })
+
+  it('matchesCategory buckets cover all required healthcare facility categories', () => {
+    // Clinic bucket holds lab, medical centre, specialist etc
+    expect(matchesCategory({ category: FACILITY_CATEGORY.LABORATORY }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.MEDICAL_CENTRE }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.SPECIALIST_CLINIC }, 'clinic')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.CLINIC }, 'clinic')).toBe(true)
+    // Other bucket holds dental, eye, physio, primary, aesthetic, spa
+    expect(matchesCategory({ category: FACILITY_CATEGORY.DENTAL }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.EYE }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.PHYSIO }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.PRIMARY }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.AESTHETIC_CLINIC }, 'other')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.COSMETICS_SPA }, 'other')).toBe(true)
+    // Hospital/pharmacy are exclusive to their buckets
+    expect(matchesCategory({ category: FACILITY_CATEGORY.HOSPITAL }, 'pharmacy')).toBe(false)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.PHARMACY }, 'hospital')).toBe(false)
+    // All shows everything regardless of business_type
+    expect(matchesCategory({ category: FACILITY_CATEGORY.DENTAL }, 'all')).toBe(true)
+    expect(matchesCategory({ category: FACILITY_CATEGORY.LABORATORY }, 'all')).toBe(true)
+  })
+
+  it('nearbyHealthFacilities with category all returns mixed facility categories for Manufacturer/Importer', async () => {
+    const mixedCache = [
+      { id: 'h1', name: 'General Hospital', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.HOSPITAL, address: 'A', source: 'detected' },
+      { id: 'p1', name: 'HealthPlus Pharmacy', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.PHARMACY, address: 'B', source: 'detected' },
+      { id: 'l1', name: 'Clinix Lab', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.LABORATORY, address: 'C', source: 'detected' },
+      { id: 'c1', name: 'City Clinic', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.CLINIC, address: 'D', source: 'detected' },
+      { id: 'd1', name: 'Smile Dental', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.DENTAL, address: 'E', source: 'detected' },
+      { id: 'e1', name: 'Eye Care', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.EYE, address: 'F', source: 'detected' },
+    ]
+    sbFetch.mockResolvedValueOnce(mixedCache).mockResolvedValueOnce([])
+    const resAll = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'manufacturer_biz', category: 'all' })
+    expect(resAll.facilities.length).toBe(6)
+    const cats = resAll.facilities.map(function (f) { return f.category })
+    expect(cats).toContain(FACILITY_CATEGORY.HOSPITAL)
+    expect(cats).toContain(FACILITY_CATEGORY.PHARMACY)
+    expect(cats).toContain(FACILITY_CATEGORY.LABORATORY)
+    expect(cats).toContain(FACILITY_CATEGORY.DENTAL)
+  })
+
+  it('pharmacy filter returns only pharmacies for Manufacturer/Importer near a pharmacy', async () => {
+    const mixedCache = [
+      { id: 'h1', name: 'General Hospital', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.HOSPITAL, address: 'A', source: 'detected' },
+      { id: 'p1', name: 'HealthPlus Pharmacy', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.PHARMACY, address: 'B', source: 'detected' },
+      { id: 'p2', name: 'MediPharm', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.PHARMACY, address: 'C', source: 'detected' },
+      { id: 'c1', name: 'City Clinic', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.CLINIC, address: 'D', source: 'detected' },
+      { id: 'l1', name: 'Lab Centre', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.LABORATORY, address: 'E', source: 'detected' },
+    ]
+    sbFetch.mockResolvedValueOnce(mixedCache).mockResolvedValueOnce([])
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'manufacturer_biz', category: 'pharmacy' })
+    expect(res.facilities.length).toBe(2)
+    expect(res.facilities.every(function (f) { return f.category === FACILITY_CATEGORY.PHARMACY })).toBe(true)
+  })
+
+  it('clinic-diagnostic filter returns labs, clinics, medical centres and specialist clinics', async () => {
+    const mixedCache = [
+      { id: 'l1', name: 'Clinix Lab', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.LABORATORY, address: 'A', source: 'detected' },
+      { id: 'c1', name: 'City Clinic', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.CLINIC, address: 'B', source: 'detected' },
+      { id: 'm1', name: 'Medi Centre', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.MEDICAL_CENTRE, address: 'C', source: 'detected' },
+      { id: 's1', name: 'Cardio Specialist', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.SPECIALIST_CLINIC, address: 'D', source: 'detected' },
+      { id: 'h1', name: 'General Hospital', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.HOSPITAL, address: 'E', source: 'detected' },
+    ]
+    sbFetch.mockResolvedValueOnce(mixedCache).mockResolvedValueOnce([])
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'manufacturer_biz', category: 'clinic' })
+    expect(res.facilities.length).toBe(4)
+    expect(res.facilities.every(function (f) {
+      return [FACILITY_CATEGORY.LABORATORY, FACILITY_CATEGORY.CLINIC, FACILITY_CATEGORY.MEDICAL_CENTRE, FACILITY_CATEGORY.SPECIALIST_CLINIC].includes(f.category)
+    })).toBe(true)
+  })
+
+  it('other filter returns dental, eye, physio, aesthetic, spa, primary and other facilities', async () => {
+    const mixedCache = [
+      { id: 'd1', name: 'Smile Dental', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.DENTAL, address: 'A', source: 'detected' },
+      { id: 'e1', name: 'Eye Care', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.EYE, address: 'B', source: 'detected' },
+      { id: 'ph1', name: 'Rehab Physio', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.PHYSIO, address: 'C', source: 'detected' },
+      { id: 'a1', name: 'Glow Aesthetic', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.AESTHETIC_CLINIC, address: 'D', source: 'detected' },
+      { id: 'h1', name: 'General Hospital', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.HOSPITAL, address: 'E', source: 'detected' },
+    ]
+    sbFetch.mockResolvedValueOnce(mixedCache).mockResolvedValueOnce([])
+    const res = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'manufacturer_biz', category: 'other' })
+    expect(res.facilities.length).toBe(4)
+    expect(res.facilities.every(function (f) { return f.category !== FACILITY_CATEGORY.HOSPITAL })).toBe(true)
+  })
+
+  it('does not restrict by business_type — same GPS returns same facilities for different business_types', async () => {
+    const cache = [
+      { id: 'h1', name: 'General Hospital', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.HOSPITAL, address: 'A', source: 'detected' },
+      { id: 'p1', name: 'Pharmacy One', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.PHARMACY, address: 'B', source: 'detected' },
+      { id: 'l1', name: 'Lab One', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.LABORATORY, address: 'C', source: 'detected' },
+      { id: 'c1', name: 'Clinic One', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.CLINIC, address: 'D', source: 'detected' },
+      { id: 'd1', name: 'Dental One', lat: 6.5, lng: 3.3, category: FACILITY_CATEGORY.DENTAL, address: 'E', source: 'detected' },
+    ]
+    sbFetch.mockResolvedValueOnce(cache).mockResolvedValueOnce([])
+    const manu = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz_manufacturer', category: 'all' })
+    // Reset mocks for second call — simulate different business_type but same facilities cached per business
+    sbFetch.mockResolvedValueOnce(cache).mockResolvedValueOnce([])
+    const retail = await nearbyHealthFacilities(6.5, 3.3, { businessId: 'biz_retail', category: 'all' })
+    expect(manu.facilities.length).toBe(retail.facilities.length)
+    expect(manu.facilities.map(function (f) { return f.category }).sort()).toEqual(retail.facilities.map(function (f) { return f.category }).sort())
   })
 })

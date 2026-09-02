@@ -9,23 +9,67 @@ const toRad = (d) => (d * Math.PI) / 180
 // rep logging from across town. Tunable per call; this is the project default.
 export const FACILITY_VERIFY_THRESHOLD_M = 150
 
-// The five app-level facility categories. OSM amenities are collapsed onto
-// these (see categoryFromAmenity). Kept here so the service, the picker UI and
+// All healthcare facility categories supported by CareFind. This list is the
+// canonical taxonomy used by the facility selector and the GPS discovery
+// service. Every category already configured in CareFind is represented here so
+// a Manufacturer/Importer (or any business type) can find and log any nearby
+// healthcare facility — the user’s business_type never restricts which
+// facility categories are visible. Kept here so the service, the picker UI and
 // the tests all share one source of truth.
 export const FACILITY_CATEGORY = {
   HOSPITAL: 'Hospital',
   PHARMACY: 'Pharmacy',
-  CLINIC: 'Clinic/Diagnostic',
-  OTHER: 'Other health facility',
+  LABORATORY: 'Medical Laboratory / Diagnostic Centre',
+  CLINIC: 'Clinic',
+  MEDICAL_CENTRE: 'Medical Centre',
+  AESTHETIC_CLINIC: 'Aesthetic Clinic',
+  COSMETICS_SPA: 'Cosmetics & Spa',
+  SPECIALIST_CLINIC: 'Specialist Clinic',
+  DENTAL: 'Dental Clinic',
+  EYE: 'Eye Clinic / Optometry Centre',
+  PHYSIO: 'Physiotherapy / Rehabilitation Centre',
+  PRIMARY: 'Primary Health Centre / Community Health Centre',
+  OTHER: 'Other Health Facility',
+  // Legacy aliases — rows written before this expansion still carry these
+  // values. They are kept so old cached/rep-added rows remain readable and
+  // filter correctly without a data migration.
+  CLINIC_DIAGNOSTIC_LEGACY: 'Clinic/Diagnostic',
+  OTHER_LEGACY: 'Other health facility',
 }
 
-// Filter keys used by the picker UI, mapped to the canonical category label.
+// Filter keys used by the picker UI. The four buckets below are the
+// user-visible pills (All + 4 category groups). Detailed categories are
+// collapsed onto these buckets so the existing UI keeps working while the
+// underlying taxonomy expands to the 13 facility types required for
+// Manufacturer/Importer visits.
 export const FACILITY_FILTER_KEYS = {
   hospital: FACILITY_CATEGORY.HOSPITAL,
   pharmacy: FACILITY_CATEGORY.PHARMACY,
   clinic: FACILITY_CATEGORY.CLINIC,
   other: FACILITY_CATEGORY.OTHER,
 }
+
+// Families for bucket matching — which detailed categories belong to which
+// picker pill. This is the eligibility rule: every facility category belongs
+// to exactly one bucket, and `matchesCategory` uses these sets.
+const CLINIC_FAMILY = new Set([
+  FACILITY_CATEGORY.CLINIC,
+  FACILITY_CATEGORY.CLINIC_DIAGNOSTIC_LEGACY,
+  FACILITY_CATEGORY.LABORATORY,
+  FACILITY_CATEGORY.MEDICAL_CENTRE,
+  FACILITY_CATEGORY.SPECIALIST_CLINIC,
+])
+
+const OTHER_FAMILY = new Set([
+  FACILITY_CATEGORY.OTHER,
+  FACILITY_CATEGORY.OTHER_LEGACY,
+  FACILITY_CATEGORY.DENTAL,
+  FACILITY_CATEGORY.EYE,
+  FACILITY_CATEGORY.PHYSIO,
+  FACILITY_CATEGORY.PRIMARY,
+  FACILITY_CATEGORY.AESTHETIC_CLINIC,
+  FACILITY_CATEGORY.COSMETICS_SPA,
+])
 
 /**
  * Great-circle distance between two { lat, lng } points, in metres.
@@ -73,29 +117,104 @@ export function formatDistance(m) {
 }
 
 /**
- * Map an OpenStreetMap amenity (or healthcare) tag onto the app's category
- * vocabulary. The Overpass query only asks for health amenities, so the
- * default "Other health facility" bucket is the right fallthrough for anything
- * we do not name explicitly.
+ * Map an OpenStreetMap tag onto the app's category vocabulary. The input may
+ * come from amenity, healthcare, or shop tags — parseOverpass tries them in
+ * that order — so this function handles all three vocabularies. Diagnostic
+ * centres, eye clinics, physiotherapy, dental, aesthetic/beauty and primary
+ * health centres are all mapped to their canonical categories so the GPS
+ * discovery and the category filters can surface them.
+ *
+ * This is intentionally NOT gated by business_type: a Manufacturer/Importer
+ * user must be able to discover any healthcare facility category, so the
+ * mapping is purely tag → category, never user → allowed categories.
  */
 export function categoryFromAmenity(amenity) {
-  switch ((amenity || '').toLowerCase()) {
+  const raw = (amenity || '').toLowerCase().trim()
+  if (!raw) return FACILITY_CATEGORY.OTHER
+  // Normalise common OSM spellings / separators
+  const v = raw.replace(/-/g, '_')
+
+  // Direct amenity/healthcare/shop values
+  switch (v) {
     case 'hospital':
       return FACILITY_CATEGORY.HOSPITAL
     case 'pharmacy':
       return FACILITY_CATEGORY.PHARMACY
+    case 'laboratory':
+    case 'lab':
+    case 'diagnostic':
+    case 'diagnostics':
+    case 'blood_donation':
+      return FACILITY_CATEGORY.LABORATORY
     case 'clinic':
     case 'doctors':
+    case 'doctor':
+      return FACILITY_CATEGORY.CLINIC
+    case 'medical_centre':
+    case 'medical_center':
+    case 'centre':
+    case 'center':
+      return FACILITY_CATEGORY.MEDICAL_CENTRE
+    case 'specialist':
+    case 'specialist_clinic':
+      return FACILITY_CATEGORY.SPECIALIST_CLINIC
+    case 'dentist':
+      return FACILITY_CATEGORY.DENTAL
+    case 'optician':
+    case 'optometry':
+    case 'optometrist':
+    case 'optics':
+    case 'eye_clinic':
+      return FACILITY_CATEGORY.EYE
+    case 'physiotherapist':
+    case 'physiotherapy':
+    case 'rehabilitation':
+    case 'rehab':
+      return FACILITY_CATEGORY.PHYSIO
     case 'health_post':
     case 'dispensary':
     case 'birthing_center':
-      return FACILITY_CATEGORY.CLINIC
-    case 'dentist':
-      return FACILITY_CATEGORY.OTHER
+    case 'primary_health_care':
+    case 'primary_health_centre':
+    case 'primary_health_center':
+    case 'community_health_centre':
+    case 'community_health_center':
+      return FACILITY_CATEGORY.PRIMARY
+    case 'aesthetic':
+    case 'aesthetic_clinic':
+    case 'dermatology':
+      return FACILITY_CATEGORY.AESTHETIC_CLINIC
+    case 'beauty':
+    case 'cosmetics':
+    case 'spa':
+    case 'wellness':
+      return FACILITY_CATEGORY.COSMETICS_SPA
     default:
-      return FACILITY_CATEGORY.OTHER
+      break
   }
+
+  // Substring fallbacks for compound values like "healthcare=laboratory" already
+  // stripped, but also handle tags such as "aesthetic_clinic" or "eye_clinic"
+  // that may appear as combined strings, and shop values.
+  if (v.includes('laboratory') || v.includes('diagnostic') || v.includes('lab')) return FACILITY_CATEGORY.LABORATORY
+  if (v.includes('aesthetic')) return FACILITY_CATEGORY.AESTHETIC_CLINIC
+  if (v.includes('beauty') || v.includes('cosmetic') || v.includes('spa')) return FACILITY_CATEGORY.COSMETICS_SPA
+  if (v.includes('specialist')) return FACILITY_CATEGORY.SPECIALIST_CLINIC
+  if (v.includes('dental') || v === 'dentist') return FACILITY_CATEGORY.DENTAL
+  if (v.includes('optician') || v.includes('optometry') || v.includes('eye')) return FACILITY_CATEGORY.EYE
+  if (v.includes('physio') || v.includes('rehab')) return FACILITY_CATEGORY.PHYSIO
+  if (v.includes('primary') || v.includes('community_health')) return FACILITY_CATEGORY.PRIMARY
+  if (v.includes('medical_centre') || v.includes('medical_center')) return FACILITY_CATEGORY.MEDICAL_CENTRE
+  if (v === 'health_post' || v === 'dispensary' || v === 'birthing_center') return FACILITY_CATEGORY.PRIMARY
+  if (v === 'clinic' || v === 'doctors' || v === 'doctor') return FACILITY_CATEGORY.CLINIC
+
+  return FACILITY_CATEGORY.OTHER
 }
+
+// Backward-compatible alias — older code imports categoryFromAmenity for both
+// amenity and healthcare values. parseOverpass also checks shop, healthcare
+// and amenity; this wrapper keeps the name accurate.
+export const categoryFromHealthcare = categoryFromAmenity
 
 /**
  * Does the GPS fix sit within `thresholdM` of the selected/captured facility?
@@ -162,6 +281,10 @@ function buildAddress(tags) {
  * directly; `way` results carry them under `center`. Rows without coordinates
  * are dropped; rows without a name fall back to a readable label so the picker
  * never shows an empty row.
+ *
+ * Tags are read in priority amenity → healthcare → shop so a way tagged
+ * healthcare=laboratory or shop=beauty is still classified, not dropped to
+ * "Other".
  */
 export function parseOverpass(data) {
   if (!data || !Array.isArray(data.elements)) return []
@@ -171,7 +294,9 @@ export function parseOverpass(data) {
       const lng = el.lon != null ? Number(el.lon) : (el.center ? Number(el.center.lon) : null)
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
       const tags = el.tags || {}
-      const amenity = tags.amenity || tags.healthcare || ''
+      const rawTag = tags.amenity || tags.healthcare || tags.shop || tags.leisure || ''
+      // Prefer a human label from the most specific tag that was actually set
+      const amenity = rawTag
       const name = tags.name || (amenity ? (amenity.charAt(0).toUpperCase() + amenity.slice(1).replace(/_/g, ' ')) : 'Unnamed facility')
       return {
         name: name,
@@ -203,12 +328,29 @@ export function rankFacilities(facilities, gps, { cap = 150 } = {}) {
 
 /**
  * Does a facility belong to a picker filter bucket? `filterKey` is one of the
- * FACILITY_FILTER_KEYS keys, or 'all'. Category comparison is exact against the
- * canonical label, so the UI and the data never drift.
+ * FACILITY_FILTER_KEYS keys, or 'all'. The four buckets collapse the 13
+ * detailed healthcare facility categories so the existing filter pills keep
+ * working while covering every facility type a Manufacturer/Importer may visit:
+ *   - hospital  → Hospital only
+ *   - pharmacy  → Pharmacy only
+ *   - clinic    → Clinic/Diagnostic family (Clinic, Lab/Diagnostic, Medical
+ *                 Centre, Specialist Clinic) including legacy "Clinic/Diagnostic"
+ *   - other     → Other family (Dental, Eye, Physio/Rehab, Primary/Community,
+ *                 Aesthetic, Cosmetics & Spa, Other)
+ * Category comparison is bucket-aware, not strict equality, so the UI and the
+ * data never drift and no business_type gating is applied.
  */
 export function matchesCategory(facility, filterKey) {
   if (!filterKey || filterKey === 'all') return true
+  const cat = (facility && facility.category) ? String(facility.category) : ''
+  if (!cat) return false
+  // Legacy rows use "Clinic/Diagnostic" — treat as clinic family
+  if (filterKey === 'hospital') return cat === FACILITY_CATEGORY.HOSPITAL
+  if (filterKey === 'pharmacy') return cat === FACILITY_CATEGORY.PHARMACY
+  if (filterKey === 'clinic') return CLINIC_FAMILY.has(cat)
+  if (filterKey === 'other') return OTHER_FAMILY.has(cat)
+  // Unknown filter key — show all rather than hide (fail-open)
   const target = FACILITY_FILTER_KEYS[filterKey]
   if (!target) return true
-  return (facility.category || '') === target
+  return cat === target
 }
