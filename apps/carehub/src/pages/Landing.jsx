@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon, Wallet } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon, Wallet, WifiOff } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
@@ -11,6 +11,14 @@ import { useBreakpoint } from '../hooks/useBreakpoint'
 gsap.registerPlugin(ScrollTrigger)
 
 const { tealDeep, tealBright, deepTeal, tealMist, fontDisplay, bg, cardBg, navy, gray600, gray500, gray400, gray300, border } = theme
+
+const PLANS = [
+  ['Basic', '60,000', '/year', ['Up to 2 locations', 'Up to 5 staff', 'Up to 5,000 products', 'All core features', 'Hospitals excluded'], false],
+  ['Growth', '100,000', '/year', ['Up to 5 locations', 'Unlimited products', 'Unlimited staff', 'All core features', 'Hospitals start here'], true],
+  ['Premium', '150,000', '/year', ['Up to 10 locations', 'Unlimited products', 'Unlimited staff', 'All core features', 'Premium features'], false],
+  ['Enterprise', '250,000', '/year', ['Up to 30 locations', 'Unlimited products', 'Unlimited staff', 'Personalized support', 'For large orgs & importers'], false],
+  ['Custom', 'Custom', '', ['Bespoke to your org', 'Tailored locations & volume', 'Personalized support', 'Contact sales'], false],
+]
 
 export default function Landing() {
   const navigate = useNavigate()
@@ -57,6 +65,31 @@ export default function Landing() {
       gsap.from('.bi-card', {
         scrollTrigger: { trigger: '.bi-section', start: 'top 85%' },
         y: 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out',
+      })
+
+      gsap.from('.ops-card', {
+        scrollTrigger: { trigger: '.ops-section', start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.6, stagger: 0.12, ease: 'power2.out',
+      })
+
+      gsap.from('.who-card', {
+        scrollTrigger: { trigger: '.who-section', start: 'top 85%' },
+        y: 30, opacity: 0, duration: 0.6, stagger: 0.08, ease: 'power2.out',
+      })
+
+      gsap.from('.why-item', {
+        scrollTrigger: { trigger: '.why-section', start: 'top 85%' },
+        y: 20, opacity: 0, duration: 0.5, stagger: 0.06, ease: 'power2.out',
+      })
+
+      gsap.from('.pricing-card', {
+        scrollTrigger: { trigger: '.pricing-grid', start: 'top 82%' },
+        y: 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out',
+      })
+
+      gsap.from('.cta-section', {
+        scrollTrigger: { trigger: '.cta-section', start: 'top 85%' },
+        scale: 0.95, opacity: 0, duration: 0.8, ease: 'power2.out',
       })
 
       ScrollTrigger.create({
@@ -394,7 +427,181 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* Sections added by Tasks 4-15 */}
+      {/* ── Staff, Locations, Offline ────────────────────────────── */}
+      <div className="ops-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              { icon: Users, title: 'Your Team. Your Business. Your Control.', desc: 'Manage staff accounts, roles, responsibilities and access from a centralized platform. CareHub helps business owners and managers maintain better operational control as their teams grow.' },
+              { icon: MapPin, title: 'One Business. Multiple Locations. One System.', desc: 'CareHub supports growing businesses that operate across multiple locations, helping owners and managers maintain centralized visibility and control over operations.' },
+              { icon: WifiOff, title: 'Keep Your Business Moving.', desc: 'CareHub is designed with offline capability to support essential business operations when internet connectivity is unavailable.' },
+            ].map((card, i) => (
+              <div key={i} className="ops-card" style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <card.icon size={22} />
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: navy, marginBottom: 6 }}>{card.title}</div>
+                <div style={{ fontSize: 13.5, color: gray500, lineHeight: 1.6 }}>{card.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Who CareHub Is For ────────────────────────────────── */}
+      <div className="who-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 48 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Built for the Businesses That Keep Healthcare, Wellness and Personal Care Moving.
+            </h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 16 }}>
+            {[
+              { icon: '\u{1F48A}', title: 'Pharmacies', desc: 'Inventory, sales, staff, customers, locations and related pharmacy operations.' },
+              { icon: '\u{1F3E5}', title: 'Hospitals and clinics', desc: 'Business operations, appointments, staff, patients/clients and locations.' },
+              { icon: '\u{1F9EA}', title: 'Laboratories', desc: 'Operations, services, clients, staff and business information.' },
+              { icon: '\u2728', title: 'Aesthetic clinics', desc: 'Services, appointments, staff, clients and relevant product operations.' },
+              { icon: '\u{1F33F}', title: 'Spas and wellness centres', desc: 'Appointments, services, staff, clients and product sales.' },
+              { icon: '\u{1F484}', title: 'Cosmetics and beauty businesses', desc: 'Products, inventory, sales, staff and customer management.' },
+              { icon: '\u{1F487}', title: 'Hair-care businesses and salons', desc: 'Appointments, services, staff, customers and product management.' },
+              { icon: '\u{1F3E5}', title: 'Other eligible businesses', desc: 'Healthcare, wellness, beauty and personal-care businesses.' },
+            ].map((item, i) => (
+              <div key={i} className="who-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: 16, background: cardBg, borderRadius: theme.radius.lg, border: `1px solid ${border}` }}>
+                <div style={{ fontSize: 24, flexShrink: 0 }}>{item.icon}</div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: navy, marginBottom: 4 }}>{item.title}</div>
+                  <div style={{ fontSize: 13, color: gray500, lineHeight: 1.5 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Why CareHub ──────────────────────────────────────── */}
+      <div className="why-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+        <div style={{ maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+              Why CareHub
+            </h2>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
+            {[
+              'Fully designed for healthcare and related service businesses',
+              'Business-specific tools based on the business type selected during signup',
+              'One platform for core operations',
+              'Greater visibility across the CareFind health social platform',
+              'Intelligent technology designed to support smarter decisions',
+              'Scalable for single and multiple-location businesses',
+              '30-day free trial to experience the platform before committing',
+            ].map((item, i) => (
+              <div key={i} className="why-item" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: gray600 }}>
+                <CheckIcon size={16} color={tealDeep} strokeWidth={3} />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Pricing ───────────────────────────────────────────── */}
+      <div id="pricing" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 32, color: navy, margin: '0 0 8px' }}>
+              Plain pricing in Naira
+            </h2>
+            <p style={{ fontSize: 13.5, color: gray500 }}>Every plan includes POS, inventory, reports and your CareFind listing.</p>
+          </div>
+          <div className="pricing-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {PLANS.map(([name, price, period, items, popular]) => (
+              <div key={name} className="pricing-card" style={{
+                background: popular ? `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)` : cardBg,
+                borderRadius: theme.radius.xl,
+                border: popular ? 'none' : `1px solid ${border}`,
+                padding: isMobile ? 24 : 28,
+                position: 'relative', display: 'flex', flexDirection: 'column',
+                boxShadow: popular ? theme.elevation[3] : 'none',
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+              }}
+                onMouseEnter={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(-6px)'; e.currentTarget.style.boxShadow = theme.elevation[4] } }}
+                onMouseLeave={e => { if (!isMobile) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = popular ? theme.elevation[3] : 'none' } }}
+              >
+                {popular && (
+                  <div style={{ position: 'absolute', top: -10, left: 20, background: '#fff', color: tealDeep, fontSize: 10, fontWeight: 800, padding: '3px 12px', borderRadius: theme.radius.full, letterSpacing: '0.04em' }}>
+                    MOST POPULAR
+                  </div>
+                )}
+                <div style={{ fontWeight: 800, fontSize: 14, color: popular ? '#fff' : navy, marginBottom: 10 }}>{name}</div>
+                <div style={{ marginBottom: 16 }}>
+                  {price === 'Custom' ? (
+                    <span style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 22, color: popular ? '#fff' : navy }}>Custom</span>
+                  ) : (
+                    <>
+                      <span style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: 28, color: popular ? '#fff' : navy }}>&#8358;{price}</span>
+                      <span style={{ fontSize: 12, color: popular ? 'rgba(255,255,255,0.6)' : gray400 }}>{period}</span>
+                    </>
+                  )}
+                </div>
+                <div style={{ marginBottom: 20, flex: 1 }}>
+                  {items.map((it, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: popular ? 'rgba(255,255,255,0.8)' : gray500, padding: '5px 0' }}>
+                      <CheckIcon size={12} color={popular ? '#fff' : tealDeep} strokeWidth={3} />
+                      {it}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => navigate('/register')} style={{
+                  width: '100%', padding: 12, borderRadius: theme.radius.md,
+                  border: popular ? 'none' : `1px solid ${border}`,
+                  background: popular ? '#fff' : 'white',
+                  color: popular ? tealDeep : navy,
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}>
+                  {name === 'Enterprise' || name === 'Custom' ? 'Talk to us' : `Start with ${name}`}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Final CTA + Footer ─────────────────────────────────── */}
+      <div className="cta-section" style={{ padding: isMobile ? '48px 24px' : '64px 24px', background: `linear-gradient(135deg, ${deepTeal} 0%, ${tealDeep} 100%)`, maxWidth: 1100, margin: isMobile ? '40px 0 0' : '40px auto 0', borderRadius: isMobile ? 0 : theme.radius.xl, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
+        <div style={{ maxWidth: 600 }}>
+          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 22 : 30, color: '#fff', margin: '0 0 10px', lineHeight: 1.2 }}>
+            Your Business Deserves a Smarter Way to Operate.
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 1.6, maxWidth: 460 }}>
+            Stop managing your business through scattered tools and disconnected processes. Bring your operations together, gain better control, increase your visibility and build for growth with technology designed around your business.
+          </p>
+        </div>
+        <button onClick={() => navigate('/register')} style={{ padding: '15px 32px', borderRadius: theme.radius.md, border: 'none', background: '#fff', color: tealDeep, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          Get Started Free <ArrowRight size={16} />
+        </button>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 600, background: `linear-gradient(135deg, ${deepTeal} 0%, ${tealDeep} 100%)`, padding: '0 24px 16px' }}>
+        Manage smarter. Operate better. Get discovered. Grow with CareHub.
+      </div>
+
+      <div style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderTop: `1px solid ${border}`, marginTop: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: gray500 }}>
+          <Logo size={18} />
+          &copy; 2026 CareHub &middot; Part of the Care ecosystem
+        </div>
+        <div style={{ display: 'flex', gap: 20 }}>
+          {['Features', 'Pricing', 'CareFind', 'support@carehub.ng'].map(text => (
+            text.startsWith('support')
+              ? <span key={text} style={{ fontSize: 12, fontWeight: 600, color: gray500 }}>{text}</span>
+              : text === 'CareFind'
+                ? <a key={text} href="https://carefind.ng" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: gray500, textDecoration: 'none' }}>{text}</a>
+                : <a key={text} href={`#${text.toLowerCase()}`} style={{ fontSize: 12, fontWeight: 600, color: gray500, textDecoration: 'none' }}>{text}</a>
+          ))}
+        </div>
+      </div>
     </main>
   )
 }
