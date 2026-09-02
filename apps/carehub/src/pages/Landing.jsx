@@ -24,6 +24,11 @@ export default function Landing() {
         y: 50, opacity: 0, duration: 1, stagger: 0.18, ease: 'power3.out',
       })
 
+      gsap.from('.business-type-pill', {
+        scrollTrigger: { trigger: '.business-types-strip', start: 'top 90%' },
+        x: -40, opacity: 0, duration: 0.6, stagger: 0.06, ease: 'power2.out',
+      })
+
       ScrollTrigger.create({
         trigger: heroRef.current,
         start: 'bottom top',
@@ -107,6 +112,19 @@ export default function Landing() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* ── Business Types Strip ──────────────────────────────── */}
+      <div className="business-types-strip" style={{ padding: '28px 24px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: gray400, marginBottom: 16 }}>Built for your type of business</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+          {BUSINESS_TYPES.map(b => (
+            <div key={b.id} className="business-type-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 6px', borderRadius: 999, border: `1px solid ${border}`, background: 'white', fontSize: 12.5, fontWeight: 700, color: navy, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{b.icon}</span>
+              {b.name}
+            </div>
+          ))}
         </div>
       </div>
 
