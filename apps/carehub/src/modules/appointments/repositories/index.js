@@ -95,6 +95,63 @@ export function createAppointmentRepository(request = sbFetch) {
       }
     },
 
+    // Manual POS/Transfer confirmation — single channel, no split, staff attest
+    async confirmPos(appointmentId, businessId, posReference) {
+      try {
+        const result = await request('rpc/confirm_pos_payment', {
+          method: 'POST',
+          body: JSON.stringify({ p_appointment_id: appointmentId, p_pos_reference: posReference || null }),
+        })
+        if (result === 'ok' || (Array.isArray(result) && result[0] === 'ok')) return 'ok'
+        if (typeof result === 'string' && result) throw new Error(result)
+        return result
+      } catch (e) {
+        const msg = String(e.message || '')
+        if (msg.includes('does not exist') || msg.includes('confirm_pos_payment')) {
+          // Fallback to direct patch when migration not yet applied (dev/local)
+          return request(`appointments?id=eq.${appointmentId}&business_id=eq.${businessId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ payment_status: 'paid', pos_reference: posReference || null }),
+            prefer: 'return=minimal',
+          })
+        }
+        throw e
+      }
+    },
+
+    async confirmTransfer(appointmentId, businessId, proofUrl) {
+      try {
+        const result = await request('rpc/confirm_transfer_payment', {
+          method: 'POST',
+          body: JSON.stringify({ p_appointment_id: appointmentId, p_proof_url: proofUrl || null }),
+        })
+        if (result === 'ok' || (Array.isArray(result) && result[0] === 'ok')) return 'ok'
+        if (typeof result === 'string' && result) throw new Error(result)
+        return result
+      } catch (e) {
+        const msg = String(e.message || '')
+        if (msg.includes('does not exist') || msg.includes('confirm_transfer_payment')) {
+          return request(`appointments?id=eq.${appointmentId}&business_id=eq.${businessId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ payment_status: 'paid', transfer_proof_url: proofUrl || null }),
+            prefer: 'return=minimal',
+          })
+        }
+        throw e
+      }
+    },
+
+    async initiatePaystack(appointmentId, businessId) {
+      // Proxies to /api/initiate-appointment-payment (service-role Paystack init)
+      // The repository seam is PostgREST-only; this helper is for symmetry — the
+      // page calls fetch() directly to the Vercel function so the paystack secret stays server-side.
+      // Kept here so tests can mock it if needed.
+      return request(`rpc/initiate_appointment_paystack`, {
+        method: 'POST',
+        body: JSON.stringify({ p_appointment_id: appointmentId }),
+      })
+    },
+
     // Previously an id-only DELETE with no business filter — the same unscoped
     // class as the PATCHes this rollout keeps finding, but destructive rather
     // than corrective, and the page offers it behind a permission check and a

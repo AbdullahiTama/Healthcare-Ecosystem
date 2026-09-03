@@ -153,6 +153,89 @@ async function handleBooking(metadata, reference, amount) {
   return { settled: true }
 }
 
+// Shop order handler (CareFind Shop, strict Paystack)
+// Races verify-shop-payment on the same order; shop RPC is idempotent.
+async function handleShopOrder(metadata, reference, amount) {
+  if (!metadata?.order_id) return null
+
+  const { data: order } = await supabase
+    .from('shop_orders')
+    .select('id, vendor_business_id, total_kobo, payment_status, status, order_ref')
+    .eq('id', metadata.order_id)
+    .maybeSingle()
+  if (!order) return null
+
+  // Cross-check Paystack amount against server total_kobo
+  if (order.total_kobo == null || amount !== order.total_kobo) return null
+
+  // Try canonical shop RPCs first
+  let result = null
+  let error = null
+  // New naming: verify_shop_payment / settle_shop_payment
+  const tryRpc = async (name, args) => {
+    const r = await supabase.rpc(name, args)
+    return r
+  }
+  let rpcRes = await tryRpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
+  if (rpcRes.error) {
+    // Fallback: settle_shop_payment (older migration)
+    rpcRes = await tryRpc('settle_shop_payment', { p_order_id: order.id, p_reference: reference })
+  }
+  if (rpcRes.error) {
+    // Fallback: legacy create_shop_order flow uses shop_payments + status update
+    // Do minimal idempotent update if order still pending_payment
+    if (order.status === 'pending_payment' || order.payment_status === 'pending') {
+      const { error: updErr } = await supabase
+        .from('shop_orders')
+        .update({ payment_status: 'paid', status: 'paid', paystack_reference: reference })
+        .eq('id', order.id)
+        .eq('status', 'pending_payment')
+      if (updErr) return null
+      await supabase.from('shop_order_status_history').insert({
+        order_id: order.id,
+        from_status: 'pending_payment',
+        to_status: 'paid',
+        note: `Paystack ${reference}`,
+      })
+      await supabase.from('shop_payments').upsert({
+        order_id: order.id,
+        payment_reference: reference,
+        amount_kobo: amount,
+        status: 'success',
+        gateway: 'paystack',
+      }, { onConflict: 'payment_reference' })
+      result = 'ok'
+    } else {
+      return null
+    }
+  } else {
+    result = rpcRes.data
+    error = rpcRes.error
+    if (error) return null
+    if (result !== 'ok' && result !== 'already_paid' && result !== 'success' && result !== true) {
+      // Some RPCs return boolean true on success
+      if (result && typeof result === 'object' && result.already_processed) return { alreadyProcessed: true }
+      if (result === 'already_processed') return { alreadyProcessed: true }
+      return null
+    }
+    if (result === 'already_paid' || result === 'already_processed') return { alreadyProcessed: true }
+  }
+
+  // Notify vendor business owner (mirror of booking handler)
+  await supabase.from('staff_notifications').insert({
+    business_id: order.vendor_business_id,
+    staff_id: null,
+    is_owner: true,
+    kind: 'shop_order_paid',
+    title: `Shop order paid — ${order.order_ref}`,
+    body: `Order ${order.order_ref} — ₦${(amount / 100).toLocaleString()} via Paystack`,
+    link: '/dashboard/ecommerce',
+    read_at: null,
+  })
+
+  return { settled: true }
+}
+
 // CareHub plan renewal handler
 async function handlePlanPayment(metadata, reference, amount) {
   if (!metadata?.business_id || !metadata?.months) return null
@@ -207,6 +290,10 @@ export default async function handler(req, res) {
 
     // Try CareFind appointment booking (has appointment_id in metadata)
     result = await handleBooking(metadata, reference, amount)
+    if (result) return res.status(200).json(result)
+
+    // Try Shop order (has order_id in metadata)
+    result = await handleShopOrder(metadata, reference, amount)
     if (result) return res.status(200).json(result)
 
     // Try CareHub plan payment (has business_id)

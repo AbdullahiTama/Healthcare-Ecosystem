@@ -51,8 +51,9 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     }
   }
 
-  async function submitApplication(businessId, { terms_accepted, seller_info, segment, terms_version_id, applicant_user_id, audit_metadata }) {
+  async function submitApplication(businessId, { terms_accepted, seller_info, segment, terms_version_id, applicant_user_id, audit_metadata, account_number }) {
     if (!terms_accepted) throw new Error('You must accept the terms and conditions')
+    if (!account_number || !String(account_number).trim()) throw new Error('Account number is required')
     const now = new Date().toISOString()
     // Validate/resolve segment and terms version (before seller_info so missing-segment tests still get segment error)
     let seg = segment ? String(segment).toLowerCase().trim() : null
@@ -93,6 +94,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
         submitted_at: now,
         approval_timestamp: now,
         audit_metadata: audit_metadata || null,
+        account_number: String(account_number).trim(),
         updated_at: now,
       }),
       prefer: 'resolution=merge-duplicates,return=representation',

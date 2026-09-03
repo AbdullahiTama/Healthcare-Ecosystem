@@ -20,6 +20,12 @@ export const SEGMENT_COMMISSION_LABELS = {
   distributor: '2.5% of sale (vendor-paid, deducted from vendor payout)',
 }
 
+export const SEGMENT_CHECKBOX_LABELS = {
+  retail: 'I have read and agree to the Retail E-commerce Terms & Conditions.',
+  wholesale: 'I have read and agree to the Wholesale E-commerce Terms & Conditions.',
+  distributor: 'I have read and agree to the Distributor E-commerce Terms & Conditions.',
+}
+
 const VALID_SEGMENTS = new Set(Object.keys(SEGMENT_RATES))
 
 export function assertValidSegment(segment) {

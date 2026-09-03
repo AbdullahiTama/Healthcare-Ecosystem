@@ -17,6 +17,35 @@ export default function Appointments({ brand, role, perms }) {
   const [wallet, setWallet] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+
+  // Paystack return: ?reference=... — verify server-side before showing paid
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('reference') || params.get('trxref')
+    if (!ref) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await authClient.auth.getSession()
+        if (!session) return
+        const res = await fetch('/api/verify-appointment-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ reference: ref }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        window.history.replaceState({}, '', window.location.pathname)
+        if (res.ok) {
+          showToast(data.alreadyPaid ? 'Payment already confirmed' : 'Payment confirmed — appointment marked as paid', { type: 'success' })
+          load()
+        } else {
+          showToast(data.error || 'Could not confirm payment. Keep your reference and contact support.', { type: 'error' })
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
   const [filter, setFilter] = useState('all')
   const [showAdd, setShowAdd] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
@@ -61,10 +90,15 @@ export default function Appointments({ brand, role, perms }) {
 
   async function save() {
     if (!form.clientName || !form.date || !form.time) { showToast('Please enter client name, date and time.', { type: 'warning' }); return }
+    const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
+    if (feeKobo && feeKobo > 0 && !form.paymentChannel) { showToast('Select payment channel (cash / POS / transfer / paystack)', { type: 'warning' }); return }
+    if (feeKobo && form.paymentChannel === 'pos' && !form.posRef && !confirm('POS reference is empty — proceed without receipt code?')) { /* allow */ }
     setSaving(true)
     try {
-      const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
-      await appointmentRepository.create(brand.id, {
+      // One channel per appointment — no split. Cash is instant paid, pos/transfer unpaid pending attest, paystack unpaid pending Paystack.
+      const ch = feeKobo ? (form.paymentChannel || 'cash') : null
+      const paymentStatus = !feeKobo ? null : ch === 'cash' ? 'paid' : 'unpaid'
+      const payload = {
         client_id: form.client_id || null,
         client_name: form.clientName,
         service: form.service || '',
@@ -77,18 +111,36 @@ export default function Appointments({ brand, role, perms }) {
         source: 'carehub',
         phone: form.phone || '',
         concern: form.concern || null,
-        // ADR-005: CareHub bookings are settled in person. The channel is
-        // recorded for the business's own books; the medium is snapshotted
-        // from the business default so online consultations always carry it.
-        payment_channel: form.paymentChannel || 'cash',
+        payment_channel: ch,
         consultation_medium: brand?.consultation_medium || null,
         consultation_medium_link: brand?.consultation_medium_link || null,
         fee_amount: feeKobo,
-        payment_status: feeKobo ? 'unpaid' : null,
-      })
-      showToast('Appointment booked!', { type: 'success' })
+        payment_status: paymentStatus,
+        pos_reference: ch === 'pos' ? (form.posRef || null) : null,
+        transfer_proof_url: ch === 'transfer' ? (form.transferProofUrl || null) : null,
+        // verified audit for cash — attested by creator
+        ...(ch === 'cash' && feeKobo ? { verified_at: new Date().toISOString() } : {}),
+      }
+      const created = await appointmentRepository.create(brand.id, payload)
+      // Paystack link: if channel is paystack, immediately request Paystack URL for sharing
+      if (ch === 'paystack' && feeKobo && created) {
+        // created may be array or object depending on sbFetch; try to get id
+        const createdId = Array.isArray(created) ? created[0]?.id : created?.id
+        if (createdId) {
+          try { await handleSendPaymentLink({ id: createdId, client_name: form.clientName, date: form.date, time: form.time, fee_amount: feeKobo }) } catch {}
+          showToast('Appointment booked — paystack link created, share it with the client', { type: 'success' })
+        } else {
+          showToast('Appointment booked!', { type: 'success' })
+        }
+      } else if (ch === 'cash' && feeKobo) {
+        showToast('Appointment booked — cash marked as paid', { type: 'success' })
+      } else if ((ch === 'pos' || ch === 'transfer') && feeKobo) {
+        showToast(`Appointment booked — ${ch === 'pos' ? 'POS' : 'transfer'} awaiting staff confirmation`, { type: 'success' })
+      } else {
+        showToast('Appointment booked!', { type: 'success' })
+      }
       setForm({ date: todayDate() }); setShowAdd(false); load()
-    } catch (e) { showToast('Could not save appointment. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not save appointment. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
 
@@ -195,6 +247,39 @@ export default function Appointments({ brand, role, perms }) {
       showToast('Network error. Please try again.', { type: 'error' })
     }
     setWithdrawing(false)
+  }
+
+  async function handleConfirmPos(appt) {
+    const ref = prompt('Enter POS receipt reference (last 4-6 digits, optional):', appt.pos_reference || '')
+    if (ref === null) return
+    const posRef = ref.trim()
+    try {
+      const res = await appointmentRepository.confirmPos(appt.id, brand.id, posRef || null)
+      if (typeof res === 'string' && res !== 'ok') throw new Error(res)
+      showToast('POS confirmed — marked as paid', { type: 'success' })
+      load()
+    } catch (e) {
+      const m = String(e.message || '')
+      if (m.includes('already_paid')) showToast('Already paid', { type: 'info' })
+      else if (m.includes('forbidden')) showToast('You do not own this appointment', { type: 'error' })
+      else if (m.includes('wrong_channel')) showToast('Not a POS appointment', { type: 'warning' })
+      else showToast(m || 'Could not confirm POS', { type: 'error' })
+    }
+  }
+
+  async function handleConfirmTransfer(appt) {
+    if (!confirm(`Confirm transfer received for ${appt.client_name} — ₦${(appt.fee_amount/100).toLocaleString()}?`)) return
+    try {
+      const res = await appointmentRepository.confirmTransfer(appt.id, brand.id, null)
+      if (typeof res === 'string' && res !== 'ok') throw new Error(res)
+      showToast('Transfer confirmed — marked as paid', { type: 'success' })
+      load()
+    } catch (e) {
+      const m = String(e.message || '')
+      if (m.includes('already_paid')) showToast('Already paid', { type: 'info' })
+      else if (m.includes('forbidden')) showToast('You do not own this appointment', { type: 'error' })
+      else showToast(m || 'Could not confirm transfer', { type: 'error' })
+    }
   }
 
   async function handleSendPaymentLink(appt) {
@@ -326,9 +411,15 @@ export default function Appointments({ brand, role, perms }) {
             {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
             {a.status === 'confirmed' && <button onClick={() => updateStatus(a.id, 'completed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Complete</button>}
             {a.status !== 'cancelled' && a.status !== 'completed' && <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>}
-            {a.payment_status === 'unpaid' && a.fee_amount && (
+            {a.payment_status === 'unpaid' && a.payment_channel === 'pos' && a.fee_amount && (
+              <button onClick={() => handleConfirmPos(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm POS</button>
+            )}
+            {a.payment_status === 'unpaid' && a.payment_channel === 'transfer' && a.fee_amount && (
+              <button onClick={() => handleConfirmTransfer(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm Transfer</button>
+            )}
+            {a.payment_status === 'unpaid' && a.fee_amount && (a.payment_channel === 'paystack' || !a.payment_channel || a.payment_channel === 'card') && (
               <button onClick={() => handleSendPaymentLink(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>
-                {payLinkLoading && payLink === a.id ? 'Sending...' : 'Send Pay Link'}
+                {payLinkLoading && payLink === a.id ? 'Sending...' : 'Pay Link'}
               </button>
             )}
             {perms?.canDelete && <RedBtn onClick={() => askDelete(a)} style={{ padding: '4px 9px', fontSize: '11px' }}>Del</RedBtn>}
@@ -357,8 +448,12 @@ export default function Appointments({ brand, role, perms }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Sel label='Booking type' value={form.bookingType || 'physical'} onChange={v => f('bookingType', v)} options={[{ value: 'physical', label: 'Physical visit' }, { value: 'online', label: 'Online (video/phone)' }]} />
-            <Sel label='Payment channel' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash' }, { value: 'transfer', label: 'Transfer' }, { value: 'pos', label: 'POS' }, { value: 'credit', label: 'Credit' }]} />
+            <Sel label='Payment channel *' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash — instant paid' }, { value: 'pos', label: 'POS — confirm after terminal' }, { value: 'transfer', label: 'Transfer — confirm after receipt' }, { value: 'paystack', label: 'Paystack link — pay online' }]} />
           </div>
+          {form.paymentChannel === 'pos' && form.fee && (
+            <Inp label='POS reference (optional)' value={form.posRef || ''} onChange={v => f('posRef', v)} placeholder='Last 4-6 digits of receipt' />
+          )}
+          {form.fee && <div style={{ fontSize: 11, color: gray400, marginTop: -8, marginBottom: 4 }}>{form.paymentChannel === 'cash' ? 'Cash: will be marked paid immediately.' : form.paymentChannel === 'pos' ? 'POS: appointment stays unpaid until you tap Confirm POS after terminal approval.' : form.paymentChannel === 'transfer' ? 'Transfer: stays unpaid until you tap Confirm Transfer.' : form.paymentChannel === 'paystack' ? 'Paystack: a shareable link will be created — client pays online, you are notified when confirmed.' : ''}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
             <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />

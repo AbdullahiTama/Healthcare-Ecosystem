@@ -37,6 +37,8 @@ import resolveAccountHandler from './_handlers/resolve-account.js'
 import lookupAppointmentHandler from './_handlers/lookup-appointment.js'
 import cancelAppointmentHandler from './_handlers/cancel-appointment.js'
 import walletTransactionsHandler from './_handlers/wallet-transactions.js'
+import initiateShopPaymentHandler from './_handlers/initiate-shop-payment.js'
+import verifyShopPaymentHandler from './_handlers/verify-shop-payment.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -58,6 +60,8 @@ const ROUTES = {
   'lookup-appointment': lookupAppointmentHandler,
   'cancel-appointment': cancelAppointmentHandler,
   'wallet-transactions': walletTransactionsHandler,
+  'initiate-shop-payment': initiateShopPaymentHandler,
+  'verify-shop-payment': verifyShopPaymentHandler,
 }
 
 // This route must receive the untouched request stream so it can hash the raw

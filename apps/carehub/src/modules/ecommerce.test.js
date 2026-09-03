@@ -1,6 +1,7 @@
 ﻿import { describe, it, expect } from 'vitest'
 import { createEcommerceRepository } from './ecommerce/repositories/index.js'
 import { createInMemoryClient } from '../test/inMemoryClient.js'
+import { SEGMENT_CHECKBOX_LABELS } from '../lib/ecommerceSegments.js'
 
 const A = 'biz-A'
 const B = 'biz-B'
@@ -95,22 +96,22 @@ describe('ecommerceRepository', () => {
 
   it('submitApplication requires terms', async () => {
     const { repo } = seeded()
-    await expect(repo.submitApplication(A, { terms_accepted: false, seller_info: { contactName: 'Ada', contactPhone: '08012345678' } })).rejects.toThrow('terms')
+    await expect(repo.submitApplication(A, { terms_accepted: false, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, account_number: '1234567890' })).rejects.toThrow('terms')
   })
 
   it('submitApplication requires segment/terms_version', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' } })).rejects.toThrow('segment')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, account_number: '1234567890' })).rejects.toThrow('segment')
   })
 
   it('submitApplication stamps business_id and Approved with audit (auto-approve)', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS], ecommerce_applications: [] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', applicant_user_id: 'user-1', audit_metadata: { userAgent: 'test' } })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', applicant_user_id: 'user-1', audit_metadata: { userAgent: 'test' }, account_number: '1234567890' })
     const rows = client.rows('ecommerce_applications')
     expect(rows.length).toBe(1)
-    expect(rows[0]).toMatchObject({ business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.10, applicant_user_id: 'user-1' })
+    expect(rows[0]).toMatchObject({ business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.10, applicant_user_id: 'user-1', account_number: '1234567890' })
     expect(rows[0].acceptance_timestamp).toBeTruthy()
     expect(rows[0].approval_timestamp).toBeTruthy()
     expect(rows[0].submitted_at).toBeTruthy()
@@ -119,21 +120,21 @@ describe('ecommerceRepository', () => {
   it('successful retail Apply stores 10% rate', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail' })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.accepted_commission_rate).toBe(0.10)
   })
   it('successful wholesale Apply stores 5% rate', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(B, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'wholesale', terms_version_id: 't-wholesale' })
+    await repo.submitApplication(B, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'wholesale', terms_version_id: 't-wholesale', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications').find(r => r.business_id === B)
     expect(row.accepted_commission_rate).toBe(0.05)
   })
   it('successful distributor Apply stores 2.5% rate', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication('biz-C', { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'distributor', terms_version_id: 't-distributor' })
+    await repo.submitApplication('biz-C', { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'distributor', terms_version_id: 't-distributor', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.accepted_commission_rate).toBe(0.025)
   })
@@ -141,7 +142,7 @@ describe('ecommerceRepository', () => {
   it('Apply auto-resolves terms_version when only segment given', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail' })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.terms_version_id).toBe('t-retail')
     expect(row.accepted_commission_rate).toBe(0.10)
@@ -150,7 +151,7 @@ describe('ecommerceRepository', () => {
   it('Apply without explicit acceptance is blocked (Apply cannot be completed without required acceptance)', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: false, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail' })).rejects.toThrow('terms')
+    await expect(repo.submitApplication(A, { terms_accepted: false, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })).rejects.toThrow('terms')
     expect(client.rows('ecommerce_applications').length).toBe(0)
   })
 
@@ -223,7 +224,7 @@ describe('ecommerceRepository', () => {
       ecommerce_products: [],
     })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail' })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })
     expect(client.rows('ecommerce_products').length).toBe(0)
     const app = await repo.getApplication(A)
     expect(app.status).toBe('Approved')
@@ -306,9 +307,9 @@ describe('ecommerceRepository', () => {
     for (const c of cases) {
       const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
       const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-      await repo.submitApplication('biz-'+c.seg, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: c.seg, terms_version_id: c.id })
+      await repo.submitApplication('biz-'+c.seg, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: c.seg, terms_version_id: c.id, account_number: '1234567890' })
       const row = client.rows('ecommerce_applications').find(r => r.business_id === 'biz-'+c.seg)
-      const orderTotal = 500000 // â‚¦5,000
+      const orderTotal = 500000
       const expectedCommission = Math.round(orderTotal * c.rate)
       expect(row.accepted_commission_rate).toBe(c.rate)
       expect(Math.round(orderTotal * row.accepted_commission_rate)).toBe(expectedCommission)
@@ -328,23 +329,23 @@ describe('ecommerceRepository', () => {
   it('submit rejects mismatched segment vs terms_version', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-wholesale' })).rejects.toThrow('does not match')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-wholesale', account_number: '1234567890' })).rejects.toThrow('does not match')
   })
   it('submit rejects inactive terms version', async () => {
     const inactive = [{ id: 't-old', segment: 'retail', version: 'v0', title: 'Old', content: 'old', commission_rate: 0.10, commission_label: '10%', is_active: false }]
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS, ...inactive] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-old' })).rejects.toThrow('not active')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-old', account_number: '1234567890' })).rejects.toThrow('not active')
   })
   it('submit rejects unknown terms_version_id', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, terms_version_id: 'nope' })).rejects.toThrow('not found')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, terms_version_id: 'nope', account_number: '1234567890' })).rejects.toThrow('not found')
   })
   it('submit resolves segment when only terms_version_id given', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, terms_version_id: 't-distributor' })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, terms_version_id: 't-distributor', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.segment).toBe('distributor')
     expect(row.accepted_commission_rate).toBe(0.025)
@@ -352,8 +353,8 @@ describe('ecommerceRepository', () => {
   it('submit rejects whitespace contactName/phone', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: '   ', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-retail' })).rejects.toThrow('Contact name')
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '   ' }, segment: 'retail', terms_version_id: 't-retail' })).rejects.toThrow('Contact name')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: '   ', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })).rejects.toThrow('Contact name')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '   ' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })).rejects.toThrow('Contact name')
   })
   it('getTermsForSegment trims whitespace', async () => {
     const { repo } = seeded()
@@ -419,7 +420,25 @@ describe('ecommerceRepository', () => {
     const mismatched = [{ id: 't-bad', segment: 'retail', version: 'v2', title: 'Bad', content: 'bad', commission_rate: 0.20, commission_label: '20%', is_active: true }]
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS, ...mismatched] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
-    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-bad' })).rejects.toThrow('mismatch')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-bad', account_number: '1234567890' })).rejects.toThrow('mismatch')
+  })
+  it('submitApplication requires account_number', async () => {
+    const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
+    const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail' })).rejects.toThrow('Account number')
+    await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '   ' })).rejects.toThrow('Account number')
+  })
+  it('submitApplication stores account_number', async () => {
+    const client = createInMemoryClient({ ecommerce_terms: [...TERMS], ecommerce_applications: [] })
+    const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
+    await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '0123456789' })
+    const row = client.rows('ecommerce_applications')[0]
+    expect(row.account_number).toBe('0123456789')
+  })
+  it('SEGMENT_CHECKBOX_LABELS has correct text per segment', () => {
+    expect(SEGMENT_CHECKBOX_LABELS.retail).toBe('I have read and agree to the Retail E-commerce Terms & Conditions.')
+    expect(SEGMENT_CHECKBOX_LABELS.wholesale).toBe('I have read and agree to the Wholesale E-commerce Terms & Conditions.')
+    expect(SEGMENT_CHECKBOX_LABELS.distributor).toBe('I have read and agree to the Distributor E-commerce Terms & Conditions.')
   })
 })
 

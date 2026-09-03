@@ -38,7 +38,10 @@ export default function Checkout() {
   const [pickupStationId, setPickupStationId] = useState('')
   const [stations, setStations] = useState([])
   const [loading, setLoading] = useState(false)
+  const [payLoading, setPayLoading] = useState(false)
   const [error, setError] = useState('')
+  const [allowPayOnDelivery, setAllowPayOnDelivery] = useState(false)
+  const [payMethod, setPayMethod] = useState('paystack')
 
   useEffect(() => {
     async function loadStations() {
@@ -50,6 +53,21 @@ export default function Checkout() {
     }
     loadStations()
   }, [])
+
+  // Load vendor pay-on-delivery flag (strict Paystack by default, vendor opt-in)
+  useEffect(() => {
+    const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
+    if (vendorIds.length !== 1) { setAllowPayOnDelivery(false); return }
+    let live = true
+    supabase.from('businesses').select('shop_allow_pay_on_delivery').eq('id', vendorIds[0]).maybeSingle().then(({ data }) => {
+      if (live) {
+        const allowed = !!data?.shop_allow_pay_on_delivery
+        setAllowPayOnDelivery(allowed)
+        if (!allowed) setPayMethod('paystack')
+      }
+    }).catch(() => { if (live) setAllowPayOnDelivery(false) })
+    return () => { live = false }
+  }, [items])
 
   if (items.length === 0) {
     return (
@@ -90,30 +108,100 @@ export default function Checkout() {
   const deliveryFeeDisplay = !approved && formData.delivery_preference === 'home'
   const grandTotal = total + fees.fulfilment + (deliveryFeeDisplay ? 0 : fees.delivery)
 
+  // Strict Paystack default; pay-at-pickup only when vendor allows + pickup selected
+  const canUsePickup = allowPayOnDelivery && formData.delivery_preference === 'pickup'
+
+  async function initiatePaystackForOrder(orderId, paymentReference) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('Please sign in again to pay')
+    const res = await fetch('/api/initiate-shop-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ order_id: orderId }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Could not start Paystack payment')
+    if (data.authorization_url) {
+      window.location.href = data.authorization_url
+      return true
+    }
+    throw new Error('No authorization_url from Paystack')
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const usePickup = canUsePickup && payMethod === 'pickup'
+    if (usePickup) {
+      // Pay at Pickup — create order and skip Paystack (vendor will accept later)
+      setLoading(true)
+      setError('')
+      try {
+        if (!formData.street || !formData.city || !formData.state) throw new Error('Street, city and state are required')
+        if (!formData.customer_phone || String(formData.customer_phone).trim().length < 10) throw new Error('Valid phone number is required')
+        if (!formData.customer_email || !formData.customer_email.includes('@')) throw new Error('Valid email is required')
+        if (!pickupStationId) throw new Error('Please select a pickup station')
+        const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
+        if (vendorIds.length === 0) throw new Error('Vendor not found for cart items — please re-add products from Shop')
+        if (vendorIds.length > 1) throw new Error('Multi-vendor checkout is not yet supported — please checkout per vendor')
+        const vendorBusinessId = vendorIds[0]
+        const delivery_address = `${formData.street}, ${formData.city}, ${formData.state}`
+        const orderItems = items.map(item => ({ ecommerce_product_id: item.ecommerce_product_id, quantity: item.quantity, unit_price_kobo: item.unit_price_kobo }))
+        const payment_reference = `CF-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
+        const orderId = await orderRepository.create({
+          customer_id: user.id,
+          vendor_business_id: vendorBusinessId,
+          items: orderItems,
+          subtotal_kobo: total,
+          commission_kobo: fees.commission,
+          fulfilment_kobo: fees.fulfilment,
+          delivery_kobo: 0,
+          total_kobo: grandTotal,
+          delivery_address,
+          delivery_city: formData.city,
+          delivery_state: formData.state,
+          delivery_phone: formData.customer_phone,
+          delivery_email: formData.customer_email,
+          delivery_instructions: formData.delivery_instructions || null,
+          delivery_preference: 'pickup',
+          distance_km: 0,
+          is_approved_city: approved,
+          customer_name: formData.customer_name || user.email,
+          payment_reference,
+          pickup_station_id: pickupStationId
+        })
+        clearCart()
+        navigate(`/orders/${orderId}`)
+      } catch (err) {
+        const msg = String(err.message || '')
+        if (msg.includes('INSUFFICIENT_STOCK')) setError('Some items are now out of stock — please review your cart. Inventory was updated after you added items.')
+        else if (msg.includes('PRICE_CHANGED')) setError('A product price changed while you were checking out — please review your cart and try again.')
+        else if (msg.includes('Vendor not approved')) setError('This vendor is not currently approved for Shop sales.')
+        else setError(err.message || 'Failed to create order. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
+    // Strict Paystack flow: create order as pending_payment then redirect to Paystack
     setLoading(true)
+    setPayLoading(true)
     setError('')
+    let createdOrderId = null
     try {
       if (!formData.street || !formData.city || !formData.state) throw new Error('Street, city and state are required')
       if (!formData.customer_phone || String(formData.customer_phone).trim().length < 10) throw new Error('Valid phone number is required')
       if (!formData.customer_email || !formData.customer_email.includes('@')) throw new Error('Valid email is required')
       if (formData.delivery_preference === 'pickup' && !pickupStationId) throw new Error('Please select a pickup station')
-      // Vendor grouping — spec assumes single vendor per order; reject multi-vendor cart explicitly
       const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
       if (vendorIds.length === 0) throw new Error('Vendor not found for cart items — please re-add products from Shop')
       if (vendorIds.length > 1) throw new Error('Multi-vendor checkout is not yet supported — please checkout per vendor')
       const vendorBusinessId = vendorIds[0]
-      const customer_id = user.id
       const delivery_address = `${formData.street}, ${formData.city}, ${formData.state}`
-      const orderItems = items.map(item => ({
-        ecommerce_product_id: item.ecommerce_product_id,
-        quantity: item.quantity,
-        unit_price_kobo: item.unit_price_kobo
-      }))
+      const orderItems = items.map(item => ({ ecommerce_product_id: item.ecommerce_product_id, quantity: item.quantity, unit_price_kobo: item.unit_price_kobo }))
       const payment_reference = `CF-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
-      const orderId = await orderRepository.create({
-        customer_id,
+      createdOrderId = await orderRepository.create({
+        customer_id: user.id,
         vendor_business_id: vendorBusinessId,
         items: orderItems,
         subtotal_kobo: total,
@@ -134,16 +222,24 @@ export default function Checkout() {
         payment_reference,
         pickup_station_id: formData.delivery_preference === 'pickup' ? pickupStationId : null
       })
+      // Do not clear cart yet — keep it until Paystack is confirmed (order is created)
+      await initiatePaystackForOrder(createdOrderId, payment_reference)
+      // Redirected — clear cart optimistically; if user aborts, order remains pending_payment
       clearCart()
-      navigate(`/orders/${orderId}`)
     } catch (err) {
       const msg = String(err.message || '')
       if (msg.includes('INSUFFICIENT_STOCK')) setError('Some items are now out of stock — please review your cart. Inventory was updated after you added items.')
       else if (msg.includes('PRICE_CHANGED')) setError('A product price changed while you were checking out — please review your cart and try again.')
       else if (msg.includes('Vendor not approved')) setError('This vendor is not currently approved for Shop sales.')
       else setError(err.message || 'Failed to create order. Please try again.')
+      // If order was created but Paystack init failed, send customer to order detail to retry
+      if (createdOrderId && msg.toLowerCase().includes('paystack')) {
+        clearCart()
+        navigate(`/orders/${createdOrderId}`)
+      }
     } finally {
       setLoading(false)
+      setPayLoading(false)
     }
   }
 
@@ -331,6 +427,23 @@ export default function Checkout() {
             </div>
           </Card>
 
+          {/* Payment method selector — strict Paystack default */}
+          {canUsePickup && (
+            <Card style={{ padding: 16, border: `1px solid ${theme.tealDeep}20`, background: theme.tealMist }}>
+              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>Payment Method</p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" onClick={() => setPayMethod('paystack')} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${payMethod==='paystack'? theme.tealDeep : theme.border}`, background: payMethod==='paystack'? theme.tealDeep : '#fff', color: payMethod==='paystack'? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Pay with Paystack (Card/Bank)</button>
+                <button type="button" onClick={() => setPayMethod('pickup')} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${payMethod==='pickup'? theme.tealDeep : theme.border}`, background: payMethod==='pickup'? theme.tealDeep : '#fff', color: payMethod==='pickup'? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Pay at Pickup</button>
+              </div>
+              <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight }}>{payMethod==='pickup' ? 'Order created as unpaid — vendor will confirm and you pay when you collect.' : 'You will be redirected to Paystack to pay securely. Order is held as pending_payment until verified.'}</p>
+            </Card>
+          )}
+          {!canUsePickup && (
+            <div role="note" style={{ padding: 12, borderRadius: 8, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20`, fontSize: 12, color: theme.textMid, textAlign: 'center' }}>
+              Payment is via <b>Paystack</b> (cards, bank, USSD, mobile). Your order is created as <b>pending_payment</b> until Paystack confirms.
+            </div>
+          )}
+
           {error && (
             <div role="alert" style={{
               padding: 16,
@@ -346,16 +459,17 @@ export default function Checkout() {
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || payLoading}
             style={{
               padding: '16px 24px',
               fontSize: 16,
-              fontWeight: 600
+              fontWeight: 600,
+              opacity: (loading||payLoading) ? 0.7 : 1
             }}
           >
-            {loading ? 'Creating Order...' : deliveryFeeDisplay ? 'Proceed to Pay for Products Now' : 'Place Order'}
+            {payLoading ? 'Redirecting to Paystack...' : loading ? 'Creating Order...' : canUsePickup && payMethod==='pickup' ? 'Place Order — Pay at Pickup' : deliveryFeeDisplay ? 'Proceed to Pay with Paystack' : `Pay ₦${(grandTotal/100).toLocaleString()} with Paystack`}
           </Button>
-          <p style={{ fontSize: 11, color: theme.textLight, textAlign:'center' }}>Payment via Paystack (cards/bank/mobile) will be added in next iteration — order is created as pending_payment and idempotency is enforced via payment_reference.</p>
+          <p style={{ fontSize: 11, color: theme.textLight, textAlign:'center' }}>Secure by Paystack · 256-bit SSL · Ref {payMethod} · Idempotency via payment_reference</p>
         </div>
       </form>
     </div>

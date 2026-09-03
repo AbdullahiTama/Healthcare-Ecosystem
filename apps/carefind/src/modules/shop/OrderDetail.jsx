@@ -41,6 +41,36 @@ export default function OrderDetail() {
     loadOrder()
   }, [orderId])
 
+  // Paystack return: ?reference=... — verify server-side before showing paid
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('reference') || params.get('trxref')
+    if (!ref) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers = session ? { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` } : { 'Content-Type': 'application/json' }
+        const res = await fetch('/api/verify-shop-payment', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ order_id: orderId, reference: ref }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        window.history.replaceState({}, '', window.location.pathname)
+        if (res.ok) {
+          await loadOrder()
+        } else {
+          setError(data.error || 'Could not confirm payment. Keep your reference and contact support.')
+        }
+      } catch (e) {
+        setError('Could not confirm payment')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [orderId])
+
   async function loadOrder() {
     setLoading(true)
     setError('')
@@ -76,12 +106,38 @@ export default function OrderDetail() {
       setUpdating(false)
     }
   }
-  async function handleVerifyPayment() {
-    const ref = prompt('Enter Paystack reference (simulated — in prod this comes from Paystack callback):')
-    if (!ref || !ref.trim()) return
+  async function handlePayNow() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setError('Please sign in to pay'); return }
     setUpdating(true)
     try {
-      await orderRepository.verifyPayment(orderId, ref.trim())
+      const res = await fetch('/api/initiate-shop-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ order_id: orderId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not start Paystack payment')
+      if (data.authorization_url) window.location.href = data.authorization_url
+    } catch (err) {
+      setError(err.message || 'Could not start payment')
+    } finally { setUpdating(false) }
+  }
+  async function handleVerifyPayment() {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('reference') || prompt('Enter Paystack reference:')
+    if (!ref || !String(ref).trim()) return
+    setUpdating(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const headers = session ? { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` } : { 'Content-Type': 'application/json' }
+      const res = await fetch('/api/verify-shop-payment', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ order_id: orderId, reference: String(ref).trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Verification failed')
       await loadOrder()
     } catch (err) {
       setError(err.message || 'Payment verification failed')
@@ -258,8 +314,9 @@ export default function OrderDetail() {
             <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
           </div>
           {order.status==='pending_payment' && isCustomer && (
-            <div style={{ display:'flex', gap:8, marginTop:12 }}>
-              <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1 }}>Verify Paystack Payment (simulate)</Button>
+            <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+              <Button onClick={handlePayNow} disabled={updating} style={{ flex:1, minWidth: 140 }}>Pay with Paystack</Button>
+              <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1, minWidth: 140 }}>I've Paid — Verify</Button>
               <Button variant="secondary" onClick={handleCancel} disabled={updating}>Cancel Order</Button>
             </div>
           )}
