@@ -63,9 +63,12 @@ export default function Wallet({ brand, role }) {
         if (res.ok && data.accountName) {
           setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
           setAccountResolved(true)
+        } else if (data.unsupportedBank) {
+          setAccountResolved(false)
+          showToast(data.error || 'This bank does not support automatic verification. Please enter your account name manually.', { type: 'warning' })
         } else {
           setAccountResolved(false)
-          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
+          showToast(data.error || data.detail || 'Could not verify account name.', { type: 'error' })
         }
       } catch {
         setAccountResolved(false)
@@ -267,10 +270,13 @@ export default function Wallet({ brand, role }) {
                 {accountResolved && withdrawForm.accountName && (
                   <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
                 )}
+                {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
+                  <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>

@@ -164,9 +164,12 @@ function Wallet() {
         if (res.ok && data.accountName) {
           setWdAccountName(data.accountName)
           setWdAccountResolved(true)
+        } else if (data.unsupportedBank) {
+          setWdAccountResolved(false)
+          showToast(data.error || 'This bank does not support automatic verification. Please enter your account name manually.', { type: 'warning' })
         } else {
           setWdAccountResolved(false)
-          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
+          showToast(data.error || data.detail || 'Could not verify account name.', { type: 'error' })
         }
       } catch {
         setWdAccountResolved(false)
@@ -537,6 +540,9 @@ function Wallet() {
                   {wdAccountResolved && wdAccountName && (
                     <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Account name verified</span>
                   )}
+                  {!wdAccountResolved && !wdAccountResolving && wdBankCode && wdAccountNumber.length === 10 && (
+                    <span style={{ fontSize: 11, color: theme.warning }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                  )}
                 </div>
                 <Inp
                   label="Withdrawal PIN"
@@ -552,11 +558,11 @@ function Wallet() {
                 />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}

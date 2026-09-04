@@ -65,7 +65,11 @@ export async function resolveAccount({ bankCode, accountNumber }) {
   const data = await paystackFetch(`/bank/resolve?${qs}`)
 
   if (!data.status) {
-    throw new Error(data.message || 'Could not verify account')
+    const err = new Error(data.message || 'Could not verify account')
+    err.paystackMessage = data.message
+    err.bankCode = bankCode
+    err.accountNumber = accountNumber
+    throw err
   }
 
   return { accountName: data.data.account_name, accountNumber: data.data.account_number }

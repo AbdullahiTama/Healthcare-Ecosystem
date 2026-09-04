@@ -118,9 +118,12 @@ export default function Appointments({ brand, role, perms }) {
         if (res.ok && data.accountName) {
           setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
           setAccountResolved(true)
+        } else if (data.unsupportedBank) {
+          setAccountResolved(false)
+          showToast(data.error || 'This bank does not support automatic verification. Please enter your account name manually.', { type: 'warning' })
         } else {
           setAccountResolved(false)
-          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
+          showToast(data.error || data.detail || 'Could not verify account name.', { type: 'error' })
         }
       } catch {
         setAccountResolved(false)
@@ -532,7 +535,7 @@ export default function Appointments({ brand, role, perms }) {
         confirmLabel='Delete' />
 
       <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} title='Withdraw booking balance'
-        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <p style={{ margin: 0, fontSize: '12.5px', color: gray600 }}>
             Available balance: <b style={{ color: success }}>{naira(wallet?.available_balance)}</b>. Money is sent straight to the bank account below via Paystack.
@@ -581,6 +584,9 @@ export default function Appointments({ brand, role, perms }) {
             )}
             {accountResolved && withdrawForm.accountName && (
               <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+            )}
+            {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
+              <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
             )}
           </div>
         </div>
