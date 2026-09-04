@@ -117,7 +117,7 @@ export default function FacilityDiscovery({ brand }) {
         page: p,
         pageSize,
         businessId: brand?.id || null,
-        radius: distance ? Number(distance) : null,
+        radius: (distance && Number.isFinite(Number(distance)) && Number(distance) > 0) ? Number(distance) : null,
       })
       if (reset) {
         setFacilities(res.facilities)

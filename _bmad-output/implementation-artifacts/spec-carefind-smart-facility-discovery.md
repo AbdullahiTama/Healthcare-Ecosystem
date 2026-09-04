@@ -2,7 +2,7 @@
 title: 'CareFind Smart Facility Discovery & Live Field Intelligence Engine'
 type: 'feature'
 created: '2026-09-04'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'ed76e37320e14bec16401765ee96d1f4811fa79b'
 review_loop_iteration: 0
 context:
@@ -94,3 +94,83 @@ Pipeline: `resolveLocation`→`fetchSources` (CareFind `(state,lga,city)` + Over
 - `npm test -- src/modules/facility-discovery` -- State→LGA, Search Modes, dedupe, no 200 m cap
 - `npm run build` -- vite build clean
 - `npm test` -- full suite passes (447+; no regression)
+
+## Suggested Review Order
+
+**Entry point — Smart Facility Discovery**
+
+- Location-first filter system with 5 modes and dynamic LGA
+  [`FacilityDiscovery.jsx:14`](../../apps/carehub/src/modules/facility-discovery/FacilityDiscovery.jsx#L14)
+
+- Shared engine pipeline resolveLocation→fetchSources→normalize→dedupe→score→rank
+  [`facilityDiscovery.js:1`](../../apps/carehub/src/lib/facilityDiscovery.js#L1)
+
+**Nigeria geography and location resolution**
+
+- 37 states + 774 LGAs dataset with alias-normalized State and centre fallback
+  [`nigeriaGeo.js:5`](../../apps/carehub/src/lib/nigeriaGeo.js#L5)
+
+- Single-source NG_STATES unification and state centre for cross-state search
+  [`constants.js:16`](../../apps/carehub/src/config/constants.js#L16)
+
+**Facility taxonomy and matching**
+
+- 16-category taxonomy with legacy aliases and direct-key bucket mapping
+  [`geo.js:32`](../../apps/carehub/src/lib/geo.js#L32)
+
+- Category mapping for OSM amenity|healthcare|shop synonyms
+  [`geo.js:131`](../../apps/carehub/src/lib/geo.js#L131)
+
+**Progressive discovery and multi-source aggregation**
+
+- Remove hard 200 m, progressive radii 500/1000/2000/5000 with cache-then-Overpass
+  [`places.js:36`](../../apps/carehub/src/lib/places.js#L36)
+
+- Source aggregation CareFind + Overpass tiled + optional Google Places New via Edge Function
+  [`facilityDiscovery.js:250`](../../apps/carehub/src/lib/facilityDiscovery.js#L250)
+
+- Deduplication 50 m+name/phone/domain and confidence/verification scoring
+  [`facilityDiscovery.js:116`](../../apps/carehub/src/lib/facilityDiscovery.js#L116)
+
+**Live Field Activity upgrade**
+
+- Capture accuracy/timestamp/address and remove hard 200 cap via shared engine
+  [`LiveActivity.jsx:136`](../../apps/carehub/src/modules/live-activity/LiveActivity.jsx#L136)
+
+- FacilityPicker Nearby/Expanded/Area controls and source/verification badges
+  [`FacilityPicker.jsx:43`](../../apps/carehub/src/modules/live-activity/FacilityPicker.jsx#L43)
+
+**Navigation and routing**
+
+- New Facility Discovery module gated to ENTERPRISE_TYPES after Live Activity
+  [`permissions.js:251`](../../apps/carehub/src/lib/permissions.js#L251)
+
+- Route /dashboard/discovery via bareGuard mirroring Live Activity pattern
+  [`BusinessDashboard.jsx:223`](../../apps/carehub/src/pages/dashboard/BusinessDashboard.jsx#L223)
+
+**Export and pagination**
+
+- Filter-aware CSV with criteria/date/count and PDF export with source attribution
+  [`export.js:24`](../../apps/carehub/src/modules/facility-discovery/export.js#L24)
+
+- Background job simulation for >1k rows with chunked progress
+  [`export.js:121`](../../apps/carehub/src/modules/facility-discovery/export.js#L121)
+
+- Pagination clamped and distance guard for point search
+  [`facilityDiscovery.js:432`](../../apps/carehub/src/lib/facilityDiscovery.js#L432)
+
+**Schema and supporting changes**
+
+- businesses.lga/area nullable columns with state/lga/city indexes
+  [`20260904_facility_discovery_location.sql:1`](../../apps/carehub/sql/20260904_facility_discovery_location.sql#L1)
+
+- BUSINESS_PUBLIC_COLUMNS lga/area for State/LGA filtering
+  [`supabase.js:71`](../../apps/carehub/src/services/supabase.js#L71)
+
+**Tests and safety nets**
+
+- Integration tests for progressive radii, cross-state, category direct keys, tiling, dedup pipeline
+  [`facilityDiscovery.integration.test.js:1`](../../apps/carehub/src/lib/facilityDiscovery.integration.test.js#L1)
+
+- NigeriaGeo 37/774 and export criteria/date/count/PDF coverage
+  [`nigeriaGeo.test.js:14`](../../apps/carehub/src/lib/nigeriaGeo.test.js#L14)

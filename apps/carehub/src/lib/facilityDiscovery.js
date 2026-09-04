@@ -429,12 +429,14 @@ export async function discoverFacilities(params = {}) {
     })
   }
 
-  // 11. Pagination via cursor (offset)
+  // 11. Pagination via cursor (offset) — clamp negative/beyond
   const total = facilities.length
-  const start = page * pageSize
-  const paged = facilities.slice(start, start + pageSize)
-  const hasMore = start + pageSize < total
-  const nextCursor = hasMore ? page + 1 : null
+  const safePage = Number.isFinite(page) && page >= 0 ? Math.floor(page) : 0
+  const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 20
+  const start = Math.max(0, Math.min(safePage * safePageSize, total))
+  const paged = facilities.slice(start, start + safePageSize)
+  const hasMore = start + safePageSize < total
+  const nextCursor = hasMore ? safePage + 1 : null
 
   return {
     facilities: paged,
