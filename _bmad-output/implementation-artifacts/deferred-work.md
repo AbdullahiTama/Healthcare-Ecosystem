@@ -114,3 +114,12 @@
 - source_spec: none
   summary: Make Stories discoverable across avatars with indicator ring, tap-to-open, engagement and owner analytics
   evidence: Split from CareFind QA compilation per SCOPE STANDARD — stories cross-surface ring + analytics; deferred.
+- source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
+  summary: Extract shared useAccountResolve and useBanks hooks to eliminate duplicated account-resolution and bank-loading effects across CareFind Wallet, CareHub Wallet, and CareHub Appointments.
+  evidence: Three components carry identical ~35-line debounced resolve useEffect and loadBanks useEffect; blind-hunter flagged drift surface — pre-existing duplication, not caused by this fix.
+- source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
+  summary: Deduplicate disabled/opacity expressions in CareHub Wallet and Appointments withdraw buttons (same long condition repeated twice per file).
+  evidence: The disabled prop and opacity ternary copy-paste the same guard; any future change must update both or they drift — pre-existing pattern, not caused by this fix.
+- source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
+  summary: Align carehub paystack.js with carefind paystack.js by extracting shared paystackHeaders helper.
+  evidence: carefind exports paystackHeaders(); carehub inlines the same header construction; documented as deliberate mirrors but have diverged — pre-existing.

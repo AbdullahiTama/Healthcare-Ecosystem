@@ -277,13 +277,13 @@ export default function Appointments({ brand, role, perms }) {
       showToast('Fill in the amount and bank details.', { type: 'warning' }); return
     }
     const amountKobo = Math.round(parseFloat(withdrawForm.amount) * 100)
-    if (wallet?.available_balance && amountKobo > wallet.available_balance) {
+    if (amountKobo > (wallet?.available_balance || 0)) {
       showToast('Amount exceeds available balance.', { type: 'warning' }); return
     }
     setWithdrawing(true)
     try {
       const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'warning' }); return }
+      if (!session) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       const res = await fetch('/api/initiate-business-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
@@ -532,12 +532,15 @@ export default function Appointments({ brand, role, perms }) {
         confirmLabel='Delete' />
 
       <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} title='Withdraw booking balance'
-        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
+        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <p style={{ margin: 0, fontSize: '12.5px', color: gray600 }}>
             Available balance: <b style={{ color: success }}>{naira(wallet?.available_balance)}</b>. Money is sent straight to the bank account below via Paystack.
           </p>
-          <Inp label='Amount (₦)' type='number' value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder='e.g. 5000' min='1' max={wallet?.available_balance ? Math.floor(wallet.available_balance / 100) : ''} required />
+          <Inp label='Amount (₦)' type='number' value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder='e.g. 5000' min='1' max={Math.floor((wallet?.available_balance ?? 0) / 100)} required />
+          {withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0) && (
+            <span style={{ fontSize: '11px', color: danger, fontWeight: '700' }}>Amount exceeds available balance of {naira(wallet?.available_balance)}</span>
+          )}
           <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
             Bank *
             <select

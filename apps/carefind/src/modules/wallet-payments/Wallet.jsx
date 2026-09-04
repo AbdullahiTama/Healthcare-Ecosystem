@@ -247,7 +247,7 @@ function Wallet() {
         return
       }
 
-      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin('')
+      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
       const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
       setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
       const { data: txData } = await supabase
@@ -490,9 +490,9 @@ function Wallet() {
                     Amount exceeds your balance of {wallet?.balance || 0} CareCoins
                   </p>
                 )}
-                {wdAmount >= 5 && Number(wdAmount) <= (wallet?.balance || 0) && (
+                {Number(wdAmount) >= 5 && Number(wdAmount) <= (wallet?.balance || 0) && (
                   <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.textLight }}>
-                    You'll receive ≈ ₦{Math.floor(wdAmount * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
+                    You'll receive ≈ ₦{Math.floor(Number(wdAmount) * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
                   </p>
                 )}
                 <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -552,11 +552,11 @@ function Wallet() {
                 />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || !wdAccountResolved || !wdAccountName || !wdPin) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
