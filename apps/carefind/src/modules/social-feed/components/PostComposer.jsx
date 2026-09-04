@@ -78,6 +78,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
   const [postType, setPostType] = useState('text')
   const [visualTheme, setVisualTheme] = useState('teal-depth')
   const [postRating, setPostRating] = useState(5)
+  // INVARIANT: draft state — imageFile/imagePreview remain local until explicit Post; no effect auto-publishes.
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -182,6 +183,8 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
     }
   }, [mentionQuery, mentionResults, selectedMentionIdx, insertMention])
 
+  // INVARIANT: image selection only sets draft state — never inserts into posts.
+  // Publish only via createPost's single supabase insert, gated by `posting`.
   const handleImageSelect = useCallback((file) => {
     if (!file.type.startsWith('image/')) {
       toast.show('Please select an image', { type: 'warning' })
@@ -197,8 +200,11 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
     setImagePreview(null)
   }, [imagePreview])
 
+  // INVARIANT (spec-carefind-drawing-auto-publish-fix): createPost is the ONLY caller of posts.insert.
+  // No effect watches imageFile/content to auto-publish. posting flag is the idempotency guard.
   const createPost = useCallback(async () => {
     if (!user) return
+    if (posting) return
     if (!content.trim() && postType === 'text') {
       toast.show('Write something first', { type: 'warning' })
       return
@@ -281,7 +287,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
     } finally {
       setPosting(false)
     }
-  }, [user, content, postType, visualTheme, postRating, imageFile, imagePreview, toast, onClose, onPosted, removeImage])
+  }, [user, content, postType, visualTheme, postRating, imageFile, imagePreview, posting, toast, onClose, onPosted, removeImage])
 
   return (
     <div style={{ background: theme.cardBg, borderRadius: 16, boxShadow: theme.elevation[1], padding: 16 }}>

@@ -3,6 +3,12 @@ import { theme } from '../styles/theme'
 
 // A finger/touch drawing canvas. Draw, pick colors, erase, clear.
 // Calls onSave with a PNG blob when the user saves.
+//
+// INVARIANT (spec-carefind-drawing-auto-publish-fix): draft stays draft until explicit Post.
+// - start/move/end/clearCanvas only mutate canvas ctx, never call onSave/supabase/notify.
+// - save() is the SOLE caller of onSave(blob), only on explicit "Use this drawing" click.
+// - saving flag prevents double-tap double-publish.
+// - No effect may auto-save strokes to posts.
 function DrawingBoard({ onSave, onCancel }) {
   const canvasRef = useRef(null)
   const ctxRef = useRef(null)
@@ -37,6 +43,7 @@ function DrawingBoard({ onSave, onCancel }) {
     return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }
   }
 
+  // INVARIANT: only mutates canvas context — never publishes
   function start(e) {
     e.preventDefault()
     drawing.current = true
@@ -48,6 +55,7 @@ function DrawingBoard({ onSave, onCancel }) {
     ctx.moveTo(x, y)
   }
 
+  // INVARIANT: only mutates canvas context — never publishes
   function move(e) {
     if (!drawing.current) return
     e.preventDefault()
@@ -57,10 +65,12 @@ function DrawingBoard({ onSave, onCancel }) {
     ctx.stroke()
   }
 
+  // INVARIANT: only flips local drawing flag — never publishes
   function end() {
     drawing.current = false
   }
 
+  // INVARIANT: clears canvas pixels only — never calls onSave/supabase
   function clearCanvas() {
     const canvas = canvasRef.current
     const ctx = ctxRef.current
@@ -69,9 +79,13 @@ function DrawingBoard({ onSave, onCancel }) {
     ctx.fillRect(0, 0, rect.width, rect.height)
   }
 
+  // INVARIANT: sole publish gate for the drawing — only explicit click calls onSave.
+  // saving guard prevents rapid double-tap from emitting two blobs/posts.
   async function save() {
+    if (saving) return
     setSaving(true)
     const canvas = canvasRef.current
+    if (!canvas) { setSaving(false); return }
     canvas.toBlob((blob) => {
       onSave(blob)
       setSaving(false)

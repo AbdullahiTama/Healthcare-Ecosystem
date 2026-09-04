@@ -132,6 +132,9 @@ function Feed() {
   const [postType, setPostType] = useState('text') // text, visual, question, review, article
   const [visualTheme, setVisualTheme] = useState('teal')
   const [postRating, setPostRating] = useState(5)
+  // INVARIANT (spec-carefind-drawing-auto-publish-fix): draft stays in React state
+  // imageFile/imagePreview are local draft only — no useEffect may watch them to auto-insert into posts.
+  // Publish happens only via handlePost's single supabase.from('posts').insert, gated by `posting`.
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -773,9 +776,11 @@ function Feed() {
     setImagePreview(null)
   }
 
+  // INVARIANT: single publish gate — only handlePost inserts into posts, guarded by `posting` to prevent double-tap duplicates.
   async function handlePost(e) {
     e.preventDefault()
     if (!user) return
+    if (posting) return
     if (postType === 'video') {
       if (!cardVideo) {
         toast.show('Choose a video before posting.')
@@ -1925,6 +1930,10 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
         <DrawingBoard
           onCancel={() => setShowDraw(false)}
           onSave={(blob) => {
+            // INVARIANT: drawing stays draft until explicit Post — this handler
+            // only sets local imageFile/imagePreview and closes the board.
+            // It never calls supabase.from('posts').insert or handlePost.
+            // No effect watches imageFile to auto-publish.
             if (blob) {
               // A drawing is just an image: same pipeline as a photo
               const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' })
