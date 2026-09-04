@@ -36,23 +36,21 @@ export async function shareOrCopy({ title, text, url, files, mediaUrl }) {
   const target = url || window.location.href
 
   if (navigator.share) {
-    const payload = { title, text, url: target }
     const hasFiles = Array.isArray(files) && files.length > 0
-    // Web Share with files needs an explicit canShare guard — some browsers
-    // expose share() but throw on a files payload. When files can't be shared
-    // we skip the share entirely so the media link lands on the clipboard
-    // instead of being silently dropped.
     const filesShareable = !hasFiles
       || (typeof navigator.canShare === 'function' && navigator.canShare({ files }))
-    if (filesShareable) {
-      if (hasFiles) payload.files = files
-      try {
-        await navigator.share(payload)
-        return 'shared'
-      } catch (e) {
-        // The user closing the share sheet is not a failure to report.
-        if (e?.name === 'AbortError') return 'dismissed'
-      }
+    const payload = { title, text, url: target }
+    // Include files only when the browser confirms it can share them. When
+    // files are present but not shareable we still share url+text so the
+    // preview card deep-links to the canonical /post/:id (I/O matrix: omit
+    // files but still share url).
+    if (hasFiles && filesShareable) payload.files = files
+    try {
+      await navigator.share(payload)
+      return 'shared'
+    } catch (e) {
+      // The user closing the share sheet is not a failure to report.
+      if (e?.name === 'AbortError') return 'dismissed'
     }
   }
 
@@ -60,8 +58,10 @@ export async function shareOrCopy({ title, text, url, files, mediaUrl }) {
     // The post URL already carries og:image tags so WhatsApp/Telegram/etc.
     // render the image inside the link preview card. Appending the raw
     // mediaUrl as a second line caused two separate previews (image + link)
-    // when pasted into WhatsApp — the image and text appeared split.
-    await navigator.clipboard.writeText(text ? `${text}\n\n${target}` : `${target}`)
+    // when pasted into WhatsApp — the image and text appeared split, so we
+    // never append mediaUrl. URL is first so the preview appears without
+    // scrolling (deep-link preview card: image/title tappable to /post/:id).
+    await navigator.clipboard.writeText(text ? `${target}\n\n${text}` : `${target}`)
     return 'copied'
   } catch {
     return 'failed'

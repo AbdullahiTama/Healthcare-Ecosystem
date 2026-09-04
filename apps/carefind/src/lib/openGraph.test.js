@@ -445,3 +445,65 @@ describe('titleFromContent (the card headline)', () => {
     expect(meta.description.startsWith(meta.title)).toBe(true)
   })
 })
+
+describe('deep-link preview card — image/title taps open canonical /post/:id', () => {
+  const postWithImage = {
+    id: POST_ID,
+    content: JSON.stringify([{ id: 'a', type: 'text', content: 'Deep Link Title\n\nBody for preview card that should link to canonical.' }]),
+    image_url: 'https://cdn.example/post.jpg',
+  }
+
+  it('buildPostMeta with image uses absolute og:image and canonical og:url', () => {
+    const meta = buildPostMeta(postWithImage, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
+    expect(meta.image).toBe('https://cdn.example/post.jpg')
+    expect(meta.url).toBe(POST_CANONICAL)
+    expect(meta.title).toContain('Deep Link Title')
+    expect(meta.description).toContain('Body for preview')
+  })
+
+  it('buildPostMeta resolves relative image via absoluteUrl to absolute og:image', () => {
+    const meta = buildPostMeta({ ...postWithImage, image_url: '/img/relative.jpg' }, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
+    expect(meta.image).toBe('https://carefind.app/img/relative.jpg')
+  })
+
+  it('renderOgHtml emits og:url canonical, og:image absolute, twitter:card large so WhatsApp preview is tappable to post', () => {
+    const meta = buildPostMeta(postWithImage, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
+    const html = renderOgHtml(meta)
+    expect(html).toContain(`<meta property="og:url" content="${POST_CANONICAL}" />`)
+    expect(html).toContain(`<link rel="canonical" href="${POST_CANONICAL}" />`)
+    expect(html).toContain('<meta property="og:image" content="https://cdn.example/post.jpg" />')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />')
+    expect(html).toContain(`<a href="${POST_CANONICAL}">Open on CareFind</a>`)
+    expect(html).not.toContain('http-equiv="refresh"')
+  })
+
+  it('text-only post has no og:image and twitter:card summary — no broken image', () => {
+    const textOnly = { ...postWithImage, image_url: null }
+    const meta = buildPostMeta(textOnly, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
+    expect(meta.image).toBeNull()
+    const html = renderOgHtml(meta)
+    expect(html).toContain('<meta name="twitter:card" content="summary" />')
+    expect(html).not.toContain('og:image')
+  })
+
+  it('subscriber-only post leaks no content — generic title/description and no image', () => {
+    const premium = { ...postWithImage, subscriber_only: true }
+    const meta = buildPostMeta(premium, { origin: ORIGIN, canonicalUrl: POST_CANONICAL })
+    expect(meta.title).toMatch(/subscriber-only/i)
+    expect(meta.description).not.toContain('Deep Link')
+    expect(meta.image).toBeNull()
+    const html = renderOgHtml(meta)
+    expect(html).not.toContain('Deep Link')
+    expect(html).not.toContain('https://cdn.example/post.jpg')
+  })
+
+  it('legacy /feed?post= URL still canonicalises to /post/:id for crawler preview', () => {
+    const legacy = parseShareTarget(`/feed?post=${POST_ID}`)
+    const canonical = canonicalUrlFor(legacy, ORIGIN, LEGACY_POST_URL)
+    expect(canonical).toBe(POST_CANONICAL)
+    const meta = buildPostMeta(postWithImage, { origin: ORIGIN, canonicalUrl: canonical })
+    const html = renderOgHtml(meta)
+    expect(html).toContain(`<meta property="og:url" content="${POST_CANONICAL}" />`)
+    expect(html).not.toContain(LEGACY_POST_URL)
+  })
+})
