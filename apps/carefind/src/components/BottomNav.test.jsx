@@ -23,20 +23,28 @@ function renderNav(initialPath) {
   )
 }
 
-describe('BottomNav (four destinations)', () => {
+describe('BottomNav (five destinations, always visible)', () => {
   beforeEach(() => {
     supabaseMock.from.mockClear()
   })
 
-  it('renders the four core destinations', () => {
+  it('renders the five core destinations including Create', () => {
     renderNav('/feed')
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'MedMarket' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create post' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'News' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Create post' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Browse' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Shop' })).not.toBeInTheDocument()
+  })
+
+  it('always shows Create irrespective of page', () => {
+    for (const path of ['/search?tab=shop', '/news', '/profile', '/search']) {
+      const { unmount } = renderNav(path)
+      expect(screen.getByRole('button', { name: 'Create post' })).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('keeps MedMarket highlighted inside the marketplace', () => {
@@ -49,10 +57,5 @@ describe('BottomNav (four destinations)', () => {
     renderNav('/feed')
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(14, 111, 90)')
     expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(139, 151, 143)')
-  })
-
-  it('does not render Create button', () => {
-    renderNav('/feed')
-    expect(screen.queryByRole('button', { name: 'Create post' })).not.toBeInTheDocument()
   })
 })

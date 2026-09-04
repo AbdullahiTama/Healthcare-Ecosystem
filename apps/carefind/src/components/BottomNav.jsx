@@ -1,10 +1,12 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Home, Store, Newspaper, User } from 'lucide-react'
+import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
+import { Home, Store, Newspaper, User, Plus } from 'lucide-react'
 import { theme } from '../styles/theme'
+import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 
-function BottomNav() {
+function BottomNav({ onCompose }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
@@ -15,6 +17,16 @@ function BottomNav() {
   const isMedMarketActive = isSearch
   const isNewsActive = isNews
   const isProfileActive = isProfile
+
+  function handleCompose() {
+    if (onCompose) {
+      logCreateTap({ source: 'bottom-nav', route: 'in-place', path: location.pathname })
+      onCompose()
+      return
+    }
+    logCreateTap({ source: 'bottom-nav', route: 'navigate', path: location.pathname })
+    navigate(CREATE_PATH)
+  }
 
   const itemStyle = (active) => ({
     display: 'flex',
@@ -57,11 +69,14 @@ function BottomNav() {
         background: theme.cardBg,
         borderTop: `1px solid ${theme.border}`,
         display: 'flex',
-        alignItems: 'stretch',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        gap: 2,
         padding: '6px 4px calc(6px + env(safe-area-inset-bottom)) 4px',
         boxShadow: '0 -2px 10px rgba(0,0,0,0.04)',
         zIndex: 100,
         boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
     >
       <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
@@ -80,6 +95,27 @@ function BottomNav() {
         </span>
         MedMarket
       </Link>
+      <button
+        onClick={handleCompose}
+        aria-label="Create post"
+        style={{
+          ...itemStyle(false),
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          style={{
+            ...iconCapsule(false),
+            background: theme.tealDeep,
+            color: '#fff',
+          }}
+        >
+          <Plus size={18} strokeWidth={2.6} aria-hidden="true" color="#fff" />
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 800, color: theme.textLight }}>Create</span>
+      </button>
       <Link
         to="/news"
         style={itemStyle(isNewsActive)}
