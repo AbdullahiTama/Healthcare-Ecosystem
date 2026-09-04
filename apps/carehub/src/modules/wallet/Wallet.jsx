@@ -99,6 +99,10 @@ export default function Wallet({ brand, role }) {
     if (!withdrawForm.amount || !withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName) {
       showToast('Fill in amount and bank details.', { type: 'warning' }); return
     }
+    const amountKobo = Math.round(parseFloat(withdrawForm.amount) * 100)
+    if (wallet?.available_balance && amountKobo > wallet.available_balance) {
+      showToast('Amount exceeds available balance.', { type: 'warning' }); return
+    }
     setWithdrawing(true)
     try {
       const { data: { session } } = await authClient.auth.getSession()
@@ -108,7 +112,7 @@ export default function Wallet({ brand, role }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           business_id: brand.id,
-          amount: Math.round(parseFloat(withdrawForm.amount) * 100),
+          amount: amountKobo,
           bankCode: withdrawForm.bankCode,
           bankName: withdrawForm.bankName,
           accountNumber: withdrawForm.accountNumber,
@@ -218,7 +222,7 @@ export default function Wallet({ brand, role }) {
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Withdraw to Bank</div>
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Available: <strong style={{ color: success }}>{naira(wallet?.available_balance)}</strong></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <Inp label="Amount (₦)" type="number" value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder="e.g. 5000" required />
+              <Inp label="Amount (₦)" type="number" value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder="e.g. 5000" min="1" max={wallet?.available_balance ? Math.floor(wallet.available_balance / 100) : ''} required />
               <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 Bank *
                 <select
@@ -243,7 +247,7 @@ export default function Wallet({ brand, role }) {
                   <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
                 )}
               </label>
-              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v.replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" required />
+              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
               <div>
                 <Inp
                   label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
