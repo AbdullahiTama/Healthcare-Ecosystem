@@ -2,7 +2,7 @@
 title: 'Fix Drawing auto-publish — one Post creates one post'
 type: 'bugfix'
 created: '2026-09-04'
-status: 'in-review'
+status: 'done'
 baseline_commit: '1402aa5b0f5750563e9d48c593824483b00bd9c7'
 review_loop_iteration: 0
 context:
@@ -50,10 +50,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `apps/carefind/src/components/DrawingBoard.jsx` -- verify no auto-publish paths: `start`/`move`/`end`/`clearCanvas` only mutate canvas ctx, never call `onSave` or `supabase`; `save()` is sole `onSave(blob)` caller on explicit click; add guard `saving` disables double-tap.
-- [ ] `apps/carefind/src/modules/social-feed/Feed.jsx` -- verify drawing `onSave` only sets `imageFile`/`imagePreview` + closes board, does not call `createPost`/`supabase`; add invariant comment and ensure no `useEffect` watches `imageFile` to publish.
-- [ ] `apps/carefind/src/modules/social-feed/components/PostComposer.jsx` -- verify `createPost` is only caller of `posts.insert`; keep `posting` guard, disable button while posting, ensure drawing image flow uses `imageFile` already set, no auto-trigger on `handleImageSelect`.
-- [ ] `apps/carefind/src/components/DrawingBoard.test.jsx` (new) + `apps/carefind/src/modules/social-feed/Feed.drawing.test.jsx` (new) -- tests: strokes without Post create 0 posts; one Post creates exactly 1; rapid double Post still 1; cancel creates 0; imageFile set without insertion.
+- [x] `apps/carefind/src/components/DrawingBoard.jsx` -- verify no auto-publish paths: `start`/`move`/`end`/`clearCanvas` only mutate canvas ctx, never call `onSave` or `supabase`; `save()` is sole `onSave(blob)` caller on explicit click; add guard `saving` disables double-tap.
+- [x] `apps/carefind/src/modules/social-feed/Feed.jsx` -- verify drawing `onSave` only sets `imageFile`/`imagePreview` + closes board, does not call `createPost`/`supabase`; add invariant comment and ensure no `useEffect` watches `imageFile` to publish.
+- [x] `apps/carefind/src/modules/social-feed/components/PostComposer.jsx` -- verify `createPost` is only caller of `posts.insert`; keep `posting` guard, disable button while posting, ensure drawing image flow uses `imageFile` already set, no auto-trigger on `handleImageSelect`.
+- [x] `apps/carefind/src/components/DrawingBoard.test.jsx` (new) + `apps/carefind/src/modules/social-feed/Feed.drawing.test.jsx` (new) -- tests: strokes without Post create 0 posts; one Post creates exactly 1; rapid double Post still 1; cancel creates 0; imageFile set without insertion.
 
 **Acceptance Criteria:**
 - Given user draws slowly for 3 minutes with erases/redraws and never presses Post, when inspecting `posts` feed, then 0 new posts exist
@@ -73,3 +73,24 @@ No new tables/buckets. Draft stays in React state (`imageFile`/`imagePreview`) u
 - `npm test -- src/components/DrawingBoard.test.jsx src/modules/social-feed/Feed.drawing.test.jsx` -- expected: 0 posts on strokes, 1 on single Post, 1 on double-tap, 0 on cancel
 - `npm test -- src/components/BottomNav.test.jsx` -- expected: still 4/4 (5 navs always)
 - `npm run build` (apps/carefind) -- expected: vite build clean
+
+## Suggested Review Order
+
+**Publish gate — draft stays draft**
+
+- Only `save()` calls `onSave`, strokes never publish
+  [`DrawingBoard.jsx:72`](../../apps/carefind/src/components/DrawingBoard.jsx#L72)
+
+- Drawing onSave only sets draft image, never inserts
+  [`Feed.jsx:1927`](../../apps/carefind/src/modules/social-feed/Feed.jsx#L1927)
+
+- Single insertion gated by `posting` flag
+  [`PostComposer.jsx:200`](../../apps/carefind/src/modules/social-feed/components/PostComposer.jsx#L200)
+
+**Tests and safety nets**
+
+- Strokes without Post create 0, double-tap still 1
+  [`DrawingBoard.test.jsx:1`](../../apps/carefind/src/components/DrawingBoard.test.jsx#L1)
+
+- Draft → Post integration: 0 until Post, 1 on Post
+  [`Feed.drawing.test.jsx:1`](../../apps/carefind/src/modules/social-feed/Feed.drawing.test.jsx#L1)
