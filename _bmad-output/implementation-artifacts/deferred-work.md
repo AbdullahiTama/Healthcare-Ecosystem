@@ -87,3 +87,30 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
   summary: Server-side audit enforcement (auth.uid() for applicant_user_id, commission_rate parity trigger, audit_metadata JSON schema)
   evidence: applicant_user_id and audit_metadata currently trusted from client getSession; blind-hunter flagged spoofable audit and commission drift between terms row and accepted rate — needs DB trigger/RPC to stamp auth.uid() and validate parity server-side.
+- source_spec: none
+  summary: Fix external sharing deep linking so WhatsApp preview card deep-links to original CareFind post (OG tags, preview)
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — independently shippable OG/metadata concern; deferred to ship Drawing auto-publish fix first as recommended critical data-integrity goal.
+- source_spec: none
+  summary: Fix Health Facility search actions to View Profile/Book Appointment and add per-business profile product/service search
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — facility search UX + booking integration; deferred to ship Drawing auto-publish first.
+- source_spec: none
+  summary: Preserve post/article rich-text colours/highlights and formatting parity from editor to published render
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — rich-text pipeline editor→storage→renderer; deferred per recommended order.
+- source_spec: none
+  summary: Allow up to 5 images per post with multi-image layout/carousel and sixth-image guard
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — media upload/storage concern; deferred per recommended order.
+- source_spec: none
+  summary: Increase video duration to 2 minutes and fix audio preservation/sync and playback controls
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — video pipeline upload/transcode/storage/playback; deferred per recommended order (critical but after Drawing).
+- source_spec: none
+  summary: Fix News submission reaching Admin queue (pending → Admin review → Approve/Reject → publish) with count indicator
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — news submission workflow API/DB/Admin UI; deferred per recommended order (critical).
+- source_spec: none
+  summary: Show News preview engagement controls (Like/Comment/Share/Repost) and fix comment save/display
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — engagement row UI + API; deferred.
+- source_spec: none
+  summary: Make scheduled Live events manageable (edit title/reschedule/delete, lifecycle Scheduled→Upcoming→Live→Ended)
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — live event lifecycle; deferred.
+- source_spec: none
+  summary: Make Stories discoverable across avatars with indicator ring, tap-to-open, engagement and owner analytics
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD — stories cross-surface ring + analytics; deferred.
