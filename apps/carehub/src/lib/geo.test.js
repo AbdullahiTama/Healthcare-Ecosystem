@@ -81,7 +81,7 @@ describe('categoryFromAmenity', () => {
     expect(categoryFromAmenity('laboratory')).toBe(FACILITY_CATEGORY.LABORATORY)
     expect(categoryFromAmenity('physiotherapist')).toBe(FACILITY_CATEGORY.PHYSIO)
     expect(categoryFromAmenity('optician')).toBe(FACILITY_CATEGORY.EYE)
-    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS_SPA)
+    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS)
     expect(categoryFromAmenity('aesthetic')).toBe(FACILITY_CATEGORY.AESTHETIC_CLINIC)
     expect(categoryFromAmenity('medical_centre')).toBe(FACILITY_CATEGORY.MEDICAL_CENTRE)
     expect(categoryFromAmenity('specialist')).toBe(FACILITY_CATEGORY.SPECIALIST_CLINIC)

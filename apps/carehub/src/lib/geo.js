@@ -22,30 +22,47 @@ export const FACILITY_CATEGORY = {
   LABORATORY: 'Medical Laboratory / Diagnostic Centre',
   CLINIC: 'Clinic',
   MEDICAL_CENTRE: 'Medical Centre',
-  AESTHETIC_CLINIC: 'Aesthetic Clinic',
-  COSMETICS_SPA: 'Cosmetics & Spa',
   SPECIALIST_CLINIC: 'Specialist Clinic',
   DENTAL: 'Dental Clinic',
   EYE: 'Eye Clinic / Optometry Centre',
   PHYSIO: 'Physiotherapy / Rehabilitation Centre',
   PRIMARY: 'Primary Health Centre / Community Health Centre',
+  AESTHETIC_CLINIC: 'Aesthetic Clinic',
+  COSMETICS: 'Cosmetics & Beauty',
+  SPA: 'Spa & Wellness Centre',
+  MANUFACTURER: 'Manufacturer',
+  IMPORTER: 'Importer',
+  DISTRIBUTOR: 'Distributor',
   OTHER: 'Other Health Facility',
   // Legacy aliases — rows written before this expansion still carry these
   // values. They are kept so old cached/rep-added rows remain readable and
   // filter correctly without a data migration.
+  COSMETICS_SPA: 'Cosmetics & Spa',
   CLINIC_DIAGNOSTIC_LEGACY: 'Clinic/Diagnostic',
   OTHER_LEGACY: 'Other health facility',
 }
 
-// Filter keys used by the picker UI. The four buckets below are the
-// user-visible pills (All + 4 category groups). Detailed categories are
-// collapsed onto these buckets so the existing UI keeps working while the
-// underlying taxonomy expands to the 13 facility types required for
-// Manufacturer/Importer visits.
+// Filter keys used by the picker UI and Facility Discovery.
+// Covers 16 distinct categories + legacy bucket grouping for backwards compat.
+// Detailed categories are collapsed onto buckets for the legacy 4-pill UI while
+// the full 16 keys are available for the new discovery filters.
 export const FACILITY_FILTER_KEYS = {
   hospital: FACILITY_CATEGORY.HOSPITAL,
   pharmacy: FACILITY_CATEGORY.PHARMACY,
   clinic: FACILITY_CATEGORY.CLINIC,
+  medical_centre: FACILITY_CATEGORY.MEDICAL_CENTRE,
+  laboratory: FACILITY_CATEGORY.LABORATORY,
+  specialist: FACILITY_CATEGORY.SPECIALIST_CLINIC,
+  dental: FACILITY_CATEGORY.DENTAL,
+  eye: FACILITY_CATEGORY.EYE,
+  physio: FACILITY_CATEGORY.PHYSIO,
+  primary: FACILITY_CATEGORY.PRIMARY,
+  aesthetic: FACILITY_CATEGORY.AESTHETIC_CLINIC,
+  cosmetics: FACILITY_CATEGORY.COSMETICS,
+  spa: FACILITY_CATEGORY.SPA,
+  manufacturer: FACILITY_CATEGORY.MANUFACTURER,
+  importer: FACILITY_CATEGORY.IMPORTER,
+  distributor: FACILITY_CATEGORY.DISTRIBUTOR,
   other: FACILITY_CATEGORY.OTHER,
 }
 
@@ -68,7 +85,12 @@ const OTHER_FAMILY = new Set([
   FACILITY_CATEGORY.PHYSIO,
   FACILITY_CATEGORY.PRIMARY,
   FACILITY_CATEGORY.AESTHETIC_CLINIC,
+  FACILITY_CATEGORY.COSMETICS,
   FACILITY_CATEGORY.COSMETICS_SPA,
+  FACILITY_CATEGORY.SPA,
+  FACILITY_CATEGORY.MANUFACTURER,
+  FACILITY_CATEGORY.IMPORTER,
+  FACILITY_CATEGORY.DISTRIBUTOR,
 ])
 
 /**
@@ -186,9 +208,21 @@ export function categoryFromAmenity(amenity) {
       return FACILITY_CATEGORY.AESTHETIC_CLINIC
     case 'beauty':
     case 'cosmetics':
+      return FACILITY_CATEGORY.COSMETICS
     case 'spa':
     case 'wellness':
-      return FACILITY_CATEGORY.COSMETICS_SPA
+      return FACILITY_CATEGORY.SPA
+    case 'manufacturer':
+    case 'medical_manufacturer':
+      return FACILITY_CATEGORY.MANUFACTURER
+    case 'importer':
+    case 'medical_importer':
+      return FACILITY_CATEGORY.IMPORTER
+    case 'distributor':
+    case 'wholesaler':
+    case 'medical_supply':
+    case 'wholesale':
+      return FACILITY_CATEGORY.DISTRIBUTOR
     default:
       break
   }
@@ -196,9 +230,13 @@ export function categoryFromAmenity(amenity) {
   // Substring fallbacks for compound values like "healthcare=laboratory" already
   // stripped, but also handle tags such as "aesthetic_clinic" or "eye_clinic"
   // that may appear as combined strings, and shop values.
-  if (v.includes('laboratory') || v.includes('diagnostic') || v.includes('lab')) return FACILITY_CATEGORY.LABORATORY
+  if (v.includes('laboratory') || v.includes('diagnostic')) return FACILITY_CATEGORY.LABORATORY
+  if (v.includes('manufacturer')) return FACILITY_CATEGORY.MANUFACTURER
+  if (v.includes('importer')) return FACILITY_CATEGORY.IMPORTER
+  if (v.includes('distributor') || v.includes('wholesal') || v.includes('medical_supply')) return FACILITY_CATEGORY.DISTRIBUTOR
   if (v.includes('aesthetic')) return FACILITY_CATEGORY.AESTHETIC_CLINIC
-  if (v.includes('beauty') || v.includes('cosmetic') || v.includes('spa')) return FACILITY_CATEGORY.COSMETICS_SPA
+  if (v.includes('cosmetic') || v.includes('beauty')) return FACILITY_CATEGORY.COSMETICS
+  if (v.includes('spa') || v.includes('wellness')) return FACILITY_CATEGORY.SPA
   if (v.includes('specialist')) return FACILITY_CATEGORY.SPECIALIST_CLINIC
   if (v.includes('dental') || v === 'dentist') return FACILITY_CATEGORY.DENTAL
   if (v.includes('optician') || v.includes('optometry') || v.includes('eye')) return FACILITY_CATEGORY.EYE
@@ -207,6 +245,8 @@ export function categoryFromAmenity(amenity) {
   if (v.includes('medical_centre') || v.includes('medical_center')) return FACILITY_CATEGORY.MEDICAL_CENTRE
   if (v === 'health_post' || v === 'dispensary' || v === 'birthing_center') return FACILITY_CATEGORY.PRIMARY
   if (v === 'clinic' || v === 'doctors' || v === 'doctor') return FACILITY_CATEGORY.CLINIC
+  // standalone 'lab' token should not over-match 'collaborate' etc; check isolated
+  if (v === 'lab' || v.includes('_lab') || v.includes('lab_')) return FACILITY_CATEGORY.LABORATORY
 
   return FACILITY_CATEGORY.OTHER
 }
@@ -328,29 +368,47 @@ export function rankFacilities(facilities, gps, { cap = 150 } = {}) {
 
 /**
  * Does a facility belong to a picker filter bucket? `filterKey` is one of the
- * FACILITY_FILTER_KEYS keys, or 'all'. The four buckets collapse the 13
- * detailed healthcare facility categories so the existing filter pills keep
- * working while covering every facility type a Manufacturer/Importer may visit:
- *   - hospital  → Hospital only
- *   - pharmacy  → Pharmacy only
+ * FACILITY_FILTER_KEYS keys, or 'all'. Supports both legacy 4-bucket UI and new
+ * 16-category discovery filters:
+ *   - hospital  → Hospital only (direct)
+ *   - pharmacy  → Pharmacy only (direct)
  *   - clinic    → Clinic/Diagnostic family (Clinic, Lab/Diagnostic, Medical
  *                 Centre, Specialist Clinic) including legacy "Clinic/Diagnostic"
  *   - other     → Other family (Dental, Eye, Physio/Rehab, Primary/Community,
- *                 Aesthetic, Cosmetics & Spa, Other)
- * Category comparison is bucket-aware, not strict equality, so the UI and the
- * data never drift and no business_type gating is applied.
+ *                 Aesthetic, Cosmetics, Spa, Manufacturer, Importer, Distributor, Other)
+ *   - laboratory, medical_centre, specialist, dental, eye, physio, primary,
+ *     aesthetic, cosmetics, spa, manufacturer, importer, distributor → direct equality
+ * Category comparison is bucket-aware for clinic/other, direct for new keys, not
+ * strict equality for legacy, so the UI and the data never drift and no
+ * business_type gating is applied.
  */
 export function matchesCategory(facility, filterKey) {
   if (!filterKey || filterKey === 'all') return true
+  const rawKey = String(filterKey).toLowerCase().trim()
   const cat = (facility && facility.category) ? String(facility.category) : ''
   if (!cat) return false
-  // Legacy rows use "Clinic/Diagnostic" — treat as clinic family
-  if (filterKey === 'hospital') return cat === FACILITY_CATEGORY.HOSPITAL
-  if (filterKey === 'pharmacy') return cat === FACILITY_CATEGORY.PHARMACY
-  if (filterKey === 'clinic') return CLINIC_FAMILY.has(cat)
-  if (filterKey === 'other') return OTHER_FAMILY.has(cat)
+  // Direct category string match (case-insensitive) — allows filterKey to be actual category label
+  // e.g., filterKey = 'Manufacturer' or 'Spa & Wellness Centre'
+  const catLower = cat.toLowerCase()
+  if (rawKey === catLower) return true
+  // Normalize underscores/dashes for filterKey lookup
+  const normKey = rawKey.replace(/-/g, '_').replace(/\s+/g, '_')
+  // Legacy bucket handling
+  if (normKey === 'hospital') return cat === FACILITY_CATEGORY.HOSPITAL
+  if (normKey === 'pharmacy') return cat === FACILITY_CATEGORY.PHARMACY
+  if (normKey === 'clinic') return CLINIC_FAMILY.has(cat)
+  if (normKey === 'other') return OTHER_FAMILY.has(cat)
+  // New direct 16-category keys
+  const target = FACILITY_FILTER_KEYS[normKey] || FACILITY_FILTER_KEYS[rawKey]
+  if (target) return cat === target
+  // Also handle category label aliases like "lab" → laboratory
+  if (normKey === 'lab' || normKey === 'laboratory' || normKey === 'lab_diagnostic') return cat === FACILITY_CATEGORY.LABORATORY
+  if (normKey === 'medcentre' || normKey === 'medical_centre' || normKey === 'medical_center') return cat === FACILITY_CATEGORY.MEDICAL_CENTRE
+  if (normKey === 'specialist_clinic' || normKey === 'specialist') return cat === FACILITY_CATEGORY.SPECIALIST_CLINIC
+  if (normKey === 'phc' || normKey === 'primary') return cat === FACILITY_CATEGORY.PRIMARY
+  if (normKey === 'aesthetic_clinic' || normKey === 'aesthetic') return cat === FACILITY_CATEGORY.AESTHETIC_CLINIC
+  if (normKey === 'cosmetics_beauty' || normKey === 'cosmetics' || normKey === 'beauty') return cat === FACILITY_CATEGORY.COSMETICS
+  if (normKey === 'physiotherapy' || normKey === 'rehab') return cat === FACILITY_CATEGORY.PHYSIO
   // Unknown filter key — show all rather than hide (fail-open)
-  const target = FACILITY_FILTER_KEYS[filterKey]
-  if (!target) return true
-  return cat === target
+  return true
 }

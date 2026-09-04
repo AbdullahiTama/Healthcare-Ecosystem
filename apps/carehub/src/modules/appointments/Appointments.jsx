@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Calendar, Hourglass, CheckCircle, Search, Download, Wallet, Banknote } from 'lucide-react'
 import { appointmentRepository } from './repositories'
 // Cross-aggregate read: the client list belongs to the clients module. Still
@@ -51,6 +51,10 @@ export default function Appointments({ brand, role, perms }) {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
+  const [banks, setBanks] = useState([])
+  const [accountResolving, setAccountResolving] = useState(false)
+  const [accountResolved, setAccountResolved] = useState(false)
+  const resolveTimer = useRef(null)
   const [form, setForm] = useState({ date: todayDate() })
   const [saving, setSaving] = useState(false)
   const [payLink, setPayLink] = useState(null)
@@ -74,6 +78,60 @@ export default function Appointments({ brand, role, perms }) {
     }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
+
+  useEffect(() => {
+    async function loadBanks() {
+      try {
+        const res = await fetch('/api/banks')
+        if (res.ok) {
+          const data = await res.json()
+          setBanks(data)
+        }
+      } catch (err) {}
+    }
+    loadBanks()
+  }, [])
+
+  // Resolve account name when bank code and 10-digit account number are both set.
+  // Debounced to avoid firing on every keystroke.
+  useEffect(() => {
+    if (resolveTimer.current) clearTimeout(resolveTimer.current)
+
+    // Clear resolved state when inputs change
+    setAccountResolved(false)
+    setWithdrawForm(prev => ({ ...prev, accountName: '' }))
+
+    const acctNum = withdrawForm.accountNumber || ''
+    const bankCode = withdrawForm.bankCode || ''
+
+    if (!bankCode || acctNum.length !== 10) return
+
+    resolveTimer.current = setTimeout(async () => {
+      setAccountResolving(true)
+      try {
+        const res = await fetch('/api/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bankCode, accountNumber: acctNum }),
+        })
+        const data = await res.json()
+        if (res.ok && data.accountName) {
+          setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
+          setAccountResolved(true)
+        } else {
+          setAccountResolved(false)
+          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
+        }
+      } catch {
+        setAccountResolved(false)
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      } finally {
+        setAccountResolving(false)
+      }
+    }, 500)
+
+    return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
+  }, [withdrawForm.bankCode, withdrawForm.accountNumber])
 
   async function load() {
     setLoading(true)
@@ -239,7 +297,7 @@ export default function Appointments({ brand, role, perms }) {
         showToast(data.error === 'insufficient' ? 'Not enough available balance to withdraw.' : data.error || 'Could not start withdrawal.', { type: 'error' })
         return
       }
-      setWithdrawForm({}); setShowWithdraw(false)
+      setWithdrawForm({}); setShowWithdraw(false); setAccountResolved(false)
       // Refresh the wallet balance.
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
       showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
@@ -469,20 +527,54 @@ export default function Appointments({ brand, role, perms }) {
         consequence={`This permanently removes ${deleteTarget?.client_name ? `${deleteTarget.client_name}'s` : 'this'} appointment from your records. This cannot be undone. If you just need to cancel it, use Cancel instead.`}
         confirmLabel='Delete' />
 
-      <Modal show={showWithdraw} onClose={() => setShowWithdraw(false)} title='Withdraw booking balance'
-        footer={<><GhostBtn onClick={() => setShowWithdraw(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} style={{ flex: 1, padding: '12px' }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
+      <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} title='Withdraw booking balance'
+        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <p style={{ margin: 0, fontSize: '12.5px', color: gray600 }}>
             Available balance: <b style={{ color: success }}>{naira(wallet?.available_balance)}</b>. Money is sent straight to the bank account below via Paystack.
           </p>
           <Inp label='Amount (₦)' type='number' value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder='e.g. 5000' required />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Bank name' value={withdrawForm.bankName || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankName: v }))} placeholder='e.g. Access Bank' required />
-            <Inp label='Bank code' value={withdrawForm.bankCode || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankCode: v }))} placeholder='3-digit Paystack code' required />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Account number' value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v }))} placeholder='10 digits' required />
-            <Inp label='Account name' value={withdrawForm.accountName || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))} placeholder='Name on account' required />
+          <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            Bank *
+            <select
+              value={withdrawForm.bankCode || ''}
+              onChange={e => {
+                const bank = banks.find(b => b.code === e.target.value)
+                setWithdrawForm(p => ({ ...p, bankCode: e.target.value, bankName: bank ? bank.name : '' }))
+              }}
+              required
+              style={{
+                padding: '10px 12px', fontSize: '13px', borderRadius: '8px',
+                border: `1px solid ${border}`, background: '#fff',
+                color: navy, fontFamily: 'inherit',
+              }}
+            >
+              <option value="">Select your bank</option>
+              {banks.map((b) => (
+                <option key={b.code} value={b.code}>{b.name}</option>
+              ))}
+            </select>
+            {banks.length === 0 && (
+              <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
+            )}
+          </label>
+          <Inp label='Account number' value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v.replace(/\D/g, '').slice(0, 10) }))} placeholder='10 digits' required />
+          <div>
+            <Inp
+              label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
+              value={withdrawForm.accountName || ''}
+              onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
+              placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
+              readOnly={accountResolved || accountResolving}
+              required
+              style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+            />
+            {accountResolving && (
+              <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
+            )}
+            {accountResolved && withdrawForm.accountName && (
+              <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+            )}
           </div>
         </div>
       </Modal>

@@ -13,7 +13,11 @@ export const BUSINESS_TYPES = [
   { id: 'other',         icon: '🏥', name: 'Other Healthcare' },
 ]
 
-export const NIG_STATES = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara']
+import { NIGERIA_STATES } from '../lib/nigeriaGeo.js'
+// Single source for Nigerian states — derive from nigeriaGeo's 37-state master.
+// Legacy name NIG_STATES kept for backwards-compat; NG_STATES alias for CareFind parity.
+export const NIG_STATES = NIGERIA_STATES.map(s => s.name)
+export const NG_STATES = NIG_STATES
 
 export const EXPENSE_CATS = ['Rent','Salary','Utilities','Supplies','Equipment','Transport','Marketing','Maintenance','Insurance','Tax','Other']
 

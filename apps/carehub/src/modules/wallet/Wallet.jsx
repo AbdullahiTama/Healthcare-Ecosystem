@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
 import { sbFetch } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
@@ -16,9 +16,67 @@ export default function Wallet({ brand, role }) {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
+  const [banks, setBanks] = useState([])
+  const [accountResolving, setAccountResolving] = useState(false)
+  const [accountResolved, setAccountResolved] = useState(false)
+  const resolveTimer = useRef(null)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   useEffect(() => { load() }, [brand?.id])
+
+  useEffect(() => {
+    async function loadBanks() {
+      try {
+        const res = await fetch('/api/banks')
+        if (res.ok) {
+          const data = await res.json()
+          setBanks(data)
+        }
+      } catch (err) {}
+    }
+    loadBanks()
+  }, [])
+
+  // Resolve account name when bank code and 10-digit account number are both set.
+  // Debounced to avoid firing on every keystroke.
+  useEffect(() => {
+    if (resolveTimer.current) clearTimeout(resolveTimer.current)
+
+    // Clear resolved state when inputs change
+    setAccountResolved(false)
+    setWithdrawForm(prev => ({ ...prev, accountName: '' }))
+
+    const acctNum = withdrawForm.accountNumber || ''
+    const bankCode = withdrawForm.bankCode || ''
+
+    if (!bankCode || acctNum.length !== 10) return
+
+    resolveTimer.current = setTimeout(async () => {
+      setAccountResolving(true)
+      try {
+        const res = await fetch('/api/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bankCode, accountNumber: acctNum }),
+        })
+        const data = await res.json()
+        if (res.ok && data.accountName) {
+          setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
+          setAccountResolved(true)
+        } else {
+          setAccountResolved(false)
+          showToast(data.detail || data.error || 'Could not verify account name.', { type: 'error' })
+        }
+      } catch {
+        setAccountResolved(false)
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      } finally {
+        setAccountResolving(false)
+      }
+    }, 500)
+
+    return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
+  }, [withdrawForm.bankCode, withdrawForm.accountNumber])
 
   async function load() {
     setLoading(true)
@@ -62,7 +120,7 @@ export default function Wallet({ brand, role }) {
         showToast(data.error === 'insufficient' ? 'Not enough available balance.' : data.error || 'Could not start withdrawal.', { type: 'error' })
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setShowWithdraw(false)
+      setWithdrawForm({}); setShowWithdraw(false); setAccountResolved(false)
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
@@ -161,13 +219,51 @@ export default function Wallet({ brand, role }) {
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Available: <strong style={{ color: success }}>{naira(wallet?.available_balance)}</strong></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <Inp label="Amount (₦)" type="number" value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder="e.g. 5000" required />
-              <Inp label="Bank name" value={withdrawForm.bankName || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankName: v }))} placeholder="e.g. Access Bank" required />
-              <Inp label="Bank code" value={withdrawForm.bankCode || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankCode: v }))} placeholder="3-digit code" required />
-              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v }))} placeholder="10 digits" required />
-              <Inp label="Account name" value={withdrawForm.accountName || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))} placeholder="Name on account" required />
+              <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                Bank *
+                <select
+                  value={withdrawForm.bankCode || ''}
+                  onChange={e => {
+                    const bank = banks.find(b => b.code === e.target.value)
+                    setWithdrawForm(p => ({ ...p, bankCode: e.target.value, bankName: bank ? bank.name : '' }))
+                  }}
+                  required
+                  style={{
+                    padding: '10px 12px', fontSize: '13px', borderRadius: '8px',
+                    border: `1px solid ${border}`, background: '#fff',
+                    color: navy, fontFamily: 'inherit',
+                  }}
+                >
+                  <option value="">Select your bank</option>
+                  {banks.map((b) => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+                {banks.length === 0 && (
+                  <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
+                )}
+              </label>
+              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v.replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" required />
+              <div>
+                <Inp
+                  label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
+                  value={withdrawForm.accountName || ''}
+                  onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
+                  placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
+                  readOnly={accountResolved || accountResolving}
+                  required
+                  style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+                />
+                {accountResolving && (
+                  <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
+                )}
+                {accountResolved && withdrawForm.accountName && (
+                  <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+                )}
+              </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <GhostBtn onClick={() => setShowWithdraw(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} style={{ flex: 1, padding: '12px' }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !accountResolved || !withdrawForm.accountName} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !accountResolved || !withdrawForm.accountName) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>

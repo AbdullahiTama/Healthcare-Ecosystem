@@ -43,6 +43,7 @@ import Messages from '../../modules/messages/Messages'
 import Stock from '../../modules/stock/Stock'
 import Orders from '../../modules/orders/Orders'
 import LiveActivity from '../../modules/live-activity/LiveActivity'
+import FacilityDiscovery from '../../modules/facility-discovery/FacilityDiscovery'
 import Reception from './hospital/Reception'
 import Triage from './hospital/Triage'
 import Doctor from './hospital/Doctor'
@@ -60,6 +61,7 @@ const PAGE_TITLES = {
   staff: 'Staff', reports: 'Financial Reports', settings: 'Settings', carefind: 'CareFind Profile',
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
   overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'E-commerce',
+  discovery: 'Facility Discovery', activity: 'Live Field Activity',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -221,6 +223,7 @@ export default function BusinessDashboard() {
             <Route path='stock' element={bareGuard('stock', <Stock {...pageProps} />)} />
             <Route path='orders' element={bareGuard('orders', <Orders {...pageProps} />)} />
             <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} />)} />
+            <Route path='discovery' element={bareGuard('discovery', <FacilityDiscovery {...pageProps} />)} />
             <Route path='reception' element={guard('reception', <><TopBar title='Reception' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reception {...pageProps} /></div></>)} />
             <Route path='triage' element={guard('triage', <><TopBar title='Triage' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Triage {...pageProps} /></div></>)} />
             <Route path='doctor' element={guard('doctor', <><TopBar title='Doctor Consultation' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Doctor {...pageProps} /></div></>)} />

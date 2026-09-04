@@ -47,7 +47,7 @@ describe('categoryFromAmenity (places-facing)', () => {
     expect(categoryFromAmenity('laboratory')).toBe(FACILITY_CATEGORY.LABORATORY)
     expect(categoryFromAmenity('optician')).toBe(FACILITY_CATEGORY.EYE)
     expect(categoryFromAmenity('physiotherapist')).toBe(FACILITY_CATEGORY.PHYSIO)
-    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS_SPA)
+    expect(categoryFromAmenity('beauty')).toBe(FACILITY_CATEGORY.COSMETICS)
   })
 })
 

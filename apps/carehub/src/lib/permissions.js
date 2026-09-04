@@ -248,6 +248,7 @@ export const MODULES = {
   lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES, section: 'clinical' },
   imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES, section: 'ecosystem' },
@@ -280,8 +281,8 @@ export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 
 // depend on a reorder happening silently.
 const NAV_ORDER = {
    default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'carefind', 'ecommerce', 'settings'],
+    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {

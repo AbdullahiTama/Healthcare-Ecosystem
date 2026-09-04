@@ -31,6 +31,7 @@ export default function FacilityPicker({
   const [error, setError] = useState(false)
   const [fromCache, setFromCache] = useState(false)
   const [filter, setFilter] = useState('all')
+  const [searchMode, setSearchMode] = useState('nearby') // nearby | expanded | area
   const [listOpen, setListOpen] = useState(false)
   const [customMode, setCustomMode] = useState(false)
   const [customName, setCustomName] = useState('')
@@ -39,19 +40,27 @@ export default function FacilityPicker({
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
-  // Load the nearest-first list once per GPS fix. The service reads our cache
-  // first and only hits Overpass when that cache is thin for this spot.
+  function radiusForMode(m) {
+    if (m === 'expanded') return 2000
+    if (m === 'area') return 5000
+    return 800
+  }
+
+  // Load the nearest-first list via shared engine. Progressive radius, no hard 200m cap.
+  // Mode controls: Nearby (800m progressive), Expanded (2000m), Area (5000m/boundary).
   useEffect(function () {
     if (!gps) return
     let cancelled = false
     setLoading(true)
     setError(false)
-    nearbyHealthFacilities(gps.lat, gps.lng, { radius: 200, category: 'all', businessId })
+    const radius = radiusForMode(searchMode)
+    nearbyHealthFacilities(gps.lat, gps.lng, { radius: radius, category: 'all', businessId })
       .then(function (res) {
         if (cancelled) return
         setAll(res.facilities)
         setFromCache(res.fromCache)
         // Auto-select the single closest facility when nothing is chosen yet.
+        // Preserve correct category — never default to Other when known (use as-is)
         if (!readOnly && !value && res.facilities.length > 0) {
           onChangeRef.current(res.facilities[0])
         }
@@ -65,7 +74,7 @@ export default function FacilityPicker({
       .finally(function () { if (!cancelled) setLoading(false) })
     return function () { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gps && gps.lat, gps && gps.lng, businessId, readOnly])
+  }, [gps && gps.lat, gps && gps.lng, businessId, readOnly, searchMode])
 
   const selected = readOnly ? (highlight || value) : value
   const displayed = all.filter(function (f) { return matchesCategory(f, filter) })
@@ -125,8 +134,10 @@ export default function FacilityPicker({
         )}
         {!loading && !error && !selected && (
           <div style={{ fontSize: '12.5px', color: gray600 }}>
-            No health facility detected within 200 m of your GPS.
-            {!readOnly && ' Add it below so it is saved with your visit.'}
+            {searchMode === 'nearby' && 'No health facility detected nearby. Try Expanded or Area mode, or add it below.'}
+            {searchMode === 'expanded' && 'No facility within expanded range. Try Area mode or add it below.'}
+            {searchMode === 'area' && 'No facility in this area. Add it below so it is saved with your visit.'}
+            {searchMode === 'nearby' && !readOnly && ' Add it below so it is saved with your visit.'}
           </div>
         )}
         {selected && (
@@ -139,9 +150,12 @@ export default function FacilityPicker({
                 {selected.address && (
                   <div style={{ fontSize: '11.5px', color: gray500, marginTop: '2px' }}>{selected.address}</div>
                 )}
-                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '2px' }}>
-                  {gps ? formatDistance(selected.distanceM != null ? selected.distanceM : null) + ' from your GPS' : 'GPS not available'}
-                </div>
+                {/* Hide distance when pending — artefact of GPS-attached coords, not evidence */}
+                {!selected.pendingReview && (
+                  <div style={{ fontSize: '11.5px', color: gray500, marginTop: '2px' }}>
+                    {gps ? formatDistance(selected.distanceM != null ? selected.distanceM : null) + ' from your GPS' : 'GPS not available'}
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
@@ -161,6 +175,7 @@ export default function FacilityPicker({
                 </span>
               )}
               {fromCache && <span style={{ fontSize: '10px', color: gray400 }}>cached</span>}
+              {selected.source && <span style={{ fontSize: '10px', fontWeight: '700', color: gray500, textTransform: 'uppercase' }}>{selected.source}</span>}
               {selected.source === 'rep_added' && (
                 <span style={{ fontSize: '10px', color: gray400 }}>
                   rep-added{verifyState === FACILITY_VERIFICATION.PENDING ? ' · a manager must confirm it' : ' · confirmed'}
@@ -170,6 +185,26 @@ export default function FacilityPicker({
           </>
         )}
       </div>
+
+      {/* Search mode controls — replaces hard 200m with Nearby/Expanded/Area */}
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          {[
+            ['nearby', 'Nearby'],
+            ['expanded', 'Expanded'],
+            ['area', 'Area'],
+          ].map(function (m) {
+            const on = searchMode === m[0]
+            return (
+              <button key={m[0]} onClick={function () { setSearchMode(m[0]) }} aria-pressed={on}
+                style={{ fontSize: '11.5px', fontWeight: '700', padding: '6px 12px', borderRadius: '20px', cursor: 'pointer',
+                  border: `1px solid ${on ? tealDeep : border}`, background: on ? tealDeep : 'white', color: on ? 'white' : gray500 }}>
+                {m[1]}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Controls */}
       {!readOnly && (

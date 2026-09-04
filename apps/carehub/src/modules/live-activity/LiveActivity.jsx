@@ -134,6 +134,9 @@ export default function LiveActivity({ brand }) {
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
+  const [gpsAccuracy, setGpsAccuracy] = useState(null)
+  const [gpsTimestamp, setGpsTimestamp] = useState(null)
+  const [gpsAddress, setGpsAddress] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
   // Facility capture (issue #1): the GPS fix drives automatic detection of the
@@ -436,6 +439,9 @@ export default function LiveActivity({ brand }) {
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
+    setGpsAccuracy(null)
+    setGpsTimestamp(null)
+    setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
     setFacilityLoading(false)
@@ -447,21 +453,34 @@ export default function LiveActivity({ brand }) {
       navigator.geolocation.getCurrentPosition(
         async function (pos) {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          const accuracy = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : null
+          const timestamp = pos.timestamp ? new Date(pos.timestamp).toISOString() : new Date().toISOString()
           setGps(coords)
+          setGpsAccuracy(accuracy)
+          setGpsTimestamp(timestamp)
           // Best-effort area label (reverse geocode) for the location caption;
           // the precise place now comes from the auto-detected facility.
+          // Capture address/LGA/State via reverseGeocode for location_label enrichment
           reverseGeocode(coords.lat, coords.lng).then(function (name) {
-            if (name) setPlaceName(name)
+            if (name) {
+              setPlaceName(name)
+              setGpsAddress(name)
+            }
           }).catch(function () {})
-          // Auto-detect the single closest facility to the GPS. The picker also
-          // does this on mount, but we kick it off here so the card is populated
-          // even before the picker renders. Failures degrade to "add manually".
+          // Auto-detect the single closest facility to the GPS via shared engine.
+          // No hard 200m cap — progressive radius 500→1000 via nearbyHealthFacilities default,
+          // with Expanded/Area controls inside FacilityPicker for further discovery.
           setFacilityLoading(true)
           try {
             const res = await nearbyHealthFacilities(coords.lat, coords.lng, {
-              radius: 200, category: 'all', businessId: brand.id,
+              category: 'all', businessId: brand.id,
             })
-            if (res.facilities.length > 0) setFacility(res.facilities[0])
+            if (res.facilities.length > 0) {
+              // Respect detected category — never default to Other when known
+              const best = res.facilities[0]
+              if (best.category) setFacility(best)
+              else setFacility(res.facilities[0])
+            }
           } catch (e) {
             console.error('Auto facility detection failed:', e)
             setFacilityError(true)
@@ -471,7 +490,7 @@ export default function LiveActivity({ brand }) {
           setFindingPlace(false)
         },
         function () { setFindingPlace(false) },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       )
     }
   }
