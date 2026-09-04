@@ -210,6 +210,10 @@ function Wallet() {
 
   async function handleWithdraw(e) {
     e.preventDefault()
+    if (Number(wdAmount) > (wallet?.balance || 0)) {
+      showToast("You don't have enough CareCoins for that amount.", { type: 'error' })
+      return
+    }
     setWdSubmitting(true)
 
     try {
@@ -478,9 +482,15 @@ function Wallet() {
                   onChange={setWdAmount}
                   placeholder={`5–${wallet.balance}`}
                   min={5}
+                  max={wallet?.balance || 0}
                   required
                 />
-                {wdAmount >= 5 && (
+                {wdAmount && Number(wdAmount) > (wallet?.balance || 0) && (
+                  <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.danger, fontWeight: 700 }}>
+                    Amount exceeds your balance of {wallet?.balance || 0} CareCoins
+                  </p>
+                )}
+                {wdAmount >= 5 && Number(wdAmount) <= (wallet?.balance || 0) && (
                   <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.textLight }}>
                     You'll receive ≈ ₦{Math.floor(wdAmount * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
                   </p>
