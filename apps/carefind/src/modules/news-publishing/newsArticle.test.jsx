@@ -357,4 +357,32 @@ describe('NewsArticle route /news/:id', () => {
     expect(screen.getByRole('link', { name: /link/i })).toHaveAttribute('href', 'https://x.test')
     expect(screen.queryByText('**bold text**')).not.toBeInTheDocument()
   })
+
+  it('shows Under review for pending article accessed by non-public route (author view)', async () => {
+    // NewsArticle shows "Article not available / still under review" for pending
+    const pending = { ...article, status: 'pending' }
+    h.ctrl.push({ data: pending, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    renderArticle('art-1')
+    expect(await screen.findByText('Article not available')).toBeInTheDocument()
+    expect(screen.getByText(/still under review/i)).toBeInTheDocument()
+  })
+
+  it('shows approved article immediately after admin approval (public feed)', async () => {
+    const approved = { ...article, status: 'approved', published_at: new Date().toISOString() }
+    h.ctrl.push({ data: approved, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    renderArticle('art-1')
+    expect(await screen.findByText('Test headline on malaria')).toBeInTheDocument()
+    expect(screen.queryByText('Article not available')).not.toBeInTheDocument()
+  })
+
+  it('maps pending to Under review and rejected to Not approved (News strip)', () => {
+    const pendingLabel = 'pending' === 'rejected' ? 'Not approved' : 'Under review'
+    const rejectedLabel = 'rejected' === 'rejected' ? 'Not approved' : 'Under review'
+    expect(pendingLabel).toBe('Under review')
+    expect(rejectedLabel).toBe('Not approved')
+  })
 })

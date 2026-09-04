@@ -520,7 +520,7 @@ function Wallet() {
                     <span style={{ fontSize: 11, color: theme.textLight }}>Loading banks…</span>
                   )}
                 </label>
-                <Inp label="Account number" value={wdAccountNumber} onChange={setWdAccountNumber} placeholder="0123456789" required />
+                <Inp label="Account number" value={wdAccountNumber} onChange={v => setWdAccountNumber(String(v || '').replace(/\D/g, '').slice(0, 10))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
                 <div>
                   <Inp
                     label={wdAccountResolving ? 'Account name (resolving…)' : 'Account name'}

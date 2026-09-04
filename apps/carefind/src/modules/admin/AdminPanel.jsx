@@ -163,7 +163,7 @@ export default function AdminPanel() {
     if (usersRes2.data) setUsers(usersRes2.data)
 
     const adminToken = localStorage.getItem('admin_token')
-    const [usersRes, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes] = await Promise.all([
+    const [usersRes, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       callAdminAuth('list_verification_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_business_claims', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
@@ -176,6 +176,7 @@ export default function AdminPanel() {
       callAdminAuth('list_withdrawal_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_task_submissions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       supabase.from('professional_consultations').select('*, profiles!professional_consultations_professional_id_fkey(full_name, display_name)').eq('status', 'paid').order('created_at', { ascending: false }).limit(20),
+      callAdminAuth('list_news', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
     ])
     setVerifications(verifRes.data || [])
     // Build phone lookup: user_id -> phone (from verification requests)
@@ -199,6 +200,7 @@ export default function AdminPanel() {
       ...(withdrawRes.data || []).filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', icon: '💰', title: `Withdrawal request: ₦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, severity: 'warning', tab: 'withdrawals', role: 'super_admin' })),
       ...(taskSubRes.data || []).filter(s => s.status === 'pending').map(s => ({ id: s.id, type: 'task', icon: '📋', title: `Task submission: ${s.tasks?.title}`, subtitle: s.profiles?.full_name || 'Professional', time: s.created_at, severity: 'info', tab: 'tasks', role: 'super_admin' })),
       ...(consultRes.data || []).map(c => ({ id: c.id, type: 'consultation', icon: '📅', title: 'New consultation booking', subtitle: c.profiles?.full_name || 'Professional', time: c.created_at, severity: 'info', tab: 'overview', role: 'verification_officer' })),
+      ...(newsRes.data || []).filter(n => n.status === 'pending').map(n => ({ id: n.id, type: 'news', icon: '📰', title: `News submission: ${(n.headline || 'New article').slice(0, 60)}`, subtitle: n.profiles?.full_name || n.profiles?.display_name || 'Contributor', time: n.created_at, severity: 'warning', tab: 'news', role: 'super_admin' })),
     ].sort((a, b) => new Date(b.time) - new Date(a.time))
 
     setNotifications(allNotifs)
@@ -221,9 +223,10 @@ export default function AdminPanel() {
     const pendingWithdrawals = (withdrawRes.data || []).filter(w => w.status === 'pending').length
     const pendingTaskSubs = (taskSubRes.data || []).filter(s => s.status === 'pending').length
     const newConsults = (consultRes.data || []).length
+    const pendingNews = (newsRes.data || []).filter(n => n.status === 'pending').length
 
     // Super admin sees all notifications
-    const totalNotifs = pendingVerifs + pendingClaims + openReports + pendingWithdrawals + pendingTaskSubs
+    const totalNotifs = pendingVerifs + pendingClaims + openReports + pendingWithdrawals + pendingTaskSubs + pendingNews
     setNotifCount(totalNotifs)
 
     // Role-specific notifications
@@ -231,9 +234,9 @@ export default function AdminPanel() {
     if (role === 'super_admin') setRoleNotifCount(totalNotifs)
     else if (role === 'verification_officer') setRoleNotifCount(pendingVerifs + newConsults)
     else if (role === 'business_manager') setRoleNotifCount(pendingClaims)
-    else if (role === 'moderator' || role === 'content_manager') setRoleNotifCount(openReports)
+    else if (role === 'moderator' || role === 'content_manager') setRoleNotifCount(openReports + pendingNews)
     else if (role === 'analytics_manager') setRoleNotifCount(pendingWithdrawals)
-    else setRoleNotifCount(0)
+    else setRoleNotifCount(pendingNews ? pendingNews : 0)
 
     setLoading(false)
   }
@@ -528,7 +531,14 @@ export default function AdminPanel() {
       const { data, phones } = await callAdminAuth('list_news', { token: localStorage.getItem('admin_token') })
       setNewsItems(data || [])
       setNewsPhones(phones || {})
-    } catch {
+    } catch (err) {
+      const msg = err?.message || ''
+      const isAuth = msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('invalid or expired token') || msg.toLowerCase().includes('no token')
+      if (isAuth) {
+        showToast('Session expired, re-login', { type: 'error' })
+      } else {
+        showToast(`Could not load news: ${msg}`, { type: 'error' })
+      }
       setNewsItems([])
     }
   }
@@ -541,23 +551,28 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
       showToast('News item approved', { type: 'success' })
+      // Optimistic update so UI reflects immediately even before reload
+      setNewsItems(prev => prev.map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n))
     } catch (err) {
       showToast(`Couldn't approve the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     setSavingNews(false)
     loadNews()
+    loadAll()
   }
 
   async function rejectNews(id) {
     try {
       await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
       showToast('News item rejected', { type: 'success' })
+      setNewsItems(prev => prev.map(n => n.id === id ? { ...n, status: 'rejected' } : n))
     } catch (err) {
       showToast(`Couldn't reject the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     loadNews()
+    loadAll()
   }
 
   function deleteNews(id) {
@@ -571,8 +586,10 @@ export default function AdminPanel() {
   async function reallyDeleteNews(id) {
     try {
       await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
-      loadNews()
+      setNewsItems(prev => prev.filter(n => n.id !== id))
       showToast('News item deleted', { type: 'success' })
+      loadNews()
+      loadAll()
     } catch (err) {
       showToast(`Couldn't delete the news item: ${err.message}`, { type: 'error' })
     }

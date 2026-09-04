@@ -10,7 +10,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 import { validateArticleForPublish } from './articleContent.js'
-import { ErrorState, CardSkeleton } from '../../components/ui'
+import { ErrorState, CardSkeleton, Toast, useToast } from '../../components/ui'
 
 function News() {
   const { user } = useAuth()
@@ -39,6 +39,7 @@ function News() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     loadNews()
@@ -97,6 +98,7 @@ function News() {
     if (!body.trim()) { setSubmitOk(false); setSubmitMsg('Please write the article body.'); return }
     if (!contactPhone.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact phone number.'); return }
     if (!contactEmail.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact email.'); return }
+    if (!user?.id) { setSubmitOk(false); setSubmitMsg('Please sign in to submit news.'); showToast('Please sign in to submit news.', { type: 'error' }); return }
 
     // Issue #4: validate and repair the block body before the hero upload and
     // the insert, so a body that would lose a section is refused with a clear
@@ -116,6 +118,8 @@ function News() {
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('news-images').getPublicUrl(path)
         heroUrl = urlData.publicUrl
+      } else {
+        showToast('Hero image upload failed, submitting without image.', { type: 'warning' })
       }
     }
 
@@ -132,7 +136,9 @@ function News() {
 
     if (error) {
       setSubmitOk(false)
-      setSubmitMsg('Could not submit: ' + error.message)
+      const msg = 'Could not submit: ' + error.message
+      setSubmitMsg(msg)
+      showToast(msg, { type: 'error' })
     } else {
       setSubmitOk(true)
       setSubmitMsg('Submitted! Your news is under review and will publish once approved.')
@@ -347,6 +353,7 @@ function News() {
       )}
 
       {isMobile && <BottomNav />}
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 

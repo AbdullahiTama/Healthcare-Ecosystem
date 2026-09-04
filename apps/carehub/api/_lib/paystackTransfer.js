@@ -65,13 +65,8 @@ export async function checkBalance() {
 // Paystack's /bank/resolve. Used to verify the account name before initiating
 // a transfer, so a typo can't route money to the wrong account.
 export async function resolveAccount({ bankCode, accountNumber }) {
-  const data = await paystackFetch('/bank/resolve', {
-    method: 'POST',
-    body: JSON.stringify({
-      bank_code: bankCode,
-      account_number: accountNumber,
-    }),
-  })
+  const qs = `account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
+  const data = await paystackFetch(`/bank/resolve?${qs}`)
 
   if (!data.status) {
     throw new Error(data.message || 'Could not verify account')
