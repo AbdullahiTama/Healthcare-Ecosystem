@@ -45,6 +45,7 @@ import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useT
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
 import RightSidebar from '../../components/layout/RightSidebar.jsx'
+import { validateVideoFile, probeVideoDuration } from './mediaLimits.js'
 
 // #7 Feed search. Prefers the tsvector index; if the migration hasn't been
 // applied yet (search_vector missing), it falls back to a substring scan so
@@ -704,11 +705,15 @@ function Feed() {
   }
 
   // Short clip as the card backdrop. Kept small on purpose: data is expensive.
+  // Now 2 minutes / 100MB with duration probe — no more 12MB size proxy.
   async function handleCardVideo(e) {
     const file = e.target.files[0]
     if (!file) return
-    if (file.size > 12 * 1024 * 1024) {
-      toast.show('That clip is too large. Please choose one under 12MB (about 15 seconds).')
+    const duration = await probeVideoDuration(file)
+    const validationError = validateVideoFile({ size: file.size, duration })
+    if (validationError) {
+      toast.show(validationError)
+      if (e.target) e.target.value = ''
       return
     }
     setUploadingVideo(true)
@@ -1384,7 +1389,7 @@ function Feed() {
                   <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>
                     {uploadingVideo ? 'Uploading…' : 'Choose a video'}
                   </span>
-                  <span style={{ fontSize: 11, color: theme.textLight }}>Up to 12MB (about 15 seconds)</span>
+                  <span style={{ fontSize: 11, color: theme.textLight }}>Up to 100 MB, 2 minutes</span>
                   <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
                 </label>
               )}

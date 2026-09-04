@@ -13,6 +13,10 @@ export const MAX_POST_IMAGES = 5
 // Three minutes: comfortably above the required one minute, while keeping an
 // uploaded clip small enough that a phone on mobile data survives it.
 export const MAX_VIDEO_SECONDS = 180
+// 2-minute upload cap — within the 180s/100MB bucket ceiling, no migration
+// needed. Keep 180 as hard ceiling, 120 is the product-facing limit enforced
+// in validateVideoFile and the feed composer.
+export const MAX_VIDEO_SECONDS_120 = 120
 export const MAX_VIDEO_MB = 100
 export const MAX_VIDEO_BYTES = MAX_VIDEO_MB * 1024 * 1024
 
@@ -23,10 +27,8 @@ export function validateVideoFile({ size, duration } = {}) {
   if (size != null && size > MAX_VIDEO_BYTES) {
     return `That clip is too large. Please choose one under ${MAX_VIDEO_MB}MB.`
   }
-  if (Number.isFinite(duration) && duration > MAX_VIDEO_SECONDS) {
-    const mins = Math.floor(MAX_VIDEO_SECONDS / 60)
-    const secs = MAX_VIDEO_SECONDS % 60
-    return `Videos can be up to ${mins} minute${mins !== 1 ? 's' : ''}${secs ? ` ${secs}s` : ''}. Please trim the clip and try again.`
+  if (Number.isFinite(duration) && duration > MAX_VIDEO_SECONDS_120) {
+    return `Video must be \u2264 2 minutes (120s). Please trim the clip and try again.`
   }
   return null
 }
