@@ -14,6 +14,9 @@ import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import StoryAvatar from '../../components/StoryAvatar.jsx'
+import StoryViewer from '../social-feed/components/StoryViewer.jsx'
+import { fetchViewedStoryIds, markStoriesViewed } from '../social-feed/storyViews.js'
 import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
@@ -61,6 +64,9 @@ function Search() {
   const [loading, setLoading] = useState(false)
   const [featured, setFeatured] = useState([])
   const [featuredType, setFeaturedType] = useState('promo')
+  const [proStories, setProStories] = useState([])
+  const [proViewed, setProViewed] = useState(() => new Set())
+  const [storyViewer, setStoryViewer] = useState(null)
   const trackRef = useRef(null)
   const toast = useToast()
 
@@ -189,7 +195,7 @@ function Search() {
       resultCount = list.length
     }
     else if (tab === 'professionals') {
-      let pf = supabase.from('profiles').select('id, full_name, display_name, verification_label, specialty, location, is_verified').eq('is_verified', true)
+      let pf = supabase.from('profiles').select('id, full_name, display_name, verification_label, specialty, location, is_verified, avatar_url').eq('is_verified', true)
       if (q) pf = pf.or(`full_name.ilike.%${q}%,display_name.ilike.%${q}%`)
       if (specialtyFilter.trim()) pf = pf.ilike('specialty', `%${specialtyFilter}%`)
       if (stateFilter) pf = pf.ilike('location', `%${stateFilter}%`)
@@ -197,6 +203,19 @@ function Search() {
       setProfessionals(data || [])
       setProducts([]); setBusinesses([])
       resultCount = (data || []).length
+      // Batch story ring for professionals (avoid N+1)
+      const ids = (data || []).map((p) => p.id)
+      if (ids.length) {
+        const { data: rows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', ids).gt('expires_at', new Date().toISOString())
+        const s = rows || []
+        setProStories(s)
+        if (s.length && user?.id) {
+          const seen = await fetchViewedStoryIds(supabase, s.map((x) => x.id))
+          setProViewed(seen)
+        } else setProViewed(new Set())
+      } else {
+        setProStories([]); setProViewed(new Set())
+      }
     }
 
     setLoading(false)
@@ -568,7 +587,7 @@ function Search() {
           <div role="tabpanel" id="marketplace-panel-professionals" aria-labelledby="marketplace-tab-professionals" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {professionals.map((pr) => (
               <Link key={pr.id} to={`/u/${pr.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg, alignItems: 'center' }}>
-                <Avatar name={pr.full_name || pr.display_name} size={44} />
+                <StoryAvatar userId={pr.id} stories={proStories} viewedIds={proViewed} size={44} src={pr.avatar_url} name={pr.full_name || pr.display_name} onClick={async (e) => { e.preventDefault(); const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', pr.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }); if (data?.length) setStoryViewer({ stories: data, index: 0, userId: pr.id }) }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name}<BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" /></p>
                   <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
