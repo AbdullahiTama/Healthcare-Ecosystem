@@ -263,7 +263,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
         try {
           for (const f of imageFiles) {
             const resized = await resizeImage(f, 1400, 0.85)
-            const path = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+            const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
             const { error: upErr } = await supabase.storage
               .from('post-images')
               .upload(path, resized, { contentType: 'image/jpeg' })

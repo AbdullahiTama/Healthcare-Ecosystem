@@ -850,7 +850,7 @@ function Feed() {
       try {
         for (const f of imageFiles) {
           const resized = await resizeImage(f, 1400, 0.85)
-          const filePath = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+          const filePath = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
           const { error: uploadError } = await supabase.storage
             .from('post-images')
             .upload(filePath, resized, { contentType: 'image/jpeg' })
