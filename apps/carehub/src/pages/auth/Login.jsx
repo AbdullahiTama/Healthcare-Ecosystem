@@ -51,7 +51,8 @@ export default function Login() {
       login(account.biz, account.staff)
       navigate('/dashboard/dashboard')
     } catch (e) {
-      setErr('Connection error. Check your internet and try again.')
+      console.error('[Login] Error:', e)
+      setErr(e.message || 'Connection error. Check your internet and try again.')
     }
     setLoading(false)
   }
