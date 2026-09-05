@@ -6,11 +6,12 @@ import { useNavigate } from 'react-router-dom'
 import { useCart } from './CartProvider'
 import { useAuth } from '../../providers/AuthContext'
 import { orderRepository } from './orderRepository'
+import { addressesRepository } from '../account/addressesRepository'
 import { calculateTotalFees } from './pricing'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
-import { ArrowLeft, MapPin, Truck, Package, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star } from 'lucide-react'
 
 const APPROVED_CITIES = ['lagos','abuja','port harcourt','kano','ibadan','benin city','enugu','kaduna','zaria','aba','jos','ilorin','onitsha','ogbomosho','maiduguri','warri']
 const isApprovedCity = (city, state) => {
@@ -42,6 +43,50 @@ export default function Checkout() {
   const [error, setError] = useState('')
   const [allowPayOnDelivery, setAllowPayOnDelivery] = useState(false)
   const [payMethod, setPayMethod] = useState('paystack')
+  const [savedAddresses, setSavedAddresses] = useState([])
+  const [selectedAddressId, setSelectedAddressId] = useState('')
+  const [saveAddress, setSaveAddress] = useState(false)
+  const [addressesLoading, setAddressesLoading] = useState(true)
+  const [addressPreFilled, setAddressPreFilled] = useState(false)
+
+  useEffect(() => {
+    async function loadAddresses() {
+      if (!user) return
+      try {
+        const addrs = await addressesRepository.list(user.id)
+        setSavedAddresses(addrs)
+        const defaultAddr = addrs.find(a => a.is_default)
+        if (defaultAddr && !addressPreFilled) {
+          setSelectedAddressId(defaultAddr.id)
+          setFormData(prev => ({
+            ...prev,
+            street: defaultAddr.street,
+            city: defaultAddr.city,
+            state: defaultAddr.state,
+          }))
+          setAddressPreFilled(true)
+        }
+      } catch {} finally { setAddressesLoading(false) }
+    }
+    loadAddresses()
+  }, [user])
+
+  function handleSelectAddress(addrId) {
+    setSelectedAddressId(addrId)
+    if (addrId === '__new__') {
+      setFormData(prev => ({ ...prev, street: '', city: '', state: '' }))
+      return
+    }
+    const addr = savedAddresses.find(a => a.id === addrId)
+    if (addr) {
+      setFormData(prev => ({
+        ...prev,
+        street: addr.street,
+        city: addr.city,
+        state: addr.state,
+      }))
+    }
+  }
 
   useEffect(() => {
     async function loadStations() {
@@ -111,6 +156,22 @@ export default function Checkout() {
   // Strict Paystack default; pay-at-pickup only when vendor allows + pickup selected
   const canUsePickup = allowPayOnDelivery && formData.delivery_preference === 'pickup'
 
+  async function maybeSaveAddress() {
+    if (!saveAddress || !user || !formData.street || !formData.city || !formData.state) return
+    try {
+      await addressesRepository.create({
+        user_id: user.id,
+        label: 'Home',
+        street: formData.street,
+        city: formData.city,
+        state: formData.state,
+        is_default: savedAddresses.length === 0,
+      })
+    } catch (err) {
+      console.warn('Could not save address:', err.message || err)
+    }
+  }
+
   async function initiatePaystackForOrder(orderId, paymentReference) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) throw new Error('Please sign in again to pay')
@@ -169,6 +230,7 @@ export default function Checkout() {
           payment_reference,
           pickup_station_id: pickupStationId
         })
+        await maybeSaveAddress()
         clearCart()
         navigate(`/orders/${orderId}`)
       } catch (err) {
@@ -222,7 +284,7 @@ export default function Checkout() {
         payment_reference,
         pickup_station_id: formData.delivery_preference === 'pickup' ? pickupStationId : null
       })
-      // Do not clear cart yet — keep it until Paystack is confirmed (order is created)
+      await maybeSaveAddress()
       await initiatePaystackForOrder(createdOrderId, payment_reference)
       // Redirected — clear cart optimistically; if user aborts, order remains pending_payment
       clearCart()
@@ -276,6 +338,26 @@ export default function Checkout() {
               <MapPin size={20} />
               Delivery Address
             </h2>
+            {!addressesLoading && savedAddresses.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'block', marginBottom: 4 }}>Select a saved address</label>
+                <select
+                  value={selectedAddressId}
+                  onChange={(e) => handleSelectAddress(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 10,
+                    border: `1px solid ${theme.border}`, background: '#fff', fontSize: 13, fontFamily: 'inherit',
+                  }}
+                >
+                  {savedAddresses.map((addr) => (
+                    <option key={addr.id} value={addr.id}>
+                      {addr.label}{addr.is_default ? ' (Default)' : ''} — {addr.street}, {addr.city}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Add new address</option>
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Input label="Customer Name *" value={formData.customer_name} onChange={(v) => setFormData({ ...formData, customer_name: v })} placeholder="Full name" required />
@@ -306,6 +388,15 @@ export default function Checkout() {
                 />
               </div>
               <Textarea label="Delivery Instructions" value={formData.delivery_instructions} onChange={(v) => setFormData({ ...formData, delivery_instructions: v })} placeholder="Landmark, gate code..." rows={2} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={saveAddress}
+                  onChange={(e) => setSaveAddress(e.target.checked)}
+                  style={{ width: 18, height: 18 }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 600, color: theme.textMid }}>Save this address for future orders</span>
+              </label>
               {!approved && formData.city && formData.state && (
                 <div role="status" style={{ padding: 12, borderRadius: 8, background: theme.amberBg || '#FFF7ED', border: `1px solid ${theme.warning}30`, color: theme.warning, fontSize: 13, display:'flex', gap:8 }}>
                   <AlertTriangle size={16} style={{ flexShrink:0, marginTop:2 }} />

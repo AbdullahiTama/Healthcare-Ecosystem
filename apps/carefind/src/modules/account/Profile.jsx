@@ -1202,6 +1202,12 @@ function Profile() {
             </span>
             <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
           </Link>
+          <Link to="/account/addresses" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
+              <MapPin size={17} color={theme.gray500} aria-hidden="true" /> Saved addresses
+            </span>
+            <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
+          </Link>
           {!profile?.is_verified && (
             <Link to="/verify" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>

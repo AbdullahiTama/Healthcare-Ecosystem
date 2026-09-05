@@ -42,6 +42,7 @@ import Checkout from './modules/shop/Checkout.jsx'
 import OrderDetail from './modules/shop/OrderDetail.jsx'
 import OrderList from './modules/shop/OrderList.jsx'
 import Wishlist from './modules/shop/Wishlist.jsx'
+import Addresses from './modules/account/Addresses.jsx'
 import { CartProvider } from './modules/shop/CartProvider.jsx'
 import { WishlistProvider } from './modules/shop/WishlistProvider.jsx'
 
@@ -109,6 +110,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/orders" element={<RequireAuth><OrderList /></RequireAuth>} />
             <Route path="/orders/:orderId" element={<RequireAuth><OrderDetail /></RequireAuth>} />
             <Route path="/wishlist" element={<RequireAuth><Wishlist /></RequireAuth>} />
+            <Route path="/account/addresses" element={<RequireAuth><Addresses /></RequireAuth>} />
           </Routes>
         </ErrorBoundary>
       </BrowserRouter>
