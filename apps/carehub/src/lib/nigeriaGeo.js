@@ -234,35 +234,42 @@ export async function resolveLocation({ mode, state, lga, city, area, coords } =
 async function geocodeLocation(query) {
   if (!query) return null
   const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&polygon_geojson=0&q=' + encodeURIComponent(query)
-  const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
-  if (!res.ok) return null
-  const data = await res.json()
-  if (!Array.isArray(data) || data.length === 0) return null
-  const item = data[0]
-  const lat = parseFloat(item.lat)
-  const lon = parseFloat(item.lon)
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
-  let boundary = null
-  if (Array.isArray(item.boundingbox) && item.boundingbox.length === 4) {
-    // Nominatim bbox: [south, north, west, east] as strings
-    const south = parseFloat(item.boundingbox[0])
-    const north = parseFloat(item.boundingbox[1])
-    const west = parseFloat(item.boundingbox[2])
-    const east = parseFloat(item.boundingbox[3])
-    if ([south,north,west,east].every(Number.isFinite)) {
-      boundary = { south, north, west, east }
+  const ctrl = new AbortController()
+  const timer = setTimeout(function () { ctrl.abort() }, 8000)
+  try {
+    const res = await fetch(url, { headers: { 'Accept': 'application/json', 'User-Agent': 'CareHub/1.0 (HealthCare-Ecosystem)' }, signal: ctrl.signal })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!Array.isArray(data) || data.length === 0) return null
+    const item = data[0]
+    const lat = parseFloat(item.lat)
+    const lon = parseFloat(item.lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+    let boundary = null
+    if (Array.isArray(item.boundingbox) && item.boundingbox.length === 4) {
+      const south = parseFloat(item.boundingbox[0])
+      const north = parseFloat(item.boundingbox[1])
+      const west = parseFloat(item.boundingbox[2])
+      const east = parseFloat(item.boundingbox[3])
+      if ([south,north,west,east].every(Number.isFinite)) {
+        boundary = { south, north, west, east }
+      }
     }
-  }
-  const addr = item.address || {}
-  const state = addr.state || null
-  const city = addr.city || addr.town || addr.village || addr.county || null
-  return {
-    centre: { lat, lng: lon },
-    boundary,
-    state: normalizeState(state) || state || null,
-    city,
-    lga: null,
-    label: item.display_name || query,
+    const addr = (item.address && typeof item.address === 'object') ? item.address : {}
+    const state = addr.state || null
+    const city = addr.city || addr.town || addr.village || addr.county || null
+    return {
+      centre: { lat, lng: lon },
+      boundary,
+      state: normalizeState(state) || state || null,
+      city,
+      lga: null,
+      label: item.display_name || query,
+    }
+  } catch (e) {
+    return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -274,6 +281,8 @@ export function centreForState(state) {
 }
 
 export function centreForLga(state, lga) {
-  // LGA-level centre would need geocode; return state centre as approximation
+  // NOTE: Returns state capital centre as approximation. True LGA centres require
+  // per-LGA geocoding or a static dataset. Distance calculations in LGA mode are
+  // approximate — acceptable for ranking, not for precise proximity.
   return centreForState(state)
 }

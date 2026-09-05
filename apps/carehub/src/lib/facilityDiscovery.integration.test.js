@@ -52,11 +52,26 @@ describe('facilityDiscovery integration (verification-gap patch)', () => {
 
   it('progressive radii: nearbyHealthFacilities with thin cache calls fetchOverpass with 800 then expands', async () => {
     const { nearbyHealthFacilities } = await import('./places.js')
-    // With empty cache (sbFetch mocked to []), it should hit Overpass progressively
+    const radiiUsed = []
+    const origFetch = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
+      const u = String(url)
+      if (u.includes('overpass')) {
+        const bodyStr = opts && opts.body ? decodeURIComponent(String(opts.body)) : ''
+        const radiusMatch = bodyStr.match(/around:(\d+)/)
+        if (radiusMatch) radiiUsed.push(Number(radiusMatch[1]))
+        globalThis.__overpassCalls = (globalThis.__overpassCalls || 0) + 1
+        return { ok: true, json: async () => ({ elements: [{ type: 'node', lat: 6.53, lon: 3.33, tags: { amenity: 'hospital', name: 'OSM Hospital' } }] }) }
+      }
+      if (u.includes('nominatim')) return { ok: true, json: async () => [] }
+      return { ok: true, json: async () => [], text: async () => '[]', headers: { get: () => null } }
+    }))
     const res = await nearbyHealthFacilities(6.5, 3.3, { radius: 800, category: 'all', businessId: 'biz-test-progressive' })
-    // Overpass should have been called at least once (cache <5)
     expect(globalThis.__overpassCalls).toBeGreaterThan(0)
+    expect(radiiUsed.length).toBeGreaterThan(0)
+    expect(radiiUsed[0]).toBe(800)
     expect(res.facilities).toBeDefined()
+    vi.stubGlobal('fetch', origFetch)
   })
 
   it('cross-state: discoverFacilities state=Lagos with Ogun GPS resolves to Lagos centre not Ogun', async () => {

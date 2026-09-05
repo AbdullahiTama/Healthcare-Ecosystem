@@ -69,6 +69,7 @@ export default function FacilityDiscovery({ brand }) {
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState(null)
+  const searchIdRef = useRef(0)
 
   const lgas = useMemo(() => getLgasForState(stateSel), [stateSel])
   const pageSize = 20
@@ -93,6 +94,7 @@ export default function FacilityDiscovery({ brand }) {
   }
 
   async function doSearch(reset = true) {
+    const thisSearch = ++searchIdRef.current
     const p = reset ? 0 : page + 1
     if (reset) {
       setFacilities([])
@@ -119,6 +121,7 @@ export default function FacilityDiscovery({ brand }) {
         businessId: brand?.id || null,
         radius: (distance && Number.isFinite(Number(distance)) && Number(distance) > 0) ? Number(distance) : null,
       })
+      if (thisSearch !== searchIdRef.current) return
       if (reset) {
         setFacilities(res.facilities)
       } else {
@@ -128,10 +131,11 @@ export default function FacilityDiscovery({ brand }) {
       setHasMore(res.hasMore)
       setPage(p)
     } catch (e) {
+      if (thisSearch !== searchIdRef.current) return
       console.error('Discovery failed:', e)
       setError(e.message || 'Search failed')
     } finally {
-      setLoading(false)
+      if (thisSearch === searchIdRef.current) setLoading(false)
     }
   }
 
@@ -327,7 +331,7 @@ export default function FacilityDiscovery({ brand }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {facilities.map(function (f) {
                 return (
-                  <Card key={f.id || f.name + f.lat} style={{ padding: '14px' }}>
+                  <Card key={f.id || f.sourceRef || (f.source + ':' + f.name + ':' + f.lat + ':' + f.lng)} style={{ padding: '14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: '15px', fontWeight: '800', color: navy, display: 'flex', alignItems: 'center', gap: '6px' }}>

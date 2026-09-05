@@ -10,7 +10,7 @@
 // - Normalize→dedupe→score before display; never present external as officially verified
 
 import { sbFetch } from '../services/supabase.js'
-import { haversineMeters, FACILITY_CATEGORY, categoryFromAmenity, FACILITY_VERIFICATION } from './geo.js'
+import { haversineMeters, FACILITY_CATEGORY, categoryFromAmenity, FACILITY_VERIFICATION, matchesCategory } from './geo.js'
 import { fetchOverpass, fetchOverpassTiled, fetchCareFindFacilities, PROGRESSIVE_RADII } from './places.js'
 import { resolveLocation, normalizeState, centreForState } from './nigeriaGeo.js'
 
@@ -36,10 +36,9 @@ export const VERIFICATION_LEVEL = {
 
 export function verificationStatus(facility, gps) {
   if (!gps || gps.lat == null || gps.lng == null) return VERIFICATION_LEVEL.NO_GPS
-  if (facility && facility.pendingReview) return VERIFICATION_LEVEL.PENDING
-  if (facility && facility.source === FACILITY_SOURCE.REGULATORY) return VERIFICATION_LEVEL.REGULATORY
-  // External sources never present as officially verified unless we have GPS corroboration
-  // For external, still allow verified if within threshold but mark external_unverified otherwise
+  if (!facility || !Number.isFinite(facility.lat) || !Number.isFinite(facility.lng)) return VERIFICATION_LEVEL.NO_GPS
+  if (facility.pendingReview) return VERIFICATION_LEVEL.PENDING
+  if (facility.source === FACILITY_SOURCE.REGULATORY) return VERIFICATION_LEVEL.REGULATORY
   const dist = haversineMeters(gps, { lat: facility.lat, lng: facility.lng })
   if (dist != null && dist <= 150) {
     if (facility.source === FACILITY_SOURCE.OSM || facility.source === FACILITY_SOURCE.GOOGLE) {
@@ -61,14 +60,14 @@ export function confidenceScore(facility, { sourceCount = 1, gps = null } = {}) 
   // Source agreement: +20 per extra source, max 40
   if (sourceCount > 1) score += Math.min(40, (sourceCount - 1) * 20)
   // Coord quality: precise coords (5 decimals) => +15; missing => -20
-  if (facility.lat != null && facility.lng != null) {
-    const latStr = String(facility.lat)
-    const lngStr = String(facility.lng)
-    const latPrec = (latStr.split('.')[1] || '').length
-    const lngPrec = (lngStr.split('.')[1] || '').length
+  if (facility.lat != null && facility.lng != null && Number.isFinite(facility.lat) && Number.isFinite(facility.lng)) {
+    const latStr = Number(facility.lat).toFixed(5)
+    const lngStr = Number(facility.lng).toFixed(5)
+    const latPrec = (latStr.split('.')[1] || '').replace(/0+$/, '').length
+    const lngPrec = (lngStr.split('.')[1] || '').replace(/0+$/, '').length
     if (latPrec >= 5 && lngPrec >= 5) score += 15
     else if (latPrec >= 3 && lngPrec >= 3) score += 8
-    else score -= 5
+    else score += 3
   } else {
     score -= 20
   }
@@ -101,7 +100,9 @@ export function normalizeName(name) {
 }
 export function normalizePhone(phone) {
   if (!phone) return ''
-  return String(phone).replace(/\D/g, '').slice(-10) // last 10 digits for NG
+  const digits = String(phone).replace(/\D/g, '')
+  if (digits.startsWith('234') && digits.length > 10) return digits.slice(3, 13)
+  return digits.slice(-10)
 }
 export function extractDomain(url) {
   if (!url) return ''
@@ -169,10 +170,9 @@ export function dedupeFacilities(facilities) {
 }
 
 function mergeTwo(a, b) {
-  // Prefer more complete fields, highest confidence
   const sources = [...(a.sourceRefs || []), ...(b.sourceRefs || []), { source: b.source, id: b.id || b.business_id }]
-    .filter(Boolean)
-    .filter(function (s, idx, arr) { return arr.findIndex(x => x.source === s.source && String(x.id) === String(s.id)) === idx })
+    .filter(function (s) { return s && s.source })
+    .filter(function (s, idx, arr) { return arr.findIndex(function (x) { return x.source === s.source && String(x.id) === String(s.id) }) === idx })
   const merged = { ...a }
   // Prefer newer/better fields
   if (!merged.phone && b.phone) merged.phone = b.phone
@@ -206,18 +206,15 @@ export function normalizeFacility(raw, source) {
   const lat = raw.lat != null ? Number(raw.lat) : (raw.latitude != null ? Number(raw.latitude) : null)
   const lng = raw.lng != null ? Number(raw.lng) : (raw.longitude != null ? Number(raw.longitude) : null)
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    // Allow carefind rows without coords? but dedupe needs coords; keep if name present for area mode
-    // For boundary searches without point, distance is from centre
     if (raw.name == null) return null
   }
+  const bt = typeof raw.business_type === 'string' ? raw.business_type : String(raw.business_type || '')
   let category = raw.category || FACILITY_CATEGORY.OTHER
-  // If category came from business_type, map via categoryFromAmenity for consistency
-  if (raw.business_type) {
-    const mapped = categoryFromAmenity(raw.business_type)
-    // Keep original if mapped is OTHER but business_type is manufacturer etc that should map
+  if (bt) {
+    const mapped = categoryFromAmenity(bt)
     if (mapped !== FACILITY_CATEGORY.OTHER) category = mapped
-    else if (['manufacturer','importer','distributor'].includes(String(raw.business_type).toLowerCase())) {
-      const key = String(raw.business_type).toLowerCase()
+    else if (['manufacturer','importer','distributor'].includes(bt.toLowerCase())) {
+      const key = bt.toLowerCase()
       if (key === 'manufacturer') category = FACILITY_CATEGORY.MANUFACTURER
       else if (key === 'importer') category = FACILITY_CATEGORY.IMPORTER
       else if (key === 'distributor') category = FACILITY_CATEGORY.DISTRIBUTOR
@@ -367,7 +364,6 @@ export async function discoverFacilities(params = {}) {
 
   // 5. Category filter via matches imported helper
   if (category && category !== 'all') {
-    const { matchesCategory } = await import('./geo.js')
     facilities = facilities.filter(f => matchesCategory(f, category))
   }
 

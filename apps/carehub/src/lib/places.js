@@ -298,10 +298,38 @@ export async function dismissRepAddedFacility(id) {
 // Uses sbFetch pagedQuery internally; called by facilityDiscovery engine.
 // Kept in places.js as transport layer (no ranking/dedupe), intelligence lives in facilityDiscovery.js.
 export async function fetchCareFindFacilities({ state, lga, city, category, keyword, limit = 50, offset = 0 } = {}) {
+  try {
+    const rpcResult = await sbFetch('rpc/discover_facilities_cursor?p_state=' + encodeURIComponent(state || '') + '&p_lga=' + encodeURIComponent(lga || '') + '&p_city=' + encodeURIComponent(city || '') + '&p_category=' + encodeURIComponent(category || 'all') + '&p_keyword=' + encodeURIComponent(keyword || '') + '&p_limit=' + limit + '&p_cursor=' + offset)
+    if (rpcResult && rpcResult.rows) {
+      return (rpcResult.rows || []).map(function (r) {
+        const lat = r.latitude != null ? Number(r.latitude) : (r.lat != null ? Number(r.lat) : null)
+        const lng = r.longitude != null ? Number(r.longitude) : (r.lng != null ? Number(r.lng) : null)
+        return {
+          id: 'carefind:' + r.id,
+          business_id: r.id,
+          name: r.name,
+          lat: lat,
+          lng: lng,
+          category: r.category || r.business_type || 'Other Health Facility',
+          address: r.address || [r.city, r.state].filter(Boolean).join(', '),
+          state: r.state || null,
+          lga: r.lga || null,
+          area: r.area || null,
+          city: r.city || null,
+          phone: r.phone || null,
+          source: 'carefind',
+          sourceRef: r.id,
+          businessType: r.business_type,
+        }
+      }).filter(function (f) { return f.name })
+    }
+  } catch (e) {
+  }
   const params = []
-  if (state) params.push('state=ilike.*' + encodeURIComponent(state) + '*')
-  if (lga) params.push('lga=ilike.*' + encodeURIComponent(lga) + '*')
-  if (city) params.push('city=ilike.*' + encodeURIComponent(city) + '*')
+  const safeVal = function (v) { return String(v || '').replace(/[^a-zA-Z0-9 \-'.]/g, '') }
+  if (state) params.push('state=ilike.*' + encodeURIComponent(safeVal(state)) + '*')
+  if (lga) params.push('lga=ilike.*' + encodeURIComponent(safeVal(lga)) + '*')
+  if (city) params.push('city=ilike.*' + encodeURIComponent(safeVal(city)) + '*')
   // visible_on_carefind or status filter omitted for discovery completeness — spec says no hidden gate
   let q = 'businesses?select=id,name,business_type,state,city,lga,area,address,phone,latitude,longitude,lat,lng,category,website&order=created_at.desc'
   if (params.length) q += '&' + params.join('&')
@@ -342,20 +370,22 @@ export async function fetchCareFindFacilities({ state, lga, city, category, keyw
 // Tiled Overpass for large area/boundary searches — partition per provider limits.
 // For point searches we single-tile; for boundary we generate grid tiles inside bbox.
 export async function fetchOverpassTiled({ centre, boundary, radius = DEFAULT_RADIUS } = {}) {
-  // Simple single-tile for point search; boundary tiling stub — partition into ~10km tiles
   if (boundary && boundary.south != null) {
-    const tiles = partitionBoundary(boundary, 4) // up to 4 tiles to respect rate limits
+    const tiles = partitionBoundary(boundary, 4)
+    const CONCURRENCY = 2
     const results = []
-    for (let i = 0; i < tiles.length; i++) {
-      const t = tiles[i]
-      try {
-        const rows = await fetchOverpass(t.lat, t.lng, t.radius)
-        results.push(...rows)
-      } catch (e) {
-        console.error('Tiled Overpass tile failed:', e)
-      }
-      // Attribution respect: small delay between tiles to avoid hammering
-      if (i < tiles.length - 1) await new Promise(function (r) { setTimeout(r, 250) })
+    for (let start = 0; start < tiles.length; start += CONCURRENCY) {
+      const batch = tiles.slice(start, start + CONCURRENCY)
+      const batchResults = await Promise.all(batch.map(async function (t) {
+        try {
+          return await fetchOverpass(t.lat, t.lng, t.radius)
+        } catch (e) {
+          console.error('Tiled Overpass tile failed:', e)
+          return []
+        }
+      }))
+      results.push(...batchResults.flat())
+      if (start + CONCURRENCY < tiles.length) await new Promise(function (r) { setTimeout(r, 250) })
     }
     return results
   }
@@ -418,25 +448,23 @@ export async function nearbyHealthFacilities(lat, lng, options = {}) {
       const r = radii[i]
       const cached = await readCachedNearby(businessId, lat, lng, r)
       if (cached.length >= CACHE_MIN_RESULTS || i === radii.length - 1) {
-        pool = cached
+        if (cached.length > pool.length) pool = cached
         break
       }
-      // If not enough at this radius, keep trying larger before falling to Overpass
       if (cached.length > pool.length) pool = cached
     }
   }
-  // If still thin, fetch from Overpass progressively (respect provider limits with largest radius last)
   if (pool.length < CACHE_MIN_RESULTS) {
     fromCache = false
     let fresh = []
     for (let i = 0; i < radii.length; i++) {
       const r = radii[i]
       try {
-        fresh = await fetchOverpass(lat, lng, r)
+        const batch = await fetchOverpass(lat, lng, r)
+        if (batch.length > fresh.length) fresh = batch
         if (fresh.length >= 5) break
       } catch (e) {
         console.error('Overpass lookup failed, using cache only:', e)
-        fresh = []
       }
     }
     if (fresh.length > 0) {

@@ -16,6 +16,7 @@ import {
   confirmRepAddedFacility,
   dismissRepAddedFacility,
 } from '../../lib/places.js'
+import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
 import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
@@ -134,8 +135,6 @@ export default function LiveActivity({ brand }) {
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
-  const [gpsAccuracy, setGpsAccuracy] = useState(null)
-  const [gpsTimestamp, setGpsTimestamp] = useState(null)
   const [gpsAddress, setGpsAddress] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
@@ -439,8 +438,6 @@ export default function LiveActivity({ brand }) {
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
-    setGpsAccuracy(null)
-    setGpsTimestamp(null)
     setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
@@ -453,11 +450,7 @@ export default function LiveActivity({ brand }) {
       navigator.geolocation.getCurrentPosition(
         async function (pos) {
           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-          const accuracy = pos.coords.accuracy != null ? Math.round(pos.coords.accuracy) : null
-          const timestamp = pos.timestamp ? new Date(pos.timestamp).toISOString() : new Date().toISOString()
           setGps(coords)
-          setGpsAccuracy(accuracy)
-          setGpsTimestamp(timestamp)
           // Best-effort area label (reverse geocode) for the location caption;
           // the precise place now comes from the auto-detected facility.
           // Capture address/LGA/State via reverseGeocode for location_label enrichment
@@ -472,14 +465,24 @@ export default function LiveActivity({ brand }) {
           // with Expanded/Area controls inside FacilityPicker for further discovery.
           setFacilityLoading(true)
           try {
-            const res = await nearbyHealthFacilities(coords.lat, coords.lng, {
-              category: 'all', businessId: brand.id,
+            const res = await discoverFacilities({
+              mode: 'nearby',
+              coords: coords,
+              category: 'all',
+              page: 0,
+              pageSize: 10,
+              businessId: brand.id,
             })
             if (res.facilities.length > 0) {
-              // Respect detected category — never default to Other when known
               const best = res.facilities[0]
-              if (best.category) setFacility(best)
-              else setFacility(res.facilities[0])
+              if (best.category && best.category !== 'Other Health Facility') {
+                setFacility(best)
+              } else if (res.facilities.length > 1) {
+                const known = res.facilities.find(function (f) { return f.category && f.category !== 'Other Health Facility' })
+                setFacility(known || best)
+              } else {
+                setFacility(best)
+              }
             }
           } catch (e) {
             console.error('Auto facility detection failed:', e)

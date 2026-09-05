@@ -174,3 +174,48 @@ Pipeline: `resolveLocation`→`fetchSources` (CareFind `(state,lga,city)` + Over
 
 - NigeriaGeo 37/774 and export criteria/date/count/PDF coverage
   [`nigeriaGeo.test.js:14`](../../apps/carehub/src/lib/nigeriaGeo.test.js#L14)
+
+### Review Findings
+
+**Decision Needed:**
+
+- [ ] [Review][Decision] Two disconnected discovery pipelines — LiveActivity uses `nearbyHealthFacilities()` (places.js) while FacilityDiscovery uses `discoverFacilities()` (facilityDiscovery.js). These are separate engines with different dedupe/scoring/verification. Spec AC8 requires "both call same shared discovery service." Architectural decision needed: should LiveActivity switch to `discoverFacilities()`, or should `nearbyHealthFacilities` be refactored to call the shared engine?
+- [ ] [Review][Decision] Hard 100-result cap contradicts no-cap AC — `fetchSources` hardcodes `limit: 100` for CareFind fetches (facilityDiscovery.js:258,262). AC4 requires no arbitrary result cap and full-set export. Decision: implement true server-side cursor pagination, or increase limit and accept client-side pagination?
+- [ ] [Review][Decision] PDF export is print-to-PDF — `exportToPDF` uses `window.open` + `window.print()` (export.js). AC6 requires "export to PDF." Decision: is print-to-PDF acceptable, or do we need a library like jsPDF for self-contained PDF generation?
+- [ ] [Review][Decision] Background export is synchronous — `createExportJob` runs on main thread with setTimeout (export.js:121). Spec requires "background job with progress." Decision: is a Web Worker required, or is the current simulation acceptable for now?
+
+**Patch:**
+
+- [ ] [Review][Patch] PostgREST filter injection — `fetchCareFindFacilities` builds query via string concatenation with `*` wildcards after `encodeURIComponent` (places.js:302-304). Could allow injection. Fix: validate/sanitize state/lga/city against known values or use PostgREST array syntax.
+- [ ] [Review][Patch] Nominatim missing User-Agent + timeout — `geocodeLocation` has no User-Agent header (Nominatim requires it per usage policy) and no timeout (nigeriaGeo.js:260-263). Fix: add User-Agent header and AbortController timeout.
+- [ ] [Review][Patch] exportToPDF popup blocker — `window.open` blocked by default in modern browsers (export.js:249-258). Fix: use hidden iframe or Blob + download link approach.
+- [ ] [Review][Patch] React list key collision — `f.id || f.name + f.lat` not unique in dense urban areas (FacilityDiscovery.jsx). Fix: use `f.id || f.sourceRef || index` as key.
+- [ ] [Review][Patch] doSearch no request cancellation — Race conditions on rapid filter changes (FacilityDiscovery.jsx:176-183). Fix: use AbortController to cancel in-flight requests.
+- [ ] [Review][Patch] normalizePhone assumes 10 digits — `slice(-10)` corrupts +234 numbers (facilityDiscovery.js:298-301). Fix: handle country code properly, e.g., strip +234 then take 10 digits.
+- [ ] [Review][Patch] verificationStatus NaN guard — No guard for null/NaN lat/lng before haversineMeters (facilityDiscovery.js:239). Fix: add `if (!Number.isFinite(facility.lat) || !Number.isFinite(facility.lng)) return VERIFICATION_LEVEL.NO_GPS`.
+- [ ] [Review][Patch] normalizeFacility NaN coords — Allows NaN into pipeline (facilityDiscovery.js:404-408). Fix: validate coords before returning, return null if invalid.
+- [ ] [Review][Patch] Progressive loop overwrites pool/fresh — Each iteration overwrites instead of accumulating (places.js:320-338). Fix: accumulate results across radii, e.g., `pool = pool.concat(cached)`.
+- [ ] [Review][Patch] mergeTwo undefined sourceRefs — Can produce `{source: undefined, id: undefined}` entries (facilityDiscovery.js:367-371). Fix: filter properly with `.filter(s => s && s.source && s.id)`.
+- [ ] [Review][Patch] Redundant dynamic import — `await import('./geo.js')` when already statically imported at top (facilityDiscovery.js:366). Fix: remove dynamic import, use static import.
+- [ ] [Review][Patch] LiveActivity no-op conditional — `if (best.category) setFacility(best); else setFacility(res.facilities[0])` both branches same since `best = res.facilities[0]` (LiveActivity.jsx:480-482). Fix: remove conditional or make meaningful (e.g., skip if category is Other).
+- [ ] [Review][Patch] centreForLga stub — Returns state centre, silently wrong for large states (nigeriaGeo.js:302-305). Fix: either implement LGA centre lookup or document limitation clearly.
+- [ ] [Review][Patch] confidenceScore fragile precision — String splitting on float representation (facilityDiscovery.js:260-267). `Number(6.50000)` becomes `"6.5"` (1 decimal), penalizing legitimately precise coords. Fix: use `toFixed(5)` or count significant digits differently.
+- [ ] [Review][Patch] fetchOverpassTiled sequential — Tiles fetched sequentially with await in loop (places.js:349-358). Fix: use `Promise.all` with concurrency limit for independent tiles.
+- [ ] [Review][Patch] Missing test: spa/wellness category — No test for `categoryFromAmenity('spa')` or `categoryFromAmenity('wellness')` returning `FACILITY_CATEGORY.SPA` (geo.test.js). Fix: add assertions.
+- [ ] [Review][Patch] Missing test: 16-category matchesCategory — No test for direct keys like `manufacturer`, `spa`, `cosmetics` (geo.test.js). Fix: add unit tests for new direct-key path.
+- [ ] [Review][Patch] Missing test: progressive radii verification — Test doesn't verify which radii are used, only that Overpass was called (facilityDiscovery.integration.test.js:53-58). Fix: capture radii passed to `fetchOverpass` and assert progression.
+- [ ] [Review][Patch] gpsAccuracy/gpsTimestamp dead code — Captured but never used in LiveActivity.jsx:441-442. Fix: either pass to `nearbyHealthFacilities`, store in log, display in UI, or remove.
+- [ ] [Review][Patch] Category count 17 not 16 — `FACILITY_CATEGORY` has 17 distinct values plus 2 legacy aliases. Spec says "expand to 16." Fix: clarify spec or adjust implementation (e.g., merge Cosmetics+Spa if intended as one).
+
+**Defer:**
+
+- [x] [Review][Defer] dedupeFacilities O(n²) performance — For Nigeria-wide exports with hundreds of rows, nested loop freezes main thread. Pre-existing algorithm choice; optimize later with spatial indexing/grid-based dedup.
+- [x] [Review][Defer] No LGA backfill — Migration adds nullable `lga`/`area` columns with no automated backfill. LGA filter returns zero for pre-existing businesses. Requires data migration decision.
+- [x] [Review][Defer] SQL RLS column visibility — Migration claims "existing policies already cover new columns" but no policy text shown. If any policy uses explicit column allowlist, new columns invisible. Need to verify actual RLS policies.
+- [x] [Review][Defer] Google source inert — UI shows "Google" as source option but `VITE_GOOGLE_PLACES_PROXY` env var not configured. No Google data ever fetched. Requires infra/billing decision.
+- [x] [Review][Defer] Export doesn't enforce provider restrictions — Google Places ToS restricts re-export, but `exportToCSV` includes Google rows without filtering. Requires legal/ToS review.
+- [x] [Review][Defer] partitionBoundary inverted bbox — Edge case with invalid input (south > north). Low probability. Fix later if reported.
+- [x] [Review][Defer] export.js division by zero — Edge case with 0 facilities produces NaN percent. Low probability. Fix later if reported.
+- [x] [Review][Defer] FacilityDiscovery.jsx stale page state — React setState async lag can send duplicate page number. Low probability. Fix later if reported.
+- [x] [Review][Defer] normalizeFacility business_type non-string — Edge case with non-string primitive. Low probability. Fix later if reported.
+- [x] [Review][Defer] nigeriaGeo Nominatim null address — Edge case when `item.address` is null. Low probability. Fix later if reported.

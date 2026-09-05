@@ -123,3 +123,36 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
   summary: Align carehub paystack.js with carefind paystack.js by extracting shared paystackHeaders helper.
   evidence: carefind exports paystackHeaders(); carehub inlines the same header construction; documented as deliberate mirrors but have diverged — pre-existing.
+
+## Deferred from: code review of spec-carefind-smart-facility-discovery (2026-09-05)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: dedupeFacilities O(n²) performance — nested loop freezes main thread for Nigeria-wide exports with hundreds of rows.
+  evidence: Pre-existing algorithm choice; optimize later with spatial indexing/grid-based dedup.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: No LGA backfill — migration adds nullable lga/area columns with no automated backfill; LGA filter returns zero for pre-existing businesses.
+  evidence: Requires data migration decision.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: SQL RLS column visibility — migration claims existing policies cover new columns but no policy text shown; if any policy uses explicit column allowlist, new columns invisible.
+  evidence: Need to verify actual RLS policies.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: Google source inert — UI shows Google as source option but VITE_GOOGLE_PLACES_PROXY env var not configured; no Google data ever fetched.
+  evidence: Requires infra/billing decision.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: Export doesn't enforce provider restrictions — Google Places ToS restricts re-export, but exportToCSV includes Google rows without filtering.
+  evidence: Requires legal/ToS review.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: partitionBoundary inverted bbox edge case with invalid input (south > north).
+  evidence: Low probability; fix later if reported.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: export.js division by zero edge case with 0 facilities produces NaN percent.
+  evidence: Low probability; fix later if reported.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: FacilityDiscovery.jsx stale page state — React setState async lag can send duplicate page number.
+  evidence: Low probability; fix later if reported.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: normalizeFacility business_type non-string edge case.
+  evidence: Low probability; fix later if reported.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
+  summary: nigeriaGeo Nominatim null address edge case when item.address is null.
+  evidence: Low probability; fix later if reported.

@@ -108,18 +108,27 @@ function escapeHtml(s) {
 
 export function exportToPDF(facilities, filters = {}) {
   const html = buildPdfHtml(facilities, filters)
-  const w = window.open('', '_blank')
-  if (!w) throw new Error('Popup blocked — allow popups to export PDF')
-  w.document.open()
-  w.document.write(html)
-  w.document.close()
-  // Give browser a moment to render before print
-  setTimeout(function () { w.print() }, 300)
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.src = url
+  document.body.appendChild(iframe)
+  iframe.onload = function () {
+    setTimeout(function () {
+      try { iframe.contentWindow.print() } catch (e) { window.open(url, '_blank') }
+      setTimeout(function () { document.body.removeChild(iframe); URL.revokeObjectURL(url) }, 1000)
+    }, 300)
+  }
 }
 
 // Background job simulation for large exports (>1k rows)
 export function createExportJob(facilities, filters, onProgress) {
   const total = facilities.length
+  if (total === 0) {
+    if (onProgress) onProgress({ processed: 0, total: 0, percent: 0 })
+    return Promise.resolve({ facilities, filters, total, status: 'complete' })
+  }
   let processed = 0
   const chunkSize = 200
   return new Promise(function (resolve) {
