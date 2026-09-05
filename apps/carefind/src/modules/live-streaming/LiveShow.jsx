@@ -287,10 +287,11 @@ function LiveShow() {
   const isLive = show.status === 'live'
   const visibleComments = comments.filter(c => !c.hidden || isHost)
 
-  // Scheduled/upcoming show — show countdown + trailer
+  // Scheduled/upcoming show — show countdown + trailer, respect expiry (spec lifecycle)
   if (show.status === 'scheduled') {
     const target = show.scheduled_at ? new Date(show.scheduled_at) : null
     const diff = target ? target - now : 0
+    const expired = target ? target.getTime() <= Date.now() : false
     const days = Math.max(0, Math.floor(diff / 86400000))
     const hrs = Math.max(0, Math.floor((diff % 86400000) / 3600000))
     const mins = Math.max(0, Math.floor((diff % 3600000) / 60000))
@@ -301,13 +302,18 @@ function LiveShow() {
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
         <div style={{ textAlign: 'center', padding: '20px 20px 30px' }}>
-          <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>⏳ UPCOMING LIVE</div>
+          <div style={{ display: 'inline-block', background: expired ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>{expired ? '⚠ TIME PASSED' : '⏳ UPCOMING LIVE'}</div>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: '0 0 8px 0' }}>{show.title}</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', margin: '0 0 24px 0' }}>
             {target ? target.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
           </p>
 
-          {/* Countdown */}
+          {expired && (
+            <p role="alert" style={{ margin: '0 0 16px 0', fontSize: 12.5, color: '#fde68a', fontWeight: 700, background: 'rgba(255,255,255,0.08)', padding: '8px 12px', borderRadius: 10 }}>This scheduled time has passed. The host can reschedule from their profile or dashboard.</p>
+          )}
+
+          {/* Countdown — hidden when expired, expiry respected in Upcoming filter */}
+          {!expired && (
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 28 }}>
             {[['Days', days], ['Hrs', hrs], ['Min', mins], ['Sec', secs]].map(([label, val]) => (
               <div key={label} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 14, padding: '14px 12px', minWidth: 62 }}>
@@ -316,6 +322,7 @@ function LiveShow() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Trailer */}
           {show.trailer_url && (
