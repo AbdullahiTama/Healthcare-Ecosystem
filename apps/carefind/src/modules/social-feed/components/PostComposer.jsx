@@ -10,6 +10,8 @@ import { Camera, X, Mic, HelpCircle, FileText, BookOpen, Star, Image as ImageIco
 import { Avatar, TealBtn, GhostBtn, Pill } from '../../../components/ui'
 import { useToast } from '../../../components/ui'
 import { extractMentions } from '../mentions.js'
+import { resizeImage } from '../../../utils/imageResize.js'
+import { MAX_POST_IMAGES } from '../mediaLimits.js'
 
 const POST_TYPES = [
   { key: 'text', icon: Pen, label: 'Post' },
@@ -78,9 +80,9 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
   const [postType, setPostType] = useState('text')
   const [visualTheme, setVisualTheme] = useState('teal-depth')
   const [postRating, setPostRating] = useState(5)
-  // INVARIANT: draft state — imageFile/imagePreview remain local until explicit Post; no effect auto-publishes.
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
+  // INVARIANT: draft state — imageFiles/imagePreviews remain local until explicit Post; no effect auto-publishes.
+  const [imageFiles, setImageFiles] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [posting, setPosting] = useState(false)
   const composerRef = useRef(null)
@@ -185,23 +187,55 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
 
   // INVARIANT: image selection only sets draft state — never inserts into posts.
   // Publish only via createPost's single supabase insert, gated by `posting`.
-  const handleImageSelect = useCallback((file) => {
-    if (!file.type.startsWith('image/')) {
-      toast.show('Please select an image', { type: 'warning' })
+  const handleImagesSelect = useCallback((files) => {
+    const fileList = Array.from(files || [])
+    const images = fileList.filter((f) => f.type?.startsWith('image/'))
+    if (images.length !== fileList.length) {
+      toast.show('Please select images', { type: 'warning' })
+    }
+    const remaining = MAX_POST_IMAGES - imageFiles.length
+    if (remaining <= 0) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
       return
     }
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
-  }, [toast])
+    if (images.length > remaining) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
+    }
+    const toAdd = images.slice(0, remaining)
+    if (!toAdd.length) return
+    const newPreviews = toAdd.map((f) => URL.createObjectURL(f))
+    setImageFiles((prev) => [...prev, ...toAdd])
+    setImagePreviews((prev) => [...prev, ...newPreviews])
+  }, [imageFiles.length, toast])
+
+  const handleImageSelect = useCallback((file) => {
+    // Back-compat single-file entry: delegate to multi
+    if (file) handleImagesSelect([file])
+  }, [handleImagesSelect])
+
+  const removeImageAt = useCallback((idx) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== idx))
+    setImagePreviews((prev) => {
+      const url = prev[idx]
+      if (url) try { URL.revokeObjectURL(url) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
+  }, [])
 
   const removeImage = useCallback(() => {
-    setImageFile(null)
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
-    setImagePreview(null)
-  }, [imagePreview])
+    imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+    setImageFiles([])
+    setImagePreviews([])
+  }, [imagePreviews])
+
+  const clearAllImages = useCallback(() => {
+    imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+    setImageFiles([])
+    setImagePreviews([])
+  }, [imagePreviews])
 
   // INVARIANT (spec-carefind-drawing-auto-publish-fix): createPost is the ONLY caller of posts.insert.
-  // No effect watches imageFile/content to auto-publish. posting flag is the idempotency guard.
+  // No effect watches imageFiles/content to auto-publish. posting flag is the idempotency guard.
   const createPost = useCallback(async () => {
     if (!user) return
     if (posting) return
@@ -209,7 +243,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
       toast.show('Write something first', { type: 'warning' })
       return
     }
-    if (postType === 'visual' && !imageFile) {
+    if (postType === 'visual' && imageFiles.length === 0) {
       toast.show('Add an image for Voice Card posts', { type: 'warning' })
       return
     }
@@ -223,12 +257,33 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
       }
       const activeIdentity = getActiveIdentity()
 
+      let imageUrls = []
+      if (imageFiles.length) {
+        setUploadingImage(true)
+        try {
+          for (const f of imageFiles) {
+            const resized = await resizeImage(f, 1400, 0.85)
+            const path = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+            const { error: upErr } = await supabase.storage
+              .from('post-images')
+              .upload(path, resized, { contentType: 'image/jpeg' })
+            if (upErr) throw upErr
+            const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(path)
+            imageUrls.push(urlData.publicUrl)
+          }
+        } catch (e) {
+          setUploadingImage(false)
+          throw new Error('Could not upload the photo: ' + (e.message || 'please try again'))
+        }
+        setUploadingImage(false)
+      }
+
       const postData = {
         user_id: user.id,
         content: content.trim(),
         post_type: postType,
         theme: visualTheme,
-        ...(postType === 'visual' && imageFile ? { image_url: imagePreview } : {}),
+        ...(imageUrls.length ? { image_url: imageUrls[0], image_urls: imageUrls } : {}),
         ...(postType === 'review' ? { rating: postRating } : {}),
         ...(activeIdentity?.type === 'business' ? { posting_as_business_id: activeIdentity.id } : {}),
         ...(activeIdentity?.type === 'staff' ? { posted_as_type: 'staff', posted_as_id: activeIdentity.staffId, posted_as_name: activeIdentity.fullName, posted_as_title: activeIdentity.publicTitle } : {}),
@@ -287,7 +342,7 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
     } finally {
       setPosting(false)
     }
-  }, [user, content, postType, visualTheme, postRating, imageFile, imagePreview, posting, toast, onClose, onPosted, removeImage])
+  }, [user, content, postType, visualTheme, postRating, imageFiles, posting, toast, onClose, onPosted, removeImage])
 
   return (
     <div style={{ background: theme.cardBg, borderRadius: 16, boxShadow: theme.elevation[1], padding: 16 }}>
@@ -321,19 +376,34 @@ export function PostComposer({ onClose, onPosted, myUsername, myAvatar }) {
 
           {postType === 'visual' && (
             <div style={{ marginBottom: 12 }}>
-              {imagePreview ? (
-                <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <img src={imagePreview} alt="Preview" style={{ maxWidth: '100%', borderRadius: 12, maxHeight: 300 }} />
-                  <button onClick={removeImage} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <X size={16} />
-                  </button>
+              {imagePreviews.length > 0 ? (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {imagePreviews.map((url, idx) => (
+                    <div key={url + idx} style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={url} alt={`Preview ${idx + 1}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 12, display: 'block' }} />
+                      <button onClick={() => removeImageAt(idx)} aria-label={`Remove image ${idx + 1}`} style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.7)', color: '#fff', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {imagePreviews.length < MAX_POST_IMAGES && (
+                    <label style={{ width: 100, height: 100, border: `2px dashed ${theme.border}`, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: theme.textLight, background: '#fff' }}>
+                      <input type="file" accept="image/*" multiple disabled={imagePreviews.length >= MAX_POST_IMAGES} onChange={e => { handleImagesSelect(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
+                      <Camera size={20} style={{ color: theme.textLight }} />
+                      <span style={{ fontSize: 11, marginTop: 4 }}>{imagePreviews.length}/{MAX_POST_IMAGES}</span>
+                    </label>
+                  )}
                 </div>
               ) : (
-                <label style={{ display: 'block', border: `2px dashed ${theme.border}`, borderRadius: 12, padding: 24, textAlign: 'center', cursor: 'pointer', color: theme.textLight }}>
-                  <input type="file" accept="image/*" onChange={e => e.target.files[0] && handleImageSelect(e.target.files[0])} style={{ display: 'none' }} />
+                <label style={{ display: 'block', border: `2px dashed ${theme.border}`, borderRadius: 12, padding: 24, textAlign: 'center', cursor: imagePreviews.length >= MAX_POST_IMAGES ? 'not-allowed' : 'pointer', color: theme.textLight, opacity: imagePreviews.length >= MAX_POST_IMAGES ? 0.5 : 1 }}>
+                  <input type="file" accept="image/*" multiple disabled={imagePreviews.length >= MAX_POST_IMAGES} onChange={e => { handleImagesSelect(e.target.files); e.target.value = '' }} style={{ display: 'none' }} />
                   <Camera size={24} style={{ margin: '0 auto 8px', color: theme.textLight }} />
-                  <div>Click or drag to add image</div>
+                  <div>Click or drag to add images</div>
+                  <div style={{ fontSize: 11, marginTop: 4 }}>{imagePreviews.length}/{MAX_POST_IMAGES} photos</div>
                 </label>
+              )}
+              {imagePreviews.length >= MAX_POST_IMAGES && (
+                <div style={{ fontSize: 11, color: theme.textLight, marginTop: 6 }}>{MAX_POST_IMAGES}/{MAX_POST_IMAGES} photos — remove one to add more</div>
               )}
             </div>
           )}

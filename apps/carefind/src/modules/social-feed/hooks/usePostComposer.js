@@ -3,6 +3,8 @@ import { supabase } from '../../../config/supabaseClient'
 import { useAuth } from '../../../providers/AuthContext'
 import { getActiveIdentity } from '../../../lib/activeIdentity'
 import { useToast } from '../../../components/ui'
+import { resizeImage } from '../../../utils/imageResize.js'
+import { MAX_POST_IMAGES } from '../mediaLimits.js'
 
 export function usePostComposer() {
   const { user } = useAuth()
@@ -11,8 +13,8 @@ export function usePostComposer() {
   const [postType, setPostType] = useState('text')
   const [visualTheme, setVisualTheme] = useState('teal')
   const [postRating, setPostRating] = useState(5)
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFiles, setImageFiles] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
   const [uploadingImage, setUploadingImage] = useState(false)
   const [posting, setPosting] = useState(false)
   const articleTextareaRef = useRef(null)
@@ -24,17 +26,40 @@ export function usePostComposer() {
       toast.show('Write something first', { type: 'warning' })
       return
     }
+    if (postType === 'visual' && imageFiles.length === 0) {
+      toast.show('Add an image for Voice Card posts', { type: 'warning' })
+      return
+    }
 
     setPosting(true)
     try {
       const activeIdentity = getActiveIdentity()
+
+      let imageUrls = []
+      if (imageFiles.length) {
+        setUploadingImage(true)
+        try {
+          for (const f of imageFiles) {
+            const resized = await resizeImage(f, 1400, 0.85)
+            const path = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+            const { error: upErr } = await supabase.storage.from('post-images').upload(path, resized, { contentType: 'image/jpeg' })
+            if (upErr) throw upErr
+            const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(path)
+            imageUrls.push(urlData.publicUrl)
+          }
+        } catch (e) {
+          setUploadingImage(false)
+          throw new Error('Could not upload the photo: ' + (e.message || 'please try again'))
+        }
+        setUploadingImage(false)
+      }
 
       const postData = {
         user_id: user.id,
         content: content.trim(),
         post_type: postType,
         theme: visualTheme,
-        ...(postType === 'visual' && imageFile ? { image_url: imagePreview } : {}),
+        ...(imageUrls.length ? { image_url: imageUrls[0], image_urls: imageUrls } : {}),
         ...(postType === 'question' ? {} : {}),
         ...(postType === 'review' ? { rating: postRating } : {}),
         ...(postType === 'article' ? {} : {}),
@@ -54,8 +79,9 @@ export function usePostComposer() {
       setPostType('text')
       setVisualTheme('teal')
       setPostRating(5)
-      setImageFile(null)
-      setImagePreview(null)
+      imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+      setImageFiles([])
+      setImagePreviews([])
       toast.show('Post created!', { type: 'success' })
       return data
     } catch (e) {
@@ -64,22 +90,47 @@ export function usePostComposer() {
     } finally {
       setPosting(false)
     }
-  }, [user, content, postType, visualTheme, postRating, imageFile, imagePreview, toast])
+  }, [user, content, postType, visualTheme, postRating, imageFiles, toast])
 
-  const handleImageSelect = useCallback((file) => {
-    if (!file.type.startsWith('image/')) {
-      toast.show('Please select an image', { type: 'warning' })
+  const handleImagesSelect = useCallback((files) => {
+    const fileList = Array.from(files || [])
+    const images = fileList.filter((f) => f.type?.startsWith('image/'))
+    if (images.length !== fileList.length) {
+      toast.show('Please select images', { type: 'warning' })
+    }
+    const remaining = MAX_POST_IMAGES - imageFiles.length
+    if (remaining <= 0) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
       return
     }
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
-  }, [toast])
+    if (images.length > remaining) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
+    }
+    const toAdd = images.slice(0, remaining)
+    if (!toAdd.length) return
+    const newPreviews = toAdd.map((f) => URL.createObjectURL(f))
+    setImageFiles((prev) => [...prev, ...toAdd])
+    setImagePreviews((prev) => [...prev, ...newPreviews])
+  }, [imageFiles.length, toast])
+
+  const handleImageSelect = useCallback((file) => {
+    if (file) handleImagesSelect([file])
+  }, [handleImagesSelect])
+
+  const removeImageAt = useCallback((idx) => {
+    setImageFiles((prev) => prev.filter((_, i) => i !== idx))
+    setImagePreviews((prev) => {
+      const url = prev[idx]
+      if (url) try { URL.revokeObjectURL(url) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
+  }, [])
 
   const removeImage = useCallback(() => {
-    setImageFile(null)
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
-    setImagePreview(null)
-  }, [imagePreview])
+    imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+    setImageFiles([])
+    setImagePreviews([])
+  }, [imagePreviews])
 
   return {
     content,
@@ -90,15 +141,22 @@ export function usePostComposer() {
     setVisualTheme,
     postRating,
     setPostRating,
-    imageFile,
-    imagePreview,
+    imageFiles,
+    setImageFiles,
+    imagePreviews,
+    setImagePreviews,
+    // Back-compat single mirrors
+    imageFile: imageFiles[0] || null,
+    imagePreview: imagePreviews[0] || null,
     uploadingImage,
     setUploadingImage,
     posting,
     articleTextareaRef,
     composerRef,
     createPost,
+    handleImagesSelect,
     handleImageSelect,
+    removeImageAt,
     removeImage
   }
 }

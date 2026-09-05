@@ -36,7 +36,7 @@ function applyMap(setter, next, { merge }) {
 // duplicated rather than imported because Feed's constant isn't exported and
 // this task's scope is "don't touch Feed's block", not "wire Feed and the
 // hook together" — retiring Feed's copy is a follow-up (see hydrate below).
-const REPOST_SOURCE_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
+const REPOST_SOURCE_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, image_urls, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
 
 // Owns everything that answers "what is this post's engagement context?" —
 // the state, the reads that fill it, and the handlers that change it. Two

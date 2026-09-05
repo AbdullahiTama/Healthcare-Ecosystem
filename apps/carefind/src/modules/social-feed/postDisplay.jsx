@@ -52,16 +52,25 @@ export function PostTile({ post, onOpen }) {
         border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, overflow: 'hidden',
         background: theme.cardBg, height: 156, display: 'flex', flexDirection: 'column',
       }}>
-        {shown.image_url ? (
-          <div style={{ height: 84, background: `url(${shown.image_url}) center/cover` }} />
-        ) : (
-          <div style={{
-            height: 84, background: theme.tealMist, color: theme.tealDeep,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <KindIcon size={26} strokeWidth={1.8} aria-hidden="true" />
-          </div>
-        )}
+        {(() => {
+          const g = imagesOf(shown)
+          return g.length ? (
+            <div style={{ height: 84, background: `url(${g[0]}) center/cover`, position: 'relative' }}>
+              {g.length > 1 && (
+                <span style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  +{g.length}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{
+              height: 84, background: theme.tealMist, color: theme.tealDeep,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <KindIcon size={26} strokeWidth={1.8} aria-hidden="true" />
+            </div>
+          )
+        })()}
         <div style={{ padding: '9px 11px', flex: 1, overflow: 'hidden' }}>
           {/* A repost is labelled as one, never presented as the profile
               owner's own writing (issue #8). */}

@@ -222,7 +222,7 @@ function Profile() {
     if (!user) return
     const { data } = await supabase
       .from('posts')
-      .select('id, content, created_at, post_type, image_url, repost_of, user_id')
+      .select('id, content, created_at, post_type, image_url, image_urls, repost_of, user_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(60)
@@ -236,7 +236,7 @@ function Profile() {
     if (!ids.length) return list
     const { data: sources } = await supabase
       .from('posts')
-      .select('id, content, created_at, post_type, image_url, user_id')
+      .select('id, content, created_at, post_type, image_url, image_urls, user_id')
       .in('id', ids)
     const byId = {}
     ;(sources || []).forEach((s) => { byId[s.id] = s })
@@ -263,7 +263,7 @@ function Profile() {
     if (!user) return
     const { data } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(id, content, created_at, post_type, image_url, repost_of, user_id)')
+      .select('post_id, posts(id, content, created_at, post_type, image_url, image_urls, repost_of, user_id)')
       .eq('user_id', user.id)
       .limit(60)
     setSavedPosts(await withRepostSources((data || []).map(s => s.posts).filter(Boolean)))

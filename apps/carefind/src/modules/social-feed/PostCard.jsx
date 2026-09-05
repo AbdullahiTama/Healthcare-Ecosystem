@@ -8,6 +8,7 @@ import {
 import { theme } from '../../styles/theme'
 import { renderMarkdown } from './markdown.jsx'
 import { imagesOf } from './postDisplay.jsx'
+import { MAX_POST_IMAGES } from './mediaLimits.js'
 import VisualCard from '../../utils/VisualCard.jsx'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
@@ -502,20 +503,25 @@ export default function PostCard({
             </button>
           )}
 
-          {/* Issue #7 — one photo renders as before; two or more render as a
-              square-cropped grid. The voice-card/video types own their media
-              slot above and never fall through to here. */}
+          {/* Issue #7 — one photo renders as full-width; 2–5 render as snap carousel with dots. */}
           {(() => {
             const gallery = imagesOf(post)
             if (!gallery.length || post.post_type === 'visual' || post.post_type === 'video') return null
             if (gallery.length === 1) {
-              return <img src={gallery[0]} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
+              return <img src={gallery[0]} alt="post image 1 of 1" loading="lazy" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
             }
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 8 }}>
-                {gallery.slice(0, 6).map((url) => (
-                  <img key={url} src={url} alt="post" loading="lazy" style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: theme.radius.sm }} />
-                ))}
+              <div role="region" aria-roledescription="carousel" aria-label={`Post with ${gallery.length} images`} style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', gap: 4, scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
+                  {gallery.slice(0, MAX_POST_IMAGES).map((url, idx) => (
+                    <img key={url + idx} src={url} alt={`post image ${idx + 1} of ${gallery.length}`} loading="lazy" style={{ minWidth: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: theme.radius.sm, scrollSnapAlign: 'start', flexShrink: 0 }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 6 }} aria-hidden="true">
+                  {gallery.slice(0, MAX_POST_IMAGES).map((_, i) => (
+                    <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === 0 ? theme.tealDeep : theme.gray300, display: 'inline-block' }} />
+                  ))}
+                </div>
               </div>
             )
           })()}

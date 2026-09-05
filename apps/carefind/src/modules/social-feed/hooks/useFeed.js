@@ -21,7 +21,7 @@ export function useFeed() {
     try {
       const { data: postData } = await supabase
         .from('posts')
-        .select('id, content, created_at, user_id, post_type, image_url, audio_url, video_url, rating, is_premium, subscriber_only, preview_text, posting_as_business_id, posted_as_type, posted_as_id, posted_as_name, posted_as_title, live_session_id, view_count, theme')
+        .select('id, content, created_at, user_id, post_type, image_url, image_urls, audio_url, video_url, rating, is_premium, subscriber_only, preview_text, posting_as_business_id, posted_as_type, posted_as_id, posted_as_name, posted_as_title, live_session_id, view_count, theme')
         .order('created_at', { ascending: false })
         .limit(50)
 

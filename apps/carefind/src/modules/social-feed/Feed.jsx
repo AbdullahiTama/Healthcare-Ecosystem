@@ -45,7 +45,7 @@ import { TealBtn, Avatar, Modal, ConfirmDialog, CardSkeleton, Empty, Toast, useT
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
 import RightSidebar from '../../components/layout/RightSidebar.jsx'
-import { validateVideoFile, probeVideoDuration } from './mediaLimits.js'
+import { validateVideoFile, probeVideoDuration, MAX_POST_IMAGES } from './mediaLimits.js'
 
 // #7 Feed search. Prefers the tsvector index; if the migration hasn't been
 // applied yet (search_vector missing), it falls back to a substring scan so
@@ -75,8 +75,8 @@ async function searchPosts(query, { limit = 30 } = {}) {
 // reposts migration; until it's applied they don't exist, so loadFeed and
 // searchPosts fall back to the older set (same graceful-degradation pattern
 // as the search_vector fallback above) instead of breaking the feed.
-const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
-const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
+const POST_FEED_COLS = 'id, content, created_at, user_id, post_type, theme, image_url, image_urls, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title, repost_of, repost_count'
+const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, theme, image_url, image_urls, rating, view_count, subscriber_only, audio_url, video_url, posted_as_type, posted_as_id, posted_as_name, posted_as_title'
 
 // Explicit view-event mechanism (engagement spec §7): each qualifying view
 // writes a post_view_events row and the DB bumps posts.view_count via
@@ -134,10 +134,10 @@ function Feed() {
   const [visualTheme, setVisualTheme] = useState('teal')
   const [postRating, setPostRating] = useState(5)
   // INVARIANT (spec-carefind-drawing-auto-publish-fix): draft stays in React state
-  // imageFile/imagePreview are local draft only — no useEffect may watch them to auto-insert into posts.
+  // imageFiles/imagePreviews are local draft only — no useEffect may watch them to auto-insert into posts.
   // Publish happens only via handlePost's single supabase.from('posts').insert, gated by `posting`.
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFiles, setImageFiles] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
@@ -731,8 +731,9 @@ function Feed() {
     setCardVideo(urlData.publicUrl)
     setCardVideoPreview(URL.createObjectURL(file))
     // A clip and a photo can't both be the backdrop
-    setImageFile(null)
-    setImagePreview(null)
+    imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+    setImageFiles([])
+    setImagePreviews([])
     setUploadingVideo(false)
   }
 
@@ -769,17 +770,49 @@ function Feed() {
   }
 
 
-  function handleImageSelect(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
+  function handleImagesSelect(e) {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    const images = files.filter((f) => f.type?.startsWith('image/'))
+    if (images.length !== files.length) {
+      toast.show('Please select images', { type: 'warning' })
+    }
+    const remaining = MAX_POST_IMAGES - imageFiles.length
+    if (remaining <= 0) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
+      if (e.target) e.target.value = ''
+      return
+    }
+    if (images.length > remaining) {
+      toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
+    }
+    const toAdd = images.slice(0, remaining)
+    if (!toAdd.length) { if (e.target) e.target.value = ''; return }
+    const newPreviews = toAdd.map((f) => URL.createObjectURL(f))
+    setImageFiles((prev) => [...prev, ...toAdd])
+    setImagePreviews((prev) => [...prev, ...newPreviews])
+    if (e.target) e.target.value = ''
+  }
+
+  // Back-compat alias for tests that may still call handleImageSelect
+  function handleImageSelect(e) { return handleImagesSelect(e) }
+
+  function removeImageAt(idx) {
+    setImageFiles((prev) => prev.filter((_, i) => i !== idx))
+    setImagePreviews((prev) => {
+      const url = prev[idx]
+      if (url) try { URL.revokeObjectURL(url) } catch {}
+      return prev.filter((_, i) => i !== idx)
+    })
   }
 
   function clearImage() {
-    setImageFile(null)
-    setImagePreview(null)
+    imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+    setImageFiles([])
+    setImagePreviews([])
   }
+
+  function clearAllImages() { clearImage() }
 
   // INVARIANT: single publish gate — only handlePost inserts into posts, guarded by `posting` to prevent double-tap duplicates.
   async function handlePost(e) {
@@ -810,30 +843,28 @@ function Feed() {
 
     setPosting(true)
 
-    let imageUrl = null
+    let imageUrls = []
 
-    if (imageFile) {
+    if (imageFiles.length) {
       setUploadingImage(true)
-
-      // Shrink first: a full-size phone photo is often 5-8MB and the upload dies on it.
-      const resized = await resizeImage(imageFile, 1400, 0.85)
-      const filePath = `${user.id}-${Date.now()}.jpg`
-
-      const { error: uploadError } = await supabase.storage
-        .from('post-images')
-        .upload(filePath, resized, { contentType: 'image/jpeg' })
-
-      setUploadingImage(false)
-
-      if (uploadError) {
-        // Never post silently without the photo the user chose.
+      try {
+        for (const f of imageFiles) {
+          const resized = await resizeImage(f, 1400, 0.85)
+          const filePath = `${user.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`
+          const { error: uploadError } = await supabase.storage
+            .from('post-images')
+            .upload(filePath, resized, { contentType: 'image/jpeg' })
+          if (uploadError) throw uploadError
+          const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(filePath)
+          imageUrls.push(urlData.publicUrl)
+        }
+      } catch (e) {
+        setUploadingImage(false)
         setPosting(false)
-        toast.show('Could not upload the photo: ' + uploadError.message)
+        toast.show('Could not upload the photo: ' + (e.message || 'please try again'))
         return
       }
-
-      const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(filePath)
-      imageUrl = urlData.publicUrl
+      setUploadingImage(false)
     }
 
     if (screenContent(postContent)) {
@@ -856,7 +887,8 @@ function Feed() {
       video_url: postType === 'visual' || postType === 'video' ? cardVideo : null,
       theme: postType === 'visual' ? visualTheme : null,
       rating: postType === 'review' ? postRating : null,
-      image_url: imageUrl,
+      image_url: imageUrls[0] || null,
+      image_urls: imageUrls,
       posted_as_type: identity ? identity.type : null,
       posted_as_id: identity ? (identity.type === 'business' ? identity.id : identity.staffId) : null,
       posted_as_name: identity ? (identity.type === 'business' ? identity.name : identity.businessName) : null,
@@ -908,8 +940,9 @@ function Feed() {
 
     if (!error) {
       setContent('')
-      setImageFile(null)
-      setImagePreview(null)
+      imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
+      setImageFiles([])
+      setImagePreviews([])
       setPostRating(5)
       setSubscriberOnly(false)
       setCardAudio(null)
@@ -1456,20 +1489,18 @@ function Feed() {
               <label
                 style={{
                   flex: 1, textAlign: 'center', padding: '9px 10px', borderRadius: 10,
-                  border: `1px solid ${theme.border}`, background: imagePreview ? theme.bg : '#fff',
-                  fontSize: 12, fontWeight: 800, color: theme.navy, cursor: 'pointer',
+                  border: `1px solid ${theme.border}`, background: imagePreviews.length ? theme.bg : '#fff',
+                  fontSize: 12, fontWeight: 800, color: theme.navy, cursor: imagePreviews.length >= MAX_POST_IMAGES ? 'not-allowed' : 'pointer',
+                  opacity: imagePreviews.length >= MAX_POST_IMAGES ? 0.5 : 1,
                 }}
               >
-                <ImageIcon size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />{imagePreview ? 'Change photo' : 'Add photo'}
+                <ImageIcon size={15} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />{imagePreviews.length ? `Change photo (${imagePreviews.length}/${MAX_POST_IMAGES})` : 'Add photo'}
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const f = e.target.files[0]
-                    if (!f) return
-                    setImageFile(f)
-                    setImagePreview(URL.createObjectURL(f))
-                  }}
+                  multiple
+                  disabled={imagePreviews.length >= MAX_POST_IMAGES}
+                  onChange={handleImagesSelect}
                   style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}
                 />
               </label>
@@ -1499,11 +1530,11 @@ function Feed() {
                 <input type="file" accept="video/*" onChange={handleCardVideo} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
 
-              {(imagePreview || cardVideoPreview) && (
+              {(imagePreviews.length > 0 || cardVideoPreview) && (
                 <button
                   type="button"
                   onClick={() => {
-                    setImageFile(null); setImagePreview(null)
+                    clearImage()
                     setCardVideo(null); setCardVideoPreview(null)
                   }}
                   style={{
@@ -1650,7 +1681,7 @@ function Feed() {
           {postType === 'visual' ? (
             <div style={{ marginBottom: 8 }}>
               <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden' }}>
-                <VisualCard templateKey={visualTheme} content={content} preview={true} hasVoice={!!cardAudio} imageUrl={imagePreview} videoUrl={cardVideoPreview} username={myUsername} />
+                <VisualCard templateKey={visualTheme} content={content} preview={true} hasVoice={!!cardAudio} imageUrl={imagePreviews[0] || null} videoUrl={cardVideoPreview} username={myUsername} />
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
@@ -1693,17 +1724,27 @@ function Feed() {
             </>
           )}
 
-          {postType !== 'visual' && imagePreview && (
-            <div style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
-              <img src={imagePreview} alt="Selected photo preview" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: theme.radius.md, display: 'block' }} />
-              <button
-                type="button"
-                onClick={clearImage}
-                aria-label="Remove photo"
-                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(15,23,42,0.75)', color: '#fff', border: 'none', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
+          {postType !== 'visual' && imagePreviews.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {imagePreviews.map((url, idx) => (
+                <div key={url + idx} style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={url} alt={`Selected photo ${idx + 1} of ${imagePreviews.length}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: theme.radius.md, display: 'block' }} />
+                  <button
+                    type="button"
+                    onClick={() => removeImageAt(idx)}
+                    aria-label={`Remove photo ${idx + 1}`}
+                    style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(15,23,42,0.75)', color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+              <label style={{ width: 100, height: 100, border: `1.5px dashed ${theme.border}`, borderRadius: theme.radius.md, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: imagePreviews.length >= MAX_POST_IMAGES ? 'not-allowed' : 'pointer', color: theme.tealDeep, fontSize: 12, fontWeight: 700, background: '#fff', opacity: imagePreviews.length >= MAX_POST_IMAGES ? 0.5 : 1 }}>
+                <Camera size={18} aria-hidden="true" />
+                <span>{imagePreviews.length >= MAX_POST_IMAGES ? `${MAX_POST_IMAGES}/${MAX_POST_IMAGES}` : 'Add'}</span>
+                {imagePreviews.length < MAX_POST_IMAGES && <span style={{ fontSize: 10, color: theme.textLight }}>{imagePreviews.length}/{MAX_POST_IMAGES}</span>}
+                <input type="file" accept="image/*" multiple disabled={imagePreviews.length >= MAX_POST_IMAGES} onChange={handleImagesSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+              </label>
             </div>
           )}
 
@@ -1714,11 +1755,13 @@ function Feed() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
             marginTop: 14, paddingTop: 12, borderTop: `1px solid ${theme.border}`,
           }}>
-            {postType !== 'visual' && !imagePreview ? (
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer' }}>
+            {postType !== 'visual' && imagePreviews.length === 0 ? (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 40, fontSize: 13, color: theme.tealDeep, fontWeight: 700, cursor: imagePreviews.length >= MAX_POST_IMAGES ? 'not-allowed' : 'pointer', opacity: imagePreviews.length >= MAX_POST_IMAGES ? 0.5 : 1 }}>
                 <Camera size={17} aria-hidden="true" /> Add a photo
-                <input type="file" accept="image/*" onChange={handleImageSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
+                <input type="file" accept="image/*" multiple disabled={imagePreviews.length >= MAX_POST_IMAGES} onChange={handleImagesSelect} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }} />
               </label>
+            ) : postType !== 'visual' && imagePreviews.length > 0 ? (
+              <span style={{ fontSize: 11, color: theme.textLight }}>{imagePreviews.length}/{MAX_POST_IMAGES} photos</span>
             ) : <span />}
 
             <TealBtn type="submit" disabled={posting || uploadingImage || (postType === 'video' ? !cardVideo : !content.trim())} style={{ minWidth: 108, flexShrink: 0 }}>
@@ -1936,14 +1979,17 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
           onCancel={() => setShowDraw(false)}
           onSave={(blob) => {
             // INVARIANT: drawing stays draft until explicit Post — this handler
-            // only sets local imageFile/imagePreview and closes the board.
+            // only sets local imageFiles/imagePreviews and closes the board.
             // It never calls supabase.from('posts').insert or handlePost.
-            // No effect watches imageFile to auto-publish.
+            // No effect watches imageFiles to auto-publish.
             if (blob) {
-              // A drawing is just an image: same pipeline as a photo
-              const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' })
-              setImageFile(file)
-              setImagePreview(URL.createObjectURL(blob))
+              if (imageFiles.length >= MAX_POST_IMAGES) {
+                toast.show(`You can add up to ${MAX_POST_IMAGES} photos (${MAX_POST_IMAGES}/${MAX_POST_IMAGES})`, { type: 'warning' })
+              } else {
+                const file = new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' })
+                setImageFiles((prev) => [...prev, file])
+                setImagePreviews((prev) => [...prev, URL.createObjectURL(blob)])
+              }
             }
             setShowDraw(false)
           }}

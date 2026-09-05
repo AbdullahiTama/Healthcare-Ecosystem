@@ -93,7 +93,7 @@ function PublicProfile() {
       const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
         // repost_of is load-bearing: without it isRepost() misreads every
         // reference repost as an original post (issue #6).
-        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
+        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, image_urls, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
         supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
@@ -107,7 +107,7 @@ function PublicProfile() {
       if (sourceIds.length) {
         const { data: sources } = await supabase
           .from('posts')
-          .select('id, content, created_at, post_type, theme, image_url, user_id')
+          .select('id, content, created_at, post_type, theme, image_url, image_urls, user_id')
           .in('id', sourceIds)
         const byId = {}
         ;(sources || []).forEach((s) => { byId[s.id] = s })

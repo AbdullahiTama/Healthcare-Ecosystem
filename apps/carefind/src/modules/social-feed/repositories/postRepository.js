@@ -26,6 +26,7 @@ export const postRepository = {
         content,
         post_type,
         image_url,
+        image_urls,
         audio_url,
         video_url,
         rating,
