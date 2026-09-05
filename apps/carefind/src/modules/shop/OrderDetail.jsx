@@ -7,27 +7,15 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
-import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send } from 'lucide-react'
-
-const STATUS_CONFIG = {
-  pending_payment: { label: 'Pending Payment', icon: Clock, color: theme.warning },
-  delivery_quote_pending: { label: 'Quote Pending', icon: Truck, color: theme.warning },
-  paid: { label: 'Paid', icon: CheckCircle, color: theme.success },
-  accepted: { label: 'Accepted', icon: CheckCircle, color: theme.success },
-  processing: { label: 'Processing', icon: Package, color: theme.tealDeep },
-  ready_for_pickup: { label: 'Ready for Pickup', icon: MapPin, color: theme.tealDeep },
-  in_transit: { label: 'In Transit', icon: Truck, color: theme.tealDeep },
-  delivered: { label: 'Delivered', icon: CheckCircle, color: theme.success },
-  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger },
-  refund_requested: { label: 'Refund Requested', icon: Clock, color: theme.warning },
-  refunded: { label: 'Refunded', icon: Clock, color: theme.textMid },
-  disputed: { label: 'Disputed', icon: Clock, color: theme.danger }
-}
+import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar } from 'lucide-react'
+import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery } from './orderConstants'
+import { useCart } from './CartProvider'
 
 export default function OrderDetail() {
   const { orderId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { addItem } = useCart()
 
   const [order, setOrder] = useState(null)
   const [messages, setMessages] = useState([])
@@ -38,6 +26,25 @@ export default function OrderDetail() {
   const [station, setStation] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+
+  function handleReorder() {
+    if (!order || !order.order_items) return
+    let added = 0
+    order.order_items.forEach(item => {
+      if (item.ecommerce_product_id) {
+        addItem({
+          ecommerce_product_id: item.ecommerce_product_id,
+          product_name: item.product_name,
+          unit_price_kobo: item.unit_price_kobo,
+          quantity: item.quantity
+        })
+        added++
+      }
+    })
+    if (added > 0) {
+      navigate('/cart')
+    }
+  }
 
   useEffect(() => {
     loadOrder()
@@ -266,6 +273,71 @@ export default function OrderDetail() {
           </div>
         </Card>
 
+        {/* Tracking Timeline */}
+        {!['cancelled', 'pending_payment', 'disputed'].includes(order.status) && (
+          <Card style={{ padding: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: theme.navy, margin: 0 }}>
+                Order Tracking
+              </h2>
+              {getEstimatedDelivery(order) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: theme.tealDeep, fontWeight: 600 }}>
+                  <Calendar size={14} />
+                  {getEstimatedDelivery(order)}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative' }}>
+              {TRACKING_STEPS.map((step, idx) => {
+                const currentStepIndex = TRACKING_STEPS.findIndex(s => s.key === order.status)
+                const isCompleted = currentStepIndex >= idx || order.status === 'delivered'
+                const isCurrent = step.key === order.status
+                return (
+                  <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                    {/* Connector line */}
+                    {idx > 0 && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 14,
+                        right: '50%',
+                        width: '100%',
+                        height: 2,
+                        background: isCompleted ? theme.tealDeep : theme.gray200,
+                        zIndex: 0
+                      }} />
+                    )}
+                    {/* Step circle */}
+                    <div style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: isCompleted ? theme.tealDeep : '#fff',
+                      border: `2px solid ${isCompleted ? theme.tealDeep : theme.gray300}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 1,
+                      boxShadow: isCurrent ? `0 0 0 4px ${theme.tealDeep}20` : 'none'
+                    }}>
+                      {isCompleted && <CheckCircle size={14} color="#fff" />}
+                    </div>
+                    {/* Step label */}
+                    <div style={{
+                      marginTop: 8,
+                      fontSize: 10,
+                      fontWeight: isCurrent ? 700 : 500,
+                      color: isCompleted ? theme.tealDeep : theme.textMid,
+                      textAlign: 'center'
+                    }}>
+                      {step.label}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
+
         {/* Order Items */}
         <Card style={{ padding: 24 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: theme.navy }}>
@@ -316,6 +388,16 @@ export default function OrderDetail() {
             </div>
             <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
           </div>
+          {/* Reorder button for delivered orders */}
+          {order.status === 'delivered' && isCustomer && (
+            <Button
+              onClick={handleReorder}
+              style={{ marginTop: 16, width: '100%' }}
+              leftIcon={<RotateCcw size={16} />}
+            >
+              Buy Again
+            </Button>
+          )}
           {(order.status==='pending_payment' || order.status==='paid') && isCustomer && (
             <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
               {order.status==='pending_payment' && (

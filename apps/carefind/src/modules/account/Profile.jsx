@@ -5,7 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
   Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Flag, Link2, Lock, MapPin, Menu,
-  MessageSquare, Repeat2,
+  MessageSquare, Package, Repeat2,
   Pencil, Plus, Radio, ShoppingCart, Star, Stethoscope, Trash2, Wallet as WalletIcon, X,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -1205,6 +1205,12 @@ function Profile() {
           <Link to="/account/addresses" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
               <MapPin size={17} color={theme.gray500} aria-hidden="true" /> Saved addresses
+            </span>
+            <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
+          </Link>
+          <Link to="/orders" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
+              <Package size={17} color={theme.gray500} aria-hidden="true" /> My orders
             </span>
             <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
           </Link>

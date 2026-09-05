@@ -1,60 +1,96 @@
-// Order list page - displays orders for customers and vendors with status filtering
+// Order list page - displays orders for customers with search, status tabs, and load more
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { orderRepository } from './orderRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
-import { Card, Empty, Loading, Button } from '../../components/ui'
-import { Package, Clock, CheckCircle, Truck, MapPin, Filter } from 'lucide-react'
+import { Card, Empty, Loading, Button, Input } from '../../components/ui'
+import { Package, Search, Filter, ChevronRight, RotateCcw } from 'lucide-react'
+import { STATUS_CONFIG, CUSTOMER_STATUSES, getEstimatedDelivery } from './orderConstants'
+import { useCart } from './CartProvider'
 
-const STATUS_CONFIG = {
-  pending_payment: { label: 'Pending Payment', icon: Clock, color: theme.warning },
-  delivery_quote_pending: { label: 'Quote Pending', icon: Truck, color: theme.warning },
-  paid: { label: 'Paid', icon: CheckCircle, color: theme.success },
-  accepted: { label: 'Accepted', icon: CheckCircle, color: theme.success },
-  processing: { label: 'Processing', icon: Package, color: theme.tealDeep },
-  ready_for_pickup: { label: 'Ready for Pickup', icon: MapPin, color: theme.tealDeep },
-  in_transit: { label: 'In Transit', icon: Truck, color: theme.tealDeep },
-  delivered: { label: 'Delivered', icon: CheckCircle, color: theme.success },
-  cancelled: { label: 'Cancelled', icon: Clock, color: theme.danger },
-  refund_requested: { label: 'Refund Requested', icon: Clock, color: theme.warning },
-  refunded: { label: 'Refunded', icon: Clock, color: theme.textMid },
-  disputed: { label: 'Disputed', icon: Clock, color: theme.danger }
-}
+const PAGE_SIZE = 20
 
 export default function OrderList() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { addItem } = useCart()
 
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [viewMode, setViewMode] = useState('customer') // 'customer' or 'vendor'
+  const [search, setSearch] = useState('')
+  const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
-    loadOrders()
-  }, [viewMode, statusFilter])
+    loadOrders(true)
+  }, [statusFilter])
 
-  async function loadOrders() {
-    setLoading(true)
+  async function loadOrders(reset = false) {
+    const offset = reset ? 0 : orders.length
+    if (reset) {
+      setLoading(true)
+      setHasMore(true)
+    } else {
+      setLoadingMore(true)
+    }
     setError('')
     try {
-      let data
-      if (viewMode === 'customer') {
-        data = await orderRepository.getByCustomer(user.id, { status: statusFilter || undefined })
+      const data = await orderRepository.getByCustomer(user.id, {
+        status: statusFilter || undefined,
+        limit: PAGE_SIZE,
+        offset
+      })
+      if (reset) {
+        setOrders(data || [])
       } else {
-        // TODO: Get vendor ID from user's business
-        // For now, this is a placeholder
-        data = []
+        setOrders(prev => [...prev, ...(data || [])])
       }
-      setOrders(data || [])
+      setHasMore((data || []).length === PAGE_SIZE)
     } catch (err) {
       console.error('Failed to load orders:', err)
       setError(err.message || 'Failed to load orders')
     } finally {
       setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return orders
+    const q = search.toLowerCase().trim()
+    return orders.filter(o =>
+      (o.order_ref || '').toLowerCase().includes(q) ||
+      (o.order_items || []).some(i => (i.product_name || '').toLowerCase().includes(q)) ||
+      new Date(o.created_at).toLocaleDateString().toLowerCase().includes(q)
+    )
+  }, [orders, search])
+
+  const statusCounts = useMemo(() => {
+    const counts = { '': orders.length }
+    orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1 })
+    return counts
+  }, [orders])
+
+  function handleReorder(order, e) {
+    e.stopPropagation()
+    let added = 0
+    ;(order.order_items || []).forEach(item => {
+      if (item.ecommerce_product_id) {
+        addItem({
+          ecommerce_product_id: item.ecommerce_product_id,
+          product_name: item.product_name,
+          unit_price_kobo: item.unit_price_kobo,
+          quantity: item.quantity
+        })
+        added++
+      }
+    })
+    if (added > 0) {
+      navigate('/cart')
     }
   }
 
@@ -62,54 +98,68 @@ export default function OrderList() {
     return <Loading />
   }
 
-  const statuses = Object.keys(STATUS_CONFIG)
-
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24, color: theme.navy }}>
         My Orders
       </h1>
 
-      {/* View Mode Toggle */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <Button
-          onClick={() => setViewMode('customer')}
-          variant={viewMode === 'customer' ? 'primary' : 'secondary'}
-          size="sm"
-        >
-          Customer Orders
-        </Button>
-        <Button
-          onClick={() => setViewMode('vendor')}
-          variant={viewMode === 'vendor' ? 'primary' : 'secondary'}
-          size="sm"
-        >
-          Vendor Orders
-        </Button>
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: theme.textMid }} />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by order ref, product, or date..."
+          style={{
+            width: '100%',
+            padding: '12px 12px 12px 36px',
+            borderRadius: 10,
+            border: `1px solid ${theme.border}`,
+            fontSize: 14,
+            boxSizing: 'border-box'
+          }}
+        />
       </div>
 
-      {/* Status Filter */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Filter size={16} style={{ color: theme.textMid }} />
-        <Button
-          onClick={() => setStatusFilter('')}
-          variant={!statusFilter ? 'primary' : 'secondary'}
-          size="sm"
-        >
-          All
-        </Button>
-        {statuses.map(status => {
-          const config = STATUS_CONFIG[status]
+      {/* Status Tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
+        {CUSTOMER_STATUSES.map(s => {
+          const count = statusCounts[s.key] || 0
+          const isActive = statusFilter === s.key
           return (
-            <Button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              variant={statusFilter === status ? 'primary' : 'secondary'}
-              size="sm"
-              style={statusFilter === status ? { background: config.color, borderColor: config.color } : {}}
+            <button
+              key={s.key}
+              onClick={() => setStatusFilter(s.key)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 20,
+                border: `1px solid ${isActive ? theme.tealDeep : theme.border}`,
+                background: isActive ? theme.tealDeep : '#fff',
+                color: isActive ? '#fff' : theme.textMid,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
             >
-              {config.label}
-            </Button>
+              {s.label}
+              {count > 0 && (
+                <span style={{
+                  background: isActive ? 'rgba(255,255,255,0.2)' : theme.gray200,
+                  padding: '2px 6px',
+                  borderRadius: 10,
+                  fontSize: 11,
+                  fontWeight: 700
+                }}>
+                  {count}
+                </span>
+              )}
+            </button>
           )
         })}
       </div>
@@ -128,102 +178,156 @@ export default function OrderList() {
         </div>
       )}
 
-      {orders.length === 0 ? (
+      {filteredOrders.length === 0 ? (
         <Empty
           icon={<Package size={48} />}
-          title="No orders found"
-          description={statusFilter ? 'No orders match this filter' : 'You have not placed any orders yet'}
-          action="Browse Shop"
-          onAction={() => navigate('/search?tab=shop')}
+          title={search ? 'No orders match your search' : statusFilter ? `No ${CUSTOMER_STATUSES.find(s => s.key === statusFilter)?.label || ''} orders` : 'No orders yet'}
+          description={search ? 'Try a different search term' : statusFilter ? 'Try a different status filter' : 'Your order history will appear here'}
+          action={search || statusFilter ? 'Clear Filters' : 'Browse Shop'}
+          onAction={() => {
+            if (search || statusFilter) {
+              setSearch('')
+              setStatusFilter('')
+            } else {
+              navigate('/search?tab=shop')
+            }
+          }}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {orders.map(order => {
-            const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending_payment
-            const StatusIcon = statusConfig.icon
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {filteredOrders.map(order => {
+              const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending_payment
+              const StatusIcon = statusConfig.icon
+              const estimatedDelivery = getEstimatedDelivery(order)
+              const canReorder = order.status === 'delivered'
 
-            return (
-              <Card
-                key={order.id}
-                style={{ padding: 16, cursor: 'pointer', transition: 'box-shadow 0.2s' }}
-                onClick={() => navigate(`/orders/${order.id}`)}
-                hoverable
+              return (
+                <Card
+                  key={order.id}
+                  style={{ padding: 16, cursor: 'pointer', transition: 'box-shadow 0.2s', position: 'relative' }}
+                  onClick={() => navigate(`/orders/${order.id}`)}
+                  hoverable
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>
+                          #{order.order_ref || order.id.slice(0, 8).toUpperCase()}
+                        </span>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '3px 8px',
+                          borderRadius: 12,
+                          background: statusConfig.color + '15',
+                          color: statusConfig.color,
+                          fontSize: 11,
+                          fontWeight: 600
+                        }}>
+                          <StatusIcon size={12} />
+                          {statusConfig.label}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: theme.textMid }}>
+                        {new Date(order.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {estimatedDelivery && (
+                          <span style={{ marginLeft: 8, color: theme.tealDeep, fontWeight: 600 }}>
+                            {estimatedDelivery}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: theme.tealDeep }}>
+                        ₦{(order.total_kobo / 100).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: 11, color: theme.textMid }}>
+                        {order.order_items.length} {order.order_items.length === 1 ? 'item' : 'items'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items preview */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', gap: 4, flex: 1, overflow: 'hidden' }}>
+                      {order.order_items.slice(0, 3).map((item, idx) => (
+                        <div key={item.id || idx} style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          background: theme.gray100,
+                          fontSize: 11,
+                          color: theme.textMid,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: 120
+                        }}>
+                          {item.product_name}
+                        </div>
+                      ))}
+                      {order.order_items.length > 3 && (
+                        <span style={{ fontSize: 11, color: theme.textMid, whiteSpace: 'nowrap' }}>
+                          +{order.order_items.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                    {canReorder && (
+                      <button
+                        onClick={(e) => handleReorder(order, e)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          border: `1px solid ${theme.tealDeep}`,
+                          background: 'transparent',
+                          color: theme.tealDeep,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        <RotateCcw size={12} />
+                        Reorder
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Delivery method */}
+                  <div style={{ fontSize: 11, color: theme.textLight, borderTop: `1px solid ${theme.border}`, paddingTop: 8 }}>
+                    {order.delivery_preference === 'pickup' ? 'Pickup' : 'Home Delivery'}
+                    {order.delivery_city && ` • ${order.delivery_city}`}
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Load More */}
+          {hasMore && !search && (
+            <div style={{ textAlign: 'center', marginTop: 24 }}>
+              <Button
+                variant="secondary"
+                onClick={() => loadOrders(false)}
+                disabled={loadingMore}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: theme.navy, marginBottom: 4 }}>
-                      Order #{order.order_ref || order.id.slice(0, 8).toUpperCase()}
-                    </div>
-                    <div style={{ fontSize: 12, color: theme.textMid }}>
-                      {new Date(order.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 12px',
-                    borderRadius: 16,
-                    background: statusConfig.color + '20',
-                    color: statusConfig.color,
-                    fontSize: 12,
-                    fontWeight: 600
-                  }}>
-                    <StatusIcon size={14} />
-                    {statusConfig.label}
-                  </div>
-                </div>
+                {loadingMore ? 'Loading...' : 'Load More Orders'}
+              </Button>
+            </div>
+          )}
 
-                {/* Order Items Preview */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto', paddingBottom: 8 }}>
-                  {order.order_items.slice(0, 3).map(item => (
-                    <div key={item.id} style={{
-                      minWidth: 60,
-                      height: 60,
-                      borderRadius: 8,
-                      background: theme.gray200,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 10,
-                      color: theme.textMid,
-                      padding: 4,
-                      textAlign: 'center'
-                    }}>
-                      {item.product_name.slice(0, 20)}
-                    </div>
-                  ))}
-                  {order.order_items.length > 3 && (
-                    <div style={{
-                      minWidth: 60,
-                      height: 60,
-                      borderRadius: 8,
-                      background: theme.tealDeep + '10',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: theme.tealDeep
-                    }}>
-                      +{order.order_items.length - 3}
-                    </div>
-                  )}
-                </div>
-
-                {/* Order Summary */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
-                  <div style={{ fontSize: 12, color: theme.textMid }}>
-                    {order.order_items.length} {order.order_items.length === 1 ? 'item' : 'items'} • {order.delivery_preference === 'pickup' ? 'Pickup' : 'Delivery'}
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: theme.tealDeep }}>
-                    ₦{(order.total_kobo / 100).toLocaleString()}
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
+          {/* Summary */}
+          {!search && (
+            <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: theme.textLight }}>
+              Showing {filteredOrders.length} of {orders.length} orders
+              {!hasMore && orders.length > PAGE_SIZE && ' (all loaded)'}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
