@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { ArrowLeft, Eye, Image as ImageIcon, Newspaper, Pencil, Phone, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
@@ -292,6 +292,51 @@ function News() {
                 {heroPreview && <img src={heroPreview} alt="hero" style={{ width: '100%', display: 'block', marginBottom: 18, borderRadius: 4 }} />}
                 <div style={{ fontSize: 17, lineHeight: 1.7, color: '#1f2937' }}>
                   <ArticleEditor value={body} readOnly />
+                </div>
+                <div className="cf-eng-row" style={{ padding: '4px 18px', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '8px 0' }}>
+                  <div className="cf-eng-group">
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Like this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Heart size={18} aria-hidden="true" />
+                      <span>Like</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Comments on this article"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <MessageCircle size={18} aria-hidden="true" />
+                      <span>Comment</span>
+                    </button>
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Share this article" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Share2 size={18} aria-hidden="true" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Repost this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Repeat2 size={18} aria-hidden="true" />
+                      <span>Repost</span>
+                    </button>
+                  </div>
+                  <div className="cf-eng-group">
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Save this article" aria-pressed="false" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Bookmark size={18} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>

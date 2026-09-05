@@ -35,6 +35,7 @@ function NewsArticle() {
   const [comments, setComments] = useState([])
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
+  const [postingComment, setPostingComment] = useState(false)
   const [gifting, setGifting] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
   const [error, setError] = useState(false)
@@ -120,11 +121,22 @@ function NewsArticle() {
   async function toggleLike() {
     if (!user) { window.location.href = '/login'; return }
     if (userLiked) {
+      const prev = likes
       setLikes(prev => prev.filter(l => l.user_id !== user.id))
-      await supabase.from('news_reactions').delete().eq('news_id', id).eq('user_id', user.id)
+      const { error } = await supabase.from('news_reactions').delete().eq('news_id', id).eq('user_id', user.id)
+      if (error) {
+        setLikes(prev)
+        toast.show(error.message || 'Could not update like.', { type: 'error' })
+      }
     } else {
-      setLikes(prev => [...prev, { id: `t${Date.now()}`, user_id: user.id }])
-      await supabase.from('news_reactions').insert({ news_id: id, user_id: user.id })
+      const temp = { id: `t${Date.now()}`, user_id: user.id }
+      setLikes(prev => [...prev, temp])
+      const { error } = await supabase.from('news_reactions').insert({ news_id: id, user_id: user.id })
+      if (error) {
+        setLikes(prev => prev.filter(l => l.id !== temp.id))
+        toast.show(error.message || 'Could not like.', { type: 'error' })
+        return
+      }
       // Tell the author someone liked their article (never fires for self-likes).
       notify({ recipientId: article.author_id, actorId: user.id, type: 'news_like', message: 'liked your article', link: `/news/${article.id}`, postId: article.id })
     }
@@ -134,10 +146,18 @@ function NewsArticle() {
     if (!user) { window.location.href = '/login'; return }
     if (saved) {
       setSaved(false)
-      await supabase.from('saved_news').delete().eq('news_id', id).eq('user_id', user.id)
+      const { error } = await supabase.from('saved_news').delete().eq('news_id', id).eq('user_id', user.id)
+      if (error) {
+        setSaved(true)
+        toast.show(error.message || 'Could not unsave.', { type: 'error' })
+      }
     } else {
       setSaved(true)
-      await supabase.from('saved_news').insert({ news_id: id, user_id: user.id })
+      const { error } = await supabase.from('saved_news').insert({ news_id: id, user_id: user.id })
+      if (error) {
+        setSaved(false)
+        toast.show(error.message || 'Could not save.', { type: 'error' })
+      }
     }
   }
 
@@ -175,20 +195,41 @@ function NewsArticle() {
 
   async function addComment() {
     const text = commentDraft.trim()
-    if (!text || !user) { if (!user) window.location.href = '/login'; return }
+    if (!text) return
+    if (!user) { window.location.href = '/login'; return }
+    if (postingComment) return
+    setPostingComment(true)
     const { error } = await supabase.from('news_comments').insert({ news_id: id, user_id: user.id, content: text })
-    if (!error) {
-      setCommentDraft('')
-      const { data } = await supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true })
-      setComments(data || [])
-      // Tell the author someone commented on their article (never self-notifies).
-      notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
+    if (error) {
+      toast.show(error.message || 'Could not post comment.', { type: 'error' })
+      setPostingComment(false)
+      return
     }
+    const { data, error: selErr } = await supabase
+      .from('news_comments')
+      .select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)')
+      .eq('news_id', id)
+      .order('created_at', { ascending: true })
+    if (selErr) {
+      toast.show(selErr.message || 'Could not load comments.', { type: 'error' })
+      setPostingComment(false)
+      return
+    }
+    setComments(data || [])
+    setCommentDraft('')
+    setPostingComment(false)
+    // Tell the author someone commented on their article (never self-notifies).
+    notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
   }
 
   async function deleteComment(cid) {
-    await supabase.from('news_comments').delete().eq('id', cid).eq('user_id', user.id)
+    const prev = comments
     setComments(prev => prev.filter(c => c.id !== cid))
+    const { error } = await supabase.from('news_comments').delete().eq('id', cid).eq('user_id', user.id)
+    if (error) {
+      setComments(prev)
+      toast.show(error.message || 'Could not delete comment.', { type: 'error' })
+    }
   }
 
   function timeAgoShort(dateStr) {
@@ -443,9 +484,15 @@ function NewsArticle() {
       {commentsOpen && (
         <div style={{ padding: '4px 18px 8px', fontFamily: theme.fontFamily }}>
           <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Comments ({comments.length})</p>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder={user ? 'Add a comment…' : 'Log in to comment'} disabled={!user} style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
-            <button onClick={addComment} style={{ padding: '0 16px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>Post</button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
+            {!user ? (
+              <Link to="/login" style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box', textAlign: 'center', background: theme.bg, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Log in to comment</Link>
+            ) : (
+              <>
+                <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder="Add a comment…" style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
+                <button onClick={addComment} disabled={postingComment || !commentDraft.trim()} style={{ padding: '0 16px', background: postingComment || !commentDraft.trim() ? theme.gray300 : theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13, opacity: postingComment ? 0.7 : 1, cursor: postingComment ? 'not-allowed' : 'pointer', minHeight: 38 }}>{postingComment ? 'Posting…' : 'Post'}</button>
+              </>
+            )}
           </div>
           {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Be the first to comment.</p>}
           {comments.map((c) => (
