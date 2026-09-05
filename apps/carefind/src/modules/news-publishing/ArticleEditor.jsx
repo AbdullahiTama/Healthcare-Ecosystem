@@ -383,10 +383,35 @@ function TextBlock({ block, onChange, onDelete, readOnly, editorRef }) {
     }
   }
 
-  // Paste interception: strip all HTML, insert plain text only.
+  // Paste interception: allow sanitized HTML (b/i/mark + highlight
+  // style="background:#…", colour spans, underline/strike) through the
+  // htmlToArticleMarkers sanitizer so formatting is preserved, not stripped.
   function handlePaste(e) {
     e.preventDefault()
-    const text = (e.clipboardData || window.clipboardData).getData('text/plain')
+    const clipboard = e.clipboardData || window.clipboardData
+    const html = clipboard.getData('text/html')
+    const text = clipboard.getData('text/plain')
+    if (html) {
+      const markers = htmlToArticleMarkers(html)
+      if (markers && markers.trim()) {
+        const sanitizedHtml = renderArticleHtml(markers)
+        const tmp = document.createElement('div')
+        tmp.innerHTML = sanitizedHtml
+        const parts = Array.from(tmp.childNodes).map((node) => {
+          if (node.nodeType === 3) return node.textContent
+          if (node.nodeType === 1) {
+            if (node.tagName === 'P') return node.innerHTML
+            return node.outerHTML
+          }
+          return ''
+        })
+        const toInsert = parts.join('<br><br>')
+        if (toInsert && toInsert.trim()) {
+          document.execCommand('insertHTML', false, toInsert)
+          return
+        }
+      }
+    }
     document.execCommand('insertText', false, text)
   }
 
