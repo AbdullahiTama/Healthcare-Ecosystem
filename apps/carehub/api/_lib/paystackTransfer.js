@@ -61,6 +61,24 @@ export async function checkBalance() {
   return available
 }
 
+// Resolve the account holder name for a bank/account-number pair via
+// Paystack's /bank/resolve. Used to verify the account name before initiating
+// a transfer, so a typo can't route money to the wrong account.
+export async function resolveAccount({ bankCode, accountNumber }) {
+  const qs = `account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
+  const data = await paystackFetch(`/bank/resolve?${qs}`)
+
+  if (!data.status) {
+    const err = new Error(data.message || 'Could not verify account')
+    err.paystackMessage = data.message
+    err.bankCode = bankCode
+    err.accountNumber = accountNumber
+    throw err
+  }
+
+  return { accountName: data.data.account_name, accountNumber: data.data.account_number }
+}
+
 // Generate a unique reference for a business transfer.
 export function transferReference(businessId) {
   return `ch_wd_${businessId.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`

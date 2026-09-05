@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { ArrowLeft, Eye, Image as ImageIcon, Newspaper, Pencil, Phone, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
-import { ErrorState, CardSkeleton } from '../../components/ui'
+import { validateArticleForPublish } from './articleContent.js'
+import { ErrorState, CardSkeleton, Toast, useToast } from '../../components/ui'
 
 function News() {
   const { user } = useAuth()
@@ -38,6 +39,7 @@ function News() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     loadNews()
@@ -96,6 +98,15 @@ function News() {
     if (!body.trim()) { setSubmitOk(false); setSubmitMsg('Please write the article body.'); return }
     if (!contactPhone.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact phone number.'); return }
     if (!contactEmail.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact email.'); return }
+    if (!user?.id) { setSubmitOk(false); setSubmitMsg('Please sign in to submit news.'); showToast('Please sign in to submit news.', { type: 'error' }); return }
+
+    // Issue #4: validate and repair the block body before the hero upload and
+    // the insert, so a body that would lose a section is refused with a clear
+    // message instead of being published short.
+    const check = validateArticleForPublish(body)
+    if (!check.ok) { setSubmitOk(false); setSubmitMsg(check.error); return }
+    const articleBody = check.content
+
     setSubmitting(true)
     setSubmitMsg('')
 
@@ -107,13 +118,15 @@ function News() {
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('news-images').getPublicUrl(path)
         heroUrl = urlData.publicUrl
+      } else {
+        showToast('Hero image upload failed, submitting without image.', { type: 'warning' })
       }
     }
 
     const { error } = await supabase.from('news').insert({
       headline: headline.trim(),
       subtitle: subtitle.trim() || null,
-      body: body.trim(),
+      body: articleBody,
       hero_image_url: heroUrl,
       author_id: user.id,
       contact_phone: contactPhone.trim(),
@@ -123,7 +136,9 @@ function News() {
 
     if (error) {
       setSubmitOk(false)
-      setSubmitMsg('Could not submit: ' + error.message)
+      const msg = 'Could not submit: ' + error.message
+      setSubmitMsg(msg)
+      showToast(msg, { type: 'error' })
     } else {
       setSubmitOk(true)
       setSubmitMsg('Submitted! Your news is under review and will publish once approved.')
@@ -278,6 +293,51 @@ function News() {
                 <div style={{ fontSize: 17, lineHeight: 1.7, color: '#1f2937' }}>
                   <ArticleEditor value={body} readOnly />
                 </div>
+                <div className="cf-eng-row" style={{ padding: '4px 18px', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '8px 0' }}>
+                  <div className="cf-eng-group">
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Like this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Heart size={18} aria-hidden="true" />
+                      <span>Like</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Comments on this article"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <MessageCircle size={18} aria-hidden="true" />
+                      <span>Comment</span>
+                    </button>
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Share this article" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Share2 size={18} aria-hidden="true" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Repost this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Repeat2 size={18} aria-hidden="true" />
+                      <span>Repost</span>
+                    </button>
+                  </div>
+                  <div className="cf-eng-group">
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Save this article" aria-pressed="false" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Bookmark size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>
                 </div>
@@ -338,13 +398,14 @@ function News() {
       )}
 
       {isMobile && <BottomNav />}
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

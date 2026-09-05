@@ -68,18 +68,26 @@ describe('shareOrCopy', () => {
     expect(await shareOrCopy({ text: 'hi', url: 'http://x.test' })).toBe('failed')
   })
 
-  it('falls back to clipboard when navigator.share is missing', async () => {
+  it('falls back to clipboard when navigator.share is missing — URL first for preview without scroll', async () => {
     const clipboard = vi.fn().mockResolvedValue()
     Object.assign(global.navigator, { share: undefined, clipboard: { writeText: clipboard } })
     const result = await shareOrCopy({ text: 'hi', url: 'http://x.test' })
     expect(result).toBe('copied')
-    expect(clipboard).toHaveBeenCalledWith('hi\n\nhttp://x.test')
+    expect(clipboard).toHaveBeenCalledWith('http://x.test\n\nhi')
   })
 
-  it('reports shared when navigator.share succeeds', async () => {
+  it('clipboard fallback is URL alone when there is no text', async () => {
+    const clipboard = vi.fn().mockResolvedValue()
+    Object.assign(global.navigator, { share: undefined, clipboard: { writeText: clipboard } })
+    await shareOrCopy({ text: '', url: 'http://x.test/post/123' })
+    expect(clipboard).toHaveBeenCalledWith('http://x.test/post/123')
+  })
+
+  it('reports shared when navigator.share succeeds — url is separate field for deep-link preview', async () => {
     const share = vi.fn().mockResolvedValue()
     Object.assign(global.navigator, { share, clipboard: { writeText: vi.fn() } })
-    expect(await shareOrCopy({ title: 't', text: 'hi', url: 'http://x.test' })).toBe('shared')
+    expect(await shareOrCopy({ title: 't', text: 'hi', url: 'http://x.test/post/abc' })).toBe('shared')
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ title: 't', text: 'hi', url: 'http://x.test/post/abc' }))
   })
 
   it('reports dismissed when the user aborts the share sheet', async () => {
@@ -97,11 +105,11 @@ describe('shareOrCopy', () => {
       clipboard: { writeText: vi.fn() },
     })
     expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('shared')
-    expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [file] }))
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ files: [file], url: 'http://x.test' }))
   })
 
-  it('omits files when canShare rejects them and falls back to clipboard', async () => {
-    const share = vi.fn()
+  it('omits files when canShare rejects them but still shares url (deep-link preview)', async () => {
+    const share = vi.fn().mockResolvedValue()
     const clipboard = vi.fn().mockResolvedValue()
     const file = new File(['x'], 'pic.jpg', { type: 'image/jpeg' })
     Object.assign(global.navigator, {
@@ -109,16 +117,18 @@ describe('shareOrCopy', () => {
       canShare: vi.fn(() => false),
       clipboard: { writeText: clipboard },
     })
-    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('copied')
-    expect(share).not.toHaveBeenCalled()
-    expect(clipboard).toHaveBeenCalled()
+    expect(await shareOrCopy({ text: 'hi', url: 'http://x.test', files: [file] })).toBe('shared')
+    expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: 'http://x.test', text: 'hi' }))
+    expect(share).not.toHaveBeenCalledWith(expect.objectContaining({ files: expect.anything() }))
+    expect(clipboard).not.toHaveBeenCalled()
   })
 
-  it('appends the media URL to clipboard text so recipients still get the media', async () => {
+  it('does not append the media URL to clipboard text (OG tags carry the image) — URL first', async () => {
     const clipboard = vi.fn().mockResolvedValue()
     Object.assign(global.navigator, { share: undefined, clipboard: { writeText: clipboard } })
     await shareOrCopy({ text: 'hi', url: 'http://x.test', mediaUrl: 'http://x.test/pic.jpg' })
-    expect(clipboard).toHaveBeenCalledWith('hi\n\nhttp://x.test\n\nhttp://x.test/pic.jpg')
+    expect(clipboard).toHaveBeenCalledWith('http://x.test\n\nhi')
+    expect(clipboard.mock.calls[0][0]).not.toContain('pic.jpg')
   })
 })
 

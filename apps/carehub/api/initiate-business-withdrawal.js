@@ -46,7 +46,20 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: 'Could not check payment provider balance' })
   }
 
-  const reference = transferReference(businessId)
+  // Reuse a previous attempt's reference if a pending/processing request never
+  // got its transfer code attached (crash window) — Paystack dedupes by reference,
+  // so re-initiating the same transfer can't double-pay.
+  const { data: prior } = await supabase
+    .from('business_withdrawal_requests')
+    .select('paystack_reference')
+    .eq('business_id', businessId)
+    .in('status', ['pending', 'processing'])
+    .is('paystack_transfer_code', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const reference = prior?.paystack_reference || transferReference(businessId)
 
   try {
     // Create or reuse the Paystack transfer recipient for this business.
@@ -58,12 +71,15 @@ export default async function handler(req, res) {
     })
 
     // Reserve the available balance and record the request (atomic).
+    // The reference is stored at creation time so there's never a crash
+    // window where a pending request lacks a reference.
     const { data: requestResult, error: requestError } = await supabase.rpc('request_business_withdrawal', {
       p_business_id: businessId,
       p_amount: amountKobo,
       p_bank_name: bankName,
       p_account_number: accountNumber,
       p_account_name: accountName,
+      p_reference: reference,
     })
 
     if (requestError || requestResult !== 'ok') {
@@ -72,7 +88,7 @@ export default async function handler(req, res) {
       })
     }
 
-    // Initiate the Paystack transfer.
+    // Initiate the Paystack transfer (idempotent by reference).
     const { transferCode } = await initiateTransfer({
       recipientCode,
       amountKobo,
@@ -80,26 +96,16 @@ export default async function handler(req, res) {
       reference,
     })
 
-    // Attach the Paystack details to the pending request we just created.
-    const { data: pendingRequests } = await supabase
+    // Attach transfer details by reference (unique), not "latest pending".
+    await supabase
       .from('business_withdrawal_requests')
-      .select('id')
+      .update({
+        status: 'processing',
+        paystack_transfer_code: transferCode,
+        paystack_recipient_code: recipientCode,
+      })
       .eq('business_id', businessId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (pendingRequests && pendingRequests.length > 0) {
-      await supabase
-        .from('business_withdrawal_requests')
-        .update({
-          status: 'processing',
-          paystack_reference: reference,
-          paystack_transfer_code: transferCode,
-          paystack_recipient_code: recipientCode,
-        })
-        .eq('id', pendingRequests[0].id)
-    }
+      .eq('paystack_reference', reference)
 
     return res.status(200).json({
       success: true,

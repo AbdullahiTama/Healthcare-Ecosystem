@@ -3,11 +3,14 @@ import { useState, useEffect } from 'react'
 import Landing from './pages/Landing'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import ForgotPassword from './pages/auth/ForgotPassword'
+import ResetPassword from './pages/auth/ResetPassword'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import BusinessDashboard from './pages/dashboard/BusinessDashboard'
 import AgentLogin from './pages/agent/AgentLogin'
 import ApplyAgent from './pages/agent/ApplyAgent'
 import AgentDashboard from './modules/referral-agent/AgentDashboard'
+import ReceiptPage from './pages/ReceiptPage'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
 import AuthProvider from './providers/AuthProvider'
@@ -87,11 +90,14 @@ export default function App() {
           <Route path='/' element={<Landing />} />
           <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
           <Route path='/register' element={<Register />} />
+          <Route path='/forgot-password' element={<ForgotPassword />} />
+          <Route path='/reset-password' element={<ResetPassword />} />
           <Route path='/apply-agent' element={<ApplyAgent />} />
           <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
           <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
           <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />
           <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
+          <Route path='/receipt/:id' element={<ReceiptPage />} />
           <Route path='*' element={<Navigate to='/' />} />
         </Routes>
       </div>

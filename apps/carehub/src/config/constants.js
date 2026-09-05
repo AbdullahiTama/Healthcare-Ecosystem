@@ -2,17 +2,22 @@
 // category lists). Moved out of lib/utils.js, which now holds only generic
 // helpers and design tokens.
 export const BUSINESS_TYPES = [
-  { id: 'skincare',            icon: '🧴', name: 'Skincare / Aesthetic Spa' },
-  { id: 'pharmacy',            icon: '💊', name: 'Community Pharmacy' },
-  { id: 'hospital',            icon: '🏥', name: 'Hospital / Clinic' },
-  { id: 'dental',              icon: '🦷', name: 'Dental Clinic' },
-  { id: 'optical',             icon: '👁', name: 'Optical / Eye Clinic' },
-  { id: 'wellness',            icon: '🌿', name: 'Wellness & Nutrition Center' },
-  { id: 'manufacturer_importer', icon: '🏭', name: 'Manufacturer / Importer' },
-  { id: 'wholesale',           icon: '📦', name: 'Wholesale / Distributor' },
+  { id: 'pharmacy',      icon: '💊', name: 'Pharmacies' },
+  { id: 'hospital',      icon: '🏥', name: 'Hospitals' },
+  { id: 'clinic',        icon: '🩺', name: 'Clinics & Medical Centres' },
+  { id: 'laboratory',    icon: '🧪', name: 'Laboratories' },
+  { id: 'aesthetic',     icon: '✨', name: 'Aesthetic Clinics' },
+  { id: 'spa',           icon: '🌿', name: 'Spas & Wellness Centres' },
+  { id: 'cosmetics',     icon: '💄', name: 'Cosmetics & Beauty' },
+  { id: 'haircare',      icon: '💇', name: 'Hair-Care & Salons' },
+  { id: 'other',         icon: '🏥', name: 'Other Healthcare' },
 ]
 
-export const NIG_STATES = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara']
+import { NIGERIA_STATES } from '../lib/nigeriaGeo.js'
+// Single source for Nigerian states — derive from nigeriaGeo's 37-state master.
+// Legacy name NIG_STATES kept for backwards-compat; NG_STATES alias for CareFind parity.
+export const NIG_STATES = NIGERIA_STATES.map(s => s.name)
+export const NG_STATES = NIG_STATES
 
 export const EXPENSE_CATS = ['Rent','Salary','Utilities','Supplies','Equipment','Transport','Marketing','Maintenance','Insurance','Tax','Other']
 

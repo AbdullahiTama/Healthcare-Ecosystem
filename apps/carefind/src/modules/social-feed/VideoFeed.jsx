@@ -6,6 +6,11 @@ import {
 import { theme } from '../../styles/theme'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
+import { renderMarkdown } from './markdown.jsx'
+import StoryAvatar from '../../components/StoryAvatar.jsx'
+import StoryViewer from './components/StoryViewer.jsx'
+import { supabase } from '../../config/supabaseClient'
+import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 
 // The Videos tab's dedicated feed: one full-height clip per view, swiped
 // vertically like Reels/TikTok. Each slide carries a right-hand action rail
@@ -45,6 +50,8 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
   // brief moment two slides straddle the edge while snapping.
   const [activeIndex, setActiveIndex] = useState(0)
   const containerRef = useRef(null)
+  const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
+  const [viewer, setViewer] = useState(null)
 
   useEffect(() => {
     const root = containerRef.current
@@ -63,6 +70,38 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
     root.querySelectorAll('[data-video-slide]').forEach((el) => io.observe(el))
     return () => io.disconnect()
   }, [posts.length])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadStoryMeta() {
+      const ids = [...new Set(posts.map((p) => p.user_id).filter(Boolean))]
+      if (!ids.length) { setStoryMeta({ stories: [], viewedIds: new Set() }); return }
+      const { data: rows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', ids).gt('expires_at', new Date().toISOString())
+      const stories = rows || []
+      let viewedIds = new Set()
+      if (stories.length && user?.id) viewedIds = await fetchViewedStoryIds(supabase, stories.map((s) => s.id))
+      if (!cancelled) setStoryMeta({ stories, viewedIds })
+    }
+    loadStoryMeta()
+    return () => { cancelled = true }
+  }, [posts.map((p) => p.user_id).join(','), user?.id])
+
+  async function openStoryForUser(uid) {
+    const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', uid).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })
+    const list = data || []
+    if (!list.length) return
+    setViewer({ stories: list, index: 0, userId: uid })
+  }
+  function handleViewStory(st) {
+    supabase.rpc('increment_story_view', { story_id: st.id }).catch(() => {})
+    if (user?.id) {
+      markStoriesViewed(supabase, { storyIds: [st.id], userId: user.id }).catch(() => {})
+      setStoryMeta((prev) => {
+        if (prev.viewedIds.has(st.id)) return prev
+        const next = new Set(prev.viewedIds); next.add(st.id); return { ...prev, viewedIds: next }
+      })
+    }
+  }
 
   const slideHeight = isMobile ? 'calc(100dvh - 210px)' : 'min(70vh, 640px)'
 
@@ -108,6 +147,9 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
               background: 'linear-gradient(to top, rgba(0,0,0,0.72), rgba(0,0,0,0))',
               color: '#fff', display: 'flex', alignItems: 'flex-end', gap: 8,
             }}>
+              {!post.posted_as_type ? (
+                <StoryAvatar userId={post.user_id} stories={storyMeta.stories} viewedIds={storyMeta.viewedIds} size={34} src={profiles[post.user_id]?.avatar_url} name={authorName(post)} onClick={() => openStoryForUser(post.user_id)} />
+              ) : null}
               <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none', color: '#fff' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 800, fontSize: 13.5 }}>
                   {authorName(post)}
@@ -146,9 +188,9 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
                   display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                   fontFamily: theme.fontFamily,
                 }}
-              >
-                {post.content}
-              </button>
+                >
+                  {renderMarkdown(post.content) || post.content}
+                </button>
             )}
 
             {/* Right action rail */}
@@ -268,8 +310,19 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
                   myUsername={myUsername}
                   myAvatar={myAvatar}
                   onCommentAdded={handleCommentAdded}
+                  stories={storyMeta.stories}
+                  viewedIds={storyMeta.viewedIds}
+                  onStoryClick={openStoryForUser}
                 />
               </div>
+            )}
+            {viewer && (
+              <StoryViewer stories={viewer.stories} index={viewer.index} onNavigate={(n) => setViewer((prev) => n === null || n < 0 || n >= prev.stories.length ? null : { ...prev, index: n })} onClose={() => setViewer(null)} onViewStory={handleViewStory} renderHeader={(s) => (
+                <>
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>{authorName({ user_id: viewer.userId })?.[0]?.toUpperCase() || '?'}</div>
+                  <div style={{ flex: 1 }}><p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{authorName({ user_id: viewer.userId })}</p><p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{new Date(s.created_at).toLocaleDateString()}</p></div>
+                </>
+              )} />
             )}
           </div>
         )

@@ -2,7 +2,6 @@
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
-import { emailAdminNewRegistration } from '../../lib/email'
 import { Card, Inp, Sel, TealBtn, DarkBtn, GhostBtn, Toggle, useToast, Toast, Logo } from '../../components/ui/index'
 import { DARK, businessName } from '../../lib/utils'
 import { BUSINESS_TYPES, NIG_STATES } from '../../config/constants'
@@ -53,6 +52,7 @@ export default function Register() {
   const submit = async () => {
     setSaving(true)
     const ownerEmail = data.ownerEmail.toLowerCase()
+    const referralInput = data.noReferrer ? null : (data.referrerCode?.trim() ? data.referrerCode.trim().toUpperCase() : (refCode ? refCode.toUpperCase() : null))
     try {
       await registerBusiness({
         name: data.businessName,
@@ -71,22 +71,27 @@ export default function Register() {
         lng: parseFloat(data.lng) || 0,
         website: data.website || '',
         visible_on_carefind: data.visibleOnCareFind !== false,
-        referral_code_used: refCode || null,
+        referral_code_used: referralInput,
       })
       // The register_business RPC mints the owner's CONFIRMED Supabase Auth
       // account in the same transaction that creates the pending business row —
       // there is no separate provisioning step any more (businesses.password
       // was dropped in C2). New owners can sign in immediately and see the
       // honest pending state.
-      // Send email notification to admin
+      // Fire-and-forget server-side emails (owner confirmation + admin alert).
+      // Registration must succeed even if email fails — never block on this.
       try {
-        await emailAdminNewRegistration({
-          businessName: data.businessName,
-          ownerName: (data.firstName + ' ' + data.lastName).trim(),
-          businessType: data.businessType || 'skincare',
-          state: data.state || '',
-          email: ownerEmail,
-        })
+        fetch('/api/notify-registration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: data.businessName,
+            ownerName: (data.firstName + ' ' + data.lastName).trim(),
+            businessType: data.businessType || 'skincare',
+            state: data.state || '',
+            email: ownerEmail,
+          }),
+        }).catch(() => {})
       } catch (e) {}
       setDone(true)
     } catch (e) {
@@ -105,7 +110,7 @@ export default function Register() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Hourglass size={48} color={tealDeep} /></div>
         <div style={{ fontFamily: fontDisplay, fontSize: '26px', fontWeight: '700', color: navy, marginBottom: '8px' }}>Registration submitted</div>
         <div style={{ fontSize: '14px', color: gray600, lineHeight: '1.8', marginBottom: '24px' }}>
-          Thank you <strong>{data.firstName}</strong>! Your business <strong>{data.businessName}</strong> has been submitted for review. You will be notified within 24 hours.
+          Thank you <strong>{data.firstName}</strong>! Your business <strong>{data.businessName}</strong> has been submitted for review. We’ve sent a confirmation email to <strong>{data.ownerEmail}</strong> — please check your inbox (and spam folder). You will be notified within 24 hours once your account is reviewed.
         </div>
         <div style={{ background: theme.tealMist, borderRadius: theme.radius.lg, padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
           {[['done', 'Registration submitted'], ['pending', 'Admin review in progress'], ['wait', 'Approval notification sent to your email'], ['wait2', 'Dashboard unlocked, start using CareHub']].map(([k, l]) => {
@@ -238,6 +243,15 @@ export default function Register() {
                 <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
                 <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: theme.tealDeep }}>Free</div><div style={{ fontSize: '11px', color: theme.textLight }}>for now</div></div>
               </div>
+              <div style={{ padding: '14px', borderRadius: '12px', background: bg, border: `1px solid ${border}` }}>
+                <div style={{ fontSize: '13px', fontWeight: '800', color: navy, marginBottom: '8px' }}>Referrer (optional)</div>
+                <div style={{ fontSize: '12px', color: gray600, marginBottom: '10px', lineHeight: '1.6' }}>If someone referred you to CareHub, enter their referral code. If no one referred you, check “No Referrer”.</div>
+                <CInp label="Referrer Code" value={data.referrerCode ?? refCode} onChange={v => f('referrerCode', v)} placeholder="e.g. CH-8F3K2Q" disabled={!!data.noReferrer} />
+                <label style={{ display: 'flex', gap: '8px', cursor: 'pointer', alignItems: 'center', marginTop: '10px' }}>
+                  <input type="checkbox" checked={!!data.noReferrer} onChange={e => f('noReferrer', e.target.checked)} style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', color: theme.textMid, fontWeight: '600' }}>No Referrer — I was not referred by anyone</span>
+                </label>
+              </div>
               <label style={{ display: 'flex', gap: '10px', cursor: 'pointer', alignItems: 'flex-start' }}>
                 <input type='checkbox' checked={data.agreedTerms || false} onChange={e => f('agreedTerms', e.target.checked)} style={{ marginTop: '2px', flexShrink: 0 }} />
                 <span style={{ fontSize: '12px', color: theme.textMid, lineHeight: '1.6' }}>I agree to the Terms of Service and Privacy Policy. I understand my account requires admin approval.</span>
@@ -256,6 +270,7 @@ export default function Register() {
                   ['Business Hours', data.businessHours],
                   ['Owner', (data.firstName || '') + ' ' + (data.lastName || '')],
                   ['Login Email', data.ownerEmail],
+                  ['Plan', data.businessType === 'hospital' ? 'Growth — ₦100,000/year (hospitals start here)' : 'Basic — ₦60,000/year'],
                   ['CareFind', data.visibleOnCareFind !== false ? 'Yes - Listed publicly' : 'No'],
                 ].filter(([, v]) => v).map(([l, v], i) => (
                   <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: i % 2 === 0 ? theme.gray50 : '#fff', fontSize: '13px' }}>
@@ -263,6 +278,11 @@ export default function Register() {
                   </div>
                 ))}
               </div>
+              {data.businessType === 'hospital' && (
+                <div style={{ marginTop: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${tealDeep}`, fontSize: '12.5px', color: tealDeep, lineHeight: '1.6' }}>
+                  Hospitals start from <strong>Growth</strong> — you’ll be placed on Growth (₦100,000/year, up to 5 locations, unlimited staff/products). Basic is not available for hospitals.
+                </div>
+              )}
               <div style={{ marginTop: '16px', padding: '14px', borderRadius: '12px', background: theme.warningBg, border: `1px solid ${theme.amberBorder}`, fontSize: '13px', color: theme.amberText, lineHeight: '1.7' }}>
                 After submitting, admin will review and approve your account within 24 hours.
               </div>

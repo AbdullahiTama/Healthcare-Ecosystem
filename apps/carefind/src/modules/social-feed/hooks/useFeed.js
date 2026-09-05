@@ -21,7 +21,7 @@ export function useFeed() {
     try {
       const { data: postData } = await supabase
         .from('posts')
-        .select('id, content, created_at, user_id, post_type, image_url, audio_url, video_url, rating, is_premium, subscriber_only, preview_text, posting_as_business_id, posted_as_type, posted_as_id, posted_as_name, posted_as_title, live_session_id, view_count, theme')
+        .select('id, content, created_at, user_id, post_type, image_url, image_urls, audio_url, video_url, rating, is_premium, subscriber_only, preview_text, posting_as_business_id, posted_as_type, posted_as_id, posted_as_name, posted_as_title, live_session_id, view_count, theme')
         .order('created_at', { ascending: false })
         .limit(50)
 
@@ -101,9 +101,9 @@ export function useFeed() {
     }
   }, [user, reactions, posts, notify])
 
-  const userHasLiked = useCallback((postId) => reactions.some(r => r.post_id === postId && r.user_id === user?.id), [reactions, user])
-  const likeCount = useCallback((postId) => reactions.filter(r => r.post_id === postId).length, [reactions])
-  const commentTotal = useCallback((postId) => commentCounts[postId] || 0, [commentCounts])
+  const userHasLiked = useCallback((postId) => (reactions || []).some(r => r.post_id === postId && r.user_id === user?.id), [reactions, user])
+  const likeCount = useCallback((postId) => (reactions || []).filter(r => r.post_id === postId).length, [reactions])
+  const commentTotal = useCallback((postId) => (commentCounts || {})[postId] || 0, [commentCounts])
 
   return {
     posts,

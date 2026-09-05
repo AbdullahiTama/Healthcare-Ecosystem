@@ -34,8 +34,8 @@ const NOTIFICATION_KIND = {
 const DEFAULT_KIND = { Icon: Bell, tint: theme.gray500 }
 
 // Notification types whose target is a single feed post. When the row carries
-// a post_id, these deep-link to the post itself (/feed?post=<id>) instead of
-// the bare '/'-'/feed' fallback stored on the row. Everything else (news,
+// a post_id, these deep-link to the post's own permalink (/post/<id>) instead
+// of the bare '/'-'/feed' fallback stored on the row. Everything else (news,
 // follows, payments, product alerts) keeps its own link.
 const POST_LINK_TYPES = new Set(['like', 'comment', 'reply', 'repost', 'gift'])
 
@@ -147,7 +147,7 @@ function Notifications() {
 
         {items.map((n) => {
           const { Icon, tint } = NOTIFICATION_KIND[n.type] || DEFAULT_KIND
-          const to = n.post_id && POST_LINK_TYPES.has(n.type) ? `/feed?post=${n.post_id}` : n.link
+          const to = n.post_id && POST_LINK_TYPES.has(n.type) ? `/post/${n.post_id}` : n.link
           const inner = (
             <Card style={{
               display: 'flex', gap: 12, alignItems: 'flex-start', padding: 14, marginBottom: 8,
@@ -193,7 +193,7 @@ function Notifications() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

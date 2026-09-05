@@ -1,128 +1,138 @@
-import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { supabase } from '../config/supabaseClient'
-import { useAuth } from '../providers/AuthContext'
-import { Home, Newspaper, Plus, User, Compass } from 'lucide-react'
+import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
+import { Home, Store, Newspaper, User, Plus } from 'lucide-react'
 import { theme } from '../styles/theme'
+import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 
 function BottomNav({ onCompose }) {
   const location = useLocation()
-  const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const isActive = (path) => location.pathname === path
-  const isHomeActive = location.pathname === '/feed'
-  const [unreadNews, setUnreadNews] = useState(0)
+
+  const isFeed = location.pathname === '/feed'
+  const isProfile = location.pathname === '/profile'
+  const isSearch = location.pathname === '/search'
+  const isNews = location.pathname === '/news' || location.pathname.startsWith('/news/')
+
+  const isHomeActive = isFeed
+  const isMedMarketActive = isSearch
+  const isNewsActive = isNews
+  const isProfileActive = isProfile
+
+  function handleCompose() {
+    if (onCompose) {
+      logCreateTap({ source: 'bottom-nav', route: 'in-place', path: location.pathname })
+      onCompose()
+      return
+    }
+    logCreateTap({ source: 'bottom-nav', route: 'navigate', path: location.pathname })
+    navigate(CREATE_PATH)
+  }
 
   const itemStyle = (active) => ({
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-    color: active ? theme.tealDeep : theme.textLight, textDecoration: 'none', fontSize: 10, fontWeight: 700,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    color: active ? theme.tealDeep : theme.textLight,
+    textDecoration: 'none',
+    fontSize: 10,
+    fontWeight: 800,
+    flex: 1,
+    padding: '6px 0 2px',
+    WebkitTapHighlightColor: 'transparent',
   })
 
-  // iOS-style tab: the active icon sits in a soft teal capsule so the current
-  // screen reads at a glance, even at a small tap size.
   const iconCapsule = (active) => ({
-    width: 38, height: 26, borderRadius: 9, flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 40,
+    height: 28,
+    borderRadius: 10,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     background: active ? theme.tealMist : 'transparent',
     transition: `background ${theme.motion.fast} ${theme.motion.easeOut}`,
   })
 
-  useEffect(() => {
-    async function loadUnread() {
-      if (!user) { setUnreadNews(0); return }
-      // When did this user last open the News page?
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('news_last_seen')
-        .eq('id', user.id)
-        .maybeSingle()
-      const lastSeen = prof?.news_last_seen || '1970-01-01'
-      // Count approved news published since then
-      const { count } = await supabase
-        .from('news')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'approved')
-        .gt('published_at', lastSeen)
-      setUnreadNews(count || 0)
-    }
-    loadUnread()
-  }, [user, location.pathname])
-
-  function handleCompose() {
-    if (location.pathname !== '/feed') {
-      navigate('/feed')
-      setTimeout(() => {
-        const el = document.getElementById('post-composer')
-        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.querySelector('textarea')?.focus() }
-      }, 400)
-    } else {
-      const el = document.getElementById('post-composer')
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        el.querySelector('textarea')?.focus()
-      } else if (onCompose) {
-        onCompose()
-      }
-    }
-  }
-
   return (
-    <div style={{
-      position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-      width: '100%', maxWidth: 480, background: theme.cardBg, borderTop: `1px solid ${theme.border}`,
-      display: 'flex', justifyContent: 'space-around', alignItems: 'flex-start', gap: 2,
-      padding: '8px 6px calc(8px + env(safe-area-inset-bottom)) 6px',
-      boxShadow: '0 -2px 10px rgba(0,0,0,0.04)', zIndex: 100,
-    }}>
-      <Link to="/feed" style={itemStyle(isHomeActive)}>
+    <nav
+      role="navigation"
+      aria-label="Primary"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 480,
+        background: theme.cardBg,
+        borderTop: `1px solid ${theme.border}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        gap: 2,
+        padding: '6px 4px calc(6px + env(safe-area-inset-bottom)) 4px',
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.04)',
+        zIndex: 100,
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
+      <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
         <span style={iconCapsule(isHomeActive)}>
           <Home size={20} strokeWidth={isHomeActive ? 2.4 : 2} aria-hidden="true" />
         </span>
         Home
       </Link>
-      <Link to="/search" style={itemStyle(isActive('/search'))}>
-        <span style={iconCapsule(isActive('/search'))}>
-          <Compass size={20} strokeWidth={isActive('/search') ? 2.4 : 2} aria-hidden="true" />
+      <Link
+        to="/search?tab=shop"
+        style={itemStyle(isMedMarketActive)}
+        aria-current={isMedMarketActive ? 'page' : undefined}
+      >
+        <span style={iconCapsule(isMedMarketActive)}>
+          <Store size={20} strokeWidth={isMedMarketActive ? 2.4 : 2} aria-hidden="true" />
         </span>
         MedMarket
       </Link>
       <button
         onClick={handleCompose}
-        style={{
-          width: 44, height: 44, borderRadius: theme.radius.md, background: theme.tealDeep,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
-          border: 'none', cursor: 'pointer', boxShadow: theme.elevation[2],
-          transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}`,
-        }}
-        onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)' }}
-        onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
         aria-label="Create post"
+        style={{
+          ...itemStyle(false),
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+        }}
       >
-        <Plus size={22} strokeWidth={2.6} aria-hidden="true" />
+        <span
+          style={{
+            ...iconCapsule(false),
+            background: theme.tealDeep,
+            color: '#fff',
+          }}
+        >
+          <Plus size={18} strokeWidth={2.6} aria-hidden="true" color="#fff" />
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 800, color: theme.textLight }}>Create</span>
       </button>
-      <Link to="/news" style={{ ...itemStyle(isActive('/news')), position: 'relative' }}>
-        <span style={iconCapsule(isActive('/news'))}>
-          <Newspaper size={20} strokeWidth={isActive('/news') ? 2.4 : 2} aria-hidden="true" />
+      <Link
+        to="/news"
+        style={itemStyle(isNewsActive)}
+        aria-current={isNewsActive ? 'page' : undefined}
+      >
+        <span style={iconCapsule(isNewsActive)}>
+          <Newspaper size={20} strokeWidth={isNewsActive ? 2.4 : 2} aria-hidden="true" />
         </span>
         News
-        {unreadNews > 0 && (
-          <span style={{
-            position: 'absolute', top: -2, right: 10, minWidth: 16, height: 16, padding: '0 4px',
-            borderRadius: 8, background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box',
-            border: `1.5px solid ${theme.cardBg}`,
-          }}>
-            {unreadNews > 99 ? '99+' : unreadNews}
-          </span>
-        )}
       </Link>
-      <Link to="/profile" style={itemStyle(isActive('/profile'))}>
-        <span style={iconCapsule(isActive('/profile'))}>
-          <User size={20} strokeWidth={isActive('/profile') ? 2.4 : 2} aria-hidden="true" />
+      <Link to="/profile" style={itemStyle(isProfileActive)} aria-current={isProfileActive ? 'page' : undefined}>
+        <span style={iconCapsule(isProfileActive)}>
+          <User size={20} strokeWidth={isProfileActive ? 2.4 : 2} aria-hidden="true" />
         </span>
         Profile
       </Link>
-    </div>
+    </nav>
   )
 }
 

@@ -1,10 +1,9 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
 
 // Minimal fake Supabase: every builder method is a thenable that resolves to
-// the table's rows filtered by the eq/in constraints accumulated so far. The
-// deep-linked post fetch goes through the mocked postRepository instead.
+// the table's rows filtered by the eq/in constraints accumulated so far.
 const mockSupabase = vi.hoisted(() => {
   const data = {
     tables: {
@@ -66,10 +65,6 @@ vi.mock('../../config/supabaseClient', () => ({
 vi.mock('../../providers/AuthContext', () => ({
   useAuth: () => ({ user: null }),
 }))
-vi.mock('./repositories', () => ({
-  postRepository: { getPostById: vi.fn() },
-  commentRepository: {},
-}))
 
 // Leaf/heavy children: not exercised by these tests.
 vi.mock('../../utils/VisualCard.jsx', () => ({ default: () => <div /> }))
@@ -106,8 +101,8 @@ vi.mock('../../utils/voiceCard.js', () => ({
 vi.mock('../../utils/imageResize.js', () => ({ resizeImage: vi.fn() }))
 
 import Feed from './Feed.jsx'
-import { postRepository } from './repositories'
 import { shareOrCopy } from '../../utils/share.js'
+import { POSTS_DIRTY_EVENT } from './postSync.js'
 
 function makePost(overrides = {}) {
   return {
@@ -142,12 +137,20 @@ beforeEach(() => {
   mockSupabase.data.tables.posts = []
   mockSupabase.data.tables.profiles = []
   mockSupabase.data.rpcRows = {}
-  postRepository.getPostById.mockReset()
   shareOrCopy.mockClear()
 })
 
-describe('Feed share deep link (Item 12)', () => {
-  it('shares a post with a ?post=<id> URL', async () => {
+// Task 6: opening a post ("See more" or a shared link) is no longer Feed's
+// own modal machinery — it is a navigation to the post's permalink
+// (/post/:id), with the current feed location carried as history state so
+// BackgroundRoutes can render it as an overlay on top of this page instead
+// of replacing it. That combination (Feed's navigate call + BackgroundRoutes
+// + PostModalRoute) is exercised end-to-end in
+// src/components/BackgroundRoutes.test.jsx; sharePost's own URL shape is
+// covered here. Task 7 moved that shape itself from /feed?post=<id> to the
+// post's own permalink, /post/<id> — this pins the new contract.
+describe('Feed share URL', () => {
+  it('shares a post with a /post/<id> URL', async () => {
     mockSupabase.data.tables.posts = [makePost()]
     renderFeed('/feed')
 
@@ -157,26 +160,70 @@ describe('Feed share deep link (Item 12)', () => {
     await waitFor(() => expect(shareOrCopy).toHaveBeenCalled())
     const arg = shareOrCopy.mock.calls[0][0]
     const url = new URL(arg.url)
-    expect(url.pathname).toBe('/feed')
-    expect(url.searchParams.get('post')).toBe('p1')
+    expect(url.pathname).toBe('/post/p1')
+  })
+})
+
+// Task 7: Task 6 deleted Feed's ?post= handling along with its modal
+// machinery, so every URL already shared publicly and every
+// notifications.link row already written — all in the legacy
+// /feed?post=<id> shape — pointed at nothing on this branch until the
+// redirect below landed. Rendering a bare <Feed /> can't prove the redirect
+// works (there is nowhere for it to land), so this registers the same two
+// routes main.jsx does and asserts the old URL actually reaches the new one.
+describe('legacy ?post= links', () => {
+  it('redirects an old share URL to the permalink', async () => {
+    mockSupabase.data.tables.posts = [makePost({ id: 'p1' })]
+    render(
+      <MemoryRouter initialEntries={['/feed?post=p1']}>
+        <Routes>
+          <Route path="/feed" element={<Feed />} />
+          <Route path="/post/:id" element={<div>permalink page</div>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('permalink page')).toBeInTheDocument()
+  })
+})
+
+// Task 6's addendum gave PostModalRoute its own usePostEngagement instance,
+// so a mutation made inside the /post/:id overlay never touches this Feed's
+// copy of the same post. postSync.js bridges that gap: the overlay dispatches
+// POSTS_DIRTY_EVENT on window when it closes dirty, and Feed is supposed to
+// answer by reloading (see the listener at Feed.jsx around loadFeedRef).
+// These tests exercise the RECEIVING half directly against this real Feed
+// instance — dispatching the event and asserting an actual refetch happens —
+// rather than trusting a spy on some internal, so they fail if the listener
+// is removed, if its effect never attaches, or if the imported event name
+// drifts from the one Feed listens for.
+describe('postSync: Feed reloads on POSTS_DIRTY_EVENT', () => {
+  function postsFetchCount() {
+    return mockSupabase.supabase.from.mock.calls.filter((call) => call[0] === 'posts').length
+  }
+
+  it('refetches posts when the overlay dispatches POSTS_DIRTY_EVENT', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+    await screen.findByText(/A shareable post body/i)
+
+    const before = postsFetchCount()
+
+    window.dispatchEvent(new Event(POSTS_DIRTY_EVENT))
+
+    await waitFor(() => expect(postsFetchCount()).toBeGreaterThan(before))
   })
 
-  it('opens a deep-linked post in the detail modal and clears the param', async () => {
-    postRepository.getPostById.mockResolvedValue(makePost({ content: 'Deep linked body text' }))
-    renderFeed('/feed?post=p1')
+  it('does not refetch posts when no dirty event fires', async () => {
+    mockSupabase.data.tables.posts = [makePost()]
+    renderFeed('/feed')
+    await screen.findByText(/A shareable post body/i)
 
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText(/Deep linked body text/)).toBeInTheDocument()
-    expect(postRepository.getPostById).toHaveBeenCalledWith('p1')
-    await waitFor(() => expect(window.location.search).not.toContain('post='))
-  })
+    const before = postsFetchCount()
 
-  it('closes silently when the deep-linked post is missing', async () => {
-    postRepository.getPostById.mockRejectedValue(new Error('PGRST116'))
-    renderFeed('/feed?post=p1')
+    // Nothing dispatches POSTS_DIRTY_EVENT here — give any stray async work a
+    // tick, then confirm no extra 'posts' query was issued.
+    await new Promise((resolve) => setTimeout(resolve, 20))
 
-    await waitFor(() => expect(postRepository.getPostById).toHaveBeenCalledWith('p1'))
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(window.location.search).not.toContain('post=')
+    expect(postsFetchCount()).toBe(before)
   })
 })

@@ -6,7 +6,7 @@ import { businessLucideIcon, businessName } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { useAuth } from '../../providers/AuthProvider'
 import { authClient } from '../../lib/authClient'
-import { PLAN_LABELS, PLAN_MONTHLY_NAIRA } from '../../lib/planLimits'
+import { PLAN_LABELS, PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA, PLAN_LIMITS, isPlanAllowedForBusinessType } from '../../lib/planLimits'
 import { theme } from '../../styles/theme'
 import { sbUpload } from '../../services/supabase'
 import { Card, Loading, SectionHead, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast, Toast } from '../../components/ui'
@@ -29,7 +29,24 @@ export default function Settings({ brand, role, perms }) {
   const isOwner = role === 'Owner'
   const bType = brand?.business_type || brand?.type || 'skincare'
 
+  // Services
+  const [services, setServices] = useState([])
+  const [servicesLoading, setServicesLoading] = useState(false)
+  const [servicesError, setServicesError] = useState('')
+  const [showServiceModal, setShowServiceModal] = useState(false)
+  const [editingService, setEditingService] = useState(null)
+  const [serviceForm, setServiceForm] = useState({ name: '', description: '', price: '', duration: '' })
+  const [savingService, setSavingService] = useState(false)
+  const [deleteServiceTarget, setDeleteServiceTarget] = useState(null)
+  const [availDate, setAvailDate] = useState('')
+  const [availTime, setAvailTime] = useState('')
+  const [availEndTime, setAvailEndTime] = useState('')
+  const [availServiceId, setAvailServiceId] = useState('')
+  const [availability, setAvailability] = useState([])
+  const [availabilityError, setAvailabilityError] = useState('')
+
   useEffect(() => { load() }, [brand?.id])
+  useEffect(() => { if (brand?.id) loadServices() }, [brand?.id])
 
   // Return from Paystack — verify server-side before showing the plan as
   // renewed. Same "never trust the URL, ask Paystack" shape as CareFind's
@@ -212,6 +229,84 @@ export default function Settings({ brand, role, perms }) {
     setSavingBooking(false)
   }
 
+  // ── Services ────────────────────────────────────────────────────────────────
+  async function loadServices() {
+    setServicesLoading(true)
+    setServicesError('')
+    setAvailabilityError('')
+    try {
+      const s = await settingsRepository.getServices(brand.id)
+      setServices(s || [])
+      const av = await settingsRepository.getAvailability(brand.id)
+      setAvailability(av || [])
+    } catch (e) { setServicesError('Could not load services. Check your connection and try again.'); setServices([]) }
+    setServicesLoading(false)
+  }
+
+  async function handleSaveService() {
+    if (!serviceForm.name || !serviceForm.name.trim()) { showToast('Service name is required.', { type: 'warning' }); return }
+    const priceNum = serviceForm.price ? parseFloat(serviceForm.price) : null
+    if (priceNum != null && (isNaN(priceNum) || priceNum < 0)) { showToast('Price must be a valid non-negative amount.', { type: 'warning' }); return }
+    const durNum = serviceForm.duration ? parseInt(serviceForm.duration) : null
+    if (durNum != null && (isNaN(durNum) || durNum <= 0)) { showToast('Duration must be a positive number of minutes.', { type: 'warning' }); return }
+    setSavingService(true)
+    try {
+      const payload = {
+        name: serviceForm.name.trim(),
+        description: serviceForm.description || null,
+        price_kobo: serviceForm.price !== '' && serviceForm.price != null ? Math.round(parseFloat(serviceForm.price) * 100) : null,
+        duration_minutes: serviceForm.duration ? parseInt(serviceForm.duration) : null,
+        is_active: serviceForm.is_active !== false,
+      }
+      if (editingService) {
+        await settingsRepository.updateService(editingService.id, brand.id, payload)
+        showToast('Service updated! Future bookings will use the new price; past bookings keep their snapshot.', { type: 'success' })
+      } else {
+        await settingsRepository.createService(brand.id, payload)
+        showToast('Service created!', { type: 'success' })
+      }
+      setShowServiceModal(false); setEditingService(null); setServiceForm({ name: '', description: '', price: '', duration: '' })
+      loadServices()
+    } catch (e) { showToast(e.message || 'Could not save service. Please try again.', { type: 'error' }) }
+    setSavingService(false)
+  }
+
+  async function handleDeleteService() {
+    const svc = deleteServiceTarget
+    setDeleteServiceTarget(null)
+    if (!svc?.id) return
+    try { await settingsRepository.deleteService(svc.id, brand.id); showToast(`"${svc.name}" deactivated — hidden from patients but historical bookings preserved.`, { type: 'success' }); loadServices() } catch (e) { showToast(e.message || 'Could not deactivate service.', { type: 'error' }) }
+  }
+
+  async function handleAddAvailability() {
+    if (!availDate || !availTime) { showToast('Pick a date and time.', { type: 'warning' }); return }
+    const today = new Date().toISOString().split('T')[0]
+    if (availDate < today) { showToast('Cannot create slots in the past.', { type: 'warning' }); return }
+    if (availEndTime && availTime >= availEndTime) { showToast('End time must be after start time.', { type: 'warning' }); return }
+    setAvailabilityError('')
+    try {
+      await settingsRepository.saveAvailability(brand.id, [{ service_id: availServiceId || null, date: availDate, time: availTime, start_time: availTime, end_time: availEndTime || null }])
+      showToast('Availability added!', { type: 'success' })
+      setAvailTime(''); setAvailEndTime('')
+      const av = await settingsRepository.getAvailability(brand.id)
+      setAvailability(av || [])
+    } catch (e) { setAvailabilityError(e.message || 'Could not add availability. Time may already exist or overlaps.'); showToast(e.message || 'Could not add availability. Time may already exist.', { type: 'error' }) }
+  }
+
+  async function handleDeleteAvailability(id) {
+    try { await settingsRepository.deleteAvailability(id, brand.id); setAvailability(prev => prev.filter(a => a.id !== id)); showToast('Slot removed.', { type: 'success' }) } catch (e) { showToast(e.message || 'Could not remove slot. Booked slots cannot be deleted.', { type: 'error' }) }
+  }
+
+  async function handleReactivateService(svc) {
+    try { await settingsRepository.updateService(svc.id, brand.id, { is_active: true }); showToast(`"${svc.name}" reactivated.`, { type: 'success' }); loadServices() } catch (e) { showToast('Could not reactivate service.', { type: 'error' }) }
+  }
+
+  const openEditService = (svc) => {
+    setEditingService(svc)
+    setServiceForm({ name: svc.name, description: svc.description || '', price: svc.price_kobo != null ? String(svc.price_kobo / 100) : '', duration: svc.duration_minutes ? String(svc.duration_minutes) : '', is_active: svc.is_active })
+    setShowServiceModal(true)
+  }
+
   if (!isOwner) return (
     <div style={{ padding: '32px', textAlign: 'center', color: gray400 }}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Lock size={40} /></div>
@@ -221,10 +316,13 @@ export default function Settings({ brand, role, perms }) {
   )
 
   const planKey = brand?.plan || 'basic'
+  const yearlyPrice = PLAN_YEARLY_NAIRA[planKey] ?? PLAN_YEARLY_NAIRA.basic
   const monthlyPrice = PLAN_MONTHLY_NAIRA[planKey] || PLAN_MONTHLY_NAIRA.basic
+  const limits = PLAN_LIMITS[planKey] || PLAN_LIMITS.basic
   const expiresAt = brand?.plan_expires_at ? new Date(brand.plan_expires_at) : null
   const daysLeft = expiresAt ? Math.ceil((expiresAt - new Date()) / 86400000) : null
   const isExpired = daysLeft !== null && daysLeft < 0
+  const hospitalBlocked = brand?.business_type === 'hospital' && planKey === 'basic'
 
   if (loading) return <Loading text="Loading settings..." />
 
@@ -237,10 +335,20 @@ export default function Settings({ brand, role, perms }) {
         <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '4px', color: navy }}>Billing</div>
         <div style={{ fontSize: '13px', color: gray500, marginBottom: '16px' }}>Your plan and renewal</div>
 
+        {hospitalBlocked && (
+          <div style={{ marginBottom: '12px', padding: '12px 14px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '13px', fontWeight: '600' }}>
+            Hospitals start from Growth — Basic is not available for hospital accounts. Please upgrade to Growth or higher.
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', padding: '14px 16px', borderRadius: theme.radius.md, background: tealMist, border: `1px solid ${tealMist}`, marginBottom: '16px' }}>
           <div>
             <div style={{ fontWeight: '800', fontSize: '15px', color: navy }}>{PLAN_LABELS[planKey] || 'Basic'} plan</div>
-            <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>₦{monthlyPrice.toLocaleString()}/month</div>
+            <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>
+              {yearlyPrice ? `₦${yearlyPrice.toLocaleString()}/year` : 'Custom pricing'} {yearlyPrice ? <span style={{ color: gray400 }}>· ₦{monthlyPrice.toLocaleString()}/month</span> : null}
+            </div>
+            <div style={{ fontSize: '11px', color: gray400, marginTop: '4px' }}>
+              {limits.maxLocations === Infinity ? 'Unlimited locations' : `Up to ${limits.maxLocations} locations`} · {limits.maxStaff === Infinity ? 'Unlimited staff' : `Up to ${limits.maxStaff} staff`} · {limits.maxProducts === Infinity ? 'Unlimited products' : `Up to ${limits.maxProducts.toLocaleString()} products`}
+            </div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontWeight: '700', fontSize: '13px', color: isExpired ? danger : (daysLeft !== null && daysLeft <= 7) ? warning : success }}>
@@ -253,14 +361,20 @@ export default function Settings({ brand, role, perms }) {
         </div>
 
         {isOwner ? (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
-              {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
-            </TealBtn>
-            <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
-              {renewing ? 'Redirecting…' : `Renew 12 months, pay for 10 — ₦${(monthlyPrice * 10).toLocaleString()}`}
-            </GhostBtn>
-          </div>
+          yearlyPrice ? (
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <TealBtn onClick={() => handleRenew(1)} disabled={renewing} style={{ padding: '12px 20px' }}>
+                {renewing ? 'Redirecting…' : `Renew 1 month — ₦${monthlyPrice.toLocaleString()}`}
+              </TealBtn>
+              <GhostBtn onClick={() => handleRenew(12)} disabled={renewing} style={{ padding: '12px 20px' }}>
+                {renewing ? 'Redirecting…' : `Renew 12 months — ₦${yearlyPrice.toLocaleString()}`}
+              </GhostBtn>
+            </div>
+          ) : (
+            <div style={{ padding: '14px', borderRadius: theme.radius.md, background: theme.gray50, border: `1px solid ${border}`, fontSize: '13px', color: gray600 }}>
+              Custom plan — pricing is tailored to your organization. Contact <strong>support@carehub.ng</strong> to discuss your requirements.
+            </div>
+          )
         ) : (
           <p style={{ fontSize: '12px', color: gray400 }}>Only the business Owner can renew the plan.</p>
         )}
@@ -350,6 +464,119 @@ export default function Settings({ brand, role, perms }) {
           <TealBtn onClick={saveBookingSettings} style={{ alignSelf: 'flex-start', padding: '12px 24px' }}>{savingBooking ? 'Saving...' : 'Save Booking Settings'}</TealBtn>
         </div>
       </Card>
+
+      {/* Services — professional appointment configuration */}
+      <Card style={{ padding: '24px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: navy }}>Services</div>
+            <div style={{ fontSize: '13px', color: gray500, marginTop: '4px' }}>Create your services, set prices and manage availability</div>
+          </div>
+          <TealBtn onClick={() => { setEditingService(null); setServiceForm({ name: '', description: '', price: '', duration: '', is_active: true }); setShowServiceModal(true) }} style={{ padding: '10px 18px' }}>+ Add Service</TealBtn>
+        </div>
+
+        {servicesError && (
+          <div role="alert" aria-live="polite" style={{ marginBottom: '12px', padding: '10px 12px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '12px', fontWeight: '600' }}>
+            {servicesError} <button onClick={loadServices} style={{ marginLeft: 8, background: 'none', border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: theme.radius.sm, padding: '2px 8px', cursor: 'pointer', fontWeight: '700' }}>Retry</button>
+          </div>
+        )}
+        {servicesLoading ? <Loading text="Loading services..." /> : services.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px', border: `2px dashed ${border}`, borderRadius: theme.radius.lg, background: bg }}>
+            <div style={{ fontSize: '14px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>No services yet</div>
+            <div style={{ fontSize: '12px', color: gray400, marginBottom: '12px' }}>Add your first service to let customers book by service.</div>
+            <GhostBtn onClick={() => { setEditingService(null); setServiceForm({ name: '', description: '', price: '', duration: '', is_active: true }); setShowServiceModal(true) }}>+ Add Service</GhostBtn>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+            {services.map(svc => (
+              <div key={svc.id} role="article" aria-label={`Service ${svc.name}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: svc.is_active ? 'white' : theme.gray50, gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: '800', fontSize: '14px', color: navy, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {svc.name} {!svc.is_active && <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: theme.radius.sm, background: theme.gray200, color: gray500 }}>INACTIVE — hidden from patients</span>}
+                  </div>
+                  {svc.description && <div style={{ fontSize: '12px', color: gray500, marginTop: '2px' }}>{svc.description}</div>}
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '12px', fontWeight: '700', color: tealDeep }}>{svc.price_kobo != null ? `₦${(svc.price_kobo / 100).toLocaleString()}` : 'Free'}</span>
+                    {svc.duration_minutes && <span style={{ fontSize: '12px', color: gray400 }}>{svc.duration_minutes} min</span>}
+                    <span style={{ fontSize: '11px', color: gray400 }}>Created {svc.created_at ? new Date(svc.created_at).toLocaleDateString() : ''}</span>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <GhostBtn aria-label={`Edit ${svc.name}`} onClick={() => openEditService(svc)} style={{ padding: '6px 12px', fontSize: '12px' }}>Edit</GhostBtn>
+                  <button aria-label={svc.is_active ? `Deactivate ${svc.name}` : `Reactivate ${svc.name}`} onClick={() => svc.is_active ? setDeleteServiceTarget(svc) : handleReactivateService(svc)} style={{ padding: '6px 12px', borderRadius: theme.radius.md, border: 'none', background: svc.is_active ? theme.dangerBg : tealMist, color: svc.is_active ? theme.danger : tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>{svc.is_active ? 'Deactivate' : 'Reactivate'}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ borderTop: `1px solid ${border}`, paddingTop: '20px', marginTop: '20px' }}>
+          <div style={{ fontSize: '14px', fontWeight: '800', color: navy, marginBottom: '4px' }}>Availability</div>
+          <div style={{ fontSize: '12px', color: gray500, marginBottom: '14px' }}>Add specific dates and time slots per service. Daily slots above still apply as fallback. Past dates and booked slots are blocked.</div>
+          {availabilityError && (
+            <div role="alert" style={{ marginBottom: '10px', padding: '8px 10px', borderRadius: theme.radius.md, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: '12px' }}>{availabilityError}</div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: '8px', alignItems: 'end', marginBottom: '14px' }}>
+            <Sel label="Service" value={availServiceId} onChange={setAvailServiceId} options={[{ value: '', label: 'All services (general)' }, ...services.filter(s=>s.is_active).map(s => ({ value: s.id, label: s.name }))]} />
+            <Inp label="Date" type="date" value={availDate} onChange={setAvailDate} aria-label="Availability date" />
+            <Inp label="Start time" type="time" value={availTime} onChange={setAvailTime} aria-label="Start time" />
+            <Inp label="End time (optional)" type="time" value={availEndTime} onChange={setAvailEndTime} aria-label="End time" />
+            <TealBtn onClick={handleAddAvailability} style={{ padding: '10px 16px' }} aria-label="Add availability slot">Add</TealBtn>
+          </div>
+          {availability.length === 0 ? (
+            <div style={{ fontSize: '12px', color: gray400, textAlign: 'center', padding: '12px', background: bg, borderRadius: theme.radius.md }}>No date-specific slots yet. Daily slots from Booking above will be used.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {availability.map(a => {
+                const svcName = a.service_id ? (services.find(s => s.id === a.service_id)?.name || a.service_id.slice(0, 8)) : 'General'
+                const isBooked = a.is_booked || a.status === 'booked' || !!a.appointment_id
+                return (
+                  <span key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', borderRadius: theme.radius.full, background: isBooked ? theme.gray50 : tealMist, border: `1px solid ${isBooked ? theme.gray200 : tealDeep}`, fontSize: '12px', fontWeight: '600', color: isBooked ? gray500 : tealDeep, textDecoration: isBooked ? 'line-through' : 'none' }} title={isBooked ? 'Booked — cannot delete' : 'Available'}>
+                    {svcName} · {a.date} {a.time}{a.end_time ? `–${a.end_time}` : ''} {isBooked && '(booked)'}
+                    {!isBooked && <button onClick={() => handleDeleteAvailability(a.id)} aria-label={`Remove slot ${a.date} ${a.time}`} style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.danger, fontWeight: '900', padding: 0 }}>×</button>}
+                  </span>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Service modal */}
+      {showServiceModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <Card style={{ maxWidth: '480px', width: '100%', padding: '24px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '16px' }}>{editingService ? 'Edit Service' : 'Add Service'}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <Inp label="Service name *" value={serviceForm.name} onChange={v => setServiceForm(p => ({ ...p, name: v }))} placeholder="e.g. Dental Cleaning" required />
+              <Textarea label="Description" value={serviceForm.description} onChange={v => setServiceForm(p => ({ ...p, description: v }))} placeholder="What does this service include?" rows={2} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Inp label="Price (₦, blank = free)" type="number" value={serviceForm.price} onChange={v => setServiceForm(p => ({ ...p, price: v }))} placeholder="0" />
+                <Inp label="Duration (minutes)" type="number" value={serviceForm.duration} onChange={v => setServiceForm(p => ({ ...p, duration: v }))} placeholder="30" />
+              </div>
+              <Toggle label="Active" desc="Inactive services are hidden from customers" value={serviceForm.is_active !== false} onChange={v => setServiceForm(p => ({ ...p, is_active: v }))} />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <GhostBtn onClick={() => { setShowServiceModal(false); setEditingService(null) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleSaveService} style={{ flex: 1, padding: '12px' }}>{savingService ? 'Saving...' : editingService ? 'Save Changes' : 'Add Service'}</TealBtn>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {deleteServiceTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <Card style={{ maxWidth: '420px', width: '100%', padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '8px' }}>Deactivate service?</div>
+            <div style={{ fontSize: '13px', color: gray500, marginBottom: '8px' }}>This will hide <strong>{deleteServiceTarget.name}</strong> from patients. Historical bookings keep their price and remain visible.</div>
+            <div style={{ fontSize: '11px', color: gray400, marginBottom: '20px', padding: '8px', background: bg, borderRadius: theme.radius.sm }}>The service is soft-deactivated, not deleted, to preserve audit history per spec §3.2.</div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <GhostBtn onClick={() => setDeleteServiceTarget(null)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+              <button onClick={handleDeleteService} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: theme.danger, color: 'white', fontWeight: '800', cursor: 'pointer' }}>Deactivate</button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Receipt Customization */}
       <Card style={{ padding: '24px', marginBottom: '20px' }}>

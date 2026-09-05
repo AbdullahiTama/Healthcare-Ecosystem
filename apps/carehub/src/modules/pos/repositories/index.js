@@ -103,6 +103,15 @@ export function createSaleRepository({
       )
     },
 
+    // Single sale by id, tenant-scoped so a receipt link can never resolve to
+    // another business's sale. Powers the /receipt/:id lookup page (the target
+    // of the printed QR code). The QR encodes the human-facing txn_no, not the
+    // internal row id, so the lookup is by txn_no.
+    async getById(businessId, saleId) {
+      const rows = await request(`sales?txn_no=eq.${saleId}&business_id=eq.${businessId}&select=*`)
+      return Array.isArray(rows) ? rows[0] : rows
+    },
+
     // Records a sale, choosing its own destination. Returns { queued } so the
     // page can tell the cashier what happened without knowing how it decided:
     //   queued: false            — written to the database

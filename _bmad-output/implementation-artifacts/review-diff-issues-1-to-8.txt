@@ -1,0 +1,3273 @@
+﻿diff --git a/_bmad-output/implementation-artifacts/deferred-work.md b/_bmad-output/implementation-artifacts/deferred-work.md
+index d257367..02852dc 100644
+--- a/_bmad-output/implementation-artifacts/deferred-work.md
++++ b/_bmad-output/implementation-artifacts/deferred-work.md
+@@ -6,4 +6,13 @@
+   evidence: products.expiry_date is described as a quick-reference of batch expiry but nothing updates it when batches change; pre-existing committed design surfaced during review.
+ - source_spec: `_bmad-output/implementation-artifacts/spec-purchase-expiry-live.md`
+   summary: Add component-level test coverage for the Purchases save() wiring (purchaseExpirySummary result -> create body).
+-  evidence: The helper and repository pass-through are unit-tested, but the save() handler in Purchases.jsx that wires them is not, and the repo has no component-test harness for modules (no @testing-library/react).
+\ No newline at end of file
++  evidence: The helper and repository pass-through are unit-tested, but the save() handler in Purchases.jsx that wires them is not, and the repo has no component-test harness for modules (no @testing-library/react).
++- source_spec: none
++  summary: Fix staff login rejecting freshly created staff accounts with correct credentials (loginStaff validation path, atomic staff+password creation, clearer error messaging).
++  evidence: Split from Sajel Pharma bug report so the ESC/POS receipt printing fix could ship independently; disjoint subsystems (auth vs printing).
++- source_spec: `_bmad-output/implementation-artifacts/spec-issues-1-to-8-batch-fixes.md`
++  summary: Component-level test for DashboardHome proactive-alert effects (daily dedupe, notify payloads, owner-only gate).
++  evidence: The pure classification is tested (velocity.test.js) and the NotificationBell is component-tested, but the effect wiring in DashboardHome.jsx (localStorage dedupe keys, markSent-after-await ordering) has no test ΓÇö no module-level component harness exists (no @testing-library/react); same rationale as the Purchases save() entry above.
++- source_spec: `_bmad-output/implementation-artifacts/spec-issues-1-to-8-batch-fixes.md`
++  summary: Pre-existing advisor findings left untouched by this batch ΓÇö SECURITY DEFINER views (staff_directory, professional_earnings), mutable search_path on legacy functions (handle_new_user, increment_*_view), anon-executable definer RPCs (register_business, attempt_staff_claim, etc.), pg_trgm in public schema, leaked-password protection disabled.
++  evidence: All present before this work; fixing them is a dedicated hardening pass, not a drive-by inside an issue-batch spec.
+diff --git a/apps/carefind/src/modules/healthcare-discovery/DrugProfile.jsx b/apps/carefind/src/modules/healthcare-discovery/DrugProfile.jsx
+index 9cacb85..68e98bb 100644
+--- a/apps/carefind/src/modules/healthcare-discovery/DrugProfile.jsx
++++ b/apps/carefind/src/modules/healthcare-discovery/DrugProfile.jsx
+@@ -18,6 +18,7 @@ import BottomNav from '../../components/BottomNav.jsx'
+ import { Loading, StarPicker, Stars } from '../../components/ui'
+ import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+ import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
++import { recordContactLead } from '../utils/contactLeads.js'
+ import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
+ 
+ function DrugProfile() {
+@@ -441,6 +442,14 @@ function DrugProfile() {
+                   const wa = waLinkFor(p)
+                   const call = telLink(sellerPhone(p))
+                   if (!wa && !call) return null
++                  // Record the lead intent before the deep link takes the
++                  // viewer out of the app (fire-and-forget, throttled).
++                  const lead = (channel) => recordContactLead({
++                    businessId: p.business_id,
++                    productId: p.id,
++                    productName: p.name,
++                    channel,
++                  })
+                   return (
+                     <div style={{ display: 'flex', gap: 8 }}>
+                       {wa && (
+@@ -448,6 +457,7 @@ function DrugProfile() {
+                           href={wa}
+                           target="_blank"
+                           rel="noreferrer"
++                          onClick={() => lead('whatsapp')}
+                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
+                         >
+                           <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+@@ -456,6 +466,7 @@ function DrugProfile() {
+                       {call && (
+                         <a
+                           href={call}
++                          onClick={() => lead('call')}
+                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
+                         >
+                           <Phone size={16} aria-hidden="true" /> Call
+diff --git a/apps/carefind/src/modules/healthcare-discovery/Search.jsx b/apps/carefind/src/modules/healthcare-discovery/Search.jsx
+index 6232a0e..40ce3ab 100644
+--- a/apps/carefind/src/modules/healthcare-discovery/Search.jsx
++++ b/apps/carefind/src/modules/healthcare-discovery/Search.jsx
+@@ -14,6 +14,7 @@ import AppShell from '../../components/layout/AppShell.jsx'
+ import BottomNav from '../../components/BottomNav.jsx'
+ import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+ import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
++import { recordContactLead } from '../utils/contactLeads.js'
+ import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
+ 
+ // Nigerian states offered as autocomplete suggestions. The location filter
+@@ -470,12 +471,12 @@ const distanceMeters = (p, u) => {
+               {(waLink || callLink) && (
+                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                   {waLink && (
+-                    <a href={waLink} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
++                    <a href={waLink} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'whatsapp' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                       <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                     </a>
+                   )}
+                   {callLink && (
+-                    <a href={callLink} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
++                    <a href={callLink} onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'call' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                       <Phone size={16} aria-hidden="true" /> Call
+                     </a>
+                   )}
+@@ -516,12 +517,12 @@ const distanceMeters = (p, u) => {
+             {(bizWa || bizCall) && (
+               <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                 {bizWa && (
+-                  <a href={bizWa} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
++                  <a href={bizWa} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: b.id, channel: 'whatsapp' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                     <MessageCircle size={16} aria-hidden="true" /> WhatsApp
+                   </a>
+                 )}
+                 {bizCall && (
+-                  <a href={bizCall} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
++                  <a href={bizCall} onClick={() => recordContactLead({ businessId: b.id, channel: 'call' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
+                     <Phone size={16} aria-hidden="true" /> Call
+                   </a>
+                 )}
+diff --git a/apps/carefind/src/modules/utils/contactLeads.js b/apps/carefind/src/modules/utils/contactLeads.js
+new file mode 100644
+index 0000000..17d3ec2
+--- /dev/null
++++ b/apps/carefind/src/modules/utils/contactLeads.js
+@@ -0,0 +1,38 @@
++// Fire-and-forget contact-lead recording (issue #4: CareFind ΓåÆ CareHub loop).
++//
++// When a viewer taps WhatsApp/Call on a listing, the tap itself is the lead ΓÇö
++// but the WhatsApp deep link takes the viewer out of the app and the intent
++// evaporates. This helper records that intent into `contact_leads` so the
++// business owner can be told about it in CareHub.
++//
++// Contract:
++//   - NEVER blocks, throws, or surfaces UI. The anchor's default navigation
++//     (WhatsApp / tel) must proceed no matter what happens here.
++//   - Throttled per (business, channel, product) in sessionStorage: one viewer
++//     tapping around must not flood the owner's notification feed. The throttle
++//     lives for the tab session ΓÇö a return visit tomorrow is a fresh lead.
++import { supabase } from '../../config/supabaseClient'
++
++export function recordContactLead({ businessId, productId, productName, channel }) {
++  try {
++    if (!businessId || (channel !== 'whatsapp' && channel !== 'call')) return
++    const key = 'carehub_lead_' + businessId + '_' + channel + '_' + (productId || 'biz')
++    if (sessionStorage.getItem(key)) return
++    sessionStorage.setItem(key, '1')
++
++    supabase.auth.getSession()
++      .then(({ data }) => {
++        const viewerId = data?.session?.user?.id || null
++        return supabase.from('contact_leads').insert({
++          business_id: businessId,
++          product_id: productId || null,
++          product_name: productName || null,
++          channel,
++          viewer_id: viewerId,
++        })
++      })
++      .then(() => {}, () => {})
++  } catch (e) {
++    // Deliberately silent ΓÇö see contract above.
++  }
++}
+diff --git a/apps/carehub/sql/20260821_contact_leads.sql b/apps/carehub/sql/20260821_contact_leads.sql
+new file mode 100644
+index 0000000..f6098ef
+--- /dev/null
++++ b/apps/carehub/sql/20260821_contact_leads.sql
+@@ -0,0 +1,153 @@
++-- ============================================================================
++-- 20260821_contact_leads.sql
++-- Issue #4 (CareFind ΓåÆ CareHub loop), part 1 of 2.
++--
++-- WHAT
++--   1. `contact_leads` ΓÇö a durable record every time a CareFind viewer taps
++--      "WhatsApp" or "Call" on a business/product card. Today that intent
++--      evaporates; with this table it becomes a lead the owner can be told
++--      about and, later, count.
++--
++--   2. Trigger on public.reviews ΓÇö when a customer leaves a review on a
++--      business's CareFind profile, the owner gets a staff_notifications row
++--      (kind 'review_created'). This mirrors what notify() writes from the
++--      app side: is_owner = true, staff_id = NULL, scoped to business_id.
++--      businesses.owner is a display name (text), not a user id, so "the
++--      owner" in notification terms IS the is_owner row ΓÇö same convention as
++--      every other owner notification in the system.
++--
++-- SECURITY MODEL (house pattern from sql/20260802_roles_rls.sql)
++--   - INSERT: anon + authenticated may record leads. The button is public;
++--      requiring login would kill the lead. WITH CHECK (true) only.
++--   - SELECT: tenant-scoped via current_business_ids() OR is_platform_admin().
++--   - No UPDATE/DELETE policies: leads are append-only evidence.
++--   - The trigger function is SECURITY DEFINER so an anonymous review insert
++--      can still write the owner notification (staff_notifications RLS only
++--      allows tenant members to write).
++--
++-- IDEMPOTENT: safe to re-run.
++-- ============================================================================
++
++CREATE TABLE IF NOT EXISTS public.contact_leads (
++  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  business_id  uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
++  product_id   uuid,
++  product_name text,
++  channel      text NOT NULL CHECK (channel IN ('whatsapp', 'call')),
++  viewer_id    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
++  created_at   timestamptz NOT NULL DEFAULT now()
++);
++
++ALTER TABLE public.contact_leads ENABLE ROW LEVEL SECURITY;
++
++DROP POLICY IF EXISTS "anyone can record a contact lead" ON public.contact_leads;
++CREATE POLICY "anyone can record a contact lead"
++  ON public.contact_leads FOR INSERT
++  TO anon, authenticated
++  WITH CHECK (true);
++
++DROP POLICY IF EXISTS "tenant can read own contact leads" ON public.contact_leads;
++CREATE POLICY "tenant can read own contact leads"
++  ON public.contact_leads FOR SELECT
++  USING (
++    business_id IN (SELECT public.current_business_ids())
++    OR public.is_platform_admin()
++  );
++
++CREATE INDEX IF NOT EXISTS idx_contact_leads_business
++  ON public.contact_leads (business_id, created_at DESC);
++
++-- ---------------------------------------------------------------------------
++-- Review ΓåÆ owner notification trigger
++-- ---------------------------------------------------------------------------
++
++CREATE OR REPLACE FUNCTION public.notify_owner_on_review()
++RETURNS trigger
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = public
++AS $$
++BEGIN
++  INSERT INTO public.staff_notifications
++    (business_id, staff_id, is_owner, kind, title, body, link)
++  VALUES (
++    NEW.business_id,
++    NULL,
++    true,
++    'review_created',
++    'New ' || NEW.rating || '-star review',
++    COALESCE(NULLIF(LEFT(NEW.comment, 120), ''),
++             'A customer reviewed your business on CareFind.'),
++    '/dashboard/carefind'
++  );
++  RETURN NEW;
++END;
++$$;
++
++DROP TRIGGER IF EXISTS trg_notify_owner_on_review ON public.reviews;
++CREATE TRIGGER trg_notify_owner_on_review
++  AFTER INSERT ON public.reviews
++  FOR EACH ROW EXECUTE FUNCTION public.notify_owner_on_review();
++
++-- Trigger-only function: nobody should call it over PostgREST. Triggers do
++-- not check EXECUTE, so this only closes the RPC surface (advisor lint 0028).
++REVOKE EXECUTE ON FUNCTION public.notify_owner_on_review()
++  FROM anon, authenticated, public;
++
++-- ---------------------------------------------------------------------------
++-- Contact-lead ΓåÆ owner notification trigger
++--
++-- The whole point of recording a lead (issue #4 addendum): the moment a
++-- viewer taps WhatsApp/Call, the owner hears about it in CareHub. Same
++-- definer shape as the review trigger ΓÇö an anonymous insert must still be
++-- able to write the owner's staff_notifications row.
++-- ---------------------------------------------------------------------------
++
++CREATE OR REPLACE FUNCTION public.notify_business_contact_lead()
++RETURNS trigger
++LANGUAGE plpgsql
++SECURITY DEFINER
++SET search_path = public
++AS $$
++DECLARE
++  viewer_name text;
++  subject     text;
++BEGIN
++  SELECT COALESCE(
++           NULLIF(au.raw_user_meta_data->>'full_name', ''),
++           NULLIF(au.raw_user_meta_data->>'name', ''),
++           NULLIF(au.email, ''),
++           'Someone'
++         )
++    INTO viewer_name
++    FROM auth.users au
++   WHERE au.id = NEW.viewer_id;
++
++  viewer_name := COALESCE(viewer_name, 'Someone');
++  subject     := COALESCE(NULLIF(NEW.product_name, ''), 'your business');
++
++  INSERT INTO public.staff_notifications
++    (business_id, staff_id, is_owner, kind, title, body, link)
++  VALUES (
++    NEW.business_id,
++    NULL,
++    true,
++    'contact_lead',
++    'New ' || CASE NEW.channel WHEN 'whatsapp' THEN 'WhatsApp' ELSE 'Call' END || ' lead',
++    viewer_name || ' found ' || subject || ' on your CareFind profile and contacted you via '
++      || CASE NEW.channel WHEN 'whatsapp' THEN 'WhatsApp' ELSE 'Call' END
++      || ' ΓÇö please follow up.',
++    '/dashboard/carefind'
++  );
++  RETURN NEW;
++END;
++$$;
++
++DROP TRIGGER IF EXISTS trg_notify_business_contact_lead ON public.contact_leads;
++CREATE TRIGGER trg_notify_business_contact_lead
++  AFTER INSERT ON public.contact_leads
++  FOR EACH ROW EXECUTE FUNCTION public.notify_business_contact_lead();
++
++-- Trigger-only function: close the RPC surface (advisor lint 0028).
++REVOKE EXECUTE ON FUNCTION public.notify_business_contact_lead()
++  FROM anon, authenticated, public;
+diff --git a/apps/carehub/sql/20260821_field_activity_place_of_visit.sql b/apps/carehub/sql/20260821_field_activity_place_of_visit.sql
+new file mode 100644
+index 0000000..74a5ddc
+--- /dev/null
++++ b/apps/carehub/sql/20260821_field_activity_place_of_visit.sql
+@@ -0,0 +1,19 @@
++-- Issue #8 (field report, 2026-08-21): reps must record WHERE they visited,
++-- not just that they logged something. Three nullable additions to
++-- field_activities:
++--
++--   place_of_visit  text     ΓÇö free-text place name ("Lagos University
++--                              Teaching Hospital"), typed or picked from a
++--                              geocoder suggestion
++--   place_coords    jsonb    ΓÇö { lat, lng } of the resolved place, for the
++--                              distance check against the row's GPS lat/lng
++--   place_verified  boolean  ΓÇö did the resolved place sit within tolerance of
++--                              the captured GPS? Computed at log time; kept on
++--                              the row so the feed never re-derives it.
++--
++-- Nullable / defaulted throughout: existing rows keep their meaning and old
++-- app versions keep writing fine.
++ALTER TABLE public.field_activities
++  ADD COLUMN IF NOT EXISTS place_of_visit text,
++  ADD COLUMN IF NOT EXISTS place_coords jsonb,
++  ADD COLUMN IF NOT EXISTS place_verified boolean NOT NULL DEFAULT false;
+diff --git a/apps/carehub/src/components/layout/NotificationBell.jsx b/apps/carehub/src/components/layout/NotificationBell.jsx
+index 8d4c2bd..69d2cac 100644
+--- a/apps/carehub/src/components/layout/NotificationBell.jsx
++++ b/apps/carehub/src/components/layout/NotificationBell.jsx
+@@ -1,8 +1,9 @@
+-import { useState, useEffect } from 'react'
++import { useState, useEffect, useMemo } from 'react'
+ import { useNavigate } from 'react-router-dom'
+ import { Bell } from 'lucide-react'
+ import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../../services/supabase'
+ import { watchTable } from '../../lib/realtime'
++import { categoryForKind, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
+ import { theme } from '../../styles/theme'
+ import { useToast, Toast } from '../ui'
+ 
+@@ -28,6 +29,7 @@ export default function NotificationBell({ brand }) {
+ 
+   const [items, setItems] = useState([])
+   const [open, setOpen] = useState(false)
++  const [tab, setTab] = useState('all')
+   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
+ 
+   useEffect(function () { load() }, [brand?.id])
+@@ -58,20 +60,41 @@ export default function NotificationBell({ brand }) {
+ 
+   const unread = items.filter(function (n) { return !n.read_at })
+ 
++  // Per-tab counts. 'all' plus one tab per category; unknown kinds count
++  // under General (categoryForKind's fallback), never into a wrong tab.
++  const tabCounts = useMemo(function () {
++    const counts = { all: unread.length }
++    for (const c of NOTIFICATION_CATEGORIES) counts[c] = 0
++    for (const n of unread) counts[categoryForKind(n.kind)]++
++    return counts
++  }, [items])
++
++  const visibleItems = useMemo(function () {
++    if (tab === 'all') return items
++    return items.filter(function (n) { return categoryForKind(n.kind) === tab })
++  }, [items, tab])
++
+   async function openItem(n) {
+-    try {
+-      if (!n.read_at) {
++    if (!n.read_at) {
++      // Optimistic update, but reverted if the PATCH fails ΓÇö silently
++      // swallowing the error left rows marked read in the UI that were still
++      // unread on the server, so the badge "came back" on next load.
++      setItems(function (prev) {
++        return prev.map(function (x) {
++          if (x.id !== n.id) return x
++          return { ...x, read_at: new Date().toISOString() }
++        })
++      })
++      try {
+         await markNotificationRead(n.id)
++      } catch (e) {
++        console.error('Mark-as-read failed:', e)
+         setItems(function (prev) {
+-          return prev.map(function (x) {
+-            if (x.id !== n.id) return x
+-            const copy = { ...x }
+-            copy.read_at = new Date().toISOString()
+-            return copy
+-          })
++          return prev.map(function (x) { return x.id === n.id ? { ...x, read_at: n.read_at } : x })
+         })
++        showToast('Could not mark as read. Please try again.', { type: 'error' })
+       }
+-    } catch (e) {}
++    }
+     setOpen(false)
+     if (n.link) navigate('/dashboard/' + n.link)
+   }
+@@ -82,12 +105,11 @@ export default function NotificationBell({ brand }) {
+       setItems(function (prev) {
+         const stamp = new Date().toISOString()
+         return prev.map(function (x) {
+-          const copy = { ...x }
+-          if (!copy.read_at) copy.read_at = stamp
+-          return copy
++          return x.read_at ? x : { ...x, read_at: stamp }
+         })
+       })
+     } catch (e) {
++      // Nothing was optimistically changed here, so only the error surfaces.
+       showToast('Could not mark all as read: ' + e.message, { type: 'error' })
+     }
+   }
+@@ -133,17 +155,43 @@ export default function NotificationBell({ brand }) {
+               </button>
+             )}
+ 
++            {/* Category tabs ΓÇö per-tab unread counts so a pile-up in one area
++                (e.g. expiry alerts) cannot bury the others. */}
++            <div role='tablist' aria-label='Notification categories' style={{ display: 'flex', gap: '6px', padding: '10px 18px', borderBottom: `1px solid ${border}`, overflowX: 'auto', flexShrink: 0 }}>
++              {[['all', 'All']].concat(NOTIFICATION_CATEGORIES.map(function (c) {
++                const labels = { appointments: 'Appointments', inventory: 'Inventory & Expiry', social: 'CareFind Social', general: 'General' }
++                return [c, labels[c]]
++              })).map(function (t) {
++                const on = tab === t[0]
++                const count = tabCounts[t[0]] || 0
++                return (
++                  <button key={t[0]} role='tab' aria-selected={on} onClick={function () { setTab(t[0]) }}
++                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: '700', padding: '6px 11px', borderRadius: '20px', cursor: 'pointer',
++                      border: `1px solid ${on ? tealDeep : border}`,
++                      background: on ? tealDeep : 'white',
++                      color: on ? 'white' : gray600 }}>
++                    {t[1]}
++                    {count > 0 && (
++                      <span style={{ background: on ? 'white' : danger, color: on ? tealDeep : 'white', fontSize: '9.5px', fontWeight: '900', minWidth: '16px', height: '16px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
++                        {count > 99 ? '99+' : count}
++                      </span>
++                    )}
++                  </button>
++                )
++              })}
++            </div>
++
+             <div style={{ flex: 1, overflowY: 'auto' }}>
+-              {items.length === 0 && (
++              {visibleItems.length === 0 && (
+                 <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+-                  <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>Nothing yet</div>
++                  <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{tab === 'all' ? 'Nothing yet' : 'Nothing here yet'}</div>
+                   <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>
+                     You will be told here when an order needs you, or someone sends you correspondence.
+                   </div>
+                 </div>
+               )}
+ 
+-              {items.map(function (n) {
++              {visibleItems.map(function (n) {
+                 const isNew = !n.read_at
+                 return (
+                   <button key={n.id} onClick={function () { openItem(n) }}
+diff --git a/apps/carehub/src/components/layout/__tests__/NotificationBell.test.jsx b/apps/carehub/src/components/layout/__tests__/NotificationBell.test.jsx
+new file mode 100644
+index 0000000..ebc33f4
+--- /dev/null
++++ b/apps/carehub/src/components/layout/__tests__/NotificationBell.test.jsx
+@@ -0,0 +1,102 @@
++∩╗┐import React from 'react'
++import { createRoot } from 'react-dom/client'
++import { act } from 'react-dom/test-utils'
++import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
++import NotificationBell from '../NotificationBell'
++import { getMyNotifications, markNotificationRead } from '../../../services/supabase'
++
++// Issue #4: the bell gained category tabs and an honest mark-as-read flow.
++// These tests pin the two behaviors the field report hinged on: tapping an
++// item marks it read (badge decrements, server PATCH issued) and a FAILED
++// patch reverts the optimistic state instead of silently losing the unread.
++
++vi.mock('../../../services/supabase', () => ({
++  getMyNotifications: vi.fn(),
++  markNotificationRead: vi.fn(),
++  markAllNotificationsRead: vi.fn(),
++}))
++vi.mock('../../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}) }))
++const navigate = vi.fn()
++vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
++
++const NOW = new Date().toISOString()
++const ROWS = [
++  { id: 'n1', kind: 'low_stock', title: 'Low stock alert', body: 'Paracetamol is running low', link: 'inventory', read_at: null, created_at: NOW, staff_id: 'staff-1' },
++  { id: 'n2', kind: 'booking_created', title: 'New booking', body: 'Chinedu booked a consultation', link: 'appointments', read_at: null, created_at: NOW, staff_id: 'staff-1' },
++]
++
++describe('NotificationBell', () => {
++  let host
++  let root
++
++  beforeEach(() => {
++    localStorage.setItem('carehub_auth', JSON.stringify({ staff: { id: 'staff-1' } }))
++    getMyNotifications.mockReset()
++    getMyNotifications.mockResolvedValue(ROWS.map(r => ({ ...r })))
++    markNotificationRead.mockReset()
++    markNotificationRead.mockResolvedValue({})
++    navigate.mockReset()
++    host = document.createElement('div')
++    document.body.appendChild(host)
++    root = createRoot(host)
++  })
++
++  afterEach(async () => {
++    await act(async () => { root.unmount() })
++    host.remove()
++    localStorage.removeItem('carehub_auth')
++  })
++
++  async function renderBell() {
++    await act(async () => { root.render(<NotificationBell brand={{ id: 'b1' }} />) })
++    await act(async () => {})
++  }
++
++  const bellButton = () => host.querySelector('button')
++  const buttonByText = (text) => [...host.querySelectorAll('button')].find(b => b.textContent.includes(text))
++
++  it('shows the unread badge and decrements it when an item is tapped', async () => {
++    await renderBell()
++    expect(bellButton().textContent).toContain('2')
++
++    await act(async () => { bellButton().click() })
++    const item = buttonByText('Low stock alert')
++    expect(item).toBeDefined()
++
++    await act(async () => { item.click() })
++    await act(async () => {})
++    expect(markNotificationRead).toHaveBeenCalledWith('n1')
++    expect(navigate).toHaveBeenCalledWith('/dashboard/inventory')
++    // Panel closed after tap; badge reflects one remaining unread.
++    expect(bellButton().textContent).toContain('1')
++    expect(bellButton().textContent).not.toContain('2')
++  })
++
++  it('reverts the optimistic read state when the PATCH fails', async () => {
++    markNotificationRead.mockRejectedValueOnce(new Error('network down'))
++    await renderBell()
++
++    await act(async () => { bellButton().click() })
++    await act(async () => { buttonByText('New booking').click() })
++    await act(async () => {})
++
++    // n2 went optimistically read, then came back: nothing changed net ΓÇö
++    // both items are unread again and the failure is surfaced.
++    expect(bellButton().textContent).toContain('2')
++    expect(host.textContent).toContain('Could not mark as read')
++  })
++
++  it('counts per-category unread badges and filters the list by tab', async () => {
++    await renderBell()
++    await act(async () => { bellButton().click() })
++
++    const inventoryTab = buttonByText('Inventory & Expiry')
++    const appointmentsTab = buttonByText('Appointments')
++    expect(inventoryTab.textContent).toContain('1')
++    expect(appointmentsTab.textContent).toContain('1')
++
++    await act(async () => { inventoryTab.click() })
++    expect(buttonByText('Low stock alert')).toBeDefined()
++    expect(buttonByText('New booking')).toBeUndefined()
++  })
++})
+diff --git a/apps/carehub/src/lib/geo.js b/apps/carehub/src/lib/geo.js
+new file mode 100644
+index 0000000..12ef83e
+--- /dev/null
++++ b/apps/carehub/src/lib/geo.js
+@@ -0,0 +1,36 @@
++// Pure geospatial helpers for the field-activity Place of Visit check.
++// No dependencies, no I/O ΓÇö the distance math is unit-tested in geo.test.js.
++
++const EARTH_RADIUS_M = 6371000
++const toRad = (d) => (d * Math.PI) / 180
++
++/**
++ * Great-circle distance between two { lat, lng } points, in metres.
++ * Returns null when either point is missing or non-numeric ΓÇö callers must
++ * treat "cannot compute" as NOT verified rather than crashing the log flow.
++ */
++export function haversineMeters(a, b) {
++  if (!a || !b) return null
++  const lat1 = Number(a.lat)
++  const lon1 = Number(a.lng)
++  const lat2 = Number(b.lat)
++  const lon2 = Number(b.lng)
++  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return null
++
++  const dLat = toRad(lat2 - lat1)
++  const dLon = toRad(lon2 - lon1)
++  const s =
++    Math.sin(dLat / 2) ** 2 +
++    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
++  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(s))
++}
++
++/**
++ * Does the GPS fix sit within `radiusM` of the resolved place? The default
++ * tolerance absorbs consumer-GPS drift (~20ΓÇô100 m urban) without waving
++ * through a rep logging from across town.
++ */
++export function verifyPlaceMatch(placeCoords, gpsCoords, radiusM = 500) {
++  const d = haversineMeters(placeCoords, gpsCoords)
++  return d != null && d <= radiusM
++}
+diff --git a/apps/carehub/src/lib/geo.test.js b/apps/carehub/src/lib/geo.test.js
+new file mode 100644
+index 0000000..a0db6c5
+--- /dev/null
++++ b/apps/carehub/src/lib/geo.test.js
+@@ -0,0 +1,53 @@
++import { describe, it, expect } from 'vitest'
++import { haversineMeters, verifyPlaceMatch } from './geo.js'
++
++describe('haversineMeters', () => {
++  it('measures a known short distance accurately', () => {
++    // One degree of longitude at the equator Γëê 111,195 m.
++    const d = haversineMeters({ lat: 0, lng: 0 }, { lat: 0, lng: 1 })
++    expect(d).toBeGreaterThan(111000)
++    expect(d).toBeLessThan(111400)
++  })
++
++  it('is zero for identical points and symmetric', () => {
++    expect(haversineMeters({ lat: 6.5, lng: 3.3 }, { lat: 6.5, lng: 3.3 })).toBe(0)
++    const ab = haversineMeters({ lat: 6.5, lng: 3.3 }, { lat: 6.6, lng: 3.4 })
++    const ba = haversineMeters({ lat: 6.6, lng: 3.4 }, { lat: 6.5, lng: 3.3 })
++    expect(ab).toBeCloseTo(ba, 6)
++  })
++
++  it('returns null for missing or non-numeric coordinates', () => {
++    expect(haversineMeters(null, { lat: 0, lng: 0 })).toBeNull()
++    expect(haversineMeters({ lat: 0, lng: 0 }, null)).toBeNull()
++    expect(haversineMeters({ lat: NaN, lng: 0 }, { lat: 0, lng: 0 })).toBeNull()
++    expect(haversineMeters({ lat: undefined, lng: 0 }, { lat: 0, lng: 0 })).toBeNull()
++  })
++})
++
++describe('verifyPlaceMatch', () => {
++  // Ikeja City Mall Γåö Ikeja General Hospital is roughly 2 km apart; the
++  // airport and the mall are ~4 km apart. Points below are synthetic but in
++  // the same ballpark of separation.
++  const place = { lat: 6.5833, lng: 3.3333 }
++  const nearbyGps = { lat: 6.5837, lng: 3.3339 } // ~80 m away
++  const farGps = { lat: 6.6018, lng: 3.3517 }   // ~2.6 km away
++
++  it('accepts a GPS fix within the default 500 m tolerance', () => {
++    expect(verifyPlaceMatch(place, nearbyGps)).toBe(true)
++  })
++
++  it('rejects a GPS fix beyond tolerance', () => {
++    expect(verifyPlaceMatch(place, farGps)).toBe(false)
++  })
++
++  it('honours a custom radius', () => {
++    expect(verifyPlaceMatch(place, farGps, 5000)).toBe(true)
++    expect(verifyPlaceMatch(place, farGps, 100)).toBe(false)
++  })
++
++  it('never verifies against unusable coordinates', () => {
++    expect(verifyPlaceMatch(null, nearbyGps)).toBe(false)
++    expect(verifyPlaceMatch(place, null)).toBe(false)
++    expect(verifyPlaceMatch(place, { lat: NaN, lng: 3 })).toBe(false)
++  })
++})
+diff --git a/apps/carehub/src/lib/notificationCategories.js b/apps/carehub/src/lib/notificationCategories.js
+new file mode 100644
+index 0000000..0ad741e
+--- /dev/null
++++ b/apps/carehub/src/lib/notificationCategories.js
+@@ -0,0 +1,28 @@
++// Notification tab categories (issue #4). Pure mapping so the bell's tabs and
++// any future digest share one source of truth for which kind lands where.
++
++export const NOTIFICATION_CATEGORIES = ['appointments', 'inventory', 'social', 'general']
++
++const KIND_TO_CATEGORY = {
++  // Appointments
++  booking_created: 'appointments',
++  booking_confirmed: 'appointments',
++  booking_paid: 'appointments',
++  // Inventory & expiry
++  product_expiring_soon: 'inventory',
++  product_expired: 'inventory',
++  low_stock: 'inventory',
++  out_of_stock: 'inventory',
++  // CareFind social
++  contact_lead: 'social',
++  review_created: 'social',
++}
++
++/**
++ * Maps a staff_notifications.kind to its tab category. Unknown kinds ΓÇö
++ * including anything added server-side later ΓÇö fall back to 'general' so a
++ * new kind can never strand its notifications outside every tab.
++ */
++export function categoryForKind(kind) {
++  return KIND_TO_CATEGORY[kind] || 'general'
++}
+diff --git a/apps/carehub/src/lib/notificationCategories.test.js b/apps/carehub/src/lib/notificationCategories.test.js
+new file mode 100644
+index 0000000..7e67269
+--- /dev/null
++++ b/apps/carehub/src/lib/notificationCategories.test.js
+@@ -0,0 +1,38 @@
++import { describe, it, expect } from 'vitest'
++import { categoryForKind, NOTIFICATION_CATEGORIES } from './notificationCategories.js'
++
++describe('categoryForKind', () => {
++  it('routes appointment kinds to appointments', () => {
++    expect(categoryForKind('booking_confirmed')).toBe('appointments')
++    expect(categoryForKind('booking_created')).toBe('appointments')
++    expect(categoryForKind('booking_paid')).toBe('appointments')
++  })
++
++  it('routes stock and expiry kinds to inventory', () => {
++    for (const kind of ['product_expiring_soon', 'product_expired', 'low_stock', 'out_of_stock']) {
++      expect(categoryForKind(kind)).toBe('inventory')
++    }
++  })
++
++  it('routes CareFind social kinds to social', () => {
++    expect(categoryForKind('contact_lead')).toBe('social')
++    expect(categoryForKind('review_created')).toBe('social')
++  })
++
++  it('keeps operational kinds in general', () => {
++    for (const kind of ['activity', 'activity_comment', 'order_approval', 'order_copy', 'order_update', 'message']) {
++      expect(categoryForKind(kind)).toBe('general')
++    }
++  })
++
++  it('falls back to general for unknown and missing kinds', () => {
++    expect(categoryForKind('something_new')).toBe('general')
++    expect(categoryForKind('')).toBe('general')
++    expect(categoryForKind(null)).toBe('general')
++    expect(categoryForKind(undefined)).toBe('general')
++  })
++
++  it('exposes exactly the four tab categories', () => {
++    expect(NOTIFICATION_CATEGORIES).toEqual(['appointments', 'inventory', 'social', 'general'])
++  })
++})
+diff --git a/apps/carehub/src/lib/velocity.js b/apps/carehub/src/lib/velocity.js
+new file mode 100644
+index 0000000..a1348a5
+--- /dev/null
++++ b/apps/carehub/src/lib/velocity.js
+@@ -0,0 +1,71 @@
++// Sales-velocity classification for the owner's daily digest (issue #4).
++// Pure functions ΓÇö no I/O, no React ΓÇö unit-tested in velocity.test.js.
++//
++// `sales.items` is a jsonb column the app writes with JSON.stringify(items),
++// so Postgres stores a scalar JSON *string*, not an array (measured 2026-08-04:
++// 51 of 54 rows were strings). Line items carry `id` OR `product_id`, never
++// both, and `qty` is an integer string. Both shapes are handled here ΓÇö the
++// same rules the sale_stock_movement trigger enforces server-side.
++
++/**
++ * Normalises a sales row's items value to an array of line items.
++ * Returns [] for anything unparseable rather than throwing.
++ */
++export function parseSaleItems(items) {
++  if (!items) return []
++  let arr = items
++  if (typeof items === 'string') {
++    try { arr = JSON.parse(items) } catch (e) { return [] }
++    // Double-encoded: the string parses to a JSON string holding the array.
++    if (typeof arr === 'string') {
++      try { arr = JSON.parse(arr) } catch (e) { return [] }
++    }
++  }
++  if (!Array.isArray(arr)) return []
++  return arr.map(function (it) {
++    const qty = parseInt(it && it.qty, 10)
++    return { ...it, qty: Number.isFinite(qty) ? qty : 0 }
++  })
++}
++
++const DAY_MS = 86400000
++
++/**
++ * Classifies stocked products by units sold over the trailing window:
++ *   fast   ΓÇö 10+ units
++ *   medium ΓÇö 1ΓÇô9 units
++ *   slow   ΓÇö 0 units (stocked but not selling)
++ * Out-of-stock and service rows are never classified. Returns
++ * { fast: [{id,name,units}], medium: [...], slow: [...] } sorted by units.
++ */
++export function classifySalesVelocity(products, sales, { days = 30 } = {}) {
++  const cutoff = Date.now() - days * DAY_MS
++  const unitsById = {}
++
++  for (const sale of sales || []) {
++    const t = new Date(sale.created_at || 0).getTime()
++    if (!Number.isFinite(t) || t < cutoff) continue
++    for (const item of parseSaleItems(sale.items)) {
++      const id = item.id || item.product_id
++      if (!id) continue
++      unitsById[id] = (unitsById[id] || 0) + item.qty
++    }
++  }
++
++  const groups = { fast: [], medium: [], slow: [] }
++  for (const prod of products || []) {
++    const cat = prod.cat || prod.category || ''
++    if (cat === 'Services') continue
++    if (!(prod.stock > 0)) continue
++    const units = unitsById[prod.id] || 0
++    const entry = { id: prod.id, name: prod.name, units: units }
++    if (units >= 10) groups.fast.push(entry)
++    else if (units >= 1) groups.medium.push(entry)
++    else groups.slow.push(entry)
++  }
++
++  const byUnits = (a, b) => b.units - a.units
++  groups.fast.sort(byUnits)
++  groups.medium.sort(byUnits)
++  return groups
++}
+diff --git a/apps/carehub/src/lib/velocity.test.js b/apps/carehub/src/lib/velocity.test.js
+new file mode 100644
+index 0000000..ffc68e8
+--- /dev/null
++++ b/apps/carehub/src/lib/velocity.test.js
+@@ -0,0 +1,89 @@
++import { describe, it, expect } from 'vitest'
++import { parseSaleItems, classifySalesVelocity } from './velocity.js'
++
++const p = (id, name, stock) => ({ id, name, stock, category: 'Medicines' })
++// A sale whose items jsonb is a double-encoded STRING ΓÇö the shape 51 of 54
++// real rows had when measured (sql/20260804_sale_stock_movement.sql L75-84).
++const stringSale = (daysAgo, items) => ({
++  created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
++  items: JSON.stringify(JSON.stringify(items)),
++})
++const arraySale = (daysAgo, items) => ({
++  created_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
++  items,
++})
++
++describe('parseSaleItems', () => {
++  it('unwraps double-encoded jsonb strings', () => {
++    const items = parseSaleItems(JSON.stringify([{ id: 'p1', qty: '3' }]))
++    expect(items).toEqual([{ id: 'p1', qty: 3 }])
++  })
++
++  it('passes real arrays through', () => {
++    expect(parseSaleItems([{ product_id: 'p2', qty: 1 }])).toEqual([{ product_id: 'p2', qty: 1 }])
++  })
++
++  it('returns [] for nullish and garbage input instead of throwing', () => {
++    expect(parseSaleItems(null)).toEqual([])
++    expect(parseSaleItems(undefined)).toEqual([])
++    expect(parseSaleItems('not json')).toEqual([])
++    expect(parseSaleItems({ nested: 'object' })).toEqual([])
++  })
++
++  it('coerces string quantities and defaults missing ones to zero', () => {
++    expect(parseSaleItems('[{"id":"p1","qty":"7"},{"id":"p2"}]')[0].qty).toBe(7)
++    expect(parseSaleItems('[{"id":"p2"}]')[0].qty).toBe(0)
++  })
++})
++
++describe('classifySalesVelocity', () => {
++  const products = [
++    p('fast', 'Fast Mover', 50),
++    p('mid', 'Steady Item', 20),
++    p('slow', 'Dust Collector', 10),
++    p('out', 'Out of Stock', 0),
++    p('svc', 'Consultation', 999),
++  ]
++  products[4].category = 'Services'
++  const sales = [
++    arraySale(1, [{ id: 'fast', qty: 6 }]),
++    stringSale(3, [{ id: 'fast', qty: '5' }]), // 11 total ΓåÆ fast
++    arraySale(5, [{ id: 'mid', qty: 2 }]),
++    arraySale(10, [{ id: 'slow', qty: 0 }]), // sold nothing
++  ]
++
++  it('classifies stocked products by units sold in the window', () => {
++    const { fast, medium, slow } = classifySalesVelocity(products, sales, { days: 30 })
++    expect(fast.map(x => x.id)).toEqual(['fast'])
++    expect(fast[0].units).toBe(11)
++    expect(medium.map(x => x.id)).toEqual(['mid'])
++    expect(slow.map(x => x.id)).toEqual(['slow'])
++  })
++
++  it('never classifies out-of-stock or service rows', () => {
++    const all = classifySalesVelocity(products, sales, { days: 30 })
++    const ids = [...all.fast, ...all.medium, ...all.slow].map(x => x.id)
++    expect(ids).not.toContain('out')
++    expect(ids).not.toContain('svc')
++  })
++
++  it('ignores sales older than the window', () => {
++    const old = [arraySale(90, [{ id: 'slow', qty: 99 }])]
++    const { slow, fast } = classifySalesVelocity(products, old, { days: 30 })
++    expect(fast).toHaveLength(0)
++    expect(slow.map(x => x.id)).toContain('slow')
++  })
++
++  it('handles line items keyed by product_id as well as id', () => {
++    const salesAlt = [arraySale(2, [{ product_id: 'mid', qty: 9 }])]
++    const { medium } = classifySalesVelocity(products, salesAlt, { days: 30 })
++    expect(medium[0].units).toBe(9)
++  })
++
++  it('returns empty groups when there are no sales at all', () => {
++    const all = classifySalesVelocity(products, [], { days: 30 })
++    expect(all.fast).toHaveLength(0)
++    expect(all.medium).toHaveLength(0)
++    expect(all.slow.map(x => x.id)).toEqual(['fast', 'mid', 'slow'])
++  })
++})
+diff --git a/apps/carehub/src/modules/adr/AdrReportPage.jsx b/apps/carehub/src/modules/adr/AdrReportPage.jsx
+index c25ff73..efec57b 100644
+--- a/apps/carehub/src/modules/adr/AdrReportPage.jsx
++++ b/apps/carehub/src/modules/adr/AdrReportPage.jsx
+@@ -3,7 +3,7 @@ import { ArrowLeft, Plus, Trash2, Download, Camera, X, RefreshCw, CheckCircle, A
+ import { useNavigate } from 'react-router-dom'
+ import { Button, Card, Pill, Input, Select, Textarea, Toggle, useToast, Toast, Loading, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
+ import { adrReportRepository } from './repositories'
+-import { adrValidation } from './validation'
++import { adrValidation, normalizeChildRow } from './validation'
+ import { ADR_FORM } from './formEngine'
+ import { buildPdfHtml, buildE2bXml, openPrintView, downloadTextFile, exportFilename } from './exports'
+ import { draftBackup, buildDraftSnapshot, isStale } from './draftBackup'
+@@ -195,7 +195,9 @@ export default function AdrReportPage({ reportId }) {
+       const hydrated = { ...report, reaction_expected: reactionExpected, new_safety_signal: newSafetySignal, adr_products: products, adr_reactions: reactions }
+       const client = await adrValidation.validateForSubmit(hydrated)
+       if (!client.valid) {
+-        setMissing(client.missing)
++        // Structured items carry a stable id that doubles as a DOM anchor ΓÇö
++        // the banner renders them as jump-to-field buttons.
++        setMissing(client.missingFields || [])
+         showToast('Cannot submit ΓÇö complete the highlighted fields', { type: 'warning' })
+         setSubmitting(false)
+         return
+@@ -208,8 +210,10 @@ export default function AdrReportPage({ reportId }) {
+         showToast(`${terminology.adrLabel} submitted`, { type: 'success' })
+         await load()
+       } else {
++        // The server path returns plain strings with no anchor ids ΓÇö they
++        // render as text items in the same banner.
+         const list = (result && result.missing) || ['Submission could not be completed']
+-        setMissing(Array.isArray(list) ? list : [list])
++        setMissing((Array.isArray(list) ? list : [list]).map(label => ({ label })))
+         showToast('Cannot submit ΓÇö server rejected the report', { type: 'warning' })
+       }
+     } catch (e) {
+@@ -219,6 +223,16 @@ export default function AdrReportPage({ reportId }) {
+     }
+   }
+ 
++  // Banner tap-through: scroll the named field into view and focus it. Items
++  // whose id has no matching anchor (e.g. server-side strings) stay inert.
++  function focusMissingField(id) {
++    const el = document.querySelector(`[data-adr-field="${id}"]`)
++    if (!el) return
++    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
++    const focusable = el.matches('input, select, textarea') ? el : el.querySelector('input, select, textarea')
++    if (focusable) focusable.focus({ preventScroll: true })
++  }
++
+   async function handleArchive() {
+     if (!report) return
+     setArchiving(true)
+@@ -409,9 +423,22 @@ export default function AdrReportPage({ reportId }) {
+ 
+       {missing.length > 0 && (
+         <div role="alert" style={{ marginBottom: 20, padding: '14px 16px', borderRadius: theme.radius.md, background: theme.warningBg, border: `1px solid ${theme.warning}` }}>
+-          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet ΓÇö missing:</div>
++          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 6 }}>Cannot submit yet ΓÇö tap a field to jump to it:</div>
+           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: theme.gray600, lineHeight: 1.7 }}>
+-            {missing.map((m, i) => <li key={i}>{m}</li>)}
++            {missing.map((m, i) => {
++              const label = typeof m === 'string' ? m : m.label
++              // Structured items anchor to a real input; anything without an
++              // id (server-side strings) renders as plain text.
++              return (
++                <li key={m.id || i}>
++                  {m.id ? (
++                    <button onClick={() => focusMissingField(m.id)} style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>
++                      {label}
++                    </button>
++                  ) : label}
++                </li>
++              )
++            })}
+           </ul>
+         </div>
+       )}
+@@ -426,6 +453,7 @@ export default function AdrReportPage({ reportId }) {
+         onRemove={removeProduct}
+         disabled={isLocked}
+         industry={isIndustry}
++        showToast={showToast}
+       />
+ 
+       <ConcomitantSection meds={meds} onAdd={addMed} onRemove={removeMed} disabled={isLocked} />
+@@ -439,6 +467,7 @@ export default function AdrReportPage({ reportId }) {
+         terminology={terminology}
+         reactionExpected={reactionExpected}
+         onExpectedChange={setReactionExpected}
++        showToast={showToast}
+       />
+ 
+       {isIndustry && <IndustrySection report={report} setField={setField} newSafetySignal={newSafetySignal} setNewSafetySignal={setNewSafetySignal} disabled={isLocked} />}
+@@ -554,8 +583,8 @@ function ReporterSection({ report, setField, disabled }) {
+   return (
+     <Section title="Reporter" sub="Who is reporting this event. Name may be blank when the facility confirms anonymity.">
+       <div style={grid}>
+-        <Input label="Name" value={r.reporter_name || ''} onChange={v => setField('reporter_name', v)} placeholder="Reporter name" disabled={disabled} />
+-        <Select label="Qualification" value={r.reporter_qualification || ''} onChange={v => setField('reporter_qualification', v)} options={qualificationOptions()} disabled={disabled} />
++        <Input label="Name" value={r.reporter_name || ''} onChange={v => setField('reporter_name', v)} placeholder="Reporter name" disabled={disabled} data-adr-field="reporter_name" />
++        <Select label="Qualification" value={r.reporter_qualification || ''} onChange={v => setField('reporter_qualification', v)} options={qualificationOptions()} disabled={disabled} data-adr-field="reporter_qualification" />
+         <Input label="Facility" value={r.reporter_facility_name || ''} onChange={v => setField('reporter_facility_name', v)} placeholder="Facility name" disabled={disabled} />
+         <Input label="Phone (Nigeria)" value={r.reporter_phone || ''} onChange={v => setField('reporter_phone', v)} placeholder="+234..." disabled={disabled} />
+         <Input label="Email" type="email" value={r.reporter_email || ''} onChange={v => setField('reporter_email', v)} placeholder="reporter@example.com" disabled={disabled} />
+@@ -566,6 +595,7 @@ function ReporterSection({ report, setField, disabled }) {
+           onChange={v => setField('reporter_consent_followup', v === 'yes' ? true : v === 'no' ? false : null)}
+           options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
+           disabled={disabled}
++          data-adr-field="reporter_consent_followup"
+         />
+         <Select
+           label="Anonymous confirmed by facility"
+@@ -584,11 +614,11 @@ function PatientSection({ report, setField, disabled }) {
+   return (
+     <Section title="Patient" sub="An identifier (initials or internal ID) plus age, DOB or age group. No full name is stored.">
+       <div style={grid}>
+-        <Input label="Identifier (initials or internal ID)" value={r.patient_identifier || ''} onChange={v => setField('patient_identifier', v)} placeholder="J.S. or patient-001" disabled={disabled} />
+-        <Input label="Age" type="number" value={r.patient_age != null ? String(r.patient_age) : ''} onChange={v => setField('patient_age', v === '' ? null : Number(v))} placeholder="e.g. 45" disabled={disabled} />
++        <Input label="Identifier (initials or internal ID)" value={r.patient_identifier || ''} onChange={v => setField('patient_identifier', v)} placeholder="J.S. or patient-001" disabled={disabled} data-adr-field="patient_identifier" />
++        <Input label="Age" type="number" value={r.patient_age != null ? String(r.patient_age) : ''} onChange={v => setField('patient_age', v === '' ? null : Number(v))} placeholder="e.g. 45" disabled={disabled} data-adr-field="patient_age" />
+         <Input label="Date of birth" type="date" value={r.patient_dob || ''} onChange={v => setField('patient_dob', v || null)} disabled={disabled} />
+         <Select label="Age group" value={r.patient_age_group || ''} onChange={v => setField('patient_age_group', v)} options={ageGroupOptions()} disabled={disabled} />
+-        <Select label="Gender" value={r.patient_gender || ''} onChange={v => setField('patient_gender', v)} options={genderOptions()} disabled={disabled} />
++        <Select label="Gender" value={r.patient_gender || ''} onChange={v => setField('patient_gender', v)} options={genderOptions()} disabled={disabled} data-adr-field="patient_gender" />
+         <Input label="Weight (kg)" type="number" value={r.patient_weight_kg != null ? String(r.patient_weight_kg) : ''} onChange={v => setField('patient_weight_kg', v === '' ? null : Number(v))} placeholder="e.g. 70" disabled={disabled} />
+         <div style={{ gridColumn: '1 / -1' }}>
+           <Textarea label="Medical history (relevant)" rows={3} value={r.patient_medical_history || ''} onChange={v => setField('patient_medical_history', v)} placeholder="Allergies, chronic conditions, pregnancy status, relevant comorbiditiesΓÇª" disabled={disabled} />
+@@ -615,7 +645,7 @@ const emptyProduct = () => ({
+ 
+ const ROUTE_OPTIONS = ['Oral', 'Topical', 'IV', 'IM', 'Subcutaneous', 'Inhalation', 'Ophthalmic', 'Other']
+ 
+-function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry }) {
++function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, industry, showToast }) {
+   const [editing, setEditing] = useState(null)
+   const [draft, setDraft] = useState(emptyProduct())
+ 
+@@ -629,9 +659,16 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
+   }
+   async function save() {
+     if (!draft.product_brand_name || !draft.product_brand_name.trim()) return
+-    if (editing === '__new__') await onAdd(draft)
+-    else await onUpdate(editing, draft)
+-    setEditing(null)
++    // Blank date/enum inputs must persist as null ΓÇö the raw '' draft trips the
++    // database CHECK constraints and used to fail silently.
++    const row = normalizeChildRow(draft)
++    try {
++      if (editing === '__new__') await onAdd(row)
++      else await onUpdate(editing, row)
++      setEditing(null)
++    } catch (e) {
++      showToast('Could not save the suspect product ΓÇö check its values and try again', { type: 'error' })
++    }
+   }
+   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
+ 
+@@ -641,36 +678,38 @@ function ProductsSection({ products, onAdd, onUpdate, onRemove, disabled, indust
+       sub="At least one product with a brand name is required before submission."
+       badge={!disabled && <Button variant="ghost" size="sm" onClick={startNew}><Plus size={14} /> Add product</Button>}
+     >
+-      {products.length === 0 && !editing && (
+-        <Empty icon={<AlertTriangle size={20} />} message="No products yet. Add the product(s) suspected of causing the reaction." />
+-      )}
+-
+-      {products.map(p => (
+-        <div key={p.product_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
+-          {editing === p.product_id ? (
+-            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+-          ) : (
+-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+-              <div style={{ minWidth: 0 }}>
+-                <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{p.product_brand_name || 'Unnamed product'}</div>
+-                <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
+-                  {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' ┬╖ ') || 'No details yet'}
++      <div data-adr-field="products_section">
++        {products.length === 0 && !editing && (
++          <Empty icon={<AlertTriangle size={20} />} message="No products yet. Add the product(s) suspected of causing the reaction." />
++        )}
++
++        {products.map(p => (
++          <div key={p.product_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
++            {editing === p.product_id ? (
++              <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
++            ) : (
++              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
++                <div style={{ minWidth: 0 }}>
++                  <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{p.product_brand_name || 'Unnamed product'}</div>
++                  <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
++                    {[p.product_generic_name, p.manufacturer, p.batch_lot_number, p.dose, p.route, p.indication].filter(Boolean).join(' ┬╖ ') || 'No details yet'}
++                  </div>
++                </div>
++                <div style={{ display: 'flex', gap: 6 }}>
++                  {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
++                  {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(p.product_id)}><Trash2 size={13} /></Button>}
+                 </div>
+               </div>
+-              <div style={{ display: 'flex', gap: 6 }}>
+-                {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(p)}>Edit</Button>}
+-                {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(p.product_id)}><Trash2 size={13} /></Button>}
+-              </div>
+-            </div>
+-          )}
+-        </div>
+-      ))}
++            )}
++          </div>
++        ))}
+ 
+-      {editing === '__new__' && (
+-        <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
+-          <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
+-        </div>
+-      )}
++        {editing === '__new__' && (
++          <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
++            <ProductForm draft={draft} set={set} industry={industry} onSave={save} onCancel={() => setEditing(null)} />
++          </div>
++        )}
++      </div>
+     </Section>
+   )
+ }
+@@ -679,7 +718,7 @@ function ProductForm({ draft, set, industry, onSave, onCancel }) {
+   return (
+     <div>
+       <div style={grid}>
+-        <Input label="Brand name *" value={draft.product_brand_name} onChange={v => set('product_brand_name', v)} placeholder="e.g. Ampiclox" required />
++        <Input label="Brand name *" value={draft.product_brand_name} onChange={v => set('product_brand_name', v)} placeholder="e.g. Ampiclox" required data-adr-field="product_brand_name" />
+         <Input label="Generic name" value={draft.product_generic_name} onChange={v => set('product_generic_name', v)} />
+         <Input label="Manufacturer" value={draft.manufacturer} onChange={v => set('manufacturer', v)} />
+         <Input label={industry ? 'Batch / lot number *' : 'Batch / lot number'} value={draft.batch_lot_number} onChange={v => set('batch_lot_number', v)} placeholder="Batch/lot" />
+@@ -752,7 +791,7 @@ const emptyReaction = () => ({
+   rechallenge_result: '',
+ })
+ 
+-function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, terminology, reactionExpected, onExpectedChange }) {
++function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, terminology, reactionExpected, onExpectedChange, showToast }) {
+   const [editing, setEditing] = useState(null)
+   const [draft, setDraft] = useState(emptyReaction())
+ 
+@@ -760,9 +799,16 @@ function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, term
+   function startNew() { setEditing('__new__'); setDraft(emptyReaction()) }
+   async function save() {
+     if (!draft.reaction_description || !draft.reaction_description.trim()) return
+-    if (editing === '__new__') await onAdd(draft)
+-    else await onUpdate(editing, draft)
+-    setEditing(null)
++    // Blank date/enum inputs must persist as null ΓÇö the raw '' draft trips the
++    // database CHECK constraints and used to fail silently.
++    const row = normalizeChildRow(draft)
++    try {
++      if (editing === '__new__') await onAdd(row)
++      else await onUpdate(editing, row)
++      setEditing(null)
++    } catch (e) {
++      showToast('Could not save the reaction ΓÇö check its values and try again', { type: 'error' })
++    }
+   }
+   function set(field, value) { setDraft(prev => ({ ...prev, [field]: value })) }
+ 
+@@ -772,53 +818,55 @@ function ReactionsSection({ reactions, onAdd, onUpdate, onRemove, disabled, term
+       sub="Describe the reaction(s). At least one is required; the six seriousness flags and outcome decide the reporting deadline."
+       badge={!disabled && <Button variant="ghost" size="sm" onClick={startNew}><Plus size={14} /> Add reaction</Button>}
+     >
+-      <div style={{ marginBottom: 16 }}>
+-        <Select
+-          label="Was this expected for the product?"
+-          value={reactionExpected === null ? '' : reactionExpected ? 'expected' : 'unexpected'}
+-          onChange={v => onExpectedChange(v === '' ? null : v === 'expected')}
+-          options={[{ value: 'expected', label: 'Expected' }, { value: 'unexpected', label: 'Unexpected' }]}
+-          disabled={disabled}
+-        />
+-      </div>
+-
+-      {reactions.length === 0 && !editing && (
+-        <Empty icon={<AlertTriangle size={20} />} message={`Add the ${terminology.adrLabel.toLowerCase()} description and seriousness.`} />
+-      )}
++      <div data-adr-field="reactions_section">
++        <div style={{ marginBottom: 16 }}>
++          <Select
++            label="Was this expected for the product?"
++            value={reactionExpected === null ? '' : reactionExpected ? 'expected' : 'unexpected'}
++            onChange={v => onExpectedChange(v === '' ? null : v === 'expected')}
++            options={[{ value: 'expected', label: 'Expected' }, { value: 'unexpected', label: 'Unexpected' }]}
++            disabled={disabled}
++          />
++        </div>
+ 
+-      {reactions.map(r => (
+-        <div key={r.reaction_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
+-          {editing === r.reaction_id ? (
+-            <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
+-          ) : (
+-            <div>
+-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+-                <div style={{ minWidth: 0 }}>
+-                  <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{r.reaction_description}</div>
+-                  <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
+-                    {[r.severity ? REACTION_SEVERITY_LABELS[r.severity] : null, r.outcome ? `Outcome: ${REACTION_OUTCOME_LABELS[r.outcome]}` : null, r.onset_date ? `Onset ${r.onset_date}` : null].filter(Boolean).join(' ┬╖ ')}
++        {reactions.length === 0 && !editing && (
++          <Empty icon={<AlertTriangle size={20} />} message={`Add the ${terminology.adrLabel.toLowerCase()} description and seriousness.`} />
++        )}
++
++        {reactions.map(r => (
++          <div key={r.reaction_id} style={{ borderBottom: `1px solid ${theme.gray100}`, padding: '12px 0' }}>
++            {editing === r.reaction_id ? (
++              <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
++            ) : (
++              <div>
++                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
++                  <div style={{ minWidth: 0 }}>
++                    <div style={{ fontWeight: 800, fontSize: 13.5, color: theme.navy }}>{r.reaction_description}</div>
++                    <div style={{ fontSize: 12, color: theme.textLight, marginTop: 2, lineHeight: 1.6 }}>
++                      {[r.severity ? REACTION_SEVERITY_LABELS[r.severity] : null, r.outcome ? `Outcome: ${REACTION_OUTCOME_LABELS[r.outcome]}` : null, r.onset_date ? `Onset ${r.onset_date}` : null].filter(Boolean).join(' ┬╖ ')}
++                    </div>
++                  </div>
++                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
++                    {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>Edit</Button>}
++                    {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(r.reaction_id)}><Trash2 size={13} /></Button>}
+                   </div>
+                 </div>
+-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+-                  {!disabled && <Button variant="ghost" size="sm" onClick={() => startEdit(r)}>Edit</Button>}
+-                  {!disabled && <Button variant="ghost" size="sm" onClick={() => onRemove(r.reaction_id)}><Trash2 size={13} /></Button>}
+-                </div>
++                {isSeriousRow(r) && (
++                  <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
++                    {SERIOUSNESS_OPTIONS.filter(o => r[o.key]).map(o => <Pill key={o.key} label={o.label} type="red" />)}
++                  </div>
++                )}
+               </div>
+-              {isSeriousRow(r) && (
+-                <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+-                  {SERIOUSNESS_OPTIONS.filter(o => r[o.key]).map(o => <Pill key={o.key} label={o.label} type="red" />)}
+-                </div>
+-              )}
+-            </div>
+-          )}
+-        </div>
+-      ))}
++            )}
++          </div>
++        ))}
+ 
+-      {editing === '__new__' && (
+-        <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
+-          <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
+-        </div>
+-      )}
++        {editing === '__new__' && (
++          <div style={{ borderTop: `1px solid ${theme.gray100}`, paddingTop: 14 }}>
++            <ReactionForm draft={draft} set={set} onSave={save} onCancel={() => setEditing(null)} />
++          </div>
++        )}
++      </div>
+     </Section>
+   )
+ }
+@@ -832,19 +880,19 @@ function ReactionForm({ draft, set, onSave, onCancel }) {
+     <div>
+       <div style={grid}>
+         <div style={{ gridColumn: '1 / -1' }}>
+-          <Textarea label="Reaction description *" rows={2} value={draft.reaction_description} onChange={v => set('reaction_description', v)} placeholder="e.g. Anaphylactic reaction, rash, nauseaΓÇª" required />
++          <Textarea label="Reaction description *" rows={2} value={draft.reaction_description} onChange={v => set('reaction_description', v)} placeholder="e.g. Anaphylactic reaction, rash, nauseaΓÇª" required data-adr-field="reaction_description" />
+         </div>
+         <Input label="Onset date" type="date" value={draft.onset_date} onChange={v => set('onset_date', v)} />
+         <Input label="Duration" value={draft.duration} onChange={v => set('duration', v)} placeholder="e.g. 2 hours, 3 days" />
+-        <Select label="Severity *" value={draft.severity} onChange={v => set('severity', v)} options={severityOptions()} />
+-        <Select label="Outcome *" value={draft.outcome} onChange={v => set('outcome', v)} options={outcomeOptions()} />
++        <Select label="Severity *" value={draft.severity} onChange={v => set('severity', v)} options={severityOptions()} data-adr-field="severity" />
++        <Select label="Outcome *" value={draft.outcome} onChange={v => set('outcome', v)} options={outcomeOptions()} data-adr-field="outcome" />
+         <Select label="Action taken" value={draft.action_taken} onChange={v => set('action_taken', v)} options={actionTakenOptions()} />
+         <Select label="Causality assessment" value={draft.causality_assessment} onChange={v => set('causality_assessment', v)} options={causalityOptions()} />
+         <Select label="De-challenge result" value={draft.dechallenge_result} onChange={v => set('dechallenge_result', v)} options={dechallengeOptions()} />
+         <Select label="Re-challenge result" value={draft.rechallenge_result} onChange={v => set('rechallenge_result', v)} options={rechallengeOptions()} />
+       </div>
+ 
+-      <div style={{ marginTop: 14 }}>
++      <div style={{ marginTop: 14 }} data-adr-field="seriousness_fields">
+         <div style={{ fontSize: 11.5, fontWeight: 700, color: theme.gray600, marginBottom: 8 }}>Seriousness (tick all that apply)</div>
+         <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+           {SERIOUSNESS_OPTIONS.map(o => (
+@@ -869,12 +917,12 @@ function IndustrySection({ report, setField, newSafetySignal, setNewSafetySignal
+   return (
+     <Section title="Regulatory details" sub="Industry / manufacturer-importer fields. Batch/lot, causality assessment and case narrative are mandatory.">
+       <div style={grid}>
+-        <Input label="Batch / lot number *" value={report.batch_lot_number || ''} onChange={v => setField('batch_lot_number', v)} placeholder="Batch/lot" disabled={disabled} />
+-        <Select label="Causality assessment *" value={report.causality_assessment || ''} onChange={v => setField('causality_assessment', v)} options={causalityOptions()} disabled={disabled} />
++        <Input label="Batch / lot number *" value={report.batch_lot_number || ''} onChange={v => setField('batch_lot_number', v)} placeholder="Batch/lot" disabled={disabled} data-adr-field="regulatory_batch_lot_number" />
++        <Select label="Causality assessment *" value={report.causality_assessment || ''} onChange={v => setField('causality_assessment', v)} options={causalityOptions()} disabled={disabled} data-adr-field="regulatory_causality_assessment" />
+         <Input label="Naranjo score" type="number" value={report.naranjo_score != null ? String(report.naranjo_score) : ''} onChange={v => setField('naranjo_score', v === '' ? null : Number(v))} disabled={disabled} />
+         <Input label="Follow-up version" type="number" value={report.follow_up_version_number != null ? String(report.follow_up_version_number) : ''} onChange={v => setField('follow_up_version_number', v === '' ? null : Number(v))} disabled={disabled} />
+         <div style={{ gridColumn: '1 / -1' }}>
+-          <Textarea label="Case narrative summary *" rows={4} value={report.case_narrative_summary || ''} onChange={v => setField('case_narrative_summary', v)} placeholder="Chronological account of the eventΓÇª" disabled={disabled} />
++          <Textarea label="Case narrative summary *" rows={4} value={report.case_narrative_summary || ''} onChange={v => setField('case_narrative_summary', v)} placeholder="Chronological account of the eventΓÇª" disabled={disabled} data-adr-field="case_narrative_summary" />
+         </div>
+         <div style={{ gridColumn: '1 / -1' }}>
+           <Textarea label="Distribution / batch trace notes" rows={3} value={report.distribution_batch_trace_notes || ''} onChange={v => setField('distribution_batch_trace_notes', v)} placeholder="Batches distributed, locations, quantitiesΓÇª" disabled={disabled} />
+@@ -920,8 +968,8 @@ function HospitalSection({ report, setField, onUpload, uploading, disabled }) {
+   return (
+     <Section title="Clinical details" sub="Hospital / clinic fields. Ward/department and attending physician are mandatory before submission.">
+       <div style={grid}>
+-        <Input label="Ward / department *" value={r.ward_department || ''} onChange={v => setField('ward_department', v)} placeholder="e.g. Ward 4, General Medicine" disabled={disabled} />
+-        <Input label="Attending physician *" value={r.attending_physician || ''} onChange={v => setField('attending_physician', v)} placeholder="Physician name" disabled={disabled} />
++        <Input label="Ward / department *" value={r.ward_department || ''} onChange={v => setField('ward_department', v)} placeholder="e.g. Ward 4, General Medicine" disabled={disabled} data-adr-field="ward_department" />
++        <Input label="Attending physician *" value={r.attending_physician || ''} onChange={v => setField('attending_physician', v)} placeholder="Physician name" disabled={disabled} data-adr-field="attending_physician" />
+         <div style={{ gridColumn: '1 / -1' }}>
+           <Textarea label="Lab investigation notes" rows={3} value={r.lab_investigation_notes || ''} onChange={v => setField('lab_investigation_notes', v)} placeholder="Lab results, investigations relevant to the reactionΓÇª" disabled={disabled} />
+         </div>
+diff --git a/apps/carehub/src/modules/adr/validation.js b/apps/carehub/src/modules/adr/validation.js
+index a562be8..b1de28c 100644
+--- a/apps/carehub/src/modules/adr/validation.js
++++ b/apps/carehub/src/modules/adr/validation.js
+@@ -33,12 +33,27 @@ const SERIOUSNESS_FIELDS = [
+ ]
+ 
+ // The canonical submission validator, shared by both entry points below.
++//
++// Every gate records its gap twice: as a human-readable label in `missing`
++// (the legacy shape, kept for backward compatibility) and as a structured
++// { id, label } in `missingFields`. The ids are stable DOM anchors ΓÇö the form
++// page tags its inputs with matching data-adr-field attributes so a banner
++// item can scroll to and focus the exact field it names.
+ function validateReportSubmit(report) {
+   const missing = []
++  const missingFields = []
++  // flag() keeps the two lists in lockstep ΓÇö never push to one without the
++  // other. `missing` mirrors the server RPC's strings verbatim (the two must
++  // stay interchangeable); a third argument overrides only the banner label
++  // where the page needs to disambiguate same-named fields.
++  function flag(id, label, bannerLabel) {
++    missing.push(label)
++    missingFields.push({ id, label: bannerLabel || label })
++  }
+ 
+   // 1. Reporter qualification must be set
+   if (!report.reporter_qualification) {
+-    missing.push('Reporter qualification')
++    flag('reporter_qualification', 'Reporter qualification')
+   }
+ 
+   // 2. Reporter name or anonymous confirmation
+@@ -46,58 +61,60 @@ function validateReportSubmit(report) {
+   const anonymousConfirmed = report.reporter_anonymous_confirmed_by_facility === true
+ 
+   if (!hasName && !anonymousConfirmed) {
+-    missing.push('Reporter name')
++    flag('reporter_name', 'Reporter name')
+   }
+ 
+   // 3. Reporter consent must be explicitly true or false
+   if (report.reporter_consent_followup === undefined || report.reporter_consent_followup === null) {
+-    missing.push('Reporter consent for follow-up')
++    flag('reporter_consent_followup', 'Reporter consent for follow-up')
+   }
+ 
+   // 4. Patient identifier must be set
+   if (!report.patient_identifier || report.patient_identifier.trim().length === 0) {
+-    missing.push('Patient identifier')
++    flag('patient_identifier', 'Patient identifier')
+   }
+ 
+-  // 5. At least one of patient_age, patient_dob, patient_age_group must be set
+-  const hasPatientAge = report.patient_age && String(report.patient_age).trim().length > 0
++  // 5. At least one of patient_age, patient_dob, patient_age_group must be set.
++  // Age is checked against null/undefined explicitly, NOT truthiness: 0 is a
++  // valid age (neonate) and was previously flagged as missing.
++  const hasPatientAge = report.patient_age !== null && report.patient_age !== undefined && String(report.patient_age).trim().length > 0
+   const hasPatientDob = report.patient_dob && String(report.patient_dob).trim().length > 0
+   const hasPatientAgeGroup = report.patient_age_group && String(report.patient_age_group).trim().length > 0
+ 
+   if (!hasPatientAge && !hasPatientDob && !hasPatientAgeGroup) {
+-    missing.push('Patient age or DOB or age group')
++    flag('patient_age', 'Patient age or DOB or age group')
+   }
+ 
+   // 6. Patient gender must be set
+   if (!report.patient_gender || !Object.values(PATIENT_GENDER).includes(report.patient_gender)) {
+-    missing.push('Patient gender')
++    flag('patient_gender', 'Patient gender')
+   }
+ 
+   // 7. At least one suspect product exists
+   const hasProducts = report.adr_products && Array.isArray(report.adr_products) && report.adr_products.length > 0
+   if (!hasProducts) {
+-    missing.push('At least one suspect product')
++    flag('products_section', 'At least one suspect product')
+   }
+ 
+   // 8. At least one product must have a brand name
+   if (hasProducts) {
+     const hasBrandName = report.adr_products.some(p => p.product_brand_name && p.product_brand_name.trim().length > 0)
+     if (!hasBrandName) {
+-      missing.push('Product brand name')
++      flag('products_section', 'Product brand name')
+     }
+   }
+ 
+   // 9. At least one reaction exists
+   const hasReactions = report.adr_reactions && Array.isArray(report.adr_reactions) && report.adr_reactions.length > 0
+   if (!hasReactions) {
+-    missing.push('At least one adverse reaction')
++    flag('reactions_section', 'At least one adverse reaction')
+   }
+ 
+   // 10. Reaction description must be set (at least one)
+   if (hasReactions) {
+     const hasReactionDesc = report.adr_reactions.some(r => r.reaction_description && r.reaction_description.trim().length > 0)
+     if (!hasReactionDesc) {
+-      missing.push('Reaction description')
++      flag('reaction_description', 'Reaction description')
+     }
+   }
+ 
+@@ -105,7 +122,7 @@ function validateReportSubmit(report) {
+   if (hasReactions) {
+     const hasSeverity = report.adr_reactions.some(r => r.severity && Object.values(REACTION_SEVERITY).includes(r.severity))
+     if (!hasSeverity) {
+-      missing.push('Severity')
++      flag('severity', 'Severity')
+     }
+   }
+ 
+@@ -115,7 +132,7 @@ function validateReportSubmit(report) {
+       SERIOUSNESS_FIELDS.every(f => r[f] !== undefined && r[f] !== null)
+     )
+     if (!complete) {
+-      missing.push('All six seriousness fields')
++      flag('seriousness_fields', 'All six seriousness fields')
+     }
+   }
+ 
+@@ -123,37 +140,61 @@ function validateReportSubmit(report) {
+   if (hasReactions) {
+     const hasOutcome = report.adr_reactions.some(r => r.outcome && Object.values(REACTION_OUTCOME).includes(r.outcome))
+     if (!hasOutcome) {
+-      missing.push('Outcome')
++      flag('outcome', 'Outcome')
+     }
+   }
+ 
+-  // Industry-specific validation
++  // Industry-specific validation. The regulatory batch/causality anchors are
++  // deliberately distinct from the per-product batch field and the per-reaction
++  // causality field ΓÇö same subject matter, different inputs on the page.
+   if (report.module_type === ADR_MODULE_TYPES.INDUSTRY) {
+     if (!report.batch_lot_number || report.batch_lot_number.trim().length === 0) {
+-      missing.push('Batch/lot number')
++      flag('regulatory_batch_lot_number', 'Batch/lot number', 'Batch/lot number (Regulatory details)')
+     }
+     if (!report.causality_assessment || !Object.values(CAUSALITY).includes(report.causality_assessment)) {
+-      missing.push('Causality assessment')
++      flag('regulatory_causality_assessment', 'Causality assessment', 'Causality assessment (Regulatory details)')
+     }
+     if (!report.case_narrative_summary || report.case_narrative_summary.trim().length === 0) {
+-      missing.push('Case narrative summary')
++      flag('case_narrative_summary', 'Case narrative summary')
+     }
+   }
+ 
+   // Hospital-specific validation
+   if (report.module_type === ADR_MODULE_TYPES.HOSPITAL) {
+     if (!report.ward_department || report.ward_department.trim().length === 0) {
+-      missing.push('Ward/department')
++      flag('ward_department', 'Ward/department')
+     }
+     if (!report.attending_physician || report.attending_physician.trim().length === 0) {
+-      missing.push('Attending physician')
++      flag('attending_physician', 'Attending physician')
+     }
+   }
+ 
+   return {
+     valid: missing.length === 0,
+     missing,
++    missingFields,
++  }
++}
++
++// Date and DB-CHECK enum keys on the child rows (products / reactions). The
++// drafts hold '' while the form is empty; Postgres rejects '' for date columns
++// and CHECK enums alike, so both families coerce to null before persistence.
++const CHILD_DATE_KEYS = ['expiry_date', 'start_date', 'stop_date', 'onset_date']
++const CHILD_ENUM_KEYS = ['severity', 'outcome', 'causality_assessment', 'action_taken', 'dechallenge_result', 'rechallenge_result']
++
++/**
++ * Normalises a child-row draft (suspect product / adverse reaction) for
++ * persistence: blank strings on date and enum columns become null so the row
++ * no longer trips the database CHECK constraints. Free-text columns are left
++ * untouched ('' is valid there). Pure ΓÇö returns a copy, never mutates.
++ */
++export function normalizeChildRow(row) {
++  if (row === null || row === undefined || typeof row !== 'object') return row
++  const out = { ...row }
++  for (const key of [...CHILD_DATE_KEYS, ...CHILD_ENUM_KEYS]) {
++    if (out[key] === '') out[key] = null
+   }
++  return out
+ }
+ 
+ export const adrValidation = {
+@@ -220,7 +261,8 @@ export const adrValidation = {
+       issues.push('Patient identifier is required')
+     }
+ 
+-    const hasAge = report.patient_age && String(report.patient_age).trim().length > 0
++    // Same explicit null/undefined check as the submit gate: 0 is a valid age.
++    const hasAge = report.patient_age !== null && report.patient_age !== undefined && String(report.patient_age).trim().length > 0
+     const hasDob = report.patient_dob && String(report.patient_dob).trim().length > 0
+     const hasAgeGroup = report.patient_age_group && Object.values(PATIENT_AGE_GROUP).includes(report.patient_age_group)
+ 
+diff --git a/apps/carehub/src/modules/adr/validation.test.js b/apps/carehub/src/modules/adr/validation.test.js
+index 483fc81..d4bdba2 100644
+--- a/apps/carehub/src/modules/adr/validation.test.js
++++ b/apps/carehub/src/modules/adr/validation.test.js
+@@ -1,5 +1,5 @@
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+-import { adrValidation } from './validation.js'
++import { adrValidation, normalizeChildRow } from './validation.js'
+ 
+ const HOUR = 60 * 60 * 1000
+ const DAY = 24 * HOUR
+@@ -76,6 +76,12 @@ describe('adrValidation.validateForSubmit', () => {
+     expect(byGroup.valid).toBe(true)
+   })
+ 
++  it('accepts patient age 0 (neonate) without flagging the age gate', async () => {
++    const result = await adrValidation.validateForSubmit({ ...validReport, patient_age: 0 })
++    expect(result.valid).toBe(true)
++    expect(result.missing).not.toContain('Patient age or DOB or age group')
++  })
++
+   it('requires age, DOB or age group', async () => {
+     const result = await adrValidation.validateForSubmit({ ...validReport, patient_age: null })
+     expect(result.missing).toContain('Patient age or DOB or age group')
+@@ -153,6 +159,115 @@ describe('adrValidation.validateForSubmit', () => {
+   })
+ })
+ 
++describe('structured missing fields (anchorable banner items)', () => {
++  it('returns missingFields with stable ids alongside the legacy label list', async () => {
++    const result = await adrValidation.validateForSubmit({
++      ...validReport,
++      reporter_qualification: '',
++      patient_identifier: '',
++      adr_reactions: [{ reaction_description: 'Rash' }],
++    })
++    expect(result.valid).toBe(false)
++    for (const f of result.missingFields) {
++      expect(typeof f.id).toBe('string')
++      expect(f.id.length).toBeGreaterThan(0)
++      expect(typeof f.label).toBe('string')
++    }
++    const ids = result.missingFields.map(f => f.id)
++    expect(ids).toContain('reporter_qualification')
++    expect(ids).toContain('patient_identifier')
++    expect(ids).toContain('severity')
++    expect(ids).toContain('outcome')
++    expect(ids).toContain('seriousness_fields')
++    // For the community module every structured label mirrors the legacy string
++    expect(result.missingFields.map(f => f.label)).toEqual(result.missing)
++  })
++
++  it('labels regulatory batch/causality distinctly from per-product/per-reaction fields', async () => {
++    const result = await adrValidation.validateForSubmit({ ...validReport, module_type: 'industry' })
++    const ids = result.missingFields.map(f => f.id)
++    expect(ids).toContain('regulatory_batch_lot_number')
++    expect(ids).toContain('regulatory_causality_assessment')
++    expect(ids).toContain('case_narrative_summary')
++    const causality = result.missingFields.find(f => f.id === 'regulatory_causality_assessment')
++    expect(causality.label).toMatch(/Regulatory/i)
++  })
++
++  it('anchors section-level gaps to their section', async () => {
++    const none = await adrValidation.validateForSubmit({ ...validReport, adr_products: [], adr_reactions: [] })
++    const ids = none.missingFields.map(f => f.id)
++    expect(ids).toContain('products_section')
++    expect(ids).toContain('reactions_section')
++
++    const noBrand = await adrValidation.validateForSubmit({ ...validReport, adr_products: [{ product_generic_name: 'Generic only' }] })
++    expect(noBrand.missingFields.map(f => f.id)).toContain('products_section')
++  })
++
++  it('anchors hospital gates to their fields', async () => {
++    const result = await adrValidation.validateForSubmit({ ...validReport, module_type: 'hospital' })
++    const ids = result.missingFields.map(f => f.id)
++    expect(ids).toContain('ward_department')
++    expect(ids).toContain('attending_physician')
++  })
++})
++
++describe('normalizeChildRow (blank draft coercion)', () => {
++  it('coerces blank date and enum fields to null and keeps everything else', () => {
++    const row = normalizeChildRow({
++      severity: '',
++      onset_date: '',
++      outcome: 'recovered',
++      start_date: '2026-01-01',
++      reaction_description: 'Rash',
++    })
++    expect(row.severity).toBeNull()
++    expect(row.onset_date).toBeNull()
++    expect(row.outcome).toBe('recovered')
++    expect(row.start_date).toBe('2026-01-01')
++    expect(row.reaction_description).toBe('Rash')
++  })
++
++  it('coerces every DB CHECK enum key and passes non-blank values through', () => {
++    const out = normalizeChildRow({
++      severity: 'severe',
++      outcome: '',
++      causality_assessment: '',
++      action_taken: '',
++      dechallenge_result: '',
++      rechallenge_result: '',
++      expiry_date: '2027-05-01',
++      stop_date: '',
++    })
++    expect(out.severity).toBe('severe')
++    expect(out.expiry_date).toBe('2027-05-01')
++    expect(out.outcome).toBeNull()
++    expect(out.causality_assessment).toBeNull()
++    expect(out.action_taken).toBeNull()
++    expect(out.dechallenge_result).toBeNull()
++    expect(out.rechallenge_result).toBeNull()
++    expect(out.stop_date).toBeNull()
++  })
++
++  it('leaves free-text keys untouched (blank strings are valid text columns)', () => {
++    const out = normalizeChildRow({ dose: '', route: '', duration: '' })
++    expect(out.dose).toBe('')
++    expect(out.route).toBe('')
++    expect(out.duration).toBe('')
++  })
++
++  it('does not mutate the input row', () => {
++    const row = { severity: '', onset_date: '' }
++    normalizeChildRow(row)
++    expect(row.severity).toBe('')
++    expect(row.onset_date).toBe('')
++  })
++
++  it('handles nullish rows defensively', () => {
++    expect(normalizeChildRow(null)).toBeNull()
++    expect(normalizeChildRow(undefined)).toBeUndefined()
++  })
++})
++
+ describe('adrValidation.validateHospitalFields', () => {
+   it('flags missing or blank mandatory fields', () => {
+     expect(adrValidation.validateHospitalFields({})).toEqual(['Ward/department', 'Attending physician'])
+diff --git a/apps/carehub/src/modules/consultation/formParts.jsx b/apps/carehub/src/modules/consultation/formParts.jsx
+index 14b5f0d..ce2ded7 100644
+--- a/apps/carehub/src/modules/consultation/formParts.jsx
++++ b/apps/carehub/src/modules/consultation/formParts.jsx
+@@ -5,7 +5,7 @@
+ import { useState, useEffect, useRef } from 'react'
+ import { theme } from '../../styles/theme'
+ import { Card, Inp, Loading } from '../../components/ui'
+-import { searchProducts } from '../../services/supabase'
++import { productRepository } from '../inventory/repositories'
+ 
+ const { tealDeep, navy, gray600, gray400, border, bg } = theme
+ 
+@@ -76,47 +76,63 @@ export function ProductSearchPicker({ businessId, selectedIds = [], onToggle, pl
+   const [results, setResults] = useState([])
+   const [loading, setLoading] = useState(false)
+   const [notFound, setNotFound] = useState(false)
++  const [error, setError] = useState(false)
++  const [retryNonce, setRetryNonce] = useState(0)
+   const timer = useRef(null)
+ 
+   useEffect(() => {
+     const q = query.trim()
+     if (q.length < 2) {
+-      setResults([]); setNotFound(false); setLoading(false)
++      setResults([]); setNotFound(false); setError(false); setLoading(false)
+       return
+     }
+     setLoading(true)
+     clearTimeout(timer.current)
+     timer.current = setTimeout(async () => {
+       try {
+-        const data = await searchProducts(businessId, q)
++        const data = await productRepository.search(businessId, q)
+         setResults(data || [])
+         setNotFound((data || []).length === 0)
++        setError(false)
+       } catch (e) {
+-        console.error('Product search error:', e)
+-        setResults([]); setNotFound(false)
++        console.error('Product search failed:', e)
++        setResults([]); setNotFound(false); setError(true)
+       } finally {
+         setLoading(false)
+       }
+     }, 250)
+     return () => clearTimeout(timer.current)
+-  }, [query, businessId])
++  }, [query, businessId, retryNonce])
+ 
+   const visible = results.filter(p => !selectedIds.includes(p.id))
+ 
+   return (
+     <div>
+       <Inp label='' value={query} onChange={setQuery} placeholder={placeholder} aria-label={placeholder} />
+-      {loading && <div style={{ marginTop: 8 }}><Loading /></div>}
+-      {!loading && query.trim().length >= 2 && notFound && (
+-        <div style={{ fontSize: 12, color: gray400, marginTop: 8 }}>No products match "{query.trim()}".</div>
+-      )}
++      <div aria-live='polite'>
++        {loading && <div style={{ marginTop: 8 }}><Loading /></div>}
++        {!loading && error && (
++          <button type="button" onClick={() => setRetryNonce(n => n + 1)}
++            style={{ display: 'block', width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: theme.radius.md, border: `1px solid ${theme.danger}`, background: theme.dangerBg, color: theme.danger, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>
++            Couldn't load products. Tap to retry ΓÇö or keep typing.
++          </button>
++        )}
++        {!loading && !error && query.trim().length >= 2 && notFound && (
++          <div style={{ fontSize: 12, color: gray400, marginTop: 8 }}>No products match "{query.trim()}".</div>
++        )}
++      </div>
+       {!loading && visible.length > 0 && (
+         <div style={{ marginTop: 8, maxHeight: 224, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, border: `1px solid ${border}`, borderRadius: theme.radius.md, padding: 6, background: '#fff' }}>
+           {visible.map(p => (
+             <button key={p.id} type="button" onClick={() => onToggle(p)}
+               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: `1px solid ${border}`, background: bg, cursor: 'pointer', textAlign: 'left' }}
+               aria-label={'Add ' + p.name}>
+-              <span style={{ fontWeight: 700, fontSize: 12.5, color: navy }}>{p.name}</span>
++              <span style={{ fontWeight: 700, fontSize: 12.5, color: navy }}>
++                {p.name}
++                {p.generic_name && p.generic_name.toLowerCase() !== p.name.toLowerCase() && (
++                  <span style={{ fontWeight: 500, fontSize: 11, color: gray400 }}> ┬╖ {p.generic_name}</span>
++                )}
++              </span>
+               {p.price != null && <span style={{ fontSize: 11, color: gray400 }}>Γéª{Number(p.price || 0).toLocaleString()}</span>}
+             </button>
+           ))}
+diff --git a/apps/carehub/src/modules/dashboard-home/DashboardHome.jsx b/apps/carehub/src/modules/dashboard-home/DashboardHome.jsx
+index 050aff0..d4dfea0 100644
+--- a/apps/carehub/src/modules/dashboard-home/DashboardHome.jsx
++++ b/apps/carehub/src/modules/dashboard-home/DashboardHome.jsx
+@@ -9,6 +9,8 @@ import {
+ // keeping a second copy of either query. Same shape as Reports.
+ import { saleRepository } from '../pos/repositories'
+ import { appointmentRepository } from '../appointments/repositories'
++import { notify } from '../../services/supabase'
++import { classifySalesVelocity } from '../../lib/velocity'
+ import { fmt, businessName } from '../../lib/utils'
+ import { theme } from '../../styles/theme'
+ import { Card, Avatar, Empty, Loading, StatCard } from '../../components/ui'
+@@ -85,6 +87,82 @@ export default function DashboardHome({ brand, products, role, perms }) {
+   const nextAppt = upcomingAppts[0]
+   const showApptItem = canSeeAppts && upcomingAppts.length > 0
+ 
++  // ΓöÇΓöÇ Proactive owner alerts (issue #4) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++  // The dashboard is where the owner already looks, so it raises the stock and
++  // expiry conditions it can see into the notification center ΓÇö once per kind,
++  // per business, per day (localStorage dedupe). Owner-only: staff dashboards
++  // must not write owner notifications as a side effect of being viewed.
++  const daysToExpiry = (p) => {
++    if (!p.expiry_date) return null
++    const d = new Date(p.expiry_date)
++    if (Number.isNaN(d.getTime())) return null
++    return Math.ceil((d - new Date()) / 86400000)
++  }
++  const expiringSoon = products.filter(p => { const t = daysToExpiry(p); return t !== null && t >= 0 && t <= 60 })
++  const expiredProducts = products.filter(p => { const t = daysToExpiry(p); return t !== null && t < 0 })
++
++  useEffect(() => {
++    if (role !== 'Owner' || !brand?.id || loading) return
++    const dayKey = new Date().toISOString().split('T')[0]
++    const keyFor = (kind) => 'carehub_notified_' + kind + '_' + brand.id
++    const sentToday = (kind) => { try { return localStorage.getItem(keyFor(kind)) === dayKey } catch (e) { return false } }
++    const markSent = (kind) => { try { localStorage.setItem(keyFor(kind), dayKey) } catch (e) {} }
++    // notify() itself never throws; marking after the await keeps the dedupe
++    // honest for the failures it CAN report.
++    const names = (arr) => arr.slice(0, 5).map(p => p.name).join(', ') + (arr.length > 5 ? ' +' + (arr.length - 5) + ' more' : '')
++
++    async function raiseAlerts() {
++      try {
++        if (outStock.length > 0 && !sentToday('out_of_stock')) {
++          await notify(brand.id, [{ staffId: null }], 'out_of_stock',
++            outStock.length + ' product' + (outStock.length === 1 ? '' : 's') + ' out of stock',
++            names(outStock), '/dashboard/inventory?stock=out')
++          markSent('out_of_stock')
++        }
++        if (lowStock.length > 0 && !sentToday('low_stock')) {
++          await notify(brand.id, [{ staffId: null }], 'low_stock',
++            lowStock.length + ' product' + (lowStock.length === 1 ? '' : 's') + ' running low',
++            names(lowStock), '/dashboard/inventory?stock=low')
++          markSent('low_stock')
++        }
++        if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
++          await notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
++            expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
++            names(expiringSoon), '/dashboard/inventory?expiry=expiring')
++          markSent('product_expiring_soon')
++        }
++        if (expiredProducts.length > 0 && !sentToday('product_expired')) {
++          await notify(brand.id, [{ staffId: null }], 'product_expired',
++            expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
++            names(expiredProducts), '/dashboard/inventory?expiry=expired')
++          markSent('product_expired')
++        }
++        // Velocity digest ΓÇö only when something actually sold in the window;
++        // "everything is slow" on an empty book is noise, not insight.
++        const windowStart = Date.now() - 30 * 86400000
++        const recentSales = allSales.filter(s => new Date(s.created_at || 0).getTime() >= windowStart)
++        if (recentSales.length > 0 && !sentToday('sales_velocity')) {
++          const v = classifySalesVelocity(products, recentSales, { days: 30 })
++          const parts = []
++          if (v.fast.length > 0) parts.push(v.fast.length + ' fast mover' + (v.fast.length === 1 ? '' : 's'))
++          if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
++          if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
++          if (parts.length > 0) {
++            await notify(brand.id, [{ staffId: null }], 'sales_velocity',
++              '30-day sales velocity: ' + parts.join(', '),
++              v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
++              '/dashboard/reports')
++            markSent('sales_velocity')
++          }
++        }
++      } catch (e) {
++        console.error('Proactive alert check failed:', e)
++      }
++    }
++    raiseAlerts()
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [role, brand?.id, loading, products, allSales])
++
+   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
+   const worklistEmpty = attentionCount === 0
+ 
+diff --git a/apps/carehub/src/modules/inventory/Inventory.jsx b/apps/carehub/src/modules/inventory/Inventory.jsx
+index 4cd3678..6692ef5 100644
+--- a/apps/carehub/src/modules/inventory/Inventory.jsx
++++ b/apps/carehub/src/modules/inventory/Inventory.jsx
+@@ -1,9 +1,11 @@
+ import { useState, useEffect, useMemo } from 'react'
++import { useSearchParams } from 'react-router-dom'
+ import {
+   Download, Upload, AlertTriangle, Package, DollarSign, Search, Camera,
+   FileUp, CheckCircle, ArrowRight, Clipboard, Plus, Loader2,
+ } from 'lucide-react'
+ import { productRepository } from './repositories'
++import { parseInventoryCsv } from './csvImport'
+ import { fmt, todayDate } from '../../lib/utils'
+ import { PRODUCT_CATS } from '../../config/constants'
+ import { SALE_TYPES, SALE_TYPE_LABELS, unitLabel, unitsForSaleType, isUnitValidForSaleType, saleUnitError } from '@care-ecosystem/shared-marketplace'
+@@ -39,19 +41,41 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+   const totalDuplicateItems = duplicateGroups.reduce((s, g) => s + (g.length - 1), 0)
+ 
+   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat || p.category)))]
++
++  // Deep-link filters (issue #4): the dashboard's proactive alerts link here
++  // with ?stock=low|out and ?expiry=expiring|expired, so a tap opens the full
++  // affected list rather than a summary line.
++  const [searchParams] = useSearchParams()
++  const [stockFilter, setStockFilter] = useState(searchParams.get('stock') === 'low' || searchParams.get('stock') === 'out' ? searchParams.get('stock') : '')
++  const [expiryFilter, setExpiryFilter] = useState(searchParams.get('expiry') === 'expiring' || searchParams.get('expiry') === 'expired' ? searchParams.get('expiry') : '')
++
++  const daysToExpiry = (p) => {
++    if (!p.expiry_date) return null
++    const d = new Date(p.expiry_date)
++    if (Number.isNaN(d.getTime())) return null
++    return Math.ceil((d - new Date()) / 86400000)
++  }
++
+   const filtered = useMemo(() => products.filter(p => {
+     const pCat = p.cat || p.category || ''
+     const pGeneric = p.generic_name || p.genericName || ''
+-    return (catFilter === 'All' || pCat === catFilter) &&
+-      (p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))
+-  }), [products, catFilter, search])
++    if (catFilter !== 'All' && pCat !== catFilter) return false
++    if (!(p.name.toLowerCase().includes(search.toLowerCase()) || pGeneric.toLowerCase().includes(search.toLowerCase()))) return false
++    const isService = pCat === 'Services'
++    if (stockFilter === 'low' && (isService || !(p.stock > 0 && p.stock <= (p.reorder_level || 5)))) return false
++    if (stockFilter === 'out' && (isService || p.stock > 0)) return false
++    const t = expiryFilter ? daysToExpiry(p) : null
++    if (expiryFilter === 'expiring' && !(t !== null && t >= 0 && t <= 60)) return false
++    if (expiryFilter === 'expired' && !(t !== null && t < 0)) return false
++    return true
++  }), [products, catFilter, search, stockFilter, expiryFilter])
+ 
+   // Pagination ΓÇö 50 rows per page. Reset to page 0 whenever the result set
+   // changes (search, filter, or data reload) so the user never lands on an
+   // empty page that no longer exists. DataTable does the slicing.
+   const PAGE_SIZE = 50
+   const [page, setPage] = useState(0)
+-  useEffect(() => { setPage(0) }, [search, catFilter, products.length])
++  useEffect(() => { setPage(0) }, [search, catFilter, stockFilter, expiryFilter, products.length])
+   const lowStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock > 0 && p.stock <= (p.reorder_level || 5))
+   const outOfStock = products.filter(p => (p.cat || p.category) !== 'Services' && p.stock <= 0)
+   const stockValue = products.filter(p => (p.cat || p.category) !== 'Services').reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0)
+@@ -207,10 +231,10 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+ 
+   function downloadTemplate() {
+     const rows = [
+-      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)'],
+-      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes'],
+-      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes'],
+-      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes'],
++      ['Product Name', 'Generic Name', 'Category', 'Selling Price (NGN)', 'Cost Price (NGN)', 'Stock Quantity', 'Reorder Level', 'Barcode', 'List on CareFind (yes/no)', 'Expiry Date'],
++      ['Amoxicillin 500mg', 'Amoxicillin', 'Medicines', '1500', '800', '100', '20', '', 'yes', '2027-06-30'],
++      ['Paracetamol 500mg', 'Paracetamol', 'Medicines', '800', '400', '200', '30', '', 'yes', '2028-01-31'],
++      ['Consultation Fee', 'Medical Consultation', 'Services', '5000', '0', '', '0', '', 'yes', ''],
+     ]
+     const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
+     const blob = new Blob([csv], { type: 'text/csv' })
+@@ -226,26 +250,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+     const reader = new FileReader()
+     reader.onload = ev => {
+       try {
+-        const lines = ev.target.result.split('\n').filter(l => l.trim())
+-        if (lines.length < 2) { setUploadError('File is empty or has no products.'); return }
+-        const parsed = lines.slice(1).map(line => {
+-          const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
+-          if (!cols[0]) return null
+-          return {
+-            name: cols[0] || '',
+-            generic_name: cols[1] || '',
+-            category: cols[2] || 'Medicines',
+-            price: parseFloat(cols[3]) || 0,
+-            cost_price: parseFloat(cols[4]) || 0,
+-            stock: cols[5] !== '' ? parseInt(cols[5]) || 0 : 999,
+-            reorder_level: parseInt(cols[6]) || 5,
+-            barcode: cols[7] || '',
+-            list_on_carefind: (cols[8] || 'yes').toLowerCase() !== 'no',
+-            emoji: '≡ƒÆè',
+-          }
+-        }).filter(Boolean)
+-        if (parsed.length === 0) { setUploadError('No valid products found.'); return }
+-        setUploadData(parsed)
++        const { rows, error } = parseInventoryCsv(ev.target.result)
++        if (error) { setUploadError(error); return }
++        setUploadData(rows)
+       } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
+     }
+     reader.readAsText(file); e.target.value = ''
+@@ -281,6 +288,7 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+         reorder_level: parseInt(p.reorder_level) || 5,
+         barcode: p.barcode || '',
+         list_on_carefind: p.list_on_carefind !== false,
++        expiry_date: p.expiry_date || null,
+         emoji: '≡ƒÆè',
+         business_id: brand.id,
+       })
+@@ -389,6 +397,22 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+         </div>
+       </div>
+ 
++      {(stockFilter || expiryFilter) && (
++        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
++          <span style={{ fontSize: '12px', color: gray500, fontWeight: '700' }}>Filtered by:</span>
++          {stockFilter && (
++            <button onClick={() => setStockFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${warning}`, background: warningBg, color: warning, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
++              {stockFilter === 'low' ? 'Low stock only' : 'Out of stock only'} Γ£ò
++            </button>
++          )}
++          {expiryFilter && (
++            <button onClick={() => setExpiryFilter('')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: theme.radius.full, border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}>
++              {expiryFilter === 'expiring' ? 'Expiring within 60 days' : 'Expired'} Γ£ò
++            </button>
++          )}
++        </div>
++      )}
++
+       {scanning && (
+         <div style={{ marginBottom: '16px', borderRadius: theme.radius.lg, overflow: 'hidden', border: `2px solid ${tealDeep}`, position: 'relative', background: 'black' }}>
+           <video id='inv-cam' style={{ width: '100%', maxHeight: '240px', objectFit: 'cover', display: 'block' }} autoPlay playsInline muted />
+@@ -537,8 +561,9 @@ export default function Inventory({ brand, products, setProducts, role, perms, l
+             1. Tap <strong>Download Template</strong><br />
+             2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
+             3. Fill in your products row by row<br />
+-            4. Save as <strong>CSV</strong><br />
+-            5. Upload here
++            4. Set <strong>Expiry Date</strong> as YYYY-MM-DD (e.g. 2027-06-30) ΓÇö leave blank if none<br />
++            5. Save as <strong>CSV</strong><br />
++            6. Upload here
+           </div>
+           <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: bg }}>
+             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
+diff --git a/apps/carehub/src/modules/inventory/csvImport.js b/apps/carehub/src/modules/inventory/csvImport.js
+new file mode 100644
+index 0000000..5c3cfb3
+--- /dev/null
++++ b/apps/carehub/src/modules/inventory/csvImport.js
+@@ -0,0 +1,75 @@
++// Pure CSV-import helpers for the Inventory bulk upload. Extracted from
++// Inventory.jsx so the parsing rules are unit-testable and the component only
++// orchestrates file reading and state.
++//
++// Column contract (positional ΓÇö the header row is display-only):
++//   0 Product Name ┬╖ 1 Generic Name ┬╖ 2 Category ┬╖ 3 Selling Price (NGN) ┬╖
++//   4 Cost Price (NGN) ┬╖ 5 Stock Quantity ┬╖ 6 Reorder Level ┬╖ 7 Barcode ┬╖
++//   8 List on CareFind (yes/no) ┬╖ 9 Expiry Date
++//
++// Columns 0ΓÇô8 are the original template; column 9 is optional so legacy
++// 9-column files keep importing with a null expiry.
++
++/**
++ * Coerces a spreadsheet expiry value to an ISO `YYYY-MM-DD` string, or null.
++ * Blank ΓåÆ null (the products.expiry_date column is nullable). Unparseable or
++ * impossible dates ΓåÆ null rather than a guess: JS silently rolls overflow
++ * dates (2027-02-31 ΓåÆ March 3), which would store a day the user never typed.
++ */
++export function normalizeExpiryDate(value) {
++  const v = String(value ?? '').trim()
++  if (!v) return null
++
++  // ISO input is a pure calendar date: validated in UTC so no timezone can
++  // shift it, and impossible dates (2027-02-31) fail the component check
++  // instead of silently rolling over.
++  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v)
++  if (isoMatch) {
++    const y = Number(isoMatch[1])
++    const m = Number(isoMatch[2])
++    const d = Number(isoMatch[3])
++    const dt = new Date(Date.UTC(y, m - 1, d))
++    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null
++    return `${isoMatch[1]}-${isoMatch[2].padStart(2, '0')}-${isoMatch[3].padStart(2, '0')}`
++  }
++
++  // Other formats go through the engine's parser; the result is read back in
++  // local components so "5/31/2027" stays May 31 whatever the TZ offset.
++  const t = Date.parse(v)
++  if (Number.isNaN(t)) return null
++  const dt = new Date(t)
++  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
++}
++
++/**
++ * Parses uploaded inventory CSV text into product rows.
++ * Returns { rows, error } ΓÇö error is null on success, otherwise a
++ * user-facing message. Rows without a product name are skipped.
++ */
++export function parseInventoryCsv(text) {
++  const lines = String(text || '').split('\n').filter(l => l.trim())
++  if (lines.length < 2) return { rows: [], error: 'File is empty or has no products.' }
++
++  const rows = []
++  for (const line of lines.slice(1)) {
++    // Quote-aware split: commas inside "quoted values" don't break columns.
++    const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
++    if (!cols[0]) continue
++    rows.push({
++      name: cols[0] || '',
++      generic_name: cols[1] || '',
++      category: cols[2] || 'Medicines',
++      price: parseFloat(cols[3]) || 0,
++      cost_price: parseFloat(cols[4]) || 0,
++      stock: cols[5] !== '' ? parseInt(cols[5]) || 0 : 999,
++      reorder_level: parseInt(cols[6]) || 5,
++      barcode: cols[7] || '',
++      list_on_carefind: (cols[8] || 'yes').toLowerCase() !== 'no',
++      expiry_date: normalizeExpiryDate(cols[9]),
++      emoji: '≡ƒÆè',
++    })
++  }
++
++  if (rows.length === 0) return { rows: [], error: 'No valid products found.' }
++  return { rows, error: null }
++}
+diff --git a/apps/carehub/src/modules/inventory/csvImport.test.js b/apps/carehub/src/modules/inventory/csvImport.test.js
+new file mode 100644
+index 0000000..8d2e864
+--- /dev/null
++++ b/apps/carehub/src/modules/inventory/csvImport.test.js
+@@ -0,0 +1,85 @@
++import { describe, it, expect } from 'vitest'
++import { parseInventoryCsv, normalizeExpiryDate } from './csvImport.js'
++
++// A legacy template row ΓÇö exactly the 9 columns the original template shipped,
++// before Expiry Date was appended as column 10.
++const LEGACY_ROW = '"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes"'
++const NEW_ROW = '"Amoxicillin 500mg","Amoxicillin","Medicines","1500","800","100","20","","yes","2027-06-30"'
++
++describe('parseInventoryCsv', () => {
++  it('imports legacy 9-column rows with a null expiry date', () => {
++    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no)\n' + LEGACY_ROW
++    const { rows, error } = parseInventoryCsv(csv)
++    expect(error).toBeNull()
++    expect(rows).toHaveLength(1)
++    expect(rows[0]).toMatchObject({
++      name: 'Amoxicillin 500mg',
++      generic_name: 'Amoxicillin',
++      category: 'Medicines',
++      price: 1500,
++      cost_price: 800,
++      stock: 100,
++      reorder_level: 20,
++      list_on_carefind: true,
++    })
++    expect(rows[0].expiry_date).toBeNull()
++  })
++
++  it('parses the expiry date from a 10-column row', () => {
++    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + NEW_ROW
++    const { rows, error } = parseInventoryCsv(csv)
++    expect(error).toBeNull()
++    expect(rows[0].expiry_date).toBe('2027-06-30')
++  })
++
++  it('nulls a malformed expiry date but still imports the row', () => {
++    const row = '"Bad Date Product","Generic","Medicines","100","50","10","5","","no","not-a-date"'
++    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + row
++    const { rows } = parseInventoryCsv(csv)
++    expect(rows).toHaveLength(1)
++    expect(rows[0].expiry_date).toBeNull()
++    expect(rows[0].list_on_carefind).toBe(false)
++  })
++
++  it('normalises Excel-style dates to ISO', () => {
++    const row = '"Excel Product","G","Medicines","100","50","10","5","","yes","5/31/2027"'
++    const csv = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no),Expiry Date\n' + row
++    const { rows } = parseInventoryCsv(csv)
++    expect(rows[0].expiry_date).toBe('2027-05-31')
++  })
++
++  it('skips rows without a product name and reports an error when nothing valid remains', () => {
++    const header = 'Product Name,Generic Name,Category,Selling Price (NGN),Cost Price (NGN),Stock Quantity,Reorder Level,Barcode,List on CareFind (yes/no)'
++    const empty = parseInventoryCsv(header + '\n,"No name","Medicines","1","1","1","1","","yes"')
++    expect(empty.rows).toHaveLength(0)
++    expect(empty.error).toBe('No valid products found.')
++
++    const blank = parseInventoryCsv('')
++    expect(blank.rows).toHaveLength(0)
++    expect(blank.error).toBe('File is empty or has no products.')
++  })
++})
++
++describe('normalizeExpiryDate', () => {
++  it('returns null for blank and whitespace-only values', () => {
++    expect(normalizeExpiryDate('')).toBeNull()
++    expect(normalizeExpiryDate('   ')).toBeNull()
++    expect(normalizeExpiryDate(undefined)).toBeNull()
++    expect(normalizeExpiryDate(null)).toBeNull()
++  })
++
++  it('accepts ISO dates and passes them through unchanged', () => {
++    expect(normalizeExpiryDate('2027-06-30')).toBe('2027-06-30')
++  })
++
++  it('rejects impossible calendar dates instead of rolling them over', () => {
++    // JS silently rolls 2027-02-31 to March; the stored day must be what the
++    // user typed or nothing at all.
++    expect(normalizeExpiryDate('2027-02-31')).toBeNull()
++    expect(normalizeExpiryDate('2027-13-01')).toBeNull()
++  })
++
++  it('parses other unambiguous formats via Date.parse', () => {
++    expect(normalizeExpiryDate('June 30, 2027')).toBe('2027-06-30')
++  })
++})
+diff --git a/apps/carehub/src/modules/inventory/repositories/index.js b/apps/carehub/src/modules/inventory/repositories/index.js
+index 487637d..6241241 100644
+--- a/apps/carehub/src/modules/inventory/repositories/index.js
++++ b/apps/carehub/src/modules/inventory/repositories/index.js
+@@ -30,6 +30,22 @@ export function createProductRepository(request = sbFetch) {
+       return results[0] || null
+     },
+ 
++    // Type-ahead lookup for consultation forms: matches the brand name OR the
++    // generic name, case-insensitively. The query is URL-encoded before it is
++    // interpolated so a product name containing a comma cannot break the
++    // or=() clause structure. Selects only what pickers render ΓÇö an earlier
++    // service-layer version selected a nonexistent `sku` column, which made
++    // every search fail with PGRST204 (swallowed by the caller's catch).
++    async search(businessId, query, limit = 30) {
++      const q = encodeURIComponent(query.trim())
++      if (!q) return []
++      return request(
++        `products?business_id=eq.${businessId}` +
++        `&or=(name.ilike.*${q}*,generic_name.ilike.*${q}*)` +
++        `&order=name.asc,id.asc&select=id,name,generic_name,price,category&limit=${limit}`,
++      )
++    },
++
+     async create(businessId, product) {
+       return request('products', {
+         method: 'POST',
+diff --git a/apps/carehub/src/modules/inventory/repositories/index.test.js b/apps/carehub/src/modules/inventory/repositories/index.test.js
+index fad4d2d..14a1bb0 100644
+--- a/apps/carehub/src/modules/inventory/repositories/index.test.js
++++ b/apps/carehub/src/modules/inventory/repositories/index.test.js
+@@ -158,6 +158,46 @@ describe('productRepository', () => {
+     expect(called).toBe(false)
+   })
+ 
++  // ΓöÇΓöÇ search: consultation-form type-ahead ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++  // The service-layer searchProducts this replaces selected a nonexistent
++  // `sku` column (PGRST204 on every call) and matched name only.
++  it('search matches brand OR generic name, case-insensitively, tenant-scoped', async () => {
++    const client = createInMemoryClient({
++      products: [
++        { id: '1', business_id: A, name: 'Panadol', generic_name: 'Paracetamol', price: 500 },
++        { id: '2', business_id: A, name: 'Amoxicillin', generic_name: null, price: 1500 },
++        { id: '9', business_id: B, name: 'Paracetamol Extra', generic_name: null, price: 900 },
++      ],
++    })
++    const repo = createProductRepository(client)
++
++    // by brand name
++    expect((await repo.search(A, 'panadol')).map(r => r.id)).toEqual(['1'])
++    // by generic name ΓÇö the match the old query could never make
++    expect((await repo.search(A, 'PARACETAMOL')).map(r => r.id)).toEqual(['1'])
++    // never crosses the tenant boundary
++    expect((await repo.search(A, 'extra')).map(r => r.id)).toEqual([])
++    // blank query issues no request
++    expect(await repo.search(A, '   ')).toEqual([])
++  })
++
++  it('search URL-encodes the query so commas cannot break the or= clause', async () => {
++    const calls = []
++    const repo = createProductRepository(async (path) => { calls.push(path); return [] })
++    await repo.search(A, 'cream, 50g')
++    expect(calls[0]).toContain(encodeURIComponent('cream, 50g'))
++    expect(calls[0]).not.toContain('cream,')
++  })
++
++  it('search selects only real columns and caps the result size', async () => {
++    const calls = []
++    const repo = createProductRepository(async (path) => { calls.push(path); return [] })
++    await repo.search(A, 'para', 5)
++    expect(calls[0]).toContain('select=id,name,generic_name,price,category')
++    expect(calls[0]).toContain('limit=5')
++    expect(calls[0]).not.toContain('sku')
++  })
++
+   it('exports a default productRepository instance', () => {
+     expect(typeof productRepository.getAll).toBe('function')
+     expect(typeof productRepository.deleteBulk).toBe('function')
+diff --git a/apps/carehub/src/modules/live-activity/LiveActivity.jsx b/apps/carehub/src/modules/live-activity/LiveActivity.jsx
+index 8d5056e..c58cf61 100644
+--- a/apps/carehub/src/modules/live-activity/LiveActivity.jsx
++++ b/apps/carehub/src/modules/live-activity/LiveActivity.jsx
+@@ -1,11 +1,14 @@
+ import { useState, useEffect, useRef } from 'react'
++import { MapPin, BadgeCheck, AlertTriangle } from 'lucide-react'
+ import {
+   getActivityFields, addActivityField, deleteActivityField,
+   getDefaultViewers, setDefaultViewers,
+-  getFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
++  getFieldActivities, countFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
+   logActivity, reactToActivity, unreactToActivity, commentOnActivity,
+-  uploadActivityVoice, reverseGeocode,
++  uploadActivityVoice, reverseGeocode, geocodePlace,
+ } from '../../services/supabase'
++// Pure distance check: does the GPS fix sit within tolerance of the claimed place?
++import { verifyPlaceMatch } from '../../lib/geo'
+ // Cross-aggregate reads: activity is logged by staff, against a territory.
+ import { territoryRepository } from '../territories/repositories'
+ import { staffRepository } from '../staff/repositories'
+@@ -84,6 +87,8 @@ export default function LiveActivity({ brand }) {
+     ? (authData.staff.public_title || authData.staff.role || 'Staff')
+     : 'Owner'
+   const isOwner = meStaffId === null
++  // Managers (and the owner) get the My Feed / Team Reports split (issue #7).
++  const isManager = isOwner || /manager/i.test((authData.staff && authData.staff.role) || '')
+ 
+   const [fields, setFields] = useState([])
+   const [activities, setActivities] = useState([])
+@@ -97,6 +102,11 @@ export default function LiveActivity({ brand }) {
+   const [liveOn, setLiveOn] = useState(false)
+ 
+   const [view, setView] = useState('feed')
++  // Scope tabs (managers only): 'mine' shows the manager's own logs, 'team'
++  // shows everything the business's permission model lets them see. The owner
++  // has no staff row, so their "mine" would be empty ΓÇö they start on 'team'.
++  const [scope, setScope] = useState(isOwner ? 'team' : 'mine')
++  const [counts, setCounts] = useState(null)
+   const [dateRange, setDateRange] = useState('all')
+   const [customFrom, setCustomFrom] = useState('')
+   const [customTo, setCustomTo] = useState('')
+@@ -115,6 +125,15 @@ export default function LiveActivity({ brand }) {
+   const [gps, setGps] = useState(null)
+   const [placeName, setPlaceName] = useState('')
+   const [findingPlace, setFindingPlace] = useState(false)
++  // Place of Visit (issue #8): the rep names WHERE they visited; the name is
++  // geocoded to coordinates and checked against the GPS fix at submit time.
++  const [placeQuery, setPlaceQuery] = useState('')
++  const [placeCoords, setPlaceCoords] = useState(null)
++  const [placeSuggestions, setPlaceSuggestions] = useState([])
++  const [geocoding, setGeocoding] = useState(false)
++  const [geoError, setGeoError] = useState(false)
++  const [geoRetry, setGeoRetry] = useState(0)
++  const placeTimer = useRef(null)
+   const [saving, setSaving] = useState(false)
+   const [saveStatus, setSaveStatus] = useState('')
+ 
+@@ -163,6 +182,21 @@ export default function LiveActivity({ brand }) {
+       setStaffList(stf || [])
+       setTerritories(ters || [])
+ 
++      // Tab badges for managers. Non-fatal: a failed count just hides the
++      // numbers, it must not blank the feed.
++      if (isManager) {
++        try {
++          const [mine, team] = await Promise.all([
++            countFieldActivities(brand.id, meStaffId),
++            countFieldActivities(brand.id),
++          ])
++          setCounts({ mine: mine, team: team })
++        } catch (e) {
++          console.error('Activity counts failed:', e)
++          setCounts(null)
++        }
++      }
++
+       const ids = (acts || []).map(function (a) { return a.id })
+       const vs = await getActivityViewers(ids)
+       const vmap = {}
+@@ -339,6 +373,38 @@ export default function LiveActivity({ brand }) {
+     setVoicePreview(null)
+   }
+ 
++  // Debounced forward-geocode of the typed place name. Suggestions are only
++  // fetched while the logger is open; picking one pins the coordinates that
++  // the submit-time verification compares against the GPS fix.
++  useEffect(function () {
++    if (!logging) return
++    const q = placeQuery.trim()
++    if (q.length < 3) { setPlaceSuggestions([]); setGeoError(false); return }
++    clearTimeout(placeTimer.current)
++    placeTimer.current = setTimeout(async function () {
++      setGeocoding(true)
++      try {
++        const results = await geocodePlace(q)
++        setPlaceSuggestions(results)
++        setGeoError(false)
++      } catch (e) {
++        console.error('Place lookup failed:', e)
++        setPlaceSuggestions([])
++        setGeoError(true)
++      } finally {
++        setGeocoding(false)
++      }
++    }, 400)
++    return function () { clearTimeout(placeTimer.current) }
++  }, [placeQuery, logging, geoRetry])
++
++  function pickPlace(s) {
++    setPlaceQuery(s.name)
++    setPlaceCoords({ lat: s.lat, lng: s.lng })
++    setPlaceSuggestions([])
++    setGeoError(false)
++  }
++
+   function openLogger() {
+     if (fields.length === 0) {
+       showToast('No activity fields set up yet. The Owner needs to define what a visit record looks like first.', { type: 'warning' })
+@@ -351,6 +417,10 @@ export default function LiveActivity({ brand }) {
+     setVoicePreview(null)
+     setGps(null)
+     setPlaceName('')
++    setPlaceQuery('')
++    setPlaceCoords(null)
++    setPlaceSuggestions([])
++    setGeoError(false)
+     setLogging(true)
+ 
+     if (navigator.geolocation) {
+@@ -360,7 +430,12 @@ export default function LiveActivity({ brand }) {
+           const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+           setGps(coords)
+           const name = await reverseGeocode(coords.lat, coords.lng)
+-          if (name) setPlaceName(name)
++          if (name) {
++            setPlaceName(name)
++            // Prefill the editable Place of Visit with the reverse-geocoded
++            // guess; the rep can correct it before submitting.
++            setPlaceQuery(function (prev) { return prev || name })
++          }
+           setFindingPlace(false)
+         },
+         function () { setFindingPlace(false) },
+@@ -393,6 +468,11 @@ export default function LiveActivity({ brand }) {
+         return { staff_id: id, viewer_name: nameFor(id) }
+       })
+ 
++      // Verification is computed once, at log time, and stored with the row ΓÇö
++      // the feed never re-derives it. No GPS or no resolved place means
++      // "unverified", not an error: the log must still go through.
++      const verified = !!(placeCoords && gps && verifyPlaceMatch(placeCoords, gps))
++
+       await logActivity({
+         business_id: brand.id,
+         staff_id: meStaffId,
+@@ -404,6 +484,9 @@ export default function LiveActivity({ brand }) {
+         lat: gps ? gps.lat : null,
+         lng: gps ? gps.lng : null,
+         location_label: placeName || null,
++        place_of_visit: placeQuery.trim() || null,
++        place_coords: placeCoords || null,
++        place_verified: verified,
+       }, viewers)
+ 
+       showToast('Activity logged', { type: 'success' })
+@@ -498,6 +581,7 @@ export default function LiveActivity({ brand }) {
+   }
+ 
+   const permitted = activities.filter(function (a) {
++    if (isManager && scope === 'mine') return a.staff_id === meStaffId
+     if (isOwner) return true
+     if (a.staff_id === meStaffId) return true
+     const vs = viewersByAct[a.id] || []
+@@ -543,7 +627,7 @@ export default function LiveActivity({ brand }) {
+     if (col.key === 'date') return fmtStamp(a.created_at)
+     if (col.key === 'rep') return a.rep_name
+     if (col.key === 'territory') return terrName(a.territory_id) || ''
+-    if (col.key === 'place') return a.location_label || ''
++    if (col.key === 'place') return a.place_of_visit || a.location_label || ''
+     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
+     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
+     if (col.fieldId) {
+@@ -635,6 +719,30 @@ export default function LiveActivity({ brand }) {
+         </div>
+       )}
+ 
++      {isManager && (
++        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
++          {[
++            ['mine', 'My Feed', counts ? counts.mine : null],
++            ['team', 'Team Reports', counts ? counts.team : null],
++          ].map(function (t) {
++            const on = scope === t[0]
++            const label = t[2] != null
++              ? t[1] + ' (' + (t[2] >= 1000 ? '1000+' : t[2]) + ')'
++              : t[1]
++            return (
++              <button key={t[0]} onClick={function () { setScope(t[0]) }}
++                aria-pressed={on}
++                style={{ fontSize: '12.5px', fontWeight: '800', padding: '9px 18px', borderRadius: '10px', cursor: 'pointer',
++                  border: `1px solid ${on ? tealDeep : border}`,
++                  background: on ? tealDeep : 'white',
++                  color: on ? 'white' : gray500 }}>
++              {label}
++              </button>
++            )
++          })}
++        </div>
++      )}
++
+       <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+         {[['feed', 'Feed'], ['table', 'Table']].map(function (v) {
+           const on = view === v[0]
+@@ -812,6 +920,22 @@ export default function LiveActivity({ brand }) {
+                         {a.location_label}
+                       </div>
+                     )}
++                    {(a.place_of_visit || a.place_verified) && (
++                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: a.location_label ? '2px' : '4px' }}>
++                        <span style={{ fontSize: '12px', fontWeight: '700', color: navy }}>
++                          <MapPin size={11} style={{ verticalAlign: '-1px', marginRight: '3px' }} />{a.place_of_visit}
++                        </span>
++                        {a.place_verified ? (
++                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: successBg, color: success }}>
++                            <BadgeCheck size={10} /> GPS verified
++                          </span>
++                        ) : (
++                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', fontWeight: '800', padding: '2px 8px', borderRadius: '20px', background: warningBg, color: warning }}>
++                            <AlertTriangle size={10} /> Unverified
++                          </span>
++                        )}
++                      </div>
++                    )}
+                   </div>
+                   {a.lat && a.lng && (
+                     <a href={'https://www.google.com/maps?q=' + a.lat + ',' + a.lng} target='_blank' rel='noreferrer'
+@@ -948,19 +1072,60 @@ export default function LiveActivity({ brand }) {
+           <GhostBtn onClick={function () { setLogging(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+           <TealBtn onClick={submitActivity} style={{ flex: 2, padding: '12px' }}>{saving ? 'Saving...' : 'Log It'}</TealBtn>
+         </>}>
+-            <div style={{ padding: '10px 12px', borderRadius: '8px', background: placeName ? tealMist : bg, border: '1px solid ' + (placeName ? tealMist : gray100), marginBottom: '16px' }}>
+-              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Location</div>
+-              <div style={{ fontSize: '12.5px', color: placeName ? tealDeep : gray400, fontWeight: placeName ? '700' : '500', marginTop: '2px' }}>
+-                {placeName
+-                  ? placeName
+-                  : findingPlace
+-                    ? 'Finding where you are...'
+-                    : gps
+-                      ? 'Coordinates captured'
+-                      : 'Location not available'}
++            <div style={{ padding: '10px 12px', borderRadius: '8px', background: bg, border: `1px solid ${gray100}`, marginBottom: '16px' }}>
++              <div style={{ fontSize: '10px', fontWeight: '800', color: gray400, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GPS</div>
++              <div style={{ fontSize: '12.5px', color: gps ? tealDeep : gray400, fontWeight: gps ? '700' : '500', marginTop: '2px' }}>
++                {findingPlace
++                  ? 'Finding where you are...'
++                  : gps
++                    ? 'Coordinates captured'
++                    : 'Location not available'}
+               </div>
+             </div>
+ 
++            <div>
++              <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Place of Visit</div>
++              <input value={placeQuery} onChange={function (e) { setPlaceQuery(e.target.value) }}
++                placeholder='Where did you visit? e.g. Lagos University Teaching Hospital'
++                aria-label='Place of Visit'
++                style={{ width: '100%', padding: '12px 12px', borderRadius: '10px', border: `1px solid ${border}`, fontSize: '13px', background: 'white', boxSizing: 'border-box' }} />
++              {geocoding && <div style={{ fontSize: '11.5px', color: gray400, marginTop: '4px' }}>Looking up placeΓÇª</div>}
++              {!geocoding && geoError && (
++                <button type='button' onClick={function () { setGeoRetry(function (n) { return n + 1 }) }}
++                  style={{ display: 'block', width: '100%', marginTop: '6px', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${danger}`, background: dangerBg, color: danger, fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', textAlign: 'left' }}>
++                  Couldn't look up that place. Tap to retry ΓÇö or keep typing.
++                </button>
++              )}
++              {placeSuggestions.length > 0 && (
++                <div style={{ marginTop: '6px', maxHeight: '180px', overflowY: 'auto', border: `1px solid ${border}`, borderRadius: '10px', background: 'white' }}>
++                  {placeSuggestions.map(function (s, i) {
++                    return (
++                      <button key={i} type='button' onClick={function () { pickPlace(s) }}
++                        style={{ display: 'block', width: '100%', padding: '9px 12px', borderBottom: `1px solid ${gray100}`, background: 'white', border: 'none', borderTop: i > 0 ? `1px solid ${gray100}` : 'none', cursor: 'pointer', textAlign: 'left', fontSize: '12px', color: navy }}>
++                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: '600' }}><MapPin size={12} /> {s.name}</span>
++                      </button>
++                    )
++                  })}
++                </div>
++              )}
++              {gps && placeCoords && (
++                verifyPlaceMatch(placeCoords, gps) ? (
++                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: success, marginTop: '6px' }}>
++                    <BadgeCheck size={13} /> GPS matches this place
++                  </div>
++                ) : (
++                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', fontWeight: '700', color: warning, marginTop: '6px' }}>
++                    <AlertTriangle size={13} /> You are far from this place ΓÇö it will be saved unverified
++                  </div>
++                )
++              )}
++              {gps && !placeCoords && placeQuery.trim().length >= 3 && !geocoding && (
++                <div style={{ fontSize: '11.5px', color: gray500, marginTop: '6px' }}>
++                  Pick a suggestion above to verify against your GPS.
++                </div>
++              )}
++            </div>
++
+             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+               <div>
+                 <div style={{ fontSize: '12px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Territory</div>
+diff --git a/apps/carehub/src/modules/territories/Territories.jsx b/apps/carehub/src/modules/territories/Territories.jsx
+index 2077e92..c5c5d0f 100644
+--- a/apps/carehub/src/modules/territories/Territories.jsx
++++ b/apps/carehub/src/modules/territories/Territories.jsx
+@@ -1,13 +1,14 @@
+-import { useState, useEffect } from 'react'
+-import { Plus, Check } from 'lucide-react'
++import { useState, useEffect, useMemo } from 'react'
++import { Plus, Check, Upload, Download, FileUp, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react'
+ import { territoryRepository } from './repositories'
++import { parseTerritoryCsv, resolveTerritoryUpload } from './territoryImport'
+ // Cross-aggregate read: reps assigned to a territory are staff.
+ import { staffRepository } from '../staff/repositories'
+ import { theme } from '../../styles/theme'
+ import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
+ import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
+ 
+-const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
++const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg, success, warning, warningBg } = theme
+ const LEVEL_SUGGESTIONS = ['Region', 'State', 'City', 'LGA', 'Zone']
+ 
+ export default function Territories({ brand }) {
+@@ -21,6 +22,10 @@ export default function Territories({ brand }) {
+   const [form, setForm] = useState({})
+   const [assigningTerritory, setAssigningTerritory] = useState(null)
+   const [territoryToDelete, setTerritoryToDelete] = useState(null)
++  const [showUpload, setShowUpload] = useState(false)
++  const [uploadData, setUploadData] = useState([])
++  const [uploadError, setUploadError] = useState('')
++  const [importing, setImporting] = useState(false)
+ 
+   useEffect(() => { load() }, [brand?.id])
+ 
+@@ -90,6 +95,95 @@ export default function Territories({ brand }) {
+   const repsFor = (territoryId) => assignments.filter(a => a.territory_id === territoryId)
+   const parentName = (id) => territories.find(t => t.id === id)?.name || null
+ 
++  // ΓöÇΓöÇ Bulk upload (CSV) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++  // Mirrors the Inventory product upload: download a template, fill it in
++  // Excel, save as CSV, upload here. The parent territory is referenced by
++  // NAME in the file and resolved against territories that already exist.
++  const resolution = useMemo(
++    () => resolveTerritoryUpload(uploadData, territories),
++    [uploadData, territories],
++  )
++
++  function downloadTerritoryTemplate() {
++    const rows = [
++      ['Territory Name', 'Level', 'Sits Under (name)'],
++      ['Nigeria South', 'Region', ''],
++      ['Lagos Region', 'Region', 'Nigeria South'],
++      ['Ikeja', 'LGA', 'Lagos Region'],
++    ]
++    const csv = rows.map(r => r.map(c => '"' + c + '"').join(',')).join('\n')
++    const blob = new Blob([csv], { type: 'text/csv' })
++    const url = URL.createObjectURL(blob)
++    const a = document.createElement('a'); a.href = url; a.download = 'CareHub_Territories_Template.csv'; a.click()
++    URL.revokeObjectURL(url)
++    showToast('Template downloaded! Fill in Excel, save as CSV, then upload.', { type: 'success' })
++  }
++
++  function handleTerritoryFileUpload(e) {
++    const file = e.target.files[0]; if (!file) return
++    setUploadError(''); setUploadData([])
++    const reader = new FileReader()
++    reader.onload = ev => {
++      try {
++        const { rows, error } = parseTerritoryCsv(ev.target.result)
++        if (error) { setUploadError(error); return }
++        setUploadData(rows)
++      } catch (err) { setUploadError('Error reading file. Use the downloaded template.') }
++    }
++    reader.readAsText(file); e.target.value = ''
++  }
++
++  async function importTerritories() {
++    if (resolution.creates.length === 0) { showToast('Nothing new to import ΓÇö everything in the file already exists.', { type: 'warning' }); return }
++    setImporting(true)
++    showToast('Importing ' + resolution.creates.length + ' territoriesΓÇª', { type: 'info' })
++    try {
++      const { added, skipped: serverSkipped, failed } = await territoryRepository.createMany(brand.id, resolution.creates)
++
++      // Second pass: children whose parent was created by this same file are
++      // still top-level ΓÇö patch each onto its parent now that every row has an id.
++      let linked = 0
++      const linkFailures = []
++      if (resolution.parentLinks.length > 0) {
++        const byName = new Map((await territoryRepository.getAll(brand.id)).map(t => [t.name.toLowerCase(), t]))
++        for (const link of resolution.parentLinks) {
++          try {
++            const child = byName.get(link.name.toLowerCase())
++            const parent = byName.get(link.parent_name.toLowerCase())
++            if (!child?.id || !parent?.id) throw new Error('territory not found after import')
++            await territoryRepository.update(child.id, brand.id, { parent_territory_id: parent.id })
++            linked++
++          } catch {
++            linkFailures.push(link.name)
++          }
++        }
++      }
++
++      await load()
++      setShowUpload(false); setUploadData([]); setUploadError('')
++      const skipped = resolution.skipped.length + serverSkipped
++      const problems = [
++        ...resolution.failed.map(f => f.name + ' (' + f.reason + ')'),
++        ...failed.map(x => x.name + ' (' + x.message + ')'),
++        ...linkFailures.map(n => n + ' (could not link to parent)'),
++      ]
++      const parts = [added + ' imported']
++      if (linked > 0) parts.push(linked + ' linked to their parents')
++      if (skipped > 0) parts.push(skipped + ' skipped (already exist)')
++      if (resolution.invalid.length > 0) parts.push(resolution.invalid.length + ' invalid')
++      if (problems.length > 0) parts.push(problems.length + ' need attention')
++      const summary = parts.join(' ┬╖ ')
++      if (problems.length > 0) {
++        showToast(summary + ': ' + problems.slice(0, 3).join(', '), { type: 'warning' })
++      } else {
++        showToast(summary + '!', { type: 'success' })
++      }
++    } catch (e) {
++      showToast('Import failed: ' + e.message, { type: 'error' })
++    }
++    setImporting(false)
++  }
++
+   const toggleRep = async (territoryId, staffId) => {
+     const existing = assignments.find(a => a.territory_id === territoryId && a.staff_id === staffId)
+     try {
+@@ -110,6 +204,7 @@ export default function Territories({ brand }) {
+         title="Territories"
+         description="Regions, states, or coverage areas ΓÇö named however your company works. Assign reps to each."
+         primaryAction={{ label: 'Add territory', leftIcon: <Plus size={15} />, onClick: openNew }}
++        secondaryActions={[{ label: 'Bulk upload', leftIcon: <Upload size={15} />, onClick: () => { setUploadData([]); setUploadError(''); setShowUpload(true) } }]}
+       />
+       <div style={{ padding: '24px', maxWidth: '760px' }}>
+         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+@@ -213,6 +308,61 @@ export default function Territories({ brand }) {
+             </div>
+       </Modal>
+ 
++      {/* Bulk Upload Modal */}
++      <Modal show={showUpload} onClose={() => { setShowUpload(false); setUploadData([]); setUploadError('') }} title='Upload Territories from Excel / CSV'>
++        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
++          <div style={{ padding: '14px', borderRadius: '12px', background: tealMist, border: `1px solid ${tealDeep}`, fontSize: '13px', color: tealDeep, lineHeight: '1.9' }}>
++            1. Tap <strong>Download Template</strong><br />
++            2. Open in <strong>Microsoft Excel</strong> or Google Sheets<br />
++            3. Fill in your territories row by row ΓÇö "Sits Under" must match an existing territory's name, or another row in this file (children may be listed before their parents)<br />
++            4. Save as <strong>CSV</strong><br />
++            5. Upload here
++          </div>
++          <label style={{ display: 'block', padding: '24px', borderRadius: '12px', border: `2px dashed ${border}`, textAlign: 'center', cursor: 'pointer', background: theme.bg }}>
++            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px', color: gray500 }}><FileUp size={36} /></div>
++            <div style={{ fontWeight: '700', color: gray600, fontSize: '14px' }}>Tap to select CSV file</div>
++            <input type='file' accept='.csv,.xlsx,.xls,.txt' onChange={handleTerritoryFileUpload} style={{ display: 'none' }} />
++          </label>
++          {uploadError && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px', borderRadius: '10px', background: dangerBg, border: `1px solid ${danger}`, fontSize: '13px', color: danger }}><AlertTriangle size={15} /> {uploadError}</div>}
++          {uploadData.length > 0 && (
++            <div>
++              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: success, fontSize: '13px', marginBottom: '8px', flexWrap: 'wrap' }}>
++                <CheckCircle size={15} /> {resolution.creates.length} new territories in file
++                {resolution.skipped.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> ┬╖ {resolution.skipped.length} already exist (will be skipped)</span>}
++                {resolution.invalid.length > 0 && <span style={{ color: warning, fontWeight: '600' }}> ┬╖ {resolution.invalid.length} invalid</span>}
++                {resolution.failed.length > 0 && <span style={{ color: danger, fontWeight: '600' }}> ┬╖ {resolution.failed.length} cannot be imported</span>}
++              </div>
++              <div style={{ maxHeight: '180px', overflowY: 'auto', borderRadius: '10px', border: `1px solid ${theme.gray100}` }}>
++                {uploadData.map((t, i) => {
++                  const isDupe = resolution.skipped.some(s => s.toLowerCase() === t.name.toLowerCase())
++                  const failedRow = resolution.failed.find(f => f.row === i + 1)
++                  return (
++                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 12px', borderBottom: `1px solid ${theme.gray100}`, fontSize: '12px', background: failedRow ? dangerBg : isDupe ? warningBg : 'transparent' }}>
++                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '600', color: failedRow ? danger : isDupe ? warning : navy }}>
++                        {(isDupe || failedRow) && <AlertTriangle size={12} />}{t.name}
++                      </span>
++                      <span style={{ color: failedRow ? danger : isDupe ? warning : gray500 }}>
++                        {failedRow ? failedRow.reason : isDupe ? 'Already exists' : [t.level, t.parent_name ? 'under ' + t.parent_name : ''].filter(Boolean).join(' ┬╖ ') || 'ΓÇö'}
++                      </span>
++                    </div>
++                  )
++                })}
++              </div>
++            </div>
++          )}
++          <div style={{ display: 'flex', gap: '10px' }}>
++            <GhostBtn onClick={downloadTerritoryTemplate} style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><Download size={14} /> Download Template</GhostBtn>
++            {uploadData.length > 0 && resolution.creates.length > 0 && (
++              <button onClick={importTerritories} disabled={importing} style={{ flex: 1, padding: '12px', borderRadius: theme.radius.md, border: 'none', background: tealDeep, color: 'white', fontWeight: '800', fontSize: '14px', cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.7 : 1 }}>
++                {importing
++                  ? <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Loader2 size={16} className="spin" aria-hidden="true" /> ImportingΓÇª</span>
++                  : 'Import ' + resolution.fresh.length + ' Territories'}
++              </button>
++            )}
++          </div>
++        </div>
++      </Modal>
++
+       <ConfirmDialog show={!!territoryToDelete} onClose={() => setTerritoryToDelete(null)} onConfirm={remove}
+         title={'Delete "' + (territoryToDelete ? territoryToDelete.name : '') + '"?'}
+         consequence={'This permanently removes the territory' + (territoryToDelete && repsFor(territoryToDelete.id).length > 0 ? ' and unassigns the ' + repsFor(territoryToDelete.id).length + ' rep(s) currently covering it' : '') + '. This cannot be undone.'}
+diff --git a/apps/carehub/src/modules/territories/repositories/index.js b/apps/carehub/src/modules/territories/repositories/index.js
+index c0648d2..85550bc 100644
+--- a/apps/carehub/src/modules/territories/repositories/index.js
++++ b/apps/carehub/src/modules/territories/repositories/index.js
+@@ -1,5 +1,5 @@
+ import { sbFetch } from '../../../services/supabase'
+-import { translateConstraintError } from '../../../lib/dbErrors'
++import { translateConstraintError, isDuplicateError } from '../../../lib/dbErrors'
+ 
+ // Four tables reference `territories` and none of those foreign keys cascade.
+ // The rep-assignment one is the reachable case: assigning a rep is a normal
+@@ -51,6 +51,37 @@ export function createTerritoryRepository(request = sbFetch) {
+       })
+     },
+ 
++    // Bulk import (CSV upload): same contract as the clients repository ΓÇö
++    // many creates in safe-sized parallel batches with per-row error capture,
++    // so one bad row can never sink the whole file. Returns
++    // { added, skipped, failed } where skipped counts rows the SERVER refused
++    // as duplicates and failed is [{ name, message }] for everything else.
++    async createMany(businessId, territories, batchSize = 20) {
++      let added = 0
++      let skipped = 0
++      const failed = []
++      for (let i = 0; i < territories.length; i += batchSize) {
++        const batch = territories.slice(i, i + batchSize)
++        const results = await Promise.all(batch.map(t =>
++          request('territories', {
++            method: 'POST',
++            body: JSON.stringify({ ...t, business_id: businessId }),
++          })
++            .then(() => true)
++            .catch(err => {
++              if (isDuplicateError(err)) return 'skipped'
++              return { name: t.name || 'Unknown', message: err.message || 'error' }
++            })
++        ))
++        results.forEach(r => {
++          if (r === true) added++
++          else if (r === 'skipped') skipped++
++          else failed.push(r)
++        })
++      }
++      return { added, skipped, failed }
++    },
++
+     // Previously an id-only PATCH in services/supabase.js.
+     async update(territoryId, businessId, updates) {
+       return request(`territories?id=eq.${territoryId}&business_id=eq.${businessId}`, {
+diff --git a/apps/carehub/src/modules/territories/repositories/index.test.js b/apps/carehub/src/modules/territories/repositories/index.test.js
+index f73de16..9c43897 100644
+--- a/apps/carehub/src/modules/territories/repositories/index.test.js
++++ b/apps/carehub/src/modules/territories/repositories/index.test.js
+@@ -47,6 +47,52 @@ describe('territoryRepository', () => {
+       expect(created).toMatchObject({ business_id: A, parent_territory_id: 't2' })
+     })
+ 
++    // ΓöÇΓöÇ Bulk import (CSV upload) ΓÇö same contract as clients.createMany ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++    it('createMany inserts every row with the tenant stamped', async () => {
++      const { repo, client } = seeded()
++      const result = await repo.createMany(A, [
++        { name: 'Ikeja', level: 'City', parent_territory_id: 't2' },
++        { name: 'Ibadan', level: 'City', parent_territory_id: null },
++      ])
++      expect(result).toEqual({ added: 2, skipped: 0, failed: [] })
++      expect(client.rows('territories').filter((r) => r.name === 'Ikeja' || r.name === 'Ibadan'))
++        .toEqual([
++          expect.objectContaining({ name: 'Ikeja', business_id: A }),
++          expect.objectContaining({ name: 'Ibadan', business_id: A }),
++        ])
++    })
++
++    it('createMany captures per-row failures without losing the rest', async () => {
++      let n = 0
++      const repo = createTerritoryRepository(async (path, options) => {
++        n++
++        if (n === 1) throw new Error('network blip')
++        return []
++      })
++      const result = await repo.createMany(A, [
++        { name: 'Broken' },
++        { name: 'Fine' },
++      ])
++      expect(result.added).toBe(1)
++      expect(result.failed).toEqual([{ name: 'Broken', message: 'network blip' }])
++    })
++
++    it('createMany is a no-op for an empty list (issues no request)', async () => {
++      let called = false
++      const repo = createTerritoryRepository(async () => { called = true; return [] })
++      const result = await repo.createMany(A, [])
++      expect(result).toEqual({ added: 0, skipped: 0, failed: [] })
++      expect(called).toBe(false)
++    })
++
++    it('createMany counts a server duplicate as skipped, not failed', async () => {
++      const repo = createTerritoryRepository(async () => {
++        throw new Error('Supabase error (409): duplicate key value violates unique constraint')
++      })
++      const result = await repo.createMany(A, [{ name: 'South West' }])
++      expect(result).toEqual({ added: 0, skipped: 1, failed: [] })
++    })
++
+     it('update scopes by id and business', async () => {
+       const { repo, client } = seeded()
+       await repo.update('t2', A, { name: 'Lagos State' })
+diff --git a/apps/carehub/src/modules/territories/territoryImport.js b/apps/carehub/src/modules/territories/territoryImport.js
+new file mode 100644
+index 0000000..527a8d1
+--- /dev/null
++++ b/apps/carehub/src/modules/territories/territoryImport.js
+@@ -0,0 +1,127 @@
++// Pure CSV-import helpers for the Territories bulk upload, extracted from the
++// page so the rules are unit-testable. Mirrors inventory/csvImport.js.
++//
++// Column contract (positional ΓÇö the header row is display-only):
++//   0 Territory Name ┬╖ 1 Level (optional) ┬╖ 2 Sits Under (name, optional)
++//
++// The parent is referenced BY NAME because a spreadsheet author cannot know
++// database ids; resolution against existing territories happens in
++// resolveTerritoryUpload at import time.
++
++/**
++ * Parses uploaded territory CSV text into { name, level, parent_name } rows.
++ * Returns { rows, error } ΓÇö error is null on success, otherwise a
++ * user-facing message. Rows without a name are skipped.
++ */
++export function parseTerritoryCsv(text) {
++  const lines = String(text || '').split('\n').filter(l => l.trim())
++  if (lines.length < 2) return { rows: [], error: 'File is empty or has no territories.' }
++
++  const rows = []
++  for (const line of lines.slice(1)) {
++    // Quote-aware split: commas inside "quoted values" don't break columns.
++    const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim())
++    if (!cols[0]) continue
++    rows.push({ name: cols[0], level: cols[1] || '', parent_name: cols[2] || '' })
++  }
++
++  if (rows.length === 0) return { rows: [], error: 'No valid territories found.' }
++  return { rows, error: null }
++}
++
++/**
++ * Turns parsed rows into a two-pass upload plan against the business's
++ * existing territories:
++ *   creates     ΓÇö [{ name, level, parent_territory_id }] first-pass inserts.
++ *                 parent_territory_id is set only when the parent ALREADY
++ *                 exists in the database; everything else inserts top-level.
++ *   parentLinks ΓÇö [{ name, parent_name }] second-pass PATCHes: children whose
++ *                 parent is created by this same file. The caller resolves
++ *                 names to ids after the inserts land and patches each child.
++ *   skipped     ΓÇö names already in the database or duplicated in-file
++ *                 (case-insensitive)
++ *   invalid     ΓÇö file positions of rows with no name ("row 3")
++ *   failed      ΓÇö [{ name, row, reason }] rows that can never link: unknown
++ *                 parent name, or membership in / hanging off a circular
++ *                 hierarchy inside the file.
++ */
++export function resolveTerritoryUpload(rows, existingTerritories) {
++  const known = new Map(
++    (existingTerritories || []).filter(t => t && t.name).map(t => [t.name.toLowerCase(), t]),
++  )
++  const pending = [] // rows that will definitely be created (parent already in DB, or no parent)
++  const deferred = new Map() // lower(name) -> { name, level, row, parent_name }
++  const skipped = []
++  const invalid = []
++
++  // Pass 1: park every valid row; defer any whose parent isn't already in the
++  // database (it may be created later in this same file).
++  rows.forEach((r, i) => {
++    const name = String(r?.name || '').trim()
++    if (!name) { invalid.push('row ' + (i + 1)); return }
++    const key = name.toLowerCase()
++    if (known.has(key)) { skipped.push(name); return }
++
++    const parentName = String(r?.parent_name || '').trim()
++    let parent_territory_id = null
++    if (parentName) {
++      const parent = known.get(parentName.toLowerCase())
++      if (parent?.id) parent_territory_id = parent.id
++    }
++
++    if (parentName && !parent_territory_id) {
++      deferred.set(key, { name, level: String(r?.level || '').trim() || null, row: i + 1, parent_name: parentName })
++    } else {
++      pending.push({ name, level: String(r?.level || '').trim() || null, parent_territory_id, row: i + 1 })
++    }
++    // Register only AFTER dedupe checks so a later duplicate of this name is
++    // skipped ΓÇö and WITHOUT an id, so it can never serve as an existing parent.
++    known.set(key, { name })
++  })
++
++  // Pass 2 classification: walk each deferred child up its in-file parent
++  // chain. A chain terminates safely when it reaches a row that resolved to a
++  // real id in pass 1; it dead-ends at a name nothing created (unknown) or
++  // loops forever (cycle). Memoized so shared tails are walked once.
++  const statusOf = new Map() // key -> true (resolvable) | false (circular)
++
++  const resolves = (key, path) => {
++    if (statusOf.has(key)) return statusOf.get(key)
++    const node = deferred.get(key)
++    if (!node) return true // not deferred ΓåÆ its parent got a real id in pass 1
++    const cycleStart = path.indexOf(key)
++    if (cycleStart !== -1) {
++      for (let i = cycleStart; i < path.length; i++) statusOf.set(path[i], false)
++      return false
++    }
++    const ok = resolves(node.parent_name.toLowerCase(), [...path, key])
++    statusOf.set(key, ok)
++    return ok
++  }
++
++  const creates = []
++  const parentLinks = []
++  const failed = []
++
++  pending.forEach(p => creates.push({ name: p.name, level: p.level, parent_territory_id: p.parent_territory_id }))
++  deferred.forEach((node, key) => {
++    if (!pending.some(p => p.name.toLowerCase() === node.parent_name.toLowerCase()) &&
++        !deferred.has(node.parent_name.toLowerCase())) {
++      failed.push({ name: node.name, row: node.row, reason: 'Unknown parent "' + node.parent_name + '"' })
++      return
++    }
++    if (resolves(key, [])) {
++      creates.push({ name: node.name, level: node.level, parent_territory_id: null })
++      parentLinks.push({ name: node.name, parent_name: node.parent_name })
++    } else {
++      failed.push({ name: node.name, row: node.row, reason: 'Circular hierarchy detected' })
++    }
++  })
++
++  // Restore file order so previews read like the spreadsheet.
++  const rowIndex = new Map()
++  rows.forEach((r, i) => { if (r?.name) rowIndex.set(String(r.name).trim().toLowerCase(), i) })
++  creates.sort((a, b) => (rowIndex.get(a.name.toLowerCase()) ?? 0) - (rowIndex.get(b.name.toLowerCase()) ?? 0))
++
++  return { creates, parentLinks, skipped, invalid, failed }
++}
+diff --git a/apps/carehub/src/modules/territories/territoryImport.test.js b/apps/carehub/src/modules/territories/territoryImport.test.js
+new file mode 100644
+index 0000000..94e1615
+--- /dev/null
++++ b/apps/carehub/src/modules/territories/territoryImport.test.js
+@@ -0,0 +1,149 @@
++import { describe, it, expect } from 'vitest'
++import { parseTerritoryCsv, resolveTerritoryUpload } from './territoryImport.js'
++
++const HEADER = 'Territory Name,Level,Sits Under (name)'
++
++describe('parseTerritoryCsv', () => {
++  it('parses name, level and parent name positionally', () => {
++    const csv = HEADER + '\n"Lagos Region","Region","Nigeria South"\n"Ikeja","LGA","Lagos Region"'
++    const { rows, error } = parseTerritoryCsv(csv)
++    expect(error).toBeNull()
++    expect(rows).toEqual([
++      { name: 'Lagos Region', level: 'Region', parent_name: 'Nigeria South' },
++      { name: 'Ikeja', level: 'LGA', parent_name: 'Lagos Region' },
++    ])
++  })
++
++  it('treats level and parent as optional', () => {
++    const csv = HEADER + '\n"Abuja Central"'
++    const { rows } = parseTerritoryCsv(csv)
++    expect(rows[0]).toEqual({ name: 'Abuja Central', level: '', parent_name: '' })
++  })
++
++  it('skips rows without a name and errors when nothing valid remains', () => {
++    const empty = parseTerritoryCsv('')
++    expect(empty.rows).toHaveLength(0)
++    expect(empty.error).toBe('File is empty or has no territories.')
++
++    const headerOnly = parseTerritoryCsv(HEADER + '\n,"Region","Parent"')
++    expect(headerOnly.rows).toHaveLength(0)
++    expect(headerOnly.error).toBe('No valid territories found.')
++  })
++})
++
++describe('resolveTerritoryUpload', () => {
++  const existing = [
++    { id: 't1', name: 'Nigeria South', level: 'Region' },
++    { id: 't2', name: 'Lagos Region', level: 'Region' },
++  ]
++
++  it('resolves parent names case-insensitively to existing territory ids', () => {
++    const { creates, parentLinks } = resolveTerritoryUpload(
++      [{ name: 'Ikeja', level: 'LGA', parent_name: 'lagos region' }],
++      existing,
++    )
++    expect(creates).toEqual([{ name: 'Ikeja', level: 'LGA', parent_territory_id: 't2' }])
++    expect(parentLinks).toEqual([])
++  })
++
++  it('defers a child whose parent is defined later in the same file (two-pass)', () => {
++    // Parallel batch inserts give no ordering guarantee, so the child inserts
++    // with a null parent first; the link is patched once every row exists.
++    const { creates, parentLinks, failed } = resolveTerritoryUpload(
++      [
++        { name: 'Ikeja', level: 'LGA', parent_name: 'Lagos Region' },
++        { name: 'Lagos Region', level: 'Region', parent_name: '' },
++      ],
++      [],
++    )
++    expect(creates).toEqual([
++      { name: 'Ikeja', level: 'LGA', parent_territory_id: null },
++      { name: 'Lagos Region', level: 'Region', parent_territory_id: null },
++    ])
++    expect(parentLinks).toEqual([{ name: 'Ikeja', parent_name: 'Lagos Region' }])
++    expect(failed).toEqual([])
++  })
++
++  it('fails rows whose parent exists nowhere with a reason', () => {
++    const { creates, parentLinks, failed } = resolveTerritoryUpload(
++      [{ name: 'Ikeja', level: 'LGA', parent_name: 'Atlantis' }],
++      existing,
++    )
++    expect(creates).toHaveLength(0)
++    expect(parentLinks).toEqual([])
++    expect(failed).toHaveLength(1)
++    expect(failed[0].name).toBe('Ikeja')
++    expect(failed[0].reason).toMatch(/unknown parent/i)
++    expect(failed[0].reason).toContain('Atlantis')
++  })
++
++  it('fails every row in a parent cycle instead of guessing an order', () => {
++    const { creates, parentLinks, failed } = resolveTerritoryUpload(
++      [
++        { name: 'Area A', level: '', parent_name: 'Area B' },
++        { name: 'Area B', level: '', parent_name: 'Area A' },
++      ],
++      [],
++    )
++    expect(creates).toEqual([])
++    expect(parentLinks).toEqual([])
++    expect(failed.map(f => f.name).sort()).toEqual(['Area A', 'Area B'])
++    for (const f of failed) expect(f.reason).toMatch(/circular/i)
++  })
++
++  it('fails rows hanging off a cycle ΓÇö they can never resolve either', () => {
++    const { parentLinks, failed } = resolveTerritoryUpload(
++      [
++        { name: 'Area A', level: '', parent_name: 'Area B' },
++        { name: 'Area B', level: '', parent_name: 'Area A' },
++        { name: 'Depot', level: '', parent_name: 'Area A' },
++      ],
++      [],
++    )
++    expect(parentLinks).toEqual([])
++    expect(failed.map(f => f.name).sort()).toEqual(['Area A', 'Area B', 'Depot'])
++  })
++
++  it('chains multi-level in-file hierarchies onto their file-created parents', () => {
++    const { creates, parentLinks } = resolveTerritoryUpload(
++      [
++        { name: 'Region R', level: 'Region', parent_name: '' },
++        { name: 'State S', level: 'State', parent_name: 'Region R' },
++        { name: 'LGA L', level: 'LGA', parent_name: 'State S' },
++      ],
++      [],
++    )
++    expect(creates).toHaveLength(3)
++    expect(parentLinks).toEqual([
++      { name: 'State S', parent_name: 'Region R' },
++      { name: 'LGA L', parent_name: 'State S' },
++    ])
++  })
++
++  it('skips names that already exist, case-insensitively, and dedupes within the file', () => {
++    const { creates, skipped } = resolveTerritoryUpload(
++      [
++        { name: 'LAGOS REGION', level: '', parent_name: '' },
++        { name: 'Ibadan', level: '', parent_name: '' },
++        { name: 'ibadan', level: '', parent_name: '' },
++      ],
++      existing,
++    )
++    expect(creates.map(r => r.name)).toEqual(['Ibadan'])
++    expect(skipped).toEqual(['LAGOS REGION', 'ibadan'])
++  })
++
++  it('reports rows without a name as invalid with their file position', () => {
++    const { creates, invalid } = resolveTerritoryUpload(
++      [{ name: '', level: 'Region', parent_name: '' }],
++      existing,
++    )
++    expect(creates).toHaveLength(0)
++    expect(invalid).toEqual(['row 1'])
++  })
++
++  it('nulls blank levels for the nullable column', () => {
++    const { creates } = resolveTerritoryUpload([{ name: 'Kano', level: '', parent_name: '' }], [])
++    expect(creates[0]).toEqual({ name: 'Kano', level: null, parent_territory_id: null })
++  })
++})
+diff --git a/apps/carehub/src/services/supabase.js b/apps/carehub/src/services/supabase.js
+index 28ce3cf..e96dd3d 100644
+--- a/apps/carehub/src/services/supabase.js
++++ b/apps/carehub/src/services/supabase.js
+@@ -196,11 +196,11 @@ export async function getAllLocations(mainBusinessId) {
+ // on a limit=50000 request). Only offset-paging through the clamp reaches
+ // every row, so the products/clients collection reads below page through it.
+ export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
+-export async function searchProducts(businessId, query, limit = 30) {
+-  const q = encodeURIComponent(query.trim())
+-  if (!q) return []
+-  return sbFetch('products?business_id=eq.' + businessId + '&name=ilike.*' + q + '*&order=name.asc&select=id,name,price,category,sku&limit=' + limit)
+-}
++// NOTE: `searchProducts` lived here until 2026-08-21. It selected a nonexistent
++// `sku` column, so every call failed with PGRST204 and the consultation form's
++// silent catch made the picker look empty. Replaced by
++// productRepository.search (modules/inventory/repositories), which matches
++// name OR generic_name and selects only real columns.
+ export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
+ export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+ export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+@@ -505,8 +505,19 @@ export async function setDefaultViewers(businessId, staffId, viewers) {
+   }
+ }
+ 
+-export async function getFieldActivities(businessId) {
+-  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=100')
++export async function getFieldActivities(businessId, { limit = 100 } = {}) {
++  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=' + limit)
++}
++
++// Lightweight count for the manager's My Feed / Team Reports tab badges.
++// select=id keeps the payload tiny; PostgREST's server-side db-max-rows clamp
++// (1000 on this project) saturates the result past that, which callers must
++// surface as "1000+" rather than an exact figure.
++export async function countFieldActivities(businessId, staffId) {
++  let path = 'field_activities?business_id=eq.' + businessId
++  if (staffId) path += '&staff_id=eq.' + staffId
++  const rows = await sbFetch(path + '&select=id&limit=1000')
++  return Array.isArray(rows) ? rows.length : 0
+ }
+ export async function getActivityViewers(activityIds) {
+   if (!activityIds || activityIds.length === 0) return []
+@@ -551,6 +562,29 @@ export async function reverseGeocode(lat, lng) {
+   }
+ }
+ 
++// Forward geocoding for the Place of Visit field: a typed place name becomes
++// coordinates so the log can verify the rep's GPS against where they claim to
++// be. Same free OpenStreetMap service as reverseGeocode ΓÇö no key, no cost.
++// Returns [{ name, lat, lng }] sorted by OSM relevance; throws on transport
++// failure so the caller can show a retryable error rather than an empty list.
++export async function geocodePlace(query) {
++  const q = encodeURIComponent(String(query || '').trim())
++  if (!q) return []
++  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=' + q
++  const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
++  if (!res.ok) throw new Error('Place lookup failed (' + res.status + ')')
++  const data = await res.json()
++  if (!Array.isArray(data)) return []
++  return data
++    .map(function (d) {
++      const lat = parseFloat(d.lat)
++      const lng = parseFloat(d.lon)
++      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
++      return { name: d.display_name, lat: lat, lng: lng }
++    })
++    .filter(Boolean)
++}
++
+ export async function uploadActivityVoice(blob) {
+   const type = blob.type || 'audio/mp4'
+   let ext = 'mp4'
+diff --git a/apps/carehub/src/test/inMemoryClient.js b/apps/carehub/src/test/inMemoryClient.js
+index 1db5f0a..d4b15e3 100644
+--- a/apps/carehub/src/test/inMemoryClient.js
++++ b/apps/carehub/src/test/inMemoryClient.js
+@@ -52,6 +52,17 @@ export function createInMemoryClient(seed = {}) {
+     if (val.startsWith('lte.')) return row[key] != null && compare(String(row[key]), val.slice(4)) <= 0
+     if (val.startsWith('gt.')) return row[key] != null && compare(String(row[key]), val.slice(3)) > 0
+     if (val.startsWith('lt.')) return row[key] != null && compare(String(row[key]), val.slice(3)) < 0
++    // PostgREST LIKE with * wildcards, case-insensitive. Only the forms the
++    // repositories emit are supported: leading/trailing * around a literal.
++    if (val.startsWith('ilike.')) {
++      const pattern = val.slice(6)
++      const parts = pattern.split('*')
++      if (parts.length !== 3 || parts[0] !== '' || parts[2] !== '') {
++        throw new Error(`inMemoryClient: unsupported ilike pattern "${pattern}" (only *literal*)`)
++      }
++      const needle = parts[1].toLowerCase()
++      return row[key] != null && String(row[key]).toLowerCase().includes(needle)
++    }
+     return null
+   }
+ 
+diff --git a/knowledge/modules/inventory.md b/knowledge/modules/inventory.md
+index 2e569a8..4e18dea 100644
+--- a/knowledge/modules/inventory.md
++++ b/knowledge/modules/inventory.md
+@@ -26,6 +26,9 @@ No dedicated service module. Five functions in `lib/supabase.js`: `getProducts`,
+ ## Current State
+ Add/edit/delete/restock/CSV-import/duplicate-merge are all implemented and reachable. **Stock is not reliably accurate**: `POS.jsx` decrements `stock` only in local React state and never calls `updateProduct()`, so a sale's effect on inventory reverts on reload. `Purchases.jsx` records supplier deliveries as free text with no link to `products`, so receiving stock has no effect on the catalog either. The CareFind-visibility toggle is implemented twice (here and in `CareFind.jsx`) with no shared source. No pagination exists ΓÇö every load fetches the full catalog. Authorization (`canEditPrice`/`canEditStock`) is enforced only by disabling form fields client-side.
+ 
++## Bulk upload (CSV)
++Positional 10-column template (`Inventory.jsx` downloadTemplate + `csvImport.js`): Product Name ┬╖ Generic Name ┬╖ Category ┬╖ Selling Price (NGN) ┬╖ Cost Price (NGN) ┬╖ Stock Quantity ┬╖ Reorder Level ┬╖ Barcode ┬╖ List on CareFind (yes/no) ┬╖ **Expiry Date**. Column 10 was added 2026-08-21; parsing lives in pure helpers (`parseInventoryCsv`, `normalizeExpiryDate`) unit-tested in `csvImport.test.js`. Contract: blank/malformed/impossible expiry values become `null` (the column is nullable) rather than failing the row ΓÇö JS date-rollover traps (2027-02-31 ΓåÆ March) are explicitly rejected; ISO input is validated in UTC so no timezone shifts it, other formats are read back in local components. Legacy 9-column files keep importing with a null expiry. Empty stock cell means a Service (stock 999); rows without a product name are skipped; import skips duplicates already in the catalog.
++
+ ## Missing Documentation
+ No written specification exists for: the duplicate-detection/merge algorithm (name/generic-name normalization rules, "keeper" selection logic) ΓÇö reverse-engineered from source for this entry; the intended relationship (if any) between `products.stock` and the enterprise `stock_batches`/`stock_movements` system; why `products` carries both a legacy `cat` and current `category` field with `||` fallbacks throughout; and what, if anything, is supposed to keep `products.stock` accurate given POS does not persist its own decrements.
+ 

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { verifyBusiness } from './_lib/verifyBusiness.js'
 import { paystackFetch } from './_lib/paystack.js'
-import { PLAN_MONTHLY_NAIRA } from '../src/lib/planLimits.js'
+import { PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA } from '../src/lib/planLimits.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -23,10 +23,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid request' })
   }
 
+  const yearlyPrice = PLAN_YEARLY_NAIRA[business.plan]
   const monthlyPrice = PLAN_MONTHLY_NAIRA[business.plan]
-  if (!monthlyPrice) return res.status(400).json({ error: 'Unknown plan' })
+  if (yearlyPrice === null || yearlyPrice === undefined) {
+    // Custom or unknown — no fixed Paystack price
+    return res.status(400).json({ error: 'Custom plan — contact support@carehub.ng for a tailored quote' })
+  }
+  if (!monthlyPrice || !yearlyPrice) return res.status(400).json({ error: 'Unknown plan' })
 
-  const naira = monthlyPrice * (months === 12 ? 10 : 1)
+  const naira = months === 12 ? yearlyPrice : monthlyPrice
   const reference = `ch_${business.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
 
   try {

@@ -26,6 +26,7 @@ export const NOTIFICATION_TYPES = {
   BOOKING_CREATED: 'booking_created',
   BOOKING_PAID: 'booking_paid',
   BOOKING_CONFIRMED: 'booking_confirmed',
+  PRODUCT_EXPIRING_SOON: 'product_expiring_soon',
 }
 
 // Default human-readable messages per type
@@ -53,6 +54,7 @@ export const DEFAULT_MESSAGES = {
   [NOTIFICATION_TYPES.BOOKING_CREATED]: 'New appointment booking',
   [NOTIFICATION_TYPES.BOOKING_PAID]: 'Payment received for appointment',
   [NOTIFICATION_TYPES.BOOKING_CONFIRMED]: 'Your appointment was confirmed',
+  [NOTIFICATION_TYPES.PRODUCT_EXPIRING_SOON]: ' product is approaching its expiry date',
 }
 
 /**

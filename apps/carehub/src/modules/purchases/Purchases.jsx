@@ -11,7 +11,8 @@ import { stockRepository } from '../stock/repositories'
 // inventory replenishment, and the debt raised by any shortfall. Each is owned
 // by its own module's repository rather than re-derived here.
 import { debtRepository } from '../debts/repositories'
-import { fmt, todayDate } from '../../lib/utils'
+import { fmt, fmtDate, todayDate } from '../../lib/utils'
+import { purchaseExpirySummary } from './expirySummary'
 import { findDuplicate } from '../../lib/productMatches'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -78,6 +79,7 @@ export default function Purchases({ brand, role, perms }) {
       const balance = Math.max(0, total - paid)
       const totalQty = validItems.reduce((s, i) => s + Number(i.qty), 0)
       const productNames = validItems.map(i => i.name.trim())
+      const { expiry, batch } = purchaseExpirySummary(validItems)
       const purchase = await purchaseRepository.create(brand.id, {
         supplier_name: form.supplier,
         product_name: productNames.join(', '),
@@ -90,6 +92,8 @@ export default function Purchases({ brand, role, perms }) {
         due_date: form.dueDate || '',
         status: paid >= total ? 'paid' : 'pending',
         notes: form.notes || '',
+        expiry: expiry,
+        batch: batch,
       })
       const purchaseId = (purchase[0] || {}).id || ''
 
@@ -264,7 +268,7 @@ export default function Purchases({ brand, role, perms }) {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${border}`, background: gray50 }}>
-                  {['Supplier', 'Product', 'Qty', 'Unit Cost', 'Total', 'Paid', 'Balance', 'Supply Date', 'Due Date', 'Status', 'Action'].map(h => (
+                  {['Supplier', 'Product', 'Qty', 'Unit Cost', 'Total', 'Paid', 'Balance', 'Supply Date', 'Due Date', 'Expiry Date', 'Status', 'Action'].map(h => (
                     <th key={h} style={{ padding: '12px 12px', textAlign: 'left', fontSize: '10px', fontWeight: '700', color: gray400, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -281,6 +285,7 @@ export default function Purchases({ brand, role, perms }) {
                     <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: '900', color: (p.balance || 0) > 0 ? danger : success }}>{fmt(p.balance || 0)}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{p.supply_date || '—'}</td>
                     <td style={{ padding: '12px 12px', fontSize: '12px', color: gray400 }}>{p.due_date || '—'}</td>
+                    <td style={{ padding: '12px 12px', fontSize: '12px', color: gray500 }}>{fmtDate(p.expiry)}</td>
                     <td style={{ padding: '12px 12px' }}><Pill label={p.status} type={p.status === 'paid' ? 'green' : 'amber'} /></td>
                     <td style={{ padding: '12px 12px' }}>
                       {p.status !== 'paid' && <button onClick={() => markPaid(p)} style={{ padding: '6px 12px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>Mark paid</button>}
@@ -330,8 +335,11 @@ export default function Purchases({ brand, role, perms }) {
                       <input value={item.batch} onChange={e => setItem(i, 'batch', e.target.value)} placeholder='Batch no. (optional)'
                         aria-label='Batch number'
                         style={{ padding: '8px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
-                      <input value={item.expiry} onChange={e => setItem(i, 'expiry', e.target.value)} type='date' aria-label='Expiry date'
-                        style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <label style={{ fontSize: '11px', fontWeight: '700', color: gray500 }}>Expiry Date</label>
+                        <input value={item.expiry} onChange={e => setItem(i, 'expiry', e.target.value)} type='date' aria-label='Expiry date'
+                          style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', color: navy, background: 'white' }} />
+                      </div>
                       <select value={item.cat} onChange={e => setItem(i, 'cat', e.target.value)} aria-label='Category'
                         style={{ padding: '7px 10px', borderRadius: theme.radius.sm, border: `1px solid ${border}`, fontSize: '12px', outline: 'none', background: 'white', color: navy }}>
                         {PRODUCT_CATS.map(c => <option key={c}>{c}</option>)}

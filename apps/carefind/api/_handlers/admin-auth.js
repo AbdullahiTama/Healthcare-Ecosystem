@@ -535,5 +535,117 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true })
   }
 
+  // --------------------------------------------------------------------
+  // Credential review (issue #5). The `credentials` bucket holds professional
+  // licences, MDCN/PCN certificates and work IDs — identity documents — and
+  // is now PRIVATE (20260822_credentials_bucket_hardening.sql). It used to be
+  // a public bucket, so AdminPanel could link straight at credential_url and
+  // so could anyone else who had or guessed that URL.
+  //
+  // Reviewers reach a document through here instead: this handler holds the
+  // service-role key, so it is the one caller that can read another user's
+  // object, and it hands back a URL that expires. Requires a valid admin
+  // session, same as every other action above.
+  // --------------------------------------------------------------------
+  if (action === 'credential_url') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+
+    const { requestId } = req.body
+    if (!requestId) return res.status(400).json({ error: 'requestId required' })
+
+    const { data: request, error: readError } = await supabase
+      .from('verification_requests')
+      .select('id, credential_url')
+      .eq('id', requestId)
+      .maybeSingle()
+    if (readError) return res.status(400).json({ error: readError.message })
+    if (!request || !request.credential_url) {
+      return res.status(404).json({ error: 'This request has no credential document attached.' })
+    }
+
+    // Rows written before this change stored a full public URL; rows written
+    // after store the bare object path. Accept both, and never let a stored
+    // value walk out of the bucket.
+    const stored = String(request.credential_url)
+    const marker = '/credentials/'
+    const idx = stored.indexOf(marker)
+    const objectPath = (idx >= 0 ? stored.slice(idx + marker.length) : stored).replace(/^\/+/, '')
+    if (!objectPath || objectPath.includes('..')) {
+      return res.status(400).json({ error: 'Stored credential path is not usable.' })
+    }
+
+    const { data: signed, error: signError } = await supabase.storage
+      .from('credentials')
+      .createSignedUrl(objectPath, 300) // five minutes is long enough to review
+    if (signError) return res.status(400).json({ error: signError.message })
+
+    return res.status(200).json({ url: signed.signedUrl, expiresIn: 300 })
+  }
+
+  // --------------------------------------------------------------------
+  // Shop / E-commerce admin (Spec A18)
+  // --------------------------------------------------------------------
+  if (action === 'list_ecommerce_applications') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { data } = await supabase.from('ecommerce_applications').select('*, businesses(name, business_type, city, state)').order('created_at', { ascending: false }).limit(100)
+    return res.status(200).json({ data: data || [] })
+  }
+  if (action === 'update_ecommerce_application') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { id, status, rejection_reason } = req.body
+    if (!id || !status) return res.status(400).json({ error: 'id and status required' })
+    const allowed = ['Approved','Rejected','Suspended','Under Review']
+    if (!allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' })
+    const patch = { status, updated_at: new Date().toISOString(), reviewed_at: new Date().toISOString(), reviewer_id: payload.adminId }
+    if (rejection_reason) patch.rejection_reason = rejection_reason
+    const { error } = await supabase.from('ecommerce_applications').update(patch).eq('id', id)
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ success: true })
+  }
+  if (action === 'list_ecommerce_products_admin') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { data } = await supabase.from('ecommerce_products').select('id,status,category,prescription_required,is_restricted,active_at,business_id,product_id, businesses(name), products(name,price,stock)').order('created_at', { ascending: false }).limit(100)
+    return res.status(200).json({ data: data || [] })
+  }
+  if (action === 'moderate_ecommerce_product') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { id, is_restricted, status } = req.body
+    if (!id) return res.status(400).json({ error: 'id required' })
+    const patch = {}
+    if (typeof is_restricted === 'boolean') patch.is_restricted = is_restricted
+    if (status) patch.status = status
+    patch.updated_at = new Date().toISOString()
+    const { error } = await supabase.from('ecommerce_products').update(patch).eq('id', id)
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ success: true })
+  }
+  if (action === 'list_shop_orders_admin') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { data } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).limit(50)
+    return res.status(200).json({ data: data || [] })
+  }
+  if (action === 'admin_update_shop_order_status') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { orderId, status, note } = req.body
+    if (!orderId || !status) return res.status(400).json({ error: 'orderId and status required' })
+    const { error } = await supabase.rpc('update_shop_order_status', { p_order_id: orderId, p_to_status: status, p_changed_by: null, p_note: note || null })
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ success: true })
+  }
+
   return res.status(400).json({ error: 'Unknown action' })
 }

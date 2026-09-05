@@ -4,13 +4,13 @@
 import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
-  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
-  ClipboardList, LayoutDashboard, Layers,
+  Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
+  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -23,7 +23,7 @@ export const ROLES = {
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','carefind','messages','stock','orders','activity'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -36,7 +36,7 @@ export const ROLES = {
     label: 'Manager',
   },
   Pharmacist: {
-    nav: ['dashboard','pos','inventory','clients','consultation','rx_inbox'],
+    nav: ['dashboard','pos','inventory','clients','consultation','rx_inbox','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -88,7 +88,7 @@ export const ROLES = {
     label: 'Cashier',
   },
   Nurse: {
-    nav: ['dashboard','triage','clients'],
+    nav: ['dashboard','triage','clients','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -101,7 +101,7 @@ export const ROLES = {
     label: 'Nurse',
   },
   Doctor: {
-    nav: ['dashboard','doctor','consultation','clients'],
+    nav: ['dashboard','doctor','consultation','clients','adr-reports'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -132,7 +132,7 @@ export const ROLES = {
 // (Manufacturer/Importer and Wholesale let companies type their own role names,
 // so "Regional Manager", "Business Development Manager" etc won't be in the list above).
 export const DEFAULT_STAFF_PERMS = {
-  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'carefind'],
+  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'adr-reports', 'carefind'],
   canEditPrice: false,
   canEditStock: false,
   canDelete: false,
@@ -182,6 +182,22 @@ export function can(role, action, customRoles = {}) {
   return getPerms(role, customRoles)[action] || false
 }
 
+// Is this staff role a manager? Deliberately a substring test, not an equality
+// check against the preset "Manager": Manufacturer/Importer and Wholesale
+// tenants type their own role names (see DEFAULT_STAFF_PERMS above), so real
+// businesses run "Regional Manager", "Area Manager", "<Brand> Manager". An
+// exact match finds none of them.
+//
+// This is the ONE definition — UI gating and any server-side recipient lookup
+// must both go through it. When a lookup needs to filter rows rather than test
+// one value, fetch `id,role` and filter with this predicate rather than
+// re-expressing the rule as a PostgREST filter, which is how the two drifted
+// apart before. Owners are NOT covered here: an owner has no `staff` row at
+// all, so callers handle the owner separately.
+export function isManagerRole(role) {
+  return /manager/i.test(role || '')
+}
+
 // ── Module registry ───────────────────────────────────────────────────────────
 // Single source of truth for which modules exist and which business types may
 // use them. Everything that lists modules — the sidebar, the route guards and
@@ -201,44 +217,72 @@ const ENTERPRISE_TYPES = ['manufacturer_importer', 'wholesale']
 const CONSULT_TYPES = ['skincare', 'pharmacy']
 
 export const MODULES = {
-  dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES },
-  overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES },
-  pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES },
-  inventory: { label: 'Inventory', icon: Package, types: ALL_TYPES },
-  mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES },
-  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' } },
-  appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES },
-  consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES },
-  expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES },
-  debts: { label: 'Debts', icon: Landmark, types: ALL_TYPES },
-  purchases: { label: 'Purchases', icon: Truck, types: ALL_TYPES },
-  demand: { label: 'Demand', icon: ClipboardList, types: ALL_TYPES },
-  carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES },
-  locations: { label: 'Locations', icon: Building2, types: ALL_TYPES },
-  staff: { label: 'Staff', icon: User, types: ALL_TYPES },
-  reports: { label: 'Reports', icon: BarChart2, types: ALL_TYPES },
-  settings: { label: 'Settings', icon: Settings, types: ALL_TYPES },
-  reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES },
-  triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES },
-  doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES },
-  rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES },
-  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES },
-  imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES },
-  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES },
-  orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES },
-  warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES },
-  stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES },
-  territories: { label: 'Territories', icon: Map, types: ENTERPRISE_TYPES },
-  messages: { label: 'Correspondence', icon: Mail, types: ENTERPRISE_TYPES },
+  dashboard: { label: 'Dashboard', icon: Home, types: ALL_TYPES, section: 'overview' },
+  overview: { label: 'Overview', icon: LayoutDashboard, types: ALL_TYPES, section: 'overview' },
+  pos: { label: 'POS / Sales', icon: ShoppingCart, types: ALL_TYPES, section: 'operations' },
+  inventory: { label: 'Stock Management', icon: Package, types: ALL_TYPES, section: 'operations' },
+  mastercatalog: { label: 'Master Catalog', icon: Layers, types: ALL_TYPES, section: 'ecosystem' },
+  clients: { label: 'Clients', icon: Users, types: ALL_TYPES, labelByType: { hospital: 'Patients' }, section: 'patients' },
+  appointments: { label: 'Appointments', icon: Calendar, types: RETAIL_TYPES, section: 'operations' },
+  consultation: { label: 'Consultations', icon: Clipboard, types: CONSULT_TYPES, section: 'operations' },
+  expenses: { label: 'Expenses', icon: Receipt, types: ALL_TYPES, section: 'finance' },
+  debts: { label: 'Debts', icon: Landmark, types: ALL_TYPES, section: 'finance' },
+  purchases: { label: 'Purchases', icon: Truck, types: ALL_TYPES, section: 'operations' },
+  demand: { label: 'Demand', icon: ClipboardList, types: ALL_TYPES, section: 'intelligence' },
+  carefind: { label: 'CareFind Profile', icon: Search, types: ALL_TYPES, section: 'ecosystem' },
+  locations: { label: 'Locations', icon: Building2, types: ALL_TYPES, section: 'ecosystem' },
+  staff: { label: 'Staff', icon: User, types: ALL_TYPES, section: 'people' },
+  // Reports Hub (planning-artifacts/ux-designs/…/EXPERIENCE.md §2 IA). The hub
+  // lives at /dashboard/reports; each report module deep-links to its tab via
+  // `path`. More tabs (operational, client & sales, compliance, scheduled) are
+  // appended to the registry + REPORT_TABS as their modules ship (Phase 2/3).
+  wallet: { label: 'Wallet', icon: Landmark, types: ALL_TYPES, section: 'finance' },
+  reports: { label: 'Financial Reports', icon: BarChart2, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/financial' },
+  'adr-reports': { label: 'Pharmacovigilance (ADR)', icon: AlertTriangle, types: ALL_TYPES, section: 'intelligence', path: '/dashboard/reports/adr' },
+  ecommerce: { label: 'E-commerce', icon: Store, types: ALL_TYPES, section: 'ecosystem' },
+  settings: { label: 'Settings', icon: Settings, types: ALL_TYPES, section: 'admin' },
+  reception: { label: 'Reception', icon: UserCheck, types: HOSPITAL_TYPES, section: 'clinical' },
+  triage: { label: 'Triage', icon: Activity, types: HOSPITAL_TYPES, section: 'clinical' },
+  doctor: { label: 'Doctor', icon: Stethoscope, types: HOSPITAL_TYPES, section: 'clinical' },
+  rx_inbox: { label: 'Rx Inbox', icon: Pill, types: HOSPITAL_TYPES, section: 'clinical' },
+  lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES, section: 'clinical' },
+  imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
+  activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  territories: { label: 'Territories', icon: MapIcon, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  messages: { label: 'Correspondence', icon: Mail, types: ENTERPRISE_TYPES, section: 'ecosystem' },
 }
+
+// Workflow sections (docs/product/INFORMATION-ARCHITECTURE.md — "group by
+// workflow, not module"). The roadmap's P2.5 grouping: Overview, Operations,
+// Patients, Clinical, Finance, People, Intelligence, Ecosystem, Admin.
+// SECTION_ORDER is the canonical order; MODULES[id].section is the membership
+// map. Section order is intentionally fixed so a role can never reflow the
+// sidebar by granting odd nav subsets.
+export const NAV_SECTIONS = {
+  overview: { label: 'Overview' },
+  operations: { label: 'Operations' },
+  patients: { label: 'Patients & Clients' },
+  clinical: { label: 'Clinical' },
+  finance: { label: 'Finance' },
+  people: { label: 'People' },
+  intelligence: { label: 'Intelligence' },
+  ecosystem: { label: 'Ecosystem' },
+  admin: { label: 'Admin' },
+}
+
+export const SECTION_ORDER = ['overview', 'operations', 'patients', 'clinical', 'finance', 'people', 'intelligence', 'ecosystem', 'admin']
 
 // Per-vertical ordering. Kept separate from the registry because the three
 // legacy nav lists ordered their modules differently and nothing should
 // depend on a reorder happening silently.
 const NAV_ORDER = {
-   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-   hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'reports', 'carefind', 'settings'],
+   default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {
@@ -273,6 +317,85 @@ export const ALL_NAV_ENTERPRISE = NAV_ORDER.enterprise.map(id => [id, MODULES[id
 export function getNavItems(role, businessType, customRoles = {}) {
   const perms = getPerms(role, customRoles)
   return getModulesForType(businessType).filter(item => perms.nav.includes(item[0]))
+}
+
+// Grouped nav for the sidebar (docs/product/INFORMATION-ARCHITECTURE.md).
+// Derives purely from the same flat ordering getNavItems uses — the registry
+// and NAV_ORDER stay the single source of truth, and this only slices the
+// allowed list into workflow sections so route guards and the role editor keep
+// consuming the flat form unchanged. Empty sections are dropped.
+export function getNavGroups(role, businessType, customRoles = {}) {
+  const items = getNavItems(role, businessType, customRoles)
+  const groups = new Map(SECTION_ORDER.map(id => [id, []]))
+  items.forEach(item => {
+    const section = MODULES[item[0]].section
+    if (groups.has(section)) groups.get(section).push(item)
+  })
+  return SECTION_ORDER
+    .filter(id => groups.get(id).length > 0)
+    .map(id => ({ id, label: NAV_SECTIONS[id].label, items: groups.get(id) }))
+}
+
+// ── Reports Hub (planning-artifacts/ux-designs/…/EXPERIENCE.md §2 taxonomy) ──
+// Canonical tab order for /dashboard/reports. REPORT_TABS is the single source
+// of truth for the hub's tab bar; a tab must both exist in MODULES and be
+// granted in a role's nav array before it can appear here. More tabs are
+// appended as their modules ship (Phase 2/3: operational, client & sales,
+// compliance, scheduled).
+export const REPORT_TABS = ['reports', 'adr-reports']
+
+// Deep-linkable URL slug per tab — /dashboard/reports/:slug. The sidebar items
+// deep-link via MODULES[id].path, which resolves to these slugs.
+export const REPORT_TAB_SLUGS = {
+  reports: 'financial',
+  'adr-reports': 'adr',
+}
+
+// Reverse lookup for the :tab route param (ReportsHub).
+export const slugToReportTab = Object.fromEntries(
+  Object.entries(REPORT_TAB_SLUGS).map(([id, slug]) => [slug, id])
+)
+
+export function reportTabSlug(id) {
+  return REPORT_TAB_SLUGS[id]
+}
+
+// The tabs a role may actually open, in canonical order, filtered through the
+// same role/business-type matrix the sidebar and route guards use.
+export function getReportTabs(role, businessType, customRoles = {}) {
+  const allowed = getNavItems(role, businessType, customRoles).map(item => item[0])
+  return REPORT_TABS.filter(id => allowed.includes(id))
+}
+
+// Role-aware landing tab (EXPERIENCE.md §2): clinical staff (Pharmacist, Nurse,
+// Doctor) land on ADR, every other report-granted role lands on Financial.
+// Falls back to the first tab a role can access so a role never lands on a tab
+// it cannot open.
+export function getReportDefaultTab(role, businessType, customRoles = {}) {
+  const tabs = getReportTabs(role, businessType, customRoles)
+  if (tabs.length === 0) return null
+  if (['Pharmacist', 'Nurse', 'Doctor'].includes(role) && tabs.includes('adr-reports')) return 'adr-reports'
+  if (tabs.includes('reports')) return 'reports'
+  return tabs[0]
+}
+
+// Sidebar deep links: report modules resolve to their hub tab path, everything
+// else to /dashboard/:id.
+export function modulePath(id) {
+  return MODULES[id]?.path || `/dashboard/${id}`
+}
+
+// Sidebar active state. Report modules are hub deep links, and the legacy
+// /dashboard/adr-reports* URLs (list + detail) keep the ADR item highlighted
+// while a report is open.
+export function isModuleActive(id, pathname) {
+  if (id === 'reports') {
+    return pathname === '/dashboard/reports' || pathname.startsWith('/dashboard/reports/financial')
+  }
+  if (id === 'adr-reports') {
+    return pathname.startsWith('/dashboard/reports/adr') || pathname.startsWith('/dashboard/adr-reports')
+  }
+  return pathname.split('/').pop() === id
 }
 
 export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier', 'Nurse', 'Doctor', 'Lab Technician']

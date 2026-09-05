@@ -4,9 +4,9 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
-  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Link2, Lock, MapPin, Menu,
+  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Flag, Link2, Lock, MapPin, Menu,
   MessageSquare, Repeat2,
-  Plus, Radio, ShoppingCart, Star, Stethoscope, Wallet as WalletIcon, X,
+  Pencil, Plus, Radio, ShoppingCart, Star, Stethoscope, Trash2, Wallet as WalletIcon, X,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -20,9 +20,13 @@ import FollowersSheet from '../social-feed/FollowersSheet.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
 import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
-import { Card, CardSkeleton, Empty, Stars, Toast, useToast } from '../../components/ui'
+import { Card, CardSkeleton, Empty, Modal, ConfirmDialog, Stars, Toast, useToast } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
-import { PostTileGrid, isRepost, withoutRepostMark } from '../social-feed/postDisplay.jsx'
+import { isRepost } from '../social-feed/postDisplay.jsx'
+import PostCard from '../social-feed/PostCard.jsx'
+import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+import { usePostEngagement } from '../social-feed/usePostEngagement'
+import { formatCount } from '../social-feed/postSelectors'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 
 function Profile() {
@@ -58,11 +62,30 @@ function Profile() {
   const [myReviews, setMyReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [tabLoading, setTabLoading] = useState(false)
-  const [openPost, setOpenPost] = useState(null)
+  // Authors of the posts this profile has reposted, so a repost can name and
+  // link the person who actually wrote it (issue #8).
+  const [sourceAuthors, setSourceAuthors] = useState({})
+  // Issues #3/#4: every post on this profile renders through the SAME
+  // full-featured PostCard the feed uses — like, comment, share, gift, save,
+  // and (on your own posts) Edit/Delete — driven by the same engagement layer,
+  // not a degraded tile grid.
+  const [unlockedCreators, setUnlockedCreators] = useState([])
+  const [giftingPost, setGiftingPost] = useState(null) // { postId, authorId }
+  // The four things a reader can report (same closed set as the feed).
+  const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
   const [menuOpen, setMenuOpen] = useState(false)
   const [myStories, setMyStories] = useState([])
   const [myShows, setMyShows] = useState([])
   const [now, setNow] = useState(Date.now())
+  // Manage scheduled live: edit/reschedule/cancel lifecycle (spec-carefind-scheduled-live-manageable)
+  const [editingShow, setEditingShow] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editScheduledAt, setEditScheduledAt] = useState('')
+  const [editTrailerFile, setEditTrailerFile] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [cancelConfirmId, setCancelConfirmId] = useState(null)
+  const [cancellingId, setCancellingId] = useState(null)
   const [storyComposer, setStoryComposer] = useState(false)
   const [sTitle, setSTitle] = useState('')
   const [sBody, setSBody] = useState('')
@@ -75,6 +98,83 @@ function Profile() {
   const [productUpload, setProductUpload] = useState(false)
   const [sheetKind, setSheetKind] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  // Issues #3/#4 — the feed's shared engagement layer (main's usePostEngagement)
+  // drives every PostCard on this profile. The index also contains the SOURCES
+  // of reposts, so an interaction on a reposted article targets the original.
+  const postIndex = []
+  {
+    const seen = new Set()
+    for (const p of [...savedPosts, ...myPosts]) {
+      if (p && !seen.has(p.id)) { seen.add(p.id); postIndex.push(p) }
+      if (p?.source && !seen.has(p.source.id)) { seen.add(p.source.id); postIndex.push(p.source) }
+    }
+  }
+  const postKey = postIndex.map((p) => p.id).join(',')
+  const [sharingId, setSharingId] = useState(null)
+  const [reportPostId, setReportPostId] = useState(null)
+  const [reportingId, setReportingId] = useState(null)
+  const [editingPost, setEditingPost] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const engagement = usePostEngagement({
+    user,
+    navigate,
+    toast: { show: showToast },
+    logEngagement: () => {},
+    onSharingChange: setSharingId,
+    onReportPost: setReportPostId,
+    onEditingPostChange: setEditingPost,
+    reloadFeed: () => { loadMyPosts(); loadSavedPosts() },
+    onPostDeleted: () => { loadMyPosts(); loadSavedPosts() },
+  })
+  async function submitReport(reason) {
+    const postId = reportPostId
+    if (!user || !postId) return
+    setReportingId(postId)
+    const { error } = await supabase.from('reports').insert({ reporter_id: user.id, post_id: postId, reason })
+    setReportingId(null)
+    setReportPostId(null)
+    if (error) {
+      showToast('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
+      return
+    }
+    showToast('Thanks: our team will review this post.', { type: 'success' })
+  }
+  // Counts, likes, saves, follows for these posts live in the hook's slices;
+  // hydrate fills them whenever the loaded set changes.
+  useEffect(() => {
+    if (!postKey || !user) return undefined
+    engagement.hydrate(postIndex).catch(() => {})
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postKey])
+  function authorName(post) {
+    if (post.posted_as_type) return post.posted_as_name || 'Business'
+    const profiles = { ...sourceAuthors, ...engagement.state.profiles }
+    const p = profiles[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
+  }
+  // Every prop PostCard needs besides `post`/`preview`. engagementProps carries
+  // the counts, toggles, isLocked and resolveSource; the profile adds its own
+  // chrome (gift/report/delete/detail modals) and overrides resolveSource so a
+  // repost resolves against THIS page's index, not the feed's list.
+  const cardProps = {
+    ...engagement.engagementProps,
+    user,
+    navigate,
+    authorName,
+    myUsername,
+    myAvatar,
+    sharingId,
+    editingPost,
+    setEditingPost,
+    setConfirmDeleteId,
+    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
+    // See more now expands inline in PostCard; tapping the post navigates to /post/:id
+    onOpenDetail: (p) => navigate(`/post/${p.id}`),
+    resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
+  }
+
 
   useEffect(() => {
     if (!user) { navigate('/login'); return }
@@ -121,25 +221,61 @@ function Profile() {
     })))
   }
 
+  // Issue #6: this query used to omit `repost_of`, so every reference repost
+  // looked like an ordinary post to isRepost() and the Reposts tab was always
+  // empty while the Posts tab showed a bare 🔁 row. It now selects repost_of
+  // AND resolves each source, so a reposted article appears on the reposting
+  // user's own profile showing the original author's words, labelled as a
+  // repost (issue #8).
   async function loadMyPosts() {
     if (!user) return
     const { data } = await supabase
       .from('posts')
-      .select('id, content, created_at, post_type, image_url')
+      .select('id, content, created_at, post_type, image_url, image_urls, repost_of, user_id')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(60)
-    setMyPosts(data || [])
+    setMyPosts(await withRepostSources(data || []))
+  }
+
+  // Attach `source` to every repost in a list, and remember who wrote each
+  // source so the original author can be named and linked (issue #8).
+  async function withRepostSources(list) {
+    const ids = [...new Set(list.filter((p) => p.repost_of).map((p) => p.repost_of))]
+    if (!ids.length) return list
+    const { data: sources } = await supabase
+      .from('posts')
+      .select('id, content, created_at, post_type, image_url, image_urls, user_id')
+      .in('id', ids)
+    const byId = {}
+    ;(sources || []).forEach((s) => { byId[s.id] = s })
+
+    const authorIds = [...new Set((sources || []).map((s) => s.user_id).filter(Boolean))]
+    if (authorIds.length) {
+      const { data: authors } = await supabase
+        .from('profiles')
+        .select('id, display_name, full_name, is_verified')
+        .in('id', authorIds)
+      if (authors?.length) {
+        setSourceAuthors((prev) => {
+          const next = { ...prev }
+          authors.forEach((a) => { next[a.id] = a })
+          return next
+        })
+      }
+    }
+
+    return list.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p))
   }
 
   async function loadSavedPosts() {
     if (!user) return
     const { data } = await supabase
       .from('saved_posts')
-      .select('post_id, posts(id, content, created_at, post_type, image_url)')
+      .select('post_id, posts(id, content, created_at, post_type, image_url, image_urls, repost_of, user_id)')
       .eq('user_id', user.id)
       .limit(60)
-    setSavedPosts((data || []).map(s => s.posts).filter(Boolean))
+    setSavedPosts(await withRepostSources((data || []).map(s => s.posts).filter(Boolean)))
   }
 
   async function loadMyPlaylists() {
@@ -180,11 +316,18 @@ function Profile() {
     if (!user) return
     const { data } = await supabase
       .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at')
+      .select('id, title, body, image_url, bg_color, created_at, position, view_count')
       .eq('user_id', user.id)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
-    setMyStories(data || [])
+    const sorted = (data || []).sort((a, b) => {
+      const pa = a.position ?? Infinity
+      const pb = b.position ?? Infinity
+      if (pa !== pb) return pa - pb
+      if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+    setMyStories(sorted)
   }
 
   // Sequential story viewer: progress bar, auto-advance, tap zones. Mirrors
@@ -214,12 +357,89 @@ function Profile() {
     if (!user) return
     const { data } = await supabase
       .from('live_shows')
-      .select('id, title, status, scheduled_at')
+      .select('id, title, status, scheduled_at, trailer_url, host_id')
       .eq('host_id', user.id)
-      .in('status', ['live', 'scheduled'])
+      .in('status', ['live', 'scheduled', 'ended'])
       .order('scheduled_at', { ascending: true })
     setMyShows(data || [])
   }
+
+  function toLocalDatetimeValue(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  function openEditShow(s) {
+    setEditError('')
+    setEditTitle(s.title || '')
+    setEditScheduledAt(toLocalDatetimeValue(s.scheduled_at))
+    setEditTrailerFile(null)
+    setEditingShow(s)
+  }
+
+  async function uploadEditTrailer() {
+    if (!editTrailerFile) return null
+    const ext = editTrailerFile.name.split('.').pop() || 'mp4'
+    const path = `trailer-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('live-media').upload(path, editTrailerFile, { contentType: editTrailerFile.type || 'video/mp4' })
+    if (upErr) return null
+    const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
+    return urlData.publicUrl
+  }
+
+  async function saveEditedShow() {
+    if (!editingShow) return
+    if (!editTitle.trim()) { setEditError('Give your show a title.'); return }
+    if (!editScheduledAt) { setEditError('Pick a date & time.'); return }
+    const newDate = new Date(editScheduledAt)
+    if (isNaN(newDate.getTime())) { setEditError('Invalid date.'); return }
+    if (newDate.getTime() <= Date.now() + 5 * 60 * 1000) { setEditError('Pick a time at least 5 minutes in the future.'); return }
+    if (editingShow.status !== 'scheduled') { setEditError('Only scheduled shows can be edited.'); return }
+    setEditSaving(true); setEditError('')
+    let trailerUrl = editingShow.trailer_url || null
+    if (editTrailerFile) {
+      const uploaded = await uploadEditTrailer()
+      if (uploaded) trailerUrl = uploaded
+    }
+    const patch = { title: editTitle.trim(), scheduled_at: newDate.toISOString() }
+    if (trailerUrl !== editingShow.trailer_url) patch.trailer_url = trailerUrl
+    const { error } = await supabase.from('live_shows').update(patch).eq('id', editingShow.id).eq('host_id', user.id).eq('status', 'scheduled')
+    setEditSaving(false)
+    if (error) {
+      setEditError(error.message || 'Could not save.')
+      if (error.code === '42501') showToast('You can only edit your own scheduled shows.', { type: 'error' })
+      return
+    }
+    setEditingShow(null)
+    showToast('Show updated.', { type: 'success' })
+    loadMyShows()
+  }
+
+  async function confirmCancelShow() {
+    if (!cancelConfirmId) return
+    setCancellingId(cancelConfirmId)
+    const targetId = cancelConfirmId
+    const { error: delErr } = await supabase.from('live_shows').delete().eq('id', targetId).eq('host_id', user.id).eq('status', 'scheduled')
+    if (delErr) {
+      const { error: updErr } = await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', targetId).eq('host_id', user.id).eq('status', 'scheduled')
+      if (updErr) {
+        showToast('Could not cancel: ' + (updErr.message || delErr.message), { type: 'error' })
+        setCancellingId(null)
+        return
+      }
+    }
+    setCancelConfirmId(null)
+    setCancellingId(null)
+    showToast('Scheduled show cancelled.', { type: 'success' })
+    loadMyShows()
+  }
+
+  const nowDate = new Date(now)
+  const liveShows = myShows.filter((s) => s.status === 'live')
+  const upcomingShows = myShows.filter((s) => s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) > nowDate)
+  const pastShows = myShows.filter((s) => s.status === 'ended' || (s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) <= nowDate))
 
   async function postStory() {
     if (!sTitle.trim() && !sBody.trim() && !sImage) return
@@ -392,7 +612,7 @@ function Profile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -434,15 +654,40 @@ function Profile() {
         </div>
         <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
           <div style={{ position: 'relative', width: 88, height: 88 }}>
-            <div style={{
-              width: 88, height: 88, borderRadius: '50%',
-              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
-              border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 30, fontWeight: 800,
-            }}>
-              {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
-            </div>
+            {myStories.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setViewerIndex(0)}
+                aria-label="View your story"
+                style={{
+                  width: 88, height: 88, borderRadius: '50%', padding: 3,
+                  background: theme.tealDeep, border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', boxSizing: 'border-box',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                }}
+              >
+                <div style={{
+                  width: 82, height: 82, borderRadius: '50%',
+                  background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                  border: '3px solid #fff', boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 30, fontWeight: 800,
+                }}>
+                  {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+                </div>
+              </button>
+            ) : (
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%',
+                background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 30, fontWeight: 800,
+              }}>
+                {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+              </div>
+            )}
 
             {/* Change photo */}
             <label style={{
@@ -457,6 +702,11 @@ function Profile() {
               <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </label>
           </div>
+          {myStories.length > 0 && (
+            <span style={{ display: 'block', textAlign: 'center', fontSize: 10, fontWeight: 800, color: theme.tealDeep, marginTop: 2 }}>
+              Tap to view story
+            </span>
+          )}
         </div>
       </div>
 
@@ -521,27 +771,27 @@ function Profile() {
           </div>
         )}
 
-        {/* My Stories — at the top of the profile, Instagram-style (Phase 5).
-            Add-story first, then live/upcoming shows, then your stories. */}
+        {/* WhatsApp-style: story ring lives on avatar. This row now holds
+            only the Add-story action and live/upcoming shows — not story
+            circles. Tapping the avatar (with ring) opens the sequential viewer. */}
+        {/* Live & Upcoming row — expired scheduled are filtered out of Upcoming (spec) */}
+        {(liveShows.length > 0 || upcomingShows.length > 0) ? (
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
-          <button onClick={() => setStoryComposer(true)} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => setStoryComposer(true)} aria-label="Add to story" style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
             <div style={{ width: 58, height: 58, borderRadius: '50%', background: theme.bg, border: `2px dashed ${theme.tealDeep}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}><Plus size={24} aria-hidden="true" /></div>
             <span style={{ fontSize: 10, fontWeight: 700, color: theme.textMid }}>Add story</span>
           </button>
 
-          {/* Live / upcoming shows */}
-          {myShows.map((s) => {
-            if (s.status === 'live') {
-              return (
-                <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                  <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Radio size={20} aria-hidden="true" /></div>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
-                </Link>
-              )
-            }
-            // scheduled
+          {liveShows.map((s) => (
+            <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Radio size={20} aria-hidden="true" /></div>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
+            </Link>
+          ))}
+
+          {upcomingShows.map((s) => {
             const diff = s.scheduled_at ? new Date(s.scheduled_at) - now : 0
             const d = Math.max(0, Math.floor(diff / 86400000))
             const h = Math.max(0, Math.floor((diff % 86400000) / 3600000))
@@ -557,16 +807,63 @@ function Profile() {
               </Link>
             )
           })}
-
-          {myStories.map((s, i) => (
-            <button key={s.id} onClick={() => setViewerIndex(i)} aria-label={`View story${s.title ? `: ${s.title}` : ''}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-              <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: theme.tealDeep }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>{!s.image_url && (s.title?.[0]?.toUpperCase() || <BookOpen size={18} aria-hidden="true" />)}</div>
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Story'}</span>
-            </button>
-          ))}
         </div>
+        ) : myShows.length === 0 ? (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 6, marginBottom: 12 }}>
+            <button onClick={() => setStoryComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: theme.tealDeep, cursor: 'pointer' }}>
+              <Plus size={16} aria-hidden="true" /> Add to story
+            </button>
+            {myStories.length > 0 && (
+              <span style={{ fontSize: 11, color: theme.textLight, alignSelf: 'center' }}>Tap your photo to view {myStories.length} stor{myStories.length === 1 ? 'y' : 'ies'}</span>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 6, marginBottom: 12, alignItems: 'center' }}>
+            <button onClick={() => setStoryComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: theme.tealDeep, cursor: 'pointer' }}>
+              <Plus size={16} aria-hidden="true" /> Add to story
+            </button>
+            <span style={{ fontSize: 11, color: theme.textLight }}>No upcoming lives</span>
+          </div>
+        )}
+
+        {/* Manage upcoming scheduled shows — edit / reschedule / cancel */}
+        {upcomingShows.length > 0 && (
+          <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.cardBg }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upcoming lives — manage</p>
+            {upcomingShows.map((s) => {
+              const target = s.scheduled_at ? new Date(s.scheduled_at) : null
+              const when = target ? target.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', weekday: 'short' }) : ''
+              return (
+                <div key={s.id} data-testid={`upcoming-manage-${s.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Untitled live'}</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.textLight }}>{when}</p>
+                  </div>
+                  <Link to={`/live-dashboard/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>View</Link>
+                  <button onClick={() => openEditShow(s)} aria-label={`Edit ${s.title || 'show'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${theme.border}`, background: '#fff', borderRadius: 20, fontSize: 12, fontWeight: 700, color: theme.navy, cursor: 'pointer' }}><Pencil size={12} aria-hidden="true" /> Edit</button>
+                  <button onClick={() => setCancelConfirmId(s.id)} aria-label={`Cancel ${s.title || 'show'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: theme.dangerBg || '#fef2f2', color: theme.alert || '#dc2626', border: `1px solid ${theme.alert || '#dc2626'}`, borderRadius: 20, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}><Trash2 size={12} aria-hidden="true" /> Cancel</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Past / Ended — expired scheduled_at no longer in Upcoming */}
+        {pastShows.length > 0 && (
+          <div data-testid="past-shows-section" style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.bg }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Past / Ended</p>
+            {pastShows.map((s) => {
+              const when = s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : ''
+              const label = s.status === 'ended' ? 'Ended' : (s.scheduled_at && new Date(s.scheduled_at) <= nowDate ? 'Expired' : s.status)
+              return (
+                <div key={s.id} data-testid={`past-show-${s.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.gray300 || '#ccc', flexShrink: 0, display: 'inline-block' }} />
+                  <span style={{ flex: 1, fontSize: 12.5, color: theme.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Untitled'} · {when} · {label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
@@ -885,8 +1182,13 @@ function Profile() {
           }
 
           return (
-            <div style={{ marginBottom: 16 }}>
-              <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
+            // Issues #3/#4: full PostCards, not tiles — every interaction the
+            // feed offers works here too, including Edit/Delete on your own
+            // posts via each card's overflow menu.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              {list.map((p) => (
+                <PostCard key={p.id} post={p} preview {...cardProps} />
+              ))}
             </div>
           )
         })()}
@@ -922,19 +1224,64 @@ function Profile() {
         </button>
       </div>
 
-      {openPost && (
-        <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
-            </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type && openPost.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{openPost.post_type}</span>}
-            <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? new Date(openPost.created_at).toLocaleDateString() : ''}</p>
-          </div>
-        </div>
+      {/* Issues #3/#4 — gifting, reporting and deletion use the same
+          components the feed uses. */}
+
+      {giftingPost && (
+        <GiftPanel
+          postId={giftingPost.postId}
+          recipientId={giftingPost.authorId}
+          onClose={() => {
+            const { postId } = giftingPost
+            setGiftingPost(null)
+            // Reflect a just-sent gift in the card's count.
+            supabase
+              .rpc('post_gift_stats', { p_post_id: postId })
+              .then(({ data }) => {
+                if (data?.gift_count != null) {
+                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                }
+              })
+              .catch(() => {})
+          }}
+        />
       )}
+
+      <ConfirmDialog
+        show={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { engagement.engagementProps.handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        title="Delete this post?"
+        consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
+        confirmLabel="Delete"
+      />
+
+      {/* Report reasons: a closed set, one tap each (same as the feed). */}
+      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
+        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
+          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => submitReport(reason)}
+              disabled={!!reportingId}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
+                padding: '11px 14px', borderRadius: theme.radius.md,
+                border: `1px solid ${theme.gray200}`, background: '#fff',
+                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
+                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
+              }}
+            >
+              <Flag size={16} color={theme.gray400} aria-hidden="true" />
+              {reason}
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       {/* Story composer */}
       {storyComposer && (
@@ -1007,6 +1354,41 @@ function Profile() {
         />
       )}
 
+      {/* Edit scheduled live modal */}
+      {editingShow && (
+        <div onClick={() => setEditingShow(null)} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 20, boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Edit scheduled live</h3>
+              <button onClick={() => setEditingShow(null)} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
+            </div>
+            {editError && <p role="alert" style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{editError}</p>}
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title</label>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Show title" style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit' }} />
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date & time</label>
+            <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit' }} />
+            <p style={{ margin: '-8px 0 12px 0', fontSize: 10.5, color: theme.textLight }}>Must be at least 5 minutes in the future.</p>
+            <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+              🎬 {editTrailerFile ? editTrailerFile.name.slice(0, 26) : (editingShow.trailer_url ? 'Change trailer video' : 'Add trailer video (optional)')}
+              <input type="file" accept="video/*" onChange={(e) => setEditTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={saveEditedShow} disabled={editSaving} style={{ flex: 1, padding: 12, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14 }}>{editSaving ? 'Saving…' : 'Save changes'}</button>
+              <button onClick={() => setEditingShow(null)} style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        show={!!cancelConfirmId}
+        onClose={() => setCancelConfirmId(null)}
+        onConfirm={confirmCancelShow}
+        title="Cancel this scheduled live?"
+        consequence="It will disappear from Upcoming immediately and be moved to Past/Ended. This cannot be undone."
+        confirmLabel={cancellingId ? 'Cancelling…' : 'Cancel show'}
+      />
+
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
 
       {isMobile && <BottomNav />}
@@ -1016,7 +1398,7 @@ function Profile() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

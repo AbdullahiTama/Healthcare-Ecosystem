@@ -39,28 +39,20 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'This transaction does not belong to you' })
   }
 
-  // Atomic: credit creator's wallet and create subscription
-  const { data, error } = await supabase.rpc('pay_creator_subscription', {
+  // Atomic: claim reference, credit creator, extend subscription (no wallet debit)
+  const { data, error } = await supabase.rpc('settle_subscription_payment', {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
+    p_naira_amount: paystackData.data.amount,
+    p_reference: reference,
   })
 
   if (error) return res.status(500).json({ error: error.message })
-  if (data === 'insufficient') {
-    // This shouldn't happen since we're charging via Paystack, not wallet
-    return res.status(400).json({ error: 'Could not complete subscription' })
+  const row = Array.isArray(data) ? data[0] : data
+  if (row?.already_processed) {
+    return res.status(200).json({ success: true, coins: parseInt(metadata.coins), alreadyProcessed: true })
   }
-
-  // Record the Paystack payment
-  await supabase.from('transactions').insert({
-    user_id: metadata.user_id,
-    type: 'subscription_payment',
-    amount: parseInt(metadata.coins),
-    naira_amount: paystackData.data.amount,
-    reference,
-    status: 'success',
-  }).select().maybeSingle()
 
   return res.status(200).json({ success: true, coins: parseInt(metadata.coins) })
 }

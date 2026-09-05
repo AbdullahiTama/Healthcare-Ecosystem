@@ -3,10 +3,15 @@ import { SB_URL, SB_KEY } from '../config/supabase.js'
 
 // This client exists ONLY to listen for live updates over a websocket.
 // Every other database call in CareHub still goes through sbFetch in supabase.js.
+// It deliberately runs with persistSession: false — it must never hold or
+// overwrite the login session. A distinct storageKey keeps supabase-js from
+// raising its "Multiple GoTrueClient instances detected" warning: two clients
+// (this one and lib/authClient.js's) would otherwise share the default
+// `sb-<project-ref>-auth-token` key in the same browser context.
 let client = null
 try {
   client = createClient(SB_URL, SB_KEY, {
-    auth: { persistSession: false },
+    auth: { persistSession: false, storageKey: 'carehub-realtime-ignored' },
   })
 } catch (e) {
   client = null

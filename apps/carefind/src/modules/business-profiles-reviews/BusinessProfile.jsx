@@ -1,21 +1,110 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle, Phone,
-  Pill as PillIcon, Smile, Sparkles, Star, Store,
+  ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin,
+  Pill as PillIcon, Smile, Sparkles, Star, Store, Search as SearchIcon,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { canShowPrice, distanceLabel, whatsappLink, telLink, coordsFrom } from '../utils/marketplace'
+import { canShowPrice, distanceLabel, coordsFrom } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
 import { Card, Pill, TealBtn, Inp, Textarea, Empty, StarPicker, Stars, Toast, useToast, CardSkeleton } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+
+function PatientAppointmentLookup({ bizId }) {
+  const toast = useToast()
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [appointments, setAppointments] = useState(null)
+  const [error, setError] = useState('')
+
+  async function lookup(e) {
+    e.preventDefault()
+    if (!phone.trim()) return
+    setLoading(true)
+    setError('')
+    setAppointments(null)
+    try {
+      const res = await fetch('/api/lookup-appointment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: bizId, phone: phone.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'No appointments found')
+      } else {
+        setAppointments(data.appointments)
+      }
+    } catch (err) {
+      setError('Could not look up appointments. Please try again.')
+    }
+    setLoading(false)
+  }
+
+  const statusColor = (s) => {
+    if (s === 'confirmed') return theme.success
+    if (s === 'completed') return theme.tealDeep
+    if (s === 'cancelled') return theme.danger
+    return theme.gray500
+  }
+
+  return (
+    <Card style={{ padding: 14, marginBottom: 26 }}>
+      <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
+        My Appointments
+      </p>
+      <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
+        Look up your bookings by phone number.
+      </p>
+      <form onSubmit={lookup} style={{ display: 'flex', gap: 8, marginBottom: appointments ? 12 : 0 }}>
+        <input
+          type="tel"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="Enter your phone number"
+          required
+          style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, fontSize: 13, color: theme.navy }}
+        />
+        <button type="submit" disabled={loading} style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: theme.tealDeep, color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+          {loading ? 'Looking...' : 'Find'}
+        </button>
+      </form>
+      {error && <p style={{ margin: '8px 0 0', fontSize: 12.5, color: theme.danger }}>{error}</p>}
+      {appointments && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          {appointments.map(a => (
+            <div key={a.id} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontWeight: 700, fontSize: 13, color: theme.navy }}>{a.service || 'Consultation'}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(a.status), textTransform: 'capitalize' }}>{a.status}</span>
+              </div>
+              <div style={{ fontSize: 12, color: theme.textMid }}>
+                {a.date} at {a.time}
+                {a.fee_amount ? ` — ₦${(a.fee_amount / 100).toLocaleString()}` : ' — Free'}
+              </div>
+              <div style={{ fontSize: 11, color: theme.textLight, marginTop: 2 }}>
+                {a.payment_status === 'paid' && <span style={{ color: theme.success }}>Paid</span>}
+                {a.payment_status === 'unpaid' && <span style={{ color: theme.danger }}>Unpaid</span>}
+                {!a.payment_status && <span>—</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {appointments && appointments.length === 0 && (
+        <p style={{ margin: '8px 0 0', fontSize: 12.5, color: theme.textLight }}>No appointments found for this phone number.</p>
+      )}
+    </Card>
+  )
+}
 
 function BookingCard({ biz }) {
   const toast = useToast()
@@ -29,6 +118,67 @@ function BookingCard({ biz }) {
   const [phone, setPhone] = useState('')
   const [booking, setBooking] = useState(false)
   const [done, setDone] = useState(false)
+  const [services, setServices] = useState([])
+  const [selectedService, setSelectedService] = useState('')
+  const [serviceAvailability, setServiceAvailability] = useState([])
+  const [availLoading, setAvailLoading] = useState(false)
+  const [showReview, setShowReview] = useState(false)
+  const [reviewData, setReviewData] = useState(null)
+  const [bookedAppt, setBookedAppt] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
+  const reviewCancelRef = useRef(null)
+  const isBookingEnabled = !!biz.booking_enabled
+
+  function handleBookingInterest() {
+    toast.show('This healthcare facility is not accepting appointments at the moment.')
+    try {
+      const key = `booking_interest_${biz.id}`
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1')
+      fetch('/api/booking-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: biz.id }),
+      }).catch(() => {})
+    } catch (e) {}
+  }
+
+  // Dialog accessibility: ESC closes, focus management
+  useEffect(() => {
+    if (!showReview) return
+    const onKey = (e) => { if (e.key === 'Escape') setShowReview(false) }
+    window.addEventListener('keydown', onKey)
+    // Focus first focusable in dialog
+    setTimeout(() => reviewCancelRef.current?.focus(), 0)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showReview])
+
+  useEffect(() => {
+    if (!isBookingEnabled) return
+    let live = true
+    supabase.from('business_services').select('id,name,price_kobo,duration_minutes,is_active').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
+      if (live) {
+        setServices(data || [])
+        if (data && data.length === 1) setSelectedService(data[0].id)
+      }
+    }).catch(() => {})
+    return () => { live = false }
+  }, [biz.id, isBookingEnabled])
+
+  // Load service-specific availability when service and date are selected
+  useEffect(() => {
+    if (!selectedService || !date) { setServiceAvailability([]); setAvailLoading(false); return }
+    let live = true
+    setAvailLoading(true)
+    supabase.from('service_availability').select('id,date,time,start_time,end_time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data, error }) => {
+      if (live) {
+        if (!error && data) setServiceAvailability(data)
+        else setServiceAvailability([])
+        setAvailLoading(false)
+      }
+    }).catch(() => { if (live) { setServiceAvailability([]); setAvailLoading(false) } })
+    return () => { live = false }
+  }, [biz.id, selectedService, date])
 
   // Return from Paystack: the client was redirected here after paying for this
   // booking. Verify server-side (amount, appointment, Paystack status) and only
@@ -52,6 +202,7 @@ function BookingCard({ biz }) {
             toast.show(data.error || 'Could not confirm your payment. If you were charged, keep your reference and contact support.', { type: 'error' })
             return
           }
+          setBookedAppt({ id: data.id, phone: phone || '' })
           setDone(true)
           toast.show('Payment confirmed — the business will confirm your appointment.', { type: 'success' })
         }
@@ -66,17 +217,16 @@ function BookingCard({ biz }) {
     return () => { cancelled = true }
   }, [searchParams])
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toLocaleDateString('en-CA')
   const isToday = date === today
 
-  // ADR-005: CareCoins price for this appointment type, for display only.
-  const feeKobo = apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee
+  const selectedSvc = services.find(s => s.id === selectedService) || null
+  // Per-service price takes precedence; fallback to consultation fee for backward compat
+  // Price is snapshotted server-side — displayed price is for review only, not trusted for payment.
+  const feeKobo = selectedSvc?.price_kobo != null ? selectedSvc.price_kobo : (apptType === 'online' ? biz.online_consultation_fee : biz.physical_consultation_fee)
   const coinCost = feeKobo ? Math.ceil(feeKobo / 20000) : 0
 
-  // booking_slots may arrive as a real array OR as a raw comma-separated
-  // string (CareFind Hub's "Available time slots" field is a plain text
-  // input) — normalize to an array of trimmed, non-empty strings first,
-  // or .filter() below throws on a string and blanks the whole page.
+  // booking_slots may arrive as a real array OR as a raw comma-separated string
   const rawSlots = biz.booking_slots
   const slotList = Array.isArray(rawSlots)
     ? rawSlots
@@ -84,12 +234,20 @@ function BookingCard({ biz }) {
       ? rawSlots.split(',').map((s) => s.trim()).filter(Boolean)
       : []
 
-  // Drop already-passed times when booking for today
-  const slots = slotList.filter((t) => {
+  // Prefer service-specific availability when it exists for the selected service+date; otherwise fallback to daily slots
+  const hasServiceSpecificSlots = selectedService && serviceAvailability.length > 0
+  const effectiveSlotList = hasServiceSpecificSlots
+    ? serviceAvailability.filter(a => a.status !== 'booked' && !a.is_booked).map(a => a.time || a.start_time)
+    : slotList
+
+  // Drop already-passed times when booking for today and filter out booked slots; also guard malformed times
+  const slots = effectiveSlotList.filter((t) => {
+    if (!t || !/^\d{2}:\d{2}$/.test(String(t))) return false
+    const [hh, mm] = String(t).split(':').map(Number)
+    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return false
     if (!isToday) return true
     const now = new Date()
-    const [h, m] = String(t).split(':')
-    return Number(h) * 60 + Number(m) > now.getHours() * 60 + now.getMinutes()
+    return hh * 60 + mm > now.getHours() * 60 + now.getMinutes()
   })
 
   async function payWithCredits(appointmentId) {
@@ -103,10 +261,27 @@ function BookingCard({ biz }) {
     return res
   }
 
-  async function submitBooking(e) {
+  function openReview(e) {
     e.preventDefault()
+    if (!date || !slot || !name.trim() || !phone.trim()) { toast.show('Please fill date, time, name and phone.'); return }
+    if (services.length > 0 && !selectedService) { toast.show('Please select a service.'); return }
+    // Show review screen with snapshot of current selections (spec §5 review)
+    setReviewData({
+      businessName: biz.name,
+      serviceName: selectedSvc ? selectedSvc.name : (biz.booking_type === 'online' ? 'Online Consultation' : 'Consultation'),
+      date,
+      time: slot,
+      priceKobo: feeKobo,
+      priceLabel: feeKobo != null ? `₦${(feeKobo/100).toLocaleString()}` : 'Free',
+    })
+    setShowReview(true)
+  }
+
+  async function submitBooking() {
     if (!date || !slot || !name.trim() || !phone.trim()) return
+    if (services.length > 0 && !selectedService) { toast.show('Please select a service.'); return }
     setBooking(true)
+    setShowReview(false)
     try {
       const res = await fetch('/api/booking', {
         method: 'POST',
@@ -119,11 +294,24 @@ function BookingCard({ biz }) {
           booking_type: apptType,
           name: name.trim(),
           phone: phone.trim(),
+          service_id: selectedService || null,
+          service: selectedSvc ? selectedSvc.name : undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toast.show(data.error || 'Could not send booking request.')
+        const errMsg = data.error || 'Could not send booking request.'
+        toast.show(errMsg)
+        // If slot just taken (409), refresh availability
+        if (errMsg.toLowerCase().includes('taken') || errMsg.toLowerCase().includes('booked')) {
+          if (selectedService && date) {
+            supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+              if (data) setServiceAvailability(data)
+            })
+          }
+          setSlot('')
+        }
+        setBooking(false)
         return
       }
 
@@ -136,6 +324,7 @@ function BookingCard({ biz }) {
           toast.show(payData.error || 'Could not complete payment.')
           return
         }
+        setBookedAppt({ id: data.id, phone: phone.trim() })
         setDone(true)
         toast.show('Booking paid with your CareCoins — the business will confirm.')
         return
@@ -145,6 +334,7 @@ function BookingCard({ biz }) {
         return
       }
 
+      setBookedAppt({ id: data.id, phone: phone.trim() })
       setDone(true)
       toast.show('Request sent — the business will confirm your appointment.')
     } catch (err) {
@@ -154,8 +344,25 @@ function BookingCard({ biz }) {
     setBooking(false)
   }
 
+  if (!isBookingEnabled) {
+    return (
+      <Card id="booking" style={{ padding: 14, marginBottom: 26, opacity: 0.97 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
+          Book an Appointment
+        </p>
+        <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
+          This healthcare facility is not accepting appointments at the moment.
+        </p>
+        <button onClick={handleBookingInterest} aria-label="Book Appointment unavailable" style={{ width: '100%', minHeight: 44, padding: '11px 16px', background: '#e2e8f0', color: theme.textLight, border: `1px solid ${theme.border}`, borderRadius: 12, fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>
+          Book Appointment
+        </button>
+        <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight }}>Tap to notify the facility of your interest.</p>
+      </Card>
+    )
+  }
+
   return (
-    <Card style={{ padding: 14, marginBottom: 26 }}>
+    <Card id="booking" style={{ padding: 14, marginBottom: 26 }}>
       <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
         Book an Appointment
       </p>
@@ -164,9 +371,58 @@ function BookingCard({ biz }) {
       </p>
 
       {done ? (
-        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700, color: theme.success }}>Request sent — we'll notify you once the business confirms.</p>
+          {bookedAppt?.id && (
+            <button
+              onClick={async () => {
+                if (!confirm('Are you sure you want to cancel this appointment?')) return
+                setCancelling(true)
+                try {
+                  const res = await fetch('/api/cancel-appointment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appointment_id: bookedAppt.id, cancelled_by: 'patient', reason: 'Cancelled by patient' }),
+                  })
+                  const data = await res.json().catch(() => ({}))
+                  if (res.ok) {
+                    setDone(false)
+                    setBookedAppt(null)
+                    toast.show('Appointment cancelled.', { type: 'success' })
+                    // Refresh availability
+                    if (selectedService && date) {
+                      supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+                        if (data) setServiceAvailability(data)
+                      })
+                    }
+                  } else {
+                    toast.show(data.error || 'Could not cancel appointment.', { type: 'error' })
+                  }
+                } catch (err) {
+                  toast.show('Could not cancel appointment.', { type: 'error' })
+                }
+                setCancelling(false)
+              }}
+              disabled={cancelling}
+              style={{ padding: '8px 14px', borderRadius: 10, border: `1px solid ${theme.danger}`, background: '#fff', color: theme.danger, fontWeight: 700, fontSize: 12, cursor: cancelling ? 'wait' : 'pointer', opacity: cancelling ? 0.7 : 1 }}
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+            </button>
+          )}
+        </div>
       ) : (
-        <form onSubmit={submitBooking}>
+        <form onSubmit={openReview}>
+          {services.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 6 }}>Service</label>
+              <select value={selectedService} onChange={e => setSelectedService(e.target.value)} required={services.length > 0} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: `1px solid ${theme.border}`, background: '#fff', fontSize: 13, color: theme.navy }}>
+                <option value="">Select a service</option>
+                {services.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} {s.price_kobo != null ? `— ₦${(s.price_kobo / 100).toLocaleString()}` : '— Free'} {s.duration_minutes ? `· ${s.duration_minutes} min` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <div style={{ flex: 1 }}>
               <Inp
@@ -238,14 +494,17 @@ function BookingCard({ biz }) {
           )}
 
           <p style={{ margin: '0 0 6px 0', fontSize: 11.5, fontWeight: 800, color: theme.textMid, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Preferred time
+            Preferred time {availLoading && <span style={{ fontWeight: 400, textTransform: 'none', color: theme.textLight }}>(loading...)</span>}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {slots.length === 0 && <span style={{ fontSize: 12.5, color: theme.textLight }}>No times left for this date — pick another day.</span>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }} role="group" aria-label="Available time slots">
+            {slots.length === 0 && !availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>{hasServiceSpecificSlots ? 'No available times for this service on this date — try another day.' : 'No times left for this date — pick another day.'}</span>}
+            {availLoading && <span style={{ fontSize: 12.5, color: theme.textLight }}>Loading availability...</span>}
             {slots.map((t) => (
               <button
                 key={t}
                 type="button"
+                aria-pressed={slot === t}
+                aria-label={`Select time ${t}`}
                 onClick={() => setSlot(t)}
                 style={{
                   padding: '7px 12px', borderRadius: 10, border: '1px solid',
@@ -260,10 +519,30 @@ function BookingCard({ biz }) {
             ))}
           </div>
 
-          <TealBtn type="submit" disabled={booking}>
-            {booking ? 'Sending...' : 'Request Appointment'}
+          <TealBtn type="submit" disabled={booking || slots.length === 0}>
+            Review Booking
           </TealBtn>
         </form>
+      )}
+      {showReview && reviewData && (
+        <div role="dialog" aria-modal="true" aria-label="Review booking details" onClick={() => setShowReview(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 800, color: theme.navy }}>Review your booking</h3>
+            <p style={{ margin: '0 0 14px 0', fontSize: 12.5, color: theme.textLight }}>Please confirm details before paying. Price is fixed at booking time and won't change later.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16, padding: 12, borderRadius: 12, background: theme.bg, border: `1px solid ${theme.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Business</span><span style={{ fontWeight: 700, color: theme.navy }}>{reviewData.businessName}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Service</span><span style={{ fontWeight: 700, color: theme.navy }}>{reviewData.serviceName}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Date</span><span style={{ fontWeight: 700 }}>{reviewData.date}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}><span style={{ color: theme.textMid, fontWeight: 600 }}>Time</span><span style={{ fontWeight: 700 }}>{reviewData.time}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderTop: `1px solid ${theme.border}`, paddingTop: 8 }}><span style={{ color: theme.textMid, fontWeight: 700 }}>Price</span><span style={{ fontWeight: 800, color: theme.tealDeep }}>{reviewData.priceLabel}</span></div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button ref={reviewCancelRef} onClick={() => setShowReview(false)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${theme.border}`, background: '#fff', color: theme.textMid, fontWeight: 700, cursor: 'pointer' }}>Back</button>
+              <button onClick={submitBooking} disabled={booking} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: theme.tealDeep, color: '#fff', fontWeight: 800, cursor: booking ? 'wait' : 'pointer', opacity: booking ? 0.7 : 1 }}>{booking ? 'Processing...' : (reviewData.priceKobo > 0 ? 'Pay Now' : 'Confirm Booking')}</button>
+            </div>
+            <p style={{ margin: '10px 0 0 0', fontSize: 11, color: theme.textLight, textAlign: 'center' }}>{reviewData.priceKobo > 0 ? 'You will be redirected to secure payment. Your slot is held only after verified payment.' : 'Free booking — no payment needed.'}</p>
+          </div>
+        </div>
       )}
     </Card>
   )
@@ -277,6 +556,8 @@ function BusinessProfile() {
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [biz, setBiz] = useState(null)
   const [products, setProducts] = useState([])
+  const [businessServices, setBusinessServices] = useState([])
+  const [profileQuery, setProfileQuery] = useState('')
   const [reviews, setReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [loading, setLoading] = useState(true)
@@ -302,6 +583,7 @@ function BusinessProfile() {
     if (!bizData || bizData.status !== 'active' || bizData.visible_on_carefind === false) {
       setBiz(null)
       setProducts([])
+      setBusinessServices([])
       setReviews([])
       setLoading(false)
       return
@@ -318,6 +600,13 @@ function BusinessProfile() {
 
     // Only hide products explicitly out of stock (stock may be null for some listings)
     const visibleProducts = listed.filter((p) => p.stock == null || p.stock > 0)
+
+    const { data: servicesData } = await supabase
+      .from('business_services')
+      .select('id, name, price_kobo, duration_minutes, is_active')
+      .eq('business_id', id)
+      .eq('is_active', true)
+    const visibleServices = (servicesData || []).filter((s) => s.is_active !== false)
 
     const { data: reviewData } = await supabase
       .from('reviews')
@@ -343,6 +632,7 @@ function BusinessProfile() {
 
     setBiz(bizData)
     setProducts(visibleProducts)
+    setBusinessServices(visibleServices)
     setReviews(rv)
     setLoading(false)
   }
@@ -365,6 +655,12 @@ function BusinessProfile() {
     })
 
     if (!error) {
+      // Issue #7: business reviews emitted no notification. The recipient is
+      // whoever claimed the business, not a profile with this id.
+      const sent = await notifyReview(supabase, {
+        kind: 'business', actorId: user.id, businessId: id, rating, link: `/business/${id}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
       setComment('')
       setRating(5)
       toast.show('Review posted — thank you!')
@@ -395,10 +691,6 @@ function BusinessProfile() {
     pct: reviews.length ? Math.round((reviews.filter((r) => r.rating === n).length / reviews.length) * 100) : 0,
   }))
 
-  // Build a proper wa.me link (handles Nigerian 080... numbers)
-  const waLink = whatsappLink(biz.whatsapp, `Hi ${biz.name}, I found you on CareFind.`)
-  const callLink = telLink(biz.phone)
-
   // Google Maps link for the Directions button: the business-supplied map URL
   // wins; otherwise fall back to the exact GPS coordinates set in Settings
   // (lat/lng is the live shape, latitude/longitude is the legacy shape);
@@ -416,6 +708,16 @@ function BusinessProfile() {
   // so the same business type reads the same in both products.
   const TYPE_ICON = { pharmacy: PillIcon, hospital: Hospital, dental: Smile, optical: Eye, wellness: Leaf, skincare: Sparkles }
   const TypeIcon = TYPE_ICON[biz.business_type] || Store
+
+  const lowerQuery = profileQuery.trim().toLowerCase()
+  const filteredProducts = !lowerQuery
+    ? products
+    : products.filter((p) => (p.name && p.name.toLowerCase().includes(lowerQuery)) || (p.generic_name && p.generic_name.toLowerCase().includes(lowerQuery)))
+  const filteredServices = !lowerQuery
+    ? businessServices
+    : businessServices.filter((s) => s.name && s.name.toLowerCase().includes(lowerQuery))
+  const totalFilteredCount = filteredProducts.length + filteredServices.length
+  const totalUnfilteredCount = products.length + businessServices.length
 
   // Desktop only: the hero's key facts + primary actions, as a persistent
   // sidebar card instead of a one-time scroll-past block (LAYOUTS.md's
@@ -453,26 +755,6 @@ function BusinessProfile() {
           )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {waLink && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noreferrer"
-                style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-              >
-                <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-              </a>
-              {callLink && (
-                <a
-                  href={callLink}
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
-                </a>
-              )}
-            </div>
-          )}
           {mapHref && (
             <a
               href={mapHref}
@@ -490,59 +772,57 @@ function BusinessProfile() {
 
   const bodyContent = (
     <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 40 } : { fontFamily: theme.fontFamily }}>
-      <div style={{
-        background: theme.navy, color: '#fff',
+      <div role="img" aria-label={`${biz.name} — Black-owned ${biz.business_type} in ${biz.city}, Nigeria, verified on CareHub`} style={{
+        background: `linear-gradient(135deg, ${theme.deepTeal}E6 0%, ${theme.tealDeep}D9 100%), url(${biz.cover_url || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop'}) center/cover`,
+        color: '#fff', position: 'relative', overflow: 'hidden',
         ...(isMobile
           ? { padding: '20px 20px 26px 20px', borderRadius: '0 0 28px 28px' }
-          : { padding: '24px 28px', borderRadius: theme.radius.xl, marginBottom: 20 }),
-        ...(biz.cover_url ? { padding: '0 0 24px 0', overflow: 'hidden' } : {}),
+          : { padding: '28px 32px', borderRadius: theme.radius.xl, marginBottom: 20 }),
       }}>
-        {biz.cover_url && (
-          <div style={{
-            height: isMobile ? 96 : 132,
-            background: `url(${biz.cover_url}) center/cover`,
-            marginBottom: isMobile ? 16 : 20,
-          }} role="img" aria-label={`${biz.name} banner`} />
-        )}
-        {isMobile && (
-          <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700, ...(biz.cover_url ? { marginLeft: 20 } : {}) }}>
-            <ArrowLeft size={15} aria-hidden="true" /> Back to search
-          </Link>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: isMobile ? 16 : 0, ...(biz.cover_url ? { marginLeft: isMobile ? 20 : 28, marginRight: isMobile ? 20 : 28 } : {}) }}>
-          <span style={{
-            width: 46, height: 46, borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden',
-          }}>
-            {biz.logo_url
-              ? <img src={biz.logo_url} alt={`${biz.name} logo`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
-              : <TypeIcon size={22} aria-hidden="true" />}
-          </span>
-          <div>
-            <h1 style={{ fontSize: 19, fontWeight: 900, margin: '0 0 2px 0', letterSpacing: '-0.01em' }}>{biz.name}</h1>
-            <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.65)', textTransform: 'capitalize' }}>
-              {biz.business_type} · {biz.city}, {biz.state}
-            </p>
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.06) 0%, transparent 60%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {isMobile && (
+            <Link to="/search" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'rgba(255,255,255,0.82)', textDecoration: 'none', fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
+              <ArrowLeft size={15} aria-hidden="true" /> Back to search
+            </Link>
+          )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', backdropFilter: 'blur(6px)', marginBottom: 12 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px rgba(34,197,94,0.7)' }} /> Verified on CareHub · {biz.business_type} · {biz.city}
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4 }}>
+            <span style={{
+              width: 52, height: 52, borderRadius: theme.radius.lg, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden', backdropFilter: 'blur(6px)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)'
+            }}>
+              {biz.logo_url
+                ? <img src={biz.logo_url} alt={`${biz.name} logo — Black-owned business in Nigeria`} width={52} height={52} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                : <TypeIcon size={24} aria-hidden="true" />}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 900, margin: '0 0 3px 0', letterSpacing: '-0.02em', lineHeight: 1.15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>{biz.name} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.18)', fontSize: 10, fontWeight: 800, letterSpacing: '0.04em' }}>✓ Verified</span></h1>
+              <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(255,255,255,0.78)', textTransform: 'capitalize', fontWeight: 600 }}>
+                {biz.business_type} · {biz.city}, {biz.state} {biz.hours ? `· ${biz.hours}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {isMobile && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{avgRating || '—'}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Avg Rating</p>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{reviews.length}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Reviews</p>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 16, padding: '12px 12px', textAlign: 'center', backdropFilter: 'blur(6px)' }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>{products.length}</p>
+                <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.72)', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Products</p>
+              </div>
+            </div>
+          )}
         </div>
-
-        {isMobile && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 16, ...(biz.cover_url ? { marginLeft: 20, marginRight: 20 } : {}) }}>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{avgRating || '—'}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Avg Rating</p>
-            </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{reviews.length}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Reviews</p>
-            </div>
-            <div style={{ flex: 1, background: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: '10px 12px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 17, fontWeight: 900 }}>{products.length}</p>
-              <p style={{ margin: 0, fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 700 }}>Products</p>
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={isMobile ? { padding: '20px 20px 0 20px' } : {}}>
@@ -560,24 +840,6 @@ function BusinessProfile() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              {waLink && (
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-                </a>
-              )}
-              {callLink && (
-                <a
-                  href={callLink}
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
-                </a>
-              )}
               {mapHref && (
                 <a
                   href={mapHref}
@@ -603,51 +865,114 @@ function BusinessProfile() {
           </>
         )}
 
-        {biz.booking_enabled && <BookingCard biz={biz} />}
+        <BookingCard biz={biz} />
 
-        <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
-          Available Products
-        </p>
-        {products.length === 0 && <Empty icon={<PillIcon size={40} color={theme.gray300} strokeWidth={1.5} />} message="No products listed yet." />}
+        {biz.booking_enabled && <PatientAppointmentLookup bizId={biz.id} />}
 
-        <div style={isMobile
-          ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }
-          : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 26 }}>
-          {products.map((p) => (
-            <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
-              <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
-                {p.image_url
-                  ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                  : <div style={{
-                      width: 44, height: 44, borderRadius: theme.radius.md, flexShrink: 0,
-                      background: theme.tealMist, color: theme.tealDeep,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}><PillIcon size={21} aria-hidden="true" /></div>}
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
-                  {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-                    {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
-                    {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
-                    {(() => { const dist = distanceLabel(p, userCoords); return dist ? <Pill label={dist} type="gray" style={{ fontSize: 9.5 }} /> : null })()}
-                  </div>
-                  <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
-                    <Star size={11} aria-hidden="true" /> See reviews
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  {canShowPrice(p)
-                    ? <>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
-                        {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
-                      </>
-                    : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
-                  {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
-                </div>
-              </Card>
-            </Link>
-          ))}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <SearchIcon size={16} color={theme.textLight} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
+            <input
+              aria-label="Search products and services in this facility"
+              placeholder="Search products and services in this facility"
+              value={profileQuery}
+              onChange={(e) => setProfileQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '11px 12px 11px 36px',
+                borderRadius: 12,
+                border: `1px solid ${theme.border}`,
+                fontSize: 13,
+                fontFamily: theme.fontFamily,
+                background: '#fff',
+                boxSizing: 'border-box',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <div aria-live="polite" style={{ marginTop: 6, fontSize: 12, color: theme.textLight }}>
+            {profileQuery.trim() ? `${totalFilteredCount} result${totalFilteredCount !== 1 ? 's' : ''} found` : `${totalUnfilteredCount} items`}
+          </div>
         </div>
+
+        {totalFilteredCount === 0 ? (
+          <Empty icon={<PillIcon size={40} color={theme.gray300} strokeWidth={1.5} />} message="No products/services found in this facility" />
+        ) : (
+          <>
+            <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
+              Available Products
+            </p>
+            {filteredProducts.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: theme.textLight, margin: '0 0 16px 0' }}>No matching products</p>
+            ) : (
+              <div style={isMobile
+                ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }
+                : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 16 }}>
+                {filteredProducts.map((p) => (
+                  <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
+                    <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
+                      {p.image_url
+                        ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
+                        : <div style={{
+                            width: 44, height: 44, borderRadius: theme.radius.md, flexShrink: 0,
+                            background: theme.tealMist, color: theme.tealDeep,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}><PillIcon size={21} aria-hidden="true" /></div>}
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
+                        {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+                          {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                          {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
+                          {(() => { const dist = distanceLabel(p, userCoords); return dist ? <Pill label={dist} type="gray" style={{ fontSize: 9.5 }} /> : null })()}
+                        </div>
+                        <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
+                          <Star size={11} aria-hidden="true" /> See reviews
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {canShowPrice(p)
+                          ? <>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                              {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
+                            </>
+                          : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
+                        {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
+                      </div>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
+              Services
+            </p>
+            {filteredServices.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: theme.textLight, margin: '0 0 26px 0' }}>{profileQuery.trim() ? 'No matching services' : 'No services listed yet.'}</p>
+            ) : (
+              <div style={isMobile
+                ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }
+                : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 26 }}>
+                {filteredServices.map((s) => (
+                  <Card key={s.id} style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{s.name}</p>
+                      {s.duration_minutes && <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{s.duration_minutes} min</p>}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {s.price_kobo != null ? (
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{(s.price_kobo / 100).toLocaleString()}</p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Free</p>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Reviews
@@ -769,7 +1094,6 @@ function BusinessProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}
