@@ -156,3 +156,21 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
   summary: nigeriaGeo Nominatim null address edge case when item.address is null.
   evidence: Low probability; fix later if reported.
+- source_spec: none
+  summary: Build Dashboard stats-only view with pending business approvals and pending agent applications
+  evidence: Split from CareFindHub Super Admin Panel upgrade per SCOPE STANDARD — stats-only landing view reads businesses/platform_team_members; deferred to ship SQL foundation first.
+- source_spec: none
+  summary: Build Businesses management (search/paginate, detail, Suspend/Revoked/Delete, E-commerce sub-tab, Export)
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — high-priority businesses list/detail/actions/exports; deferred to ship SQL foundation first.
+- source_spec: none
+  summary: Build Team → Agents (registration, approval/placement, referral tracking, earnings atomic trigger, 20-agent cap, transfer audit, agent self-service login)
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — largest financial blast radius, requires SQL foundation.
+- source_spec: none
+  summary: Build Team → Platform Admin Team (roles, hiring, permission-scoped login via CareHub pattern)
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — admin_roles/admin_team_members + navCatalogueFor; deferred.
+- source_spec: none
+  summary: Build Applications unified list (E-commerce/Agent/Team, none auto-approve)
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — unified Applications review flow; deferred.
+- source_spec: none
+  summary: Build Ledger aggregation + Payouts (pending→processing→paid) + Coverage carry-over
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — Ledger aggregates existing sources + Payouts atomic financial updates; deferred.
