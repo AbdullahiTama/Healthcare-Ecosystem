@@ -39,12 +39,14 @@ import cancelAppointmentHandler from './_handlers/cancel-appointment.js'
 import walletTransactionsHandler from './_handlers/wallet-transactions.js'
 import initiateShopPaymentHandler from './_handlers/initiate-shop-payment.js'
 import verifyShopPaymentHandler from './_handlers/verify-shop-payment.js'
+import bookingInterestHandler from './_handlers/booking-interest.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
   'admin-setup': adminSetupHandler,
   'banks': banksHandler,
   'booking': bookingHandler,
+  'booking-interest': bookingInterestHandler,
   'charge-consultation': chargeConsultationHandler,
   'charge-subscription': chargeSubscriptionHandler,
   'create-subaccount': createSubaccountHandler,

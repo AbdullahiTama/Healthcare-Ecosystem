@@ -3,15 +3,15 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin, MessageCircle, Phone,
-  Pill as PillIcon, Smile, Sparkles, Star, Store,
+  ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin,
+  Pill as PillIcon, Smile, Sparkles, Star, Store, Search as SearchIcon,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
-import { canShowPrice, distanceLabel, whatsappLink, telLink, coordsFrom } from '../utils/marketplace'
+import { canShowPrice, distanceLabel, coordsFrom } from '../utils/marketplace'
 import AppShell from '../../components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from '../../components/layout/SidebarSection.jsx'
 import { getSentimentSummary } from './sentiment'
@@ -127,6 +127,21 @@ function BookingCard({ biz }) {
   const [bookedAppt, setBookedAppt] = useState(null)
   const [cancelling, setCancelling] = useState(false)
   const reviewCancelRef = useRef(null)
+  const isBookingEnabled = !!biz.booking_enabled
+
+  function handleBookingInterest() {
+    toast.show('This healthcare facility is not accepting appointments at the moment.')
+    try {
+      const key = `booking_interest_${biz.id}`
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1')
+      fetch('/api/booking-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: biz.id }),
+      }).catch(() => {})
+    } catch (e) {}
+  }
 
   // Dialog accessibility: ESC closes, focus management
   useEffect(() => {
@@ -139,6 +154,7 @@ function BookingCard({ biz }) {
   }, [showReview])
 
   useEffect(() => {
+    if (!isBookingEnabled) return
     let live = true
     supabase.from('business_services').select('id,name,price_kobo,duration_minutes,is_active').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
       if (live) {
@@ -147,7 +163,7 @@ function BookingCard({ biz }) {
       }
     }).catch(() => {})
     return () => { live = false }
-  }, [biz.id])
+  }, [biz.id, isBookingEnabled])
 
   // Load service-specific availability when service and date are selected
   useEffect(() => {
@@ -328,8 +344,25 @@ function BookingCard({ biz }) {
     setBooking(false)
   }
 
+  if (!isBookingEnabled) {
+    return (
+      <Card id="booking" style={{ padding: 14, marginBottom: 26, opacity: 0.97 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
+          Book an Appointment
+        </p>
+        <p style={{ margin: '0 0 12px 0', fontSize: 12.5, color: theme.textLight }}>
+          This healthcare facility is not accepting appointments at the moment.
+        </p>
+        <button onClick={handleBookingInterest} aria-label="Book Appointment unavailable" style={{ width: '100%', minHeight: 44, padding: '11px 16px', background: '#e2e8f0', color: theme.textLight, border: `1px solid ${theme.border}`, borderRadius: 12, fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>
+          Book Appointment
+        </button>
+        <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight }}>Tap to notify the facility of your interest.</p>
+      </Card>
+    )
+  }
+
   return (
-    <Card style={{ padding: 14, marginBottom: 26 }}>
+    <Card id="booking" style={{ padding: 14, marginBottom: 26 }}>
       <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 4px 0' }}>
         Book an Appointment
       </p>
@@ -523,6 +556,8 @@ function BusinessProfile() {
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const [biz, setBiz] = useState(null)
   const [products, setProducts] = useState([])
+  const [businessServices, setBusinessServices] = useState([])
+  const [profileQuery, setProfileQuery] = useState('')
   const [reviews, setReviews] = useState([])
   const [reviewers, setReviewers] = useState({})
   const [loading, setLoading] = useState(true)
@@ -548,6 +583,7 @@ function BusinessProfile() {
     if (!bizData || bizData.status !== 'active' || bizData.visible_on_carefind === false) {
       setBiz(null)
       setProducts([])
+      setBusinessServices([])
       setReviews([])
       setLoading(false)
       return
@@ -564,6 +600,13 @@ function BusinessProfile() {
 
     // Only hide products explicitly out of stock (stock may be null for some listings)
     const visibleProducts = listed.filter((p) => p.stock == null || p.stock > 0)
+
+    const { data: servicesData } = await supabase
+      .from('business_services')
+      .select('id, name, price_kobo, duration_minutes, is_active')
+      .eq('business_id', id)
+      .eq('is_active', true)
+    const visibleServices = (servicesData || []).filter((s) => s.is_active !== false)
 
     const { data: reviewData } = await supabase
       .from('reviews')
@@ -589,6 +632,7 @@ function BusinessProfile() {
 
     setBiz(bizData)
     setProducts(visibleProducts)
+    setBusinessServices(visibleServices)
     setReviews(rv)
     setLoading(false)
   }
@@ -647,10 +691,6 @@ function BusinessProfile() {
     pct: reviews.length ? Math.round((reviews.filter((r) => r.rating === n).length / reviews.length) * 100) : 0,
   }))
 
-  // Build a proper wa.me link (handles Nigerian 080... numbers)
-  const waLink = whatsappLink(biz.whatsapp, `Hi ${biz.name}, I found you on CareFind.`)
-  const callLink = telLink(biz.phone)
-
   // Google Maps link for the Directions button: the business-supplied map URL
   // wins; otherwise fall back to the exact GPS coordinates set in Settings
   // (lat/lng is the live shape, latitude/longitude is the legacy shape);
@@ -668,6 +708,16 @@ function BusinessProfile() {
   // so the same business type reads the same in both products.
   const TYPE_ICON = { pharmacy: PillIcon, hospital: Hospital, dental: Smile, optical: Eye, wellness: Leaf, skincare: Sparkles }
   const TypeIcon = TYPE_ICON[biz.business_type] || Store
+
+  const lowerQuery = profileQuery.trim().toLowerCase()
+  const filteredProducts = !lowerQuery
+    ? products
+    : products.filter((p) => (p.name && p.name.toLowerCase().includes(lowerQuery)) || (p.generic_name && p.generic_name.toLowerCase().includes(lowerQuery)))
+  const filteredServices = !lowerQuery
+    ? businessServices
+    : businessServices.filter((s) => s.name && s.name.toLowerCase().includes(lowerQuery))
+  const totalFilteredCount = filteredProducts.length + filteredServices.length
+  const totalUnfilteredCount = products.length + businessServices.length
 
   // Desktop only: the hero's key facts + primary actions, as a persistent
   // sidebar card instead of a one-time scroll-past block (LAYOUTS.md's
@@ -705,26 +755,6 @@ function BusinessProfile() {
           )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {waLink && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noreferrer"
-                style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-              >
-                <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-              </a>
-              {callLink && (
-                <a
-                  href={callLink}
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
-                </a>
-              )}
-            </div>
-          )}
           {mapHref && (
             <a
               href={mapHref}
@@ -810,24 +840,6 @@ function BusinessProfile() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-              {waLink && (
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: '#25D366', color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <MessageCircle size={16} aria-hidden="true" style={{ marginRight: 7 }} /> WhatsApp
-                </a>
-              )}
-              {callLink && (
-                <a
-                  href={callLink}
-                  style={{ flex: 1, textAlign: 'center', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '11px 16px', background: theme.tealDeep, color: '#fff', borderRadius: 14, textDecoration: 'none', fontSize: 13.5, fontWeight: 700, boxSizing: 'border-box' }}
-                >
-                  <Phone size={16} aria-hidden="true" style={{ marginRight: 7 }} /> Call
-                </a>
-              )}
               {mapHref && (
                 <a
                   href={mapHref}
@@ -853,53 +865,114 @@ function BusinessProfile() {
           </>
         )}
 
-        {biz.booking_enabled && <BookingCard biz={biz} />}
+        <BookingCard biz={biz} />
 
         {biz.booking_enabled && <PatientAppointmentLookup bizId={biz.id} />}
 
-        <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
-          Available Products
-        </p>
-        {products.length === 0 && <Empty icon={<PillIcon size={40} color={theme.gray300} strokeWidth={1.5} />} message="No products listed yet." />}
-
-        <div style={isMobile
-          ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }
-          : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 26 }}>
-          {products.map((p) => (
-            <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
-              <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
-                {p.image_url
-                  ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                  : <div style={{
-                      width: 44, height: 44, borderRadius: theme.radius.md, flexShrink: 0,
-                      background: theme.tealMist, color: theme.tealDeep,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}><PillIcon size={21} aria-hidden="true" /></div>}
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
-                  {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-                    {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
-                    {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
-                    {(() => { const dist = distanceLabel(p, userCoords); return dist ? <Pill label={dist} type="gray" style={{ fontSize: 9.5 }} /> : null })()}
-                  </div>
-                  <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
-                    <Star size={11} aria-hidden="true" /> See reviews
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  {canShowPrice(p)
-                    ? <>
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
-                        {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
-                      </>
-                    : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
-                  {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
-                </div>
-              </Card>
-            </Link>
-          ))}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <SearchIcon size={16} color={theme.textLight} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
+            <input
+              aria-label="Search products and services in this facility"
+              placeholder="Search products and services in this facility"
+              value={profileQuery}
+              onChange={(e) => setProfileQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '11px 12px 11px 36px',
+                borderRadius: 12,
+                border: `1px solid ${theme.border}`,
+                fontSize: 13,
+                fontFamily: theme.fontFamily,
+                background: '#fff',
+                boxSizing: 'border-box',
+                outline: 'none',
+              }}
+            />
+          </div>
+          <div aria-live="polite" style={{ marginTop: 6, fontSize: 12, color: theme.textLight }}>
+            {profileQuery.trim() ? `${totalFilteredCount} result${totalFilteredCount !== 1 ? 's' : ''} found` : `${totalUnfilteredCount} items`}
+          </div>
         </div>
+
+        {totalFilteredCount === 0 ? (
+          <Empty icon={<PillIcon size={40} color={theme.gray300} strokeWidth={1.5} />} message="No products/services found in this facility" />
+        ) : (
+          <>
+            <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
+              Available Products
+            </p>
+            {filteredProducts.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: theme.textLight, margin: '0 0 16px 0' }}>No matching products</p>
+            ) : (
+              <div style={isMobile
+                ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }
+                : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 16 }}>
+                {filteredProducts.map((p) => (
+                  <Link key={p.id} to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
+                    <Card style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center' }}>
+                      {p.image_url
+                        ? <div style={{ width: 44, height: 44, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
+                        : <div style={{
+                            width: 44, height: 44, borderRadius: theme.radius.md, flexShrink: 0,
+                            background: theme.tealMist, color: theme.tealDeep,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}><PillIcon size={21} aria-hidden="true" /></div>}
+                      <div style={{ flex: 1 }}>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{p.name}</p>
+                        {p.generic_name && <p style={{ margin: '0 0 2px 0', color: theme.textLight, fontSize: 12, fontStyle: 'italic' }}>{p.generic_name}</p>}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+                          {p.sale_type && <Pill label={p.sale_type === 'retail' ? 'Retail' : (p.sale_type === 'distributor' ? 'Distributor' : 'Wholesale')} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
+                          {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
+                          {(() => { const dist = distanceLabel(p, userCoords); return dist ? <Pill label={dist} type="gray" style={{ fontSize: 9.5 }} /> : null })()}
+                        </div>
+                        <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
+                          <Star size={11} aria-hidden="true" /> See reviews
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        {canShowPrice(p)
+                          ? <>
+                              <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
+                              {p.price_unit && <p style={{ margin: 0, fontSize: 10, color: theme.textLight }}>per {p.price_unit}</p>}
+                            </>
+                          : <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
+                        {p.stock != null && <p style={{ margin: 0, fontSize: 10.5, color: theme.textLight }}>Stock: {p.stock}</p>}
+                      </div>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
+              Services
+            </p>
+            {filteredServices.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: theme.textLight, margin: '0 0 26px 0' }}>{profileQuery.trim() ? 'No matching services' : 'No services listed yet.'}</p>
+            ) : (
+              <div style={isMobile
+                ? { display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 26 }
+                : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10, marginBottom: 26 }}>
+                {filteredServices.map((s) => (
+                  <Card key={s.id} style={{ padding: 13, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 14, color: theme.navy }}>{s.name}</p>
+                      {s.duration_minutes && <p style={{ margin: 0, fontSize: 11.5, color: theme.textLight }}>{s.duration_minutes} min</p>}
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      {s.price_kobo != null ? (
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 900, color: theme.tealDeep }}>₦{(s.price_kobo / 100).toLocaleString()}</p>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: theme.textLight }}>Free</p>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
         <p style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 12px 0' }}>
           Reviews

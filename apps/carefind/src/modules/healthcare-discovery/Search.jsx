@@ -123,7 +123,7 @@ function Search() {
   }
 
   const businessesQuery = (q, st) => {
-    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, whatsapp, phone, latitude, longitude, lat, lng')
+    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, booking_enabled, latitude, longitude, lat, lng')
       .eq('visible_on_carefind', true)
       .eq('status', 'active')
     if (q) bq = bq.or(`name.ilike.%${q}%,business_type.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
@@ -519,8 +519,24 @@ function Search() {
         {!loading && tab === 'businesses' && businesses.length > 0 && (
           <div role="tabpanel" id="marketplace-panel-businesses" aria-labelledby="marketplace-tab-businesses" style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 10 }}>
             {businesses.map((b, idx) => {
-              const bizWa = whatsappLink(b.whatsapp, `Hi, I'm interested in ${b.name} on CareFind.`)
-              const bizCall = telLink(b.phone)
+              const isBookable = !!b.booking_enabled
+              const handleBook = () => {
+                if (isBookable) {
+                  navigate(`/business/${b.id}#booking`)
+                } else {
+                  toast.show('This healthcare facility is not accepting appointments at the moment.')
+                  try {
+                    const key = `booking_interest_${b.id}`
+                    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return
+                    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1')
+                    fetch('/api/booking-interest', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ business_id: b.id }),
+                    }).catch(() => {})
+                  } catch (e) {}
+                }
+              }
               return (
                 <div key={b.id} className="mm-card" style={{ padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg }}>
                   <Link to={`/business/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12 }}>
@@ -538,12 +554,10 @@ function Search() {
                       <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}><Star size={11} aria-hidden="true" /> See profile &amp; reviews <ChevronRight size={11} aria-hidden="true" /></p>
                     </div>
                   </Link>
-                  {(bizWa || bizCall) && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                      {bizWa && <a href={bizWa} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: b.id, channel: 'whatsapp' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}><MessageCircle size={16} aria-hidden="true" /> WhatsApp</a>}
-                      {bizCall && <a href={bizCall} onClick={() => recordContactLead({ businessId: b.id, channel: 'call' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none' }}><Phone size={16} aria-hidden="true" /> Call</a>}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <Link to={`/business/${b.id}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>View Profile</Link>
+                    <button onClick={handleBook} aria-label={isBookable ? 'Book Appointment' : 'Book Appointment unavailable'} aria-disabled={!isBookable} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: isBookable ? theme.tealDeep : '#e2e8f0', color: isBookable ? '#fff' : theme.textLight, border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: isBookable ? 1 : 0.9, boxSizing: 'border-box' }}>Book Appointment</button>
+                  </div>
                 </div>
               )
             })}
