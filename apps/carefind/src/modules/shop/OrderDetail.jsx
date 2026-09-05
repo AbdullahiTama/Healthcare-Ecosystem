@@ -36,6 +36,8 @@ export default function OrderDetail() {
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState(false)
   const [station, setStation] = useState(null)
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   useEffect(() => {
     loadOrder()
@@ -144,10 +146,11 @@ export default function OrderDetail() {
     } finally { setUpdating(false) }
   }
   async function handleCancel() {
-    if (!confirm('Cancel this order? Stock will be restored.')) return
     setUpdating(true)
     try {
-      await orderRepository.cancel(orderId, user.id)
+      await orderRepository.cancel(orderId, user.id, cancelReason || null)
+      setShowCancelModal(false)
+      setCancelReason('')
       await loadOrder()
     } catch (err) { setError(err.message || 'Cancel failed') } finally { setUpdating(false) }
   }
@@ -313,11 +316,15 @@ export default function OrderDetail() {
             </div>
             <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
           </div>
-          {order.status==='pending_payment' && isCustomer && (
+          {(order.status==='pending_payment' || order.status==='paid') && isCustomer && (
             <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
-              <Button onClick={handlePayNow} disabled={updating} style={{ flex:1, minWidth: 140 }}>Pay with Paystack</Button>
-              <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1, minWidth: 140 }}>I've Paid — Verify</Button>
-              <Button variant="secondary" onClick={handleCancel} disabled={updating}>Cancel Order</Button>
+              {order.status==='pending_payment' && (
+                <>
+                  <Button onClick={handlePayNow} disabled={updating} style={{ flex:1, minWidth: 140 }}>Pay with Paystack</Button>
+                  <Button onClick={handleVerifyPayment} disabled={updating} style={{ flex:1, minWidth: 140 }}>I've Paid — Verify</Button>
+                </>
+              )}
+              <Button variant="secondary" onClick={() => setShowCancelModal(true)} disabled={updating}>Cancel Order</Button>
             </div>
           )}
           {order.status==='delivery_quote_pending' && isCustomer && (
@@ -454,6 +461,71 @@ export default function OrderDetail() {
             fontSize: 14
           }}>
             {error}
+          </div>
+        )}
+
+        {/* Cancel Order Modal */}
+        {showCancelModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}>
+            <Card style={{ maxWidth: 480, width: '100%', padding: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.navy, marginBottom: 16 }}>
+                Cancel Order
+              </h2>
+              <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 16 }}>
+                Are you sure you want to cancel this order? Stock will be restored and you will receive a refund if you have already paid.
+              </p>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: theme.navy, marginBottom: 8 }}>
+                  Reason for cancellation (optional)
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Changed my mind, found it cheaper elsewhere, etc."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `1px solid ${theme.border}`,
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowCancelModal(false)
+                    setCancelReason('')
+                  }}
+                  disabled={updating}
+                >
+                  Keep Order
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleCancel}
+                  disabled={updating}
+                >
+                  {updating ? 'Cancelling...' : 'Cancel Order'}
+                </Button>
+              </div>
+            </Card>
           </div>
         )}
       </div>
