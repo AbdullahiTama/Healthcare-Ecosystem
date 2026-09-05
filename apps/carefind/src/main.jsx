@@ -47,6 +47,8 @@ import { CartProvider } from './modules/shop/CartProvider.jsx'
 import { WishlistProvider } from './modules/shop/WishlistProvider.jsx'
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
+const BusinessesHub = lazy(() => import('./modules/businesses-hub/BusinessesHub.jsx'))
+const DashboardHub = lazy(() => import('./modules/dashboard-hub/DashboardHub.jsx'))
 
 const Loading = () => (
   <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -103,6 +105,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/admin" element={<AdminLogin />} />
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin-panel" element={<Suspense fallback={<Loading />}><AdminPanel /></Suspense>} />
+            <Route path="/admin/businesses" element={<Suspense fallback={<Loading />}><BusinessesHub /></Suspense>} />
+            <Route path="/admin/dashboard" element={<Suspense fallback={<Loading />}><DashboardHub /></Suspense>} />
 
             {/* Shop Cart & Checkout - requires auth */}
             <Route path="/cart" element={<RequireAuth><Cart /></RequireAuth>} />
