@@ -17,6 +17,7 @@ import PostMenu from './PostMenu.jsx'
 import ProfileHeader from '../../components/ProfileHeader.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
 import { Card, Pill, TealBtn, GhostBtn, ConfirmDialog } from '../../components/ui'
+import StoryAvatar from '../../components/StoryAvatar.jsx'
 
 // One pill per post, never two. `text` posts deliberately have no pill:
 // labelling the default kind adds noise without adding information. Kept here
@@ -102,6 +103,10 @@ export default function PostCard({
   // drawn exactly once and a repost-of-a-repost cannot recurse.
   resolveSource,
   isRepostBody = false,
+  // Story ring cross-surface (spec-carefind-stories-cross-surface-fix)
+  stories,
+  viewedIds,
+  onStoryClick,
 }) {
   // Every hook is declared BEFORE the repost early return below. React
   // requires an unchanging hook order per component instance, and an instance
@@ -244,30 +249,36 @@ export default function PostCard({
         padding: post.post_type === 'visual' || post.post_type === 'video' ? '14px 16px 0 16px' : 0,
         marginBottom: post.post_type === 'visual' || post.post_type === 'video' ? 0 : 10,
       }}>
-        <Link
-          to={`/u/${post.user_id}`}
-          aria-label={`${authorName(post)}'s profile`}
-          style={{ position: 'relative', flexShrink: 0, textDecoration: 'none', display: 'block' }}
-        >
-          <div
-            aria-hidden="true"
-            style={{
-              width: 42, height: 42, borderRadius: post.posted_as_type ? theme.radius.md : '50%',
-              background: post.posted_as_type
-                ? theme.navy
-                : (profiles[post.user_id]?.avatar_url
-                    ? `url(${profiles[post.user_id].avatar_url}) center/cover`
-                    : theme.tealDeep),
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 15, fontWeight: 800,
-            }}
+        <div style={{ position: 'relative', flexShrink: 0, display: 'block' }}>
+          <Link
+            to={`/u/${post.user_id}`}
+            aria-label={`${authorName(post)}'s profile`}
+            style={{ textDecoration: 'none', display: 'block' }}
           >
-            {post.posted_as_type
-              ? (post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />)
-              : (!profiles[post.user_id]?.avatar_url &&
-                  (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
-          </div>
-
+            {post.posted_as_type ? (
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 42, height: 42, borderRadius: theme.radius.md,
+                  background: theme.navy,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 15, fontWeight: 800,
+                }}
+              >
+                {post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />}
+              </div>
+            ) : (
+              <StoryAvatar
+                userId={post.user_id}
+                stories={stories}
+                viewedIds={viewedIds}
+                size={42}
+                src={profiles[post.user_id]?.avatar_url}
+                name={authorName(post)}
+                onClick={onStoryClick ? () => onStoryClick(post.user_id) : undefined}
+              />
+            )}
+          </Link>
           {/* Follow badge sitting on the avatar (TikTok-style) */}
           {user && post.user_id !== user.id && (
             <button
@@ -287,7 +298,7 @@ export default function PostCard({
               {isFollowing(post.user_id) ? <Check size={12} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
             </button>
           )}
-        </Link>
+        </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <ProfileHeader
@@ -642,6 +653,9 @@ export default function PostCard({
           myUsername={myUsername}
           myAvatar={myAvatar}
           onCommentAdded={handleCommentAdded}
+          stories={stories}
+          viewedIds={viewedIds}
+          onStoryClick={onStoryClick}
         />
       )}
     </Card>

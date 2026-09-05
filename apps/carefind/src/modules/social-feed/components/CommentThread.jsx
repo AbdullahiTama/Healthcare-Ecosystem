@@ -7,6 +7,7 @@ import { commentRepository } from '../repositories'
 import { renderMarkdown } from '../markdown.jsx'
 import { extractMentions } from '../mentions.js'
 import { Avatar, TealBtn } from '../../../components/ui'
+import StoryAvatar from '../../../components/StoryAvatar.jsx'
 import VerifiedBadge from '../../../components/VerifiedBadge.jsx'
 import { theme } from '../../../styles/theme'
 import { Heart, Pencil, Trash2, X } from 'lucide-react'
@@ -60,7 +61,7 @@ function mentionsMap(comment) {
   return map
 }
 
-export function CommentThread({ postId, user, comments, onCommentsChange, editingComment, setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts, myUsername, myAvatar, onCommentAdded }) {
+export function CommentThread({ postId, user, comments, onCommentsChange, editingComment, setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts, myUsername, myAvatar, onCommentAdded, stories, viewedIds, onStoryClick }) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleAddComment = useCallback(async (parentId, overrideText) => {
@@ -171,7 +172,11 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ flexShrink: 0 }}>
             <Link to={`/u/${comment.user_id}`} style={{ textDecoration: 'none' }}>
-              <Avatar name={getCommentName(comment)} src={comment.profiles?.avatar_url} size={depth > 0 ? 26 : 30} />
+              {stories ? (
+                <StoryAvatar userId={comment.user_id} stories={stories} viewedIds={viewedIds} size={depth > 0 ? 26 : 30} src={comment.profiles?.avatar_url} name={getCommentName(comment)} onClick={onStoryClick ? () => onStoryClick(comment.user_id) : undefined} />
+              ) : (
+                <Avatar name={getCommentName(comment)} src={comment.profiles?.avatar_url} size={depth > 0 ? 26 : 30} />
+              )}
             </Link>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>

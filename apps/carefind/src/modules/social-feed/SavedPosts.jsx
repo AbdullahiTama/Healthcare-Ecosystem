@@ -11,6 +11,9 @@ import { renderArticleHtml } from '../news-publishing/articleFormat'
 import { renderMarkdown } from './markdown.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Avatar, Card, CardSkeleton, Empty } from '../../components/ui'
+import StoryAvatar from '../../components/StoryAvatar.jsx'
+import StoryViewer from './components/StoryViewer.jsx'
+import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 
 function SavedPosts() {
@@ -21,6 +24,8 @@ function SavedPosts() {
   const [posts, setPosts] = useState([])
   const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
+  const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
+  const [viewer, setViewer] = useState(null)
 
   const visualThemes = {
     teal: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
@@ -68,6 +73,13 @@ function SavedPosts() {
       ;(profileData || []).forEach((p) => { profileMap[p.id] = p })
       setProfiles(profileMap)
 
+      // Batch story ring for all saved-post authors
+      const { data: storyRows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', userIds).gt('expires_at', new Date().toISOString())
+      const storiesForAuthors = storyRows || []
+      let viewedIds = new Set()
+      if (storiesForAuthors.length && user?.id) viewedIds = await fetchViewedStoryIds(supabase, storiesForAuthors.map((s) => s.id))
+      setStoryMeta({ stories: storiesForAuthors, viewedIds })
+
       setLoading(false)
     }
     if (!authLoading) load()
@@ -84,6 +96,23 @@ function SavedPosts() {
   function authorName(post) {
     const p = profiles[post.user_id]
     return p?.full_name || p?.display_name || 'CareFind user'
+  }
+
+  async function openStoryForUser(uid) {
+    const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', uid).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })
+    const list = data || []
+    if (!list.length) return
+    setViewer({ stories: list, index: 0, userId: uid })
+  }
+  function handleViewStory(st) {
+    supabase.rpc('increment_story_view', { story_id: st.id }).catch(() => {})
+    if (user?.id) {
+      markStoriesViewed(supabase, { storyIds: [st.id], userId: user.id }).catch(() => {})
+      setStoryMeta((prev) => {
+        if (prev.viewedIds.has(st.id)) return prev
+        const next = new Set(prev.viewedIds); next.add(st.id); return { ...prev, viewedIds: next }
+      })
+    }
   }
 
   function inShell(content) {
@@ -172,7 +201,7 @@ function SavedPosts() {
                 marginBottom: post.post_type === 'visual' ? 0 : 10,
               }}>
                 <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', minWidth: 0 }}>
-                  <Avatar name={authorName(post)} src={profiles[post.user_id]?.avatar_url} size={34} />
+                  <StoryAvatar userId={post.user_id} stories={storyMeta.stories} viewedIds={storyMeta.viewedIds} size={34} src={profiles[post.user_id]?.avatar_url} name={authorName(post)} onClick={() => openStoryForUser(post.user_id)} />
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <span style={{ fontSize: 13.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
@@ -205,6 +234,14 @@ function SavedPosts() {
       </div>
 
       {isMobile && <BottomNav />}
+      {viewer && (
+        <StoryViewer stories={viewer.stories} index={viewer.index} onNavigate={(n) => setViewer((prev) => n === null || n < 0 || n >= prev.stories.length ? null : { ...prev, index: n })} onClose={() => setViewer(null)} onViewStory={handleViewStory} renderHeader={(s) => (
+          <>
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>{authorName({ user_id: viewer.userId })?.[0]?.toUpperCase() || '?'}</div>
+            <div style={{ flex: 1 }}><p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 800 }}>{authorName({ user_id: viewer.userId })}</p><p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: 11 }}>{new Date(s.created_at).toLocaleDateString()}</p></div>
+          </>
+        )} />
+      )}
     </div>
   )
 
