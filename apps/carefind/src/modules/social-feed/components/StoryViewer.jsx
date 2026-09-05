@@ -22,7 +22,7 @@ import GiftPanel from '../../subscriptions-monetization/GiftPanel.jsx'
 //                   (view counting, seen marking)
 //   renderHeader  — (story, helpers) => node; avatar + name block. helpers = { onClose }
 const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderHeader }) => {
-  const { user } = useAuth()
+  const { user } = useAuth() || { user: null }
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const [progress, setProgress] = useState(0)
   const timerRef = useRef(null)
