@@ -68,7 +68,7 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
 // excludes both sensitive columns. getBusinessByEmail is only ever called with
 // a real session (authenticated retains is_platform_admin), but it still must
 // not ask for password.
-const BUSINESS_PUBLIC_COLUMNS = 'id,name,owner,email,phone,whatsapp,address,state,city,lga,area,business_type,hours,maps_link,lat,lng,website,status,visible_on_carefind,created_at,parent_business_id,branch_name,plan,cover_url,enterprise_type,plan_expires_at,location_label,show_price_on_carefind,logo_url,description,latitude,longitude,booking_enabled,booking_type,booking_slots,referring_agent_id,referral_code_used,show_prices,online_consultation_fee,physical_consultation_fee,branch_depth_limit,consultation_medium,consultation_medium_link'
+const BUSINESS_PUBLIC_COLUMNS = 'id,name,owner,email,phone,whatsapp,address,state,city,business_type,hours,maps_link,lat,lng,website,status,visible_on_carefind,created_at,parent_business_id,branch_name,plan,cover_url,enterprise_type,plan_expires_at,location_label,show_price_on_carefind,logo_url,description,latitude,longitude,booking_enabled,booking_type,booking_slots,referring_agent_id,referral_code_used,show_prices,online_consultation_fee,physical_consultation_fee,branch_depth_limit,consultation_medium,consultation_medium_link'
 export async function getBusinessById(id) {
   const r = await sbFetch('businesses?id=eq.' + id + '&select=' + BUSINESS_PUBLIC_COLUMNS)
   return r[0] || null
