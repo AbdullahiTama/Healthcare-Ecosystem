@@ -8,10 +8,11 @@ import { useAuth } from '../../providers/AuthContext'
 import { orderRepository } from './orderRepository'
 import { addressesRepository } from '../account/addressesRepository'
 import { calculateTotalFees } from './pricing'
+import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
-import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star, Tag, CheckCircle, X } from 'lucide-react'
 
 const APPROVED_CITIES = ['lagos','abuja','port harcourt','kano','ibadan','benin city','enugu','kaduna','zaria','aba','jos','ilorin','onitsha','ogbomosho','maiduguri','warri']
 const isApprovedCity = (city, state) => {
@@ -49,6 +50,12 @@ export default function Checkout() {
   const [saveAddress, setSaveAddress] = useState(false)
   const [addressesLoading, setAddressesLoading] = useState(true)
   const [addressPreFilled, setAddressPreFilled] = useState(false)
+  
+  // Promo code state
+  const [promoCode, setPromoCode] = useState('')
+  const [promoValidation, setPromoValidation] = useState(null) // { valid, discount_kobo, promo_code_id, error }
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [promoApplied, setPromoApplied] = useState(false)
 
   useEffect(() => {
     async function loadAddresses() {
@@ -152,10 +159,43 @@ export default function Checkout() {
   })
   // Cross-city: fulfilment still charged, delivery pending (B27 Step 3B)
   const deliveryFeeDisplay = !approved && formData.delivery_preference === 'home'
-  const grandTotal = total + fees.fulfilment + (deliveryFeeDisplay ? 0 : fees.delivery)
+  const discountKobo = promoValidation?.valid ? promoValidation.discount_kobo : 0
+  const grandTotal = total + fees.fulfilment + (deliveryFeeDisplay ? 0 : fees.delivery) - discountKobo
 
   // Strict Paystack default; pay-at-pickup only when vendor allows + pickup selected
   const canUsePickup = allowPayOnDelivery && formData.delivery_preference === 'pickup'
+
+  async function handleValidatePromoCode() {
+    if (!promoCode.trim() || !user) return
+    
+    setPromoLoading(true)
+    setPromoValidation(null)
+    
+    try {
+      const result = await validatePromoCode(
+        promoCode.trim(),
+        user.id,
+        total, // order total before fees
+        segment
+      )
+      
+      setPromoValidation(result)
+      
+      if (result.valid) {
+        setPromoApplied(true)
+      }
+    } catch (err) {
+      setPromoValidation({ valid: false, error: 'Failed to validate promo code' })
+    } finally {
+      setPromoLoading(false)
+    }
+  }
+
+  function handleRemovePromoCode() {
+    setPromoCode('')
+    setPromoValidation(null)
+    setPromoApplied(false)
+  }
 
   async function maybeSaveAddress() {
     if (!saveAddress || !user || !formData.street || !formData.city || !formData.state) return
@@ -231,6 +271,12 @@ export default function Checkout() {
           payment_reference,
           pickup_station_id: pickupStationId
         })
+        
+        // Apply promo code if valid
+        if (promoValidation?.valid && promoValidation.promo_code_id) {
+          await applyPromoCodeToOrder(orderId, promoValidation.promo_code_id, promoValidation.discount_kobo)
+        }
+        
         await maybeSaveAddress()
         clearCart()
         navigate(`/orders/${orderId}`)
@@ -285,6 +331,12 @@ export default function Checkout() {
         payment_reference,
         pickup_station_id: formData.delivery_preference === 'pickup' ? pickupStationId : null
       })
+      
+      // Apply promo code if valid
+      if (promoValidation?.valid && promoValidation.promo_code_id) {
+        await applyPromoCodeToOrder(createdOrderId, promoValidation.promo_code_id, promoValidation.discount_kobo)
+      }
+      
       await maybeSaveAddress()
       await initiatePaystackForOrder(createdOrderId, payment_reference)
       // Redirected — clear cart optimistically; if user aborts, order remains pending_payment
@@ -509,6 +561,122 @@ export default function Checkout() {
                   <span style={{ fontWeight: 600, color: theme.warning }}>PENDING (quoted within 24h)</span>
                 </div>
               )}
+              
+              {/* Promo Code Section */}
+              <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'block', marginBottom: 4 }}>
+                      <Tag size={12} style={{ display: 'inline', marginRight: 4 }} />
+                      Promo Code
+                    </label>
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase())
+                        if (promoApplied) {
+                          setPromoApplied(false)
+                          setPromoValidation(null)
+                        }
+                      }}
+                      placeholder="Enter promo code"
+                      disabled={promoApplied}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        border: `1px solid ${promoValidation?.valid ? theme.success : promoValidation?.error ? theme.danger : theme.border}`,
+                        fontSize: 13,
+                        fontFamily: 'inherit',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div style={{ paddingTop: 20 }}>
+                    {promoApplied ? (
+                      <button
+                        type="button"
+                        onClick={handleRemovePromoCode}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          border: `1px solid ${theme.border}`,
+                          background: '#fff',
+                          color: theme.textMid,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
+                        }}
+                      >
+                        <X size={14} />
+                        Remove
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleValidatePromoCode}
+                        disabled={promoLoading || !promoCode.trim()}
+                        style={{
+                          padding: '10px 16px',
+                          borderRadius: 8,
+                          border: 'none',
+                          background: promoLoading || !promoCode.trim() ? theme.gray200 : theme.tealDeep,
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: promoLoading || !promoCode.trim() ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {promoLoading ? 'Validating...' : 'Apply'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Promo code validation message */}
+                {promoValidation && (
+                  <div style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 8,
+                    background: promoValidation.valid ? theme.successBg : theme.dangerBg,
+                    border: `1px solid ${promoValidation.valid ? theme.success : theme.danger}30`,
+                    fontSize: 12,
+                    color: promoValidation.valid ? theme.success : theme.danger,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    {promoValidation.valid ? (
+                      <>
+                        <CheckCircle size={14} />
+                        <span>
+                          {promoValidation.description || 'Promo code applied!'} 
+                          {promoValidation.discount_type === 'percentage' 
+                            ? ` (${promoValidation.discount_value}% off)`
+                            : ` (₦${(promoValidation.discount_kobo / 100).toLocaleString()} off)`
+                          }
+                        </span>
+                      </>
+                    ) : (
+                      <span>{promoValidation.error}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Discount display */}
+              {promoValidation?.valid && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: theme.success }}>
+                  <span>Discount</span>
+                  <span style={{ fontWeight: 600 }}>-₦{(discountKobo / 100).toLocaleString()}</span>
+                </div>
+              )}
+              
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, marginTop: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700 }}>
                   <span style={{ color: theme.navy }}>{deliveryFeeDisplay ? 'Subtotal' : 'Total'}</span>
