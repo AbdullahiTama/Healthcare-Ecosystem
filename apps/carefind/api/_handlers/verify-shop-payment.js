@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { sendEmail, buildOrderConfirmationHtml } from '../_lib/email.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -135,5 +136,52 @@ export default async function handler(req, res) {
     read_at: null,
   }).then(() => {}, () => {})
 
+  // ── Customer post-payment notifications ──────────────────────────────────
+  // Fire-and-forget: email + in-app notification. Failures are logged but
+  // never block the payment response.
+  notifyCustomerPostPayment(order.id).catch(err => {
+    console.error('[verify-shop-payment] customer notification error:', err)
+  })
+
   return res.status(200).json({ success: true, id: order.id, paid: true })
+}
+
+async function notifyCustomerPostPayment(orderId) {
+  const { data: fullOrder } = await supabase
+    .from('shop_orders')
+    .select('id, order_ref, customer_id, total_kobo, fulfilment_kobo, delivery_kobo, subtotal_kobo, delivery_address, delivery_city, delivery_state, delivery_email, customer_name, payment_reference, created_at')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (!fullOrder) return
+
+  const { data: items } = await supabase
+    .from('shop_order_items')
+    .select('product_name, quantity, unit_price_kobo')
+    .eq('order_id', orderId)
+
+  // In-app notification
+  if (fullOrder.customer_id) {
+    await supabase.from('notifications').insert({
+      recipient_id: fullOrder.customer_id,
+      type: 'shop_order_paid',
+      message: `Payment confirmed for order ${fullOrder.order_ref} — ₦${(fullOrder.total_kobo / 100).toLocaleString()}`,
+      link: `/orders/${orderId}`,
+    }).then(() => {}, () => {})
+  }
+
+  // Order confirmation email
+  const email = fullOrder.delivery_email
+  if (email && email.includes('@')) {
+    const siteUrl = process.env.SITE_URL || process.env.VITE_SITE_URL || ''
+    const html = buildOrderConfirmationHtml({
+      order: fullOrder,
+      items: items || [],
+      siteUrl,
+    })
+    await sendEmail({
+      to: email,
+      subject: `Order Confirmed — ${fullOrder.order_ref}`,
+      html,
+    }).then(() => {}, () => {})
+  }
 }
