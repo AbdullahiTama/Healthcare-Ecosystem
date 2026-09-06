@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Truck, CreditCard, Hourglass, Search, Plus, X } from 'lucide-react'
+import { Truck, CreditCard, Hourglass, Search, Plus, X, ChevronDown } from 'lucide-react'
 import { purchaseRepository } from './repositories'
 // Product writes go through the inventory seam: replenishment must be atomic
 // now that sales decrement stock server-side (C5/C12).
@@ -24,6 +24,7 @@ const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, gray50, bo
 // immediately sellable (stock is also set). Existing products keep their
 // own selling price; only stock and cost are updated.
 const NEW_PRODUCT_MARKUP = 1.5
+const PAGE_SIZE = 50
 
 const blankItem = () => ({ name: '', qty: '', cost: '', sell: '', batch: '', expiry: '', cat: 'Medicines' })
 
@@ -31,9 +32,12 @@ export default function Purchases({ brand, role, perms }) {
   const [purchases, setPurchases] = useState([])
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [search, setSearch] = useState('')
   const [filterMonth, setFilterMonth] = useState('')
   const [filterYear, setFilterYear] = useState('')
+  const [totals, setTotals] = useState({ purchase_count: 0, total_paid: 0, total_owed: 0 })
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ supplyDate: todayDate(), items: [blankItem()] })
   const [saving, setSaving] = useState(false)
@@ -46,7 +50,7 @@ export default function Purchases({ brand, role, perms }) {
   const addItem = () => setForm(p => ({ ...p, items: [...p.items, blankItem()] }))
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.filter((_, idx) => idx !== i) }))
 
-  useEffect(() => { load() }, [brand?.id])
+  useEffect(() => { load() }, [brand?.id, filterMonth, filterYear, search])
   useEffect(() => {
     let live = true
     productRepository.getAll(brand.id).then(p => { if (live) setInventory(p || []) }).catch(() => {})
@@ -55,8 +59,29 @@ export default function Purchases({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const p = await purchaseRepository.getAll(brand.id); setPurchases(p || []) } catch (e) {}
+    setPurchases([])
+    setHasMore(true)
+    try {
+      const [page, totalData] = await Promise.all([
+        purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: 0, limit: PAGE_SIZE }),
+        purchaseRepository.getTotals(brand.id),
+      ])
+      setPurchases(page || [])
+      setTotals(totalData?.[0] || { purchase_count: 0, total_paid: 0, total_owed: 0 })
+      setHasMore((page || []).length === PAGE_SIZE)
+    } catch (e) {}
     setLoading(false)
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const more = await purchaseRepository.getPage(brand.id, { search, month: filterMonth, year: filterYear, offset: purchases.length, limit: PAGE_SIZE })
+      setPurchases(p => [...p, ...(more || [])])
+      setHasMore((more || []).length === PAGE_SIZE)
+    } catch (e) {}
+    setLoadingMore(false)
   }
 
   const validItems = form.items.filter(i => i.name.trim() && Number(i.qty) > 0 && Number(i.cost) > 0)
@@ -218,15 +243,6 @@ export default function Purchases({ brand, role, perms }) {
     } catch (e) { showToast('Could not mark as paid. Please try again.', { type: 'error' }) }
   }
 
-  const filtered = purchases.filter(p => {
-    const matchSearch = !search || p.supplier_name.toLowerCase().includes(search.toLowerCase()) || (p.product_name && p.product_name.toLowerCase().includes(search.toLowerCase()))
-    const matchMonth = !filterMonth || p.created_at?.startsWith(filterMonth)
-    const matchYear = !filterYear || p.created_at?.startsWith(filterYear)
-    return matchSearch && matchMonth && matchYear
-  })
-
-  const totalOwed = purchases.reduce((s, p) => s + (p.balance || 0), 0)
-  const totalPaid = purchases.reduce((s, p) => s + (p.amount_paid || 0), 0)
   const years = [...new Set(purchases.map(p => p.created_at?.slice(0, 4)).filter(Boolean))].sort().reverse()
 
   // Autocomplete suggestions for the product-name inputs: existing catalogue
@@ -239,9 +255,9 @@ export default function Purchases({ brand, role, perms }) {
       <SectionHead title='Purchases' sub='Record multi-item supplier purchases' btn='+ Record Purchase' onBtn={() => setShowAdd(true)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
-        <StatCard icon={<Truck />} label='Total Purchases' value={purchases.length} />
-        <StatCard icon={<CreditCard />} label='Total Paid' value={fmt(totalPaid)} />
-        <StatCard icon={<Hourglass />} label='Balance Owed' value={fmt(totalOwed)} alert={totalOwed > 0} />
+        <StatCard icon={<Truck />} label='Total Purchases' value={totals.purchase_count || 0} />
+        <StatCard icon={<CreditCard />} label='Total Paid' value={fmt(Number(totals.total_paid) || 0)} />
+        <StatCard icon={<Hourglass />} label='Balance Owed' value={fmt(Number(totals.total_owed) || 0)} alert={(Number(totals.total_owed) || 0) > 0} />
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
@@ -260,7 +276,7 @@ export default function Purchases({ brand, role, perms }) {
         {(filterMonth || filterYear) && <button onClick={() => { setFilterMonth(''); setFilterYear('') }} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}>Clear</button>}
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? <Loading /> : purchases.length === 0 ? (
         <Empty icon={<Truck size={40} />} message='No purchases recorded' action='+ Record Purchase' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>
@@ -274,7 +290,7 @@ export default function Purchases({ brand, role, perms }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(p => (
+                {purchases.map(p => (
                   <tr key={p.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 12px', fontWeight: '700', fontSize: '13px', color: navy }}>{p.supplier_name}</td>
                     <td style={{ padding: '12px 12px', fontSize: '13px', color: gray600, maxWidth: '260px' }}>{p.product_name || '—'}</td>
@@ -295,6 +311,14 @@ export default function Purchases({ brand, role, perms }) {
               </tbody>
             </table>
           </div>
+          {hasMore && (
+            <div style={{ padding: '16px', textAlign: 'center' }}>
+              <button onClick={loadMore} disabled={loadingMore}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: loadingMore ? 'wait' : 'pointer' }}>
+                {loadingMore ? 'Loading...' : <><ChevronDown size={14} /> Load more</>}
+              </button>
+            </div>
+          )}
         </Card>
       )}
 
