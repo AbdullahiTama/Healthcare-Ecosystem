@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Card } from '../../components/ui'
+import { Card, Toast } from '../../components/ui'
+import { useToast } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { createShopRepository } from './shopRepository'
 import { useCart } from './CartProvider'
@@ -17,6 +18,7 @@ const shopRepository = createShopRepository()
 
 export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false }) {
   const { count, addItem } = useCart()
+  const { msg: toastMsg, type: toastType, show: showToast } = useToast()
   const { has: hasWishlist, toggle: toggleWishlist } = useWishlist()
   const [segment, setSegment] = useState(initialSegment)
   const [miniOpen, setMiniOpen] = useState(false)
@@ -129,6 +131,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
 
   return (
     <div style={outerStyle}>
+      <Toast msg={toastMsg} type={toastType} />
       {/* Top bar: wishlist + cart — hide when embedded? keep cart accessible but compact */}
       {!embedded ? (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
@@ -259,7 +262,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         rows={grid}
         loading={false}
         error=""
-        onAddToCart={(item) => addItem(item)}
+        onAddToCart={(item) => { addItem(item); showToast('Added to cart!', { type: 'success', duration: 2000 }) }}
         onToggleWishlist={toggleWishlist}
         hasWishlist={hasWishlist}
         ratings={ratings}

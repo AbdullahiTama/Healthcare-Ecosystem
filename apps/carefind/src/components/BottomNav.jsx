@@ -1,12 +1,14 @@
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
-import { Home, Store, Newspaper, User, Plus } from 'lucide-react'
+import { Home, Store, Newspaper, User, Plus, ShoppingCart } from 'lucide-react'
 import { theme } from '../styles/theme'
 import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
+import { useCart } from '../modules/shop/CartProvider'
 
 function BottomNav({ onCompose }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { count } = useCart()
 
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
@@ -53,6 +55,7 @@ function BottomNav({ onCompose }) {
     justifyContent: 'center',
     background: active ? theme.tealMist : 'transparent',
     transition: `background ${theme.motion.fast} ${theme.motion.easeOut}`,
+    position: 'relative',
   })
 
   return (
@@ -92,6 +95,30 @@ function BottomNav({ onCompose }) {
       >
         <span style={iconCapsule(isMedMarketActive)}>
           <Store size={20} strokeWidth={isMedMarketActive ? 2.4 : 2} aria-hidden="true" />
+          {count > 0 && (
+            <span
+              style={{
+                position: 'absolute',
+                top: -2,
+                right: -4,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                background: theme.danger,
+                color: '#fff',
+                fontSize: 9,
+                fontWeight: 800,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 4px',
+                lineHeight: 1,
+              }}
+              aria-label={`${count} items in cart`}
+            >
+              {count > 99 ? '99+' : count}
+            </span>
+          )}
         </span>
         MedMarket
       </Link>

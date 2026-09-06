@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle, Bell } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { Card, Pill, Empty } from '../../components/ui'
+import { Card, Pill, Empty, Toast } from '../../components/ui'
+import { useToast } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
 import { useCart } from './CartProvider'
 import { useWishlist } from './WishlistProvider'
@@ -21,6 +22,7 @@ const shopRepository = createShopRepository()
 export default function ProductDetail() {
   const { productId } = useParams()
   const { addItem } = useCart()
+  const { msg: toastMsg, type: toastType, show: showToast } = useToast()
   const { has, toggle } = useWishlist()
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
@@ -155,6 +157,7 @@ export default function ProductDetail() {
     if (!product || !p) return
     addItem({ ecommerce_product_id: product.id, product_name: p.name, unit_price_kobo: priceKobo, quantity: qty, image_url: images[0]?.url || p.image_url || null, vendor_id: product.business_id, vendor_business_id: product.business_id, sale_type: p.sale_type || null, prescription_required: !!product.prescription_required })
     setAddedToCart(true); setTimeout(() => setAddedToCart(false), 2000)
+    showToast('Added to cart!', { type: 'success', duration: 2000 })
   }
   const handleSubmitReview = async () => {
     if (!rating || rating <1 || rating>5) return
@@ -181,6 +184,7 @@ export default function ProductDetail() {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: 16, ...(isMobile ? { overflowX: 'hidden', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : {}) }}>
+      <Toast msg={toastMsg} type={toastType} />
       <Link to="/search?tab=shop" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: theme.tealDeep, textDecoration: 'none', fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
         <ArrowLeft size={14} /> Back to Shop
       </Link>

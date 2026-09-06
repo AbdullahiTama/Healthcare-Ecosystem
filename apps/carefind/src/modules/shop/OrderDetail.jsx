@@ -35,6 +35,7 @@ export default function OrderDetail() {
   const [trackingEvents, setTrackingEvents] = useState([])
   const [trackingToken, setTrackingToken] = useState(null)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [paymentJustConfirmed, setPaymentJustConfirmed] = useState(false)
 
   function handleReorder() {
     if (!order || !order.order_items) return
@@ -256,6 +257,7 @@ export default function OrderDetail() {
         if (cancelled) return
         window.history.replaceState({}, '', window.location.pathname)
         if (res.ok) {
+          setPaymentJustConfirmed(true)
           await loadOrder()
         } else {
           setError(data.error || 'Could not confirm payment. Keep your reference and contact support.')
@@ -435,6 +437,25 @@ export default function OrderDetail() {
         Back to Orders
       </button>
 
+      {paymentJustConfirmed && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 20px',
+          borderRadius: 12,
+          background: theme.successBg,
+          border: `1px solid ${theme.success}30`,
+          marginBottom: 16,
+        }}>
+          <CheckCircle size={20} color={theme.success} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: theme.success }}>Payment Confirmed!</div>
+            <div style={{ fontSize: 12, color: theme.textMid }}>Your order {order.order_ref} has been placed successfully.</div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Order Header */}
         <Card style={{ padding: 24 }}>
@@ -554,11 +575,14 @@ export default function OrderDetail() {
                 </div>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, position: 'relative' }}>
               {TRACKING_STEPS.map((step, idx) => {
                 const currentStepIndex = TRACKING_STEPS.findIndex(s => s.key === order.status)
                 const isCompleted = currentStepIndex >= idx || order.status === 'delivered'
                 const isCurrent = step.key === order.status
+                const history = (order.order_status_history || order.shop_order_status_history || [])
+                const stepEvent = history.find(h => h.to_status === step.key)
+                const stepDate = stepEvent ? new Date(stepEvent.created_at) : null
                 return (
                   <div key={step.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
                     {/* Connector line */}
@@ -591,13 +615,24 @@ export default function OrderDetail() {
                     {/* Step label */}
                     <div style={{
                       marginTop: 8,
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: isCurrent ? 700 : 500,
                       color: isCompleted ? theme.tealDeep : theme.textMid,
                       textAlign: 'center'
                     }}>
                       {step.label}
                     </div>
+                    {/* Step timestamp */}
+                    {isCompleted && stepDate && (
+                      <div style={{
+                        marginTop: 2,
+                        fontSize: 10,
+                        color: theme.textLight,
+                        textAlign: 'center'
+                      }}>
+                        {stepDate.toLocaleDateString('en-NG', { month: 'short', day: 'numeric' })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
