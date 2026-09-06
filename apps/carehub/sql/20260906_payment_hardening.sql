@@ -201,7 +201,8 @@ BEGIN
   v_commission_calc := public.calculate_shop_commission(v_segment, v_subtotal_calc);
   v_fulfilment_calc := public.calculate_shop_fulfilment_fee(v_segment, v_subtotal_calc, v_total_qty);
   v_delivery_calc := public.calculate_shop_delivery_fee(p_distance_km, p_delivery_preference);
-  v_total_calc := v_subtotal_calc + v_commission_calc + v_fulfilment_calc + v_delivery_calc;
+  -- Total = subtotal + fulfilment + delivery (customer pays; commission is vendor-side)
+  v_total_calc := v_subtotal_calc + v_fulfilment_calc + v_delivery_calc;
 
   IF p_commission_kobo != v_commission_calc THEN
     RAISE EXCEPTION 'Commission mismatch: expected %, got %', v_commission_calc, p_commission_kobo USING ERRCODE='P0002';

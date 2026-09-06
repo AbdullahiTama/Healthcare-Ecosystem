@@ -130,7 +130,7 @@ export default function OrderDetail() {
             <tbody>
               <tr>
                 <td>Subtotal</td>
-                <td>₦${((order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</td>
+                <td>₦${((order.subtotal_kobo || order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</td>
               </tr>
               <tr>
                 <td>Fulfilment Fee</td>
@@ -688,7 +688,7 @@ export default function OrderDetail() {
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
               <span style={{ color: theme.textMid }}>Subtotal</span>
-              <span>₦{((order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</span>
+              <span>₦{((order.subtotal_kobo || order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
               <span style={{ color: theme.textMid }}>Fulfilment Fee</span>
