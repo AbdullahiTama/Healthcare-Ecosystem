@@ -24,6 +24,7 @@ export default function Checkout() {
   const { items, total, clearCart } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const isGuest = !user
 
   const [formData, setFormData] = useState({
     customer_name: user?.user_metadata?.full_name || '',
@@ -69,7 +70,7 @@ export default function Checkout() {
       } catch {} finally { setAddressesLoading(false) }
     }
     loadAddresses()
-  }, [user])
+  }, [user, addressPreFilled])
 
   function handleSelectAddress(addrId) {
     setSelectedAddressId(addrId)

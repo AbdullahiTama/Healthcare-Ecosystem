@@ -40,6 +40,7 @@ import walletTransactionsHandler from './_handlers/wallet-transactions.js'
 import initiateShopPaymentHandler from './_handlers/initiate-shop-payment.js'
 import verifyShopPaymentHandler from './_handlers/verify-shop-payment.js'
 import bookingInterestHandler from './_handlers/booking-interest.js'
+import requestShopReturnHandler from './_handlers/request-shop-return.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -64,6 +65,7 @@ const ROUTES = {
   'wallet-transactions': walletTransactionsHandler,
   'initiate-shop-payment': initiateShopPaymentHandler,
   'verify-shop-payment': verifyShopPaymentHandler,
+  'request-shop-return': requestShopReturnHandler,
 }
 
 // This route must receive the untouched request stream so it can hash the raw

@@ -7,7 +7,7 @@ import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
-import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar } from 'lucide-react'
+import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download } from 'lucide-react'
 import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery } from './orderConstants'
 import { useCart } from './CartProvider'
 
@@ -26,6 +26,10 @@ export default function OrderDetail() {
   const [station, setStation] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [showReturnModal, setShowReturnModal] = useState(false)
+  const [returnReason, setReturnReason] = useState('')
+  const [returnDescription, setReturnDescription] = useState('')
+  const [returnData, setReturnData] = useState(null)
 
   function handleReorder() {
     if (!order || !order.order_items) return
@@ -43,6 +47,184 @@ export default function OrderDetail() {
     })
     if (added > 0) {
       navigate('/cart')
+    }
+  }
+
+  function handleDownloadInvoice() {
+    if (!order) return
+    
+    const invoiceHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${order.order_ref || order.id.slice(0, 8).toUpperCase()}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+          .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+          .header h1 { margin: 0; color: #0E6F5A; }
+          .header .invoice-info { text-align: right; }
+          .section { margin-bottom: 24px; }
+          .section h2 { color: #0E6F5A; border-bottom: 2px solid #0E6F5A; padding-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+          th { background: #f5f5f5; font-weight: 600; }
+          .total { font-size: 18px; font-weight: 700; color: #0E6F5A; }
+          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1>CareFind</h1>
+            <p>Healthcare Marketplace</p>
+          </div>
+          <div class="invoice-info">
+            <h2>INVOICE</h2>
+            <p><strong>Order:</strong> ${order.order_ref || order.id.slice(0, 8).toUpperCase()}</p>
+            <p><strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString()}</p>
+            <p><strong>Status:</strong> ${order.status}</p>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Customer Details</h2>
+          <p><strong>Name:</strong> ${order.customer_name || 'N/A'}</p>
+          <p><strong>Email:</strong> ${order.delivery_email || 'N/A'}</p>
+          <p><strong>Phone:</strong> ${order.delivery_phone || 'N/A'}</p>
+          <p><strong>Address:</strong> ${order.delivery_address}, ${order.delivery_city || ''}, ${order.delivery_state || ''}</p>
+        </div>
+
+        <div class="section">
+          <h2>Order Items</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.order_items.map(item => `
+                <tr>
+                  <td>${item.product_name}</td>
+                  <td>${item.quantity}</td>
+                  <td>₦${(item.unit_price_kobo / 100).toLocaleString()}</td>
+                  <td>₦${((item.quantity * item.unit_price_kobo) / 100).toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h2>Order Summary</h2>
+          <table>
+            <tbody>
+              <tr>
+                <td>Subtotal</td>
+                <td>₦${((order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td>Fulfilment Fee</td>
+                <td>₦${(order.fulfilment_kobo / 100).toLocaleString()}</td>
+              </tr>
+              <tr>
+                <td>Delivery Fee</td>
+                <td>${order.delivery_kobo > 0 ? `₦${(order.delivery_kobo / 100).toLocaleString()}` : 'PENDING'}</td>
+              </tr>
+              <tr class="total">
+                <td><strong>Total</strong></td>
+                <td><strong>₦${(order.total_kobo / 100).toLocaleString()}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        ${order.payment_reference ? `
+          <div class="section">
+            <h2>Payment Information</h2>
+            <p><strong>Payment Reference:</strong> ${order.payment_reference}</p>
+            ${order.paystack_reference ? `<p><strong>Paystack Reference:</strong> ${order.paystack_reference}</p>` : ''}
+            <p><strong>Payment Status:</strong> ${order.payment_status}</p>
+          </div>
+        ` : ''}
+
+        <div class="footer">
+          <p>Thank you for shopping with CareFind!</p>
+          <p>For support, contact: support@carefind.ng</p>
+          <p>This is a computer-generated invoice. No signature required.</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            if (window.location.search.includes('print=1')) {
+              window.print();
+            }
+          }
+        </script>
+      </body>
+      </html>
+    `
+
+    const blob = new Blob([invoiceHtml], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const newWindow = window.open(url, '_blank')
+    if (newWindow) {
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+  }
+
+  async function loadReturnData() {
+    try {
+      const { data } = await supabase
+        .from('shop_order_returns')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      setReturnData(data || null)
+    } catch (err) {
+      console.error('Failed to load return data:', err)
+    }
+  }
+
+  async function handleRequestReturn() {
+    if (!returnReason.trim()) {
+      setError('Please select a return reason')
+      return
+    }
+    setUpdating(true)
+    setError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Please sign in to request a return')
+      
+      const res = await fetch('/api/request-shop-return', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          order_id: orderId,
+          reason: returnReason,
+          description: returnDescription || null
+        })
+      })
+      
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to request return')
+      
+      setShowReturnModal(false)
+      setReturnReason('')
+      setReturnDescription('')
+      await loadOrder()
+      await loadReturnData()
+    } catch (err) {
+      setError(err.message || 'Failed to request return')
+    } finally {
+      setUpdating(false)
     }
   }
 
@@ -94,6 +276,10 @@ export default function OrderDetail() {
           const { data: st } = await supabase.from('shop_pickup_stations').select('id,name,address,city,state').eq('id', data.pickup_station_id).maybeSingle()
           setStation(st || null)
         } catch {}
+      }
+      // Load return data if order is delivered
+      if (data.status === 'delivered' || data.status === 'refund_requested' || data.status === 'refunded') {
+        await loadReturnData()
       }
     } catch (err) {
       console.error('Failed to load order:', err)
@@ -234,19 +420,29 @@ export default function OrderDetail() {
                 {new Date(order.created_at).toLocaleString()} {order.payment_reference && <span>· Ref {order.payment_reference}</span>}
               </p>
             </div>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '8px 16px',
-              borderRadius: 20,
-              background: statusConfig.color + '20',
-              color: statusConfig.color,
-              fontSize: 14,
-              fontWeight: 600
-            }}>
-              <StatusIcon size={16} />
-              {statusConfig.label}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Button
+                onClick={handleDownloadInvoice}
+                variant="secondary"
+                size="sm"
+                leftIcon={<Download size={14} />}
+              >
+                Invoice
+              </Button>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                borderRadius: 20,
+                background: statusConfig.color + '20',
+                color: statusConfig.color,
+                fontSize: 14,
+                fontWeight: 600
+              }}>
+                <StatusIcon size={16} />
+                {statusConfig.label}
+              </div>
             </div>
           </div>
 
@@ -389,14 +585,42 @@ export default function OrderDetail() {
             <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
           </div>
           {/* Reorder button for delivered orders */}
-          {order.status === 'delivered' && isCustomer && (
-            <Button
-              onClick={handleReorder}
-              style={{ marginTop: 16, width: '100%' }}
-              leftIcon={<RotateCcw size={16} />}
-            >
-              Buy Again
-            </Button>
+          {order.status === 'delivered' && isCustomer && !returnData && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <Button
+                onClick={handleReorder}
+                style={{ flex: 1 }}
+                leftIcon={<RotateCcw size={16} />}
+              >
+                Buy Again
+              </Button>
+              <Button
+                onClick={() => setShowReturnModal(true)}
+                variant="secondary"
+                style={{ flex: 1 }}
+                leftIcon={<RotateCcw size={16} />}
+              >
+                Return / Refund
+              </Button>
+            </div>
+          )}
+          {/* Return status display */}
+          {returnData && isCustomer && (
+            <div style={{ marginTop: 16, padding: 16, borderRadius: 8, background: returnData.status === 'approved' ? theme.successBg : returnData.status === 'rejected' ? theme.dangerBg : theme.warningBg, border: `1px solid ${returnData.status === 'approved' ? theme.success : returnData.status === 'rejected' ? theme.danger : theme.warning}30` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <RotateCcw size={16} color={returnData.status === 'approved' ? theme.success : returnData.status === 'rejected' ? theme.danger : theme.warning} />
+                <span style={{ fontWeight: 700, color: returnData.status === 'approved' ? theme.success : returnData.status === 'rejected' ? theme.danger : theme.warning }}>
+                  Return {returnData.status === 'requested' ? 'Requested' : returnData.status === 'approved' ? 'Approved' : returnData.status === 'rejected' ? 'Rejected' : returnData.status}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, color: theme.textMid }}>
+                <div><strong>Reason:</strong> {returnData.reason}</div>
+                {returnData.description && <div style={{ marginTop: 4 }}><strong>Details:</strong> {returnData.description}</div>}
+                <div style={{ marginTop: 4 }}><strong>Refund Amount:</strong> ₦{(returnData.refund_amount_kobo / 100).toLocaleString()}</div>
+                <div style={{ marginTop: 4 }}><strong>Requested:</strong> {new Date(returnData.requested_at).toLocaleDateString()}</div>
+                {returnData.resolution_notes && <div style={{ marginTop: 4 }}><strong>Notes:</strong> {returnData.resolution_notes}</div>}
+              </div>
+            </div>
           )}
           {(order.status==='pending_payment' || order.status==='paid') && isCustomer && (
             <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
@@ -605,6 +829,102 @@ export default function OrderDetail() {
                   disabled={updating}
                 >
                   {updating ? 'Cancelling...' : 'Cancel Order'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Return/Refund Modal */}
+        {showReturnModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}>
+            <Card style={{ maxWidth: 480, width: '100%', padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: theme.navy, marginBottom: 16 }}>
+                Request Return / Refund
+              </h2>
+              <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 16 }}>
+                You can request a return within 7 days of delivery. The vendor will review your request and respond.
+              </p>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: theme.navy, marginBottom: 8 }}>
+                  Reason for return *
+                </label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `1px solid ${theme.border}`,
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    background: 'white'
+                  }}
+                >
+                  <option value="">Select a reason</option>
+                  <option value="defective">Product is defective or damaged</option>
+                  <option value="wrong_item">Received wrong item</option>
+                  <option value="not_as_described">Not as described</option>
+                  <option value="quality_issue">Quality issue</option>
+                  <option value="changed_mind">Changed my mind</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, color: theme.navy, marginBottom: 8 }}>
+                  Additional details (optional)
+                </label>
+                <textarea
+                  value={returnDescription}
+                  onChange={(e) => setReturnDescription(e.target.value)}
+                  placeholder="Please provide any additional details about your return request..."
+                  rows={4}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `1px solid ${theme.border}`,
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <div style={{ padding: 12, borderRadius: 8, background: theme.infoBg, border: `1px solid ${theme.info}30`, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: theme.info, fontWeight: 600, marginBottom: 4 }}>Refund Amount</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: theme.navy }}>₦{(order.total_kobo / 100).toLocaleString()}</div>
+                <div style={{ fontSize: 12, color: theme.textMid, marginTop: 4 }}>Full refund to original payment method</div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowReturnModal(false)
+                    setReturnReason('')
+                    setReturnDescription('')
+                  }}
+                  disabled={updating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleRequestReturn}
+                  disabled={updating || !returnReason}
+                >
+                  {updating ? 'Submitting...' : 'Submit Request'}
                 </Button>
               </div>
             </Card>

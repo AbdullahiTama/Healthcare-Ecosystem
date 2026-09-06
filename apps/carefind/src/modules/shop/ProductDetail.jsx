@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle, Bell } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty } from '../../components/ui'
 import { createShopRepository } from './shopRepository'
@@ -11,6 +11,7 @@ import { reviewsRepository } from './reviewsRepository'
 import { qaRepository } from './qaRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { supabase } from '../../config/supabaseClient'
 import BottomNav from '../../components/BottomNav.jsx'
 
 const shopRepository = createShopRepository()
@@ -37,10 +38,12 @@ export default function ProductDetail() {
   const [qa, setQa] = useState([])
   const [qaQuestion, setQaQuestion] = useState('')
   const [qaSubmitting, setQaSubmitting] = useState(false)
+  const [stockAlertSubscribed, setStockAlertSubscribed] = useState(false)
+  const [stockAlertLoading, setStockAlertLoading] = useState(false)
   const touchStartX = useRef(null)
 
   useEffect(() => { load() }, [productId])
-  useEffect(() => { if (product) { pushRecent(product.id); loadRelated(); loadReviews(); loadQa() } }, [product?.id])
+  useEffect(() => { if (product) { pushRecent(product.id); loadRelated(); loadReviews(); loadQa(); checkStockAlertSubscription() } }, [product?.id])
 
   async function loadRelated() {
     try { const rows = await shopRepository.getActiveProducts({ segment: 'all', limit: 20 }); setRelated((rows||[]).filter(r=>r.id!==productId).slice(0,4)) } catch {}
@@ -54,6 +57,58 @@ export default function ProductDetail() {
   async function loadQa() {
     const list = await qaRepository.list(productId)
     setQa(list || [])
+  }
+
+  async function checkStockAlertSubscription() {
+    if (!user || !product) return
+    try {
+      const { data } = await supabase
+        .from('shop_stock_alerts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('ecommerce_product_id', product.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      setStockAlertSubscribed(!!data)
+    } catch (err) {
+      console.error('Failed to check stock alert subscription:', err)
+    }
+  }
+
+  async function handleStockAlertToggle() {
+    if (!user) {
+      alert('Please sign in to get stock alerts')
+      return
+    }
+    if (!product) return
+
+    setStockAlertLoading(true)
+    try {
+      if (stockAlertSubscribed) {
+        // Unsubscribe
+        await supabase
+          .from('shop_stock_alerts')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .eq('ecommerce_product_id', product.id)
+        setStockAlertSubscribed(false)
+      } else {
+        // Subscribe
+        await supabase
+          .from('shop_stock_alerts')
+          .insert({
+            user_id: user.id,
+            ecommerce_product_id: product.id,
+            is_active: true
+          })
+        setStockAlertSubscribed(true)
+      }
+    } catch (err) {
+      console.error('Failed to toggle stock alert:', err)
+      alert('Failed to update stock alert subscription')
+    } finally {
+      setStockAlertLoading(false)
+    }
   }
 
   async function load() {
@@ -179,6 +234,31 @@ export default function ProductDetail() {
         <button onClick={handleAddToCart} disabled={!p.stock || p.stock <= 0} style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: addedToCart ? theme.success : (p.stock > 0 ? theme.tealDeep : theme.gray200), color: addedToCart ? '#fff' : (p.stock > 0 ? '#fff' : theme.textLight), fontWeight: 700, cursor: p.stock > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 0.2s' }}>
           <ShoppingBag size={16} />{addedToCart ? 'Added to Cart!' : (p.stock > 0 ? `Add ${qty} to Cart` : 'Out of Stock')}
         </button>
+        {p.stock <= 0 && user && (
+          <button
+            onClick={handleStockAlertToggle}
+            disabled={stockAlertLoading}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: 12,
+              border: `1px solid ${stockAlertSubscribed ? theme.success : theme.tealDeep}`,
+              background: stockAlertSubscribed ? theme.successBg : 'transparent',
+              color: stockAlertSubscribed ? theme.success : theme.tealDeep,
+              fontWeight: 700,
+              cursor: stockAlertLoading ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 8,
+              opacity: stockAlertLoading ? 0.6 : 1
+            }}
+          >
+            <Bell size={16} fill={stockAlertSubscribed ? 'currentColor' : 'none'} />
+            {stockAlertLoading ? 'Updating...' : (stockAlertSubscribed ? 'Notify me when back in stock ✓' : 'Notify me when back in stock')}
+          </button>
+        )}
         <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}><ShieldCheck size={12}/> CareFind Authentic</span>
           <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:theme.navy, border:`1px solid ${theme.border}`, borderRadius:999, padding:'4px 8px', background:'#fff' }}><RotateCcw size={12}/> 7-day return</span>

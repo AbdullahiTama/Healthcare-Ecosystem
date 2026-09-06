@@ -25,6 +25,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [priceMin, setPriceMin] = useState('')
   const [priceMax, setPriceMax] = useState('')
   const [brand, setBrand] = useState('all')
+  const [category, setCategory] = useState('all')
   const [showRxOnly, setShowRxOnly] = useState(false)
   const [inStockOnly, setInStockOnly] = useState(true)
   const [sort, setSort] = useState('popular')
@@ -65,9 +66,15 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     return ['all', ...Array.from(s)]
   }, [products])
 
+  const categories = useMemo(() => {
+    const s = new Set((products||[]).map(r => r.ecommerce_category || r.category).filter(Boolean))
+    return ['all', ...Array.from(s)]
+  }, [products])
+
   const filtered = useMemo(() => {
     let rows = [...products]
     if (brand !== 'all') rows = rows.filter(r => (r.category || r.products?.category) === brand)
+    if (category !== 'all') rows = rows.filter(r => (r.ecommerce_category || r.category) === category)
     if (priceMin !== '') rows = rows.filter(r => {
       const k = r.ecommerce_price_kobo ?? (r.products.price!=null ? Math.round(r.products.price*100) : null)
       return k != null && k >= Math.round(parseFloat(priceMin)*100)
@@ -83,7 +90,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     else if (sort === 'newest') rows.sort((a,b) => new Date(b.active_at) - new Date(a.active_at))
     else if (sort === 'rating') rows.sort((a,b) => (ratings[b.id]?.avg||0) - (ratings[a.id]?.avg||0))
     return rows
-  }, [products, brand, priceMin, priceMax, showRxOnly, inStockOnly, sort, ratings])
+  }, [products, brand, category, priceMin, priceMax, showRxOnly, inStockOnly, sort, ratings])
 
   const featured = filtered.slice(0, 6)
   const grid = filtered
@@ -206,6 +213,9 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         {!embedded && <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, color:theme.navy }}><SlidersHorizontal size={14}/> Filters</span>}
         <select value={brand} onChange={e=>setBrand(e.target.value)} aria-label="Filter by brand" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
           {brands.map(b => <option key={b} value={b}>{b==='all' ? 'All brands' : b}</option>)}
+        </select>
+        <select value={category} onChange={e=>setCategory(e.target.value)} aria-label="Filter by category" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
+          {categories.map(c => <option key={c} value={c}>{c==='all' ? 'All categories' : c}</option>)}
         </select>
         <input placeholder="Min ₦" value={priceMin} onChange={e=>setPriceMin(e.target.value)} inputMode="numeric" aria-label="Minimum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
         <input placeholder="Max ₦" value={priceMax} onChange={e=>setPriceMax(e.target.value)} inputMode="numeric" aria-label="Maximum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
