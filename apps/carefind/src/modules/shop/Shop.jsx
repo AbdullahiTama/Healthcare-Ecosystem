@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card } from '../../components/ui'
@@ -18,9 +19,6 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const { count, addItem } = useCart()
   const { has: hasWishlist, toggle: toggleWishlist } = useWishlist()
   const [segment, setSegment] = useState(initialSegment)
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [miniOpen, setMiniOpen] = useState(false)
   const [priceMin, setPriceMin] = useState('')
   const [priceMax, setPriceMax] = useState('')
@@ -35,7 +33,14 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [showFilters, setShowFilters] = useState(false)
 
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
-  useEffect(() => { load(); setRecentIds(getRecent()) }, [segment, externalQuery])
+  useEffect(() => { setRecentIds(getRecent()) }, [])
+
+  const { data: products = [], isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['shop-products', segment, externalQuery],
+    queryFn: () => shopRepository.getActiveProducts({ segment, query: externalQuery, limit: 80 }),
+    staleTime: 30 * 1000,
+  })
+  const error = queryError ? 'Could not load Shop products' : ''
   useEffect(() => {
     if (products.length===0) return
     let cancelled=false
@@ -49,17 +54,6 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     })
     return ()=> { cancelled=true }
   }, [products])
-
-  async function load() {
-    setLoading(true); setError('')
-    try {
-      const rows = await shopRepository.getActiveProducts({ segment, query: externalQuery, limit: 80 })
-      setProducts(rows || [])
-    } catch (e) {
-      setError('Could not load Shop products')
-    }
-    setLoading(false)
-  }
 
   const brands = useMemo(() => {
     const s = new Set((products||[]).map(r => r.category || r.products?.category).filter(Boolean))

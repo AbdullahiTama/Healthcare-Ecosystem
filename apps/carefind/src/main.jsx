@@ -2,8 +2,12 @@ import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './styles/global.css'
+import { initSentry, Sentry } from './lib/sentry'
+import { QueryProvider } from './lib/queryClient.jsx'
 import { AuthProvider } from './providers/AuthContext.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+
+initSentry()
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import Feed from './modules/social-feed/Feed.jsx'
 import PostPage from './modules/social-feed/PostPage.jsx'
@@ -64,6 +68,8 @@ const Loading = () => (
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <Sentry.ErrorBoundary>
+    <QueryProvider>
     <AuthProvider>
       <WishlistProvider>
       <CartProvider>
@@ -139,5 +145,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </CartProvider>
     </WishlistProvider>
   </AuthProvider>
+  </QueryProvider>
+  </Sentry.ErrorBoundary>
 </React.StrictMode>,
 )

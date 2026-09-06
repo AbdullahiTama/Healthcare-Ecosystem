@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { initSentry, Sentry } from './lib/sentry'
 import Landing from './pages/Landing'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
@@ -16,6 +17,7 @@ import { resolveAccountByEmail } from './services/supabase'
 import AuthProvider from './providers/AuthProvider'
 
 export default function App() {
+  initSentry()
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('carehub_auth')
@@ -84,6 +86,7 @@ export default function App() {
   }, [])
 
   return (
+    <Sentry.ErrorBoundary>
     <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <Routes>
@@ -102,5 +105,6 @@ export default function App() {
         </Routes>
       </div>
     </AuthProvider>
+    </Sentry.ErrorBoundary>
   )
 }

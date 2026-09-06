@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { orderRepository } from './orderRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
@@ -18,25 +19,27 @@ export default function OrderList() {
   const { addItem } = useCart()
 
   const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
   const [hasMore, setHasMore] = useState(true)
 
+  const { data: initialOrders = [], isLoading: loading, refetch } = useQuery({
+    queryKey: ['customer-orders', user?.id, statusFilter],
+    queryFn: () => orderRepository.getByCustomer(user.id, { status: statusFilter || undefined, limit: PAGE_SIZE, offset: 0 }),
+    enabled: !!user?.id,
+    staleTime: 30 * 1000,
+  })
+
   useEffect(() => {
-    loadOrders(true)
-  }, [statusFilter])
+    setOrders(initialOrders)
+    setHasMore(initialOrders.length === PAGE_SIZE)
+  }, [initialOrders])
 
   async function loadOrders(reset = false) {
     const offset = reset ? 0 : orders.length
-    if (reset) {
-      setLoading(true)
-      setHasMore(true)
-    } else {
-      setLoadingMore(true)
-    }
+    if (!reset) setLoadingMore(true)
     setError('')
     try {
       const data = await orderRepository.getByCustomer(user.id, {
@@ -46,6 +49,7 @@ export default function OrderList() {
       })
       if (reset) {
         setOrders(data || [])
+        refetch()
       } else {
         setOrders(prev => [...prev, ...(data || [])])
       }
@@ -54,7 +58,6 @@ export default function OrderList() {
       console.error('Failed to load orders:', err)
       setError(err.message || 'Failed to load orders')
     } finally {
-      setLoading(false)
       setLoadingMore(false)
     }
   }

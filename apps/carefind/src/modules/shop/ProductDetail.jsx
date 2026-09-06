@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ChevronLeft, ChevronRight, Package, ShoppingBag, Heart, Star, ShieldCheck, Truck, RotateCcw, Send, Trash2, MessageCircle, Bell } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Pill, Empty } from '../../components/ui'
@@ -23,10 +24,7 @@ export default function ProductDetail() {
   const { has, toggle } = useWishlist()
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
-  const [product, setProduct] = useState(null)
   const [recommendations, setRecommendations] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [current, setCurrent] = useState(0)
   const [qty, setQty] = useState(1)
   const [addedToCart, setAddedToCart] = useState(false)
@@ -43,7 +41,14 @@ export default function ProductDetail() {
   const [stockAlertLoading, setStockAlertLoading] = useState(false)
   const touchStartX = useRef(null)
 
-  useEffect(() => { load() }, [productId])
+  const { data: product, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: () => shopRepository.getProductDetail(productId),
+    enabled: !!productId,
+    staleTime: 60 * 1000,
+  })
+  const error = queryError ? 'Product not found' : ''
+
   useEffect(() => { if (product) { pushRecent(product.id); trackView(); loadRecommendations(); loadReviews(); loadQa(); checkStockAlertSubscription() } }, [product?.id])
 
   async function trackView() {
@@ -124,15 +129,6 @@ export default function ProductDetail() {
     } finally {
       setStockAlertLoading(false)
     }
-  }
-
-  async function load() {
-    setLoading(true); setError('')
-    try {
-      const data = await shopRepository.getProductDetail(productId)
-      if (!data) { setError('Product not available'); setProduct(null) } else { setProduct(data); setCurrent(0); setQty(1) }
-    } catch (e) { setError('Could not load product') }
-    setLoading(false)
   }
 
   if (loading) return <div style={{ padding: 20, textAlign: 'center', color: theme.textLight }}>Loading product...</div>

@@ -1,0 +1,82 @@
+-- ============================================================================
+-- Feature 4 (CareHub Patient/Client Bulk Upload) — server-authoritative dedupe
+--
+-- PROBLEM
+-- -------
+-- Clients.jsx lets a business import an existing customer/patient database
+-- from CSV. Phone number is the documented dedupe key — the template promises
+-- "clients are matched by phone number, so repeat customers from the file are
+-- skipped, not duplicated." That promise was enforced ONLY in React:
+-- importClients() builds a Set of normalized phones from whatever getAll()
+-- just returned and filters the file against it. The `clients` table had no
+-- unique constraint, so a duplicate could still land via:
+--   1. a concurrent upload (two cashiers importing at once),
+--   2. a single client added between the list load and the import,
+--   3. any direct POST to /rest/v1/clients that skips the page entirely.
+-- The UI also had no single-add dedupe: "Add Client" would happily create a
+-- second row with a phone that already exists.
+--
+-- FIX
+-- ----
+-- A partial UNIQUE INDEX that makes the database the authority on "one phone
+-- per business", exactly matching the app's normalization. The app computes
+-- normPhone = String(phone).replace(/[^0-9]/g, '') and dedupes on that; the
+-- index applies the identical transformation:
+--
+--     UNIQUE (business_id, regexp_replace(phone, '[^0-9]', '', 'g'))
+--     WHERE phone IS NOT NULL AND btrim(phone) <> ''
+--
+--   * PER BUSINESS: the same phone in two different businesses still creates
+--     two clients — the upload template is explicitly a per-business import.
+--   * NULL/empty/whitespace phones are EXCLUDED by the WHERE clause, so a
+--     business may hold several clients with no phone (the upload skips
+--     missing-phone rows, and RLS/POSTGREST never required a phone). A
+--     "no-phone" row can never collide with a real phone.
+--   * The normalization is identical to the frontend, so a row the app would
+--     skip as a duplicate is exactly a row the index rejects (23505 / 409),
+--     and vice versa. Anything the app considers distinct ('080...' vs
+--     '+234801...') the index also treats as distinct — consistent, no
+--     surprise server-side stricter-than-app rules.
+--
+-- CONSTRAINT vs INDEX: a partial (WHERE) predicate is only expressible as an
+-- index, not a table constraint, and PostgREST reports its violations as a
+-- 409 with code 23505 either way. The index also serves the phone lookup if a
+-- future repository read ever filters by normalized phone.
+--
+-- CLIENT BEHAVIOUR
+-- ----------------
+--   * Bulk import: createMany catches the 409 per row and reports it as
+--     "skipped (already exists)" instead of a scary failure — the promise the
+--     template makes holds even under a race.
+--   * Single add: save() now surfaces "A client with this phone number
+--     already exists" instead of the generic save failure.
+--
+-- OUT OF SCOPE (documented, not changed)
+-- --------------------------------------
+--   * global_client_id exists and is indexed but still unused — wiring it up
+--     is a cross-business identity feature (the same person registered in
+--     several businesses), a separate product decision from per-business
+--     phone dedupe. Left for its own feature.
+--   * The frontend dedupe Set remains (it avoids wasted server round-trips
+--     for obvious in-file duplicates); the index is the backstop, not the
+--     replacement.
+--
+-- VERIFY AFTER APPLYING
+-- ---------------------
+--   As an authenticated member of a test business (set_config JWT + SET LOCAL
+--   ROLE authenticated, wrapped in a transaction and rolled back):
+--       * INSERT a client with an EXISTING phone (same business)
+--             -> expect 23505 / 409 duplicate-key rejection, no row written.
+--       * INSERT the same phone for a DIFFERENT business
+--             -> expect success (per-business uniqueness).
+--       * INSERT the same phone in a formatting variant (spaces/hyphens)
+--             -> expect rejection (normalization matches the app).
+--       * INSERT a client with no phone / whitespace phone
+--             -> expect success (excluded from the index).
+--   Re-run security advisors: identical to the pre-change baseline (a plain
+--   index adds no policy/function surface).
+-- ============================================================================
+
+CREATE UNIQUE INDEX IF NOT EXISTS clients_phone_unique_per_business
+  ON public.clients (business_id, regexp_replace(phone, '[^0-9]', '', 'g'))
+  WHERE phone IS NOT NULL AND btrim(phone) <> '';
