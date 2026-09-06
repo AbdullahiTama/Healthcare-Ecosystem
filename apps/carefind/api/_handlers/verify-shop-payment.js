@@ -116,6 +116,13 @@ export default async function handler(req, res) {
   if (alreadyPaid) return res.status(200).json({ success: true, id: order.id, alreadyPaid: true })
   if (!settled) return res.status(500).json({ error: 'Could not settle order' })
 
+  // Track purchase patterns for recommendations
+  try {
+    await supabase.rpc('track_purchase_pattern', { p_order_id: order.id })
+  } catch (err) {
+    console.error('Failed to track purchase pattern:', err)
+  }
+
   // Notify vendor
   await supabase.from('staff_notifications').insert({
     business_id: order.vendor_business_id,

@@ -9,6 +9,7 @@ import { useWishlist } from './WishlistProvider'
 import { pushRecent } from './recentlyViewed'
 import { reviewsRepository } from './reviewsRepository'
 import { qaRepository } from './qaRepository'
+import { recommendationsRepository } from './recommendationsRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { supabase } from '../../config/supabaseClient'
@@ -23,7 +24,7 @@ export default function ProductDetail() {
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
   const [product, setProduct] = useState(null)
-  const [related, setRelated] = useState([])
+  const [recommendations, setRecommendations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [current, setCurrent] = useState(0)
@@ -43,10 +44,24 @@ export default function ProductDetail() {
   const touchStartX = useRef(null)
 
   useEffect(() => { load() }, [productId])
-  useEffect(() => { if (product) { pushRecent(product.id); loadRelated(); loadReviews(); loadQa(); checkStockAlertSubscription() } }, [product?.id])
+  useEffect(() => { if (product) { pushRecent(product.id); trackView(); loadRecommendations(); loadReviews(); loadQa(); checkStockAlertSubscription() } }, [product?.id])
 
-  async function loadRelated() {
-    try { const rows = await shopRepository.getActiveProducts({ segment: 'all', limit: 20 }); setRelated((rows||[]).filter(r=>r.id!==productId).slice(0,4)) } catch {}
+  async function trackView() {
+    try {
+      await recommendationsRepository.trackView(productId, user?.id || null)
+    } catch (err) {
+      console.error('Failed to track product view:', err)
+    }
+  }
+
+  async function loadRecommendations() {
+    try {
+      const recs = await recommendationsRepository.getRecommendations(productId, 6, user?.id || null)
+      setRecommendations(recs || [])
+    } catch (err) {
+      console.error('Failed to load recommendations:', err)
+      setRecommendations([])
+    }
   }
   async function loadReviews() {
     const list = await reviewsRepository.list(productId)
@@ -320,16 +335,19 @@ export default function ProductDetail() {
         </div>
       </Card>
 
-      {related.length>0 && (
+      {recommendations.length>0 && (
         <div style={{ marginBottom:12 }}>
-          <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>Bought together</div>
+          <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>You may also like</div>
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:8 }}>
-            {related.map(r=>(
-              <Link key={r.id} to={`/shop/${r.id}`} style={{ textDecoration:'none', flex:'0 0 140px' }}>
+            {recommendations.map(r=>(
+              <Link key={r.product_id} to={`/shop/${r.product_id}`} style={{ textDecoration:'none', flex:'0 0 140px' }}>
                 <Card style={{ padding:8, textAlign:'center' }}>
-                  <div style={{ height:80, borderRadius:8, background: (r.primary_image_url||r.products.image_url) ? `url(${r.primary_image_url||r.products.image_url}) center/cover` : theme.tealMist }} />
-                  <div style={{ fontSize:12, fontWeight:700, color:theme.navy, marginTop:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.products.name}</div>
-                  <div style={{ fontSize:12, fontWeight:800, color:theme.tealDeep }}>₦{((r.ecommerce_price_kobo ?? Math.round(r.products.price*100))/100).toLocaleString()}</div>
+                  <div style={{ height:80, borderRadius:8, background: r.image_url ? `url(${r.image_url}) center/cover` : theme.tealMist }} />
+                  <div style={{ fontSize:12, fontWeight:700, color:theme.navy, marginTop:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</div>
+                  <div style={{ fontSize:12, fontWeight:800, color:theme.tealDeep }}>₦{(r.price/100).toLocaleString()}</div>
+                  {r.relationship_type === 'frequently_bought_together' && (
+                    <div style={{ fontSize:10, color:theme.success, marginTop:4, fontWeight:600 }}>Frequently bought together</div>
+                  )}
                 </Card>
               </Link>
             ))}
