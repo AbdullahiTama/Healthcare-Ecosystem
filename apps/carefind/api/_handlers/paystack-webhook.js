@@ -155,6 +155,7 @@ async function handleBooking(metadata, reference, amount) {
 
 // Shop order handler (CareFind Shop, strict Paystack)
 // Races verify-shop-payment on the same order; shop RPC is idempotent.
+// Uses claim_payment_event for deduplication to prevent double-processing.
 async function handleShopOrder(metadata, reference, amount) {
   if (!metadata?.order_id) return null
 
@@ -168,22 +169,22 @@ async function handleShopOrder(metadata, reference, amount) {
   // Cross-check Paystack amount against server total_kobo
   if (order.total_kobo == null || amount !== order.total_kobo) return null
 
-  // Try canonical shop RPCs first
-  let result = null
-  let error = null
-  // New naming: verify_shop_payment / settle_shop_payment
-  const tryRpc = async (name, args) => {
-    const r = await supabase.rpc(name, args)
-    return r
-  }
-  let rpcRes = await tryRpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
+  // Deduplicate via shop_payment_events
+  const { data: claimed } = await supabase.rpc('claim_payment_event', {
+    p_order_id: order.id,
+    p_payment_reference: reference,
+    p_event_type: 'charge.success',
+    p_amount_kobo: amount,
+  })
+  if (claimed === 'already_processed') return { alreadyProcessed: true }
+
+  // Try canonical shop RPCs
+  let rpcRes = await supabase.rpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
   if (rpcRes.error) {
-    // Fallback: settle_shop_payment (older migration)
-    rpcRes = await tryRpc('settle_shop_payment', { p_order_id: order.id, p_reference: reference })
+    rpcRes = await supabase.rpc('settle_shop_payment', { p_order_id: order.id, p_reference: reference })
   }
   if (rpcRes.error) {
-    // Fallback: legacy create_shop_order flow uses shop_payments + status update
-    // Do minimal idempotent update if order still pending_payment
+    // Fallback: direct idempotent update if order still pending_payment
     if (order.status === 'pending_payment' || order.payment_status === 'pending') {
       const { error: updErr } = await supabase
         .from('shop_orders')
@@ -192,45 +193,30 @@ async function handleShopOrder(metadata, reference, amount) {
         .eq('status', 'pending_payment')
       if (updErr) return null
       await supabase.from('shop_order_status_history').insert({
-        order_id: order.id,
-        from_status: 'pending_payment',
-        to_status: 'paid',
+        order_id: order.id, from_status: 'pending_payment', to_status: 'paid',
         note: `Paystack ${reference}`,
       })
       await supabase.from('shop_payments').upsert({
-        order_id: order.id,
-        payment_reference: reference,
-        amount_kobo: amount,
-        status: 'success',
-        gateway: 'paystack',
+        order_id: order.id, payment_reference: reference, amount_kobo: amount,
+        status: 'success', gateway: 'paystack',
       }, { onConflict: 'payment_reference' })
-      result = 'ok'
     } else {
       return null
     }
   } else {
-    result = rpcRes.data
-    error = rpcRes.error
-    if (error) return null
-    if (result !== 'ok' && result !== 'already_paid' && result !== 'success' && result !== true) {
-      // Some RPCs return boolean true on success
-      if (result && typeof result === 'object' && result.already_processed) return { alreadyProcessed: true }
-      if (result === 'already_processed') return { alreadyProcessed: true }
-      return null
-    }
+    const result = rpcRes.data
     if (result === 'already_paid' || result === 'already_processed') return { alreadyProcessed: true }
+    if (result && typeof result === 'object' && result.already_processed) return { alreadyProcessed: true }
+    if (result !== 'ok' && result !== 'success' && result !== true) return null
   }
 
-  // Notify vendor business owner (mirror of booking handler)
+  // Notify vendor business owner
   await supabase.from('staff_notifications').insert({
-    business_id: order.vendor_business_id,
-    staff_id: null,
-    is_owner: true,
+    business_id: order.vendor_business_id, staff_id: null, is_owner: true,
     kind: 'shop_order_paid',
     title: `Shop order paid — ${order.order_ref}`,
     body: `Order ${order.order_ref} — ₦${(amount / 100).toLocaleString()} via Paystack`,
-    link: '/dashboard/ecommerce',
-    read_at: null,
+    link: '/dashboard/ecommerce', read_at: null,
   })
 
   return { settled: true }
@@ -276,46 +262,54 @@ export default async function handler(req, res) {
 
   const event = JSON.parse(rawBody.toString('utf8'))
 
+  // Return 200 immediately to prevent Paystack timeout retries.
+  // Process the event async — all handlers are idempotent so duplicate
+  // webhook deliveries are safe.
+  res.status(200).json({ received: true })
+
+  // Fire-and-forget async processing
+  processWebhookEvent(event).catch((err) => {
+    console.error('[paystack-webhook] async processing error:', err)
+  })
+}
+
+async function processWebhookEvent(event) {
   // Dispatch by event type
   if (event.event === 'charge.success') {
     const { reference, metadata, amount } = event.data
 
     // Try subscription first (has explicit purpose flag)
     let result = await handleSubscription(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try consultation booking (has its own purpose flag)
     result = await handleConsultation(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try CareFind appointment booking (has appointment_id in metadata)
     result = await handleBooking(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try Shop order (has order_id in metadata)
     result = await handleShopOrder(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try CareHub plan payment (has business_id)
     result = await handlePlanPayment(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Fall through to top-up (has user_id + coins)
     result = await handleTopup(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
-
-    return res.status(200).json({ received: true })
+    if (result) return
   }
 
   if (event.event === 'transfer.success') {
-    const result = await handleTransferSuccess(event.data.reference)
-    return res.status(200).json(result)
+    await handleTransferSuccess(event.data.reference)
+    return
   }
 
   if (event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
-    const result = await handleTransferFailed(event.data.reference)
-    return res.status(200).json(result)
+    await handleTransferFailed(event.data.reference)
+    return
   }
-
-  return res.status(200).json({ received: true })
 }
