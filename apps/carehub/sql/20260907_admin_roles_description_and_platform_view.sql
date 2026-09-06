@@ -8,9 +8,26 @@ alter table public.admin_roles add column if not exists description text;
 do $$
 begin
   if not exists (select 1 from information_schema.tables where table_schema='public' and table_name='platform_team_members') then
-    execute 'create view public.platform_team_members as select * from public.admin_team_members';
+    execute 'create view public.platform_team_members with (security_invoker=true) as select id, full_name, email, role_id, status, created_at from public.admin_team_members';
+  else
+    -- ensure existing view is security_invoker=true (AD-2)
+    begin
+      execute 'drop view if exists public.platform_team_members';
+      execute 'create view public.platform_team_members with (security_invoker=true) as select id, full_name, email, role_id, status, created_at from public.admin_team_members';
+    exception when others then null;
+    end;
   end if;
 end $$;
+
+-- security_invoker view must not expose password_hash; mask via column list above
+-- GRANT/REVOKE: anon must not read team members, authenticated may
+revoke all on public.admin_team_members from anon, authenticated;
+revoke all on public.platform_team_members from anon, authenticated;
+grant select, insert, update, delete on public.admin_team_members to authenticated;
+grant select on public.platform_team_members to authenticated;
+-- ensure no anon access
+revoke all on public.admin_team_members from anon;
+revoke all on public.platform_team_members from anon;
 
 alter table public.payout_requests add column if not exists bank_name text;
 alter table public.payout_requests add column if not exists account_number text;

@@ -8,6 +8,10 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>CareHub | Smart Business Management Software for Healthcare, Wellness &amp; Beauty Businesses</title>
+    <script>
+      // FOUC guard: set data-theme before React paints (dark-first, honors saved + system light)
+      (function(){try{var s=localStorage.getItem('carehub_theme');if(s==='light'||s==='dark'){document.documentElement.setAttribute('data-theme',s);return}var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)');document.documentElement.setAttribute('data-theme',m&&m.matches?'light':'dark')}catch(e){}})();
+    </script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: "Geist", system-ui, -apple-system, sans-serif; background: #f9f9f6; }

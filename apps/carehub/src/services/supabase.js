@@ -403,18 +403,105 @@ export async function removeAdminTeam(id) { return sbFetch('admin_team?id=eq.' +
 // ── CAREFINDHUB SUPER ADMIN (spec sections 2-8) ────────────────────────────
 // Reuse sbFetch; these are the real backend for the upgraded panel.
 // Businesses
-export async function getBusinessesFiltered({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
-  // Use ilike on name for search, status filter, paginated. pagedQuery handles 1000-row clamp for full counts elsewhere.
-  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc'
-  if (search) q += '&name=ilike.*' + encodeURIComponent(search) + '*'
+
+// Encode ilike specials per AD-2: escape PostgREST ilike wildcards % _ * and backslash
+// then encodeURIComponent keeps them literal. Outer * wrapper stays unencoded.
+// e.g. "acme, inc" -> "*acme%2C%20inc*" with comma/space encoded, internal %/_ escaped to \%/\_
+// before encoding so they don't become wildcards.
+function escapeIlike(term) {
+  if (!term) return ''
+  return String(term)
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_')
+    .replace(/\*/g, '%')
+}
+
+function buildBusinessesFilterQuery({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const clamped = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
+  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc&deleted_at=is.null'
+  if (search) {
+    const escaped = escapeIlike(search.trim())
+    q += '&name=ilike.*' + encodeURIComponent(escaped) + '*'
+  }
   if (status) q += '&status=eq.' + encodeURIComponent(status)
-  // server-side pagination when requested
-  const offset = (page - 1) * pageSize
-  q += `&limit=${pageSize}&offset=${offset}`
+  const offset = (page - 1) * clamped
+  q += `&limit=${clamped}&offset=${offset}`
+  return q
+}
+
+export async function getBusinessesFiltered({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const q = buildBusinessesFilterQuery({ search, status, page, pageSize })
   return sbFetch(q)
 }
+
+// Count header path: use Prefer count=exact and parse Content-Range "0-9/42".
+// Falls back to data.length when count header missing (head:true supported).
+// Guard limit clamp via caller; this helper ensures total never crashes on null.
+export async function sbFetchWithCount(path, options = {}) {
+  let prefer = options.prefer ? options.prefer + ',count=exact' : 'count=exact'
+  if (options.head) prefer += ',head=true'
+  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: options.method || 'GET',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + await authToken(),
+      'Content-Type': 'application/json',
+      'Prefer': prefer,
+    },
+    body: options.body || undefined,
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    let detail = text
+    try { detail = JSON.parse(text).message || text } catch (e) {}
+    throw new Error('Supabase error (' + res.status + '): ' + detail)
+  }
+  const data = text ? JSON.parse(text) : []
+  const countHeader = res.headers.get('content-range') || res.headers.get('Content-Range') || ''
+  let count = null
+  if (countHeader) {
+    const slash = countHeader.lastIndexOf('/')
+    if (slash !== -1) {
+      const n = parseInt(countHeader.slice(slash + 1), 10)
+      if (Number.isFinite(n)) count = n
+    }
+  }
+  const total = count != null ? count : (Array.isArray(data) ? data.length : 0)
+  const range = countHeader
+  return { data, total, count, range }
+}
+
+export async function getBusinessesFilteredWithCount({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const clamped = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
+  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc&deleted_at=is.null'
+  if (search) {
+    const escaped = escapeIlike(search.trim())
+    q += '&name=ilike.*' + encodeURIComponent(escaped) + '*'
+  }
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  const offset = (page - 1) * clamped
+  q += `&limit=${clamped}&offset=${offset}`
+  try {
+    const { data, total } = await sbFetchWithCount(q)
+    // total is never null now (fallback to data.length), keep paged fallback for 1000 clamp
+    if (total == null) {
+      const all = await pagedQuery(sbFetch, 'businesses?select=id&deleted_at=is.null' + (search ? '&name=ilike.*' + encodeURIComponent(escapeIlike(search.trim())) + '*' : '') + (status ? '&status=eq.' + encodeURIComponent(status) : ''))
+      return { data, total: all.length, range: '' }
+    }
+    return { data, total, range: '' }
+  } catch (e) {
+    // fallback: data without count
+    const data = await sbFetch(q).catch(() => [])
+    return { data, total: Array.isArray(data) ? data.length : 0, range: '' }
+  }
+}
+
 export async function getBusinessesCount() {
-  // Prefer count via header; fallback to pagedQuery length
+  try {
+    const { total } = await sbFetchWithCount('businesses?select=id&deleted_at=is.null&limit=1', { head: true })
+    if (total != null) return total
+  } catch (e) {}
   const all = await pagedQuery(sbFetch, 'businesses?select=id&deleted_at=is.null')
   return Array.isArray(all) ? all.length : 0
 }
