@@ -7,6 +7,7 @@ import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Card, SectionHead, DataTable, Empty, Pill, Inp, Textarea, Sel, TealBtn, GhostBtn, Loading, useToast, Toast } from '../../components/ui'
 import { resolveEcommerceSegment, SEGMENT_RATES, SEGMENT_LABELS, SEGMENT_COMMISSION_LABELS, SEGMENT_CHECKBOX_LABELS, commissionExample } from '../../lib/ecommerceSegments'
+import VendorTrackingPanel from './VendorTrackingPanel'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, success, warning, bg } = theme
 
@@ -578,6 +579,14 @@ export default function Ecommerce({ brand, role }) {
                     {orderDetail.is_approved_city===false && orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={async()=>{ const q=prompt('Enter delivery quote (₦)'); if(q==null) return; await shopVendorRepository.updateStatus(orderDetail.id,'pending_payment',`Delivery quoted ₦${q}`); loadOrders(); }} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
                   </div>
                 </div>
+                <VendorTrackingPanel
+                  order={orderDetail}
+                  onStatusUpdate={async () => {
+                    loadOrders()
+                    const d = await shopVendorRepository.getOrder(orderDetail.id)
+                    setOrderDetail(d)
+                  }}
+                />
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
                   <div style={{ fontWeight:700, color:navy, marginBottom:6, fontSize:13 }}>Order Communication (vendor ↔ CareFind)</div>
                   <div style={{ maxHeight:160, overflowY:'auto', border:`1px solid ${border}`, borderRadius:8, padding:8, background:bg, display:'flex', flexDirection:'column', gap:6 }}>

@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { orderRepository } from './orderRepository'
+import { trackingRepository } from './trackingRepository'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
-import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download } from 'lucide-react'
+import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download, Link, Copy } from 'lucide-react'
 import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery } from './orderConstants'
 import { useCart } from './CartProvider'
+import DeliveryTrackingMap from '../../components/shop/DeliveryTrackingMap'
 
 export default function OrderDetail() {
   const { orderId } = useParams()
@@ -30,6 +32,9 @@ export default function OrderDetail() {
   const [returnReason, setReturnReason] = useState('')
   const [returnDescription, setReturnDescription] = useState('')
   const [returnData, setReturnData] = useState(null)
+  const [trackingEvents, setTrackingEvents] = useState([])
+  const [trackingToken, setTrackingToken] = useState(null)
+  const [copiedLink, setCopiedLink] = useState(false)
 
   function handleReorder() {
     if (!order || !order.order_items) return
@@ -281,6 +286,9 @@ export default function OrderDetail() {
       if (data.status === 'delivered' || data.status === 'refund_requested' || data.status === 'refunded') {
         await loadReturnData()
       }
+      // Load tracking events
+      const events = await trackingRepository.getTrackingEvents(orderId)
+      setTrackingEvents(events)
     } catch (err) {
       console.error('Failed to load order:', err)
       setError(err.message || 'Failed to load order')
@@ -362,6 +370,25 @@ export default function OrderDetail() {
       console.error('Failed to send message:', err)
       setError(err.message || 'Failed to send message')
     }
+  }
+
+  async function handleGenerateTrackingLink() {
+    try {
+      const token = await trackingRepository.generateTrackingToken(orderId)
+      if (token) {
+        setTrackingToken(token)
+      }
+    } catch (err) {
+      setError('Failed to generate tracking link')
+    }
+  }
+
+  function handleCopyTrackingLink() {
+    const url = `${window.location.origin}/track/${trackingToken}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    })
   }
 
   if (loading) {
@@ -469,6 +496,50 @@ export default function OrderDetail() {
           </div>
         </Card>
 
+        {/* Tracking Link Section - for customers on non-cancelled orders */}
+        {isCustomer && !['cancelled', 'pending_payment', 'delivered'].includes(order.status) && (
+          <Card style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: theme.navy }}>
+              <Link size={16} />
+              <span style={{ fontWeight: 600 }}>Share order tracking with anyone</span>
+            </div>
+            {trackingToken ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
+                <input
+                  value={`${window.location.origin}/track/${trackingToken}`}
+                  readOnly
+                  style={{
+                    flex: 1, padding: '6px 10px', borderRadius: 6, border: `1px solid ${theme.border}`,
+                    fontSize: 12, color: theme.textMid, background: 'white', minWidth: 0
+                  }}
+                />
+                <button
+                  onClick={handleCopyTrackingLink}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 6,
+                    border: `1px solid ${theme.border}`, background: copiedLink ? theme.tealDeep + '10' : 'white',
+                    color: copiedLink ? theme.tealDeep : theme.navy, fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                  }}
+                >
+                  {copiedLink ? <CheckCircle size={12} /> : <Copy size={12} />}
+                  {copiedLink ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleGenerateTrackingLink}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 6,
+                  border: `1px solid ${theme.tealDeep}`, background: theme.tealDeep + '10',
+                  color: theme.tealDeep, fontSize: 13, fontWeight: 600, cursor: 'pointer'
+                }}
+              >
+                <Link size={14} /> Generate Tracking Link
+              </button>
+            )}
+          </Card>
+        )}
+
         {/* Tracking Timeline */}
         {!['cancelled', 'pending_payment', 'disputed'].includes(order.status) && (
           <Card style={{ padding: 24 }}>
@@ -526,6 +597,62 @@ export default function OrderDetail() {
                       textAlign: 'center'
                     }}>
                       {step.label}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )}
+
+        {/* Delivery Tracking Map - for in-transit orders */}
+        {order.status === 'in_transit' && order.delivery_preference !== 'pickup' && (
+          <Card style={{ padding: 16 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.navy, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Truck size={18} /> Delivery Location
+            </h2>
+            <DeliveryTrackingMap
+              currentLocation={trackingEvents[0]?.location}
+              pickupStation={station}
+              height={220}
+            />
+            {trackingEvents[0]?.location && (
+              <div style={{ marginTop: 8, fontSize: 11, color: theme.textMid, textAlign: 'center' }}>
+                Last updated: {new Date(trackingEvents[0].created_at).toLocaleString('en-NG', {
+                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                })}
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Tracking Events Timeline */}
+        {trackingEvents.length > 0 && (
+          <Card style={{ padding: 20 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.navy, marginBottom: 16 }}>
+              Tracking Updates
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {trackingEvents.slice(0, 5).map((event, idx) => {
+                const statusInfo = STATUS_CONFIG[event.status] || STATUS_CONFIG.paid
+                const Icon = statusInfo.icon
+                return (
+                  <div key={event.id} style={{ display: 'flex', gap: 12 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: idx === 0 ? statusInfo.color + '15' : theme.gray200,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <Icon size={12} color={idx === 0 ? statusInfo.color : theme.textMid} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: theme.navy }}>{statusInfo.label}</div>
+                      {event.notes && <div style={{ fontSize: 12, color: theme.textMid, marginTop: 2 }}>{event.notes}</div>}
+                      <div style={{ fontSize: 11, color: theme.textLight, marginTop: 4 }}>
+                        {new Date(event.created_at).toLocaleString('en-NG', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                        })}
+                      </div>
                     </div>
                   </div>
                 )
