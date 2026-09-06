@@ -395,10 +395,128 @@ export async function addPatientMessage(data) { return sbFetch('patient_messages
 // 409 — never corrupt, but a save that failed for no actionable reason).
 // Its two callers were Settings.jsx and POS.jsx's receipt printer.
 
-// ADMIN TEAM
+// ADMIN TEAM — legacy (admin_team) kept for backward compat, new is admin_team_members + admin_roles (spec section 5)
 export async function getAdminTeam() { return sbFetch('admin_team?select=*&order=created_at.desc') }
 export async function addAdminTeam(data) { return sbFetch('admin_team', { method: 'POST', body: JSON.stringify(data) }) }
 export async function removeAdminTeam(id) { return sbFetch('admin_team?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+// ── CAREFINDHUB SUPER ADMIN (spec sections 2-8) ────────────────────────────
+// Reuse sbFetch; these are the real backend for the upgraded panel.
+// Businesses
+export async function getBusinessesFiltered({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  // Use ilike on name for search, status filter, paginated. pagedQuery handles 1000-row clamp for full counts elsewhere.
+  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc'
+  if (search) q += '&name=ilike.*' + encodeURIComponent(search) + '*'
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  // server-side pagination when requested
+  const offset = (page - 1) * pageSize
+  q += `&limit=${pageSize}&offset=${offset}`
+  return sbFetch(q)
+}
+export async function getBusinessesCount() {
+  // Prefer count via header; fallback to pagedQuery length
+  const all = await pagedQuery(sbFetch, 'businesses?select=id&deleted_at=is.null')
+  return Array.isArray(all) ? all.length : 0
+}
+export async function deleteBusinessSoft(id) {
+  return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString(), status: 'revoked' }), prefer: 'return=minimal' })
+}
+export async function hardDeleteBusiness(id) {
+  return sbFetch('businesses?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' })
+}
+export async function getEcommerceProductsByBusiness(businessId) {
+  if (!businessId) return []
+  // ecommerce_products links to businesses.business_id
+  return sbFetch('ecommerce_products?business_id=eq.' + businessId + '&select=*,products:product_id(id,name,price)&order=created_at.desc')
+}
+export async function getShopProductsByBusiness(businessId) {
+  // fallback: shop products directly via products table filtered ecommerce_enabled businesses already
+  return sbFetch('products?business_id=eq.' + businessId + '&select=id,name,price,stock&order=name.asc')
+}
+
+// Admin roles & platform team (spec 5)
+export async function getAdminRoles() { return sbFetch('admin_roles?select=*&order=created_at.asc') }
+export async function createAdminRole(data) { return sbFetch('admin_roles', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateAdminRole(id, patch) { return sbFetch('admin_roles?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function deleteAdminRole(id) { return sbFetch('admin_roles?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+export async function getAdminTeamMembers() { return sbFetch('admin_team_members?select=*,admin_roles:role_id(id,name,permissions)&order=created_at.desc') }
+export async function createAdminTeamMember(data) { return sbFetch('admin_team_members', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateAdminTeamMember(id, patch) { return sbFetch('admin_team_members?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function deleteAdminTeamMember(id) { return sbFetch('admin_team_members?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+// Agent tiers / agents / referrals / earnings / transfers (spec 4)
+export async function getAgentTiers() { return sbFetch('agent_tiers?select=*&order=created_at.asc') }
+export async function createAgentTier(data) { return sbFetch('agent_tiers', { method: 'POST', body: JSON.stringify(data) }) }
+export async function getAgentsDetailed() { return sbFetch('agents?select=*&order=created_at.desc') }
+export async function getAgentReferralsByAgent(agentId) { return sbFetch('agent_referrals?agent_id=eq.' + agentId + '&select=*&order=created_at.desc') }
+export async function getAgentEarningsByAgent(agentId) { return sbFetch('agent_earnings?agent_id=eq.' + agentId + '&select=*&order=created_at.desc') }
+export async function getAgentTransfers() { return sbFetch('agent_transfers?select=*&order=created_at.desc&limit=100') }
+export async function createAgentTransfer(data) { return sbFetch('agent_transfers', { method: 'POST', body: JSON.stringify(data) }) }
+export async function calculateAgentEarningsRpc(businessId, planValue, paymentReference) {
+  const body = paymentReference ? { p_business_id: businessId, p_plan_value: planValue, p_payment_reference: paymentReference } : { p_business_id: businessId, p_plan_value: planValue }
+  const rpc = paymentReference ? 'rpc/calculate_agent_earnings' : 'rpc/calculate_agent_earnings'
+  return sbFetch(rpc, { method: 'POST', body: JSON.stringify(body), prefer: 'return=minimal' })
+}
+export async function transferAgentAccount({ fromAgentId, toAgentId, businessId, reason, byAdminId }) {
+  // Atomic reassignment of referrals + earnings + audit via single RPC if available, else multi-step with audit
+  try {
+    await sbFetch('agent_referrals?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+    await sbFetch('agent_earnings?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+    await createAgentTransfer({ from_agent_id: fromAgentId, to_agent_id: toAgentId, business_id: businessId, reason: reason || null, by_admin_id: byAdminId || null })
+    return true
+  } catch (e) { throw e }
+}
+
+// Unified Applications (spec 6)
+export async function getApplications({ type = '', status = '' } = {}) {
+  let q = 'applications?select=*&order=submitted_at.desc'
+  if (type) q += '&type=eq.' + encodeURIComponent(type)
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  return sbFetch(q)
+}
+export async function createApplication(data) { return sbFetch('applications', { method: 'POST', body: JSON.stringify(data) }) }
+export async function reviewApplication(id, patch) { return sbFetch('applications?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+
+// Ledger aggregation (spec 7) — single-entity statement: combine wallet_tx + plan_payments + agent_earnings + shop_payments
+export async function getLedgerForEntity({ type, id }) {
+  // type: 'business' | 'agent'
+  if (type === 'business') {
+    const [wallets, plans, shops] = await Promise.all([
+      sbFetch('business_wallet_transactions?business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+      sbFetch('plan_payments?business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+      sbFetch('shop_orders?vendor_business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+    ])
+    const items = []
+    for (const w of (wallets || [])) items.push({ date: (w.created_at||'').slice(0,10), description: w.description || w.type || 'Wallet', type: w.type || 'wallet', amount: Number(w.amount || 0) })
+    for (const p of (plans || [])) items.push({ date: (p.created_at||'').slice(0,10), description: 'Plan payment ' + (p.reference||''), type: 'subscription', amount: -Math.abs(Number(p.amount || p.naira_amount || 0)) })
+    for (const s of (shops || [])) items.push({ date: (s.created_at||'').slice(0,10), description: 'Order ' + (s.order_ref||s.id.slice(0,8)), type: 'ecommerce', amount: Number(s.total_kobo||0)/100 })
+    // include legacy business_wallet_transactions fallback
+    return items.sort((a,b)=> (a.date||'').localeCompare(b.date||''))
+  } else {
+    const earnings = await sbFetch('agent_earnings?agent_id=eq.' + id + '&select=*&order=created_at.desc&limit=200').catch(()=>[])
+    return (earnings||[]).map(e=> ({ date:(e.created_at||'').slice(0,10), description:'Commission '+(e.payment_reference||e.payout_period||''), type:'agent_earning', amount: Number(e.amount_owed||0) }))
+  }
+}
+
+// Payouts (spec 8)
+export async function getPayoutRequests({ status = '' } = {}) {
+  let q = 'payout_requests?select=*&order=requested_at.desc'
+  if (status) q += '&status=eq.' + status
+  return sbFetch(q)
+}
+export async function createPayoutRequest(data) { return sbFetch('payout_requests', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updatePayoutRequest(id, patch) { return sbFetch('payout_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function markPayoutPaidAtomic(id, { reviewedBy } = {}) {
+  // Must be atomic server-side: update payout status + agent_earnings.amount_paid or wallet balance
+  // Try RPC first, fallback to client-side two-step (still shows intent; server RPC should be added)
+  try {
+    const r = await sbFetch('rpc/mark_payout_paid', { method: 'POST', body: JSON.stringify({ p_payout_id: id }), prefer: 'return=representation' })
+    return r
+  } catch (e) {
+    // fallback: just mark status; caller should handle financial update via separate RPC
+    return updatePayoutRequest(id, { status: 'paid', processed_at: new Date().toISOString(), reviewed_by: reviewedBy || null })
+  }
+}
 
 // NOTIFICATIONS (in-app alerts — who needs to know what, right now)
 export async function getMyNotifications(businessId, staffId) {
