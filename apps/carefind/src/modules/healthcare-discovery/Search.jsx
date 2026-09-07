@@ -21,9 +21,11 @@ import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productC
 import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 import MarketplaceTabs from '../marketplace/MarketplaceTabs.jsx'
-import BusinessTypeFilter from '../marketplace/BusinessTypeFilter.jsx'
 import Logo from '../social-feed/Logo.jsx'
 import { useCart } from '../shop/CartProvider'
+import FilterSheet from '../../components/FilterSheet.jsx'
+import FilterFAB from '../../components/FilterFAB.jsx'
+import ProductGrid from '../marketplace/ProductGrid.jsx'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
@@ -54,7 +56,6 @@ function Search() {
     return 'shop'
   })
   const [stateFilter, setStateFilter] = useState('')
-  const [saleTypeFilter, setSaleTypeFilter] = useState('')
   const [nearMe, setNearMe] = useState(false)
   const [specialtyFilter, setSpecialtyFilter] = useState('')
   const [businesses, setBusinesses] = useState([])
@@ -69,6 +70,19 @@ function Search() {
   const [storyViewer, setStoryViewer] = useState(null)
   const trackRef = useRef(null)
   const toast = useToast()
+
+  // Filter sheet state
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [saleType, setSaleType] = useState('all')
+  const [priceMin, setPriceMin] = useState('')
+  const [priceMax, setPriceMax] = useState('')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [showRxOnly, setShowRxOnly] = useState(false)
+  const [inStockOnly, setInStockOnly] = useState(true)
+  const [sort, setSort] = useState('popular')
+
+  // Filter categories derived from products
+  const [filterCategories, setFilterCategories] = useState(['all'])
 
   useEffect(() => {
     if (featured.length === 0) return
@@ -90,7 +104,7 @@ function Search() {
   }, [featured])
 
   useEffect(() => { loadFeatured() }, [])
-  useEffect(() => { runSearch() }, [tab, stateFilter, saleTypeFilter, specialtyFilter, nearMe])
+  useEffect(() => { runSearch() }, [tab, stateFilter, saleType, specialtyFilter, nearMe])
 
   useEffect(() => {
     const cur = searchParams.get('tab')
@@ -166,7 +180,7 @@ function Search() {
     if (tab === 'products') {
       let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)')
       if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
-      if (saleTypeFilter) pq = pq.eq('sale_type', saleTypeFilter)
+      if (saleType && saleType !== 'all') pq = pq.eq('sale_type', saleType)
       pq = pq.order('created_at', { ascending: false }).limit(100)
       const { data } = await pq
       let list = (data || []).filter(p => p.list_on_carefind !== false)
@@ -180,6 +194,9 @@ function Search() {
       setProducts(list)
       setBusinesses([]); setProfessionals([])
       resultCount = list.length
+      // Extract categories for filter sheet
+      const cats = new Set(list.map(p => p.category).filter(Boolean))
+      setFilterCategories(['all', ...Array.from(cats)])
     }
     else if (tab === 'businesses') {
       const { data } = await businessesQuery(q, stateFilter).range(0, 39)
@@ -203,7 +220,6 @@ function Search() {
       setProfessionals(data || [])
       setProducts([]); setBusinesses([])
       resultCount = (data || []).length
-      // Batch story ring for professionals (avoid N+1)
       const ids = (data || []).map((p) => p.id)
       if (ids.length) {
         const { data: rows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', ids).gt('expires_at', new Date().toISOString())
@@ -232,7 +248,15 @@ function Search() {
     }
   }
 
-  const showingFeatured = tab === 'products' && !query.trim()
+  const activeFilterCount = [
+    saleType !== 'all',
+    priceMin !== '',
+    priceMax !== '',
+    filterCategory !== 'all',
+    showRxOnly,
+    !inStockOnly,
+    sort !== 'popular',
+  ].filter(Boolean).length
 
   const bodyContent = (
     <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: '0 16px', paddingBottom: 'calc(100px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh', overflowX: 'hidden', boxSizing: 'border-box' } : { fontFamily: theme.fontFamily }}>
@@ -241,16 +265,15 @@ function Search() {
         .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
         .mm-card { transition: transform 0.12s ease; }
         .mm-card:active { transform: scale(0.96); }
-        /* hide scrollbars for tab rows but keep scroll */
         .hide-scrollbar::-webkit-scrollbar { display:none; height:0; }
         .hide-scrollbar { scrollbar-width:none; -ms-overflow-style:none; }
       `}</style>
 
-      {/* 1 — CareFind Header (mobile) — matches home page style */}
+      {/* 1 — CareFind Header */}
       {isMobile && (
         <div style={{
           background: theme.heroGradient,
-          margin: '-20px -20px 0 -20px',
+          margin: '0 -16px',
           padding: '14px 16px 14px',
           borderRadius: '0 0 24px 24px',
           color: '#fff',
@@ -285,11 +308,16 @@ function Search() {
         </div>
       )}
 
-      {/* 2 — Main Search — prominent, integrated */}
-      <div style={{ padding: isMobile ? '14px 16px 12px' : '18px 0 14px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none' }}>
+      {/* 2 — Tab Navigation (not sticky — flows naturally) */}
+      <div style={{ padding: '12px 0 8px' }}>
+        <MarketplaceTabs activeTab={tab} onChange={setTab} />
+      </div>
+
+      {/* 3 — Search Bar */}
+      <div style={{ padding: '0 0 12px' }}>
         <form onSubmit={runSearch} role="search" aria-label="Marketplace search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <SearchIcon size={18} color={theme.textLight} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
+            <SearchIcon size={18} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -299,12 +327,12 @@ function Search() {
                 width: '100%',
                 minHeight: 44,
                 padding: '11px 12px 11px 38px',
-                fontSize: isMobile ? 16 : 14,
+                fontSize: 16,
                 border: `1px solid ${theme.border}`,
                 borderRadius: 12,
                 boxSizing: 'border-box',
                 fontFamily: theme.fontFamily,
-                background: isMobile ? '#fff' : theme.cardBg,
+                background: '#fff',
                 outline: 'none',
                 WebkitTextSizeAdjust: '100%',
               }}
@@ -326,101 +354,116 @@ function Search() {
               whiteSpace: 'nowrap',
               boxSizing: 'border-box',
               WebkitTapHighlightColor: 'transparent',
-              transition: `transform ${theme.motion.fast} ${theme.motion.easeOut}`,
             }}
-            onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.97)' }}
-            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)' }}
           >
             Search
           </button>
         </form>
       </div>
 
-      {/* 3 — Marketplace Navigation — Shop first, one line, never wrap */}
-      <div style={{ padding: '10px 0 8px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none', position: isMobile ? 'sticky' : 'static', top: isMobile ? 64 : undefined, zIndex: isMobile ? 30 : undefined }}>
-        <MarketplaceTabs activeTab={tab} onChange={setTab} />
-      </div>
-
-      {/* 4 — Location filter — City or state */}
-      <div style={{ padding: isMobile ? '12px 16px 0' : '14px 0 0', background: isMobile ? '#fff' : 'transparent' }}>
-        <label htmlFor="marketplace-location" style={{ display: 'block', fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: theme.textLight, marginBottom: 6 }}>Location</label>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <MapPin size={16} color={theme.gray400} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
+      {/* 4 — Location + Filter FAB (one row) */}
+      <div style={{ padding: '0 0 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <MapPin size={16} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
           <input
-            id="marketplace-location"
             value={stateFilter}
             onChange={(e) => setStateFilter(e.target.value)}
-            placeholder="City or state (e.g., Lagos, Abuja)"
+            placeholder="City or state"
             aria-label="Filter by city or state"
             list="carefind-locations"
             style={{
               width: '100%',
-              minHeight: 44,
-              padding: '11px 12px 11px 36px',
-              fontSize: isMobile ? 16 : 13.5,
+              minHeight: 40,
+              padding: '9px 12px 9px 36px',
+              fontSize: 13,
               border: `1px solid ${theme.border}`,
-              borderRadius: 12,
+              borderRadius: 10,
               boxSizing: 'border-box',
               fontFamily: theme.fontFamily,
-              background: theme.cardBg,
+              background: '#fff',
             }}
           />
         </div>
+        <FilterFAB onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
         <datalist id="carefind-locations">
           {NG_STATES.map(s => <option key={s} value={s} />)}
         </datalist>
-        {tab === 'professionals' && (
-          <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Specialty" aria-label="Filter by specialty" style={{ marginTop: 8, width: '100%', minHeight: 44, padding: 11, fontSize: isMobile ? 16 : 13, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: theme.fontFamily, background: theme.cardBg }} />
-        )}
-        {stateFilter && (
-          <button onClick={() => setStateFilter('')} style={{ marginTop: 8, minHeight: 32, padding: '4px 12px', background: 'none', border: `1px solid ${theme.border}`, borderRadius: 999, fontSize: 11, fontWeight: 700, color: theme.textLight, cursor: 'pointer' }}>Clear location</button>
-        )}
       </div>
 
-      {/* 5 — Business type filters + Near me — one line, never wrap */}
-      <div style={{ padding: '12px 0 10px', background: isMobile ? '#fff' : 'transparent', borderBottom: isMobile ? `1px solid ${theme.hairline}` : 'none' }}>
-        <BusinessTypeFilter value={saleTypeFilter} onChange={setSaleTypeFilter} nearMe={nearMe} onNearMeToggle={setNearMe} userCoords={userCoords} />
-      </div>
+      {/* Specialty filter — professionals tab only */}
+      {tab === 'professionals' && (
+        <div style={{ padding: '0 0 12px' }}>
+          <input value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)} placeholder="Filter by specialty..." aria-label="Filter by specialty"
+            style={{ width: '100%', minHeight: 40, padding: '9px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', fontFamily: theme.fontFamily, background: '#fff' }} />
+        </div>
+      )}
 
-      {/* Featured rail — only for products tab discovery */}
-      {showingFeatured && featured.length > 0 && (
-        <div style={{ padding: '14px 0 4px', background: isMobile ? '#fff' : 'transparent' }}>
-          <p style={{ margin: '0 0 10px 16px', fontSize: 12, fontWeight: 900, color: theme.navy }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Sparkles size={14} color={theme.tealDeep} aria-hidden="true" /> {featuredType === 'promo' ? 'Featured promotions' : 'Featured on CareFind'}</span></p>
+      {/* Active filter chips */}
+      {activeFilterCount > 0 && (
+        <div style={{ padding: '0 0 12px', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: theme.textMid }}>Active:</span>
+          {saleType !== 'all' && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: theme.tealMist, color: theme.tealDeep, fontSize: 11, fontWeight: 700 }}>
+              {saleType} <button onClick={() => setSaleType('all')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: theme.tealDeep, fontSize: 13, lineHeight: 1 }}>×</button>
+            </span>
+          )}
+          {priceMin && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: theme.tealMist, color: theme.tealDeep, fontSize: 11, fontWeight: 700 }}>
+              Min ₦{priceMin} <button onClick={() => setPriceMin('')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: theme.tealDeep, fontSize: 13, lineHeight: 1 }}>×</button>
+            </span>
+          )}
+          {priceMax && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: theme.tealMist, color: theme.tealDeep, fontSize: 11, fontWeight: 700 }}>
+              Max ₦{priceMax} <button onClick={() => setPriceMax('')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: theme.tealDeep, fontSize: 13, lineHeight: 1 }}>×</button>
+            </span>
+          )}
+          {showRxOnly && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: theme.tealMist, color: theme.tealDeep, fontSize: 11, fontWeight: 700 }}>
+              Rx only <button onClick={() => setShowRxOnly(false)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: theme.tealDeep, fontSize: 13, lineHeight: 1 }}>×</button>
+            </span>
+          )}
+          <button onClick={() => { setSaleType('all'); setPriceMin(''); setPriceMax(''); setFilterCategory('all'); setShowRxOnly(false); setInStockOnly(true); setSort('popular') }}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: theme.tealDeep, fontSize: 11, fontWeight: 700, textDecoration: 'underline' }}>
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* 5 — Featured/Trending Rail (products tab only, static) */}
+      {tab === 'products' && !query.trim() && featured.length > 0 && (
+        <div style={{ padding: '0 0 16px' }}>
+          <p style={{ margin: '0 0 10px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Sparkles size={16} color={theme.tealDeep} aria-hidden="true" /> {featuredType === 'promo' ? 'Featured promotions' : 'Trending Now'}
+            </span>
+          </p>
           <div style={{ overflow: 'hidden', width: '100%' }}>
-            <div className="mm-track" ref={trackRef}>
+            <div className="mm-track hide-scrollbar" ref={trackRef}>
               {[...featured, ...featured].map((p, i) => (
                 featuredType === 'promo' ? (
                   <Link key={i} className="mm-card" to={p.link_url || '/search'} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 200 }}>
                     <Card style={{ overflow: 'hidden' }}>
                       <div style={{ height: 110, background: p.image_url ? `url(${p.image_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'flex-start', padding: 8 }}>
-                        <span style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.06em', color: '#fff', background: theme.tealDeep, padding: '2px 8px', borderRadius: 20, textTransform: 'uppercase' }}>Promo</span>
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#fff', background: theme.tealDeep, padding: '3px 10px', borderRadius: 20, textTransform: 'uppercase' }}>Promo</span>
                       </div>
-                      <div style={{ padding: '9px 11px 12px' }}>
-                        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: theme.navy, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</p>
+                      <div style={{ padding: '10px 12px 12px' }}>
+                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: theme.navy, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</p>
                       </div>
                     </Card>
                   </Link>
                 ) : (
-                  <Link key={i} className="mm-card" to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 130 }}>
+                  <Link key={i} className="mm-card" to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 140 }}>
                     <Card style={{ padding: 12, textAlign: 'center' }}>
                       <div style={{
-                        width: 46, height: 46, borderRadius: theme.radius.md, margin: '0 auto 8px',
+                        width: 48, height: 48, borderRadius: theme.radius.md, margin: '0 auto 8px',
                         background: theme.tealMist, color: theme.tealDeep,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}><PillIcon size={22} aria-hidden="true" /></div>
-                      <p style={{ margin: '0 0 3px 0', fontSize: 12.5, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
+                      <p style={{ margin: '0 0 3px 0', fontSize: 13, fontWeight: 700, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</p>
                       {canShowPrice(p)
                         ? <p style={{ margin: '0 0 2px 0', fontSize: 12, fontWeight: 700, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
-                        : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textLight }}>Ask for price</p>}
-                      <p style={{ margin: 0, fontSize: 10, color: theme.textLight, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
-                      {(() => {
-                        const dist = distanceLabel(p, userCoords)
-                        return dist ? (
-                          <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: theme.tealDeep, fontWeight: 700 }}>
-                            <MapPin size={10} aria-hidden="true" /> {dist}
-                          </p>
-                        ) : null
-                      })()}
+                        : <p style={{ margin: '0 0 2px 0', fontSize: 11, fontWeight: 700, color: theme.textMid }}>Ask for price</p>}
+                      <p style={{ margin: 0, fontSize: 11, color: theme.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.businesses?.name || ''}</p>
                     </Card>
                   </Link>
                 )
@@ -431,113 +474,46 @@ function Search() {
       )}
 
       {/* 6 — Marketplace Content */}
-      <div style={isMobile ? { padding: '14px 12px 0' } : { padding: '18px 0 0' }}>
-        {/* Shop heading per spec when Shop active */}
+      <div style={{ paddingBottom: 16 }}>
+        {/* Shop heading */}
         {tab === 'shop' && (
-          <div style={{ marginBottom: 12, padding: isMobile ? '0 4px' : 0 }}>
-            <h2 id="marketplace-panel-shop" style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy, letterSpacing: '-0.02em' }}>Shop</h2>
-            <p style={{ margin: '2px 0 0 0', fontSize: 12.5, color: theme.textLight }}>Discover health products from trusted sellers near you.</p>
+          <div style={{ marginBottom: 12 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: theme.navy, letterSpacing: '-0.02em' }}>Shop</h2>
+            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: theme.textMid }}>Health products from trusted sellers near you.</p>
           </div>
         )}
 
-        {loading && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <CardSkeleton />
-            <CardSkeleton />
-            <CardSkeleton />
-          </div>
+        {/* Loading states */}
+        {loading && tab !== 'shop' && (
+          <ProductGrid rows={[]} loading={true} skeletonType={tab === 'products' ? 'grid' : 'list'} />
         )}
 
-        {!loading && tab === 'products' && products.length === 0 && (query.trim() || stateFilter) && (
-          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No products found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another name or state.</div></>} />
-        )}
-        {!loading && tab === 'businesses' && businesses.length === 0 && (
-          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No health facilities found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another state.</div></>} />
-        )}
-        {!loading && tab === 'professionals' && professionals.length === 0 && (
-          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12.5, color: theme.textLight }}>Try another specialty or state.</div></>} />
-        )}
-
+        {/* Shop tab — delegates to Shop component */}
         {!loading && tab === 'shop' && (
-          <div role="tabpanel" id="marketplace-panel-shop" aria-labelledby="marketplace-tab-shop">
-            <Shop segment={saleTypeFilter} query={query} embedded />
-          </div>
+          <Shop segment={saleType} query={query} embedded />
         )}
 
-        {/* Products: 2-col grid on mobile, 3 tablet, 4 desktop — CSS media, not JS, so first paint is correct */}
+        {/* Products tab */}
+        {!loading && tab === 'products' && products.length === 0 && (query.trim() || stateFilter) && (
+          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No products found</div><div style={{ fontSize: 12, color: theme.textMid }}>Try another name or state.</div></>} />
+        )}
         {!loading && tab === 'products' && products.length > 0 && (
-          <>
-            <style>{`
-              .mp-products-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
-              @media (min-width: 768px) { .mp-products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-              @media (min-width: 1024px) { .mp-products-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-              .mp-products-grid > * { min-width: 0; }
-            `}</style>
-            <div role="tabpanel" id="marketplace-panel-products" aria-labelledby="marketplace-tab-products" className="mp-products-grid">
-
-            {products.map((p, idx) => {
-              const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
-              const callLink = telLink(sellerPhone(p))
-              const priceVisible = canShowPrice(p)
-              return (
-                <div key={p.id} className="mm-card" style={{ display: 'flex', flexDirection: 'column', background: '#fff', border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, overflow: 'hidden', height: '100%' }}>
-                  <Link to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <div style={{ height: 118, background: p.image_url ? `url(${p.image_url}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep, flexShrink: 0, borderBottom: `1px solid ${theme.hairline}` }}>
-                      {!p.image_url && <PillIcon size={26} aria-hidden="true" />}
-                    </div>
-                    <div style={{ padding: '9px 10px 8px', display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, lineHeight: 1.32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34, wordBreak: 'break-word', overflowWrap: 'anywhere' }} title={p.name}>
-                        {p.name}{p.category && <Pill label={p.category} type="teal" style={{ fontSize: 9, padding: '1px 6px', marginLeft: 6 }} />}
-                      </div>
-                      {p.generic_name && <div style={{ fontSize: 11, color: theme.textMid, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{p.generic_name}</div>}
-                      <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                        {p.business_id ? (
-                          <span style={{ color: theme.tealDeep, fontWeight: 700 }}>{sellerName(p)}</span>
-                        ) : p.owner_id ? (
-                          <span style={{ color: theme.tealDeep, fontWeight: 700 }}>{sellerName(p)}</span>
-                        ) : null}
-                        {p.seller_location ? ` · ${p.seller_location}` : p.businesses?.state ? ` · ${p.businesses.state}` : ''}
-                      </div>
-                      {(p.sale_type || p.min_purchase) && (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {p.sale_type && <Pill label={SALE_TYPE_LABELS[p.sale_type] || p.sale_type} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9, textTransform: 'uppercase' }} />}
-                          {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9 }} />}
-                        </div>
-                      )}
-                      <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        {priceVisible ? <span style={{ fontSize: 13.5, fontWeight: 900, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</span> : <span style={{ fontSize: 12, fontWeight: 800, color: theme.textLight }}>Ask for price</span>}
-                        {p.price_unit && priceVisible && <span style={{ fontSize: 10, color: theme.textLight }}>per {p.price_unit}</span>}
-                      </div>
-                      {(() => {
-                        const dist = distanceLabel(p, userCoords)
-                        return dist ? <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}><MapPin size={10} aria-hidden="true" /> {dist}</div> : null
-                      })()}
-                    </div>
-                  </Link>
-                  {(waLink || callLink) && (
-                    <div style={{ display: 'flex', gap: 6, padding: '0 10px 10px', flexWrap: 'wrap' }}>
-                      {waLink && (
-                        <a href={waLink} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'whatsapp' })} style={{ flex: '1 1 90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, padding: '8px 8px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none', touchAction: 'manipulation' }}>
-                          <MessageCircle size={13} aria-hidden="true" /> WhatsApp
-                        </a>
-                      )}
-                      {callLink && (
-                        <a href={callLink} onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'call' })} style={{ flex: '1 1 90px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 44, padding: '8px 8px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 11.5, textDecoration: 'none', touchAction: 'manipulation' }}>
-                          <Phone size={13} aria-hidden="true" /> Call
-                        </a>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-            </div>
-          </>
+          <ProductGrid
+            rows={products}
+            loading={false}
+            onAddToCart={() => {}}
+            emptyTitle="No products match"
+            emptyHint="Try adjusting filters or search."
+          />
         )}
 
+        {/* Businesses tab */}
+        {!loading && tab === 'businesses' && businesses.length === 0 && (
+          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No health facilities found</div><div style={{ fontSize: 12, color: theme.textMid }}>Try another state.</div></>} />
+        )}
         {!loading && tab === 'businesses' && businesses.length > 0 && (
-          <div role="tabpanel" id="marketplace-panel-businesses" aria-labelledby="marketplace-tab-businesses" style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 10 }}>
-            {businesses.map((b, idx) => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {businesses.map((b) => {
               const isBookable = !!b.booking_enabled
               const handleBook = () => {
                 if (isBookable) {
@@ -557,25 +533,24 @@ function Search() {
                 }
               }
               return (
-                <div key={b.id} className="mm-card" style={{ padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg }}>
+                <div key={b.id} style={{ padding: 16, border: `1px solid ${theme.border}`, borderRadius: 14, background: '#fff' }}>
                   <Link to={`/business/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12 }}>
-                    <div style={{ width: 46, height: 46, borderRadius: 10, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
                       {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={20} aria-hidden="true" />)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{b.name}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: theme.textLight, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
+                      <p style={{ margin: '0 0 2px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{b.name}</p>
+                      <p style={{ margin: 0, fontSize: 13, color: theme.textMid, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
                       {(() => {
                         const bc = businessCoords(b)
                         const dist = (bc && userCoords) ? formatDistance(haversineMeters(bc.lat, bc.lng, userCoords.lat, userCoords.lng)) : null
-                        return dist ? <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}><MapPin size={11} aria-hidden="true" /> {dist}</p> : null
+                        return dist ? <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.tealDeep, fontWeight: 600 }}><MapPin size={11} aria-hidden="true" /> {dist}</p> : null
                       })()}
-                      <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}><Star size={11} aria-hidden="true" /> See profile &amp; reviews <ChevronRight size={11} aria-hidden="true" /></p>
                     </div>
                   </Link>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <Link to={`/business/${b.id}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>View Profile</Link>
-                    <button onClick={handleBook} aria-label={isBookable ? 'Book Appointment' : 'Book Appointment unavailable'} aria-disabled={!isBookable} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: isBookable ? theme.tealDeep : '#e2e8f0', color: isBookable ? '#fff' : theme.textLight, border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: 'pointer', opacity: isBookable ? 1 : 0.9, boxSizing: 'border-box' }}>Book Appointment</button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <Link to={`/business/${b.id}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>View Profile</Link>
+                    <button onClick={handleBook} aria-label={isBookable ? 'Book Appointment' : 'Book Appointment unavailable'} aria-disabled={!isBookable} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: isBookable ? theme.tealDeep : '#e2e8f0', color: isBookable ? '#fff' : theme.textMid, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: isBookable ? 1 : 0.9, boxSizing: 'border-box' }}>Book Appointment</button>
                   </div>
                 </div>
               )
@@ -583,29 +558,55 @@ function Search() {
           </div>
         )}
 
-        {!loading && tab === 'professionals' && professionals.length > 0 && (
-          <div role="tabpanel" id="marketplace-panel-professionals" aria-labelledby="marketplace-tab-professionals" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {professionals.map((pr) => (
-              <Link key={pr.id} to={`/u/${pr.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 12, border: `1px solid ${theme.border}`, borderRadius: 14, background: theme.cardBg, alignItems: 'center' }}>
-                <StoryAvatar userId={pr.id} stories={proStories} viewedIds={proViewed} size={44} src={pr.avatar_url} name={pr.full_name || pr.display_name} onClick={async (e) => { e.preventDefault(); const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', pr.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }); if (data?.length) setStoryViewer({ stories: data, index: 0, userId: pr.id }) }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 14, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name}<BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" /></p>
-                  <p style={{ margin: 0, fontSize: 12, color: theme.textLight }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
-                </div>
-              </Link>
-            ))}
+        {!loading && tab === 'businesses' && bizHasMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0 4px' }}>
+            <button onClick={loadMoreBusinesses} style={{ minHeight: 44, padding: '0 24px', border: `1px solid ${theme.border}`, borderRadius: 12, background: '#fff', color: theme.tealDeep, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Load more facilities</button>
           </div>
         )}
 
-        {!loading && tab === 'businesses' && bizHasMore && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0 4px' }}>
-            <button onClick={loadMoreBusinesses} style={{ minHeight: 44, padding: '0 24px', border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, background: '#fff', color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Load more facilities</button>
+        {/* Professionals tab */}
+        {!loading && tab === 'professionals' && professionals.length === 0 && (
+          <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No professionals found</div><div style={{ fontSize: 12, color: theme.textMid }}>Try another specialty or state.</div></>} />
+        )}
+        {!loading && tab === 'professionals' && professionals.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {professionals.map((pr) => (
+              <Link key={pr.id} to={`/u/${pr.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 16, border: `1px solid ${theme.border}`, borderRadius: 14, background: '#fff', alignItems: 'center' }}>
+                <StoryAvatar userId={pr.id} stories={proStories} viewedIds={proViewed} size={48} src={pr.avatar_url} name={pr.full_name || pr.display_name} onClick={async (e) => { e.preventDefault(); const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', pr.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }); if (data?.length) setStoryViewer({ stories: data, index: 0, userId: pr.id }) }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 15, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name}<BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" /></p>
+                  <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
 
       {isMobile && <BottomNav />}
       <Toast msg={toast.msg} />
+
+      {/* Filter Bottom Sheet */}
+      <FilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        saleType={saleType}
+        onSaleTypeChange={setSaleType}
+        priceMin={priceMin}
+        onPriceMinChange={setPriceMin}
+        priceMax={priceMax}
+        onPriceMaxChange={setPriceMax}
+        category={filterCategory}
+        onCategoryChange={setFilterCategory}
+        categories={filterCategories}
+        showRxOnly={showRxOnly}
+        onShowRxOnlyChange={setShowRxOnly}
+        inStockOnly={inStockOnly}
+        onInStockOnlyChange={setInStockOnly}
+        sort={sort}
+        onSortChange={setSort}
+        onClear={() => { setSaleType('all'); setPriceMin(''); setPriceMax(''); setFilterCategory('all'); setShowRxOnly(false); setInStockOnly(true); setSort('popular') }}
+      />
     </div>
   )
 

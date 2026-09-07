@@ -171,8 +171,8 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         </div>
       )}
 
-      {/* Faceted filters — collapsible on mobile so med-market grid is immediately visible */}
-      {isMobile && (
+      {/* Faceted filters — hidden when embedded (parent Search.jsx handles via FilterSheet) */}
+      {!embedded && isMobile && (
         <button
           onClick={() => setShowFilters((v) => !v)}
           aria-expanded={showFilters}
@@ -196,35 +196,34 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
           <SlidersHorizontal size={14} aria-hidden="true" /> Filters <ChevronDown size={14} aria-hidden="true" style={{ transform: showFilters ? 'rotate(180deg)' : 'none', transition: `transform ${theme.motion.fast}` }} />
         </button>
       )}
-      <div
-        id="shop-faceted-filters"
-        style={
-          isMobile
-            ? { display: showFilters ? 'flex' : 'none', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, padding: '2px 0' }
-            : embedded
-              ? { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, padding: '2px 0' }
+      {!embedded && (
+        <div
+          id="shop-faceted-filters"
+          style={
+            isMobile
+              ? { display: showFilters ? 'flex' : 'none', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, padding: '2px 0' }
               : { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, padding: 10, border: `1px solid ${theme.border}`, borderRadius: 12, background: theme.cardBg }
-        }
-      >
-        {/* Hide Filters label when embedded to reduce chrome — keep compact */}
-        {!embedded && <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, color:theme.navy }}><SlidersHorizontal size={14}/> Filters</span>}
-        <select value={brand} onChange={e=>setBrand(e.target.value)} aria-label="Filter by brand" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
-          {brands.map(b => <option key={b} value={b}>{b==='all' ? 'All brands' : b}</option>)}
-        </select>
-        <select value={category} onChange={e=>setCategory(e.target.value)} aria-label="Filter by category" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
-          {categories.map(c => <option key={c} value={c}>{c==='all' ? 'All categories' : c}</option>)}
-        </select>
-        <input placeholder="Min ₦" value={priceMin} onChange={e=>setPriceMin(e.target.value)} inputMode="numeric" aria-label="Minimum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
-        <input placeholder="Max ₦" value={priceMax} onChange={e=>setPriceMax(e.target.value)} inputMode="numeric" aria-label="Maximum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
-        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={showRxOnly} onChange={e=>setShowRxOnly(e.target.checked)} /> Rx only</label>
-        <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={inStockOnly} onChange={e=>setInStockOnly(e.target.checked)} /> In stock</label>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontSize:12, minHeight:44 }}>
-          Sort <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort products" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', minHeight:44 }}>
-            <option value="popular">Popular</option><option value="newest">Newest</option><option value="price_asc">Price ↑</option><option value="price_desc">Price ↓</option><option value="rating">Rating</option>
+          }
+        >
+          <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, color:theme.navy }}><SlidersHorizontal size={14}/> Filters</span>
+          <select value={brand} onChange={e=>setBrand(e.target.value)} aria-label="Filter by brand" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
+            {brands.map(b => <option key={b} value={b}>{b==='all' ? 'All brands' : b}</option>)}
           </select>
+          <select value={category} onChange={e=>setCategory(e.target.value)} aria-label="Filter by category" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', fontSize:12, minHeight:44 }}>
+            {categories.map(c => <option key={c} value={c}>{c==='all' ? 'All categories' : c}</option>)}
+          </select>
+          <input placeholder="Min ₦" value={priceMin} onChange={e=>setPriceMin(e.target.value)} inputMode="numeric" aria-label="Minimum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
+          <input placeholder="Max ₦" value={priceMax} onChange={e=>setPriceMax(e.target.value)} inputMode="numeric" aria-label="Maximum price" style={{ width:90, padding:'8px 8px', borderRadius:8, border:`1px solid ${theme.border}`, fontSize:12, minHeight:44, boxSizing:'border-box' }} />
+          <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={showRxOnly} onChange={e=>setShowRxOnly(e.target.checked)} /> Rx only</label>
+          <label style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, color:theme.navy, minHeight:44 }}><input type="checkbox" checked={inStockOnly} onChange={e=>setInStockOnly(e.target.checked)} /> In stock</label>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontSize:12, minHeight:44 }}>
+            Sort <select value={sort} onChange={e=>setSort(e.target.value)} aria-label="Sort products" style={{ padding:'8px 10px', borderRadius:8, border:`1px solid ${theme.border}`, background:'#fff', minHeight:44 }}>
+              <option value="popular">Popular</option><option value="newest">Newest</option><option value="price_asc">Price ↑</option><option value="price_desc">Price ↓</option><option value="rating">Rating</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <div style={{ fontSize:11, color: theme.textLight, marginBottom: 12 }}>{filtered.length} products {inStockOnly ? '· in stock' : ''} · {showRxOnly ? 'Rx only · ' : ''}sorted {sort}</div>
+      )}
+      {!embedded && <div style={{ fontSize:11, color: theme.textMid, marginBottom: 12 }}>{filtered.length} products {inStockOnly ? '· in stock' : ''} · {showRxOnly ? 'Rx only · ' : ''}sorted {sort}</div>}
 
       {/* Featured horizontal row */}
       {featured.length > 0 && (

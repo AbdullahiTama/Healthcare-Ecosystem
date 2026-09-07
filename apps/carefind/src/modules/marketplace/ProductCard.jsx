@@ -18,19 +18,17 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
           style={{
             background: '#fff',
             border: `1px solid ${theme.border}`,
-            borderRadius: theme.radius.md,
+            borderRadius: 14,
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            // consistent card height via flex
           }}
         >
-          {/* Image area — fixed height, consistent aspect */}
+          {/* Image — 1:1 aspect ratio for consistent row heights */}
           <div
             style={{
-              height: 122,
-              borderRadius: 0,
+              aspectRatio: '1 / 1',
               background: thumb ? `url(${thumb}) center/cover` : theme.tealMist,
               display: 'flex',
               alignItems: 'center',
@@ -45,19 +43,19 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
             {!thumb && <Package size={28} aria-hidden="true" />}
           </div>
 
-          <div style={{ padding: '10px 10px 12px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
-            {/* Name — 2 line clamp, break long tokens on mobile */}
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
+            {/* Product name — 2 line clamp */}
             <div
               style={{
-                fontSize: 13,
-                fontWeight: 800,
+                fontSize: 14,
+                fontWeight: 700,
                 color: theme.navy,
-                lineHeight: 1.32,
+                lineHeight: 1.3,
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
-                minHeight: 34,
+                minHeight: 36,
                 wordBreak: 'break-word',
                 overflowWrap: 'anywhere',
               }}
@@ -65,48 +63,52 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
             >
               {p.name}
             </div>
+
+            {/* Generic name */}
             {p.generic_name && (
-              <div style={{ fontSize: 11, color: theme.textLight, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: theme.textMid, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {p.generic_name}
               </div>
             )}
 
-            {/* Seller / location compact */}
+            {/* Seller / location */}
             {(p.seller_location || row.business_id || p.businesses?.name) && (
-              <div style={{ fontSize: 11, color: theme.textLight, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: theme.textMid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {row.businesses?.name || p.businesses?.name || ''}{p.seller_location ? ` · ${p.seller_location}` : row.businesses?.state ? ` · ${row.businesses.state}` : ''}
               </div>
             )}
 
-            {/* Rx / pills row */}
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minHeight: 18, alignItems: 'center' }}>
-              {row.prescription_required && (
-                <span style={{ fontSize: 10, fontWeight: 700, color: theme.warning, border: `1px solid ${theme.warning}30`, background: '#fffbeb', padding: '2px 6px', borderRadius: 6 }}>Rx</span>
-              )}
-              {p.sale_type && <Pill label={p.sale_type} type="gray" style={{ fontSize: 9, textTransform: 'capitalize' }} />}
-            </div>
+            {/* Rx / sale type pills */}
+            {(row.prescription_required || p.sale_type) && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', minHeight: 18, alignItems: 'center' }}>
+                {row.prescription_required && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: theme.warning, border: `1px solid ${theme.warning}30`, background: '#fffbeb', padding: '2px 6px', borderRadius: 6 }}>Rx</span>
+                )}
+                {p.sale_type && <Pill label={p.sale_type} type="gray" style={{ fontSize: 9, textTransform: 'capitalize' }} />}
+              </div>
+            )}
 
-            {/* Price row — pushed to bottom */}
-            <div style={{ marginTop: 'auto', paddingTop: 6, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+            {/* Price */}
+            <div style={{ marginTop: 'auto', paddingTop: 4 }}>
               {isAskForPrice ? (
-                <span style={{ fontSize: 12, fontWeight: 800, color: theme.textLight }}>Ask for price</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: theme.textMid }}>Ask for price</span>
               ) : (
-                <span style={{ fontSize: 14, fontWeight: 900, color: theme.tealDeep, letterSpacing: '-0.01em' }}>{priceLabel}</span>
+                <span style={{ fontSize: 15, fontWeight: 800, color: theme.tealDeep, letterSpacing: '-0.01em' }}>{priceLabel}</span>
               )}
-              {p.price_unit && !isAskForPrice && <span style={{ fontSize: 10, color: theme.textLight }}>per {p.price_unit}</span>}
+              {p.price_unit && !isAskForPrice && <span style={{ fontSize: 10, color: theme.textMid, marginLeft: 4 }}>per {p.price_unit}</span>}
             </div>
 
-            {/* Rating compact */}
+            {/* Rating — trust signal on card */}
             {rating?.count ? (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: theme.textMid }}>
-                <Star size={11} fill={theme.starAmber} color={theme.starAmber} aria-hidden="true" />
-                <span style={{ fontWeight: 700 }}>{rating.avg}</span>
-                <span style={{ color: theme.textLight }}>· {rating.count}</span>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Star size={12} fill={theme.starAmber} color={theme.starAmber} aria-hidden="true" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMid }}>{rating.avg}</span>
+                <span style={{ fontSize: 11, color: theme.textMid }}>({rating.count})</span>
               </div>
             ) : null}
 
-            {/* Add to Cart bar — tappable 44h min on mobile */}
-            <div style={{ marginTop: 6 }}>
+            {/* Add to Cart */}
+            <div style={{ marginTop: 4 }}>
               <button
                 type="button"
                 onClick={(e) => {
@@ -125,8 +127,8 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
                   borderRadius: 10,
                   background: theme.tealDeep,
                   color: '#fff',
-                  fontSize: 12.5,
-                  fontWeight: 800,
+                  fontSize: 12,
+                  fontWeight: 700,
                   padding: '0 10px',
                   border: 'none',
                   cursor: 'pointer',
@@ -141,7 +143,7 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
         </div>
       </Link>
 
-      {/* Wishlist top-right */}
+      {/* Wishlist — 36px touch target */}
       <button
         type="button"
         onClick={(e) => {
@@ -154,45 +156,20 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
           position: 'absolute',
           top: 8,
           right: 8,
-          width: 30,
-          height: 30,
+          width: 36,
+          height: 36,
           borderRadius: 999,
           border: `1px solid ${theme.border}`,
-          background: wished ? theme.tealDeep : 'rgba(255,255,255,0.96)',
+          background: wished ? theme.tealDeep : 'rgba(255,255,255,0.92)',
           color: wished ? '#fff' : theme.navy,
           display: 'grid',
           placeItems: 'center',
           cursor: 'pointer',
-          boxShadow: theme.elevation[1],
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         }}
       >
-        <Heart size={14} fill={wished ? '#fff' : 'none'} aria-hidden="true" />
+        <Heart size={16} fill={wished ? '#fff' : 'none'} aria-hidden="true" />
       </button>
-
-      {/* Remove transparent overlay — it intercepted scroll/taps on narrow 2-col cards on mobile. Cart action is now the visible button below. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault(); e.stopPropagation()
-          const k = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
-          if (k != null) onAddToCart?.({ ecommerce_product_id: row.id || p.id, product_name: p.name, unit_price_kobo: k, quantity: 1, image_url: thumb, vendor_id: row.business_id, sale_type: p.sale_type })
-        }}
-        aria-label={`Add ${p.name} to cart`}
-        tabIndex={-1}
-        style={{
-          position: 'absolute',
-          left: 10,
-          right: 10,
-          bottom: 12,
-          height: 36,
-          borderRadius: 10,
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          // keep hit-target but not block scroll — pointerEvents only on visible bar area handled by the Link's span; this is now non-blocking
-          pointerEvents: 'none',
-        }}
-      />
     </div>
   )
 }
