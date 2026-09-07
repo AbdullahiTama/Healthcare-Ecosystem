@@ -243,12 +243,12 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
               )}
 
               {/* Music / source tag */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
+              <Link to={`/u/${post.user_id}`} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.8)', textDecoration: 'none' }}>
                 <Music size={12} aria-hidden="true" />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
                   {authorName(post)}
                 </span>
-              </div>
+              </Link>
             </div>
 
             {/* Right engagement rail — TikTok-style */}

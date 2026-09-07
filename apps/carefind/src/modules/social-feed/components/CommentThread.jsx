@@ -216,10 +216,10 @@ export function CommentThread({ postId, user, comments, onCommentsChange, editin
                 </div>
               ) : (
                 <div>
-                  {depth > 0 && (
-                    <span style={{ fontSize: 10.5, color: theme.textLight, fontWeight: 600 }}>
+                  {depth > 0 && parentComment && (
+                    <Link to={`/u/${parentComment.user_id}`} style={{ fontSize: 10.5, color: theme.textLight, fontWeight: 600, textDecoration: 'none' }}>
                       @{parentName}
-                    </span>
+                    </Link>
                   )}
                   <div style={{ margin: depth > 0 ? '0 0 2px' : 0, fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{renderMarkdown(comment.content, { mentions: mentionsMap(comment) })}</div>
                 </div>
