@@ -36,7 +36,9 @@ export const BASE_COMMANDS = [
 // Build dynamic business commands from live data.
 // `opts`: { businesses, payouts, perms, recentIds }
 // Returns up to 20+ commands, filtered by perms, recent first.
-export function buildCommandList({ businesses = [], payouts = [], perms = null, recentIds = [] } = {}) {
+export function buildCommandList({ businesses, payouts, perms = null, recentIds = [] } = {}) {
+  const safeBusinesses = Array.isArray(businesses) ? businesses : []
+  const safePayouts = Array.isArray(payouts) ? payouts : []
   const allowed = perms ? new Set(navCatalogueFor(perms).map(n => n.perm)) : null
   // helper to check perm: null perm means always allowed
   const isAllowed = (perm) => {
@@ -54,7 +56,7 @@ export function buildCommandList({ businesses = [], payouts = [], perms = null, 
 
   // dynamic per-business Approve/Revoke/Suspend (pending & active)
   if (isAllowed('Businesses')) {
-    const pending = businesses.filter(b => b.status === 'pending' && !b.deleted_at).slice(0, 6)
+    const pending = safeBusinesses.filter(b => b.status === 'pending' && !b.deleted_at).slice(0, 6)
     for (const b of pending) {
       list.push({
         id: `approve-${b.id}`,
@@ -79,7 +81,7 @@ export function buildCommandList({ businesses = [], payouts = [], perms = null, 
         business: b,
       })
     }
-    const active = businesses.filter(b => b.status === 'active' && !b.deleted_at).slice(0, 4)
+    const active = safeBusinesses.filter(b => b.status === 'active' && !b.deleted_at).slice(0, 4)
     for (const b of active) {
       list.push({
         id: `suspend-${b.id}`,
@@ -105,7 +107,7 @@ export function buildCommandList({ businesses = [], payouts = [], perms = null, 
       })
     }
     // View sheet for every business (searchable)
-    for (const b of businesses.slice(0, 8)) {
+    for (const b of safeBusinesses.slice(0, 8)) {
       list.push({
         id: `view-${b.id}`,
         label: `Open ${b.name}`,
@@ -122,7 +124,7 @@ export function buildCommandList({ businesses = [], payouts = [], perms = null, 
 
   // dynamic payouts: Mark Paid for processing
   if (isAllowed('Payouts')) {
-    const processing = payouts.filter(p => p.status === 'processing').slice(0, 4)
+    const processing = safePayouts.filter(p => p.status === 'processing').slice(0, 4)
     for (const p of processing) {
       list.push({
         id: `pay-${p.id}`,
@@ -136,7 +138,7 @@ export function buildCommandList({ businesses = [], payouts = [], perms = null, 
         payout: p,
       })
     }
-    const pendingPayouts = payouts.filter(p => p.status === 'pending').slice(0, 3)
+    const pendingPayouts = safePayouts.filter(p => p.status === 'pending').slice(0, 3)
     for (const p of pendingPayouts) {
       list.push({
         id: `approve-payout-${p.id}`,

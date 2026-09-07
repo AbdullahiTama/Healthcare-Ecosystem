@@ -37,7 +37,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { setRecentIds(getRecent()) }, [])
 
-  const { data: products = [], isLoading: loading, error: queryError } = useQuery({
+  const { data: products = [], isLoading: loading, error: queryError, refetch } = useQuery({
     queryKey: ['shop-products', segment, externalQuery],
     queryFn: () => shopRepository.getActiveProducts({ segment, query: externalQuery, limit: 80 }),
     staleTime: 30 * 1000,
@@ -123,7 +123,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     return (
       <div style={outerStyle}>
         <div role="alert" style={{ padding: 16, borderRadius: 12, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, textAlign: 'center', fontSize: 13 }}>
-          {error} <button onClick={load} style={{ marginLeft: 8, background: '#fff', border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: 8, padding: '6px 12px', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+          {error} <button onClick={() => refetch()} style={{ marginLeft: 8, background: '#fff', border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: 8, padding: '6px 12px', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
         </div>
       </div>
     )
