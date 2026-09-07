@@ -12,7 +12,7 @@ import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
-import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star, Tag, CheckCircle, X } from 'lucide-react'
+import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star, Tag, CheckCircle, X, ShoppingCart } from 'lucide-react'
 
 const APPROVED_CITIES = ['lagos','abuja','port harcourt','kano','ibadan','benin city','enugu','kaduna','zaria','aba','jos','ilorin','onitsha','ogbomosho','maiduguri','warri']
 const isApprovedCity = (city, state) => {
@@ -56,6 +56,10 @@ export default function Checkout() {
   const [promoValidation, setPromoValidation] = useState(null) // { valid, discount_kobo, promo_code_id, error }
   const [promoLoading, setPromoLoading] = useState(false)
   const [promoApplied, setPromoApplied] = useState(false)
+
+  // Pre-checkout stock validation state
+  const [stockErrors, setStockErrors] = useState([]) // [{ product_name, requested, available, ecommerce_product_id }]
+  const { removeItem } = useCart()
 
   useEffect(() => {
     async function loadAddresses() {
@@ -230,8 +234,40 @@ export default function Checkout() {
     throw new Error('No authorization_url from Paystack')
   }
 
+  // Pre-checkout stock validation — queries real-time stock for all cart items
+  async function validateStock() {
+    const ecomIds = [...new Set(items.map(i => i.ecommerce_product_id).filter(Boolean))]
+    if (ecomIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('ecommerce_products')
+      .select('id, product_id, products(id, name, stock)')
+      .in('id', ecomIds)
+    if (error || !data) return []
+    const errors = []
+    for (const item of items) {
+      const ecom = data.find(d => d.id === item.ecommerce_product_id)
+      const stock = ecom?.products?.stock ?? 0
+      if (stock < item.quantity) {
+        errors.push({
+          ecommerce_product_id: item.ecommerce_product_id,
+          product_name: item.product_name || ecom?.products?.name || 'Unknown',
+          requested: item.quantity,
+          available: stock,
+        })
+      }
+    }
+    return errors
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Pre-checkout stock validation
+    setStockErrors([])
+    const stockIssues = await validateStock()
+    if (stockIssues.length > 0) {
+      setStockErrors(stockIssues)
+      return
+    }
     const usePickup = canUsePickup && payMethod === 'pickup'
     if (usePickup) {
       // Pay at Pickup — create order and skip Paystack (vendor will accept later)
@@ -701,6 +737,52 @@ export default function Checkout() {
           {!canUsePickup && (
             <div role="note" style={{ padding: 12, borderRadius: 8, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20`, fontSize: 12, color: theme.textMid, textAlign: 'center' }}>
               Payment is via <b>Paystack</b> (cards, bank, USSD, mobile). Your order is created as <b>pending_payment</b> until Paystack confirms.
+            </div>
+          )}
+
+          {stockErrors.length > 0 && (
+            <div role="alert" style={{
+              padding: 16,
+              borderRadius: 12,
+              background: theme.dangerBg,
+              border: `1px solid ${theme.dangerBorder}`,
+              color: theme.danger,
+              fontSize: 13
+            }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, fontWeight:700 }}>
+                <AlertTriangle size={18} /> Some items are out of stock
+              </div>
+              <div style={{ fontSize:12, color: theme.textMid, marginBottom:12 }}>
+                The following items have insufficient stock. Remove them or reduce quantity to continue.
+              </div>
+              {stockErrors.map(se => (
+                <div key={se.ecommerce_product_id} style={{
+                  display:'flex', alignItems:'center', justifyContent:'space-between',
+                  padding:'10px 12px', marginBottom:8, borderRadius:8,
+                  background:'#fff', border:`1px solid ${theme.border}`
+                }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, color: theme.navy, fontSize:13, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{se.product_name}</div>
+                    <div style={{ fontSize:11, color: theme.textMid, marginTop:2 }}>
+                      Requested: {se.requested} · Available: {se.available}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      removeItem(se.ecommerce_product_id)
+                      setStockErrors(prev => prev.filter(e => e.ecommerce_product_id !== se.ecommerce_product_id))
+                    }}
+                    style={{
+                      marginLeft:12, flexShrink:0,
+                      padding:'6px 14px', borderRadius:8,
+                      border:`1px solid ${theme.danger}`, background:'#fff',
+                      color: theme.danger, fontWeight:700, fontSize:12, cursor:'pointer'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
