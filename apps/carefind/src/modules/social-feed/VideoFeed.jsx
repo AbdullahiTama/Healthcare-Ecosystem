@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Plus, Repeat2, Share2,
+  BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Music, Plus, Repeat2, Share2,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
@@ -12,16 +12,10 @@ import StoryViewer from './components/StoryViewer.jsx'
 import { supabase } from '../../config/supabaseClient'
 import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 
-// The Videos tab's dedicated feed: one full-height clip per view, swiped
-// vertically like Reels/TikTok. Each slide carries a right-hand action rail
-// (react, comment, share, gift, save -- the same actions as a PostCard, wired
-// through the same cardProps the mixed feed passes down) and a bottom overlay
-// with the author, caption and engagement counts.
-//
-// Autoplay is handled by VideoPlayer's own IntersectionObserver: a clip only
-// decodes while it is on screen. Slides snap (scroll-snap) so a swipe lands
-// on the next clip instead of a half-open position. Empty/loading/error
-// states live in the Feed (this component only renders the clips it is given).
+// TikTok-style vertical video feed: full-bleed, one clip per view, swiped
+// vertically. Each slide has a right-hand engagement rail (Like, Comment,
+// Share, Repost, Gift, Save) and a bottom overlay with author + caption.
+// The BottomNav overlays the feed on mobile — no space is reserved.
 
 export default function VideoFeed({ posts, cardProps, authorName, isMobile, focusPostId }) {
   const {
@@ -42,16 +36,11 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     onOpenDetail,
   } = cardProps
 
-  const railRefs = useRef({})
-
-  // Keep one active clip decodable at a time (battery + scroll perf): pause
-  // every video except the one currently in the viewport. VideoPlayer already
-  // pauses when a video leaves the screen, so this only needs to guard the
-  // brief moment two slides straddle the edge while snapping.
   const [activeIndex, setActiveIndex] = useState(0)
   const containerRef = useRef(null)
   const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
   const [viewer, setViewer] = useState(null)
+  const [captionExpanded, setCaptionExpanded] = useState({})
 
   // Scroll to the focused video when deep-linked from the main feed
   useEffect(() => {
@@ -65,6 +54,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     }
   }, [focusPostId, posts.length])
 
+  // IntersectionObserver: track which slide is active for autoplay + unmute
   useEffect(() => {
     const root = containerRef.current
     if (!root || typeof IntersectionObserver === 'undefined') return
@@ -83,6 +73,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     return () => io.disconnect()
   }, [posts.length])
 
+  // Load story metadata for author avatars
   useEffect(() => {
     let cancelled = false
     async function loadStoryMeta() {
@@ -115,199 +106,314 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     }
   }
 
-  const slideHeight = isMobile ? 'calc(100dvh - 210px)' : 'min(70vh, 640px)'
-
   return (
     <div
       ref={containerRef}
       role="list"
       aria-label="Vertical video feed"
       style={{
-        display: 'flex', flexDirection: 'column', gap: 14,
-        scrollSnapType: isMobile ? 'y proximity' : 'y mandatory',
+        display: 'flex', flexDirection: 'column',
+        scrollSnapType: isMobile ? 'y mandatory' : 'y mandatory',
         overflowY: isMobile ? 'auto' : 'visible',
         maxHeight: isMobile ? '100%' : undefined,
         WebkitOverflowScrolling: 'touch',
+        gap: 0,
       }}
     >
+      <style>{`
+        .vf-slide { scroll-snap-align: start; scroll-snap-stop: always; }
+        .vf-rail-btn { transition: transform 0.15s ease; }
+        .vf-rail-btn:active { transform: scale(0.85); }
+        .vf-caption { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+        .vf-caption.expanded { -webkit-line-clamp: unset !important; }
+      `}</style>
       {posts.map((post, index) => {
         const isActive = index === activeIndex
         const followBtnVisible = user && post.user_id !== user.id
+        const isExpanded = captionExpanded[post.id]
+        const hasCaption = post.content && renderMarkdown(post.content)
         return (
           <div
             key={post.id}
             data-video-slide
             data-index={index}
             role="listitem"
+            className="vf-slide"
             style={{
-              position: 'relative', height: slideHeight, flexShrink: 0,
-              borderRadius: theme.radius.lg, overflow: 'hidden', background: '#000',
-              scrollSnapAlign: 'start', scrollSnapStop: 'always',
+              position: 'relative',
+              height: isMobile ? '100dvh' : 'min(80vh, 720px)',
+              flexShrink: 0,
+              overflow: 'hidden',
+              background: '#000',
             }}
           >
+            {/* Video — full bleed, centered object-fit */}
             <VideoPlayer
               src={post.video_url}
               poster={post.image_url}
               ariaLabel={`Video by ${authorName(post)}`}
-              controls
+              controls={false}
               autoUnmute={isActive}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             />
 
-            {/* Bottom gradient + author/caption overlay */}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: 0, padding: '56px 14px 12px',
-              background: 'linear-gradient(to top, rgba(0,0,0,0.72), rgba(0,0,0,0))',
-              color: '#fff', display: 'flex', alignItems: 'flex-end', gap: 8,
-            }}>
-              {!post.posted_as_type ? (
-                <StoryAvatar userId={post.user_id} stories={storyMeta.stories} viewedIds={storyMeta.viewedIds} size={34} src={profiles[post.user_id]?.avatar_url} name={authorName(post)} onClick={() => openStoryForUser(post.user_id)} />
-              ) : null}
-              <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none', color: '#fff' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 800, fontSize: 13.5 }}>
-                  {authorName(post)}
-                  {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
-                    <BadgeCheck size={14} color="#4cd9b8" style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
-                  )}
-                </span>
-              </Link>
-              {followBtnVisible && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.preventDefault(); toggleFollow(post.user_id) }}
-                  aria-label={isFollowing(post.user_id) ? `Unfollow ${authorName(post)}` : `Follow ${authorName(post)}`}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer', color: '#fff',
-                    display: 'flex', alignItems: 'center', padding: 0,
-                  }}
-                >
-                  {isFollowing(post.user_id)
-                    ? <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.25)', borderRadius: 999, padding: '5px 10px' }}>Following</span>
-                    : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 800, background: theme.tealDeep, borderRadius: 999, padding: '5px 10px' }}><Plus size={12} strokeWidth={3} aria-hidden="true" /> Follow</span>}
-                </button>
-              )}
-            </div>
-
-            {/* Caption */}
-            {post.content && (
+            {/* Tap to play/pause (invisible overlay) */}
+            {!isMobile && (
               <button
                 type="button"
-                onClick={() => onOpenDetail(post)}
-                aria-label={`Read the full post by ${authorName(post)}`}
-                style={{
-                  position: 'absolute', left: 12, right: 72, bottom: 52,
-                  textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#fff',
-                  fontSize: 12.5, lineHeight: 1.45,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                  fontFamily: theme.fontFamily,
+                aria-label="Play or pause video"
+                onClick={() => {
+                  const v = document.querySelector(`[data-index="${index}"] video`)
+                  if (v) { if (v.paused) v.play().catch(() => {}); else v.pause() }
                 }}
+                style={{ position: 'absolute', inset: 0, background: 'none', border: 'none', cursor: 'pointer', zIndex: 1 }}
+              />
+            )}
+
+            {/* Bottom gradient overlay */}
+            <div style={{
+              position: 'absolute', left: 0, right: 0, bottom: 0,
+              height: '45%',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 50%, transparent 100%)',
+              pointerEvents: 'none',
+            }} />
+
+            {/* Author info + caption — bottom left */}
+            <div style={{
+              position: 'absolute', left: 12, right: 72, bottom: isMobile ? 80 : 24,
+              color: '#fff', pointerEvents: 'auto',
+            }}>
+              {/* Author row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                {!post.posted_as_type ? (
+                  <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
+                    <StoryAvatar
+                      userId={post.user_id}
+                      stories={storyMeta.stories}
+                      viewedIds={storyMeta.viewedIds}
+                      size={38}
+                      src={profiles[post.user_id]?.avatar_url}
+                      name={authorName(post)}
+                      onClick={(e) => { e?.stopPropagation?.(); openStoryForUser(post.user_id) }}
+                    />
+                  </Link>
+                ) : null}
+                <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none', color: '#fff', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 800, fontSize: 14 }}>
+                    {authorName(post)}
+                    {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
+                      <BadgeCheck size={14} color="#4cd9b8" style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
+                    )}
+                  </div>
+                </Link>
+                {followBtnVisible && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFollow(post.user_id) }}
+                    aria-label={isFollowing(post.user_id) ? `Unfollow ${authorName(post)}` : `Follow ${authorName(post)}`}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', color: '#fff',
+                      display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0,
+                    }}
+                  >
+                    {isFollowing(post.user_id)
+                      ? <span style={{ fontSize: 11, fontWeight: 800, background: 'rgba(255,255,255,0.25)', borderRadius: 999, padding: '5px 10px' }}>Following</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 800, background: theme.tealDeep, borderRadius: 999, padding: '5px 10px' }}><Plus size={12} strokeWidth={3} aria-hidden="true" /> Follow</span>}
+                  </button>
+                )}
+              </div>
+
+              {/* Caption — expandable */}
+              {hasCaption && (
+                <button
+                  type="button"
+                  onClick={() => setCaptionExpanded(prev => ({ ...prev, [post.id]: !prev[post.id] }))}
+                  className={`vf-caption ${isExpanded ? 'expanded' : ''}`}
+                  aria-label={isExpanded ? 'Collapse caption' : 'Expand caption'}
+                  style={{
+                    display: 'block', textAlign: 'left', background: 'none', border: 'none',
+                    padding: 0, cursor: 'pointer', color: '#fff',
+                    fontSize: 13, lineHeight: 1.5, maxWidth: '100%',
+                    WebkitLineClamp: isExpanded ? 'unset' : 2,
+                    fontFamily: theme.fontFamily, width: '100%',
+                  }}
                 >
                   {renderMarkdown(post.content) || post.content}
                 </button>
-            )}
+              )}
 
-            {/* Right action rail */}
-            <div style={{
-              position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
-              color: '#fff',
-            }}>
-              {(() => {
-                const buttons = [
-                  {
-                    label: userHasLiked(post.id) ? 'Unlike' : 'Like',
-                    active: userHasLiked(post.id),
-                    activeColor: theme.danger,
-                    Icon: Heart,
-                    count: likeCount(post.id),
-                    onClick: () => (user ? toggleLike(post.id) : navigate('/login')),
-                  },
-                  {
-                    label: 'Comments',
-                    active: false,
-                    Icon: MessageCircle,
-                    count: commentTotal(post.id),
-                    onClick: () => toggleComments(post.id),
-                  },
-                  {
-                    label: 'Share',
-                    active: false,
-                    Icon: Share2,
-                    count: shareCount(post.id),
-                    onClick: () => sharePost(post),
-                  },
-                  {
-                    label: 'Repost',
-                    active: userHasReposted(post.id),
-                    activeColor: theme.tealDeep,
-                    Icon: Repeat2,
-                    count: post.repost_count,
-                    onClick: () => (user ? toggleRepost(post) : navigate('/login')),
-                  },
-                  {
-                    label: 'Gift',
-                    active: false,
-                    activeColor: theme.tealDeep,
-                    Icon: Gift,
-                    count: giftCount(post.id),
-                    onClick: () => (user ? onGift(post) : navigate('/login')),
-                  },
-                  {
-                    label: isSaved(post.id) ? 'Remove from saved' : 'Save',
-                    active: isSaved(post.id),
-                    activeColor: theme.tealDeep,
-                    Icon: Bookmark,
-                    count: saveCount(post.id),
-                    onClick: () => (user ? toggleSave(post.id) : navigate('/login')),
-                  },
-                ]
-                return buttons.map((b) => (
-                  <button
-                    key={b.label}
-                    type="button"
-                    onClick={b.onClick}
-                    aria-pressed={b.active}
-                    aria-label={b.label}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                      background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0,
-                    }}
-                  >
-                    <span style={{
-                      width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.35)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <b.Icon
-                        size={20}
-                        fill={b.active ? b.activeColor : 'none'}
-                        color={b.active ? b.activeColor : '#fff'}
-                        aria-hidden="true"
-                      />
-                    </span>
-                    {b.count > 0 && (
-                      <span style={{ fontSize: 10.5, fontWeight: 800 }}>{formatCount(b.count)}</span>
-                    )}
-                  </button>
-                ))
-              })()}
+              {/* Music / source tag */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.8)' }}>
+                <Music size={12} aria-hidden="true" />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+                  {authorName(post)}
+                </span>
+              </div>
             </div>
 
+            {/* Right engagement rail — TikTok-style */}
+            <div style={{
+              position: 'absolute', right: 8, bottom: isMobile ? 140 : 100,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
+              color: '#fff', pointerEvents: 'auto',
+            }}>
+              {/* Profile picture (tappable → profile) */}
+              {!post.posted_as_type && (
+                <Link
+                  to={`/u/${post.user_id}`}
+                  style={{ position: 'relative', marginBottom: 4, textDecoration: 'none' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '50%', border: '2px solid #fff',
+                    overflow: 'hidden', background: theme.gray200,
+                  }}>
+                    {profiles[post.user_id]?.avatar_url
+                      ? <img src={profiles[post.user_id].avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: theme.tealDeep, color: '#fff', fontWeight: 800, fontSize: 16 }}>{authorName(post)?.[0]?.toUpperCase() || '?'}</div>}
+                  </div>
+                  {!isFollowing(post.user_id) && user && post.user_id !== user.id && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFollow(post.user_id) }}
+                      aria-label={`Follow ${authorName(post)}`}
+                      style={{
+                        position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)',
+                        width: 20, height: 20, borderRadius: '50%', background: theme.tealDeep,
+                        border: '2px solid #000', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', color: '#fff', padding: 0,
+                      }}
+                    >
+                      <Plus size={11} strokeWidth={3} aria-hidden="true" />
+                    </button>
+                  )}
+                </Link>
+              )}
+
+              {/* Like */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => user ? toggleLike(post.id) : navigate('/login')}
+                aria-pressed={userHasLiked(post.id)}
+                aria-label={userHasLiked(post.id) ? 'Unlike' : 'Like'}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Heart size={26} fill={userHasLiked(post.id) ? theme.danger : 'none'} color={userHasLiked(post.id) ? theme.danger : '#fff'} aria-hidden="true" />
+                </span>
+                {likeCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(likeCount(post.id))}</span>}
+              </button>
+
+              {/* Comment */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => toggleComments(post.id)}
+                aria-label="Comments"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <MessageCircle size={26} aria-hidden="true" />
+                </span>
+                {commentTotal(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(commentTotal(post.id))}</span>}
+              </button>
+
+              {/* Share */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => sharePost(post)}
+                aria-label="Share"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Share2 size={24} aria-hidden="true" />
+                </span>
+                {shareCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(shareCount(post.id))}</span>}
+              </button>
+
+              {/* Repost */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => user ? toggleRepost(post) : navigate('/login')}
+                aria-label="Repost"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Repeat2 size={24} fill={userHasReposted(post.id) ? theme.tealDeep : 'none'} color={userHasReposted(post.id) ? theme.tealDeep : '#fff'} aria-hidden="true" />
+                </span>
+                {post.repost_count > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(post.repost_count)}</span>}
+              </button>
+
+              {/* Gift */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => user ? onGift(post) : navigate('/login')}
+                aria-label="Gift"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Gift size={24} aria-hidden="true" />
+                </span>
+                {giftCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(giftCount(post.id))}</span>}
+              </button>
+
+              {/* Save */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => user ? toggleSave(post.id) : navigate('/login')}
+                aria-pressed={isSaved(post.id)}
+                aria-label={isSaved(post.id) ? 'Remove from saved' : 'Save'}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Bookmark size={24} fill={isSaved(post.id) ? theme.tealDeep : 'none'} color={isSaved(post.id) ? theme.tealDeep : '#fff'} aria-hidden="true" />
+                </span>
+                {saveCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(saveCount(post.id))}</span>}
+              </button>
+            </div>
+
+            {/* View count — top left */}
             {post.view_count > 0 && (
               <span style={{
-                position: 'absolute', top: 10, left: 12, display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.9)', background: 'rgba(0,0,0,0.35)',
-                borderRadius: 999, padding: '4px 9px',
+                position: 'absolute', top: 12, left: 12,
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 12, fontWeight: 700, color: '#fff',
+                background: 'rgba(0,0,0,0.45)', borderRadius: 999,
+                padding: '4px 10px', backdropFilter: 'blur(4px)',
               }}>
                 <Eye size={13} aria-hidden="true" /> {formatCount(post.view_count)}
               </span>
             )}
 
-            {/* Inline comments, mirroring PostCard's thread */}
+            {/* Inline comments panel */}
             {openComments[post.id] && (
               <div style={{
                 position: 'absolute', left: 0, right: 0, bottom: 0, top: '55%',
                 background: theme.cardBg, borderTopLeftRadius: theme.radius.lg, borderTopRightRadius: theme.radius.lg,
-                overflowY: 'auto', padding: '12px 14px',
+                overflowY: 'auto', padding: '12px 14px', zIndex: 10,
               }}>
                 <CommentThread
                   postId={post.id}
@@ -329,6 +435,8 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
                 />
               </div>
             )}
+
+            {/* Story viewer */}
             {viewer && (
               <StoryViewer stories={viewer.stories} index={viewer.index} onNavigate={(n) => setViewer((prev) => n === null || n < 0 || n >= prev.stories.length ? null : { ...prev, index: n })} onClose={() => setViewer(null)} onViewStory={handleViewStory} renderHeader={(s) => (
                 <>
@@ -343,4 +451,3 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     </div>
   )
 }
-

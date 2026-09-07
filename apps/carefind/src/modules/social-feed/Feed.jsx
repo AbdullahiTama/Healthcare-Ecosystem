@@ -1126,7 +1126,7 @@ function Feed() {
 
   const bodyContent = (
     <div style={isMobile
-      ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }
+      ? { fontFamily: theme.fontFamily, ...(feedTab === 'video' ? {} : { maxWidth: 480, margin: '0 auto', padding: 20, paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }) }
       : { fontFamily: theme.fontFamily }}>
       <style>{`
         .article-body p { margin: 0 0 14px 0; }
