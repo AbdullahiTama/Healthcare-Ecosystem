@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef } from 'react'
+﻿import { useEffect, useState, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import Shop from '../shop/Shop'
@@ -83,6 +83,45 @@ function Search() {
 
   // Filter categories derived from products
   const [filterCategories, setFilterCategories] = useState(['all'])
+
+  // Recent searches
+  const RECENT_KEY = 'carefind_recent_searches'
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') } catch { return [] }
+  })
+  const [showRecent, setShowRecent] = useState(false)
+  const searchInputRef = useRef(null)
+  const recentRef = useRef(null)
+
+  const addRecentSearch = useCallback((term) => {
+    if (!term.trim()) return
+    setRecentSearches(prev => {
+      const next = [term.trim(), ...prev.filter(s => s.toLowerCase() !== term.trim().toLowerCase())].slice(0, 8)
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
+
+  const removeRecentSearch = useCallback((term) => {
+    setRecentSearches(prev => {
+      const next = prev.filter(s => s !== term)
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
+
+  // Close recent dropdown on outside click
+  useEffect(() => {
+    if (!showRecent) return
+    const handler = (e) => {
+      if (recentRef.current && !recentRef.current.contains(e.target) &&
+          searchInputRef.current && !searchInputRef.current.contains(e.target)) {
+        setShowRecent(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showRecent])
 
   useEffect(() => {
     if (featured.length === 0) return
@@ -174,7 +213,9 @@ function Search() {
       return
     }
     setLoading(true)
+    setShowRecent(false)
     const q = query.trim()
+    if (q) addRecentSearch(q)
     let resultCount = 0
 
     if (tab === 'products') {
@@ -319,10 +360,14 @@ function Search() {
           <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
             <SearchIcon size={18} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
             <input
+              ref={searchInputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => { if (recentSearches.length > 0) setShowRecent(true) }}
               placeholder="Search medication, facility, professional..."
               aria-label="Search medication, facility, professional"
+              aria-expanded={showRecent && recentSearches.length > 0}
+              aria-haspopup="listbox"
               style={{
                 width: '100%',
                 minHeight: 44,
@@ -359,6 +404,27 @@ function Search() {
             Search
           </button>
         </form>
+        {/* Recent searches dropdown */}
+        {showRecent && recentSearches.length > 0 && (
+          <div ref={recentRef} role="listbox" aria-label="Recent searches" style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+            background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px 6px', borderBottom: `1px solid ${theme.border}` }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: theme.textLight, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent</span>
+              <button onClick={() => { setRecentSearches([]); try { localStorage.removeItem(RECENT_KEY) } catch {}; setShowRecent(false) }} style={{ fontSize: 11, color: theme.danger, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Clear all</button>
+            </div>
+            {recentSearches.map((term, i) => (
+              <div key={i} role="option" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', borderBottom: i < recentSearches.length - 1 ? `1px solid ${theme.border}` : 'none' }}
+                onMouseDown={(e) => { e.preventDefault(); setQuery(term); setShowRecent(false); searchInputRef.current?.blur() }}>
+                <SearchIcon size={14} color={theme.textLight} />
+                <span style={{ flex: 1, fontSize: 14, color: theme.navy }}>{term}</span>
+                <button onClick={(e) => { e.stopPropagation(); removeRecentSearch(term) }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: theme.textLight }} aria-label={`Remove ${term} from recent searches`}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 4 — Location + Filter FAB (one row) */}
