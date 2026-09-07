@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown } from 'lucide-react'
@@ -33,9 +33,37 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [ratings, setRatings] = useState({})
   const { isMobile } = useBreakpoint()
   const [showFilters, setShowFilters] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const touchStartY = useRef(null)
 
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { setRecentIds(getRecent()) }, [])
+
+  // Pull-to-refresh handlers
+  const handleTouchStart = useCallback((e) => {
+    if (window.scrollY > 0) return
+    touchStartY.current = e.touches[0].clientY
+  }, [])
+
+  const handleTouchMove = useCallback((e) => {
+    if (touchStartY.current == null || refreshing) return
+    const delta = e.touches[0].clientY - touchStartY.current
+    if (delta > 0 && window.scrollY === 0) {
+      setPullDistance(Math.min(delta * 0.5, 120))
+    }
+  }, [refreshing])
+
+  const handleTouchEnd = useCallback(async () => {
+    if (pullDistance > 80 && !refreshing) {
+      setRefreshing(true)
+      setPullDistance(60)
+      try { await refetch() } catch {}
+      setRefreshing(false)
+    }
+    setPullDistance(0)
+    touchStartY.current = null
+  }, [pullDistance, refreshing, refetch])
 
   const { data: products = [], isLoading: loading, error: queryError, refetch } = useQuery({
     queryKey: ['shop-products', segment, externalQuery],
@@ -130,8 +158,14 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   }
 
   return (
-    <div style={outerStyle}>
+    <div style={outerStyle} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       <Toast msg={toastMsg} type={toastType} />
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || refreshing) && (
+        <div style={{ textAlign:'center', overflow:'hidden', height: refreshing ? 50 : pullDistance, transition: refreshing ? 'none' : 'height 0.2s', display:'flex', alignItems:'center', justifyContent:'center', color: theme.tealDeep, fontSize: 13, fontWeight: 700 }}>
+          {refreshing ? '↻ Refreshing...' : pullDistance > 80 ? '↓ Release to refresh' : '↓ Pull to refresh'}
+        </div>
+      )}
       {/* Top bar: wishlist + cart — hide when embedded? keep cart accessible but compact */}
       {!embedded ? (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
@@ -265,8 +299,8 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         onToggleWishlist={toggleWishlist}
         hasWishlist={hasWishlist}
         ratings={ratings}
-        emptyTitle="No products match"
-        emptyHint="Try adjusting filters or search."
+        emptyTitle={externalQuery ? `No products found for "${externalQuery}"` : 'No products match'}
+        emptyHint={externalQuery ? 'Try a different search term or adjust filters.' : 'Try adjusting filters or search.'}
       />
 
       {/* Recently viewed */}

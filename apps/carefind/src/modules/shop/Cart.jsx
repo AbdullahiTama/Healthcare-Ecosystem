@@ -1,11 +1,43 @@
 // Cart page - displays cart items, allows quantity updates, removal, and checkout
 
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCart } from './CartProvider'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Empty, Loading } from '../../components/ui'
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight } from 'lucide-react'
+
+function SwipeToDelete({ onDelete, children }) {
+  const [offsetX, setOffsetX] = useState(0)
+  const [swiping, setSwiping] = useState(false)
+  const startX = useRef(null)
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; setSwiping(true) }
+  const onTouchMove = (e) => {
+    if (startX.current == null) return
+    const dx = e.touches[0].clientX - startX.current
+    if (dx < 0) setOffsetX(Math.max(dx, -100))
+  }
+  const onTouchEnd = () => {
+    if (offsetX < -70) onDelete()
+    setOffsetX(0)
+    startX.current = null
+    setSwiping(false)
+  }
+
+  return (
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 12 }}>
+      <div style={{ position: 'absolute', inset: 0, background: theme.danger, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 16, color: '#fff', fontWeight: 700, fontSize: 13, borderRadius: 12 }}>
+        Delete
+      </div>
+      <div style={{ transform: `translateX(${offsetX}px)`, transition: swiping ? 'none' : 'transform 0.2s ease', position: 'relative', zIndex: 1, background: '#fff', borderRadius: 12 }}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function Cart() {
   const { items, count, total, updateQuantity, removeItem } = useCart()
@@ -42,7 +74,8 @@ export default function Cart() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {items.map(item => (
-          <Card key={item.ecommerce_product_id} style={{ padding: 16 }}>
+          <SwipeToDelete key={item.ecommerce_product_id} onDelete={() => removeItem(item.ecommerce_product_id)}>
+          <Card style={{ padding: 16 }}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               {/* Product image */}
               <div style={{
@@ -130,7 +163,8 @@ export default function Cart() {
                 </button>
               </div>
             </div>
-          </Card>
+           </Card>
+          </SwipeToDelete>
         ))}
       </div>
 
