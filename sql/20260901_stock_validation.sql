@@ -49,11 +49,31 @@ CREATE TABLE IF NOT EXISTS stock_validation_items (
   previous_stock int NOT NULL DEFAULT 0,
   adjustment_qty int NOT NULL DEFAULT 0,
   adjustment_direction text NOT NULL CHECK (adjustment_direction IN ('+', '-')),
-  new_stock int NOT NULL DEFAULT 0,
+  new_stock int NOT NULL DEFAULT 0 CHECK (new_stock >= 0),
   reason text,
   unit_price numeric(12,2) NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Add CHECK for existing deployments where table pre-exists without the constraint
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'stock_validation_items_new_stock_check'
+      AND conrelid = 'stock_validation_items'::regclass
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'chk_stock_validation_items_new_stock_non_negative'
+      AND conrelid = 'stock_validation_items'::regclass
+  ) THEN
+    BEGIN
+      ALTER TABLE stock_validation_items ADD CONSTRAINT chk_stock_validation_items_new_stock_non_negative CHECK (new_stock >= 0);
+    EXCEPTION WHEN duplicate_object THEN
+      NULL;
+    END;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_stock_validation_items_session_id
   ON stock_validation_items(session_id);
@@ -100,6 +120,10 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS shelf_label text;
 --
 --    SECURITY INVOKER — products RLS enforces the tenant boundary; a caller
 --    can only adjust products in their own business.
+--    Hardened for laptop/desktop parity (spec-stock-validation-laptop-fix):
+--    RPC now guards new_stock >=0 before insert to prevent DB CHECK being the
+--    user-visible error surface — client already blocks with inline error, but
+--    the RPC is the final safety net and must raise a clear exception.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.save_stock_validation_session(
   p_business_id uuid,
@@ -123,6 +147,10 @@ BEGIN
   RETURNING id INTO v_session_id;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    IF (v_item->>'new_stock')::int < 0 THEN
+      RAISE EXCEPTION 'new_stock cannot be negative: %', (v_item->>'new_stock') USING ERRCODE = '23514';
+    END IF;
+
     INSERT INTO stock_validation_items (
       session_id,
       product_id,
@@ -160,7 +188,7 @@ $$;
 COMMENT ON FUNCTION public.save_stock_validation_session(uuid, uuid, text, int, int, jsonb) IS
   'Atomic stock validation: inserts a session with its item rows and updates '
   'each product stock in a single transaction. SECURITY INVOKER — products '
-  'RLS enforces the tenant boundary.';
+  'RLS enforces the tenant boundary. Guards new_stock >=0.';
 
 REVOKE ALL ON FUNCTION public.save_stock_validation_session(uuid, uuid, text, int, int, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.save_stock_validation_session(uuid, uuid, text, int, int, jsonb) TO authenticated;

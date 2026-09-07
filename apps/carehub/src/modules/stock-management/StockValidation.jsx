@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, Minus, Package } from 'lucide-react'
 import { stockValidationRepository } from './repositories'
 import { useAuth } from '../../providers/AuthProvider'
+import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Pill, Modal, GhostBtn, TealBtn, Empty, useToast, Toast } from '../../components/ui'
 import { fmt } from '../../lib/utils'
@@ -17,6 +18,33 @@ const REASONS = [
   'Other',
 ]
 
+// ── Pure helpers (exported for tests / parity verification) ────────────────
+export function parseAdjustmentQty(val) {
+  const parsed = parseInt(val, 10)
+  const n = Number.isNaN(parsed) ? 0 : parsed
+  return Math.max(0, Math.min(n, 10000))
+}
+
+export function buildValidationItems(worksheet) {
+  return worksheet.map(w => {
+    const qty = parseAdjustmentQty(w.adjustmentQty)
+    const prev = Math.max(0, parseInt(w.currentStock, 10) || 0)
+    const rawNewStock = w.direction === '+' ? prev + qty : prev - qty
+    const newStock = Math.min(rawNewStock, 10000)
+    return {
+      product_id: w.product.id,
+      product_name: w.product.name,
+      shelf_label: w.product.shelf_label || null,
+      previous_stock: prev,
+      adjustment_qty: qty,
+      adjustment_direction: w.direction === '-' ? '-' : '+',
+      new_stock: newStock,
+      reason: w.reason || null,
+      unit_price: w.product.price,
+    }
+  })
+}
+
 export default function StockValidation({ brand, products, loadProducts }) {
   const { auth } = useAuth()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
@@ -25,6 +53,7 @@ export default function StockValidation({ brand, products, loadProducts }) {
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [showSummary, setShowSummary] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [inlineError, setInlineError] = useState('')
   const rowRefs = useRef({})
 
   const categories = useMemo(() => {
@@ -90,34 +119,61 @@ export default function StockValidation({ brand, products, loadProducts }) {
 
   function updateWorksheetItem(index, updates) {
     setWorksheet(worksheet.map((item, i) => i === index ? { ...item, ...updates } : item))
+    if (inlineError) setInlineError('')
   }
 
   function adjustQty(index, delta) {
     const item = worksheet[index]
-    const newQty = Math.max(0, item.adjustmentQty + delta)
+    const current = parseAdjustmentQty(item.adjustmentQty)
+    const newQty = Math.max(0, Math.min(current + delta, 10000))
     updateWorksheetItem(index, { adjustmentQty: newQty })
   }
 
   async function confirmSave() {
+    if (saving) return
+    if (!brand?.id) {
+      showToast('Missing business — please reload and try again', { type: 'error' })
+      return
+    }
+
+    const rawItems = buildValidationItems(worksheet)
+    const negative = rawItems.find(it => it.new_stock < 0)
+    if (negative) {
+      setInlineError('Cannot go below 0')
+      showToast('Cannot go below 0 — check adjustment quantities', { type: 'error' })
+      return
+    }
+    setInlineError('')
+    const items = rawItems.filter(it => it.adjustment_qty !== 0)
+
+    // Pre-save session check: ensure auth is fresh, otherwise laptop would fall back to anon and get RLS 42501
+    try {
+      const { data: { session } } = await authClient.auth.getSession()
+      if (!session) {
+        try {
+          const { data: refreshed } = await authClient.auth.refreshSession()
+          if (!refreshed?.session) {
+            showToast('Session expired, please re-login', { type: 'error' })
+            return
+          }
+        } catch {
+          showToast('Session expired, please re-login', { type: 'error' })
+          return
+        }
+      }
+    } catch {
+      showToast('Session expired, please re-login', { type: 'error' })
+      return
+    }
+
     setSaving(true)
     try {
-      const items = worksheet.map(w => ({
-        product_id: w.product.id,
-        product_name: w.product.name,
-        shelf_label: w.product.shelf_label,
-        previous_stock: w.currentStock,
-        adjustment_qty: w.adjustmentQty,
-        adjustment_direction: w.direction,
-        new_stock: w.direction === '+' ? w.currentStock + w.adjustmentQty : w.currentStock - w.adjustmentQty,
-        reason: w.reason,
-        unit_price: w.product.price,
-      }))
       await stockValidationRepository.saveSession(
         brand.id,
         {
           user_name: auth.staff?.full_name || 'Owner',
           products_checked: worksheet.length,
-          products_adjusted: worksheet.filter(w => w.adjustmentQty > 0).length,
+          products_adjusted: worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length,
         },
         items,
         auth.staff?.id || null
@@ -125,11 +181,47 @@ export default function StockValidation({ brand, products, loadProducts }) {
       showToast('Validation saved successfully', { type: 'success' })
       setWorksheet([])
       setShowSummary(false)
-      loadProducts()
+      setInlineError('')
+      if (typeof loadProducts === 'function') loadProducts()
     } catch (error) {
-      showToast('Could not save validation: ' + error.message, { type: 'error' })
+      const msg = error?.message || String(error)
+      const code = String(error?.code || '')
+      const isCheckViolation = msg.includes('23514') || code === '23514'
+      if (isCheckViolation) {
+        showToast('Quantity cannot be negative — was blocked', { type: 'error' })
+      } else {
+        const isAuthError = msg.includes('42501') || code === '42501' || /permission|not authenticated|JWT|auth|not allowed/i.test(msg)
+        if (isAuthError) {
+        // Retry once after refreshSession — covers laptop stale session case
+        try {
+          const { data: refreshed } = await authClient.auth.refreshSession()
+          if (refreshed?.session) {
+            await stockValidationRepository.saveSession(
+              brand.id,
+              {
+                user_name: auth.staff?.full_name || 'Owner',
+                products_checked: worksheet.length,
+                products_adjusted: worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length,
+              },
+              items,
+              auth.staff?.id || null
+            )
+            showToast('Validation saved successfully', { type: 'success' })
+            setWorksheet([])
+            setShowSummary(false)
+            setInlineError('')
+            if (typeof loadProducts === 'function') loadProducts()
+            return
+          }
+        } catch {}
+        showToast('Session expired, please re-login', { type: 'error' })
+        } else {
+          showToast('Could not save validation: ' + msg, { type: 'error' })
+        }
+      }
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (
@@ -181,11 +273,17 @@ export default function StockValidation({ brand, products, loadProducts }) {
         <>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
             {worksheet.map((item, index) => {
-              const hasChange = item.adjustmentQty > 0
+              const hasChange = parseAdjustmentQty(item.adjustmentQty) > 0
               const bg = !hasChange ? 'white' : item.direction === '+' ? theme.successBg : theme.dangerBg
+              const qtyParsed = parseAdjustmentQty(item.adjustmentQty)
+              const rawComputedNewStock = item.direction === '+' ? Math.max(0, parseInt(item.currentStock,10)||0) + qtyParsed : Math.max(0, parseInt(item.currentStock,10)||0) - qtyParsed
+              const computedNewStock = Math.min(rawComputedNewStock, 10000)
+              const isNegative = computedNewStock < 0
+              const errorId = `stock-validation-error-${index}`
+              const showInlineError = isNegative || (inlineError && hasChange)
               return (
                 <div key={item.product.id} ref={el => rowRefs.current[index] = el}
-                  style={{ padding: '16px', borderRadius: theme.radius.lg, border: `1px solid ${theme.border}`, background: bg }}>
+                  style={{ padding: '16px', borderRadius: theme.radius.lg, border: `1px solid ${isNegative ? theme.danger : theme.border}`, background: bg }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                     <div>
                       <div style={{ fontWeight: '800', fontSize: '15px', color: theme.navy }}>{item.product.name}</div>
@@ -195,28 +293,48 @@ export default function StockValidation({ brand, products, loadProducts }) {
                     <div style={{ fontSize: '14px', fontWeight: '700', color: theme.navy }}>Current Stock: {item.currentStock}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                    <button onClick={() => adjustQty(index, -1)}
+                    <button onClick={() => adjustQty(index, -1)} aria-label="Decrease quantity"
                       style={{ width: '36px', height: '36px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Minus size={18} />
                     </button>
                     <input type="number" value={item.adjustmentQty}
-                      onChange={e => updateWorksheetItem(index, { adjustmentQty: Math.max(0, parseInt(e.target.value) || 0) })}
-                      style={{ width: '80px', padding: '8px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
-                    <button onClick={() => adjustQty(index, 1)}
+                      onChange={e => {
+                        const parsed = parseAdjustmentQty(e.target.value)
+                        updateWorksheetItem(index, { adjustmentQty: parsed })
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                        }
+                      }}
+                      aria-label="Adjustment quantity"
+                      aria-describedby={showInlineError ? errorId : undefined}
+                      id={`adjustment-qty-${index}`}
+                      style={{ width: '80px', padding: '8px', borderRadius: theme.radius.md, border: `1px solid ${isNegative ? theme.danger : theme.border}`, fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
+                    <button onClick={() => adjustQty(index, 1)} aria-label="Increase quantity"
                       style={{ width: '36px', height: '36px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Plus size={18} />
                     </button>
                     <select value={item.direction} onChange={e => updateWorksheetItem(index, { direction: e.target.value })}
+                      aria-label={`Adjustment direction for ${item.product.name}`}
                       style={{ padding: '8px 12px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '13px', fontWeight: '700' }}>
                       <option value="+">Add</option>
                       <option value="-">Remove</option>
                     </select>
                   </div>
+                  {isNegative && (
+                    <div id={errorId} role="alert" style={{ color: theme.danger, fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>{inlineError || 'Cannot go below 0'}</div>
+                  )}
+                  {!isNegative && inlineError && hasChange && (
+                    <div id={errorId} role="alert" style={{ color: theme.danger, fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>{inlineError}</div>
+                  )}
                   <div style={{ display: 'flex', gap: '20px', marginBottom: '12px', fontSize: '13px', flexWrap: 'wrap' }}>
                     <div>Unit Price: <strong>{fmt(item.product.price)}</strong></div>
-                    <div>Subtotal: <strong>{fmt(item.adjustmentQty * item.product.price)}</strong></div>
+                    <div>Subtotal: <strong>{fmt(qtyParsed * item.product.price)}</strong></div>
+                    <div aria-live="polite">New Stock: <strong style={{ color: isNegative ? theme.danger : theme.navy }}>{computedNewStock}</strong></div>
                   </div>
                   <select value={item.reason} onChange={e => updateWorksheetItem(index, { reason: e.target.value })}
+                    aria-label={`Reason for ${item.product.name}`}
                     style={{ width: '100%', padding: '10px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, fontSize: '13px' }}>
                     <option value="">Select reason...</option>
                     {REASONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -240,20 +358,23 @@ export default function StockValidation({ brand, products, loadProducts }) {
             </div>
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.gray50 }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Products adjusted</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.navy }}>{worksheet.filter(w => w.adjustmentQty > 0).length}</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.navy }}>{worksheet.filter(w => parseAdjustmentQty(w.adjustmentQty) > 0).length}</div>
             </div>
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.successBg }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Excess</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.success }}>{worksheet.filter(w => w.direction === '+' && w.adjustmentQty > 0).length}</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.success }}>{worksheet.filter(w => w.direction === '+' && parseAdjustmentQty(w.adjustmentQty) > 0).length}</div>
             </div>
             <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.dangerBg }}>
               <div style={{ fontSize: '12px', color: theme.gray500 }}>Shortage</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.danger }}>{worksheet.filter(w => w.direction === '-' && w.adjustmentQty > 0).length}</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: theme.danger }}>{worksheet.filter(w => w.direction === '-' && parseAdjustmentQty(w.adjustmentQty) > 0).length}</div>
             </div>
           </div>
+          {inlineError && (
+            <div id="stock-validation-inline-error" role="alert" style={{ color: theme.danger, fontSize: '13px', fontWeight: '700', textAlign: 'center' }}>{inlineError}</div>
+          )}
           <div style={{ display: 'flex', gap: '10px' }}>
             <GhostBtn onClick={() => setShowSummary(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-            <TealBtn onClick={confirmSave} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Validation'}</TealBtn>
+            <TealBtn onClick={confirmSave} disabled={saving} aria-busy={saving || undefined} style={{ flex: 1, padding: '12px' }}>{saving ? 'Saving...' : 'Save Validation'}</TealBtn>
           </div>
         </div>
       </Modal>

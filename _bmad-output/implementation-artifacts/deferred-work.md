@@ -174,3 +174,7 @@
 - source_spec: none
   summary: Build Ledger aggregation + Payouts (pending→processing→paid) + Coverage carry-over
   evidence: Split from CareFindHub upgrade per SCOPE STANDARD — Ledger aggregates existing sources + Payouts atomic financial updates; deferred.
+
+- source_spec: none
+  summary: Prevent duplicate product activation per vendor in CareFind Hub E-commerce (UNIQUE vendor+product, allow different vendors same product)
+  evidence: Split from Stock Validation + Duplicate Activation batch per SCOPE STANDARD � independently shippable marketplace integrity fix; deferred to ship critical Stock Validation laptop/desktop save fix first (Supabase error on Save)

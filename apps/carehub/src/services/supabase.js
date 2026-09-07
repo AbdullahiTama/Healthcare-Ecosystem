@@ -7,9 +7,19 @@ import { pagedQuery } from '../lib/pagedQuery.js'
 // phase2_rls_pilot.sql) — falls back to the anon key otherwise, which is
 // the same key every call used unconditionally before this fix, so
 // pre-login calls (login itself, duplicate-email checks) are unaffected.
+// Laptop stale-session fix (spec-stock-validation-laptop-fix): if getSession
+// returns null, try refreshSession once before falling back to anon — the
+// StockValidation confirmSave also does an explicit pre-save check with
+// Session expired toast, but authToken must not silently send anon when a
+// refresh would succeed, otherwise the RPC hits RLS 42501.
 async function authToken() {
   const { data } = await authClient.auth.getSession()
-  return data?.session?.access_token || SB_KEY
+  if (data?.session?.access_token) return data.session.access_token
+  try {
+    const { data: refreshed } = await authClient.auth.refreshSession()
+    if (refreshed?.session?.access_token) return refreshed.session.access_token
+  } catch {}
+  return SB_KEY
 }
 
 export async function sbFetch(path, options = {}) {
