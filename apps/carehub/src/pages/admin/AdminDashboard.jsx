@@ -193,13 +193,15 @@ function DashboardStats({ businesses, teamMembers, payouts, onNav, loading: stat
     // mock deltas for demo — in prod would compare to previous period
     const sparkPending = trend.slice(-7)
     const sparkActive = trend.map(v=> Math.max(0, v+ Math.floor(Math.random()*2))).slice(-7)
+    const safePayouts = Array.isArray(payouts) ? payouts : []
+    const safeTeam = Array.isArray(teamMembers) ? teamMembers : []
     return [
       { label: 'Pending approvals', value: pendingBusinesses.length, icon: <Hourglass />, hero: true, delta: pendingBusinesses.length > 0 ? `+${Math.min(pendingBusinesses.length,3)} today` : 'All clear', spark: sparkPending, tone: pendingBusinesses.length>0 ? 'warning' : undefined },
       { label: 'Active businesses', value: active.length, icon: <CheckCircle />, delta: `${active.length} live`, spark: sparkActive, tone: undefined },
       { label: 'Total businesses', value: safeBusinesses.filter(b=>!b.deleted_at).length, icon: <Building2 />, delta: `${safeBusinesses.length} onboarded`, spark: trend.slice(-7), tone: undefined },
       { label: 'E-commerce', value: ecommerce.length, icon: <Store />, delta: `${ecommerce.length} enabled`, spark: trend.slice(-7).map(v=> v?1:0), tone: undefined },
-      { label: 'Admin team', value: teamMembers.length, icon: <Users />, delta: `${teamMembers.length} members`, spark: [1,1,2,1,2,2,1], tone: undefined },
-      { label: 'Payouts pending', value: payouts.filter(p=>p.status==='pending'||p.status==='processing').length, icon: <Wallet />, delta: `${payouts.filter(p=>p.status==='paid').length} paid`, spark: payouts.slice(0,7).map(()=>1), tone: payouts.some(p=>p.status==='pending')?'warning':undefined },
+      { label: 'Admin team', value: safeTeam.length, icon: <Users />, delta: `${safeTeam.length} members`, spark: [1,1,2,1,2,2,1], tone: undefined },
+      { label: 'Payouts pending', value: safePayouts.filter(p=>p.status==='pending'||p.status==='processing').length, icon: <Wallet />, delta: `${safePayouts.filter(p=>p.status==='paid').length} paid`, spark: safePayouts.slice(0,7).map(()=>1), tone: safePayouts.some(p=>p.status==='pending')?'warning':undefined },
     ]
   }, [pendingBusinesses.length, active.length, safeBusinesses, ecommerce.length, teamMembers.length, payouts, trend])
 
@@ -675,7 +677,8 @@ function TeamAgentsPanel() {
     } else setEarnings([])
   }, [selected])
 
-  const filtered = filter==='all' ? agents : agents.filter(a=> (a.status||a.tier)===filter || a.tier===filter)
+  const safeAgents = Array.isArray(agents) ? agents : []
+  const filtered = filter==='all' ? safeAgents : safeAgents.filter(a=> (a.status||a.tier)===filter || a.tier===filter)
 
   const handleRegister = async () => {
     if (!reg.full_name || !reg.email || !reg.password || !reg.state) { showToast('All fields required', {type:'error'}); return }
@@ -719,7 +722,7 @@ function TeamAgentsPanel() {
     setBusy(false)
   }
 
-  const parentOptions = agents.filter(a=> a.id!==selected?.id).map(a=> ({ value: a.id, label: `${a.full_name||a.name} (${a.tier}/${a.state||'—'})` }))
+  const parentOptions = safeAgents.filter(a=> a.id!==selected?.id).map(a=> ({ value: a.id, label: `${a.full_name||a.name} (${a.tier}/${a.state||'—'})` }))
 
   if (loading) return <Loading />
   if (error) return <ErrorState message={error} onRetry={load} />
@@ -735,9 +738,9 @@ function TeamAgentsPanel() {
         <TealBtn onClick={()=>setShowRegister(true)}>+ Register agent (admin)</TealBtn>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
-        <Card style={{ padding:12, background: 'var(--teal-mist)', border:'1px solid var(--teal)', color: 'var(--fg)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Agent tiers</div><div style={{ fontSize:13 }}>{tiers.map(t=> `${t.name} (${t.max_children ?? '∞'} @ ${t.commission_pct}%)`).join(' • ') || '—'}</div></Card>
-        <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Total agents</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{agents.length}</div></Card>
-        <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Pending</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{agents.filter(a=>a.status==='pending').length}</div></Card>
+        <Card style={{ padding:12, background: 'var(--teal-mist)', border:'1px solid var(--teal)', color: 'var(--fg)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Agent tiers</div><div style={{ fontSize:13 }}>{(Array.isArray(tiers)?tiers:[]).map(t=> `${t.name} (${t.max_children ?? '∞'} @ ${t.commission_pct}%)`).join(' • ') || '—'}</div></Card>
+        <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Total agents</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{safeAgents.length}</div></Card>
+        <Card style={{ padding:12, background: 'var(--panel)', border: '1px solid var(--border)' }}><div style={{ fontSize:12, color: 'var(--muted)' }}>Pending</div><div style={{ fontWeight:800, color: 'var(--fg)' }}>{safeAgents.filter(a=>a.status==='pending').length}</div></Card>
       </div>
       {filtered.length===0 ? <Empty icon={<Users size={28} />} message="No agents for filter" /> : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -780,7 +783,7 @@ function TeamAgentsPanel() {
             </div>
             <div style={{ padding:12, border:'1px solid var(--border)', borderRadius:10, background: 'var(--panel)' }}>
               <div style={{ fontWeight:800, fontSize:13, marginBottom:8, color: 'var(--fg)' }}>Transfer Account (audit required)</div>
-              <Sel label="Transfer to agent" value={transfer.toAgentId} onChange={v=>setTransfer(s=>({...s,toAgentId:v}))} options={[{value:'',label:'Select target'}, ...agents.filter(a=>a.id!==selected.id).map(a=>({value:a.id,label:a.full_name||a.name}))]} />
+              <Sel label="Transfer to agent" value={transfer.toAgentId} onChange={v=>setTransfer(s=>({...s,toAgentId:v}))} options={[{value:'',label:'Select target'}, ...safeAgents.filter(a=>a.id!==selected.id).map(a=>({value:a.id,label:a.full_name||a.name}))]} />
               <Inp label="Reason" value={transfer.reason} onChange={v=>setTransfer(s=>({...s,reason:v}))} placeholder="e.g. account correction" />
               <TealBtn disabled={busy} onClick={handleTransfer} style={{ marginTop:8, background: 'var(--red)' }}>Transfer & audit</TealBtn>
             </div>
@@ -954,7 +957,8 @@ function ApplicationsUnifiedPanel() {
     setApps(merged); setLoading(false)
   },[])
   useEffect(()=>{ load() },[load])
-  const filtered = filter==='all' ? apps : apps.filter(a=>a.type===filter)
+  const safeApps = Array.isArray(apps) ? apps : []
+  const filtered = filter==='all' ? safeApps : safeApps.filter(a=>a.type===filter)
   const handleReview = async (app, status) => {
     setBusy(true)
     try {
@@ -980,7 +984,7 @@ function ApplicationsUnifiedPanel() {
     <div>
       <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
         {['all','ecommerce','agent','team'].map(t=>(
-          <button key={t} onClick={()=>setFilter(t)} style={{ padding:'8px 16px', borderRadius: theme.radius.md, border:'none', cursor:'pointer', fontWeight:700, fontSize:13, background: filter===t ? 'var(--teal)' : 'var(--hairline)', color: filter===t?'white':'var(--muted)', textTransform:'capitalize' }}>{t}{t!=='all' ? ` (${apps.filter(a=>a.type===t).length})` : ''}</button>
+          <button key={t} onClick={()=>setFilter(t)} style={{ padding:'8px 16px', borderRadius: theme.radius.md, border:'none', cursor:'pointer', fontWeight:700, fontSize:13, background: filter===t ? 'var(--teal)' : 'var(--hairline)', color: filter===t?'white':'var(--muted)', textTransform:'capitalize' }}>{t}{t!=='all' ? ` (${safeApps.filter(a=>a.type===t).length})` : ''}</button>
         ))}
         <GhostBtn onClick={load}><RefreshCw size={13} style={{ marginRight:6 }} />Refresh</GhostBtn>
       </div>
@@ -1017,14 +1021,16 @@ function LedgerUnifiedPanel() {
   useEffect(()=>{ getBusinesses().then(b=>setBusinesses(b||[])).catch(()=>{}); getAgentsDetailed().then(a=>setAgents(a||[])).catch(()=>{}) },[])
   const debounced = useDebounced(query, 300)
   const filteredBiz = useMemo(()=> {
-    if (!debounced) return businesses.slice(0,20)
+    const safeBiz = Array.isArray(businesses) ? businesses : []
+    if (!debounced) return safeBiz.slice(0,20)
     const q = debounced.toLowerCase()
-    return businesses.filter(b=> (b.name||'').toLowerCase().includes(q) || (b.owner||'').toLowerCase().includes(q)).slice(0,20)
+    return safeBiz.filter(b=> (b.name||'').toLowerCase().includes(q) || (b.owner||'').toLowerCase().includes(q)).slice(0,20)
   }, [businesses, debounced])
   const filteredAgents = useMemo(()=> {
-    if (!debounced) return agents.slice(0,20)
+    const safeAgentsList = Array.isArray(agents) ? agents : []
+    if (!debounced) return safeAgentsList.slice(0,20)
     const q = debounced.toLowerCase()
-    return agents.filter(a=> (a.full_name||a.name||'').toLowerCase().includes(q) || (a.email||'').toLowerCase().includes(q)).slice(0,20)
+    return safeAgentsList.filter(a=> (a.full_name||a.name||'').toLowerCase().includes(q) || (a.email||'').toLowerCase().includes(q)).slice(0,20)
   }, [agents, debounced])
   const openStatement = async (entity) => {
     setSelected(entity); setLoading(true); setLines([])
@@ -1049,7 +1055,7 @@ function LedgerUnifiedPanel() {
   }
   const exportBulk = async () => {
     let csv = 'Entity,Date,Description,Type,Amount\n'
-    for (const b of businesses.slice(0,5)) {
+    for (const b of (Array.isArray(businesses)?businesses:[]).slice(0,5)) {
       const l = await getLedgerForEntity({type:'business',id:b.id}).catch(()=>[])
       for (const it of (l||[])) csv += `${b.name},${it.date},${it.description},${it.type},${it.amount}\n`
     }
@@ -1120,7 +1126,8 @@ function PayoutsUnifiedPanel() {
     setRows(r||[]); setLoading(false)
   },[])
   useEffect(()=>{ load() },[load])
-  const filtered = filter==='all' ? rows : rows.filter(r=>r.status===filter)
+  const safeRows = Array.isArray(rows) ? rows : []
+  const filtered = filter==='all' ? safeRows : safeRows.filter(r=>r.status===filter)
   const updateStatus = async (row, next) => {
     if (busy) return
     setBusy(true)
@@ -1568,14 +1575,15 @@ export default function AdminDashboard() {
     }
   }, [handleStatusChange, businesses, showToast, load])
 
-  const allTeamCount = teamMembers.length || team.length
-  const bizList = businesses || []
+  const allTeamCount = (Array.isArray(teamMembers) ? teamMembers.length : 0) || (Array.isArray(team) ? team.length : 0)
+  const bizList = Array.isArray(businesses) ? businesses : []
   const pendingCount = bizList.filter(b=>b.status==='pending' && !b.deleted_at).length
   const pendingAppsCount = 0 // will be derived inside
+  const safePayoutsForCount = Array.isArray(payouts) ? payouts : []
   const counts = {
     pendingBusinesses: pendingCount,
     pendingApps: 0,
-    pendingPayouts: payouts.filter(p=>p.status==='pending'||p.status==='processing').length,
+    pendingPayouts: safePayoutsForCount.filter(p=>p.status==='pending'||p.status==='processing').length,
   }
 
   const isPermitted = (perm) => {

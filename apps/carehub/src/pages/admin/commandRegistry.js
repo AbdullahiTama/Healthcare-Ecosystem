@@ -177,9 +177,10 @@ export function buildCommandList({ businesses, payouts, perms = null, recentIds 
 
 // Filter helper for explicit perm check (used by palette)
 export function filterCommandsByPerms(commands, perms) {
-  if (!perms) return commands
+  const safeCommands = Array.isArray(commands) ? commands : []
+  if (!perms) return safeCommands
   const allowed = new Set(navCatalogueFor(perms).map(n => n.perm))
-  return commands.filter(c => !c.perm || allowed.has(c.perm))
+  return safeCommands.filter(c => !c.perm || allowed.has(c.perm))
 }
 
 // Simple fuzzy matcher using command-score if available, fallback to includes.
