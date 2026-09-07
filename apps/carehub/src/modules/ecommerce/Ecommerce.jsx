@@ -284,14 +284,27 @@ export default function Ecommerce({ brand, role }) {
 
   async function handleActivate() {
     if (!selected) return
+    if (selected?.status==='Active') {
+      showToast('Already activated — this product is already live for your store', { type: 'warning' })
+      return
+    }
     setActivating(true)
     try {
       await ecommerceRepository.activate(brand.id, selected.product.id)
       showToast('Product activated — visible in Shop', { type: 'success' })
       loadInventory()
       setSelected(null)
-    } catch (e) { showToast(e.message || 'Could not activate', { type: 'error' }) }
-    setActivating(false)
+    } catch (e) {
+      const msg = String(e.message || '')
+      const isDuplicate = msg.includes('23505') || msg.includes('business_id_product_id_key') || msg.includes('Already activated')
+      if (isDuplicate) {
+        showToast('Already activated — this product is already live for your store', { type: 'warning' })
+      } else {
+        showToast(e.message || 'Could not activate', { type: 'error' })
+      }
+    } finally {
+      setActivating(false)
+    }
   }
 
   async function handlePause() {
@@ -664,7 +677,7 @@ export default function Ecommerce({ brand, role }) {
                 {selected.status === 'Active' ? (
                   <GhostBtn onClick={handlePause} style={{ flex: 1, padding: 10, borderColor: warning, color: warning }}>Pause</GhostBtn>
                 ) : (
-                  <TealBtn onClick={handleActivate} disabled={activating || app?.status !== 'Approved'} style={{ flex: 1, padding: 10 }}>{activating ? 'Activating...' : 'Activate for Shop'}</TealBtn>
+                  <TealBtn onClick={handleActivate} disabled={activating || selected.status==='Active'} aria-busy={activating} style={{ flex: 1, padding: 10 }}>{activating ? 'Activating...' : 'Activate for Shop'}</TealBtn>
                 )}
               </div>
               {app?.status !== 'Approved' && <div style={{ fontSize: 11, color: danger, textAlign: 'center' }}>Business must be Approved to activate — application required. Please review and accept the applicable Terms & Conditions and apply for E-commerce access before setting up products.</div>}

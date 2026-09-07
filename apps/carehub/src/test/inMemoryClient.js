@@ -108,6 +108,20 @@ export function createInMemoryClient(seed = {}) {
     if (method === 'POST') {
       const body = JSON.parse(options.body)
       const rows = (Array.isArray(body) ? body : [body]).map((r) => ({ id: r.id ?? ++autoId, ...r }))
+      // Enforce UNIQUE(business_id, product_id) for ecommerce_products — mirrors DB constraint
+      if (table === 'ecommerce_products') {
+        for (const r of rows) {
+          if (r.business_id != null && r.product_id != null) {
+            const dup = db[table].find(x => String(x.business_id) === String(r.business_id) && String(x.product_id) === String(r.product_id))
+            if (dup) {
+              const err = new Error('duplicate key value violates unique constraint "ecommerce_products_business_id_product_id_key" (23505)')
+              err.code = '23505'
+              err.details = `Key (business_id, product_id)=(${r.business_id}, ${r.product_id}) already exists.`
+              throw err
+            }
+          }
+        }
+      }
       db[table].push(...rows.map((r) => ({ ...r })))
       return rows
     }
