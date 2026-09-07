@@ -40,7 +40,13 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { setRecentIds(getRecent()) }, [])
 
-  // Pull-to-refresh handlers
+  const { data: products = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['shop-products', segment, externalQuery],
+    queryFn: () => shopRepository.getActiveProducts({ segment, query: externalQuery, limit: 80 }),
+    staleTime: 30 * 1000,
+  })
+
+  // Pull-to-refresh handlers — defined after useQuery so refetch is initialized (TDZ guard)
   const handleTouchStart = useCallback((e) => {
     if (window.scrollY > 0) return
     touchStartY.current = e.touches[0].clientY
@@ -64,12 +70,6 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     setPullDistance(0)
     touchStartY.current = null
   }, [pullDistance, refreshing, refetch])
-
-  const { data: products = [], isLoading: loading, error: queryError, refetch } = useQuery({
-    queryKey: ['shop-products', segment, externalQuery],
-    queryFn: () => shopRepository.getActiveProducts({ segment, query: externalQuery, limit: 80 }),
-    staleTime: 30 * 1000,
-  })
   const error = queryError ? 'Could not load Shop products' : ''
   useEffect(() => {
     if (products.length===0) return

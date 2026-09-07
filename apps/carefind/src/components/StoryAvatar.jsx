@@ -1,12 +1,14 @@
 import { theme } from '../styles/theme'
 import { Avatar } from './ui'
 
-export function StoryAvatar({ profile, userId, stories = [], size = 40, onClick, hasStory: hasStoryProp, allSeen: allSeenProp }) {
-  // Allow direct props or derive via hasStory/allSeen logic inline if stories provided
+export function StoryAvatar({ profile, userId, stories = [], size = 40, onClick, hasStory: hasStoryProp, allSeen: allSeenProp, src: srcProp, name: nameProp }) {
   const hasStory = hasStoryProp !== undefined ? hasStoryProp : (Array.isArray(stories) && stories.length > 0)
   const allSeen = allSeenProp !== undefined ? allSeenProp : false
   const ringPad = hasStory ? Math.round(size * 0.045) + 2 : 0
   const ringColor = hasStory ? (allSeen ? theme.gray300 : theme.tealDeep) : 'transparent'
+
+  const avatarSrc = srcProp || profile?.avatar_url
+  const avatarName = nameProp || profile?.display_name || profile?.full_name
 
   const wrapperStyle = {
     width: size + ringPad * 2,
@@ -32,9 +34,9 @@ export function StoryAvatar({ profile, userId, stories = [], size = 40, onClick,
   }
 
   return (
-    <div style={wrapperStyle} onClick={onClick} role={onClick ? 'button' : undefined} aria-label={hasStory ? `View ${profile?.display_name || profile?.full_name || 'user'}'s story` : undefined}>
+    <div style={wrapperStyle} onClick={onClick} role={onClick ? 'button' : undefined} aria-label={hasStory ? `View ${avatarName || 'user'}'s story` : undefined}>
       <div style={innerStyle}>
-        <Avatar name={profile?.display_name || profile?.full_name || profile?.name} src={profile?.avatar_url || profile?.src} size={size - (hasStory ? 4 : 0)} />
+        <Avatar name={avatarName} src={avatarSrc} size={size - (hasStory ? 4 : 0)} />
       </div>
     </div>
   )
