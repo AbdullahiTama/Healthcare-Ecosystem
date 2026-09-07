@@ -1,5 +1,6 @@
 import { theme } from '../../styles/theme'
 import { Card, Empty } from '../../components/ui'
+import ProductCard from './ProductCard'
 
 function GridSkeleton() {
   return (
