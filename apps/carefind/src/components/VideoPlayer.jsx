@@ -27,6 +27,7 @@ function VideoPlayer({
   autoPlay = true,
   loop = true,
   muted: initialMuted = true,
+  autoUnmute = false,
   style,
 }) {
   const videoRef = useRef(null)
@@ -83,6 +84,25 @@ function VideoPlayer({
     const el = videoRef.current
     if (el) el.muted = muted
   }, [muted])
+
+  // Auto-unmute: when the video becomes active in the VideoFeed, listen for
+  // the first user gesture (scroll/tap) and unmute. Browsers require a user
+  // gesture before allowing sound — this hooks into that moment so the viewer
+  // gets audio without manually tapping the mute button.
+  useEffect(() => {
+    if (!autoUnmute || !initialMuted) return
+    function handleGesture() {
+      setMuted(false)
+      document.removeEventListener('touchstart', handleGesture)
+      document.removeEventListener('click', handleGesture)
+    }
+    document.addEventListener('touchstart', handleGesture, { once: true })
+    document.addEventListener('click', handleGesture, { once: true })
+    return () => {
+      document.removeEventListener('touchstart', handleGesture)
+      document.removeEventListener('click', handleGesture)
+    }
+  }, [autoUnmute, initialMuted])
 
   // If the caller changes the initial muted prop, reflect it.
   useEffect(() => {

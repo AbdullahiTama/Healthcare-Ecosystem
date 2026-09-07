@@ -374,10 +374,16 @@ function Feed() {
 
   // Item 5: honor a ?tab=<key> landing param (bottom-nav Videos entry). Applied
   // once on mount, then dropped so a reload returns to the persisted tab.
+  // Also handles ?tab=video&post=<id> for video deep-linking from feed taps.
+  const videoFocusPostRef = useRef(null)
   useEffect(() => {
     if (!tabParam || !FEED_TABS.some(([key]) => key === tabParam)) return
     urlTabAppliedRef.current = true
     setFeedTab(tabParam)
+    // Capture the focus post ID before clearing params
+    if (tabParam === 'video' && deepLinkPostId) {
+      videoFocusPostRef.current = deepLinkPostId
+    }
     clearTabParam()
   }, [])
 
@@ -1038,7 +1044,9 @@ function Feed() {
   // come after every hook above has run (hooks can't be conditional), which
   // is also why it isn't a plain `if (deepLinkPostId) return null` guard
   // higher up in the component.
-  if (deepLinkPostId) return <Navigate to={`/post/${deepLinkPostId}`} replace />
+  // EXCEPTION: ?tab=video&post=<id> → stay on feed and open Videos tab
+  // focused on that specific video instead of navigating away.
+  if (deepLinkPostId && tabParam !== 'video') return <Navigate to={`/post/${deepLinkPostId}`} replace />
 
   // #10a Pull-to-refresh. Only engages when the feed is scrolled to the very
   // top, so it never fights normal scrolling. Distance is damped (x0.5) and
@@ -1108,7 +1116,12 @@ function Feed() {
     // See more now expands inline within PostCard (no modal). /post/:id
     // remains the canonical URL for shares, direct links and legacy
     // ?post= redirects, but feed cards no longer navigate for expansion.
-    onOpenDetail: undefined,
+    // Video posts: tapping navigates to Videos tab focused on that video.
+    onOpenDetail: (post) => {
+      if (post?.video_url) {
+        navigate(`/feed?tab=video&post=${post.id}`)
+      }
+    },
   }
 
   const bodyContent = (
@@ -1914,6 +1927,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
             cardProps={cardProps}
             authorName={(p) => authorName(p)}
             isMobile={isMobile}
+            focusPostId={videoFocusPostRef.current}
           />
         ) : feedTab !== 'series' ? (
           displayPosts.map((post) => (

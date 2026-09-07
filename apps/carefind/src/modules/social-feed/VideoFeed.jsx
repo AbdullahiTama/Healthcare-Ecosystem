@@ -23,7 +23,7 @@ import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 // on the next clip instead of a half-open position. Empty/loading/error
 // states live in the Feed (this component only renders the clips it is given).
 
-export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
+export default function VideoFeed({ posts, cardProps, authorName, isMobile, focusPostId }) {
   const {
     user, navigate, profiles, formatCount,
     likeCount, userHasLiked, toggleLike,
@@ -52,6 +52,18 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
   const containerRef = useRef(null)
   const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
   const [viewer, setViewer] = useState(null)
+
+  // Scroll to the focused video when deep-linked from the main feed
+  useEffect(() => {
+    if (!focusPostId || !containerRef.current) return
+    const idx = posts.findIndex((p) => p.id === focusPostId)
+    if (idx < 0) return
+    const slide = containerRef.current.querySelector(`[data-index="${idx}"]`)
+    if (slide) {
+      slide.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setActiveIndex(idx)
+    }
+  }, [focusPostId, posts.length])
 
   useEffect(() => {
     const root = containerRef.current
@@ -138,6 +150,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile }) {
               poster={post.image_url}
               ariaLabel={`Video by ${authorName(post)}`}
               controls
+              autoUnmute={isActive}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
             />
 
