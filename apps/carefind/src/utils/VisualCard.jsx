@@ -135,24 +135,27 @@ function VisualCard({ templateKey = 'teal-depth', content = '', preview = false,
           gap: 8,
         }}
       >
-        <div
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 8,
-            background: 'linear-gradient(135deg, #0E6F5A, #1A8A72)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontWeight: 900,
-            fontSize: 14,
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
+        <svg
+          width={26}
+          height={26}
+          viewBox="0 0 64 64"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ flexShrink: 0 }}
         >
-          C
-        </div>
+          <path
+            d="M32 4C20.954 4 12 12.954 12 24c0 14.25 20 36 20 36s20-21.75 20-36C52 12.954 43.046 4 32 4z"
+            fill="#0E6F5A"
+          />
+          <circle cx="32" cy="22" r="7" fill="white" />
+          <path
+            d="M20 38c0-6.627 5.373-12 12-12s12 5.373 12 12"
+            stroke="white"
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
+        </svg>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <span
             style={{

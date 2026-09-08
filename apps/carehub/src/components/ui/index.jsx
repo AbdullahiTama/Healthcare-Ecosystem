@@ -1,19 +1,46 @@
-import { Activity, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Button, Input, Select } from '@care-ecosystem/design-system/components/ui'
 export { useToast } from '../../hooks/useToast'
 export { Button, Card, Pill, Badge, StatusBadge, Avatar, Loading, Skeleton, CardSkeleton, Empty, ErrorState, Input, Select, Textarea, Toggle, Label, HelperText, ErrorMessage, Modal, ConfirmDialog, Toast, DataTable, StatCard } from '@care-ecosystem/design-system/components/ui'
 
 // ── LOGO ─────────────────────────────────────────────────────────────────────
-// The one CareHub brand mark — flat teal (no gradient, per COLORS.md's rule
-// and the client template, which never uses one), same icon everywhere the
-// brand appears (Landing.jsx nav/footer, Sidebar.jsx) so it reads as one
-// consistent mark rather than a per-screen invention.
+// The one CareHub brand mark — connected nodes symbol representing
+// "connected care. Better health." Flat teal, no gradient, same icon
+// everywhere the brand appears so it reads as one consistent mark.
 export function Logo({ size = 30, style = {} }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: theme.tealDeep, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, ...style }}>
-      <Activity size={size * 0.55} strokeWidth={2.5} />
-    </div>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="CareHub"
+      style={{ flexShrink: 0, ...style }}
+    >
+      {/* Central node */}
+      <circle cx="32" cy="32" r="8" fill={theme.tealDeep} />
+      {/* Top node */}
+      <circle cx="32" cy="12" r="6" fill={theme.tealDeep} />
+      {/* Bottom node */}
+      <circle cx="32" cy="52" r="6" fill={theme.tealDeep} />
+      {/* Left node */}
+      <circle cx="12" cy="32" r="6" fill={theme.tealDeep} />
+      {/* Right node */}
+      <circle cx="52" cy="32" r="6" fill={theme.tealDeep} />
+      {/* Connecting lines */}
+      <line x1="32" y1="20" x2="32" y2="24" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
+      <line x1="32" y1="40" x2="32" y2="46" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
+      <line x1="20" y1="32" x2="24" y2="32" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
+      <line x1="40" y1="32" x2="46" y2="32" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
+      {/* Inner connecting arcs */}
+      <path d="M26 26 L22 22" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M38 26 L42 22" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M26 38 L22 42" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M38 38 L42 42" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
   )
 }
 

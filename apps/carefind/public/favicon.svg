@@ -1,6 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect width="24" height="24" rx="6" fill="#0E6F5A"/>
-  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
-    fill="none" stroke="#fff" stroke-width="2"
-    stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- CareFind Logo: Location pin with person silhouette -->
+  <defs>
+    <linearGradient id="pinGrad" x1="32" y1="0" x2="32" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0E6F5A"/>
+      <stop offset="1" stop-color="#0A5A48"/>
+    </linearGradient>
+  </defs>
+  <!-- Location pin shape -->
+  <path d="M32 4C20.954 4 12 12.954 12 24c0 14.25 20 36 20 36s20-21.75 20-36C52 12.954 43.046 4 32 4z" fill="url(#pinGrad)"/>
+  <!-- Person silhouette inside pin -->
+  <circle cx="32" cy="22" r="7" fill="white"/>
+  <path d="M20 38c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
 </svg>
