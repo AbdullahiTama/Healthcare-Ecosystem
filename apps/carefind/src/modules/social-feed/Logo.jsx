@@ -26,18 +26,9 @@ function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
       aria-label="CareFind"
       style={{ flexShrink: 0 }}
     >
-      <path
-        d="M32 4C20.954 4 12 12.954 12 24c0 14.25 20 36 20 36s20-21.75 20-36C52 12.954 43.046 4 32 4z"
-        fill={theme.tealDeep}
-      />
-      <circle cx="32" cy="22" r="7" fill="white" />
-      <path
-        d="M20 38c0-6.627 5.373-12 12-12s12 5.373 12 12"
-        stroke="white"
-        strokeWidth="3"
-        fill="none"
-        strokeLinecap="round"
-      />
+      <path d="M32 6C23.163 6 16 13.163 16 22c0 11.25 16 30 16 30s16-18.75 16-30C48 13.163 40.837 6 32 6z" fill={theme.tealDeep} />
+      <circle cx="32" cy="20" r="5" fill="white" />
+      <path d="M24 32c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" />
     </svg>
   )
 

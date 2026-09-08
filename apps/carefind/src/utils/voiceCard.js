@@ -74,26 +74,26 @@ function drawLogo(ctx, username) {
   // Draw location pin shape
   ctx.fillStyle = '#0E6F5A'
   ctx.beginPath()
-  ctx.moveTo(cx, y + s * 0.06)
-  ctx.bezierCurveTo(cx - s * 0.35, y + s * 0.06, x + s * 0.18, y + s * 0.35, x + s * 0.18, cy - s * 0.05)
-  ctx.bezierCurveTo(x + s * 0.18, y + s * 0.55, cx, y + s * 0.94, cx, y + s * 0.94)
-  ctx.bezierCurveTo(cx, y + s * 0.94, cx + s * 0.32, y + s * 0.55, cx + s * 0.32, cy - s * 0.05)
-  ctx.bezierCurveTo(cx + s * 0.32, y + s * 0.35, cx + s * 0.35, y + s * 0.06, cx, y + s * 0.06)
+  ctx.moveTo(cx, y + s * 0.09)
+  ctx.bezierCurveTo(cx - s * 0.375, y + s * 0.09, x + s * 0.25, y + s * 0.25, x + s * 0.25, cy - s * 0.03)
+  ctx.bezierCurveTo(x + s * 0.25, y + s * 0.53, cx, y + s * 0.91, cx, y + s * 0.91)
+  ctx.bezierCurveTo(cx, y + s * 0.91, cx + s * 0.375, y + s * 0.53, cx + s * 0.375, cy - s * 0.03)
+  ctx.bezierCurveTo(cx + s * 0.375, y + s * 0.25, cx + s * 0.375, y + s * 0.09, cx, y + s * 0.09)
   ctx.closePath()
   ctx.fill()
 
   // Draw person silhouette (head)
   ctx.fillStyle = '#FFFFFF'
   ctx.beginPath()
-  ctx.arc(cx, cy - s * 0.12, s * 0.12, 0, Math.PI * 2)
+  ctx.arc(cx, cy - s * 0.125, s * 0.125, 0, Math.PI * 2)
   ctx.fill()
 
   // Draw person silhouette (body arc)
   ctx.strokeStyle = '#FFFFFF'
-  ctx.lineWidth = s * 0.05
+  ctx.lineWidth = s * 0.04
   ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.arc(cx, cy + s * 0.15, s * 0.18, Math.PI * 1.2, Math.PI * 1.8)
+  ctx.arc(cx, cy + s * 0.125, s * 0.1875, Math.PI * 1.15, Math.PI * 1.85)
   ctx.stroke()
 
   ctx.textAlign = 'left'

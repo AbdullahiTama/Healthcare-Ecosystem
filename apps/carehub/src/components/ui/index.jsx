@@ -20,26 +20,17 @@ export function Logo({ size = 30, style = {} }) {
       aria-label="CareHub"
       style={{ flexShrink: 0, ...style }}
     >
-      {/* Central node */}
-      <circle cx="32" cy="32" r="8" fill={theme.tealDeep} />
       {/* Top node */}
-      <circle cx="32" cy="12" r="6" fill={theme.tealDeep} />
+      <circle cx="32" cy="14" r="6" fill={theme.tealDeep} />
       {/* Bottom node */}
-      <circle cx="32" cy="52" r="6" fill={theme.tealDeep} />
+      <circle cx="32" cy="50" r="6" fill={theme.tealDeep} />
       {/* Left node */}
-      <circle cx="12" cy="32" r="6" fill={theme.tealDeep} />
+      <circle cx="14" cy="32" r="6" fill={theme.tealDeep} />
       {/* Right node */}
-      <circle cx="52" cy="32" r="6" fill={theme.tealDeep} />
+      <circle cx="50" cy="32" r="6" fill={theme.tealDeep} />
       {/* Connecting lines */}
-      <line x1="32" y1="20" x2="32" y2="24" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
-      <line x1="32" y1="40" x2="32" y2="46" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
-      <line x1="20" y1="32" x2="24" y2="32" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
-      <line x1="40" y1="32" x2="46" y2="32" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
-      {/* Inner connecting arcs */}
-      <path d="M26 26 L22 22" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M38 26 L42 22" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M26 38 L22 42" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M38 38 L42 42" stroke={theme.tealDeep} strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="32" y1="20" x2="32" y2="44" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
+      <line x1="20" y1="32" x2="44" y2="32" stroke={theme.tealDeep} strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }
