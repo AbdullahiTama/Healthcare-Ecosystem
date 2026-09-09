@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
+import AdminLayout from './AdminLayout.jsx'
 import FeedRankingConfig from './FeedRankingConfig.jsx'
 import DistributionExperiments from './DistributionExperiments.jsx'
+import AdminShop from './AdminShop.jsx'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
 import SlideUploader from '../../components/SlideUploader.jsx'
@@ -122,6 +124,14 @@ export default function AdminPanel() {
   const [selectedPost, setSelectedPost] = useState(null)
   const [postAuthor, setPostAuthor] = useState(null)
   const [phoneMap, setPhoneMap] = useState({})
+  const [adminPermissions, setAdminPermissions] = useState({})
+  const [adminRoles, setAdminRoles] = useState([])
+  const [newRoleName, setNewRoleName] = useState('')
+  const [newRoleDesc, setNewRoleDesc] = useState('')
+  const [newRoleTabs, setNewRoleTabs] = useState({})
+  const [editingRoleId, setEditingRoleId] = useState(null)
+  const [editingRoleTabs, setEditingRoleTabs] = useState({})
+  const [savingRole, setSavingRole] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   // Generic confirmation-dialog state: { title, consequence, confirmLabel, action }.
   // `action` is the real, destructive operation — deferred until the admin confirms
@@ -135,17 +145,20 @@ export default function AdminPanel() {
     try {
       const token = localStorage.getItem('admin_token')
       const userData = localStorage.getItem('admin_user')
+      const permsData = localStorage.getItem('admin_permissions')
       if (!token || !userData) { navigate('/admin'); return }
       const decoded = atob(token)
       const parts = decoded.split('|')
       if (parts.length !== 3 || Date.now() - parseInt(parts[2]) > 86400000) {
         localStorage.removeItem('admin_token')
         localStorage.removeItem('admin_user')
+        localStorage.removeItem('admin_permissions')
         navigate('/admin')
         return
       }
       const parsedAdmin = JSON.parse(userData)
       setAdminUser(parsedAdmin)
+      if (permsData) setAdminPermissions(JSON.parse(permsData))
       loadAll()
     } catch { navigate('/admin') }
 
@@ -241,7 +254,14 @@ export default function AdminPanel() {
     setLoading(false)
   }
 
-  useEffect(() => { if (adminUser) { loadStories(); loadNews(); loadPromotions(); loadSearchLogs(); loadActiveShows(); loadShopAdmin() } }, [adminUser])
+  useEffect(() => { if (adminUser) { loadStories(); loadNews(); loadPromotions(); loadSearchLogs(); loadActiveShows(); loadShopAdmin(); loadAdminRoles() } }, [adminUser])
+
+  async function loadAdminRoles() {
+    try {
+      const { data } = await callAdminAuth('list_admin_roles', { token: localStorage.getItem('admin_token') })
+      setAdminRoles(data || [])
+    } catch { setAdminRoles([]) }
+  }
 
   async function loadShopAdmin() {
     try {
@@ -853,94 +873,47 @@ export default function AdminPanel() {
 
   if (loading) return <Loading fullScreen />
 
-  const TABS = [
-    { key: 'overview', label: '📊 Overview' },
-    { key: 'verifications', label: `🩺 Verify (${stats.pendingVerifs || 0})` },
-    { key: 'claims', label: `🏥 Claims (${stats.pendingClaims || 0})` },
-    { key: 'reports', label: `🚩 Reports (${stats.reports || 0})` },
-    { key: 'users', label: '👥 Users' },
-    { key: 'posts', label: '📝 Posts' },
-    { key: 'revenue', label: '💰 Revenue' },
-    { key: 'drugs', label: '💊 Drug Intel' },
-    { key: 'tasks', label: '📋 Tasks' },
-    { key: 'teams', label: '👨‍💼 Teams' },
-    { key: 'withdrawals', label: `💰 Withdrawals (${withdrawals.filter(w => w.status === 'pending').length})` },
-    { key: 'businesses', label: `🏢 Companies (${businesses.length})` },
-    { key: 'stories', label: `📸 Stories (${stories.length})` },
-    { key: 'news', label: `📰 News (${newsItems.filter(n => n.status === 'pending').length})` },
-    { key: 'promotions', label: `🎯 Promos (${promotions.filter(p => !p.expires_at || new Date(p.expires_at) > new Date()).length})` },
-    { key: 'searches', label: `🔎 Searches (${searchLogs.filter(s => !s.found).length})` },
-    { key: 'golive', label: `📡 Go Live (${activeShows.length})` },
-    { key: 'notifications', label: `🔔 All Alerts (${notifCount})` },
-    { key: 'shop', label: `🛒 Shop (${ecomApps.filter(a=>a.status==='Submitted'||a.status==='Under Review').length})` },
-  ]
+  const card = { border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, marginBottom: 10 }
+  const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, boxSizing: 'border-box', background: theme.bg, color: theme.textDark }
 
-  const btnStyle = (active) => ({
-    flexShrink: 0, padding: '7px 12px', borderRadius: 18, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-    border: active ? 'none' : `1px solid ${theme.border}`,
-    background: active ? theme.tealGradient : theme.bg,
-    color: active ? '#fff' : theme.textMid,
-  })
-
-  const card = { border: `1px solid ${theme.border}`, borderRadius: 16, padding: 14, background: theme.cardBg, marginBottom: 10 }
-  const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box' }
+  function handleSignOut() {
+    localStorage.removeItem('admin_token')
+    localStorage.removeItem('admin_user')
+    localStorage.removeItem('admin_permissions')
+    navigate('/admin')
+  }
 
   return (
-    <>
-    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', maxWidth: 480, margin: '0 auto', paddingBottom: 40 }}>
-      <div style={{ background: theme.heroGradient, padding: '20px 16px 16px', color: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ margin: '0 0 2px 0', fontSize: 19, fontWeight: 900 }}>CareFind Admin</h1>
-            <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>{adminUser?.full_name} · {adminUser?.role?.replace('_', ' ')}</p>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {roleNotifCount > 0 && (
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setTab('overview')} style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  🔔
-                </button>
-                <div style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: theme.danger, color: '#fff', fontSize: 9, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center',                     border: '2px solid #0E6F5A' }}>
-                  {roleNotifCount > 99 ? '99+' : roleNotifCount}
-                </div>
-              </div>
-            )}
-            <button onClick={() => { localStorage.removeItem('admin_token'); localStorage.removeItem('admin_user'); navigate('/admin') }}
-              style={{ padding: '6px 12px', background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 11, fontWeight: 700 }}>
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, padding: '10px 12px', overflowX: 'auto', background: '#fff', borderBottom: `1px solid ${theme.border}`, WebkitOverflowScrolling: 'touch' }}>
-        {TABS.map(t => <button key={t.key} onClick={() => setTab(t.key)} style={btnStyle(tab === t.key)}>{t.label}</button>)}
-      </div>
-
-      <div style={{ padding: '14px 14px 0' }}>
-
+    <AdminLayout
+      activeTab={tab}
+      onTabChange={setTab}
+      adminUser={adminUser}
+      permissions={adminPermissions}
+      notifCount={roleNotifCount}
+      onSignOut={handleSignOut}
+    >
+      <div>
         {tab === 'overview' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
               {[
-                { label: 'Total Users', value: stats.users, icon: '👥', tab: 'users' },
-                { label: 'Total Posts', value: stats.posts, icon: '📝', tab: 'posts' },
-                { label: 'Pending Verifs', value: stats.pendingVerifs, icon: '🩺', alert: stats.pendingVerifs > 0, tab: 'verifications' },
-                { label: 'Open Reports', value: stats.reports, icon: '🚩', alert: stats.reports > 0, tab: 'reports' },
-                { label: 'Transactions', value: stats.transactions, icon: '💳', tab: 'revenue' },
-                { label: 'Revenue', value: `₦${(stats.revenue || 0).toLocaleString()}`, icon: '💰', tab: 'revenue' },
+                { label: 'Total Users', value: stats.users, tab: 'users' },
+                { label: 'Total Posts', value: stats.posts, tab: 'posts' },
+                { label: 'Pending Verifs', value: stats.pendingVerifs, alert: stats.pendingVerifs > 0, tab: 'verifications' },
+                { label: 'Open Reports', value: stats.reports, alert: stats.reports > 0, tab: 'reports' },
+                { label: 'Transactions', value: stats.transactions, tab: 'revenue' },
+                { label: 'Revenue', value: `₦${(stats.revenue || 0).toLocaleString()}`, tab: 'revenue' },
               ].map(s => (
-                <div key={s.label} onClick={() => setTab(s.tab)} style={{ border: `1px solid ${s.alert ? theme.alertLight : theme.border}`, borderRadius: 14, padding: 14, background: s.alert ? theme.dangerBg : theme.cardBg, textAlign: 'center', cursor: 'pointer' }}>
-                  <p style={{ margin: '0 0 4px 0', fontSize: 20 }}>{s.icon}</p>
-                  <p style={{ margin: '0 0 2px 0', fontSize: 20, fontWeight: 900, color: s.alert ? theme.alert : theme.navy }}>{s.value}</p>
-                  <p style={{ margin: 0, fontSize: 10, color: theme.textLight, fontWeight: 700 }}>{s.label}</p>
+                <div key={s.label} onClick={() => setTab(s.tab)} style={{ border: `1px solid ${s.alert ? theme.dangerBorder : theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: s.alert ? theme.dangerBg : theme.cardBg, textAlign: 'center', cursor: 'pointer', transition: `border-color ${theme.motion.fast}` }}>
+                  <p style={{ margin: '0 0 4px 0', fontSize: 22, fontWeight: 900, color: s.alert ? theme.alert : theme.navy }}>{s.value}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: theme.textMid, fontWeight: 600 }}>{s.label}</p>
                 </div>
               ))}
             </div>
             <FeedRankingConfig />
             <DistributionExperiments />
-            <div style={{ border: `1px solid ${theme.border}`, borderRadius: 14, padding: 14, background: theme.cardBg, marginTop: 4 }}>
-              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>📅 Filter by Date</p>
+            <div style={{ border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, marginTop: 4 }}>
+              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>Filter by Date</p>
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 10, color: theme.textLight, fontWeight: 700, display: 'block', marginBottom: 3 }}>From</label>
@@ -1043,7 +1016,7 @@ export default function AdminPanel() {
             {reports.length === 0 && <p style={{ color: theme.textLight, fontSize: 13 }}>No reports yet.</p>}
             {reports.map(r => (
               <div key={r.id} style={{ ...card, border: `1px solid ${r.status === 'pending' ? theme.alertLight : theme.border}` }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: 11, color: theme.alert, fontWeight: 800 }}>🚩 {r.reason}</p>
+                <p style={{ margin: '0 0 4px 0', fontSize: 11, color: theme.alert, fontWeight: 800 }}>{r.reason}</p>
                 <p style={{ margin: '0 0 8px 0', fontSize: 13, color: theme.textMid }}>{r.posts?.content?.slice(0, 120)}</p>
                 <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textLight }}>{timeAgo(r.created_at)}</p>
                 {r.status === 'pending' && (
@@ -1225,7 +1198,7 @@ export default function AdminPanel() {
             {selectedPost && (
               <div style={{ border: `1px solid ${theme.tealBright}`, borderRadius: 16, padding: 16, background: theme.tealMist, marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>📝 Post Detail</h3>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: theme.navy }}>Post Detail</h3>
                   <button onClick={() => { setSelectedPost(null); setPostAuthor(null) }} style={{ background: 'none', border: 'none', fontSize: 18, color: theme.textLight }}>✕</button>
                 </div>
 
@@ -1467,10 +1440,13 @@ export default function AdminPanel() {
                 <input type="password" value={staffPass} onChange={(e) => setStaffPass(e.target.value)} placeholder="Password" required style={input} />
                 <select value={staffRole} onChange={(e) => setStaffRole(e.target.value)} style={{ ...input, background: '#fff' }}>
                   <option value="moderator">🛡️ Content Moderator</option>
-                  <option value="verification_officer">🩺 Verification Officer</option>
-                  <option value="business_manager">🏥 Business Manager</option>
+                  <option value="verification_officer">Verification Officer</option>
+                  <option value="business_manager">Business Manager</option>
                   <option value="support_agent">💬 Support Agent</option>
-                  <option value="analytics_manager">📊 Analytics Manager</option>
+                  <option value="analytics_manager">Analytics Manager</option>
+                  {adminRoles.filter(r => !r.is_system).map(r => (
+                    <option key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</option>
+                  ))}
                 </select>
                 <select value={staffTeam} onChange={(e) => setStaffTeam(e.target.value)} style={{ ...input, background: '#fff' }}>
                   <option value="">No team</option>
@@ -1506,6 +1482,91 @@ export default function AdminPanel() {
                 <p style={{ margin: 0, fontSize: 11, color: theme.textLight }}>{m.email} · Super Admin · Last login: {timeAgo(m.last_login)}</p>
               </div>
             ))}
+
+            {adminUser?.role === 'super_admin' && (
+              <div style={{ ...card, marginTop: 12, border: `1px solid ${theme.tealDeep}20` }}>
+                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Roles & Permissions</p>
+                <p style={{ margin: '0 0 10px 0', fontSize: 11, color: theme.textMid }}>Create custom roles and control which admin sections each role can access.</p>
+
+                <div style={{ marginBottom: 12, padding: 12, background: theme.tealMist, borderRadius: 12 }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 700, fontSize: 12, color: theme.tealDeep }}>Create New Role</p>
+                  <input value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder="Role name..." style={{ ...input, marginBottom: 6 }} />
+                  <input value={newRoleDesc} onChange={(e) => setNewRoleDesc(e.target.value)} placeholder="Description..." style={{ ...input, marginBottom: 8 }} />
+                  <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 700, color: theme.navy }}>Permitted Sections:</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                    {ALL_TABS.filter(t => t.key !== 'overview').map(t => (
+                      <label key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 12, background: newRoleTabs[t.key] ? theme.tealMist : theme.bg, border: `1px solid ${newRoleTabs[t.key] ? theme.tealDeep : theme.border}`, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!newRoleTabs[t.key]} onChange={(e) => setNewRoleTabs(prev => ({ ...prev, [t.key]: e.target.checked }))} style={{ width: 12, height: 12 }} />
+                        {t.label.replace(/\s*\(\d+\)/g, '')}
+                      </label>
+                    ))}
+                  </div>
+                  <button onClick={async () => {
+                    if (!newRoleName.trim()) return
+                    setSavingRole(true)
+                    try {
+                      const tabs = { overview: true, ...newRoleTabs }
+                      await callAdminAuth('create_admin_role', { token: localStorage.getItem('admin_token'), name: newRoleName.trim(), description: newRoleDesc, carefindTabs: tabs })
+                      setNewRoleName(''); setNewRoleDesc(''); setNewRoleTabs({})
+                      loadAdminRoles()
+                      showToast('Role created', { type: 'success' })
+                    } catch (e) { showToast(e.message || 'Failed', { type: 'error' }) }
+                    setSavingRole(false)
+                  }} disabled={savingRole} style={{ padding: '8px 14px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 12 }}>
+                    {savingRole ? 'Creating...' : 'Create Role'}
+                  </button>
+                </div>
+
+                {adminRoles.map(r => (
+                  <div key={r.id} style={{ padding: 10, border: `1px solid ${theme.border}`, borderRadius: 10, marginBottom: 8, background: r.is_system ? '#faf5ff' : theme.cardBg }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <p style={{ margin: '0 0 2px 0', fontWeight: 700, fontSize: 12, color: theme.navy }}>{r.name.replace(/_/g, ' ')} {r.is_system && <span style={{ fontSize: 9, background: '#e9d5ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 8 }}>SYSTEM</span>}</p>
+                        <p style={{ margin: '0 0 4px 0', fontSize: 10, color: theme.textLight }}>{r.description || 'No description'}</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                          {Object.entries(r.carefind_tabs || {}).filter(([,v]) => v).map(([k]) => (
+                            <span key={k} style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8, background: theme.tealMist, color: theme.tealDeep }}>{k}</span>
+                          ))}
+                        </div>
+                      </div>
+                      {!r.is_system && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={() => { setEditingRoleId(r.id); setEditingRoleTabs(r.carefind_tabs || {}) }} style={{ padding: '4px 8px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                          <button onClick={async () => {
+                            try {
+                              await callAdminAuth('delete_admin_role', { token: localStorage.getItem('admin_token'), roleId: r.id })
+                              loadAdminRoles(); showToast('Role deleted', { type: 'success' })
+                            } catch (e) { showToast(e.message || 'Failed', { type: 'error' }) }
+                          }} style={{ padding: '4px 8px', background: theme.dangerBg, color: theme.alert, border: 'none', borderRadius: 8, fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                        </div>
+                      )}
+                    </div>
+                    {editingRoleId === r.id && (
+                      <div style={{ marginTop: 8, padding: 8, background: theme.bg, borderRadius: 8 }}>
+                        <p style={{ margin: '0 0 6px 0', fontSize: 10, fontWeight: 700, color: theme.navy }}>Edit Permissions:</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                          {ALL_TABS.filter(t => t.key !== 'overview').map(t => (
+                            <label key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 10, background: editingRoleTabs[t.key] ? theme.tealMist : theme.cardBg, border: `1px solid ${editingRoleTabs[t.key] ? theme.tealDeep : theme.border}`, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={!!editingRoleTabs[t.key]} onChange={(e) => setEditingRoleTabs(prev => ({ ...prev, [t.key]: e.target.checked }))} style={{ width: 10, height: 10 }} />
+                              {t.label.replace(/\s*\(\d+\)/g, '').slice(0, 12)}
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button onClick={async () => {
+                            try {
+                              await callAdminAuth('update_admin_role', { token: localStorage.getItem('admin_token'), roleId: r.id, carefindTabs: { overview: true, ...editingRoleTabs } })
+                              setEditingRoleId(null); loadAdminRoles(); showToast('Role updated', { type: 'success' })
+                            } catch (e) { showToast(e.message || 'Failed', { type: 'error' }) }
+                          }} style={{ padding: '4px 10px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 8, fontSize: 10, fontWeight: 700 }}>Save</button>
+                          <button onClick={() => setEditingRoleId(null)} style={{ padding: '4px 10px', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, fontSize: 10, fontWeight: 700 }}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1641,7 +1702,7 @@ export default function AdminPanel() {
         {tab === 'stories' && (
           <div>
             <div style={card}>
-              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📸 Post a Story</p>
+              <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Post a Story</p>
               <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Stories appear at the top of the feed for all users and auto-expire after 24 hours.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} placeholder="Story title (e.g. New Feature!)" style={input} />
@@ -1797,7 +1858,7 @@ export default function AdminPanel() {
         {tab === 'promotions' && (
           <div>
             <div style={card}>
-              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>🎯 Add a Promotion</p>
+              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Add a Promotion</p>
               <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Promotions appear in the moving featured strip on MedMarket. They auto-expire on the date you set.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input value={promoTitle} onChange={(e) => setPromoTitle(e.target.value)} placeholder="Promotion title (e.g. 50% off Vitamin C)" style={input} />
@@ -1829,7 +1890,7 @@ export default function AdminPanel() {
                 <div key={p.id} style={{ ...card, opacity: expired ? 0.5 : 1 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <div style={{ width: 60, height: 60, borderRadius: 10, flexShrink: 0, background: p.image_url ? `url(${p.image_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800 }}>
-                      {!p.image_url && '🎯'}
+                      {!p.image_url && 'No image'}
                     </div>
                     <div style={{ flex: 1 }}>
                       <p style={{ margin: '0 0 2px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>{p.title}</p>
@@ -1874,7 +1935,7 @@ export default function AdminPanel() {
 
                   {/* Demand gaps — the gold */}
                   <div style={card}>
-                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>🎯 Demand gaps: searched but NOT found</p>
+                    <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 14, color: theme.alert }}>Demand gaps: searched but NOT found</p>
                     <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>These are products/services people want that you don't have yet. Consider stocking or adding them.</p>
                     {gaps.length === 0 && <p style={{ fontSize: 13, color: theme.textLight }}>No unmet searches yet.</p>}
                     {gaps.map(([term, count]) => (
@@ -1957,7 +2018,7 @@ export default function AdminPanel() {
                         <input type="file" accept="image/*" onChange={(e) => setLiveImage(e.target.files[0] || null)} style={{ display: 'none' }} />
                       </label>
                       <button onClick={() => postLiveItem(s.id)} disabled={postingLive} style={{ padding: '8px 18px', background: theme.tealGradient, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 13 }}>
-                        {postingLive ? 'Posting…' : '📡 Post Live'}
+                        {postingLive ? 'Posting...' : 'Post Live'}
                       </button>
                     </div>
 
@@ -1999,14 +2060,14 @@ export default function AdminPanel() {
             {/* Scheduled / upcoming shows */}
             {scheduledShows.length > 0 && (
               <div style={card}>
-                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📅 Scheduled Shows</p>
+                <p style={{ margin: '0 0 10px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Scheduled Shows</p>
                 {scheduledShows.map(s => (
                   <div key={s.id} style={{ padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: theme.navy }}>{s.title}</p>
                     <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>🕐 {new Date(s.scheduled_at).toLocaleString()}</p>
                     {s.trailer_url && <video src={s.trailer_url} controls playsInline style={{ maxWidth: 160, borderRadius: 8, display: 'block', marginBottom: 8 }} />}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => startScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#dc2626', border: 'none', padding: '8px 14px', borderRadius: 16 }}>📡 Start Now</button>
+                      <button onClick={() => startScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: '#dc2626', border: 'none', padding: '8px 14px', borderRadius: theme.radius.full }}>Start Now</button>
                       <a href={`/live-show/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, background: theme.tealMist, padding: '8px 12px', borderRadius: 16, textDecoration: 'none' }}>👁 Preview</a>
                       <button onClick={() => cancelScheduledShow(s.id)} style={{ fontSize: 12, fontWeight: 700, color: theme.alert, background: theme.dangerBg, border: 'none', padding: '8px 12px', borderRadius: 16 }}>Cancel</button>
                     </div>
@@ -2016,7 +2077,7 @@ export default function AdminPanel() {
             )}
 
             <div style={card}>
-              <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>📡 Start a Live Show</p>
+                <p style={{ margin: '0 0 6px 0', fontWeight: 800, fontSize: 14, color: theme.navy }}>Start a Live Show</p>
               <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: theme.textLight }}>Go live on CareFind. A red LIVE indicator shows in everyone's stories row. Invite guests to co-host. They'll get a notification.</p>
               <input value={liveTitle} onChange={(e) => setLiveTitle(e.target.value)} placeholder="Show title (e.g. Malaria Awareness Live)" style={{ ...input, marginBottom: 12 }} />
 
@@ -2041,12 +2102,12 @@ export default function AdminPanel() {
               </div>
 
               <button onClick={startLiveShow} disabled={creatingShow} style={{ width: '100%', padding: 13, background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14, marginBottom: 14 }}>
-                {creatingShow ? 'Starting…' : '📡 Go Live Now'}
+                {creatingShow ? 'Starting...' : 'Go Live Now'}
               </button>
 
               {/* Schedule for later */}
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 14 }}>
-                <p style={{ margin: '0 0 6px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>📅 Or schedule for later</p>
+                <p style={{ margin: '0 0 6px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Or schedule for later</p>
                 <p style={{ margin: '0 0 8px 0', fontSize: 11, color: theme.textLight }}>Set a time and an optional trailer. A countdown shows in the stories row so your audience knows a live is coming.</p>
                 <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ ...input, marginBottom: 8 }} />
                 <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
@@ -2054,7 +2115,7 @@ export default function AdminPanel() {
                   <input type="file" accept="video/*" onChange={(e) => setTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
                 </label>
                 <button onClick={scheduleShow} disabled={creatingShow} style={{ width: '100%', padding: 12, background: theme.navy, color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13 }}>
-                  {creatingShow ? 'Scheduling…' : '📅 Schedule Show'}
+                  {creatingShow ? 'Scheduling...' : 'Schedule Show'}
                 </button>
               </div>
             </div>
@@ -2062,65 +2123,14 @@ export default function AdminPanel() {
         )}
 
         {tab === 'shop' && (
-          <div>
-            <div style={{ ...card, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20` }}>
-              <p style={{ margin: '0 0 4px 0', fontWeight: 800, fontSize: 13, color: theme.navy }}>🛒 Shop / E-commerce (A18)</p>
-              <p style={{ margin: 0, fontSize: 11.5, color: theme.textMid }}>Approve vendor applications, moderate products, monitor orders and delivery/fulfilment exceptions.</p>
-            </div>
-            <div style={{ ...card }}>
-              <p style={{ margin: '0 0 8px 0', fontWeight: 800, fontSize: 12, color: theme.navy }}>Seller Applications ({ecomApps.length})</p>
-              {ecomApps.length===0 ? <p style={{ color: theme.textLight, fontSize:12 }}>No applications yet.</p> : ecomApps.map(a=>(
-                <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:`1px solid ${theme.border}` }}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{a.businesses?.name || a.business_id.slice(0,8)} · {a.businesses?.business_type||''} · {a.businesses?.city||''}</div>
-                    <div style={{ fontSize:11, color:theme.textLight }}>{a.seller_info?.contactName||''} {a.seller_info?.contactPhone||''} · {new Date(a.created_at).toLocaleDateString()}</div>
-                    <span style={{ fontSize:9, fontWeight:800, padding:'2px 6px', borderRadius:10, background: a.status==='Approved'?theme.tealMist:a.status==='Rejected'?theme.dangerBg:theme.amberBg, color: a.status==='Approved'?theme.tealDeep:a.status==='Rejected'?theme.alert:theme.amberText }}>{a.status}</span>
-                  </div>
-                  <div style={{ display:'flex', gap:6 }}>
-                    {a.status!=='Approved' && <button onClick={()=>updateEcomApp(a.id,'Approved')} style={{ padding:'6px 10px', background:theme.tealGradient, color:'#fff', border:'none', borderRadius:8, fontWeight:700, fontSize:11 }}>Approve</button>}
-                    {a.status!=='Rejected' && <button onClick={()=>updateEcomApp(a.id,'Rejected')} style={{ padding:'6px 10px', background:theme.dangerBg, color:theme.alert, border:'none', borderRadius:8, fontWeight:700, fontSize:11 }}>Reject</button>}
-                    {a.status!=='Suspended' && <button onClick={()=>updateEcomApp(a.id,'Suspended')} style={{ padding:'6px 10px', background:theme.bg, color:theme.textMid, border:`1px solid ${theme.border}`, borderRadius:8, fontWeight:700, fontSize:11 }}>Suspend</button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ ...card }}>
-              <p style={{ margin:'0 0 8px 0', fontWeight:800, fontSize:12, color:theme.navy }}>Products for moderation ({ecomProductsAdmin.length})</p>
-              {ecomProductsAdmin.length===0 ? <p style={{ color:theme.textLight, fontSize:12 }}>No products yet.</p> : ecomProductsAdmin.slice(0,20).map(p=>(
-                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:`1px solid ${theme.border}` }}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{p.products?.name} · <span style={{ fontWeight:400, color:theme.textLight }}>{p.category}</span> {p.is_restricted && <span style={{ fontSize:9, background:theme.dangerBg, color:theme.alert, padding:'1px 6px', borderRadius:10 }}>RESTRICTED</span>}</div>
-                    <div style={{ fontSize:11, color:theme.textLight }}>{p.businesses?.name} · {p.status} · stock {p.products?.stock ?? '—'} {p.prescription_required ? '· Rx' : ''}</div>
-                  </div>
-                  <div style={{ display:'flex', gap:6 }}>
-                    {p.is_restricted ? <button onClick={()=>moderateProduct(p.id,{ is_restricted:false })} style={{ padding:'6px 8px', background:theme.tealMist, color:theme.tealDeep, border:'none', borderRadius:8, fontSize:11, fontWeight:700 }}>Unrestrict</button> : <button onClick={()=>moderateProduct(p.id,{ is_restricted:true })} style={{ padding:'6px 8px', background:theme.dangerBg, color:theme.alert, border:'none', borderRadius:8, fontSize:11, fontWeight:700 }}>Restrict</button>}
-                    {p.status==='Active' && <button onClick={()=>moderateProduct(p.id,{ status:'Paused' })} style={{ padding:'6px 8px', background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:8, fontSize:11 }}>Pause</button>}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{ ...card }}>
-              <p style={{ margin:'0 0 8px 0', fontWeight:800, fontSize:12, color:theme.navy }}>Recent Shop Orders ({shopOrdersAdmin.length})</p>
-              {shopOrdersAdmin.length===0 ? <p style={{ color:theme.textLight, fontSize:12 }}>No shop orders yet.</p> : shopOrdersAdmin.map(o=>(
-                <div key={o.id} style={{ padding:'8px 0', borderBottom:`1px solid ${theme.border}` }}>
-                  <div style={{ display:'flex', justifyContent:'space-between' }}>
-                    <span style={{ fontWeight:700, fontSize:12, color:theme.navy }}>{o.order_ref} · {o.status}</span>
-                    <span style={{ fontSize:11, color:theme.textMid }}>₦{(o.total_kobo/100).toLocaleString()}</span>
-                  </div>
-                  <div style={{ fontSize:11, color:theme.textLight }}>{o.customer_name||o.customer_id.slice(0,8)} → {o.vendor_business_id.slice(0,8)} · {o.delivery_preference} {o.is_approved_city===false?'(quote pending)':''} · {new Date(o.created_at).toLocaleDateString()}</div>
-                  <div style={{ fontSize:10, color:theme.textLight }}>{(o.shop_order_items||[]).map(i=>`${i.product_name}×${i.quantity}`).join(', ')}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AdminShop showToast={showToast} />
         )}
 
         {tab === 'notifications' && (
           <div>
             {notifications.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
-                <p style={{ fontSize: 30, margin: '0 0 10px 0' }}>🔔</p>
-                <p style={{ color: theme.textLight, fontSize: 13 }}>All clear. No pending issues</p>
+                <p style={{ fontSize: 13, color: theme.textLight }}>All clear. No pending issues</p>
               </div>
             )}
             {notifications.map((n, i) => (
@@ -2143,7 +2153,6 @@ export default function AdminPanel() {
         )}
 
       </div>
-    </div>
 
     <ConfirmDialog
       show={!!confirmState}
@@ -2154,6 +2163,6 @@ export default function AdminPanel() {
       confirmLabel={confirmState?.confirmLabel || 'Delete'}
     />
     <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
-    </>
+    </AdminLayout>
   )
 }
