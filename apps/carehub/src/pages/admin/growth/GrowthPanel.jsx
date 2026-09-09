@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { Layers, TrendingUp, MapPin } from 'lucide-react'
+import { Layers, TrendingUp, MapPin, Gift } from 'lucide-react'
 import Hierarchy from './Hierarchy'
 import Performance from './Performance'
-import { CoveragePanel as ReferralCoveragePanel } from '../referral/AdminReferralPanels'
+import CoverageHeatmap from './CoverageHeatmap'
+import Campaign from './Campaign'
 
 const SUBS = [
   { id: 'hierarchy', label: 'Hierarchy', icon: Layers, comp: Hierarchy },
   { id: 'performance', label: 'Performance', icon: TrendingUp, comp: Performance },
-  { id: 'coverage', label: 'Coverage', icon: MapPin, comp: ReferralCoveragePanel },
+  { id: 'coverage', label: 'Heatmap', icon: MapPin, comp: CoverageHeatmap },
+  { id: 'campaign', label: 'Campaign', icon: Gift, comp: Campaign },
 ]
 
 export default function GrowthPanel() {

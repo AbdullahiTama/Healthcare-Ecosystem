@@ -21,6 +21,22 @@ describe('growthRepository', () => {
     expect(tree.find(t => t.state === 'Abuja').total).toBe(1)
   })
 
+  it('getCoverageGaps computes gap heuristic', async () => {
+    const { repo } = build({
+      agents: [{ id: 'a1', state: 'Lagos' }, { id: 'a2', state: 'Lagos' }],
+      businesses: [{ state: 'Lagos' }, { state: 'Lagos' }, { state: 'Lagos' }, { state: 'Abuja' }],
+    })
+    const gaps = await repo.getCoverageGaps({ limit: 10 })
+    const lagos = gaps.find(g => g.state === 'Lagos')
+    expect(lagos.agents).toBe(2)
+    expect(lagos.businesses).toBe(3)
+  })
+
+  it('generateReferralLink encodes', () => {
+    const { repo } = build()
+    expect(repo.generateReferralLink('CF-ABC', 'https://example.com')).toBe('https://example.com/register?ref=CF-ABC')
+  })
+
   it('getPerformance fallback aggregates referrals and earnings', async () => {
     const { repo } = build({
       agents: [{ id: 'a1', full_name: 'A', state: 'Lagos', tier: 'agent', parent_agent_id: null }],

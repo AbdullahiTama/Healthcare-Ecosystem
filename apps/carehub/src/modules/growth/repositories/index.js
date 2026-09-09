@@ -46,6 +46,38 @@ export function createGrowthRepository({ request = sbFetch } = {}) {
       }
       return results.sort((a, b) => b.referrals - a.referrals)
     },
+    async getBusinessesByState({ limit = 200 } = {}) {
+      return request(`businesses?select=state&limit=${limit}`).catch(() => [])
+    },
+    async getCoverageGaps({ limit = 200 } = {}) {
+      const [agents, businesses] = await Promise.all([
+        this.getAgents({ limit }),
+        this.getBusinessesByState({ limit }),
+      ])
+      const agentByState = {}
+      for (const a of (agents || [])) {
+        const s = (a.state || '—').trim() || '—'
+        agentByState[s] = (agentByState[s] || 0) + 1
+      }
+      const bizByState = {}
+      for (const b of (businesses || [])) {
+        const s = (b.state || '—').trim() || '—'
+        bizByState[s] = (bizByState[s] || 0) + 1
+      }
+      const states = new Set([...Object.keys(agentByState), ...Object.keys(bizByState)])
+      const rows = []
+      for (const s of states) {
+        const agentsCount = agentByState[s] || 0
+        const bizCount = bizByState[s] || 0
+        const gap = bizCount - agentsCount * 10 // heuristic: 1 agent per 10 businesses
+        rows.push({ state: s, agents: agentsCount, businesses: bizCount, gap, gapLabel: gap > 20 ? 'thin' : gap > 0 ? 'watch' : 'covered' })
+      }
+      return rows.sort((a, b) => b.gap - a.gap)
+    },
+    generateReferralLink(referralCode, base) {
+      const origin = base || (typeof window !== 'undefined' ? window.location.origin : 'https://carefindhub.com')
+      return `${origin}/register?ref=${encodeURIComponent(referralCode)}`
+    },
     // Build tree: state -> coordinator -> agents
     buildTree(agents) {
       const byState = {}
