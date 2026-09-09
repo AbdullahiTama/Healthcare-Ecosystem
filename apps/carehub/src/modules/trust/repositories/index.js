@@ -17,6 +17,11 @@ export function createTrustRepository({ request = sbFetch } = {}) {
       if (status) q += `&status=eq.${encodeURIComponent(status)}`
       return request(q).catch(() => [])
     },
+    async getStaffClaims({ status = 'pending', limit = 50 } = {}) {
+      let q = `staff_claims?order=created_at.desc&limit=${limit}&select=*`
+      if (status) q += `&status=eq.${encodeURIComponent(status)}`
+      return request(q).catch(() => [])
+    },
     async getReports({ status = 'pending', limit = 50 } = {}) {
       let q = `reports?order=created_at.desc&limit=${limit}&select=*`
       if (status) q += `&status=eq.${encodeURIComponent(status)}`
@@ -26,6 +31,12 @@ export function createTrustRepository({ request = sbFetch } = {}) {
       let q = `moderation_appeals?order=created_at.desc&limit=${limit}&select=*`
       if (status) q += `&status=eq.${encodeURIComponent(status)}`
       return request(q).catch(() => [])
+    },
+    async updateBusinessClaim(id, patch) {
+      return request(`business_claims?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }).catch(() => [])
+    },
+    async updateStaffClaim(id, patch) {
+      return request(`staff_claims?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }).catch(() => [])
     },
 
     // ── Unified queue ─────────────────────────────────────────────────────
@@ -64,6 +75,36 @@ export function createTrustRepository({ request = sbFetch } = {}) {
     async quarantinePost(postId, reason, actor_admin_id) {
       await request(`posts?id=eq.${postId}`, { method: 'PATCH', body: JSON.stringify({ is_quarantined: true }), prefer: 'return=minimal' }).catch(() => {})
       return this.logModeration({ target_type: 'post', target_id: postId, action: 'quarantine', reason, actor_admin_id })
+    },
+
+    // ── Drug Intel → ADR (T5) ───────────────────────────────────────────
+    async getProducts({ limit = 20 } = {}) {
+      let q = `products?order=created_at.desc&limit=${limit}&select=id,name,generic_name`
+      return request(q).catch(() => [])
+    },
+    async getProductReviews({ product_id, limit = 50 } = {}) {
+      let q = `product_reviews?order=created_at.desc&limit=${limit}&select=*`
+      if (product_id) q += `&product_id=eq.${product_id}`
+      return request(q).catch(() => [])
+    },
+    async flagReview(reviewId, patch) {
+      return request(`product_reviews?id=eq.${reviewId}`, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }).catch(() => [])
+    },
+    async createAdrDraft({ business_id, product_name, review_text, severity }) {
+      if (!business_id) throw new Error('business_id required')
+      // Minimal draft: patient_identifier = review excerpt, via adr_reports
+      return request('adr_reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          business_id,
+          module_type: 'community_pharmacy',
+          status: 'draft',
+          patient_identifier: `Auto from review: ${review_text?.slice(0, 40)}`,
+          reaction_description: review_text?.slice(0, 200) || 'Adverse signal',
+          severity: severity || 'moderate',
+        }),
+        prefer: 'return=representation',
+      }).catch(() => [])
     },
   }
 }

@@ -46,4 +46,25 @@ describe('trustRepository', () => {
     const rows = await repo.getVerifications()
     expect(rows).toEqual([])
   })
+
+  it('getStaffClaims and updateClaim', async () => {
+    const { repo, client } = build({ staff_claims: [{ id: 's1', status: 'pending' }], business_claims: [{ id: 'c1', status: 'pending' }] })
+    expect((await repo.getStaffClaims()).length).toBe(1)
+    await repo.updateBusinessClaim('c1', { status: 'approved' })
+    expect(client.rows('business_claims')[0].status).toBe('approved')
+    await repo.updateStaffClaim('s1', { status: 'rejected' })
+    expect(client.rows('staff_claims')[0].status).toBe('rejected')
+  })
+
+  it('createAdrDraft requires business_id', async () => {
+    const { repo } = build()
+    await expect(repo.createAdrDraft({ product_name: 'X' })).rejects.toThrow('business_id required')
+  })
+
+  it('getProductReviews and flagReview', async () => {
+    const { repo, client } = build({ product_reviews: [{ id: 'r1', product_id: 'p1', rating: 1, comment: 'rash' }] })
+    expect((await repo.getProductReviews({ product_id: 'p1' })).length).toBe(1)
+    await repo.flagReview('r1', { is_flagged: true })
+    expect(client.rows('product_reviews')[0].is_flagged).toBe(true)
+  })
 })
