@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText
+  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
 } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import {
@@ -29,6 +29,8 @@ import HealthPanel from './health/HealthPanel'
 import MoneyPanel from './money/MoneyPanel'
 import TrustPanel from './trust/TrustPanel'
 import GrowthPanel from './growth/GrowthPanel'
+import SupportInbox from './ops/SupportInbox'
+import Compliance from './compliance/Compliance'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function useDebounced(value, ms = 300) {
@@ -1295,6 +1297,8 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
     { id: 'money', label: 'Money', icon: Wallet, perm: 'Money', count: null },
     { id: 'trust', label: 'Trust', icon: Shield, perm: 'Trust', count: null },
     { id: 'growth', label: 'Growth', icon: TrendingUp, perm: 'Growth', count: null },
+    { id: 'ops', label: 'Ops', icon: Inbox, perm: 'Ops', count: null },
+    { id: 'compliance', label: 'Compliance', icon: ShieldAlert, perm: 'Compliance', count: null },
   ].filter(it => can(it.perm) || it.id==='dashboard')
 
   const width = collapsed ? 64 : 256
@@ -1673,6 +1677,8 @@ export default function AdminDashboard() {
               {tab==='money' && (isPermitted('Money') ? <MoneyPanel /> : <Empty icon={<Shield size={28} />} message="No access to Money" />)}
               {tab==='trust' && (isPermitted('Trust') ? <TrustPanel /> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
               {tab==='growth' && (isPermitted('Growth') ? <GrowthPanel /> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
+              {tab==='ops' && (isPermitted('Ops') ? <SupportInbox /> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
+              {tab==='compliance' && (isPermitted('Compliance') ? <Compliance /> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
             </>
           )}
         </div>
