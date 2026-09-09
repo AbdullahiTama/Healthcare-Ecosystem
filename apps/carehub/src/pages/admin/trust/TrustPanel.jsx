@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Shield, Eye, FileText, Flag, AlertTriangle } from 'lucide-react'
 import TrustQueue from './TrustQueue'
+import Verifications from './Verifications'
+import Moderation from './Moderation'
 
 const SUBS = [
   { id: 'queue', label: 'Queue', icon: Shield, comp: TrustQueue },
-  // Placeholders for next slices — keep rail stable
-  { id: 'verify', label: 'Verifications', icon: Eye, comp: () => <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Verifications workbench — next slice (T2). Use Trust Queue for now.</div> },
-  { id: 'claims', label: 'Claims', icon: FileText, comp: () => <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Claims center — next slice (T3). Business + staff claims unified.</div> },
-  { id: 'moderation', label: 'Moderation', icon: Flag, comp: () => <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Moderation HQ — next slice (T4). Quarantine vs delete.</div> },
+  { id: 'verify', label: 'Verifications', icon: Eye, comp: Verifications },
+  { id: 'moderation', label: 'Moderation', icon: Flag, comp: Moderation },
+  { id: 'claims', label: 'Claims', icon: FileText, comp: () => <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Claims center — next slice (T3). Business + staff claims unified (use Queue for now).</div> },
   { id: 'drug', label: 'Drug Intel', icon: AlertTriangle, comp: () => <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Drug Intel → ADR — next slice (T5).</div> },
 ]
 
