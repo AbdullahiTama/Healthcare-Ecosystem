@@ -17,6 +17,7 @@ export const PLATFORM_PERMISSIONS = [
   'Health',
   'Money',
   'Trust',
+  'Growth',
 ]
 
 export const PLATFORM_NAV = [
@@ -31,6 +32,7 @@ export const PLATFORM_NAV = [
   { id: 'health', label: 'Health', perm: 'Health' },
   { id: 'money', label: 'Money', perm: 'Money' },
   { id: 'trust', label: 'Trust', perm: 'Trust' },
+  { id: 'growth', label: 'Growth', perm: 'Growth' },
 ]
 
 export function normalizePlatformPermissions(raw) {
