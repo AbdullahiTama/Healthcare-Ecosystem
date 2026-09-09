@@ -14,6 +14,9 @@ export const PLATFORM_PERMISSIONS = [
   'Ledger',
   'Payouts',
   'Coverage',
+  'Health',
+  'Money',
+  'Trust',
 ]
 
 export const PLATFORM_NAV = [
@@ -25,6 +28,9 @@ export const PLATFORM_NAV = [
   { id: 'ledger', label: 'Ledger', perm: 'Ledger' },
   { id: 'payouts', label: 'Payouts', perm: 'Payouts' },
   { id: 'coverage', label: 'Coverage', perm: 'Coverage' },
+  { id: 'health', label: 'Health', perm: 'Health' },
+  { id: 'money', label: 'Money', perm: 'Money' },
+  { id: 'trust', label: 'Trust', perm: 'Trust' },
 ]
 
 export function normalizePlatformPermissions(raw) {

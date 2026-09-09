@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen
+  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText
 } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import {
@@ -25,6 +25,9 @@ import { PLATFORM_PERMISSIONS, PLATFORM_NAV, normalizePlatformPermissions, navCa
 import { toBusinessCsv, downloadCsv, buildStatementHtml, openPrintWindow } from '../../lib/carefindhubExports'
 import { buildCommandList, scoreCommand } from './commandRegistry'
 import { CoveragePanel as ReferralCoveragePanel } from './referral/AdminReferralPanels'
+import HealthPanel from './health/HealthPanel'
+import MoneyPanel from './money/MoneyPanel'
+import TrustPanel from './trust/TrustPanel'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function useDebounced(value, ms = 300) {
@@ -1287,6 +1290,9 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
     { id: 'ledger', label: 'Ledger', icon: Landmark, perm: 'Ledger', count: null },
     { id: 'payouts', label: 'Payouts', icon: Wallet, perm: 'Payouts', count: counts.pendingPayouts },
     { id: 'coverage', label: 'Coverage', icon: MapPin, perm: 'Coverage', count: null },
+    { id: 'health', label: 'Health', icon: ShieldAlert, perm: 'Health', count: null },
+    { id: 'money', label: 'Money', icon: Wallet, perm: 'Money', count: null },
+    { id: 'trust', label: 'Trust', icon: Shield, perm: 'Trust', count: null },
   ].filter(it => can(it.perm) || it.id==='dashboard')
 
   const width = collapsed ? 64 : 256
@@ -1661,6 +1667,9 @@ export default function AdminDashboard() {
               {tab==='ledger' && (isPermitted('Ledger') ? <LedgerUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Ledger" />)}
               {tab==='payouts' && (isPermitted('Payouts') ? <PayoutsUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Payouts" />)}
               {tab==='coverage' && (isPermitted('Coverage') ? <CoveragePanelWrapper /> : <Empty icon={<Shield size={28} />} message="No access to Coverage" />)}
+              {tab==='health' && (isPermitted('Health') ? <HealthPanel /> : <Empty icon={<Shield size={28} />} message="No access to Health" />)}
+              {tab==='money' && (isPermitted('Money') ? <MoneyPanel /> : <Empty icon={<Shield size={28} />} message="No access to Money" />)}
+              {tab==='trust' && (isPermitted('Trust') ? <TrustPanel /> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
             </>
           )}
         </div>
