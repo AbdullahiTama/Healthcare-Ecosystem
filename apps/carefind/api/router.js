@@ -154,5 +154,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: err.message })
   }
 
-  return target(req, res)
+  try {
+    return await target(req, res)
+  } catch (err) {
+    console.error(`[router] ${route} crashed:`, err)
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err.message || 'Internal server error' })
+    }
+  }
 }
