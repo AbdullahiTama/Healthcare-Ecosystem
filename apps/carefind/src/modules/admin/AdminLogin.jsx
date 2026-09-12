@@ -71,16 +71,16 @@ export default function AdminLogin() {
             <Shield size={28} color="#fff" strokeWidth={2.2} />
           </div>
           <h1 style={{
-            fontSize: theme.typography.h1.size,
-            fontWeight: theme.typography.h1.weight,
+            fontSize: theme.type.h1.size,
+            fontWeight: theme.type.h1.weight,
             color: theme.navy,
             margin: '0 0 6px',
-            letterSpacing: theme.typography.h1.tracking,
+            letterSpacing: theme.type.h1.letterSpacing,
           }}>
             CareFind Admin
           </h1>
           <p style={{
-            fontSize: theme.typography.body.color,
+            fontSize: theme.type.body.size,
             color: theme.textMid,
             margin: 0,
           }}>
@@ -99,11 +99,11 @@ export default function AdminLogin() {
             <div style={{ marginBottom: 20 }}>
               <label style={{
                 display: 'block',
-                fontSize: theme.typography.caption.size,
-                fontWeight: theme.typography.caption.weight,
+                fontSize: theme.type.caption.size,
+                fontWeight: theme.type.caption.weight,
                 color: theme.textMid,
                 marginBottom: 8,
-                letterSpacing: theme.typography.caption.tracking,
+                letterSpacing: theme.type.caption.letterSpacing,
                 textTransform: 'uppercase',
               }}>
                 Email Address
@@ -117,7 +117,7 @@ export default function AdminLogin() {
                 style={{
                   width: '100%',
                   padding: '12px 14px',
-                  fontSize: theme.typography.body.size,
+                  fontSize: theme.type.body.size,
                   border: `1px solid ${theme.border}`,
                   borderRadius: theme.radius.md,
                   outline: 'none',
@@ -134,11 +134,11 @@ export default function AdminLogin() {
             <div style={{ marginBottom: 24 }}>
               <label style={{
                 display: 'block',
-                fontSize: theme.typography.caption.size,
-                fontWeight: theme.typography.caption.weight,
+                fontSize: theme.type.caption.size,
+                fontWeight: theme.type.caption.weight,
                 color: theme.textMid,
                 marginBottom: 8,
-                letterSpacing: theme.typography.caption.tracking,
+                letterSpacing: theme.type.caption.letterSpacing,
                 textTransform: 'uppercase',
               }}>
                 Password
@@ -153,7 +153,7 @@ export default function AdminLogin() {
                   style={{
                     width: '100%',
                     padding: '12px 44px 12px 14px',
-                    fontSize: theme.typography.body.size,
+                    fontSize: theme.type.body.size,
                     border: `1px solid ${theme.border}`,
                     borderRadius: theme.radius.md,
                     outline: 'none',
@@ -202,9 +202,9 @@ export default function AdminLogin() {
                 <AlertCircle size={16} color={theme.alert} style={{ flexShrink: 0, marginTop: 1 }} />
                 <p style={{
                   margin: 0,
-                  fontSize: theme.typography.bodySm.size,
+                  fontSize: theme.type.bodySm.size,
                   color: theme.alert,
-                  fontWeight: theme.typography.bodySm.weight,
+                  fontWeight: theme.type.bodySm.weight,
                   lineHeight: 1.4,
                 }}>
                   {error}
@@ -218,7 +218,7 @@ export default function AdminLogin() {
               style={{
                 width: '100%',
                 padding: '13px 20px',
-                fontSize: theme.typography.body.fontWeight,
+                fontSize: theme.type.body.size,
                 fontWeight: 700,
                 background: loading ? theme.textLight : theme.tealGradient,
                 color: '#fff',
@@ -237,7 +237,7 @@ export default function AdminLogin() {
         <p style={{
           textAlign: 'center',
           marginTop: 24,
-          fontSize: theme.typography.caption.size,
+          fontSize: theme.type.caption.size,
           color: theme.textLight,
         }}>
           Authorized personnel only
