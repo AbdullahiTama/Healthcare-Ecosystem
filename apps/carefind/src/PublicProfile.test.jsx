@@ -92,8 +92,8 @@ beforeEach(() => {
   window.scrollTo = vi.fn()
 })
 
-describe('PublicProfile story rail (Feature 4)', () => {
-  it('renders one circle per story, ordered position → views → newest', async () => {
+describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no separate rail)', () => {
+  it('shows a single avatar ring when stories exist, no separate rail circles, ordering is position → views → newest via viewer', async () => {
     h.ctrl.push({ data: profile, error: null })
     h.ctrl.push({ data: [], error: null }) // posts
     h.ctrl.push({ count: 0, error: null }) // follows (following_id)
@@ -104,14 +104,21 @@ describe('PublicProfile story rail (Feature 4)', () => {
 
     renderProfile()
 
-    const railButtons = await screen.findAllByRole('button', { name: /^View story/ })
-    expect(railButtons.map((b) => b.getAttribute('aria-label'))).toEqual([
-      'View story: Tip',
-      'View story: Morning',
-    ])
+    // Single avatar ring, not per-story rail buttons
+    const ring = await screen.findByRole('button', { name: "View Dr Ada's story" })
+    expect(ring).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^View story:/ })).toBeNull()
+
+    // Tapping ring opens viewer at first story in sorted order (Tip has position 1, so first)
+    fireEvent.click(ring)
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+
+    // Next navigates sequentially to second story (Morning)
+    fireEvent.click(screen.getByRole('button', { name: 'Next story' }))
+    expect(await screen.findByRole('heading', { name: 'Morning' })).toBeInTheDocument()
   })
 
-  it('renders no rail (and no ring button) when the profile has no stories', async () => {
+  it('renders no ring button when the profile has no stories', async () => {
     h.ctrl.push({ data: profile, error: null })
     h.ctrl.push({ data: [], error: null })
     h.ctrl.push({ count: 0, error: null })
@@ -123,28 +130,11 @@ describe('PublicProfile story rail (Feature 4)', () => {
     renderProfile()
 
     await screen.findByRole('heading', { name: 'Dr Ada' })
-    expect(screen.queryByRole('button', { name: /^View story/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^View story:/ })).toBeNull()
     expect(screen.queryByRole('button', { name: "View Dr Ada's story" })).toBeNull()
   })
 
-  it('tapping a rail circle opens the viewer at that story index', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
-
-    renderProfile()
-
-    fireEvent.click((await screen.findAllByRole('button', { name: /^View story/ }))[1])
-    expect(screen.getByRole('heading', { name: 'Morning' })).toBeInTheDocument()
-  })
-})
-
-describe('PublicProfile story chooser (Feature 4 / 5)', () => {
-  it('opens a chooser on ring tap offering View Stories and View Profile', async () => {
+  it('tapping ring opens viewer directly without a chooser menu', async () => {
     h.ctrl.push({ data: profile, error: null })
     h.ctrl.push({ data: [], error: null })
     h.ctrl.push({ count: 0, error: null })
@@ -156,41 +146,29 @@ describe('PublicProfile story chooser (Feature 4 / 5)', () => {
     renderProfile()
 
     fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    expect(screen.getByRole('menuitem', { name: 'View Stories' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'View Profile' })).toBeInTheDocument()
-  })
-
-  it('View Stories starts the viewer from the first story', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
-
-    renderProfile()
-
-    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'View Stories' }))
-    expect(screen.getByRole('heading', { name: 'Tip' })).toBeInTheDocument()
-  })
-
-  it('View Profile dismisses the chooser without opening the viewer', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
-
-    renderProfile()
-
-    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'View Profile' }))
+    // No chooser — viewer appears immediately, no menuitems
     expect(screen.queryByRole('menuitem')).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Tip' })).toBeNull()
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+  })
+
+  it('viewer auto-advance: stories are ordered and accessible sequentially from ring', async () => {
+    h.ctrl.push({ data: profile, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ count: 0, error: null })
+    h.ctrl.push({ count: 0, error: null })
+    h.ctrl.push({ data: stories, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ data: [], error: null })
+
+    renderProfile()
+
+    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+    // Previous goes back with out-of-range handling — first story Previous closes or stays
+    // Next then Previous sequence works
+    fireEvent.click(screen.getByRole('button', { name: 'Next story' }))
+    expect(await screen.findByRole('heading', { name: 'Morning' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous story' }))
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
   })
 })

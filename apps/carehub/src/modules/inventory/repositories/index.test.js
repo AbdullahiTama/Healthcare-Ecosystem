@@ -158,6 +158,46 @@ describe('productRepository', () => {
     expect(called).toBe(false)
   })
 
+  // ── search: consultation-form type-ahead ───────────────────────────────────
+  // The service-layer searchProducts this replaces selected a nonexistent
+  // `sku` column (PGRST204 on every call) and matched name only.
+  it('search matches brand OR generic name, case-insensitively, tenant-scoped', async () => {
+    const client = createInMemoryClient({
+      products: [
+        { id: '1', business_id: A, name: 'Panadol', generic_name: 'Paracetamol', price: 500 },
+        { id: '2', business_id: A, name: 'Amoxicillin', generic_name: null, price: 1500 },
+        { id: '9', business_id: B, name: 'Paracetamol Extra', generic_name: null, price: 900 },
+      ],
+    })
+    const repo = createProductRepository(client)
+
+    // by brand name
+    expect((await repo.search(A, 'panadol')).map(r => r.id)).toEqual(['1'])
+    // by generic name — the match the old query could never make
+    expect((await repo.search(A, 'PARACETAMOL')).map(r => r.id)).toEqual(['1'])
+    // never crosses the tenant boundary
+    expect((await repo.search(A, 'extra')).map(r => r.id)).toEqual([])
+    // blank query issues no request
+    expect(await repo.search(A, '   ')).toEqual([])
+  })
+
+  it('search URL-encodes the query so commas cannot break the or= clause', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path) => { calls.push(path); return [] })
+    await repo.search(A, 'cream, 50g')
+    expect(calls[0]).toContain(encodeURIComponent('cream, 50g'))
+    expect(calls[0]).not.toContain('cream,')
+  })
+
+  it('search selects only real columns and caps the result size', async () => {
+    const calls = []
+    const repo = createProductRepository(async (path) => { calls.push(path); return [] })
+    await repo.search(A, 'para', 5)
+    expect(calls[0]).toContain('select=id,name,generic_name,price,category')
+    expect(calls[0]).toContain('limit=5')
+    expect(calls[0]).not.toContain('sku')
+  })
+
   it('exports a default productRepository instance', () => {
     expect(typeof productRepository.getAll).toBe('function')
     expect(typeof productRepository.deleteBulk).toBe('function')

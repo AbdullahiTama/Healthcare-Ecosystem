@@ -49,16 +49,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: settleResult || 'Could not settle payment' })
   }
 
-  await supabase.from('staff_notifications').insert({
-    business_id: appt.business_id,
-    staff_id: null,
-    is_owner: true,
-    kind: 'booking_paid',
-    title: `Payment received — ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
-    link: '/dashboard/appointments',
-    read_at: null,
-  })
+  // Only notify on a fresh settlement — the webhook also notifies on 'ok',
+  // so this prevents duplicate staff_notifications when the webhook settles
+  // first and the redirect path runs afterward.
+  if (settleResult === 'ok') {
+    await supabase.from('staff_notifications').insert({
+      business_id: appt.business_id,
+      staff_id: null,
+      is_owner: true,
+      kind: 'booking_paid',
+      title: `Payment received — ${appt.client_name}`,
+      body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
+      link: '/dashboard/appointments',
+      read_at: null,
+    })
+  }
 
   return res.status(200).json({ success: true, id: appt.id, paid: true })
 }

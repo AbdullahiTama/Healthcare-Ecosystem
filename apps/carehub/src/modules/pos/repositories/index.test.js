@@ -56,6 +56,21 @@ describe('saleRepository', () => {
     expect((await repo.getToday(A)).map((r) => r.id)).toEqual(['done'])
   })
 
+  // The printed QR encodes txn_no, and the lookup must stay tenant-scoped: the
+  // same txn_no in another business must never resolve here.
+  it('getById looks up by txn_no and stays tenant-scoped', async () => {
+    const { repo } = build({
+      seed: {
+        sales: [
+          { id: 's1', business_id: A, txn_no: 'TXN-1' },
+          { id: 's9', business_id: B, txn_no: 'TXN-1' },
+        ],
+      },
+    })
+    expect((await repo.getById(A, 'TXN-1')).id).toBe('s1')
+    expect(await repo.getById(A, 'TXN-404')).toBeUndefined()
+  })
+
   it('create writes through and stamps the tenant when online', async () => {
     const { repo, client, offline } = build()
     const result = await repo.create(A, { txn_no: 'TXN-1', total: 500 })

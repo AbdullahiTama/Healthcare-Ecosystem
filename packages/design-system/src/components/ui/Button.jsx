@@ -3,10 +3,20 @@ import { theme } from '../../theme'
 
 // Self-contained spinner keyframe — the design-system package must not depend
 // on either app's app-specific keyframes (CareHub: ch-spin, CareFind: cf-spin).
+// Injected once into <head> at module load (guarded for SSR/envs without
+// document) rather than rendered per-instance — a <style> inside <button> both
+// pollutes button.textContent (breaking text-based lookups) and duplicates the
+// rule once per button on the page.
 const SPIN_KEYFRAMES = `
 @keyframes ds-spin {
   to { transform: rotate(360deg); }
 }`
+if (typeof document !== 'undefined' && !document.getElementById('ds-button-keyframes')) {
+  const style = document.createElement('style')
+  style.id = 'ds-button-keyframes'
+  style.textContent = SPIN_KEYFRAMES
+  document.head.appendChild(style)
+}
 
 const VARIANT_STYLES = {
   primary: {
@@ -100,7 +110,7 @@ export const Button = forwardRef(function Button(
     gap: 8,
     width: fullWidth ? '100%' : 'auto',
     boxSizing: 'border-box',
-    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
+    transition: `background ${theme.motion.fast} ${theme.motion.easeOut}, border-color ${theme.motion.fast} ${theme.motion.easeOut}, color ${theme.motion.fast} ${theme.motion.easeOut}, box-shadow ${theme.motion.fast} ${theme.motion.easeOut}, transform ${theme.motion.fast} ${theme.motion.easeOut}`,
     ...style,
   }
 
@@ -144,7 +154,6 @@ export const Button = forwardRef(function Button(
       {leftIcon && !loading && <span style={{ display: 'inline-flex', flexShrink: 0 }}>{leftIcon}</span>}
       {loading ? loadingText : children}
       {rightIcon && !loading && <span style={{ display: 'inline-flex', flexShrink: 0 }}>{rightIcon}</span>}
-      <style dangerouslySetInnerHTML={{ __html: SPIN_KEYFRAMES }} />
     </button>
   )
 })

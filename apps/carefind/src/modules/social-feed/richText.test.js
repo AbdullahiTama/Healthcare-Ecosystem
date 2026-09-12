@@ -43,4 +43,25 @@ describe('previewText', () => {
   it('strips bracket markers from plain text', () => {
     expect(previewText('{b}Hello{/b} world')).toBe('Hello world')
   })
+
+  it('reads text out of a JSON block array without dumping raw JSON', () => {
+    const body = JSON.stringify([{ id: 'a', type: 'text', content: 'Never drink water during these situations.' }])
+    expect(previewText(body)).toBe('Never drink water during these situations.')
+  })
+
+  it('keeps valid \\n escapes inside a JSON block as line breaks, not raw text', () => {
+    const body = JSON.stringify([{ id: 'a', type: 'text', content: 'Line one.\\nLine two.' }])
+    const out = previewText(body)
+    expect(out).not.toContain('\\n')
+    expect(out).toContain('Line one.')
+    expect(out).toContain('Line two.')
+  })
+
+  it('recovers block text from malformed JSON instead of printing the array', () => {
+    const broken = '[{"id":"a","type":"text","content":"First point.\nSecond point."}]'
+    const out = previewText(broken)
+    expect(out).not.toContain('"id"')
+    expect(out).toContain('First point.')
+    expect(out).toContain('Second point.')
+  })
 })

@@ -2,8 +2,9 @@ import { useState, useRef } from 'react'
 import { supabase } from '../config/supabaseClient'
 import { Send, Video } from 'lucide-react'
 import { theme } from '../styles/theme'
+import { validateVideoFile, probeVideoDuration, MAX_VIDEO_MB } from '../modules/social-feed/mediaLimits.js'
 
-const MAX_MB = 50
+const MAX_MB = MAX_VIDEO_MB
 
 // Pick a video, check size, preview, upload, then hand the URL back via onUploaded.
 function VideoUploader({ showId, onUploaded }) {
@@ -13,13 +14,14 @@ function VideoUploader({ showId, onUploaded }) {
   const [error, setError] = useState('')
   const inputRef = useRef(null)
 
-  function pickFile(e) {
+  async function pickFile(e) {
     setError('')
     const f = e.target.files[0]
     if (!f) return
-    const sizeMb = f.size / (1024 * 1024)
-    if (sizeMb > MAX_MB) {
-      setError(`That video is ${sizeMb.toFixed(0)}MB, too large. Please use one under ${MAX_MB}MB (a shorter or lower-quality clip).`)
+    const duration = await probeVideoDuration(f)
+    const err = validateVideoFile({ size: f.size, duration })
+    if (err) {
+      setError(err)
       if (inputRef.current) inputRef.current.value = ''
       return
     }
@@ -35,6 +37,13 @@ function VideoUploader({ showId, onUploaded }) {
 
   async function upload() {
     if (!file) return
+    // Re-validate before upload in case probe was pending at pick time
+    const duration = await probeVideoDuration(file)
+    const err = validateVideoFile({ size: file.size, duration })
+    if (err) {
+      setError(err)
+      return
+    }
     setUploading(true)
     setError('')
     const ext = file.name.split('.').pop() || 'mp4'
@@ -73,7 +82,7 @@ function VideoUploader({ showId, onUploaded }) {
               Discard
             </button>
           </div>
-          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Max {MAX_MB}MB. Larger videos may fail on weak networks.</p>
+          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Max {MAX_MB}MB, 2 minutes. Larger videos may fail on weak networks.</p>
         </div>
       )}
     </div>

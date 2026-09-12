@@ -1,20 +1,13 @@
-import { Activity } from 'lucide-react'
 import { theme } from '../../styles/theme'
 
-// The CareFind logo: a flat teal rounded tile carrying the shared ecosystem
-// pulse mark, next to the wordmark. One component so the logo is identical
-// everywhere it appears.
-//
-// The mark matches CareHub's (`Activity` in a flat teal-600 rounded square —
-// ICONS.md, "the brand mark is one component"): BRAND_GUIDELINES.md asks for
-// the two products to be instantly distinguishable but unmistakably related,
-// and a shared mark with a different wordmark is exactly that. Flat, not
-// gradient, like every other surface in the system.
+// The CareFind logo: location pin with person silhouette — the brand mark
+// communicates "find the right care" at a glance. Flat teal, no gradient.
 //
 //   <Logo />                       full logo, default size
 //   <Logo size={40} />             bigger
-//   <Logo markOnly />              just the tile (app icon, avatars, watermarks)
+//   <Logo markOnly />              just the icon (app icon, avatars, watermarks)
 //   <Logo tone="light" />          wordmark in white (for dark backgrounds)
+//   <Logo tone="dark" />           wordmark in navy (for light backgrounds)
 //   <Logo tone="muted" />          wordmark in grey (subtle, like a byline)
 function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
   const wordColor =
@@ -23,23 +16,20 @@ function Logo({ size = 32, markOnly = false, tone = 'light', style = {} }) {
     : '#fff'
 
   const mark = (
-    <div
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="CareFind"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.28,
-        background: theme.tealDeep,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        flexShrink: 0,
-      }}
+      style={{ flexShrink: 0 }}
     >
-      <Activity size={size * 0.58} strokeWidth={2.6} aria-hidden="true" />
-    </div>
+      <path d="M32 6C23.163 6 16 13.163 16 22c0 11.25 16 30 16 30s16-18.75 16-30C48 13.163 40.837 6 32 6z" fill={theme.tealDeep} />
+      <circle cx="32" cy="20" r="5" fill="white" />
+      <path d="M24 32c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    </svg>
   )
 
   if (markOnly) return <div style={style}>{mark}</div>

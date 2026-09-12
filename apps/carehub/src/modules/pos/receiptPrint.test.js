@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildReceiptHtml, computeTax, fmtReceiptDate } from './receiptPrint.js'
+import { buildReceiptHtml, buildReceiptQrDataUrl, computeTax, fmtReceiptDate } from './receiptPrint.js'
 
 const base = {
   receipt: {
@@ -59,9 +59,9 @@ describe('buildReceiptHtml', () => {
   })
 
   it('sizes the page @page rule to the configured width', () => {
-    expect(buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '58' } })).toContain('@page { size: 58mm auto')
-    expect(buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '80' } })).toContain('@page { size: 80mm auto')
-    expect(buildReceiptHtml({ ...base, settings: { ...base.settings } })).toContain('@page { size: 80mm auto')
+    expect(buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '58' } })).toContain('size:58mm')
+    expect(buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '80' } })).toContain('size:80mm')
+    expect(buildReceiptHtml({ ...base, settings: { ...base.settings } })).toContain('size:80mm')
   })
 
   it('shows a tax line and tax-inclusive total only when a rate is set', () => {
@@ -100,8 +100,10 @@ describe('buildReceiptHtml', () => {
       ...base,
       receipt: { ...base.receipt, method: 'Split', splitAmounts: { Cash: '2000', POS: '1800', Transfer: '' }, cashGiven: 0 },
     })
-    expect(html).toContain('Cash: ₦2,000')
-    expect(html).toContain('POS: ₦1,800')
+    expect(html).toContain('Cash')
+    expect(html).toContain('₦2,000')
+    expect(html).toContain('POS')
+    expect(html).toContain('₦1,800')
     expect(html).not.toContain('Transfer')
   })
 
@@ -112,6 +114,128 @@ describe('buildReceiptHtml', () => {
 
   it('shows the logo when a logo_url is configured and omits it otherwise', () => {
     expect(buildReceiptHtml({ ...base, settings: { ...base.settings, logo_url: 'https://x/logo.png' } })).toContain('<img src="https://x/logo.png"')
-    expect(buildReceiptHtml(base)).not.toContain('<img')
+    // The QR block always renders an <img>, so absence of the logo is asserted
+    // on the circular-crop styling unique to the logo rather than on '<img'.
+    expect(buildReceiptHtml(base)).not.toContain('border-radius:50%')
+  })
+
+  it('uses a supplied local QR data URL instead of a remote image API', () => {
+    const html = buildReceiptHtml({ ...base, qrDataUrl: 'data:image/svg+xml,%3Csvg%3E%3C/svg%3E' })
+    expect(html).toContain('src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E"')
+    expect(html).not.toContain('api.qrserver.com')
+  })
+
+  it('buildReceiptQrDataUrl produces a self-contained SVG data URL', async () => {
+    const url = await buildReceiptQrDataUrl(base.receipt, base.settings)
+    expect(url.startsWith('data:image/svg+xml,')).toBe(true)
+    // Decoding the payload yields a real <svg> QR markup.
+    expect(decodeURIComponent(url.slice('data:image/svg+xml,'.length))).toContain('<svg')
+  })
+
+  // ── EDGE CASES ──────────────────────────────────────────────────────────
+
+  it('renders long product names without clipping the price', () => {
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: {
+        ...base.receipt,
+        items: [{ name: 'CARDIAC TROPONIN I RAPID DIAGNOSTIC TEST KIT', price: 11000, qty: 1 }],
+        subtotal: 11000, total: 11000,
+      },
+    })
+    expect(html).toContain('CARDIAC TROPONIN I RAPID DIAGNOSTIC TEST KIT')
+    expect(html).toContain('₦11,000')
+    // Name must use word-break CSS to prevent overflow
+    expect(html).toContain('word-break:break-word')
+  })
+
+  it('renders large prices correctly (₦999,999 and ₦1,500,000)', () => {
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: {
+        ...base.receipt,
+        items: [{ name: 'Expensive Drug', price: 1500000, qty: 1 }],
+        subtotal: 1500000, total: 1500000, cashGiven: 2000000,
+      },
+    })
+    expect(html).toContain('₦1,500,000')
+    expect(html).toContain('₦2,000,000')
+    expect(html).toContain('₦500,000')
+  })
+
+  it('handles empty/optional client and business fields', () => {
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: { ...base.receipt, client: '' },
+      business: { name: '', address: '', phone: '', whatsapp: '' },
+      settings: { ...base.settings, receipt_header: '', refund_policy: '', receipt_footer: '' },
+    })
+    // Should not crash, should still render core receipt
+    expect(html).toContain('TXN-100001')
+    expect(html).toContain('Subtotal')
+    expect(html).toContain('TOTAL')
+  })
+
+  it('uses 58mm body width when receipt_width is 58', () => {
+    const html = buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '58' } })
+    expect(html).toContain('width:58mm')
+    expect(html).toContain('font-size:10.5px')
+  })
+
+  it('uses 80mm body width when receipt_width is 80', () => {
+    const html = buildReceiptHtml({ ...base, settings: { ...base.settings, receipt_width: '80' } })
+    expect(html).toContain('width:80mm')
+    expect(html).toContain('font-size:11.5px')
+  })
+
+  it('renders 20+ items without layout breakage', () => {
+    const items = Array.from({ length: 25 }, (_, i) => ({ name: 'Item ' + (i + 1), price: 100 * (i + 1), qty: 1 }))
+    const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0)
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: { ...base.receipt, items, subtotal, total: subtotal },
+    })
+    expect(html).toContain('Item 1')
+    expect(html).toContain('Item 25')
+    expect(html).toContain('₦100')
+    expect(html).toContain('₦2,500')
+    // All items should be wrapped in grid containers
+    const gridCount = (html.match(/grid-template-columns:1fr auto/g) || []).length
+    expect(gridCount).toBeGreaterThanOrEqual(25)
+  })
+
+  it('uses CSS grid for label/value alignment (not flex)', () => {
+    const html = buildReceiptHtml(base)
+    // Should use grid for all label/value rows
+    expect(html).toContain('display:grid;grid-template-columns:1fr auto')
+    // Should NOT use the old flex layout
+    expect(html).not.toContain('display:flex;justify-content:space-between')
+  })
+
+  it('sets @page margin to zero for thermal printers', () => {
+    const html = buildReceiptHtml(base)
+    expect(html).toContain('@page{size:80mm auto;margin:0}')
+  })
+
+  it('includes print media query to remove padding', () => {
+    const html = buildReceiptHtml(base)
+    expect(html).toContain('@media print{body{padding:0}}')
+  })
+
+  it('renders items with emoji prefix when provided', () => {
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: { ...base.receipt, items: [{ name: 'Paracetamol', price: 500, qty: 1, emoji: '💊' }] },
+    })
+    expect(html).toContain('💊 Paracetamol')
+  })
+
+  it('renders items without emoji when not provided', () => {
+    const html = buildReceiptHtml({
+      ...base,
+      receipt: { ...base.receipt, items: [{ name: 'Paracetamol', price: 500, qty: 1 }] },
+    })
+    expect(html).toContain('Paracetamol')
+    expect(html).not.toContain('undefined')
   })
 })

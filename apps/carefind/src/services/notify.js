@@ -2,12 +2,20 @@ import { supabase } from '../config/supabaseClient'
 
 // Central helper to create a notification for any platform activity.
 // recipientId: who receives it. actorId: who did the action. type: activity kind.
-// Never notify yourself. Fails silently so it never blocks the main action.
+// Never notify yourself.
+//
+// A failed notification still never blocks the underlying action — but it is
+// no longer INVISIBLE (issue #7, step 4). It used to swallow every error into
+// an empty catch, and it ignored the insert's own `error` entirely, so a
+// notification rejected by RLS or a constraint looked exactly like a
+// successful one. Returns { ok, reason } and logs anything that went wrong, so
+// "no notification arrived" can be diagnosed instead of guessed at.
 export async function notify({ recipientId, actorId, type, message, link = null, postId = null }) {
+  if (!recipientId) return { ok: false, reason: 'no recipient' }
+  if (recipientId === actorId) return { ok: false, reason: 'self' } // don't notify your own actions
+
   try {
-    if (!recipientId) return
-    if (recipientId === actorId) return // don't notify your own actions
-    await supabase.from('notifications').insert({
+    const { error } = await supabase.from('notifications').insert({
       recipient_id: recipientId,
       actor_id: actorId || null,
       type,
@@ -16,8 +24,14 @@ export async function notify({ recipientId, actorId, type, message, link = null,
       post_id: postId,
       read: false,
     })
+    if (error) {
+      console.error('[notify] insert failed', { type, recipientId, message: error.message, code: error.code })
+      return { ok: false, reason: error.message }
+    }
+    return { ok: true }
   } catch (e) {
-    // silent — notifications should never break the underlying action
+    console.error('[notify] threw', { type, recipientId, error: e?.message })
+    return { ok: false, reason: e?.message || 'unknown' }
   }
 }
 
@@ -31,6 +45,9 @@ export const NOTIF_MESSAGES = {
   follow: 'started following you',
   profile_view: 'viewed your profile',
   repost: 'reposted your post',
+  // Reviews carry their star rating in the message, so the default here is
+  // only a fallback — see services/reviewNotifications.js.
+  review: 'left you a review',
   mention: 'mentioned you',
   live: 'is live now',
   consultation: 'booked a consultation with you',

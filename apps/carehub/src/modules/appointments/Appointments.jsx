@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Calendar, Hourglass, CheckCircle, Search, Download, Wallet, Banknote } from 'lucide-react'
 import { appointmentRepository } from './repositories'
 // Cross-aggregate read: the client list belongs to the clients module. Still
@@ -17,11 +17,44 @@ export default function Appointments({ brand, role, perms }) {
   const [wallet, setWallet] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+
+  // Paystack return: ?reference=... — verify server-side before showing paid
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('reference') || params.get('trxref')
+    if (!ref) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data: { session } } = await authClient.auth.getSession()
+        if (!session) return
+        const res = await fetch('/api/verify-appointment-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ reference: ref }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+        window.history.replaceState({}, '', window.location.pathname)
+        if (res.ok) {
+          showToast(data.alreadyPaid ? 'Payment already confirmed' : 'Payment confirmed — appointment marked as paid', { type: 'success' })
+          load()
+        } else {
+          showToast(data.error || 'Could not confirm payment. Keep your reference and contact support.', { type: 'error' })
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
   const [filter, setFilter] = useState('all')
   const [showAdd, setShowAdd] = useState(false)
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
+  const [banks, setBanks] = useState([])
+  const [accountResolving, setAccountResolving] = useState(false)
+  const [accountResolved, setAccountResolved] = useState(false)
+  const resolveTimer = useRef(null)
   const [form, setForm] = useState({ date: todayDate() })
   const [saving, setSaving] = useState(false)
   const [payLink, setPayLink] = useState(null)
@@ -46,6 +79,63 @@ export default function Appointments({ brand, role, perms }) {
     return () => { live = false }
   }, [brand?.id])
 
+  useEffect(() => {
+    async function loadBanks() {
+      try {
+        const res = await fetch('/api/banks')
+        if (res.ok) {
+          const data = await res.json()
+          setBanks(data)
+        }
+      } catch (err) {}
+    }
+    loadBanks()
+  }, [])
+
+  // Resolve account name when bank code and 10-digit account number are both set.
+  // Debounced to avoid firing on every keystroke.
+  useEffect(() => {
+    if (resolveTimer.current) clearTimeout(resolveTimer.current)
+
+    // Clear resolved state when inputs change
+    setAccountResolved(false)
+    setWithdrawForm(prev => ({ ...prev, accountName: '' }))
+
+    const acctNum = withdrawForm.accountNumber || ''
+    const bankCode = withdrawForm.bankCode || ''
+
+    if (!bankCode || acctNum.length !== 10) return
+
+    resolveTimer.current = setTimeout(async () => {
+      setAccountResolving(true)
+      try {
+        const res = await fetch('/api/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bankCode, accountNumber: acctNum }),
+        })
+        const data = await res.json()
+        if (res.ok && data.accountName) {
+          setWithdrawForm(prev => ({ ...prev, accountName: data.accountName }))
+          setAccountResolved(true)
+        } else if (data.unsupportedBank) {
+          setAccountResolved(false)
+          showToast(data.error || 'This bank does not support automatic verification. Please enter your account name manually.', { type: 'warning' })
+        } else {
+          setAccountResolved(false)
+          showToast(data.error || data.detail || 'Could not verify account name.', { type: 'error' })
+        }
+      } catch {
+        setAccountResolved(false)
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      } finally {
+        setAccountResolving(false)
+      }
+    }, 500)
+
+    return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
+  }, [withdrawForm.bankCode, withdrawForm.accountNumber])
+
   async function load() {
     setLoading(true)
     try { const a = await appointmentRepository.getAll(brand.id); setAppointments(a || []); setLoadError('') } catch (e) { setLoadError('Could not load appointments. Check your connection and try again.') }
@@ -61,10 +151,15 @@ export default function Appointments({ brand, role, perms }) {
 
   async function save() {
     if (!form.clientName || !form.date || !form.time) { showToast('Please enter client name, date and time.', { type: 'warning' }); return }
+    const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
+    if (feeKobo && feeKobo > 0 && !form.paymentChannel) { showToast('Select payment channel (cash / POS / transfer / paystack)', { type: 'warning' }); return }
+    if (feeKobo && form.paymentChannel === 'pos' && !form.posRef && !confirm('POS reference is empty — proceed without receipt code?')) { /* allow */ }
     setSaving(true)
     try {
-      const feeKobo = form.fee ? Math.round(parseFloat(form.fee) * 100) : null
-      await appointmentRepository.create(brand.id, {
+      // One channel per appointment — no split. Cash is instant paid, pos/transfer unpaid pending attest, paystack unpaid pending Paystack.
+      const ch = feeKobo ? (form.paymentChannel || 'cash') : null
+      const paymentStatus = !feeKobo ? null : ch === 'cash' ? 'paid' : 'unpaid'
+      const payload = {
         client_id: form.client_id || null,
         client_name: form.clientName,
         service: form.service || '',
@@ -77,18 +172,36 @@ export default function Appointments({ brand, role, perms }) {
         source: 'carehub',
         phone: form.phone || '',
         concern: form.concern || null,
-        // ADR-005: CareHub bookings are settled in person. The channel is
-        // recorded for the business's own books; the medium is snapshotted
-        // from the business default so online consultations always carry it.
-        payment_channel: form.paymentChannel || 'cash',
+        payment_channel: ch,
         consultation_medium: brand?.consultation_medium || null,
         consultation_medium_link: brand?.consultation_medium_link || null,
         fee_amount: feeKobo,
-        payment_status: feeKobo ? 'unpaid' : null,
-      })
-      showToast('Appointment booked!', { type: 'success' })
+        payment_status: paymentStatus,
+        pos_reference: ch === 'pos' ? (form.posRef || null) : null,
+        transfer_proof_url: ch === 'transfer' ? (form.transferProofUrl || null) : null,
+        // verified audit for cash — attested by creator
+        ...(ch === 'cash' && feeKobo ? { verified_at: new Date().toISOString() } : {}),
+      }
+      const created = await appointmentRepository.create(brand.id, payload)
+      // Paystack link: if channel is paystack, immediately request Paystack URL for sharing
+      if (ch === 'paystack' && feeKobo && created) {
+        // created may be array or object depending on sbFetch; try to get id
+        const createdId = Array.isArray(created) ? created[0]?.id : created?.id
+        if (createdId) {
+          try { await handleSendPaymentLink({ id: createdId, client_name: form.clientName, date: form.date, time: form.time, fee_amount: feeKobo }) } catch {}
+          showToast('Appointment booked — paystack link created, share it with the client', { type: 'success' })
+        } else {
+          showToast('Appointment booked!', { type: 'success' })
+        }
+      } else if (ch === 'cash' && feeKobo) {
+        showToast('Appointment booked — cash marked as paid', { type: 'success' })
+      } else if ((ch === 'pos' || ch === 'transfer') && feeKobo) {
+        showToast(`Appointment booked — ${ch === 'pos' ? 'POS' : 'transfer'} awaiting staff confirmation`, { type: 'success' })
+      } else {
+        showToast('Appointment booked!', { type: 'success' })
+      }
       setForm({ date: todayDate() }); setShowAdd(false); load()
-    } catch (e) { showToast('Could not save appointment. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not save appointment. Please try again.', { type: 'error' }) }
     setSaving(false)
   }
 
@@ -108,14 +221,46 @@ export default function Appointments({ brand, role, perms }) {
   async function updateStatus(id, status) {
     try {
       const appt = appointments.find(a => a.id === id)
-      await appointmentRepository.update(id, brand.id, { status })
-      // Surface the acknowledgement to the business owner's notification feed
-      // so it appears alongside booking/payment alerts. Never blocks the action.
-      if (appt && status === 'confirmed') {
+      if (!appt) { showToast('Appointment not found.', { type: 'error' }); return }
+      // Confirm: flip pending→confirmed. Funds released on completion.
+      if (status === 'confirmed' && appt.status === 'pending') {
+        const res = await appointmentRepository.confirm(id, brand.id)
+        const errMsg = typeof res === 'string' ? res : null
+        if (errMsg && errMsg !== 'ok') {
+          if (errMsg === 'not_pending') showToast('Only pending appointments can be confirmed.', { type: 'warning' })
+          else if (errMsg === 'forbidden') showToast('You do not own this appointment.', { type: 'error' })
+          else showToast('Could not confirm appointment. Please try again.', { type: 'error' })
+          return
+        }
+        // Notify patient and refresh wallet
         notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        // Refresh wallet balances
+        sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
+          if (Array.isArray(w) && w[0]) setWallet(w[0])
+        }).catch(() => {})
+        load(); showToast('Appointment confirmed.', { type: 'success' })
+        return
       }
+      // Complete: release held funds to available balance via RPC
+      if (status === 'completed' && appt.status === 'confirmed') {
+        const res = await appointmentRepository.complete(id, brand.id)
+        const errMsg = typeof res === 'string' ? res : null
+        if (errMsg && errMsg !== 'ok') {
+          if (errMsg === 'not_found') showToast('Appointment not found.', { type: 'error' })
+          else if (errMsg === 'not_paid') showToast('Payment not confirmed yet.', { type: 'warning' })
+          else showToast('Could not complete appointment. Please try again.', { type: 'error' })
+          return
+        }
+        notify(brand.id, [{ }], 'booking_completed', `Appointment completed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
+          if (Array.isArray(w) && w[0]) setWallet(w[0])
+        }).catch(() => {})
+        load(); showToast('Appointment completed — funds released to available balance.', { type: 'success' })
+        return
+      }
+      await appointmentRepository.update(id, brand.id, { status, confirmed_at: status === 'confirmed' ? new Date().toISOString() : undefined, cancelled_at: status === 'cancelled' ? new Date().toISOString() : undefined, completed_at: status === 'completed' ? new Date().toISOString() : undefined })
       load(); showToast('Status updated!', { type: 'success' })
-    } catch (e) { showToast('Could not update status. Please try again.', { type: 'error' }) }
+    } catch (e) { showToast(e.message || 'Could not update status. Please try again.', { type: 'error' }) }
   }
 
   function askDelete(appt) { setDeleteTarget(appt) }
@@ -134,16 +279,20 @@ export default function Appointments({ brand, role, perms }) {
     if (!withdrawForm.amount || !withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName) {
       showToast('Fill in the amount and bank details.', { type: 'warning' }); return
     }
+    const amountKobo = Math.round(parseFloat(withdrawForm.amount) * 100)
+    if (amountKobo > (wallet?.available_balance || 0)) {
+      showToast('Amount exceeds available balance.', { type: 'warning' }); return
+    }
     setWithdrawing(true)
     try {
       const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'warning' }); return }
+      if (!session) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       const res = await fetch('/api/initiate-business-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           business_id: brand.id,
-          amount: Math.round(parseFloat(withdrawForm.amount) * 100),
+          amount: amountKobo,
           bankCode: withdrawForm.bankCode || '',
           bankName: withdrawForm.bankName,
           accountNumber: withdrawForm.accountNumber,
@@ -155,7 +304,7 @@ export default function Appointments({ brand, role, perms }) {
         showToast(data.error === 'insufficient' ? 'Not enough available balance to withdraw.' : data.error || 'Could not start withdrawal.', { type: 'error' })
         return
       }
-      setWithdrawForm({}); setShowWithdraw(false)
+      setWithdrawForm({}); setShowWithdraw(false); setAccountResolved(false)
       // Refresh the wallet balance.
       sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => { if (Array.isArray(w) && w[0]) setWallet(w[0]) }).catch(() => {})
       showToast('Withdrawal started — it will arrive shortly.', { type: 'success' })
@@ -163,6 +312,39 @@ export default function Appointments({ brand, role, perms }) {
       showToast('Network error. Please try again.', { type: 'error' })
     }
     setWithdrawing(false)
+  }
+
+  async function handleConfirmPos(appt) {
+    const ref = prompt('Enter POS receipt reference (last 4-6 digits, optional):', appt.pos_reference || '')
+    if (ref === null) return
+    const posRef = ref.trim()
+    try {
+      const res = await appointmentRepository.confirmPos(appt.id, brand.id, posRef || null)
+      if (typeof res === 'string' && res !== 'ok') throw new Error(res)
+      showToast('POS confirmed — marked as paid', { type: 'success' })
+      load()
+    } catch (e) {
+      const m = String(e.message || '')
+      if (m.includes('already_paid')) showToast('Already paid', { type: 'info' })
+      else if (m.includes('forbidden')) showToast('You do not own this appointment', { type: 'error' })
+      else if (m.includes('wrong_channel')) showToast('Not a POS appointment', { type: 'warning' })
+      else showToast(m || 'Could not confirm POS', { type: 'error' })
+    }
+  }
+
+  async function handleConfirmTransfer(appt) {
+    if (!confirm(`Confirm transfer received for ${appt.client_name} — ₦${(appt.fee_amount/100).toLocaleString()}?`)) return
+    try {
+      const res = await appointmentRepository.confirmTransfer(appt.id, brand.id, null)
+      if (typeof res === 'string' && res !== 'ok') throw new Error(res)
+      showToast('Transfer confirmed — marked as paid', { type: 'success' })
+      load()
+    } catch (e) {
+      const m = String(e.message || '')
+      if (m.includes('already_paid')) showToast('Already paid', { type: 'info' })
+      else if (m.includes('forbidden')) showToast('You do not own this appointment', { type: 'error' })
+      else showToast(m || 'Could not confirm transfer', { type: 'error' })
+    }
   }
 
   async function handleSendPaymentLink(appt) {
@@ -294,9 +476,15 @@ export default function Appointments({ brand, role, perms }) {
             {a.status === 'pending' && <button onClick={() => updateStatus(a.id, 'confirmed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: success, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm</button>}
             {a.status === 'confirmed' && <button onClick={() => updateStatus(a.id, 'completed')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Complete</button>}
             {a.status !== 'cancelled' && a.status !== 'completed' && <button onClick={() => updateStatus(a.id, 'cancelled')} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: dangerBg, color: danger, fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Cancel</button>}
-            {a.payment_status === 'unpaid' && a.fee_amount && (
+            {a.payment_status === 'unpaid' && a.payment_channel === 'pos' && a.fee_amount && (
+              <button onClick={() => handleConfirmPos(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm POS</button>
+            )}
+            {a.payment_status === 'unpaid' && a.payment_channel === 'transfer' && a.fee_amount && (
+              <button onClick={() => handleConfirmTransfer(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>Confirm Transfer</button>
+            )}
+            {a.payment_status === 'unpaid' && a.fee_amount && (a.payment_channel === 'paystack' || !a.payment_channel || a.payment_channel === 'card') && (
               <button onClick={() => handleSendPaymentLink(a)} style={{ padding: '5px 10px', borderRadius: theme.radius.sm, border: 'none', background: tealDeep, color: 'white', fontWeight: '700', fontSize: '11px', cursor: 'pointer' }}>
-                {payLinkLoading && payLink === a.id ? 'Sending...' : 'Send Pay Link'}
+                {payLinkLoading && payLink === a.id ? 'Sending...' : 'Pay Link'}
               </button>
             )}
             {perms?.canDelete && <RedBtn onClick={() => askDelete(a)} style={{ padding: '4px 9px', fontSize: '11px' }}>Del</RedBtn>}
@@ -325,8 +513,12 @@ export default function Appointments({ brand, role, perms }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Sel label='Booking type' value={form.bookingType || 'physical'} onChange={v => f('bookingType', v)} options={[{ value: 'physical', label: 'Physical visit' }, { value: 'online', label: 'Online (video/phone)' }]} />
-            <Sel label='Payment channel' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash' }, { value: 'transfer', label: 'Transfer' }, { value: 'pos', label: 'POS' }, { value: 'credit', label: 'Credit' }]} />
+            <Sel label='Payment channel *' value={form.paymentChannel || 'cash'} onChange={v => f('paymentChannel', v)} options={[{ value: 'cash', label: 'Cash — instant paid' }, { value: 'pos', label: 'POS — confirm after terminal' }, { value: 'transfer', label: 'Transfer — confirm after receipt' }, { value: 'paystack', label: 'Paystack link — pay online' }]} />
           </div>
+          {form.paymentChannel === 'pos' && form.fee && (
+            <Inp label='POS reference (optional)' value={form.posRef || ''} onChange={v => f('posRef', v)} placeholder='Last 4-6 digits of receipt' />
+          )}
+          {form.fee && <div style={{ fontSize: 11, color: gray400, marginTop: -8, marginBottom: 4 }}>{form.paymentChannel === 'cash' ? 'Cash: will be marked paid immediately.' : form.paymentChannel === 'pos' ? 'POS: appointment stays unpaid until you tap Confirm POS after terminal approval.' : form.paymentChannel === 'transfer' ? 'Transfer: stays unpaid until you tap Confirm Transfer.' : form.paymentChannel === 'paystack' ? 'Paystack: a shareable link will be created — client pays online, you are notified when confirmed.' : ''}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
             <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
@@ -342,20 +534,60 @@ export default function Appointments({ brand, role, perms }) {
         consequence={`This permanently removes ${deleteTarget?.client_name ? `${deleteTarget.client_name}'s` : 'this'} appointment from your records. This cannot be undone. If you just need to cancel it, use Cancel instead.`}
         confirmLabel='Delete' />
 
-      <Modal show={showWithdraw} onClose={() => setShowWithdraw(false)} title='Withdraw booking balance'
-        footer={<><GhostBtn onClick={() => setShowWithdraw(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} style={{ flex: 1, padding: '12px' }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
+      <Modal show={showWithdraw} onClose={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} title='Withdraw booking balance'
+        footer={<><GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={handleWithdraw} disabled={withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <p style={{ margin: 0, fontSize: '12.5px', color: gray600 }}>
             Available balance: <b style={{ color: success }}>{naira(wallet?.available_balance)}</b>. Money is sent straight to the bank account below via Paystack.
           </p>
-          <Inp label='Amount (₦)' type='number' value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder='e.g. 5000' required />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Bank name' value={withdrawForm.bankName || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankName: v }))} placeholder='e.g. Access Bank' required />
-            <Inp label='Bank code' value={withdrawForm.bankCode || ''} onChange={v => setWithdrawForm(p => ({ ...p, bankCode: v }))} placeholder='3-digit Paystack code' required />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <Inp label='Account number' value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: v }))} placeholder='10 digits' required />
-            <Inp label='Account name' value={withdrawForm.accountName || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))} placeholder='Name on account' required />
+          <Inp label='Amount (₦)' type='number' value={withdrawForm.amount || ''} onChange={v => setWithdrawForm(p => ({ ...p, amount: v }))} placeholder='e.g. 5000' min='1' max={Math.floor((wallet?.available_balance ?? 0) / 100)} required />
+          {withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0) && (
+            <span style={{ fontSize: '11px', color: danger, fontWeight: '700' }}>Amount exceeds available balance of {naira(wallet?.available_balance)}</span>
+          )}
+          <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            Bank *
+            <select
+              value={withdrawForm.bankCode || ''}
+              onChange={e => {
+                const bank = banks.find(b => b.code === e.target.value)
+                setWithdrawForm(p => ({ ...p, bankCode: e.target.value, bankName: bank ? bank.name : '' }))
+              }}
+              required
+              style={{
+                padding: '10px 12px', fontSize: '13px', borderRadius: '8px',
+                border: `1px solid ${border}`, background: '#fff',
+                color: navy, fontFamily: 'inherit',
+              }}
+            >
+              <option value="">Select your bank</option>
+              {banks.map((b) => (
+                <option key={b.code} value={b.code}>{b.name}</option>
+              ))}
+            </select>
+            {banks.length === 0 && (
+              <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
+            )}
+          </label>
+          <Inp label='Account number' value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder='10 digits' inputMode='numeric' pattern='[0-9]*' required />
+          <div>
+            <Inp
+              label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
+              value={withdrawForm.accountName || ''}
+              onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
+              placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
+              readOnly={accountResolved || accountResolving}
+              required
+              style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+            />
+            {accountResolving && (
+              <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
+            )}
+            {accountResolved && withdrawForm.accountName && (
+              <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+            )}
+            {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
+              <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+            )}
           </div>
         </div>
       </Modal>
@@ -366,7 +598,7 @@ export default function Appointments({ brand, role, perms }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <p style={{ margin: 0, fontSize: '13px', color: gray600 }}>Share this link with <b>{payLink.clientName}</b> for the appointment on {payLink.date} at {payLink.time}.</p>
             <p style={{ margin: 0, fontSize: '12px', color: gray500 }}>Amount: <b>{naira(payLink.fee)}</b></p>
-            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: theme.radius.md, border: `1px solid ${border}`, wordBreak: 'break-all', fontSize: '12px', fontFamily: theme.fontMono, color: navy }}>{payLink.url}</div>
+            <div style={{ padding: '12px', background: theme.gray50, borderRadius: theme.radius.md, border: `1px solid ${border}`, wordBreak: 'break-all', fontSize: '12px', fontFamily: theme.fontMono, color: navy }}>{payLink.url}</div>
             <p style={{ margin: 0, fontSize: '11px', color: gray400 }}>The client pays via Paystack. You'll be notified when payment is confirmed.</p>
           </div>
         </Modal>

@@ -6,12 +6,14 @@ import { CalendarClock, Image as ImageIcon, Radio, Sparkles, X } from 'lucide-re
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 import StoryViewer from './components/StoryViewer.jsx'
+import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
 function Stories() {
   const { user } = useAuth()
   const [stories, setStories] = useState([])
+  const [viewedIds, setViewedIds] = useState(() => new Set())
   const [viewerIndex, setViewerIndex] = useState(null)
   const [loadingStories, setLoadingStories] = useState(true)
   const [canPost, setCanPost] = useState(false)
@@ -63,30 +65,73 @@ function Stories() {
 
   async function loadStories() {
     setLoadingStories(true)
-    const { data } = await supabase
-      .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, position, profiles(full_name, display_name, is_verified)')
-      .eq('is_platform', true)
-      .gt('expires_at', new Date().toISOString())
+    try {
+      let followedIds = []
+      if (user?.id) {
+        const { data: followRows } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id)
+        followedIds = (followRows || []).map((r) => r.following_id)
+      }
+      const ownId = user?.id
+      const ids = [...new Set([...(followedIds || []), ...(ownId ? [ownId] : [])])]
+      const nowIso = new Date().toISOString()
 
-    const list = data || []
-    // Rank by explicit position first (nulls last), then views (desc), then newest
-    list.sort((a, b) => {
-      const pa = a.position ?? Infinity
-      const pb = b.position ?? Infinity
-      if (pa !== pb) return pa - pb
-      if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
-      return new Date(b.created_at) - new Date(a.created_at)
-    })
-    setStories(list)
+      let query = supabase
+        .from('stories')
+        .select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, position, expires_at, profiles(full_name, display_name, is_verified, avatar_url)')
+        .gt('expires_at', nowIso)
+
+      if (ids.length) {
+        const inList = ids.join(',')
+        query = query.or(`is_platform.eq.true,user_id.in.(${inList})`)
+      } else {
+        query = query.eq('is_platform', true)
+      }
+
+      query = query.order('position', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+      const { data } = await query
+
+      const list = data || []
+      // Secondary ranking: position nulls last, then view_count desc, then newest (extra local sort keeps determinism)
+      list.sort((a, b) => {
+        const pa = a.position ?? Infinity
+        const pb = b.position ?? Infinity
+        if (pa !== pb) return pa - pb
+        if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
+        return new Date(b.created_at) - new Date(a.created_at)
+      })
+      setStories(list)
+      if (list.length && user?.id) {
+        const seen = await fetchViewedStoryIds(supabase, list.map((s) => s.id))
+        setViewedIds(seen)
+      } else {
+        setViewedIds(new Set())
+      }
+    } catch (e) {
+      setStories([])
+      setViewedIds(new Set())
+    }
     setLoadingStories(false)
   }
 
-  useEffect(() => {
-    if (viewerIndex === null) return
-    const st = stories[viewerIndex]
-    if (st) supabase.rpc('increment_story_view', { story_id: st.id })
-  }, [viewerIndex])
+  function handleViewStory(st) {
+    if (!st) return
+    // Centralized view counting: increment + mark seen (idempotent)
+    supabase.rpc('increment_story_view', { story_id: st.id }).then(() => {}).catch(() => {})
+    if (user?.id) {
+      markStoriesViewed(supabase, { storyIds: [st.id], userId: user.id }).then(() => {}).catch(() => {})
+      setViewedIds((prev) => {
+        if (prev.has(st.id)) return prev
+        const next = new Set(prev)
+        next.add(st.id)
+        return next
+      })
+      // Optimistic view_count bump
+      setStories((prev) => prev.map((s) => (s.id === st.id ? { ...s, view_count: (s.view_count || 0) + 1 } : s)))
+    }
+  }
 
   function closeViewer() { setViewerIndex(null) }
   function navigateStory(next) {
@@ -100,6 +145,13 @@ function Stories() {
   function storyInitial(s) {
     if (s.is_platform) return 'C'
     return (s.profiles?.full_name?.[0] || s.profiles?.display_name?.[0] || '?').toUpperCase()
+  }
+
+  function storyRingForGroup(group) {
+    const hasStory = group.stories.length > 0
+    const isOwn = user?.id && group.key !== 'platform' && group.key === user.id
+    const allSeen = !isOwn && hasStory && group.stories.every((s) => viewedIds.has(s.id))
+    return { hasStory, allSeen }
   }
 
   async function postStory() {
@@ -116,9 +168,6 @@ function Stories() {
       }
     }
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
-    // stories.user_id references profiles(id) (fk_stories_user) — same
-    // safety net as PostComposer: accounts without a profiles row get a
-    // 23503 FK violation on the first story insert.
     await ensureProfile(user)
     const { error } = await supabase.from('stories').insert({
       title: sTitle.trim() || null,
@@ -157,6 +206,19 @@ function Stories() {
     return `${m}m`
   }
 
+  // Group stories per user for avatar ring (one entry per user, not per story)
+  const grouped = []
+  const seenKeys = new Set()
+  for (const s of stories) {
+    const key = s.is_platform ? `platform-${s.id}` : s.user_id
+    // For platform, each platform story is its own entry (may be multiple but rare); for user, dedupe
+    const dedupKey = s.is_platform ? `platform-${s.id}` : s.user_id
+    if (seenKeys.has(dedupKey)) continue
+    seenKeys.add(dedupKey)
+    const userStories = s.is_platform ? [s] : stories.filter((x) => !x.is_platform && x.user_id === s.user_id)
+    grouped.push({ key: dedupKey, representative: s, stories: userStories })
+  }
+
   return (
     <>
       <style>{`@keyframes cf-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); } 50% { box-shadow: 0 0 0 6px rgba(220,38,38,0); } }`}</style>
@@ -187,8 +249,7 @@ function Stories() {
           </a>
         )}
 
-        {/* Add-to-story button removed from feed — users post stories from their profile now */}
-        {false && canPost && (
+        {canPost && (
           <button
             onClick={() => setComposerOpen(true)}
             style={{ flexShrink: 0, background: 'none', border: 'none', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', width: 70 }}
@@ -201,34 +262,38 @@ function Stories() {
           </button>
         )}
 
-        {stories.map((s, i) => (
-          <button
-            key={s.id}
-            onClick={() => setViewerIndex(i)}
-            style={{ flexShrink: 0, background: 'none', border: 'none', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', width: 70 }}
-          >
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%', padding: 3,
-              background: s.is_platform
-                ? `linear-gradient(135deg, #f59e0b, ${theme.tealDeep})`
-                : `linear-gradient(135deg, ${theme.tealBright}, ${theme.tealDeep})`,
-            }}>
+        {grouped.map((g) => {
+          const s = g.representative
+          const { hasStory, allSeen } = storyRingForGroup(g)
+          const ringBg = hasStory ? (allSeen ? theme.gray300 : theme.tealDeep) : 'transparent'
+          const idx = stories.findIndex((x) => x.id === s.id)
+          return (
+            <button
+              key={g.key}
+              onClick={() => setViewerIndex(idx)}
+              style={{ flexShrink: 0, background: 'none', border: 'none', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', width: 70 }}
+            >
               <div style={{
-                width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                background: s.image_url ? `url(${s.image_url})` : (s.bg_color || theme.tealDeep),
-                backgroundSize: 'cover', backgroundPosition: 'center',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '2px solid #fff', color: '#fff', fontSize: 22, fontWeight: 900,
+                width: 64, height: 64, borderRadius: '50%', padding: 3,
+                background: ringBg,
               }}>
-                {!s.image_url && storyInitial(s)}
+                <div style={{
+                  width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                  background: s.image_url ? `url(${s.image_url})` : (s.bg_color || theme.tealDeep),
+                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid #fff', color: '#fff', fontSize: 22, fontWeight: 900,
+                }}>
+                  {!s.image_url && storyInitial(s)}
+                </div>
               </div>
-            </div>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {s.is_platform && <Sparkles size={11} color={theme.warning} aria-hidden="true" style={{ flexShrink: 0 }} />}
-              {storyLabel(s)}
-            </span>
-          </button>
-        ))}
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: theme.navy, maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {s.is_platform && <Sparkles size={11} color={theme.warning} aria-hidden="true" style={{ flexShrink: 0 }} />}
+                {storyLabel(s)}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Full-screen viewer */}
@@ -238,6 +303,7 @@ function Stories() {
           index={viewerIndex}
           onNavigate={navigateStory}
           onClose={closeViewer}
+          onViewStory={handleViewStory}
           renderHeader={(s, { onClose }) => (
             <>
               <div style={{ width: 34, height: 34, borderRadius: '50%', background: s.is_platform ? theme.warning : theme.tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14 }}>

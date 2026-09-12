@@ -41,8 +41,8 @@ describe('transaction ids', () => {
 
 describe('business taxonomy helpers', () => {
   it('resolves a known business type to its display name', () => {
-    expect(businessName('pharmacy')).toBe('Community Pharmacy')
-    expect(businessName('hospital')).toBe('Hospital / Clinic')
+    expect(businessName('pharmacy')).toBe('Pharmacies')
+    expect(businessName('hospital')).toBe('Hospitals')
   })
 
   it('falls back gracefully for an unknown type', () => {

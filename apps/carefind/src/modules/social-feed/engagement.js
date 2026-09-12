@@ -25,17 +25,36 @@ export async function insertRowResolvingConflict(supabase, table, row, conflictC
   return { data: existing, error: null }
 }
 
+// A repost row carries no copy of the source's words — `repost_of` points at
+// the original and every reader resolves through it. `content` still holds the
+// bare 🔁 because posts.content is NOT NULL and because the marker is what the
+// pre-repost_of code recognised (postDisplay.isRepost), so an old client and a
+// new one agree on what this row is.
+export const REPOST_CONTENT = '🔁'
+
 // Classic repost, in two parts that stay consistent as a unit:
 //   1. post_reposts reference (post_id = source, user_id = reposter) — the
 //      machine-readable record the Reposts tab and repost_count use. Written
 //      through insertRowResolvingConflict so a double-tap resolves to the
 //      existing reference instead of erroring.
-//   2. A real 🔁-marked posts row in the reposter's feed whose repost_of
-//      points at the source, so followers see the repost exactly as the
-//      legacy content-marker convention renders it (postDisplay.jsx).
-// The subscriber_only/is_premium flags are carried across so a repost of a
-// locked post stays locked for everyone who wasn't already entitled.
-// Returns { ref, repostPost } where each is the { data, error } of its write.
+//   2. A posts row in the reposter's feed whose repost_of points at the
+//      source, so followers see it in their timeline.
+//
+// Issues #6/#8: this used to COPY `🔁 ${post.content}` into the new row. Three
+// things followed from that copy, all of them wrong:
+//   * The reposter appeared to be the author. Nothing on the card said whose
+//     writing it was, because the row genuinely held their words under the
+//     reposter's user_id.
+//   * An article's content is a JSON block array, so a reposted article was
+//     stored as `🔁 [{"id":…}]` with post_type 'text' and rendered to readers
+//     as raw JSON.
+//   * Engagement split in two: likes and comments landed on the copy, so the
+//     original author's post showed none of the reaction their writing got.
+// The row now references the source instead, which is what the schema was
+// already built for (posts.repost_of + post_reposts, 20260813_post_reposts.sql).
+//
+// subscriber_only/is_premium are still carried across: a reader whose client
+// has not resolved the source yet must not be shown a locked post unlocked.
 //
 // The feed-post half is also sent through insertRowResolvingConflict (on
 // ['user_id', 'repost_of']): posts_user_repost_uniq
@@ -44,14 +63,14 @@ export async function insertRowResolvingConflict(supabase, table, row, conflictC
 // or from a stale tab — hits 23505 and resolves to the existing post instead
 // of publishing a twin. Feed.jsx toggleRepost also guards in-flight, so the
 // DB index is the authority and the client just avoids the wasted write.
+//
+// Returns { ref, repostPost } where each is the { data, error } of its write.
 export async function writeRepost(supabase, { user, post }) {
-  const repostContent = `🔁 ${post.content || ''}`.replace(/\s+/g, ' ').trim()
   const ref = await insertRowResolvingConflict(supabase, 'post_reposts', { post_id: post.id, user_id: user.id }, ['post_id', 'user_id'])
   const repostPost = await insertRowResolvingConflict(supabase, 'posts', {
     user_id: user.id,
-    content: repostContent,
+    content: REPOST_CONTENT,
     post_type: 'text',
-    image_url: post.image_url || null,
     subscriber_only: post.subscriber_only || false,
     is_premium: post.is_premium || false,
     repost_of: post.id,

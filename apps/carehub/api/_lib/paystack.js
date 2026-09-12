@@ -26,5 +26,13 @@ export async function paystackFetch(path, options = {}) {
       ...options.headers,
     },
   })
-  return response.json()
+  const text = await response.text()
+  if (!text) {
+    throw new Error(`Paystack returned an empty response (HTTP ${response.status})`)
+  }
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    throw new Error(`Paystack returned invalid JSON: ${text.slice(0, 200)}`)
+  }
 }

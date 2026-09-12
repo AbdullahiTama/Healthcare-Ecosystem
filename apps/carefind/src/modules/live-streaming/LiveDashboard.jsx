@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
-import { Eye, FileText, Gift, Heart, Image as ImageIcon, Lock, Radio, Send, Share2 } from 'lucide-react'
+import { CalendarClock, Eye, FileText, Gift, Heart, Image as ImageIcon, Lock, Pencil, Radio, Send, Share2, Trash2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import VoiceRecorder from '../../components/VoiceRecorder.jsx'
@@ -27,6 +27,14 @@ function LiveDashboard() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [confirmEndOpen, setConfirmEndOpen] = useState(false)
+  const [editingScheduled, setEditingScheduled] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editScheduledAt, setEditScheduledAt] = useState('')
+  const [editTrailerFile, setEditTrailerFile] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const pollRef = useRef(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
@@ -164,6 +172,72 @@ function LiveDashboard() {
     navigate('/feed')
   }
 
+  function toLocalDatetimeValue(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  function openEditScheduled() {
+    if (!show || show.status !== 'scheduled') return
+    setEditError('')
+    setEditTitle(show.title || '')
+    setEditScheduledAt(toLocalDatetimeValue(show.scheduled_at))
+    setEditTrailerFile(null)
+    setEditingScheduled(true)
+  }
+
+  async function saveScheduledEdit() {
+    if (!show || show.status !== 'scheduled') { setEditError('Only scheduled shows can be edited.'); return }
+    if (!editTitle.trim()) { setEditError('Give your show a title.'); return }
+    if (!editScheduledAt) { setEditError('Pick a date & time.'); return }
+    const newDate = new Date(editScheduledAt)
+    if (isNaN(newDate.getTime())) { setEditError('Invalid date.'); return }
+    if (newDate.getTime() <= Date.now() + 5 * 60 * 1000) { setEditError('Pick a time at least 5 minutes in the future.'); return }
+    setEditSaving(true); setEditError('')
+    let trailerUrl = show.trailer_url || null
+    if (editTrailerFile) {
+      const ext = editTrailerFile.name.split('.').pop() || 'mp4'
+      const path = `trailer-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('live-media').upload(path, editTrailerFile, { contentType: editTrailerFile.type || 'video/mp4' })
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
+        trailerUrl = urlData.publicUrl
+      }
+    }
+    const patch = { title: editTitle.trim(), scheduled_at: newDate.toISOString() }
+    if (trailerUrl !== show.trailer_url) patch.trailer_url = trailerUrl
+    const { error } = await supabase.from('live_shows').update(patch).eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
+    setEditSaving(false)
+    if (error) {
+      setEditError(error.message || 'Could not save.')
+      if (error.code === '42501') showToast('You can only edit your own scheduled shows.', { type: 'error' })
+      return
+    }
+    setEditingScheduled(false)
+    showToast('Show updated.', { type: 'success' })
+    load()
+  }
+
+  async function cancelScheduledShow() {
+    setCancelling(true)
+    const { error: delErr } = await supabase.from('live_shows').delete().eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
+    if (delErr) {
+      const { error: updErr } = await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
+      if (updErr) {
+        showToast('Could not cancel: ' + (updErr.message || delErr.message), { type: 'error' })
+        setCancelling(false)
+        setCancelConfirm(false)
+        return
+      }
+    }
+    setCancelling(false)
+    setCancelConfirm(false)
+    showToast('Scheduled show cancelled.', { type: 'success' })
+    navigate('/feed')
+  }
+
   function timeAgo(dateStr) {
     const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
     if (diff < 60) return 'now'
@@ -232,8 +306,18 @@ function LiveDashboard() {
       {scheduled && (
         <div style={{ margin: 14, padding: 16, background: theme.navy, borderRadius: 14, color: '#fff', textAlign: 'center' }}>
           <p style={{ margin: '0 0 4px 0', fontSize: 13, fontWeight: 800 }}>⏳ This show is scheduled</p>
+          {show?.scheduled_at && <p style={{ margin: '0 0 4px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}><CalendarClock size={12} aria-hidden="true" style={{ verticalAlign: '-1px', marginRight: 6 }} />{new Date(show.scheduled_at).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+          {show?.scheduled_at && new Date(show.scheduled_at) <= new Date() && (
+            <p role="alert" style={{ margin: '0 0 8px 0', fontSize: 11.5, color: '#fde68a', fontWeight: 700 }}>This scheduled time has passed. Reschedule to a future time or cancel.</p>
+          )}
           <p style={{ margin: '0 0 12px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Your audience sees a countdown. When you're ready, start it live.</p>
           <button onClick={startNow} style={{ padding: '11px 24px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 14 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Radio size={15} aria-hidden="true" /> Start live now</span></button>
+          {isHost && (
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 12, flexWrap: 'wrap' }}>
+              <button onClick={openEditScheduled} aria-label="Edit scheduled show" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#fff', color: theme.navy, border: 'none', borderRadius: 20, fontWeight: 700, fontSize: 12 }}><Pencil size={13} aria-hidden="true" /> Edit</button>
+              <button onClick={() => setCancelConfirm(true)} aria-label="Cancel scheduled show" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 20, fontWeight: 700, fontSize: 12 }}><Trash2 size={13} aria-hidden="true" /> Cancel</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -335,6 +419,41 @@ function LiveDashboard() {
         title="End this live show for everyone?"
         consequence="Everyone currently watching will be disconnected and the show will be marked ended. You can't resume it."
         confirmLabel="End show"
+      />
+
+      {/* Edit scheduled show modal */}
+      {editingScheduled && (
+        <div onClick={() => setEditingScheduled(false)} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 20, boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto', fontFamily: theme.fontFamily }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Edit scheduled live</h3>
+              <button onClick={() => setEditingScheduled(false)} aria-label="Close" style={{ background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}>✕</button>
+            </div>
+            {editError && <p role="alert" style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{editError}</p>}
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title</label>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Show title" style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit' }} />
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date & time</label>
+            <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 4, fontFamily: 'inherit' }} />
+            <p style={{ margin: '0 0 12px 0', fontSize: 10.5, color: theme.textLight }}>Must be at least 5 minutes in the future.</p>
+            <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+              🎬 {editTrailerFile ? editTrailerFile.name.slice(0, 26) : (show?.trailer_url ? 'Change trailer video' : 'Add trailer video (optional)')}
+              <input type="file" accept="video/*" onChange={(e) => setEditTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={saveScheduledEdit} disabled={editSaving} style={{ flex: 1, padding: 12, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14 }}>{editSaving ? 'Saving…' : 'Save changes'}</button>
+              <button onClick={() => setEditingScheduled(false)} style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        show={cancelConfirm}
+        onClose={() => setCancelConfirm(false)}
+        onConfirm={cancelScheduledShow}
+        title="Cancel this scheduled live?"
+        consequence="It will disappear from Upcoming immediately and be moved to Past/Ended. This cannot be undone."
+        confirmLabel={cancelling ? 'Cancelling…' : 'Cancel show'}
       />
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>

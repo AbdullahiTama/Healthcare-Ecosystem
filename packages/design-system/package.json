@@ -19,7 +19,8 @@
   "author": "Care Ecosystem",
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "lucide-react": ">=0.400.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

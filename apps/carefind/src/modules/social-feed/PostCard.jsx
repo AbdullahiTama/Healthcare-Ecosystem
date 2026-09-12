@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Award, BadgeCheck, Bookmark, Building2, Check, ChevronRight, Download, Eye,
+  Award, Bookmark, Building2, Check, ChevronRight, Download, Eye,
   Flag, Gift, Heart, Lock, MessageCircle, Pencil, Plus, Repeat2, Share2, Star,
   Trash2,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { renderMarkdown } from './markdown.jsx'
+import { imagesOf } from './postDisplay.jsx'
+import { MAX_POST_IMAGES } from './mediaLimits.js'
 import VisualCard from '../../utils/VisualCard.jsx'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
 import ArticleEditor from '../news-publishing/ArticleEditor.jsx'
 import { canExportVideo } from '../../utils/voiceCard.js'
 import PostMenu from './PostMenu.jsx'
+import ProfileHeader from '../../components/ProfileHeader.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
-import { Card, Pill, TealBtn, GhostBtn } from '../../components/ui'
+import { Card, Pill, TealBtn, GhostBtn, ConfirmDialog } from '../../components/ui'
+import StoryAvatar from '../../components/StoryAvatar.jsx'
 
 // One pill per post, never two. `text` posts deliberately have no pill:
 // labelling the default kind adds noise without adding information. Kept here
@@ -93,19 +97,136 @@ export default function PostCard({
   setEditingPost,
   setConfirmDeleteId,
   onOpenDetail,
+  // Repost support (issues #6/#8). `resolveSource(id)` returns the post a
+  // repost points at, or null if it is not loaded. `isRepostBody` marks the
+  // inner render of a source post inside a repost banner, so the banner is
+  // drawn exactly once and a repost-of-a-repost cannot recurse.
+  resolveSource,
+  isRepostBody = false,
+  // Story ring cross-surface (spec-carefind-stories-cross-surface-fix)
+  stories,
+  viewedIds,
+  onStoryClick,
 }) {
-  const locked = isLocked ? isLocked(post) : false
-
-  // Preview clamp: measure the real rendered body once it exists. The clamp
-  // div is rendered only in preview mode, so the ref stays null in the detail
-  // modal and See-more never appears there.
+  // Every hook is declared BEFORE the repost early return below. React
+  // requires an unchanging hook order per component instance, and an instance
+  // can be reused across a repost/non-repost post swap (PostDetailModal
+  // renders an unkeyed PostCard whose `post` changes while it stays mounted) —
+  // hooks placed after the return would throw "Rendered more hooks than
+  // during the previous render" in exactly that case.
   const bodyRef = useRef(null)
   const [bodyOverflow, setBodyOverflow] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   useEffect(() => {
     const el = bodyRef.current
     setBodyOverflow(!!el && el.scrollHeight > el.clientHeight)
-  }, [post.content, post.post_type, preview])
+  }, [post.content, post.post_type, preview, expanded])
+  useEffect(() => {
+    // Reset expansion when the card is recycled for a different post (PostDetailModal reuses unkeyed instance)
+    setExpanded(false)
+  }, [post.id])
+  const [pendingRepost, setPendingRepost] = useState(null)
+  function requestRepostToggle(targetPost) {
+    if (!user) { navigate('/login'); return }
+    const already = userHasReposted ? userHasReposted(targetPost.id) : false
+    if (already) {
+      setPendingRepost(targetPost)
+    } else {
+      toggleRepost(targetPost)
+    }
+  }
 
+  // ── Reposts (issues #6/#8) ────────────────────────────────────────────
+  // A repost row holds no words of its own: `repost_of` names the post it
+  // points at. Render the SOURCE — its author, its content, its post type —
+  // under a "Reposted by" banner, the way X and every other platform does it,
+  // so the reposter is never mistaken for the writer. Because the inner card
+  // is the source post, every engagement handler below (like, comment, gift,
+  // view) already targets the original rather than the copy.
+  const repostSource = post.repost_of && resolveSource ? resolveSource(post.repost_of) : null
+  if (post.repost_of && !isRepostBody) {
+    const reposterName = authorName(post)
+    return (
+      <div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          padding: '0 4px 6px', fontSize: 12, fontWeight: 700, color: theme.gray500,
+        }}>
+          <Repeat2 size={14} color={theme.gray400} aria-hidden="true" />
+          <span>
+            Reposted by{' '}
+            <Link to={`/u/${post.user_id}`} style={{ color: theme.gray600, textDecoration: 'none', fontWeight: 800 }}>
+              {reposterName}
+            </Link>
+          </span>
+          {/* Issue #2: name the original author explicitly, so even a reader
+              who never scrolls into the source card below cannot mistake the
+              reposter for the writer. */}
+          {repostSource && (
+            <span>
+              · Originally posted by{' '}
+              <Link to={`/u/${repostSource.user_id}`} style={{ color: theme.gray600, textDecoration: 'none', fontWeight: 800 }}>
+                {authorName(repostSource)}
+              </Link>
+            </span>
+          )}
+          {user && post.user_id === user.id && (
+            <button
+              type="button"
+              onClick={() => setPendingRepost(repostSource || { id: post.repost_of })}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 0, fontSize: 12, fontWeight: 800, color: theme.tealDeep, cursor: 'pointer', fontFamily: theme.fontFamily }}
+            >
+              Undo repost
+            </button>
+          )}
+        </div>
+        {repostSource ? (
+          <PostCard
+            {...{
+              preview, isLocked, user, navigate, profiles, authorName, formatCount, timeAgo,
+              likeCount, userHasLiked, commentTotal, shareCount, saveCount, giftCount,
+              userHasReposted, isSaved, isFollowing, toggleLike, toggleComments, toggleRepost,
+              toggleSave, toggleFollow, sharePost, shareCard, openReport, onGift, handleEditPost,
+              handleCommentAdded, openComments, comments, setComments, editingComment,
+              setEditingComment, replyingTo, setReplyingTo, commentDrafts, setCommentDrafts,
+              myUsername, myAvatar, reportedPosts, sharingId, editingPost, setEditingPost,
+              setConfirmDeleteId, onOpenDetail, resolveSource,
+            }}
+            post={repostSource}
+            isRepostBody
+          />
+        ) : (
+          // The source has not been resolved (or was deleted). Show that
+          // honestly rather than falling back to the repost row, which is
+          // exactly how the reposter got credited as the author.
+          <Card style={{ padding: theme.space[8], borderRadius: theme.radius.xl }}>
+            <p style={{ margin: 0, fontSize: 13, color: theme.gray500 }}>
+              This post is no longer available.
+            </p>
+          </Card>
+        )}
+        <ConfirmDialog
+          show={!!pendingRepost}
+          onClose={() => setPendingRepost(null)}
+          onConfirm={() => {
+            const target = pendingRepost
+            setPendingRepost(null)
+            if (target) toggleRepost(target)
+          }}
+          title="Undo repost?"
+          consequence="This will remove the repost from your profile and your followers' feeds."
+          confirmLabel="Undo repost"
+        />
+      </div>
+    )
+  }
+
+  const locked = isLocked ? isLocked(post) : false
+
+  // Preview clamp: `bodyRef`/`bodyOverflow` are declared with the other hooks
+  // at the top of the component. The clamp div is rendered only in preview
+  // mode, so the ref stays null in the detail modal and See-more never
+  // appears there.
   const clampStyle = {
     display: '-webkit-box',
     WebkitLineClamp: 5,
@@ -114,7 +235,11 @@ export default function PostCard({
   }
 
   return (
-    <Card style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl }}>
+    <>
+      <Card
+        style={{ padding: post.post_type === 'visual' || post.post_type === 'video' ? 0 : theme.space[8], overflow: 'hidden', borderRadius: theme.radius.xl, ...(onOpenDetail ? { cursor: 'pointer' } : {}) }}
+        {...(onOpenDetail ? { onClick: (e) => { if (e.target.closest('button, a, input, textarea, [role="button"]')) return; onOpenDetail(post) } } : {})}
+      >
       {/* Card header: identity left, one kind pill + overflow menu right.
           Identity reads name → verified badge → handle → credential →
           time, i.e. "who is this, and can I trust them" before anything
@@ -124,30 +249,36 @@ export default function PostCard({
         padding: post.post_type === 'visual' || post.post_type === 'video' ? '14px 16px 0 16px' : 0,
         marginBottom: post.post_type === 'visual' || post.post_type === 'video' ? 0 : 10,
       }}>
-        <Link
-          to={`/u/${post.user_id}`}
-          aria-label={`${authorName(post)}'s profile`}
-          style={{ position: 'relative', flexShrink: 0, textDecoration: 'none', display: 'block' }}
-        >
-          <div
-            aria-hidden="true"
-            style={{
-              width: 42, height: 42, borderRadius: post.posted_as_type ? theme.radius.md : '50%',
-              background: post.posted_as_type
-                ? theme.navy
-                : (profiles[post.user_id]?.avatar_url
-                    ? `url(${profiles[post.user_id].avatar_url}) center/cover`
-                    : theme.tealDeep),
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 15, fontWeight: 800,
-            }}
+        <div style={{ position: 'relative', flexShrink: 0, display: 'block' }}>
+          <Link
+            to={`/u/${post.user_id}`}
+            aria-label={`${authorName(post)}'s profile`}
+            style={{ textDecoration: 'none', display: 'block' }}
           >
-            {post.posted_as_type
-              ? (post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />)
-              : (!profiles[post.user_id]?.avatar_url &&
-                  (profiles[post.user_id]?.full_name?.[0] || profiles[post.user_id]?.display_name?.[0] || '?').toUpperCase())}
-          </div>
-
+            {post.posted_as_type ? (
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 42, height: 42, borderRadius: theme.radius.md,
+                  background: theme.navy,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 15, fontWeight: 800,
+                }}
+              >
+                {post.posted_as_type === 'staff' ? <Award size={19} /> : <Building2 size={19} />}
+              </div>
+            ) : (
+              <StoryAvatar
+                userId={post.user_id}
+                stories={stories}
+                viewedIds={viewedIds}
+                size={42}
+                src={profiles[post.user_id]?.avatar_url}
+                name={authorName(post)}
+                onClick={onStoryClick ? () => onStoryClick(post.user_id) : undefined}
+              />
+            )}
+          </Link>
           {/* Follow badge sitting on the avatar (TikTok-style) */}
           {user && post.user_id !== user.id && (
             <button
@@ -167,44 +298,24 @@ export default function PostCard({
               {isFollowing(post.user_id) ? <Check size={12} strokeWidth={3} /> : <Plus size={13} strokeWidth={3} />}
             </button>
           )}
-        </Link>
+        </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-            <Link to={`/u/${post.user_id}`} style={{ textDecoration: 'none' }}>
-              <span style={{ fontSize: 14.5, fontWeight: 800, color: theme.navy }}>{authorName(post)}</span>
-            </Link>
-            {!post.posted_as_type && profiles[post.user_id]?.is_verified && (
-              <BadgeCheck size={15} color={theme.tealDeep} style={{ flexShrink: 0 }} role="img" aria-label="Verified" />
-            )}
-            {!post.posted_as_type && profiles[post.user_id]?.display_name && (
-              <span style={{ fontSize: 12.5, color: theme.gray400, fontWeight: 600 }}>
-                @{profiles[post.user_id].display_name}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-            {post.posted_as_type ? (
-              <span style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700 }}>
-                {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
-                {' · posted by '}
-                {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
-              </span>
-            ) : (
-              profiles[post.user_id]?.is_verified && (profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label) && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                  color: theme.tealDeep, background: theme.tealMist,
-                  padding: '2px 8px', borderRadius: theme.radius.full,
-                }}>
-                  <BadgeCheck size={12} aria-hidden="true" /> {profiles[post.user_id]?.specialty || profiles[post.user_id]?.verification_label}
-                </span>
-              )
-            )}
-            <span style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
-              <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
-            </span>
+          <ProfileHeader
+            profile={profiles[post.user_id]}
+            name={authorName(post)}
+            context="post"
+            nameHref={`/u/${post.user_id}`}
+          />
+          {post.posted_as_type && (
+            <div style={{ fontSize: 11.5, color: theme.tealDeep, fontWeight: 700, marginTop: 3 }}>
+              {post.posted_as_type === 'staff' && post.posted_as_title ? post.posted_as_title : 'Business'}
+              {' · posted by '}
+              {profiles[post.user_id]?.full_name || profiles[post.user_id]?.display_name || 'team member'}
+            </div>
+          )}
+          <div style={{ fontSize: 11.5, color: theme.gray400, fontWeight: 600, marginTop: 3 }}>
+            <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
           </div>
         </div>
 
@@ -228,14 +339,30 @@ export default function PostCard({
       {/* Edit post mode */}
       {editingPost?.id === post.id && (
         <div style={{ margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <textarea
-            value={editingPost.content}
-            onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
-            rows={3}
-            style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
-          />
+          {/* Issue #4: an article's content is a JSON array of blocks. Editing
+              it through a plain 3-row textarea showed the author raw JSON, and
+              saving whatever they typed collapsed the whole article into one
+              text block — every later block, and every drawing, gone. Article
+              posts get the real block editor; everything else keeps the plain
+              textarea, which is correct for them. */}
+          {post.post_type === 'article' || post.post_type === 'premium' ? (
+            <div style={{ border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, padding: 10 }}>
+              <ArticleEditor
+                value={editingPost.content}
+                onChange={(val) => setEditingPost((prev) => (prev ? { ...prev, content: val } : prev))}
+              />
+            </div>
+          ) : (
+            <textarea
+              value={editingPost.content}
+              onChange={(e) => setEditingPost({ ...editingPost, content: e.target.value })}
+              rows={3}
+              aria-label="Edit post"
+              style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontFamily: 'inherit' }}
+            />
+          )}
           <div style={{ display: 'flex', gap: 6 }}>
-            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content)} style={{ flex: 1 }}>Save</TealBtn>
+            <TealBtn onClick={() => handleEditPost(post.id, editingPost.content, post.post_type)} style={{ flex: 1 }}>Save</TealBtn>
             <GhostBtn onClick={() => setEditingPost(null)} style={{ flex: 1 }}>Cancel</GhostBtn>
           </div>
         </div>
@@ -338,7 +465,7 @@ export default function PostCard({
           )}
           {post.post_type === 'article' || post.post_type === 'premium' ? (
             <div style={{ margin: '10px 0 12px 0' }}>
-              {preview ? (
+              {preview && !expanded ? (
                 <div ref={bodyRef} style={clampStyle}>
                   <ArticleEditor value={post.content} readOnly />
                 </div>
@@ -348,7 +475,7 @@ export default function PostCard({
             </div>
           ) : (
             <div style={{ margin: '8px 0 10px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.5 }}>
-              {preview ? (
+              {preview && !expanded ? (
                 <div ref={bodyRef} style={clampStyle}>
                   {renderMarkdown(post.content)}
                 </div>
@@ -358,11 +485,11 @@ export default function PostCard({
             </div>
           )}
 
-          {preview && bodyOverflow && (
+          {preview && !expanded && bodyOverflow && (
             <button
               type="button"
-              onClick={() => onOpenDetail && onOpenDetail(post)}
-              aria-label={`Read the full post by ${authorName(post)}`}
+              onClick={() => setExpanded(true)}
+              aria-label={`Expand the full post by ${authorName(post)}`}
               style={{
                 background: 'none', border: 'none', padding: 0, margin: '0 0 10px 0',
                 color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer',
@@ -372,10 +499,43 @@ export default function PostCard({
               See more <ChevronRight size={14} style={{ transform: 'rotate(90deg)' }} aria-hidden="true" />
             </button>
           )}
-
-          {post.image_url && post.post_type !== 'visual' && (
-            <img src={post.image_url} alt="post" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
+          {preview && expanded && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label={`Collapse post by ${authorName(post)}`}
+              style={{
+                background: 'none', border: 'none', padding: 0, margin: '0 0 10px 0',
+                color: theme.tealDeep, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: theme.fontFamily,
+              }}
+            >
+              Show less <ChevronRight size={14} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true" />
+            </button>
           )}
+
+          {/* Issue #7 — one photo renders as full-width; 2–5 render as snap carousel with dots. */}
+          {(() => {
+            const gallery = imagesOf(post)
+            if (!gallery.length || post.post_type === 'visual' || post.post_type === 'video') return null
+            if (gallery.length === 1) {
+              return <img src={gallery[0]} alt="post image 1 of 1" loading="lazy" style={{ width: '100%', borderRadius: theme.radius.md, marginBottom: 8 }} />
+            }
+            return (
+              <div role="region" aria-roledescription="carousel" aria-label={`Post with ${gallery.length} images`} style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory', gap: 4, scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
+                  {gallery.slice(0, MAX_POST_IMAGES).map((url, idx) => (
+                    <img key={url + idx} src={url} alt={`post image ${idx + 1} of ${gallery.length}`} loading="lazy" style={{ minWidth: '100%', aspectRatio: '1 / 1', objectFit: 'cover', borderRadius: theme.radius.sm, scrollSnapAlign: 'start', flexShrink: 0 }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 6 }} aria-hidden="true">
+                  {gallery.slice(0, MAX_POST_IMAGES).map((_, i) => (
+                    <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === 0 ? theme.tealDeep : theme.gray300, display: 'inline-block' }} />
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
         </>
       )}
       {/* Engagement bar. Reading actions (react, reply, pass on) group
@@ -425,11 +585,11 @@ export default function PostCard({
           </button>
 
           {/* Repost: hidden on reposts themselves — a repost of a
-              repost would fan out the same content twice. */}
+              repost would fan out the same content twice. Twitter-like: one tap to repost, second tap confirms undo. */}
           {!post.repost_of && (
             <button
               className="cf-eng-item"
-              onClick={() => (user ? toggleRepost(post) : navigate('/login'))}
+              onClick={() => requestRepostToggle(post)}
               aria-pressed={userHasReposted(post.id)}
               aria-label={userHasReposted(post.id) ? 'Undo repost' : 'Repost this post'}
               style={{ color: userHasReposted(post.id) ? theme.tealDeep : theme.gray500 }}
@@ -493,8 +653,24 @@ export default function PostCard({
           myUsername={myUsername}
           myAvatar={myAvatar}
           onCommentAdded={handleCommentAdded}
+          stories={stories}
+          viewedIds={viewedIds}
+          onStoryClick={onStoryClick}
         />
       )}
     </Card>
+      <ConfirmDialog
+        show={!!pendingRepost && !post.repost_of}
+        onClose={() => setPendingRepost(null)}
+        onConfirm={() => {
+          const target = pendingRepost
+          setPendingRepost(null)
+          if (target) toggleRepost(target)
+        }}
+        title="Undo repost?"
+        consequence="This will remove the repost from your profile and your followers' feeds."
+        confirmLabel="Undo repost"
+      />
+    </>
   )
 }

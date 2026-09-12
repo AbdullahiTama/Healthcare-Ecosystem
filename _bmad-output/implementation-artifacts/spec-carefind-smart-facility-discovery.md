@@ -1,0 +1,221 @@
+---
+title: 'CareFind Smart Facility Discovery & Live Field Intelligence Engine'
+type: 'feature'
+created: '2026-09-04'
+status: 'done'
+baseline_commit: 'ed76e37320e14bec16401765ee96d1f4811fa79b'
+review_loop_iteration: 0
+context:
+  - 'docs/PROJECT_OVERVIEW.md'
+  - 'knowledge/modules/field-activity.md'
+  - 'apps/carehub/src/lib/geo.js'
+  - 'apps/carehub/src/lib/places.js'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Live Field Activity is a 200 m hospital-biased finder (hard-coded `places.js:36`/`LiveActivity.jsx:461`/`FacilityPicker.jsx:49`), narrow Overpass types, no cross-State/LGA/city/area/Nigeria search, no boundary-aware area mode, no multi-source merge/dedupe/rank/confidence/verification, no export — cannot answer "what health businesses exist in this State/LGA/city/Nigeria?"
+
+**Approach:** Build one reusable Facility Discovery engine (GPS + reverse-geocode + boundary + multi-source merge/dedupe/rank/paginate) shared by upgraded Live Field Activity (remove 200 m cap, progressive/area modes, correct categories) and new Smart Facility Discovery tab (location-first filters + paginated exportable results).
+
+## Boundaries & Constraints
+
+**Always:** CareFind `businesses` primary internal source; keep `business_id`+RLS (`is_business_manager` `permissions.js:197`); keep 3-state verification `geo.js:231` (≤150 m verified, pending rep-added never verifies, unverified) distance-only never blocks submit; keep manager review + `facilities_cache` UNIQUE; respect provider limits/billing/attribution; normalize→dedupe→score before display.
+
+**Ask First:** Storing/exporting Google Places beyond allowed caching; adding `lga`/`area` columns or cache tables; proxying Overpass/Google via Edge Function; ingesting PCN/MLSCN/NAFDAC as primary directory vs enrichment.
+
+**Never:** Second disconnected facility DB; present external discovery as officially verified; reimpose 200 m or 20-result caps; gate visibility by `business_type` or physical location; weaken auth/RLS; bypass provider terms.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Nearby | GPS fix | Closest first, distance, rank distance×confidence×verification; no hidden cap | Provider fail → degrade to cache + internal |
+| Cross-State | User in Ogun, State=Lagos | Lagos-boundary results, paginated, distance from Lagos centre | No GPS required; boundary else geocoded centre+state filter |
+| LGA/City/Area | State+LGA / city / area | LGA/boundary or geocoded centre search | Unknown → geocode fallback + empty state |
+| Nigeria-wide | Mode=Nigeria | State-by-state partitioned, merged, deduped, paginated | Infinite scroll; large export as background job |
+| Category | All/Hospital/Pharmacy/Clinic/MedCentre/Lab/Dental/Eye/Physio/PHC/Aesthetic/Cosmetics/Spa/Manufacturer/Importer/Distributor/Other | Bucket via `matchesCategory` families; All=every | Unknown→All (fail-open) |
+| Dedup | Same in CareFind+Google+OSM | One merged record, retains source refs, highest confidence | Ambiguous→separate + low confidence |
+| No GPS/empty | Denied / zero rows | Empty state + "Add this facility" | Never blocks Log submit; verification=unverified |
+| Export | Filtered >1k rows | CSV + PDF (criteria/date/count/table); background job with progress | Respect provider export restrictions |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `apps/carehub/src/lib/geo.js:19-38,45-72,131-212,343-355` -- FACILITY_CATEGORY + families + categoryFromAmenity + matchesCategory; expand to 16, keep legacy aliases.
+- `apps/carehub/src/lib/places.js:25-38,60-70,87-103,108-151,303-338` -- Overpass regexes, buildOverpassQuery, dedupeKey/merge, readCachedNearby (JS haversine, rep_added no address), nearbyHealthFacilities (cache→Overpass, 5/150) — remove 200 m hard default, add expandable/area modes + source aggregation.
+- `apps/carehub/src/services/supabase.js:557-606,72-83` -- reverseGeocode/geocodePlace (Nominatim) + BUSINESS_PUBLIC_COLUMNS (no lga/area); facility_* preserved.
+- `apps/carehub/src/modules/live-activity/LiveActivity.jsx:445-475,511-545` -- openLogger 200 m hard-code, verification compute — wire shared engine, add Nearby/Expanded/Area controls.
+- `apps/carehub/src/modules/live-activity/FacilityPicker.jsx:44-70,114-240` -- picker 200 m hard-code, FACILITY_FILTERS pills, 150 banner — generalize to engine props + source/verification badge.
+- `apps/carehub/src/lib/permissions.js:213-216,219-256,281-285` + `apps/carehub/src/pages/dashboard/BusinessDashboard.jsx:88-95,218-223` -- ENTERPRISE_TYPES gate + NAV_ORDER.enterprise — add sibling `discovery` module after activity (`/dashboard/discovery`).
+- `apps/carehub/sql/20260822_field_activity_facility_location.sql + 20260823_facility_review_authorization.sql + 20260823_field_activity_pending_review.sql` -- facilities_cache/rep_added_facilities + RLS — reuse, add businesses lga/area + indexes.
+- `apps/carefind/src/modules/healthcare-discovery/Search.jsx:25-30,125-196` + `apps/carehub/src/config/constants.js:4-20` -- NG_STATES vs NIG_STATES duplicate, range 0-39 — unify single source.
+- New: `apps/carehub/src/lib/nigeriaGeo.js` -- 37 States + 774 LGAs, getLgasForState, normalizeState, resolveLocation (centre/boundary/label).
+- New: `apps/carehub/src/lib/facilityDiscovery.js` -- shared engine: resolveLocation→fetchSources (CareFind+Overpass+optional Google Places New via Edge Function tiled)→normalize→dedupe (~50 m+name/phone/domain)→score→rank→paginate/export.
+- New: `apps/carehub/src/modules/facility-discovery/*` -- Smart Facility Discovery: filter bar + result list (distance/source/verification/confidence) + pagination + export.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `apps/carehub/src/config/constants.js + lib/nigeriaGeo.js` (new) -- single NG_STATES source + 774 LGAs JSON; `getLgasForState`, `normalizeState`, `resolveLocation({mode,state,lga,city,coords})→{centre,boundary,lga,state,label}` via Nominatim fallback.
+- [x] `apps/carehub/src/lib/geo.js` -- expand FACILITY_CATEGORY to 16 (Hospital, Pharmacy, Clinic/Medical Centre, Specialist Clinic, Lab/Diagnostic, Dental, Eye/Optometry, Physio/Rehab, PHC/Community, Aesthetic, Cosmetics/Beauty, Spa, Manufacturer, Importer, Distributor, Other); map OSM amenity|healthcare|shop synonyms; keep OTHER fallback + legacy aliases.
+- [x] `apps/carehub/src/lib/places.js + lib/facilityDiscovery.js` (new) -- remove hard 200 m (Nearby default 500-1000 m progressive; Area/State/LGA/Nigeria boundary-driven not point-radius); add source layer (CareFind paged `(state,lga,city)` + Overpass + optional Google Places New via Edge Function, partition large areas per provider limits, attribution); keep cache-then-live, dedupeKey 5-dec, rank nearest-first, pagination via cursor not fixed 150 UI cap; extend matchesCategory families to 16 buckets.
+- [x] `apps/carehub/src/lib/facilityDiscovery.js` -- dedupe (coord tolerance + normalized name + phone/address/domain, AI stub), confidence (source agreement, coord quality, category, verification, freshness), verification 6-level → verificationStatus+confidence, source transparency (`source`, `sourceRef/url` where allowed).
+- [x] `apps/carehub/sql/*` -- migration: `businesses.lga` + `area` text nullable + indexes `businesses(state,lga,city)`, `facilities_cache(business_id)`, `rep_added_facilities(business_id,status)`; note PCN/MLSCN/NAFDAC as enrichment.
+- [x] `apps/carehub/src/modules/live-activity/LiveActivity.jsx + FacilityPicker.jsx` -- capture accuracy+timestamp; reverseGeocode → address/LGA/State; wire shared engine; replace 200 m with Nearby/Expanded/Area controls; correct category (never default Other when known); keep Add-only-when-missing; preserve 3-state badges, hide distance when pending.
+- [x] `apps/carehub/src/lib/permissions.js + pages/dashboard/BusinessDashboard.jsx` -- add MODULES.discovery (ENTERPRISE_TYPES, ecosystem, after activity) + NAV_ORDER ordering + bareGuard route `/dashboard/discovery`.
+- [x] `apps/carehub/src/modules/facility-discovery/FacilityDiscovery.jsx` + components -- filter bar (Mode Current|Selected|State|LGA|City-Area|Nigeria; State 37 searchable; LGA dynamic; City/Area searchable; Category 16; Distance optional for point search; Verification 6; Source All/CareFind/Google/OSM/Regulatory/Other; Keyword; Sort Distance|Name|Category|Verification|Updated) + cards (name/category/address/LGA/State/phone/lat-lng/distance/source/verification/confidence) + server pagination + infinite loading + loading/error/empty/a11y responsive.
+- [x] `apps/carehub/src/modules/facility-discovery/export.js` -- filter-aware CSV (+Excel) and PDF (criteria/date/count/table name/category/address/LGA/State/phone/distance/source); large as background job with progress; comply with provider export terms.
+- [x] `apps/carehub/src/lib/geo.test.js + modules/live-activity/places.test.js + modules/facility-discovery/*.test.*` -- tests: nigeriaGeo State→LGAs, 16-category mapping, Overpass healthcare/shop, dedupe/confidence/verification, engine modes (Nearby vs State vs Nigeria partitioning), filter→query wiring; no 200 m cap regression.
+
+**Acceptance Criteria:**
+- Given rep at GPS with nearby pharmacy/lab/clinic/spa/hospital, when opening Live Nearby, then multiple categories appear nearest-first and any logs with correct category (not Other when known)
+- Given facility just beyond 200 m, when Expanded/Area mode, then it is discoverable (no 200 m code or UX cap remains)
+- Given user in Ogun selecting State=Lagos or LGA/city "Lagos", when searching, then Lagos-bound facilities appear (distance from selected centre) without moving GPS
+- Given State/LGA search with provider limits, when querying, then backend partitions, merges, dedupes and paginates (no 20-result cap; cursor/infinite; export covers full filtered set)
+- Given duplicate across CareFind+OSM+Google, when rendered, then single merged record with retained sourceRefs, source badges, confidence and 6-level verification (external never shows officially verified unless verified)
+- Given filtered results, when exporting, then PDF has criteria/date/count/table and CSV has name/category/address/LGA/State/phone/distance/source; large sets background job with status; provider restrictions respected
+- Given test coordinates from screenshots, when searching, then facilities across categories appear (not only Hospital) with distance when reference exists
+- Given both surfaces, when inspecting code/network, then both call same shared discovery service (no duplicate DB, no business_type category gate)
+
+## Spec Change Log
+
+## Design Notes
+
+Pipeline: `resolveLocation`→`fetchSources` (CareFind `(state,lga,city)` + Overpass tiled + optional Google Places New per tile via Edge Function)→`normalize`→`dedupe`→`score`→`rank`→`paginate`/`export`. `places.js` stays transport+cache; intelligence in `facilityDiscovery.js`. Nigeria: `states:[{name,lgas:[...]}]` 774 LGAs.
+
+## Verification
+
+**Commands:**
+- `npm test -- src/lib/geo.test.js src/modules/live-activity/places.test.js` -- 16 cats, Overpass healthcare/shop, dedupe/confidence green
+- `npm test -- src/modules/facility-discovery` -- State→LGA, Search Modes, dedupe, no 200 m cap
+- `npm run build` -- vite build clean
+- `npm test` -- full suite passes (447+; no regression)
+
+## Suggested Review Order
+
+**Entry point — Smart Facility Discovery**
+
+- Location-first filter system with 5 modes and dynamic LGA
+  [`FacilityDiscovery.jsx:14`](../../apps/carehub/src/modules/facility-discovery/FacilityDiscovery.jsx#L14)
+
+- Shared engine pipeline resolveLocation→fetchSources→normalize→dedupe→score→rank
+  [`facilityDiscovery.js:1`](../../apps/carehub/src/lib/facilityDiscovery.js#L1)
+
+**Nigeria geography and location resolution**
+
+- 37 states + 774 LGAs dataset with alias-normalized State and centre fallback
+  [`nigeriaGeo.js:5`](../../apps/carehub/src/lib/nigeriaGeo.js#L5)
+
+- Single-source NG_STATES unification and state centre for cross-state search
+  [`constants.js:16`](../../apps/carehub/src/config/constants.js#L16)
+
+**Facility taxonomy and matching**
+
+- 16-category taxonomy with legacy aliases and direct-key bucket mapping
+  [`geo.js:32`](../../apps/carehub/src/lib/geo.js#L32)
+
+- Category mapping for OSM amenity|healthcare|shop synonyms
+  [`geo.js:131`](../../apps/carehub/src/lib/geo.js#L131)
+
+**Progressive discovery and multi-source aggregation**
+
+- Remove hard 200 m, progressive radii 500/1000/2000/5000 with cache-then-Overpass
+  [`places.js:36`](../../apps/carehub/src/lib/places.js#L36)
+
+- Source aggregation CareFind + Overpass tiled + optional Google Places New via Edge Function
+  [`facilityDiscovery.js:250`](../../apps/carehub/src/lib/facilityDiscovery.js#L250)
+
+- Deduplication 50 m+name/phone/domain and confidence/verification scoring
+  [`facilityDiscovery.js:116`](../../apps/carehub/src/lib/facilityDiscovery.js#L116)
+
+**Live Field Activity upgrade**
+
+- Capture accuracy/timestamp/address and remove hard 200 cap via shared engine
+  [`LiveActivity.jsx:136`](../../apps/carehub/src/modules/live-activity/LiveActivity.jsx#L136)
+
+- FacilityPicker Nearby/Expanded/Area controls and source/verification badges
+  [`FacilityPicker.jsx:43`](../../apps/carehub/src/modules/live-activity/FacilityPicker.jsx#L43)
+
+**Navigation and routing**
+
+- New Facility Discovery module gated to ENTERPRISE_TYPES after Live Activity
+  [`permissions.js:251`](../../apps/carehub/src/lib/permissions.js#L251)
+
+- Route /dashboard/discovery via bareGuard mirroring Live Activity pattern
+  [`BusinessDashboard.jsx:223`](../../apps/carehub/src/pages/dashboard/BusinessDashboard.jsx#L223)
+
+**Export and pagination**
+
+- Filter-aware CSV with criteria/date/count and PDF export with source attribution
+  [`export.js:24`](../../apps/carehub/src/modules/facility-discovery/export.js#L24)
+
+- Background job simulation for >1k rows with chunked progress
+  [`export.js:121`](../../apps/carehub/src/modules/facility-discovery/export.js#L121)
+
+- Pagination clamped and distance guard for point search
+  [`facilityDiscovery.js:432`](../../apps/carehub/src/lib/facilityDiscovery.js#L432)
+
+**Schema and supporting changes**
+
+- businesses.lga/area nullable columns with state/lga/city indexes
+  [`20260904_facility_discovery_location.sql:1`](../../apps/carehub/sql/20260904_facility_discovery_location.sql#L1)
+
+- BUSINESS_PUBLIC_COLUMNS lga/area for State/LGA filtering
+  [`supabase.js:71`](../../apps/carehub/src/services/supabase.js#L71)
+
+**Tests and safety nets**
+
+- Integration tests for progressive radii, cross-state, category direct keys, tiling, dedup pipeline
+  [`facilityDiscovery.integration.test.js:1`](../../apps/carehub/src/lib/facilityDiscovery.integration.test.js#L1)
+
+- NigeriaGeo 37/774 and export criteria/date/count/PDF coverage
+  [`nigeriaGeo.test.js:14`](../../apps/carehub/src/lib/nigeriaGeo.test.js#L14)
+
+### Review Findings
+
+**Decision Needed:**
+
+- [ ] [Review][Decision] Two disconnected discovery pipelines — LiveActivity uses `nearbyHealthFacilities()` (places.js) while FacilityDiscovery uses `discoverFacilities()` (facilityDiscovery.js). These are separate engines with different dedupe/scoring/verification. Spec AC8 requires "both call same shared discovery service." Architectural decision needed: should LiveActivity switch to `discoverFacilities()`, or should `nearbyHealthFacilities` be refactored to call the shared engine?
+- [ ] [Review][Decision] Hard 100-result cap contradicts no-cap AC — `fetchSources` hardcodes `limit: 100` for CareFind fetches (facilityDiscovery.js:258,262). AC4 requires no arbitrary result cap and full-set export. Decision: implement true server-side cursor pagination, or increase limit and accept client-side pagination?
+- [ ] [Review][Decision] PDF export is print-to-PDF — `exportToPDF` uses `window.open` + `window.print()` (export.js). AC6 requires "export to PDF." Decision: is print-to-PDF acceptable, or do we need a library like jsPDF for self-contained PDF generation?
+- [ ] [Review][Decision] Background export is synchronous — `createExportJob` runs on main thread with setTimeout (export.js:121). Spec requires "background job with progress." Decision: is a Web Worker required, or is the current simulation acceptable for now?
+
+**Patch:**
+
+- [ ] [Review][Patch] PostgREST filter injection — `fetchCareFindFacilities` builds query via string concatenation with `*` wildcards after `encodeURIComponent` (places.js:302-304). Could allow injection. Fix: validate/sanitize state/lga/city against known values or use PostgREST array syntax.
+- [ ] [Review][Patch] Nominatim missing User-Agent + timeout — `geocodeLocation` has no User-Agent header (Nominatim requires it per usage policy) and no timeout (nigeriaGeo.js:260-263). Fix: add User-Agent header and AbortController timeout.
+- [ ] [Review][Patch] exportToPDF popup blocker — `window.open` blocked by default in modern browsers (export.js:249-258). Fix: use hidden iframe or Blob + download link approach.
+- [ ] [Review][Patch] React list key collision — `f.id || f.name + f.lat` not unique in dense urban areas (FacilityDiscovery.jsx). Fix: use `f.id || f.sourceRef || index` as key.
+- [ ] [Review][Patch] doSearch no request cancellation — Race conditions on rapid filter changes (FacilityDiscovery.jsx:176-183). Fix: use AbortController to cancel in-flight requests.
+- [ ] [Review][Patch] normalizePhone assumes 10 digits — `slice(-10)` corrupts +234 numbers (facilityDiscovery.js:298-301). Fix: handle country code properly, e.g., strip +234 then take 10 digits.
+- [ ] [Review][Patch] verificationStatus NaN guard — No guard for null/NaN lat/lng before haversineMeters (facilityDiscovery.js:239). Fix: add `if (!Number.isFinite(facility.lat) || !Number.isFinite(facility.lng)) return VERIFICATION_LEVEL.NO_GPS`.
+- [ ] [Review][Patch] normalizeFacility NaN coords — Allows NaN into pipeline (facilityDiscovery.js:404-408). Fix: validate coords before returning, return null if invalid.
+- [ ] [Review][Patch] Progressive loop overwrites pool/fresh — Each iteration overwrites instead of accumulating (places.js:320-338). Fix: accumulate results across radii, e.g., `pool = pool.concat(cached)`.
+- [ ] [Review][Patch] mergeTwo undefined sourceRefs — Can produce `{source: undefined, id: undefined}` entries (facilityDiscovery.js:367-371). Fix: filter properly with `.filter(s => s && s.source && s.id)`.
+- [ ] [Review][Patch] Redundant dynamic import — `await import('./geo.js')` when already statically imported at top (facilityDiscovery.js:366). Fix: remove dynamic import, use static import.
+- [ ] [Review][Patch] LiveActivity no-op conditional — `if (best.category) setFacility(best); else setFacility(res.facilities[0])` both branches same since `best = res.facilities[0]` (LiveActivity.jsx:480-482). Fix: remove conditional or make meaningful (e.g., skip if category is Other).
+- [ ] [Review][Patch] centreForLga stub — Returns state centre, silently wrong for large states (nigeriaGeo.js:302-305). Fix: either implement LGA centre lookup or document limitation clearly.
+- [ ] [Review][Patch] confidenceScore fragile precision — String splitting on float representation (facilityDiscovery.js:260-267). `Number(6.50000)` becomes `"6.5"` (1 decimal), penalizing legitimately precise coords. Fix: use `toFixed(5)` or count significant digits differently.
+- [ ] [Review][Patch] fetchOverpassTiled sequential — Tiles fetched sequentially with await in loop (places.js:349-358). Fix: use `Promise.all` with concurrency limit for independent tiles.
+- [ ] [Review][Patch] Missing test: spa/wellness category — No test for `categoryFromAmenity('spa')` or `categoryFromAmenity('wellness')` returning `FACILITY_CATEGORY.SPA` (geo.test.js). Fix: add assertions.
+- [ ] [Review][Patch] Missing test: 16-category matchesCategory — No test for direct keys like `manufacturer`, `spa`, `cosmetics` (geo.test.js). Fix: add unit tests for new direct-key path.
+- [ ] [Review][Patch] Missing test: progressive radii verification — Test doesn't verify which radii are used, only that Overpass was called (facilityDiscovery.integration.test.js:53-58). Fix: capture radii passed to `fetchOverpass` and assert progression.
+- [ ] [Review][Patch] gpsAccuracy/gpsTimestamp dead code — Captured but never used in LiveActivity.jsx:441-442. Fix: either pass to `nearbyHealthFacilities`, store in log, display in UI, or remove.
+- [ ] [Review][Patch] Category count 17 not 16 — `FACILITY_CATEGORY` has 17 distinct values plus 2 legacy aliases. Spec says "expand to 16." Fix: clarify spec or adjust implementation (e.g., merge Cosmetics+Spa if intended as one).
+
+**Defer:**
+
+- [x] [Review][Defer] dedupeFacilities O(n²) performance — For Nigeria-wide exports with hundreds of rows, nested loop freezes main thread. Pre-existing algorithm choice; optimize later with spatial indexing/grid-based dedup.
+- [x] [Review][Defer] No LGA backfill — Migration adds nullable `lga`/`area` columns with no automated backfill. LGA filter returns zero for pre-existing businesses. Requires data migration decision.
+- [x] [Review][Defer] SQL RLS column visibility — Migration claims "existing policies already cover new columns" but no policy text shown. If any policy uses explicit column allowlist, new columns invisible. Need to verify actual RLS policies.
+- [x] [Review][Defer] Google source inert — UI shows "Google" as source option but `VITE_GOOGLE_PLACES_PROXY` env var not configured. No Google data ever fetched. Requires infra/billing decision.
+- [x] [Review][Defer] Export doesn't enforce provider restrictions — Google Places ToS restricts re-export, but `exportToCSV` includes Google rows without filtering. Requires legal/ToS review.
+- [x] [Review][Defer] partitionBoundary inverted bbox — Edge case with invalid input (south > north). Low probability. Fix later if reported.
+- [x] [Review][Defer] export.js division by zero — Edge case with 0 facilities produces NaN percent. Low probability. Fix later if reported.
+- [x] [Review][Defer] FacilityDiscovery.jsx stale page state — React setState async lag can send duplicate page number. Low probability. Fix later if reported.
+- [x] [Review][Defer] normalizeFacility business_type non-string — Edge case with non-string primitive. Low probability. Fix later if reported.
+- [x] [Review][Defer] nigeriaGeo Nominatim null address — Edge case when `item.address` is null. Low probability. Fix later if reported.

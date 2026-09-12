@@ -8,16 +8,18 @@ import { Download, CheckCircle, AlertTriangle } from 'lucide-react'
 import { saleRepository } from '../pos/repositories'
 import { expenseRepository } from '../expenses/repositories'
 import { purchaseRepository } from '../purchases/repositories'
+import { adrReportRepository } from '../adr/repositories'
 import { fmt, currentMonth } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Loading, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, navy, gray600, gray500, gray400, gray100, gray50, border, danger, success, warning, bg } = theme
 
-export default function Reports({ brand, role, perms }) {
+export default function Reports({ brand, role, perms, embedded = false }) {
   const [sales, setSales] = useState([])
   const [expenses, setExpenses] = useState([])
   const [purchases, setPurchases] = useState([])
+  const [adrReports, setAdrReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('month')
   const [customMonth, setCustomMonth] = useState(currentMonth())
@@ -28,12 +30,13 @@ export default function Reports({ brand, role, perms }) {
   async function load() {
     setLoading(true)
     try {
-      const [s, e, p] = await Promise.all([
+      const [s, e, p, ad] = await Promise.all([
         saleRepository.getAll(brand.id),
         expenseRepository.getAll(brand.id),
         purchaseRepository.getAll(brand.id),
+        adrReportRepository.getReports(brand.id),
       ])
-      setSales(s || []); setExpenses(e || []); setPurchases(p || [])
+      setSales(s || []); setExpenses(e || []); setPurchases(p || []); setAdrReports(ad || [])
     } catch (e) {}
     setLoading(false)
   }
@@ -51,6 +54,7 @@ export default function Reports({ brand, role, perms }) {
   const fSales = sales.filter(filterItem).filter(s => !s.is_on_hold)
   const fExpenses = expenses.filter(filterItem)
   const fPurchases = purchases.filter(filterItem)
+  const fAdrReports = adrReports.filter(filterItem)
 
   const totalRevenue = fSales.reduce((s, x) => s + (x.total || 0), 0)
   const totalExpenses = fExpenses.reduce((s, x) => s + (x.amount || 0), 0)
@@ -94,6 +98,16 @@ export default function Reports({ brand, role, perms }) {
       ['PURCHASES DETAIL'],
       ['Date', 'Supplier', 'Product', 'Total Cost', 'Paid', 'Balance', 'Status'],
       ...fPurchases.map(p => [p.supply_date || '', p.supplier_name || '', p.product_name || '', p.total_cost || 0, p.amount_paid || 0, p.balance || 0, p.status || '']),
+      [],
+      ['ADR REPORTS DETAIL'],
+      ['Report No', 'Module', 'Status', 'Created', 'Reporter'],
+      ...fAdrReports.map(r => [
+        r.report_number || '—',
+        r.module_type || '—',
+        r.status || '—',
+        r.created_at ? new Date(r.created_at).toLocaleDateString('en-NG') : '—',
+        r.reporter_name || '—',
+      ]),
     ]
     const csv = rows.map(r => (Array.isArray(r) ? r : [r]).map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -105,14 +119,16 @@ export default function Reports({ brand, role, perms }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-        <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Financial Reports</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Full breakdown of revenue, expenses and profit</div></div>
-        {perms?.canExportReports && (
-          <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
-            <Download size={15} /> Export to Excel / CSV
-          </button>
-        )}
-      </div>
+      {(!embedded || perms?.canExportReports) && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: embedded ? 'flex-end' : 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+          {!embedded && <div><div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Financial Reports</div><div style={{ fontSize: '13px', color: gray500, marginTop: '3px' }}>Full breakdown of revenue, expenses and profit</div></div>}
+          {perms?.canExportReports && (
+            <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}>
+              <Download size={15} /> Export to Excel / CSV
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
         {['today', 'week', 'month', 'year', 'all'].map(p => { const on = period === p; return (
@@ -150,6 +166,11 @@ export default function Reports({ brand, role, perms }) {
               <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Credit outstanding</div>
               <div style={{ fontSize: '28px', fontWeight: '900', color: warning }}>{fmt(creditBalance)}</div>
               <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>Unpaid credit sales</div>
+            </Card>
+            <Card style={{ padding: '20px', borderLeft: `4px solid ${warning}` }}>
+              <div style={{ fontSize: '12px', color: gray500, fontWeight: '600', marginBottom: '4px' }}>Total ADR Reports</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: warning }}>{fAdrReports.length} reports</div>
+              <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>ADR reports</div>
             </Card>
           </div>
 

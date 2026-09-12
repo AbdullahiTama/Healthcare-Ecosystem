@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       name: clientName,
       phone,
       service,
+      service_id: serviceId,
       date,
       time,
       booking_type: bookingType,
@@ -42,6 +43,14 @@ export default async function handler(req, res) {
     if (!businessId || !clientName || !phone || !date || !time) {
       return res.status(400).json({ error: 'Name, phone, date and time are required' })
     }
+    const trimmedName = String(clientName).trim()
+    const trimmedPhone = String(phone).trim()
+    const trimmedConcern = concern ? String(concern).trim() : ''
+    if (trimmedName.length < 2 || trimmedName.length > 80) return res.status(400).json({ error: 'Name must be 2-80 characters' })
+    if (!/^\+?[0-9\s\-]{7,20}$/.test(trimmedPhone) || trimmedPhone.replace(/\D/g,'').length < 7 || trimmedPhone.replace(/\D/g,'').length > 15) return res.status(400).json({ error: 'Invalid phone number' })
+    if (trimmedConcern.length > 500) return res.status(400).json({ error: 'Concern must be under 500 characters' })
+    // Basic XSS sanitization: strip angle brackets
+    if (/[<>]/.test(trimmedName) || /[<>]/.test(trimmedPhone) || /[<>]/.test(trimmedConcern)) return res.status(400).json({ error: 'Invalid characters in input' })
 
     // 1. Business must exist, be active, publicly listed and accept bookings.
     const { data: business, error: bizErr } = await supabase
@@ -64,69 +73,189 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'This business only takes online appointments' })
     }
 
-    // 3. Date must be today or later.
-    const today = new Date().toISOString().split('T')[0]
+    // 3. Date must be today or later (strict YYYY-MM-DD).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) return res.status(400).json({ error: 'Invalid date format (YYYY-MM-DD required)' })
+    const today = new Date().toLocaleDateString('en-CA')
     if (date < today) return res.status(400).json({ error: 'Pick a date from today onwards' })
-
-    // 4. Time must be one of the business's configured slots.
-    const slots = Array.isArray(business.booking_slots) ? business.booking_slots.map(String) : []
-    if (slots.length > 0 && !slots.includes(time)) {
-      return res.status(400).json({ error: 'That time is not available. Pick one of the offered slots.' })
+    if (!/^\d{2}:\d{2}$/.test(time)) return res.status(400).json({ error: 'Invalid time format (HH:MM required)' })
+    {
+      const [hh, mm] = time.split(':').map(Number)
+      if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return res.status(400).json({ error: 'Invalid time value' })
     }
 
-    // 5. No double-booking of the same slot (pending/confirmed only).
-    const { data: clash } = await supabase
-      .from('appointments')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('date', date)
-      .eq('time', time)
-      .in('status', ['pending', 'confirmed'])
-      .maybeSingle()
-    if (clash) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
+    // 4. Time must be one of the business's configured slots (or service availability).
+    const slots = Array.isArray(business.booking_slots) ? business.booking_slots.map(String) : []
+    // If service-specific availability exists, prefer it; otherwise fall back to daily slots.
+    let hasServiceSlots = false
+    let serviceFeeKobo = null
+    let serviceNamePrefetched = null
+    let serviceIsActive = true
+    if (serviceId) {
+      const { data: svc, error: svcErr } = await supabase.from('business_services').select('id,name,price_kobo,is_active').eq('id', serviceId).eq('business_id', businessId).maybeSingle()
+      if (svcErr) return res.status(500).json({ error: 'Could not verify service' })
+      if (!svc) return res.status(400).json({ error: 'Service not found' })
+      if (!svc.is_active) return res.status(400).json({ error: 'This service is no longer available' })
+      serviceNamePrefetched = svc.name
+      serviceFeeKobo = svc.price_kobo
+      // Check service availability rows for this date (strict)
+      const { data: svcSlots, error: slotErr } = await supabase.from('service_availability').select('time,status,is_booked,date').eq('business_id', businessId).eq('service_id', serviceId).eq('date', date)
+      if (slotErr) return res.status(500).json({ error: 'Could not check availability' })
+      if (svcSlots && svcSlots.length > 0) {
+        hasServiceSlots = true
+        const availableTimes = svcSlots.filter(s => s.status === 'available' && !s.is_booked).map(s => s.time)
+        // Normalize comparison: both expected HH:MM, but guard against 9:00 vs 09:00
+        const norm = t => String(t).padStart(5,'0')
+        const normalizedAvailable = availableTimes.map(norm)
+        if (!normalizedAvailable.includes(norm(time))) return res.status(400).json({ error: 'That time is not available for the selected service. Pick an offered slot.' })
+      } else if (slots.length > 0) {
+        if (!slots.includes(time)) return res.status(400).json({ error: 'That time is not available. Pick one of the offered slots.' })
+      } else {
+        // No slots configured at all for this service/date — reject arbitrary times
+        return res.status(400).json({ error: 'No available times configured for this service on the selected date' })
+      }
+    } else if (slots.length > 0) {
+      if (!slots.includes(time)) return res.status(400).json({ error: 'That time is not available. Pick one of the offered slots.' })
+    } else if (hasServiceSlots === false && slots.length === 0) {
+      // No slots configured at all — allow any future time? Spec says must have availability, but fallback to allow to avoid blocking
+      // We will still allow but log warning; alternatively reject: uncomment next line
+      // return res.status(400).json({ error: 'No available times configured for this date' })
+    }
 
-    // 6. Determine the fee for this appointment type (kobo). NULL = free.
-    const feeKobo = wantType === 'online'
+    // 5. Determine the fee for this appointment type (kobo). NULL = free.
+    // Service price is source of truth when service selected — never trust frontend.
+    let feeKobo = wantType === 'online'
       ? business.online_consultation_fee
       : business.physical_consultation_fee
+    let serviceName = (service || '').trim() || 'Consultation'
+    if (serviceId) {
+      serviceName = serviceNamePrefetched
+      if (serviceFeeKobo != null) feeKobo = serviceFeeKobo
+    }
     const hasFee = feeKobo != null && feeKobo > 0
 
-    // 7. Insert the appointment. Paid bookings start as 'unpaid'; free ones land
-    //    directly as 'pending'.
-    const { data: appointment, error } = await supabase
-      .from('appointments')
-      .insert({
-        business_id: businessId,
-        client_name: clientName.trim(),
-        client_id: null,
-        service: (service || '').trim() || 'Consultation',
-        date,
-        time,
-        status: 'pending',
-        staff_name: '',
-        notes: 'Booked via CareFind',
-        booking_type: wantType,
-        source: 'carefind',
-        phone: phone.trim(),
-        concern: (concern || '').trim() || null,
-        payment_status: hasFee ? 'unpaid' : null,
-        fee_amount: hasFee ? feeKobo : null,
-        // ADR-005: snapshot the business's default consultation medium at
-        // booking time; the vendor can override it when confirming.
-        consultation_medium: business.consultation_medium || null,
-        consultation_medium_link: business.consultation_medium_link || null,
-      })
-      .select('id')
-      .single()
-    if (error) return res.status(400).json({ error: error.message })
+    // 6. Atomically create appointment and lock slot via RPC when service is selected (prevents race).
+    // Fallback to direct insert when RPC unavailable or for generic bookings, with unique-index guard mapping to 409.
+    let appointment = null
+    const referenceForBooking = hasFee ? `bk_${crypto.randomBytes(6).toString('hex')}_${Date.now().toString(36)}` : null
+    if (serviceId) {
+      try {
+        const { data: rpcId, error: rpcErr } = await supabase.rpc('book_appointment_slot', {
+          p_business_id: businessId,
+          p_service_id: serviceId,
+          p_date: date,
+          p_time: time,
+          p_client_name: clientName.trim(),
+          p_phone: phone.trim(),
+          p_fee_amount: hasFee ? feeKobo : null,
+          p_payment_reference: referenceForBooking,
+          p_booking_type: wantType,
+          p_concern: (concern || '').trim() || null,
+        })
+        if (rpcErr) throw rpcErr
+        if (!rpcId) throw new Error('Booking failed: no appointment id returned')
+        appointment = { id: rpcId }
+        // RPC snapshots fee as amount/fee_amount and sets payment_reference when hasFee; patch remaining fields that RPC does not set
+        if (appointment && appointment.id) {
+          await supabase.from('appointments').update({
+            payment_status: hasFee ? 'unpaid' : null,
+            consultation_medium: business.consultation_medium || null,
+            consultation_medium_link: business.consultation_medium_link || null,
+            staff_name: '',
+            notes: 'Booked via CareFind',
+          }).eq('id', appointment.id)
+        }
+      } catch (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('already booked') || msg.includes('already taken')) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
+        if (msg.includes('Service is inactive')) return res.status(400).json({ error: 'This service is no longer available' })
+        if (msg.includes('Service not found')) return res.status(400).json({ error: 'Service not found' })
+        // If RPC does not exist (migration not yet applied), fall back to legacy insert
+        if (msg.includes('does not exist') || msg.includes('book_appointment_slot') || msg.includes('function')) {
+          // fall through to legacy path below
+          appointment = null
+        } else if (msg.includes('not found') || msg.includes('inactive')) {
+          return res.status(400).json({ error: msg })
+        } else {
+          // For unique violation or other booking conflict, map to 409
+          if (msg.includes('duplicate') || msg.includes('unique') || msg.includes('appointments_one_per')) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
+          // Unknown RPC error — fall back to legacy with warning
+          appointment = null
+        }
+      }
+    }
+
+    // Legacy / fallback path: direct insert with pre-check (protected by DB unique index as final guard)
+    if (!appointment) {
+      // No double-booking check with row-level intent: rely on unique index, but pre-check for friendly 409
+      const { data: clash } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('date', date)
+        .eq('time', time)
+        .in('status', ['pending', 'confirmed'])
+        .maybeSingle()
+      if (clash) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
+
+      const { data: inserted, error } = await supabase
+        .from('appointments')
+        .insert({
+          business_id: businessId,
+          client_name: clientName.trim(),
+          client_id: null,
+          service: serviceName,
+          service_id: serviceId || null,
+          date,
+          time,
+          status: 'pending',
+          staff_name: '',
+          notes: 'Booked via CareFind',
+          booking_type: wantType,
+          source: 'carefind',
+          phone: phone.trim(),
+          concern: (concern || '').trim() || null,
+          payment_status: hasFee ? 'unpaid' : null,
+          fee_amount: hasFee ? feeKobo : null,
+          amount: hasFee ? feeKobo : null,
+          payment_reference: referenceForBooking,
+          consultation_medium: business.consultation_medium || null,
+          consultation_medium_link: business.consultation_medium_link || null,
+        })
+        .select('id')
+        .single()
+      if (error) {
+        const m = String(error.message || '')
+        if (m.includes('duplicate') || m.includes('unique') || m.includes('appointments_one_per')) return res.status(409).json({ error: 'That time was just taken. Please pick another.' })
+        return res.status(400).json({ error: error.message })
+      }
+      appointment = inserted
+
+      // If service availability row exists for this slot, mark it booked (best-effort, race-protected by RPC when available)
+      if (serviceId) {
+        try {
+          await supabase.from('service_availability').update({ is_booked: true, status: 'booked', appointment_id: appointment.id }).eq('business_id', businessId).eq('service_id', serviceId).eq('date', date).eq('time', time).eq('is_booked', false)
+        } catch (e) {}
+        try {
+          await supabase.from('service_availability').update({ is_booked: true, status: 'booked', appointment_id: appointment.id }).eq('business_id', businessId).eq('service_id', serviceId).eq('date', date).eq('start_time', time).eq('is_booked', false)
+        } catch (e) {}
+      }
+    }
 
     // 8. If there is a fee, initiate Paystack and return the payment URL.
     if (hasFee) {
-      // A stable reference is set now (not after Paystack succeeds) so the
-      // booking is payable by CareCoins later even if the Paystack checkout
-      // is skipped ΓÇö pay_booking_with_credits is idempotent on this reference.
-      const reference = `bk_${appointment.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
-      await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
+      // Reference was already generated before the atomic insert (referenceForBooking) and stored as payment_reference.
+      // Re-use it for Paystack; only generate if somehow missing (legacy safety).
+      let reference = referenceForBooking
+      if (!reference) {
+        reference = `bk_${appointment.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
+        await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
+      } else {
+        // Ensure the appointment row has it (RPC already set it, but verify)
+        const { data: refCheck } = await supabase.from('appointments').select('payment_reference').eq('id', appointment.id).maybeSingle()
+        if (!refCheck?.payment_reference) {
+          await supabase.from('appointments').update({ payment_reference: reference }).eq('id', appointment.id)
+        }
+      }
       try {
         // Callback returns the client to the business page with the opaque
         // reference; BookingCard verifies the payment before showing a

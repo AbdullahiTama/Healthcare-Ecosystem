@@ -136,14 +136,14 @@ export default function Consultation({ brand, products, staffName }) {
             style={{ flex: 1, padding: '12px 0', border: 'none', fontSize: '13px', outline: 'none', background: 'transparent', color: navy, minWidth: 0 }} />
         </div>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label='Filter by consultation type'
-          style={{ padding: '10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: '#fff', outline: 'none' }}>
+          style={{ padding: '10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: theme.cardBg, outline: 'none' }}>
           <option value=''>All types</option>
           <option value='skincare'>Skincare</option>
           <option value='pharmacy'>Pharmacy</option>
         </select>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} aria-label="From date" style={{ padding: '9px 10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: '#fff', outline: 'none' }} />
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} aria-label="To date" style={{ padding: '9px 10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: '#fff', outline: 'none' }} />
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)} aria-label="From date" style={{ padding: '9px 10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: theme.cardBg, outline: 'none' }} />
+          <input type="date" value={to} onChange={e => setTo(e.target.value)} aria-label="To date" style={{ padding: '9px 10px', border: `1px solid ${border}`, borderRadius: theme.radius.md, fontSize: 12.5, color: navy, background: theme.cardBg, outline: 'none' }} />
         </div>
       </div>
 

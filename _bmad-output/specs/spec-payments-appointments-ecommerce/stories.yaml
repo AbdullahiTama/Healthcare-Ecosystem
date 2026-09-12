@@ -1,0 +1,51 @@
+- id: "1"
+  title: Shared Paystack service + webhook shop dispatcher + DB columns
+  description: >-
+    Add appointments verification columns + businesses.shop_allow_pay_on_delivery, create shared paystack lib,
+    add handleShopOrder to paystack-webhook.js, add unique indexes and guard trigger; no UI yet.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Use existing paystackFetch and getPaystackSecretKey; keep bodyParser false and HMAC sha512; pin search_path=public on RPCs; revoke PUBLIC,anon EXECUTE, grant authenticated.
+
+- id: "2"
+  title: Shop strict Paystack — initiate/verify and Checkout redirect
+  description: >-
+    Implement POST /api/initiate-shop-payment and verify, wire Checkout.jsx to create pending_payment then redirect to Paystack and verify on return, webhook settles shop_orders idempotently; keep strict-paystack default.
+  spec_checkpoint: false
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Do not trust unit_price_kobo from cart; re-read ecommerce_products.ecommerce_price_kobo server-side and throw PRICE_CHANGED; payment_reference is idempotency key.
+
+- id: "3"
+  title: Vendor pay-on-delivery toggle
+  description: >-
+    Owner-only toggle for shop_allow_pay_on_delivery in Ecommerce.jsx/Settings, gated read of businesses row, and conditional Pay at Pickup CTA in Checkout.jsx when allowed + pickup preference.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Toggle is Owner only; unauthenticated PATCH rejected; Checkout fallback is strict Paystack when flag false.
+
+- id: "4"
+  title: CareHub appointment cash/pos/transfer/paystack channels
+  description: >-
+    Make payment_channel mandatory when fee>0 in Appointments.jsx New Appointment modal, branch save() per CAP-1..4, store verified_by/at; cash instant paid, pos/transfer unpaid pending.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Follow appointments repository seam with injected request; UI shows loading/error/empty, responsive 375/768/1280, keyboard accessible Sel.
+
+- id: "5"
+  title: Manual confirm POS/Transfer for appointments
+  description: >-
+    Add confirm_pos_payment and confirm_transfer_payment RPCs + POST /api/confirm-pos-payment / confirm-transfer-payment, add Confirm POS/Transfer actions to Appointments DataTable with pos_reference input and optional proof upload to private bucket, audit and toast.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Only Owner/Manager may confirm (current_business_ids check); idempotent already_paid; verified_by = caller staff id; write staff_notifications.
+
+- id: "6"
+  title: Paystack link for CareHub appointments (verify path)
+  description: >-
+    Wire Appointments.jsx Send Pay Link to initiate-appointment-payment, add Verify button / query ?reference= handling, reuse settle_card_booking and wallet held→available flow, ensure webhook replay is no-op.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Amount cross-check verifiedAmount === fee_amount before RPC; link is shareable; copy-to-clipboard with toast; webhook and verify race via already_paid.

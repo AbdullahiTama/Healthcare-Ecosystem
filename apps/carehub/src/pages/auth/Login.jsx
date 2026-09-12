@@ -51,7 +51,8 @@ export default function Login() {
       login(account.biz, account.staff)
       navigate('/dashboard/dashboard')
     } catch (e) {
-      setErr('Connection error. Check your internet and try again.')
+      console.error('[Login] Error:', e)
+      setErr(e.message || 'Connection error. Check your internet and try again.')
     }
     setLoading(false)
   }
@@ -100,6 +101,9 @@ export default function Login() {
             <TealBtn onClick={handleLogin} disabled={loading} style={{ padding: '16px', borderRadius: theme.radius.full, fontSize: 15, fontWeight: 800, boxShadow: theme.elevation[2], marginTop: 4, ...(loading ? {} : { background: tealDeep }) }}>
               {loading ? 'Signing in…' : 'Sign in'}
             </TealBtn>
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <Link to="/forgot-password" style={{ fontSize: 13, color: tealDeep, fontWeight: 700, textDecoration: 'none' }}>Forgot password?</Link>
+            </div>
           </div>
         </Card>
 

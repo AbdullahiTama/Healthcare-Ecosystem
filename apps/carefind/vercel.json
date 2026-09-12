@@ -1,6 +1,17 @@
 {
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/router" },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|WhatsApp|LinkedInBot|Twitterbot|Slackbot|Slack-ImgProxy|TelegramBot|Discordbot|Pinterest|redditbot|SkypeUriPreview|embedly|iframely|vkShare|Quora Link Preview).*"
+        }
+      ],
+      "destination": "/api/router"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

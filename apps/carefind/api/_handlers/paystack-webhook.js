@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
+import { sendEmail, buildOrderConfirmationHtml } from '../_lib/email.js'
 
-// Single Paystack webhook for all apps ΓÇö register this URL in the Paystack
+// Single Paystack webhook for all apps — register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
 // and CareHub plan payments all route through here.
 const supabase = createClient(
@@ -23,7 +24,7 @@ function readRawBody(req) {
   })
 }
 
-// ΓöÇΓöÇ Top-up handler (CareFind wallet credit) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Top-up handler (CareFind wallet credit)
 async function handleTopup(metadata, reference, amount) {
   if (!metadata?.user_id || !metadata?.coins) return null
   return creditTopup(supabase, {
@@ -34,46 +35,44 @@ async function handleTopup(metadata, reference, amount) {
   })
 }
 
-// ΓöÇΓöÇ Subscription handler (CareFind Paystack card payment) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Subscription handler (CareFind Paystack card payment)
 async function handleSubscription(metadata, reference, amount) {
   if (metadata?.purpose !== 'subscription') return null
 
-  const { data: existing } = await supabase
-    .from('transactions').select('id')
-    .eq('reference', reference).eq('type', 'subscription_payment')
-    .maybeSingle()
-  if (existing) return { alreadyProcessed: true }
-
-  const { data, error } = await supabase.rpc('pay_creator_subscription', {
+  const { data, error } = await supabase.rpc('settle_subscription_payment', {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
+    p_naira_amount: amount,
+    p_reference: reference,
   })
-  if (error || data !== 'ok') return null
-
-  await supabase.from('transactions').insert({
-    user_id: metadata.user_id,
-    type: 'subscription_payment',
-    amount: parseInt(metadata.coins),
-    naira_amount: amount,
-    reference,
-    status: 'success',
-  }).select().maybeSingle()
-
+  if (error) return null
+  const row = Array.isArray(data) ? data[0] : data
+  if (row?.already_processed) return { alreadyProcessed: true }
   return { credited: true }
 }
 
-// ΓöÇΓöÇ Transfer handler (automated withdrawal payouts) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Transfer handler (automated withdrawal payouts)
 async function handleTransferSuccess(reference) {
+  // CareFind user withdrawals
   await supabase
     .from('withdrawal_requests')
     .update({ status: 'completed' })
     .eq('paystack_reference', reference)
     .eq('status', 'pending')
+
+  // CareHub business withdrawals
+  await supabase
+    .from('business_withdrawal_requests')
+    .update({ status: 'completed' })
+    .eq('paystack_reference', reference)
+    .in('status', ['pending', 'processing'])
+
   return { received: true }
 }
 
 async function handleTransferFailed(reference) {
+  // CareFind user withdrawals
   const { data: requests } = await supabase
     .from('withdrawal_requests')
     .select('id')
@@ -84,10 +83,23 @@ async function handleTransferFailed(reference) {
   if (requests && requests.length > 0) {
     await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
   }
+
+  // CareHub business withdrawals
+  const { data: bizRequests } = await supabase
+    .from('business_withdrawal_requests')
+    .select('id')
+    .eq('paystack_reference', reference)
+    .in('status', ['pending', 'processing'])
+    .limit(1)
+
+  if (bizRequests && bizRequests.length > 0) {
+    await supabase.rpc('reject_business_withdrawal', { p_request_id: bizRequests[0].id })
+  }
+
   return { received: true }
 }
 
-// ΓöÇΓöÇ Consultation handler (CareFind professional consultation booking) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Consultation handler (CareFind professional consultation booking)
 // Races verify-consultation-payment.js on the same reference; the RPC claims
 // the reference atomically so only one caller can ever settle the booking.
 async function handleConsultation(metadata, reference, amount) {
@@ -101,8 +113,7 @@ async function handleConsultation(metadata, reference, amount) {
   }).then((result) => ({ settled: true, ...result }))
 }
 
-// ΓöÇΓöÇ CareHub plan renewal handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-// ── Booking handler (CareFind business-profile appointment, card paid) ──
+// Booking handler (CareFind business-profile appointment, card paid)
 // Races verify-booking-payment.js on the same appointment; settle_card_booking
 // is SECURITY DEFINER and idempotent (returns 'already_paid' for a repeat), so
 // whichever caller arrives first settles, and the other is a safe no-op. This
@@ -143,32 +154,137 @@ async function handleBooking(metadata, reference, amount) {
   return { settled: true }
 }
 
+// Shop order handler (CareFind Shop, strict Paystack)
+// Races verify-shop-payment on the same order; shop RPC is idempotent.
+// Uses claim_payment_event for deduplication to prevent double-processing.
+async function handleShopOrder(metadata, reference, amount) {
+  if (!metadata?.order_id) return null
+
+  const { data: order } = await supabase
+    .from('shop_orders')
+    .select('id, vendor_business_id, total_kobo, payment_status, status, order_ref')
+    .eq('id', metadata.order_id)
+    .maybeSingle()
+  if (!order) return null
+
+  // Cross-check Paystack amount against server total_kobo
+  if (order.total_kobo == null || amount !== order.total_kobo) return null
+
+  // Deduplicate via shop_payment_events
+  const { data: claimed } = await supabase.rpc('claim_payment_event', {
+    p_order_id: order.id,
+    p_payment_reference: reference,
+    p_event_type: 'charge.success',
+    p_amount_kobo: amount,
+  })
+  if (claimed === 'already_processed') return { alreadyProcessed: true }
+
+  // Try canonical shop RPCs
+  let rpcRes = await supabase.rpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
+  if (rpcRes.error) {
+    rpcRes = await supabase.rpc('settle_shop_payment', { p_order_id: order.id, p_reference: reference })
+  }
+  if (rpcRes.error) {
+    // Fallback: direct idempotent update if order still pending_payment
+    if (order.status === 'pending_payment' || order.payment_status === 'pending') {
+      const { error: updErr } = await supabase
+        .from('shop_orders')
+        .update({ payment_status: 'paid', status: 'paid', paystack_reference: reference })
+        .eq('id', order.id)
+        .eq('status', 'pending_payment')
+      if (updErr) return null
+      await supabase.from('shop_order_status_history').insert({
+        order_id: order.id, from_status: 'pending_payment', to_status: 'paid',
+        note: `Paystack ${reference}`,
+      })
+      await supabase.from('shop_payments').upsert({
+        order_id: order.id, payment_reference: reference, amount_kobo: amount,
+        status: 'success', gateway: 'paystack',
+      }, { onConflict: 'payment_reference' })
+    } else {
+      return null
+    }
+  } else {
+    const result = rpcRes.data
+    if (result === 'already_paid' || result === 'already_processed') return { alreadyProcessed: true }
+    if (result && typeof result === 'object' && result.already_processed) return { alreadyProcessed: true }
+    if (result !== 'ok' && result !== 'success' && result !== true) return null
+  }
+
+  // Notify vendor business owner
+  await supabase.from('staff_notifications').insert({
+    business_id: order.vendor_business_id, staff_id: null, is_owner: true,
+    kind: 'shop_order_paid',
+    title: `Shop order paid — ${order.order_ref}`,
+    body: `Order ${order.order_ref} — ₦${(amount / 100).toLocaleString()} via Paystack`,
+    link: '/dashboard/ecommerce', read_at: null,
+  })
+
+  // Notify customer (email + in-app) — fire-and-forget
+  notifyCustomerPostPayment(order.id).catch(err => {
+    console.error('[paystack-webhook] customer notification error:', err)
+  })
+
+  return { settled: true }
+}
+
+async function notifyCustomerPostPayment(orderId) {
+  const { data: fullOrder } = await supabase
+    .from('shop_orders')
+    .select('id, order_ref, customer_id, total_kobo, fulfilment_kobo, delivery_kobo, subtotal_kobo, delivery_address, delivery_city, delivery_state, delivery_email, customer_name, payment_reference, created_at')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (!fullOrder) return
+
+  const { data: items } = await supabase
+    .from('shop_order_items')
+    .select('product_name, quantity, unit_price_kobo')
+    .eq('order_id', orderId)
+
+  // In-app notification
+  if (fullOrder.customer_id) {
+    await supabase.from('notifications').insert({
+      recipient_id: fullOrder.customer_id,
+      type: 'shop_order_paid',
+      message: `Payment confirmed for order ${fullOrder.order_ref} — ₦${(fullOrder.total_kobo / 100).toLocaleString()}`,
+      link: `/orders/${orderId}`,
+    }).then(() => {}, () => {})
+  }
+
+  // Order confirmation email
+  const email = fullOrder.delivery_email
+  if (email && email.includes('@')) {
+    const siteUrl = process.env.SITE_URL || process.env.VITE_SITE_URL || ''
+    const html = buildOrderConfirmationHtml({
+      order: fullOrder,
+      items: items || [],
+      siteUrl,
+    })
+    await sendEmail({
+      to: email,
+      subject: `Order Confirmed — ${fullOrder.order_ref}`,
+      html,
+    }).then(() => {}, () => {})
+  }
+}
+
+// CareHub plan renewal handler
 async function handlePlanPayment(metadata, reference, amount) {
   if (!metadata?.business_id || !metadata?.months) return null
 
-  const { data: existing } = await supabase
-    .from('plan_payments').select('id')
-    .eq('reference', reference)
-    .maybeSingle()
-  if (existing) return { alreadyProcessed: true }
-
-  const { data: business } = await supabase
-    .from('businesses').select('id, plan_expires_at')
-    .eq('id', metadata.business_id)
-    .maybeSingle()
-  if (!business) return null
-
   const months = parseInt(metadata.months)
-  const base = business.plan_expires_at && new Date(business.plan_expires_at) > new Date()
-    ? new Date(business.plan_expires_at) : new Date()
-  const newExpiry = new Date(base)
-  newExpiry.setMonth(newExpiry.getMonth() + months)
 
-  await supabase.from('businesses').update({ plan_expires_at: newExpiry.toISOString() }).eq('id', business.id)
-  await supabase.from('plan_payments').insert({
-    business_id: business.id, months, naira_amount: amount, reference, status: 'success',
+  const { data, error } = await supabase.rpc('renew_business_plan', {
+    p_business_id: metadata.business_id,
+    p_months: months,
+    p_naira_amount: amount,
+    p_reference: reference,
   })
-  return { credited: true, new_expiry: newExpiry.toISOString() }
+  if (error) return null
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  if (row.already_processed) return { alreadyProcessed: true }
+  return { credited: true, new_expiry: row.new_expiry }
 }
 
 export default async function handler(req, res) {
@@ -192,42 +308,54 @@ export default async function handler(req, res) {
 
   const event = JSON.parse(rawBody.toString('utf8'))
 
+  // Return 200 immediately to prevent Paystack timeout retries.
+  // Process the event async — all handlers are idempotent so duplicate
+  // webhook deliveries are safe.
+  res.status(200).json({ received: true })
+
+  // Fire-and-forget async processing
+  processWebhookEvent(event).catch((err) => {
+    console.error('[paystack-webhook] async processing error:', err)
+  })
+}
+
+async function processWebhookEvent(event) {
   // Dispatch by event type
   if (event.event === 'charge.success') {
     const { reference, metadata, amount } = event.data
 
     // Try subscription first (has explicit purpose flag)
     let result = await handleSubscription(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try consultation booking (has its own purpose flag)
     result = await handleConsultation(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Try CareFind appointment booking (has appointment_id in metadata)
     result = await handleBooking(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
+
+    // Try Shop order (has order_id in metadata)
+    result = await handleShopOrder(metadata, reference, amount)
+    if (result) return
 
     // Try CareHub plan payment (has business_id)
     result = await handlePlanPayment(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
+    if (result) return
 
     // Fall through to top-up (has user_id + coins)
     result = await handleTopup(metadata, reference, amount)
-    if (result) return res.status(200).json(result)
-
-    return res.status(200).json({ received: true })
+    if (result) return
   }
 
   if (event.event === 'transfer.success') {
-    const result = await handleTransferSuccess(event.data.reference)
-    return res.status(200).json(result)
+    await handleTransferSuccess(event.data.reference)
+    return
   }
 
   if (event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
-    const result = await handleTransferFailed(event.data.reference)
-    return res.status(200).json(result)
+    await handleTransferFailed(event.data.reference)
+    return
   }
-
-  return res.status(200).json({ received: true })
 }

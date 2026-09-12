@@ -1,128 +1,196 @@
-// Design tokens for CareHub, matching docs/design/DESIGN_SYSTEM.md and its
-// linked documents (COLORS.md, TYPOGRAPHY.md, SPACING.md, GRID_SYSTEM.md,
-// ELEVATION.md, MOTION.md, ICONS.md). Mirrors the shape of CareFind's
-// ../../../carefind/src/styles/theme.js so both apps share one system
-// (DESIGN_PRINCIPLES.md's consistency principle) while each keeps its own
-// product-specific application (TYPOGRAPHY.md's CareHub vs CareFind section).
-// `lib/utils.js`'s TEAL/DARK/TEALC constants now re-export from here, so
-// every existing call site keeps working unchanged.
+// Re-export unified design tokens from shared package
+// Extended with dark-first CSS var tokens + data-theme switch per AD-4 / Quiet Chrome.
+// Color = state only: surfaces are monochrome, only amber/green/red convey state.
 
-export const theme = {
-  // ── Brand — custom teal palette ─────────────────────────────────────────
-  tealDeep: '#0E6F5A',
-  tealBright: '#0E6F5A',
-  tealHover: '#0B5A49',
-  deepTeal: '#0B4A3E',
-  navy: '#182722',
-  navySoft: '#3C4B44',
-  bg: '#F7F5EF',
-  canvasBg: '#E7E5DC',
-  cardBg: '#FBFAF6',
-  border: '#ECEAE0',
-  hairline: '#E7E4D9',
-  textDark: '#182722',
-  textMid: '#3C4B44',
-  textLight: '#8B978F',
-  textMuted: '#9AA69F',
-  success: '#0E6F5A',
-  warning: '#d97706',
-  alert: '#dc2626',
-  heroGradient: 'linear-gradient(135deg, #0E6F5A 0%, #0B4A3E 100%)',
-  tealGradient: 'linear-gradient(135deg, #0E6F5A, #0B5A49)',
-  darkGradient: 'linear-gradient(135deg, #0B4A3E, #0E6F5A)',
+import { theme as baseTheme } from '../../../../packages/design-system/src/theme.js'
 
-  // ── Full neutral scale (COLORS.md) ──────────────────────────────────────────
-  gray50: '#FBFAF6',
-  gray100: '#F7F5EF',
-  gray200: '#ECEAE0',
-  gray300: '#E7E4D9',
-  gray400: '#9AA69F',
-  gray500: '#8B978F',
-  gray600: '#5B6B63',
-  gray900: '#182722',
+// ── CSS var tokens (dark-first) ────────────────────────────────────────────
+// Dark is default; light overrides via [data-theme="light"].
+// Also respects OS prefers-color-scheme when no explicit data-theme set.
+// All UI should use var(--xxx) so the toggle works without JS re-render.
+// Quiet Chrome: near-monochrome surfaces, one accent (teal), 13px body.
 
-  // ── Semantic colors (COLORS.md) ─────────────────────────────────────────────
-  danger: '#dc2626',
-  info: '#2563eb',
-  purple: '#7c3aed',
-  successBg: '#E3EEE8',
-  warningBg: '#fffbeb',
-  dangerBg: '#fef2f2',
-  infoBg: '#eff6ff',
-  tealMist: '#E3EEE8',
-
-  // ── Domain/semantic aliases (COLORS.md — repeated literals centralized so a
-  //    change propagates; also keep foreign palettes (amber/slate) contained
-  //    in the teal/warm-gray system rather than re-typed per screen) ──────────
-  amberText: '#92400e',      // amber warning text (Register, Inventory, Admin)
-  amberBorder: '#fcd34d',    // amber warning border (Register, AdminDashboard)
-  amberDeep: '#b45309',      // darker amber emphasis (AdminDashboard)
-  slate: '#0f172a',          // dark slate alias (Register, AdminDashboard)
-  dangerBorder: '#fecaca',   // danger alert border (Login, AgentLogin, POS)
-  textFaint: '#888',         // faint gray text (Register, AdminDashboard, Inventory)
-
-  // ── Typography scale (TYPOGRAPHY.md) ────────────────────────────────────────
-  fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  fontMono: '"Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-  // Marketing/public pages only (e.g. Landing.jsx) — never dashboard/POS/
-  // form/table screens. See TYPOGRAPHY.md's "Display serif" section.
-  fontDisplay: '"Lora", Georgia, "Times New Roman", serif',
-  type: {
-    display: { size: 24, weight: 900, lineHeight: 1.2 },
-    h1: { size: 21, weight: 900, lineHeight: 1.25 },
-    h2: { size: 18, weight: 800, lineHeight: 1.3 },
-    h3: { size: 15, weight: 800, lineHeight: 1.35 },
-    bodyLg: { size: 14, weight: 500, lineHeight: 1.5 },
-    body: { size: 13, weight: 500, lineHeight: 1.5 },
-    bodySm: { size: 12, weight: 600, lineHeight: 1.4 },
-    caption: { size: 11, weight: 700, lineHeight: 1.4 },
-    micro: { size: 10.5, weight: 700, lineHeight: 1.3 },
-  },
-
-  // ── Spacing scale (SPACING.md, 4px-based) ───────────────────────────────────
-  space: {
-    1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 24, 12: 32,
-  },
-
-  // ── Corner radius scale (DESIGN_SYSTEM.md) ──────────────────────────────────
-  radius: {
-    sm: 6,
-    md: 10,
-    lg: 14,
-    xl: 20,
-    full: 9999,
-  },
-
-  // ── Elevation / shadow scale (ELEVATION.md — navy-based, never pure black) ──
-  elevation: {
-    0: 'none',
-    1: '0 1px 4px rgba(15,23,42,0.05)',
-    2: '0 4px 16px rgba(15,23,42,0.08)',
-    3: '0 8px 24px rgba(15,23,42,0.12)',
-    4: '0 20px 48px rgba(15,23,42,0.18)',
-  },
-
-  // ── Motion (MOTION.md) ───────────────────────────────────────────────────────
-  motion: {
-    instant: '0ms',
-    fast: '140ms',
-    base: '200ms',
-    slow: '300ms',
-    easeOut: 'cubic-bezier(0.16, 1, 0.3, 1)',
-    easeIn: 'cubic-bezier(0.7, 0, 0.84, 0)',
-  },
-
-  // ── Icon sizing (ICONS.md) ───────────────────────────────────────────────────
-  icon: {
-    xs: 14, sm: 16, md: 20, lg: 24, xl: 40,
-  },
-
-  // ── Breakpoints (GRID_SYSTEM.md) ────────────────────────────────────────────
-  breakpoints: {
-    mobile: 320,
-    tablet: 768,
-    laptop: 1024,
-    desktop: 1440,
-    largeDesktop: 1920,
-  },
+const CSS_VARS = `
+:root {
+  --bg: #0B1412;
+  --panel: #121C19;
+  --panel-hover: #16211E;
+  --fg: #E8EDEB;
+  --muted: #8B9A94;
+  --muted-2: #6B7D77;
+  --border: #1E2D29;
+  --hairline: #1E2D29;
+  --teal: #0E6F5A;
+  --teal-deep: #0E6F5A;
+  --teal-hover: #0B5A49;
+  --teal-mist: rgba(14,111,90,0.12);
+  --amber: #d97706;
+  --amber-bg: rgba(217,119,6,0.12);
+  --green: #16a34a;
+  --green-bg: rgba(22,163,74,0.12);
+  --red: #dc2626;
+  --red-bg: rgba(220,38,38,0.10);
+  --gray: #6B7280;
+  --overlay: rgba(6,12,10,0.72);
+  --elevation-1: 0 1px 4px rgba(0,0,0,0.3);
+  --elevation-2: 0 4px 16px rgba(0,0,0,0.35);
+  color-scheme: dark;
 }
+[data-theme="light"] {
+  --bg: #F7F5EF;
+  --panel: #FBFAF6;
+  --panel-hover: #F2EFE6;
+  --fg: #182722;
+  --muted: #5B6B63;
+  --muted-2: #8B978F;
+  --border: #ECEAE0;
+  --hairline: #E7E4D9;
+  --teal: #0E6F5A;
+  --teal-deep: #0E6F5A;
+  --teal-hover: #0B5A49;
+  --teal-mist: #E3EEE8;
+  --amber: #d97706;
+  --amber-bg: #fffbeb;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --gray: #6B7280;
+  --overlay: rgba(15,23,42,0.55);
+  --elevation-1: 0 1px 4px rgba(15,23,42,0.05);
+  --elevation-2: 0 4px 16px rgba(15,23,42,0.08);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #0B1412;
+  --panel: #121C19;
+  --panel-hover: #16211E;
+  --fg: #E8EDEB;
+  --muted: #8B9A94;
+  --muted-2: #6B7D77;
+  --border: #1E2D29;
+  --hairline: #1E2D29;
+  --teal: #14a68a;
+  --teal-deep: #14a68a;
+  --teal-hover: #0E6F5A;
+  --teal-mist: rgba(14,111,90,0.16);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.12);
+  --green: #22c55e;
+  --green-bg: rgba(34,197,94,0.12);
+  --red: #ef4444;
+  --red-bg: rgba(239,68,68,0.10);
+  --gray: #8B9A94;
+  --overlay: rgba(6,12,10,0.72);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
+html[data-theme="dark"] body, html:not([data-theme]) body {
+  background: var(--bg);
+  color: var(--fg);
+}
+html[data-theme="light"] body {
+  background: var(--bg);
+  color: var(--fg);
+}
+/* Ensure Quiet Chrome: color only on state dots/pills — surfaces stay monochrome */
+`
+
+function injectThemeVars() {
+  if (typeof document === 'undefined') return
+  if (document.getElementById('carehub-theme-vars')) return
+  const el = document.createElement('style')
+  el.id = 'carehub-theme-vars'
+  el.textContent = CSS_VARS
+  document.head.appendChild(el)
+}
+
+injectThemeVars()
+
+export function getStoredTheme() {
+  if (typeof window === 'undefined') return null
+  try { return localStorage.getItem('carehub_theme') } catch { return null }
+}
+
+export function applyTheme(name) {
+  if (typeof document === 'undefined') return
+  const t = name === 'light' || name === 'dark' ? name : 'dark'
+  document.documentElement.setAttribute('data-theme', t)
+  try { localStorage.setItem('carehub_theme', t) } catch {}
+}
+
+export function toggleTheme() {
+  if (typeof document === 'undefined') return 'dark'
+  // check localStorage first, then system light preference per spec (FOUC guard)
+  const stored = getStoredTheme()
+  const cur = document.documentElement.getAttribute('data-theme') || stored || (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+  const next = cur === 'dark' ? 'light' : 'dark'
+  applyTheme(next)
+  return next
+}
+
+export function initTheme() {
+  if (typeof document === 'undefined') return
+  injectThemeVars()
+  const stored = getStoredTheme()
+  if (stored === 'light' || stored === 'dark') {
+    document.documentElement.setAttribute('data-theme', stored)
+    return
+  }
+  // system preference via light check (spec) — if light prefers light, else dark-first
+  const prefersLight = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+  document.documentElement.setAttribute('data-theme', prefersLight ? 'light' : 'dark')
+}
+
+// FOUC guard: init synchronously before paint on import (dark-first)
+// No DOMContentLoaded defer — injectThemeVars + initTheme run immediately
+if (typeof window !== 'undefined') {
+  initTheme()
+  // keep in sync with OS when no explicit choice stored
+  try {
+    const mqLight = window.matchMedia('(prefers-color-scheme: light)')
+    const handler = (e) => {
+      const stored = getStoredTheme()
+      if (stored) return
+      document.documentElement.setAttribute('data-theme', e.matches ? 'light' : 'dark')
+    }
+    if (mqLight && mqLight.addEventListener) mqLight.addEventListener('change', handler)
+    else if (mqLight && mqLight.addListener) mqLight.addListener(handler)
+    // also listen dark for older browsers
+    const mqDark = window.matchMedia('(prefers-color-scheme: dark)')
+    if (mqDark && mqDark.addEventListener) mqDark.addEventListener('change', (e) => {
+      const s = getStoredTheme()
+      if (s) return
+      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light')
+    })
+  } catch {}
+}
+
+// Re-export base theme plus var-aware aliases for components that read theme object.
+// New code should prefer CSS vars (var(--bg) etc) but existing inline styles keep
+// working because these aliases resolve to var() strings, switching with data-theme.
+export const theme = {
+  ...baseTheme,
+  // CSS var aliases — use these for Quiet Chrome surfaces so dark/light flips
+  bg: 'var(--bg)',
+  panel: 'var(--panel)',
+  fg: 'var(--fg)',
+  border: 'var(--border)',
+  hairline: 'var(--hairline)',
+  overlay: 'var(--overlay)',
+  // keep original hexes as fallbacks via *_hex
+  bg_hex: baseTheme.bg,
+  cardBg_hex: baseTheme.cardBg,
+  // state-only colors remain as hex but also available as vars
+  teal: 'var(--teal)',
+  tealDeep: 'var(--teal-deep)',
+  amber: 'var(--amber)',
+  green: 'var(--green)',
+  red: 'var(--red)',
+}
+
+export default theme

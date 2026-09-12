@@ -4,13 +4,22 @@
 The checkout/sales-transaction domain for every CareHub business type — cart building, discount application, split/credit payment handling, receipt generation, held sales, and same-day sales history. The primary revenue-recording surface of the product.
 
 ## Files
-`apps/carehub/src/pages/dashboard/POS.jsx` (the module), `pages/dashboard/BusinessDashboard.jsx` (owns the shared `products` state POS reads from), `pages/dashboard/DashboardHome.jsx`/`Locations.jsx`/`Reports.jsx` (read-only consumers of sales totals).
+`apps/carehub/src/modules/pos/POS.jsx` (the module), `apps/carehub/src/modules/pos/receiptPrint.js` (HTML receipt builder), `apps/carehub/src/modules/pos/receiptEscpos.js` (raw ESC/POS encoder), `apps/carehub/src/modules/pos/escposUsb.js` (WebUSB transport), `apps/carehub/src/hooks/useToast.js` (feedback).
+Legacy path `pages/dashboard/POS.jsx` was split into the feature module above.
 
 ## Components
 Single large default-exported `POS` component with internal `view` state switching between `pos`/`held`/`recent`/`credit` sub-views, all in one file — no sub-component extraction. Shared primitives: `Card`, `Modal`, `Pill`, `GhostBtn`, `TealBtn`, `DarkBtn`, `Inp`, `Sel`, `Avatar`, `Toast`.
 
 ## Services
-`lib/supabase.js`: `addSale`, `updateSale`, `getSales`, `getTodaySales`, `getSettings` (read-only), plus `queueOfflineSale`/`getOfflineQueue` (the offline-cache domain) and `addDebt`/`updateDebt` (cross-call into the Debts domain for auto-created credit-sale debts).
+`apps/carehub/src/modules/pos/repositories/` (sales: `getToday`/`getAll`/`create` with localStorage offline queue `carehub_v1_offline_sales`; `is_on_hold`/`is_credit` domain), `apps/carehub/src/modules/settings/repositories/` (business settings: `tax_rate`, `receipt_width`, `receipt_header`/`footer`, `refund_policy`, `logo_url`), `apps/carehub/src/modules/debts/repositories/` (auto-created credit-sale debts). Cross-aggregate reads `getClients`/`getLatestConsultation` still via `services/supabase.js`.
+
+## Receipt Printing
+
+CareHub renders the same `{ receipt, business, settings }` object through two paths:
+
+- **ESC/POS-first** (default when available): `receiptEscpos.js:buildReceiptEscpos` builds raw command bytes (ESC/POS, CP437-safe ASCII, `receipt_width` → 32/48 columns, manual centering, `GS V` cut); `escposUsb.js` writes them over WebUSB (class-code 7 printer interface, Chromium-only, HTTPS + user-gesture required; `navigator.usb.getDevices()` keeps paired printers after the first picker grant). On success the button shows "Sending… → Receipt printed" and no browser dialog appears.
+- **Browser fallback**: `legacyPrint` path renders `receiptPrint.js:buildReceiptHtml` into a popup window and calls `window.print()`. Used immediately when WebUSB is unsupported (Firefox/Safari/iOS), when the user cancels the picker, or when connection fails before any bytes are sent. After a successful `transferOut` the fallback never fires (duplicate-receipt guard); mid-transfer failures surface as error toasts via `EscposTransferError.sent`.
+- Both entry points — post-sale "Print receipt" and Recent Sales "Reprint" (which rebuilds the receipt object from the sale row — `JSON.parse(items)`, `payment_split`, `amount_paid`, `created_at`) — behave identically. The "Print receipt" / "Reprint" buttons disable and show "Sending…" during the transfer.
 
 ## Dependencies
 `lib/utils.js` (`fmt`, `genId`, formatting), `components/ui/index.jsx`. Reads the `products` array as a prop from `BusinessDashboard.jsx` (Inventory domain) to build the sale screen — this is the domain's primary cross-domain dependency.

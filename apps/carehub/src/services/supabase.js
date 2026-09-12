@@ -7,9 +7,19 @@ import { pagedQuery } from '../lib/pagedQuery.js'
 // phase2_rls_pilot.sql) — falls back to the anon key otherwise, which is
 // the same key every call used unconditionally before this fix, so
 // pre-login calls (login itself, duplicate-email checks) are unaffected.
+// Laptop stale-session fix (spec-stock-validation-laptop-fix): if getSession
+// returns null, try refreshSession once before falling back to anon — the
+// StockValidation confirmSave also does an explicit pre-save check with
+// Session expired toast, but authToken must not silently send anon when a
+// refresh would succeed, otherwise the RPC hits RLS 42501.
 async function authToken() {
   const { data } = await authClient.auth.getSession()
-  return data?.session?.access_token || SB_KEY
+  if (data?.session?.access_token) return data.session.access_token
+  try {
+    const { data: refreshed } = await authClient.auth.refreshSession()
+    if (refreshed?.session?.access_token) return refreshed.session.access_token
+  } catch {}
+  return SB_KEY
 }
 
 export async function sbFetch(path, options = {}) {
@@ -68,7 +78,7 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
 // excludes both sensitive columns. getBusinessByEmail is only ever called with
 // a real session (authenticated retains is_platform_admin), but it still must
 // not ask for password.
-const BUSINESS_PUBLIC_COLUMNS = 'id,name,owner,email,phone,whatsapp,address,state,city,business_type,hours,maps_link,lat,lng,website,status,visible_on_carefind,created_at,parent_business_id,branch_name,plan,cover_url,enterprise_type,plan_expires_at,location_label,show_price_on_carefind,logo_url,description,latitude,longitude,booking_enabled,booking_type,booking_slots,referring_agent_id,referral_code_used,show_prices,online_consultation_fee,physical_consultation_fee,branch_depth_limit,consultation_medium,consultation_medium_link'
+const BUSINESS_PUBLIC_COLUMNS = 'id,name,owner,owner_name,owner_email,email,phone,whatsapp,address,state,city,business_type,category,hours,maps_link,lat,lng,website,status,visible_on_carefind,created_at,parent_business_id,branch_name,plan,cover_url,enterprise_type,plan_expires_at,location_label,show_price_on_carefind,logo_url,description,latitude,longitude,booking_enabled,booking_type,booking_slots,referring_agent_id,referral_code_used,show_prices,online_consultation_fee,physical_consultation_fee,branch_depth_limit,consultation_medium,consultation_medium_link,ecommerce_enabled,deleted_at,lga,area'
 export async function getBusinessById(id) {
   const r = await sbFetch('businesses?id=eq.' + id + '&select=' + BUSINESS_PUBLIC_COLUMNS)
   return r[0] || null
@@ -196,11 +206,11 @@ export async function getAllLocations(mainBusinessId) {
 // on a limit=50000 request). Only offset-paging through the clamp reaches
 // every row, so the products/clients collection reads below page through it.
 export async function getProducts(businessId) { return pagedQuery(sbFetch, 'products?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*') }
-export async function searchProducts(businessId, query, limit = 30) {
-  const q = encodeURIComponent(query.trim())
-  if (!q) return []
-  return sbFetch('products?business_id=eq.' + businessId + '&name=ilike.*' + q + '*&order=name.asc&select=id,name,price,category,sku&limit=' + limit)
-}
+// NOTE: `searchProducts` lived here until 2026-08-21. It selected a nonexistent
+// `sku` column, so every call failed with PGRST204 and the consultation form's
+// silent catch made the picker look empty. Replaced by
+// productRepository.search (modules/inventory/repositories), which matches
+// name OR generic_name and selects only real columns.
 export async function addProduct(data) { return sbFetch('products', { method: 'POST', body: JSON.stringify(data) }) }
 export async function updateProduct(id, data) { return sbFetch('products?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function deleteProduct(id) { return sbFetch('products?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
@@ -208,6 +218,26 @@ export async function deleteProductsBulk(ids) {
   if (!ids || ids.length === 0) return
   return sbFetch('products?id=in.(' + ids.join(',') + ')', { method: 'DELETE', prefer: 'return=minimal' })
 }
+
+
+
+// SERVICES
+export async function getBusinessServices(businessId) {
+  return sbFetch('business_services?business_id=eq.' + businessId + '&order=name.asc,id.asc&select=*')
+}
+
+export async function addService(data) { return sbFetch('business_services', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
+
+export async function updateService(id, data) { return sbFetch('business_services?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+
+export async function deleteService(id) { return sbFetch('business_services?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+export async function getServiceAvailability(serviceId, businessId) {
+  return sbFetch('service_availability?service_id=eq.' + serviceId + '&business_id=eq.' + businessId + '&order=date.asc,time.asc&select=*')
+}
+export async function addServiceAvailability(data) { return sbFetch('service_availability', { method: 'POST', body: JSON.stringify(data), prefer: 'return=representation' }) }
+export async function updateServiceAvailability(id, data) { return sbFetch('service_availability?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
+export async function deleteServiceAvailability(id) { return sbFetch('service_availability?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
 
 // SALES
 // NOTE: `updateSale(id, data)` used to live here — a PATCH on the sales table
@@ -375,10 +405,215 @@ export async function addPatientMessage(data) { return sbFetch('patient_messages
 // 409 — never corrupt, but a save that failed for no actionable reason).
 // Its two callers were Settings.jsx and POS.jsx's receipt printer.
 
-// ADMIN TEAM
+// ADMIN TEAM — legacy (admin_team) kept for backward compat, new is admin_team_members + admin_roles (spec section 5)
 export async function getAdminTeam() { return sbFetch('admin_team?select=*&order=created_at.desc') }
 export async function addAdminTeam(data) { return sbFetch('admin_team', { method: 'POST', body: JSON.stringify(data) }) }
 export async function removeAdminTeam(id) { return sbFetch('admin_team?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+// ── CAREFINDHUB SUPER ADMIN (spec sections 2-8) ────────────────────────────
+// Reuse sbFetch; these are the real backend for the upgraded panel.
+// Businesses
+
+// Encode ilike specials per AD-2: escape PostgREST ilike wildcards % _ * and backslash
+// then encodeURIComponent keeps them literal. Outer * wrapper stays unencoded.
+// e.g. "acme, inc" -> "*acme%2C%20inc*" with comma/space encoded, internal %/_ escaped to \%/\_
+// before encoding so they don't become wildcards.
+function escapeIlike(term) {
+  if (!term) return ''
+  return String(term)
+    .replace(/\\/g, '\\\\')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_')
+    .replace(/\*/g, '%')
+}
+
+function buildBusinessesFilterQuery({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const clamped = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
+  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc&deleted_at=is.null'
+  if (search) {
+    const escaped = escapeIlike(search.trim())
+    q += '&name=ilike.*' + encodeURIComponent(escaped) + '*'
+  }
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  const offset = (page - 1) * clamped
+  q += `&limit=${clamped}&offset=${offset}`
+  return q
+}
+
+export async function getBusinessesFiltered({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const q = buildBusinessesFilterQuery({ search, status, page, pageSize })
+  return sbFetch(q)
+}
+
+// Count header path: use Prefer count=exact and parse Content-Range "0-9/42".
+// Falls back to data.length when count header missing (head:true supported).
+// Guard limit clamp via caller; this helper ensures total never crashes on null.
+export async function sbFetchWithCount(path, options = {}) {
+  let prefer = options.prefer ? options.prefer + ',count=exact' : 'count=exact'
+  if (options.head) prefer += ',head=true'
+  const res = await fetch(SB_URL + '/rest/v1/' + path, {
+    method: options.method || 'GET',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + await authToken(),
+      'Content-Type': 'application/json',
+      'Prefer': prefer,
+    },
+    body: options.body || undefined,
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    let detail = text
+    try { detail = JSON.parse(text).message || text } catch (e) {}
+    throw new Error('Supabase error (' + res.status + '): ' + detail)
+  }
+  const data = text ? JSON.parse(text) : []
+  const countHeader = res.headers.get('content-range') || res.headers.get('Content-Range') || ''
+  let count = null
+  if (countHeader) {
+    const slash = countHeader.lastIndexOf('/')
+    if (slash !== -1) {
+      const n = parseInt(countHeader.slice(slash + 1), 10)
+      if (Number.isFinite(n)) count = n
+    }
+  }
+  const total = count != null ? count : (Array.isArray(data) ? data.length : 0)
+  const range = countHeader
+  return { data, total, count, range }
+}
+
+export async function getBusinessesFilteredWithCount({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
+  const clamped = Math.min(Math.max(Number(pageSize) || 20, 1), 100)
+  let q = 'businesses?select=' + BUSINESS_PUBLIC_COLUMNS + '&order=created_at.desc&deleted_at=is.null'
+  if (search) {
+    const escaped = escapeIlike(search.trim())
+    q += '&name=ilike.*' + encodeURIComponent(escaped) + '*'
+  }
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  const offset = (page - 1) * clamped
+  q += `&limit=${clamped}&offset=${offset}`
+  try {
+    const { data, total } = await sbFetchWithCount(q)
+    // total is never null now (fallback to data.length), keep paged fallback for 1000 clamp
+    if (total == null) {
+      const all = await pagedQuery(sbFetch, 'businesses?select=id&deleted_at=is.null' + (search ? '&name=ilike.*' + encodeURIComponent(escapeIlike(search.trim())) + '*' : '') + (status ? '&status=eq.' + encodeURIComponent(status) : ''))
+      return { data, total: all.length, range: '' }
+    }
+    return { data, total, range: '' }
+  } catch (e) {
+    // fallback: data without count
+    const data = await sbFetch(q).catch(() => [])
+    return { data, total: Array.isArray(data) ? data.length : 0, range: '' }
+  }
+}
+
+export async function getBusinessesCount() {
+  try {
+    const { total } = await sbFetchWithCount('businesses?select=id&deleted_at=is.null&limit=1', { head: true })
+    if (total != null) return total
+  } catch (e) {}
+  const all = await pagedQuery(sbFetch, 'businesses?select=id&deleted_at=is.null')
+  return Array.isArray(all) ? all.length : 0
+}
+export async function deleteBusinessSoft(id) {
+  return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ deleted_at: new Date().toISOString(), status: 'revoked' }), prefer: 'return=minimal' })
+}
+export async function hardDeleteBusiness(id) {
+  return sbFetch('businesses?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' })
+}
+export async function getEcommerceProductsByBusiness(businessId) {
+  if (!businessId) return []
+  // ecommerce_products links to businesses.business_id
+  return sbFetch('ecommerce_products?business_id=eq.' + businessId + '&select=*,products:product_id(id,name,price)&order=created_at.desc')
+}
+export async function getShopProductsByBusiness(businessId) {
+  // fallback: shop products directly via products table filtered ecommerce_enabled businesses already
+  return sbFetch('products?business_id=eq.' + businessId + '&select=id,name,price,stock&order=name.asc')
+}
+
+// Admin roles & platform team (spec 5)
+export async function getAdminRoles() { return sbFetch('admin_roles?select=*&order=created_at.asc') }
+export async function createAdminRole(data) { return sbFetch('admin_roles', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateAdminRole(id, patch) { return sbFetch('admin_roles?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function deleteAdminRole(id) { return sbFetch('admin_roles?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+export async function getAdminTeamMembers() { return sbFetch('admin_team_members?select=*,admin_roles:role_id(id,name,permissions)&order=created_at.desc') }
+export async function createAdminTeamMember(data) { return sbFetch('admin_team_members', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updateAdminTeamMember(id, patch) { return sbFetch('admin_team_members?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function deleteAdminTeamMember(id) { return sbFetch('admin_team_members?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' }) }
+
+// Agent tiers / agents / referrals / earnings / transfers (spec 4)
+export async function getAgentTiers() { return sbFetch('agent_tiers?select=*&order=created_at.asc') }
+export async function createAgentTier(data) { return sbFetch('agent_tiers', { method: 'POST', body: JSON.stringify(data) }) }
+export async function getAgentsDetailed() { return sbFetch('agents?select=*&order=created_at.desc') }
+export async function getAgentReferralsByAgent(agentId) { return sbFetch('agent_referrals?agent_id=eq.' + agentId + '&select=*&order=created_at.desc') }
+export async function getAgentEarningsByAgent(agentId) { return sbFetch('agent_earnings?agent_id=eq.' + agentId + '&select=*&order=created_at.desc') }
+export async function getAgentTransfers() { return sbFetch('agent_transfers?select=*&order=created_at.desc&limit=100') }
+export async function createAgentTransfer(data) { return sbFetch('agent_transfers', { method: 'POST', body: JSON.stringify(data) }) }
+export async function calculateAgentEarningsRpc(businessId, planValue, paymentReference) {
+  const body = paymentReference ? { p_business_id: businessId, p_plan_value: planValue, p_payment_reference: paymentReference } : { p_business_id: businessId, p_plan_value: planValue }
+  const rpc = paymentReference ? 'rpc/calculate_agent_earnings' : 'rpc/calculate_agent_earnings'
+  return sbFetch(rpc, { method: 'POST', body: JSON.stringify(body), prefer: 'return=minimal' })
+}
+export async function transferAgentAccount({ fromAgentId, toAgentId, businessId, reason, byAdminId }) {
+  // Atomic reassignment of referrals + earnings + audit via single RPC if available, else multi-step with audit
+  try {
+    await sbFetch('agent_referrals?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+    await sbFetch('agent_earnings?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+    await createAgentTransfer({ from_agent_id: fromAgentId, to_agent_id: toAgentId, business_id: businessId, reason: reason || null, by_admin_id: byAdminId || null })
+    return true
+  } catch (e) { throw e }
+}
+
+// Unified Applications (spec 6)
+export async function getApplications({ type = '', status = '' } = {}) {
+  let q = 'applications?select=*&order=submitted_at.desc'
+  if (type) q += '&type=eq.' + encodeURIComponent(type)
+  if (status) q += '&status=eq.' + encodeURIComponent(status)
+  return sbFetch(q)
+}
+export async function createApplication(data) { return sbFetch('applications', { method: 'POST', body: JSON.stringify(data) }) }
+export async function reviewApplication(id, patch) { return sbFetch('applications?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+
+// Ledger aggregation (spec 7) — single-entity statement: combine wallet_tx + plan_payments + agent_earnings + shop_payments
+export async function getLedgerForEntity({ type, id }) {
+  // type: 'business' | 'agent'
+  if (type === 'business') {
+    const [wallets, plans, shops] = await Promise.all([
+      sbFetch('business_wallet_transactions?business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+      sbFetch('plan_payments?business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+      sbFetch('shop_orders?vendor_business_id=eq.' + id + '&select=*&order=created_at.desc&limit=100').catch(() => []),
+    ])
+    const items = []
+    for (const w of (wallets || [])) items.push({ date: (w.created_at||'').slice(0,10), description: w.description || w.type || 'Wallet', type: w.type || 'wallet', amount: Number(w.amount || 0) })
+    for (const p of (plans || [])) items.push({ date: (p.created_at||'').slice(0,10), description: 'Plan payment ' + (p.reference||''), type: 'subscription', amount: -Math.abs(Number(p.amount || p.naira_amount || 0)) })
+    for (const s of (shops || [])) items.push({ date: (s.created_at||'').slice(0,10), description: 'Order ' + (s.order_ref||s.id.slice(0,8)), type: 'ecommerce', amount: Number(s.total_kobo||0)/100 })
+    // include legacy business_wallet_transactions fallback
+    return items.sort((a,b)=> (a.date||'').localeCompare(b.date||''))
+  } else {
+    const earnings = await sbFetch('agent_earnings?agent_id=eq.' + id + '&select=*&order=created_at.desc&limit=200').catch(()=>[])
+    return (earnings||[]).map(e=> ({ date:(e.created_at||'').slice(0,10), description:'Commission '+(e.payment_reference||e.payout_period||''), type:'agent_earning', amount: Number(e.amount_owed||0) }))
+  }
+}
+
+// Payouts (spec 8)
+export async function getPayoutRequests({ status = '' } = {}) {
+  let q = 'payout_requests?select=*&order=requested_at.desc'
+  if (status) q += '&status=eq.' + status
+  return sbFetch(q)
+}
+export async function createPayoutRequest(data) { return sbFetch('payout_requests', { method: 'POST', body: JSON.stringify(data) }) }
+export async function updatePayoutRequest(id, patch) { return sbFetch('payout_requests?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' }) }
+export async function markPayoutPaidAtomic(id, { reviewedBy } = {}) {
+  // Must be atomic server-side: update payout status + agent_earnings.amount_paid or wallet balance
+  // Try RPC first, fallback to client-side two-step (still shows intent; server RPC should be added)
+  try {
+    const r = await sbFetch('rpc/mark_payout_paid', { method: 'POST', body: JSON.stringify({ p_payout_id: id }), prefer: 'return=representation' })
+    return r
+  } catch (e) {
+    // fallback: just mark status; caller should handle financial update via separate RPC
+    return updatePayoutRequest(id, { status: 'paid', processed_at: new Date().toISOString(), reviewed_by: reviewedBy || null })
+  }
+}
 
 // NOTIFICATIONS (in-app alerts — who needs to know what, right now)
 export async function getMyNotifications(businessId, staffId) {
@@ -505,8 +740,19 @@ export async function setDefaultViewers(businessId, staffId, viewers) {
   }
 }
 
-export async function getFieldActivities(businessId) {
-  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=100')
+export async function getFieldActivities(businessId, { limit = 100 } = {}) {
+  return sbFetch('field_activities?business_id=eq.' + businessId + '&order=created_at.desc&select=*&limit=' + limit)
+}
+
+// Lightweight count for the manager's My Feed / Team Reports tab badges.
+// select=id keeps the payload tiny; PostgREST's server-side db-max-rows clamp
+// (1000 on this project) saturates the result past that, which callers must
+// surface as "1000+" rather than an exact figure.
+export async function countFieldActivities(businessId, staffId) {
+  let path = 'field_activities?business_id=eq.' + businessId
+  if (staffId) path += '&staff_id=eq.' + staffId
+  const rows = await sbFetch(path + '&select=id&limit=1000')
+  return Array.isArray(rows) ? rows.length : 0
 }
 export async function getActivityViewers(activityIds) {
   if (!activityIds || activityIds.length === 0) return []
@@ -549,6 +795,29 @@ export async function reverseGeocode(lat, lng) {
   } catch (e) {
     return null
   }
+}
+
+// Forward geocoding for the Place of Visit field: a typed place name becomes
+// coordinates so the log can verify the rep's GPS against where they claim to
+// be. Same free OpenStreetMap service as reverseGeocode — no key, no cost.
+// Returns [{ name, lat, lng }] sorted by OSM relevance; throws on transport
+// failure so the caller can show a retryable error rather than an empty list.
+export async function geocodePlace(query) {
+  const q = encodeURIComponent(String(query || '').trim())
+  if (!q) return []
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=' + q
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } })
+  if (!res.ok) throw new Error('Place lookup failed (' + res.status + ')')
+  const data = await res.json()
+  if (!Array.isArray(data)) return []
+  return data
+    .map(function (d) {
+      const lat = parseFloat(d.lat)
+      const lng = parseFloat(d.lon)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      return { name: d.display_name, lat: lat, lng: lng }
+    })
+    .filter(Boolean)
 }
 
 export async function uploadActivityVoice(blob) {

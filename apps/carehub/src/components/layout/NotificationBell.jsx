@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../../services/supabase'
 import { watchTable } from '../../lib/realtime'
+import { categoryForKind, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
 import { theme } from '../../styles/theme'
 import { useToast, Toast } from '../ui'
 
@@ -28,6 +29,7 @@ export default function NotificationBell({ brand }) {
 
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState('all')
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   useEffect(function () { load() }, [brand?.id])
@@ -58,20 +60,41 @@ export default function NotificationBell({ brand }) {
 
   const unread = items.filter(function (n) { return !n.read_at })
 
+  // Per-tab counts. 'all' plus one tab per category; unknown kinds count
+  // under General (categoryForKind's fallback), never into a wrong tab.
+  const tabCounts = useMemo(function () {
+    const counts = { all: unread.length }
+    for (const c of NOTIFICATION_CATEGORIES) counts[c] = 0
+    for (const n of unread) counts[categoryForKind(n.kind)]++
+    return counts
+  }, [items])
+
+  const visibleItems = useMemo(function () {
+    if (tab === 'all') return items
+    return items.filter(function (n) { return categoryForKind(n.kind) === tab })
+  }, [items, tab])
+
   async function openItem(n) {
-    try {
-      if (!n.read_at) {
-        await markNotificationRead(n.id)
-        setItems(function (prev) {
-          return prev.map(function (x) {
-            if (x.id !== n.id) return x
-            const copy = { ...x }
-            copy.read_at = new Date().toISOString()
-            return copy
-          })
+    if (!n.read_at) {
+      // Optimistic update, but reverted if the PATCH fails — silently
+      // swallowing the error left rows marked read in the UI that were still
+      // unread on the server, so the badge "came back" on next load.
+      setItems(function (prev) {
+        return prev.map(function (x) {
+          if (x.id !== n.id) return x
+          return { ...x, read_at: new Date().toISOString() }
         })
+      })
+      try {
+        await markNotificationRead(n.id)
+      } catch (e) {
+        console.error('Mark-as-read failed:', e)
+        setItems(function (prev) {
+          return prev.map(function (x) { return x.id === n.id ? { ...x, read_at: n.read_at } : x })
+        })
+        showToast('Could not mark as read. Please try again.', { type: 'error' })
       }
-    } catch (e) {}
+    }
     setOpen(false)
     if (n.link) navigate('/dashboard/' + n.link)
   }
@@ -82,12 +105,11 @@ export default function NotificationBell({ brand }) {
       setItems(function (prev) {
         const stamp = new Date().toISOString()
         return prev.map(function (x) {
-          const copy = { ...x }
-          if (!copy.read_at) copy.read_at = stamp
-          return copy
+          return x.read_at ? x : { ...x, read_at: stamp }
         })
       })
     } catch (e) {
+      // Nothing was optimistically changed here, so only the error surfaces.
       showToast('Could not mark all as read: ' + e.message, { type: 'error' })
     }
   }
@@ -133,17 +155,43 @@ export default function NotificationBell({ brand }) {
               </button>
             )}
 
+            {/* Category tabs — per-tab unread counts so a pile-up in one area
+                (e.g. expiry alerts) cannot bury the others. */}
+            <div role='tablist' aria-label='Notification categories' style={{ display: 'flex', gap: '6px', padding: '10px 18px', borderBottom: `1px solid ${border}`, overflowX: 'auto', flexShrink: 0 }}>
+              {[['all', 'All']].concat(NOTIFICATION_CATEGORIES.map(function (c) {
+                const labels = { appointments: 'Appointments', inventory: 'Inventory & Expiry', social: 'CareFind Social', general: 'General' }
+                return [c, labels[c]]
+              })).map(function (t) {
+                const on = tab === t[0]
+                const count = tabCounts[t[0]] || 0
+                return (
+                  <button key={t[0]} role='tab' aria-selected={on} onClick={function () { setTab(t[0]) }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap', fontSize: '11.5px', fontWeight: '700', padding: '6px 11px', borderRadius: '20px', cursor: 'pointer',
+                      border: `1px solid ${on ? tealDeep : border}`,
+                      background: on ? tealDeep : 'white',
+                      color: on ? 'white' : gray600 }}>
+                    {t[1]}
+                    {count > 0 && (
+                      <span style={{ background: on ? 'white' : danger, color: on ? tealDeep : 'white', fontSize: '9.5px', fontWeight: '900', minWidth: '16px', height: '16px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                        {count > 99 ? '99+' : count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              {items.length === 0 && (
+              {visibleItems.length === 0 && (
                 <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>Nothing yet</div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: navy }}>{tab === 'all' ? 'Nothing yet' : 'Nothing here yet'}</div>
                   <div style={{ fontSize: '12px', color: gray400, marginTop: '4px' }}>
                     You will be told here when an order needs you, or someone sends you correspondence.
                   </div>
                 </div>
               )}
 
-              {items.map(function (n) {
+              {visibleItems.map(function (n) {
                 const isNew = !n.read_at
                 return (
                   <button key={n.id} onClick={function () { openItem(n) }}

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheduled Reports — CareHub Reports Hub (desktop)</title>
+<style>
+/* ============================================================
+   Mock: CareHub Reports Hub — Scheduled Reports tab (desktop)
+   Governed by DESIGN.md: Components (ScheduleCard, PrimaryButton,
+   ComplianceBadge), Typography (caption/micro), Colors (semantics).
+   EXPERIENCE.md: §4 ScheduleCard/ScheduleEditor, §5 delivery
+   lifecycle + Loading/Empty/Error, §8.1, §8.5.
+   Tokens: tealDeep #0E6F5A, navy #0B4A3E, gray100 #F7F5EF,
+   gray50 #FBFAF6, gray200 #ECEAE0, gray400 #9AA69F, gray600 #5B6B63,
+   gray900 #182722, success #16a34a, warning #d97706, danger #dc2626;
+   radius md 10px, sm 6px; font Geist/system. Offline mock.
+   ============================================================ */
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#E9E6DC; font-family:"Geist",-apple-system,"Segoe UI",Roboto,Arial,sans-serif; color:#182722; padding:40px; }
+.window { max-width:1100px; margin:0 auto; background:#F7F5EF; border:1px solid #ECEAE0; border-radius:14px; box-shadow:0 20px 48px rgba(15,23,42,0.18); overflow:hidden; }
+.chrome { height:34px; background:#FBFAF6; border-bottom:1px solid #ECEAE0; display:flex; align-items:center; padding:0 16px; gap:8px; }
+.chrome span { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.app { padding:28px 36px 44px; }
+.crumb { font-size:11px; font-weight:700; letter-spacing:.04em; color:#8B978F; text-transform:uppercase; margin-bottom:6px; }
+h1 { font-size:21px; font-weight:900; letter-spacing:-.02em; margin-bottom:4px; }
+.sub { font-size:12px; font-weight:600; color:#5B6B63; margin-bottom:22px; }
+.ctx { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+.ctx .spacer { flex:1; }
+.btn { font:inherit; font-size:12px; font-weight:700; padding:8px 16px; border-radius:6px; cursor:pointer; border:1px solid #ECEAE0; background:#FBFAF6; color:#182722; }
+.btn-primary { background:#0E6F5A; border-color:#0E6F5A; color:#fff; }
+.btn-primary:hover { background:#0B4A3E; }
+.tabs { display:flex; gap:4px; border-bottom:1px solid #E7E4D9; margin-bottom:22px; }
+.tab { font-size:13px; font-weight:600; color:#3C4B44; padding:10px 16px; border-radius:10px 10px 0 0; cursor:pointer; border:1px solid transparent; border-bottom:none; }
+.tab.active { background:#E3EEE8; color:#0B4A3E; font-weight:800; box-shadow:inset 0 -2px 0 #0E6F5A; }
+.cards { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.card { background:#FBFAF6; border:1px solid #ECEAE0; border-radius:10px; padding:16px; }
+.card .row1 { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.card h3 { font-size:15px; font-weight:800; letter-spacing:-.01em; }
+.card .line { font-size:13px; font-weight:500; color:#3C4B44; margin-bottom:12px; }
+.card .times { font-size:11px; font-weight:700; letter-spacing:.02em; color:#5B6B63; margin-bottom:14px; }
+.card .times .mono { font-family:"Geist Mono",ui-monospace,Consolas,monospace; letter-spacing:0; }
+.card .actions { display:flex; align-items:center; gap:8px; border-top:1px solid #E7E4D9; padding-top:12px; }
+.card .actions .spacer { flex:1; }
+.act { font:inherit; font-size:12px; font-weight:700; color:#0B4A3E; background:none; border:none; cursor:pointer; padding:4px 8px; border-radius:6px; }
+.act:hover { background:#E3EEE8; }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; padding:3px 10px; border-radius:9999px; }
+.pill .dot { width:6px; height:6px; border-radius:50%; }
+.pill.active { background:#F0FDF4; color:#0B4A3E; } .pill.active .dot { background:#16a34a; }
+.pill.paused { background:#FFFBEB; color:#92400e; } .pill.paused .dot { background:#d97706; }
+.pill.failed { background:#FEF2F2; color:#dc2626; } .pill.failed .dot { background:#dc2626; }
+.toggle { width:34px; height:20px; border-radius:9999px; background:#0E6F5A; position:relative; cursor:pointer; border:none; }
+.toggle::after { content:""; position:absolute; top:2px; right:2px; width:16px; height:16px; border-radius:50%; background:#fff; }
+.toggle.off { background:#E7E4D9; } .toggle.off::after { right:auto; left:2px; }
+.err { margin-top:16px; background:#FEF2F2; border:1px solid #FECACA; border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:12px; }
+.err .msg { font-size:13px; font-weight:500; }
+.err .ref { font-family:"Geist Mono",ui-monospace,Consolas,monospace; font-size:11px; font-weight:700; color:#dc2626; }
+.err .btn { margin-left:auto; background:#FBFAF6; border-color:#FECACA; color:#dc2626; }
+</style>
+</head>
+<body>
+<div class="window">
+  <div class="chrome"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></div>
+  <div class="app">
+    <div class="crumb">Intelligence &amp; Reporting</div>
+    <h1>Scheduled Reports</h1>
+    <div class="sub">Automated delivery to email and WhatsApp · Africa/Lagos</div>
+
+    <div class="ctx">
+      <div class="spacer"></div>
+      <button class="btn btn-primary">New schedule</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab">Financial</div>
+      <div class="tab">Operational</div>
+      <div class="tab">Client &amp; Sales</div>
+      <div class="tab">ADR</div>
+      <div class="tab">Compliance</div>
+      <div class="tab active">Scheduled</div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="row1"><h3>Monthly P&amp;L + ADR Summary</h3><span class="pill active"><span class="dot"></span>Active</span></div>
+        <div class="line">Monthly · 1st at 08:00 (Africa/Lagos) → amara@adebayo.com.ng</div>
+        <div class="times"><span class="mono">Next run: 1 Sep 08:00</span> · Last run: <span class="mono">1 Aug 08:00 · delivered</span></div>
+        <div class="actions">
+          <button class="toggle"></button>
+          <button class="act">Edit</button>
+          <div class="spacer"></div>
+          <button class="act">Logs</button>
+          <button class="act">Delete</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row1"><h3>Weekly stockout alert</h3><span class="pill active"><span class="dot"></span>Active</span></div>
+        <div class="line">Weekly · Mon 07:00 (Africa/Lagos) → Dr. Okafor · +234 WhatsApp</div>
+        <div class="times"><span class="mono">Next run: 24 Aug 07:00</span> · Last run: <span class="mono">17 Aug 07:00 · delivered</span></div>
+        <div class="actions">
+          <button class="toggle"></button>
+          <button class="act">Edit</button>
+          <div class="spacer"></div>
+          <button class="act">Logs</button>
+          <button class="act">Delete</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row1"><h3>Quarterly VAT return</h3><span class="pill paused"><span class="dot"></span>Paused</span></div>
+        <div class="line">Quarterly · 1 Jan 08:00 → accountant@files.example.com</div>
+        <div class="times">No scheduled run · last ran <span class="mono">1 Jul 08:00</span></div>
+        <div class="actions">
+          <button class="toggle off"></button>
+          <button class="act">Edit</button>
+          <div class="spacer"></div>
+          <button class="act">Logs</button>
+          <button class="act">Delete</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row1"><h3>NAFDAC ADR export</h3><span class="pill failed"><span class="dot"></span>Failed</span></div>
+        <div class="line">Monthly · 1st at 08:00 → compliance@adebayo.com.ng</div>
+        <div class="times">Next run: <span class="mono">1 Sep 08:00</span> · last delivery <span class="mono">1 Aug · failed</span></div>
+        <div class="actions">
+          <button class="toggle"></button>
+          <button class="act">Edit</button>
+          <div class="spacer"></div>
+          <button class="act">Logs</button>
+          <button class="act">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="err">
+      <span>⚠</span>
+      <div class="msg">NAFDAC ADR export failed — the recipient mailbox rejected the file.</div>
+      <div class="ref">log #SCH-1042</div>
+      <button class="btn">Retry</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

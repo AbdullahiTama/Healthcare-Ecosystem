@@ -65,11 +65,12 @@ describe('initiate-withdrawal PIN gate', () => {
       const result = table === 'wallets'
         ? Promise.resolve({ data: { balance: 100 }, error: null })
         : table === 'withdrawal_requests'
-          ? Promise.resolve({ data: [{ id: 'wr-1' }], error: null })
+          ? Promise.resolve({ data: [{ id: 'wr-1', paystack_reference: null, paystack_transfer_code: null, created_at: new Date().toISOString() }], error: null })
           : Promise.resolve({ data: null, error: null })
       const chain = Object.assign(result, {
         select: () => chain,
         eq: () => chain,
+        is: () => chain,
         order: () => chain,
         limit: () => chain,
         maybeSingle: () => chain,
@@ -158,13 +159,15 @@ describe('initiate-withdrawal PIN gate', () => {
       accountName: 'Test User',
       userId: 'user-1',
     })
-    expect(mockSupabase.rpc).toHaveBeenCalledWith('request_withdrawal', {
+    // RPC call now includes p_reference
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('request_withdrawal', expect.objectContaining({
       p_user_id: 'user-1',
       p_amount: 10,
       p_bank_name: 'Bank A',
       p_account_number: '0123456789',
       p_account_name: 'Test User',
-    })
+      p_reference: expect.stringMatching(/^cf_wd_/),
+    }))
     expect(mockPaystack.initiateTransfer).toHaveBeenCalledWith(expect.objectContaining({
       recipientCode: 'RCP_TEST',
       amountKobo: 160000,

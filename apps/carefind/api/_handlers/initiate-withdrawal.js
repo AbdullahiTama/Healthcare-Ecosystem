@@ -25,11 +25,6 @@ export default async function handler(req, res) {
   }
 
   // ── Withdrawal PIN gate ─────────────────────────────────────────────────────
-  // Every withdrawal now requires the account owner's PIN, verified server-side
-  // against the service-role RPC family (sql/20260816_withdrawal_pin.sql). It
-  // sits between JWT verification and any balance/transfer work so a stolen
-  // session alone cannot move money. The PIN is never logged or stored here —
-  // only scrypt(pin, salt) is derived and handed to the RPCs.
   if (!pin) {
     return res.status(400).json({ error: 'Withdrawal PIN is required' })
   }
@@ -52,9 +47,6 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` })
   }
 
-  // Belt-and-braces: the RPC below is the source of truth for the compare and
-  // the lockout state. We also compare locally so a wrong PIN is rejected even
-  // if the RPC ever misbehaved.
   const attemptHash = hashPin(pin, storedPin.pin_salt)
   const locallyMatches = verifyPin(pin, storedPin.pin_salt, storedPin.pin_hash)
   const { data: pinVerified, error: pinVerifyError } = await supabase.rpc('verify_withdrawal_pin', {
@@ -83,18 +75,29 @@ export default async function handler(req, res) {
   try {
     const available = await checkBalance()
     if (available < amountKobo) {
-      return res.status(503).json({ error: 'Payment provider balance low ΓÇö try again later' })
+      return res.status(503).json({ error: 'Payment provider balance low — try again later' })
     }
   } catch (err) {
     return res.status(502).json({ error: 'Could not check payment provider balance' })
   }
 
-  const reference = transferReference(user.id)
+  // Reuse a previous attempt's reference if a pending request never got its
+  // transfer code attached (crash window) — Paystack dedupes by reference, so
+  // re-initiating the same transfer can't double-pay.
+  const { data: prior } = await supabase
+    .from('withdrawal_requests')
+    .select('paystack_reference')
+    .eq('user_id', user.id)
+    .eq('status', 'pending')
+    .is('paystack_transfer_code', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const reference = prior?.paystack_reference || transferReference(user.id)
 
   try {
     // Verify the typed account name actually belongs to the account number.
-    // A typo'd account number with a mismatched name would otherwise route
-    // money to the wrong account via Paystack's transfer recipient.
     let resolved
     try {
       resolved = await resolveAccount({ bankCode, accountNumber })
@@ -120,12 +123,15 @@ export default async function handler(req, res) {
     })
 
     // Deduct coins and record the withdrawal request (atomic via RPC)
+    // The reference is stored at creation time so there's never a crash
+    // window where a pending request lacks a reference.
     const { data: requestResult, error: requestError } = await supabase.rpc('request_withdrawal', {
       p_user_id: user.id,
       p_amount: coins,
       p_bank_name: bankName,
       p_account_number: accountNumber,
       p_account_name: verifiedAccountName,
+      p_reference: reference,
     })
 
     if (requestError || requestResult !== 'ok') {
@@ -134,33 +140,23 @@ export default async function handler(req, res) {
       })
     }
 
-    // Initiate the Paystack transfer
+    // Initiate the Paystack transfer (idempotent by reference)
     const { transferCode } = await initiateTransfer({
       recipientCode,
       amountKobo,
-      reason: `CareFind withdrawal: ${coins} CareCoins (Γéª${payoutNaira.toLocaleString()})`,
+      reason: `CareFind withdrawal: ${coins} CareCoins (₦${payoutNaira.toLocaleString()})`,
       reference,
     })
 
-    // Update the withdrawal request with Paystack reference
-    const { data: pendingRequests } = await supabase
+    // Attach transfer details by reference (unique), not "latest pending"
+    await supabase
       .from('withdrawal_requests')
-      .select('id')
+      .update({
+        paystack_transfer_code: transferCode,
+        paystack_recipient_code: recipientCode,
+      })
       .eq('user_id', user.id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    if (pendingRequests && pendingRequests.length > 0) {
-      await supabase
-        .from('withdrawal_requests')
-        .update({
-          paystack_reference: reference,
-          paystack_transfer_code: transferCode,
-          paystack_recipient_code: recipientCode,
-        })
-        .eq('id', pendingRequests[0].id)
-    }
+      .eq('paystack_reference', reference)
 
     return res.status(200).json({
       success: true,

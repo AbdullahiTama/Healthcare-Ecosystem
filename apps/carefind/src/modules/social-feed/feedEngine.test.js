@@ -65,13 +65,13 @@ describe('computeRawSignals', () => {
     const ctx = baseContext()
     ctx.lCounts.p1 = 2; ctx.cCounts.p1 = 1; ctx.view_count = 0
     const raw = computeRawSignals({ post: post({ view_count: 200 }), context: ctx })
-    expect(raw.engagement).toBe(2 * 3 + 1 * 5 + 2) // likes·3 + comments·5 + views/100
+    expect(raw.engagementQuality).toBe(2 * 1 + 1 * 3) // likes·1 + comments·3
   })
   it('boosts affinity when the viewer follows and engages with the author', () => {
     const ctx = baseContext()
     ctx.follows.add('u1'); ctx.viewerReactionIds.add('p1')
     const raw = computeRawSignals({ post: post(), context: ctx })
-    expect(raw.affinity).toBe(0.6 + 0.2)
+    expect(raw.creatorAffinity).toBe(0.6 + 0.2)
   })
   it('marks verified-professional authority and medical relevance', () => {
     const ctx = baseContext()
@@ -85,7 +85,7 @@ describe('computeRawSignals', () => {
     ctx.viewerRegion = ['lagos']
     ctx.profiles.u1 = { location: 'Lagos' }
     const raw = computeRawSignals({ post: post(), context: ctx })
-    expect(raw.location).toBe(1)
+    expect(raw.localRelevance).toBe(1)
   })
 })
 
@@ -132,7 +132,7 @@ describe('rankForYou', () => {
     ctx.viewerRegion = ['lagos']
     ctx.profiles.near_author = { location: 'Lagos' }
     ctx.profiles.far_author = { location: 'Abuja' }
-    const weights = { ...DEFAULT_RANKING_CONFIG.weights, location: 100, engagement: 0, recency: 0, affinity: 0, authority: 0, medical: 0, interests: 0 }
+    const weights = { ...DEFAULT_RANKING_CONFIG.weights, localRelevance: 100, personalRelevance: 0, freshness: 0, creatorAffinity: 0, contentQuality: 0, engagementQuality: 0, discovery: 0 }
     const ranked = rankForYou({ posts, context: ctx, weights })
     expect(ranked[0].id).toBe('near')
   })

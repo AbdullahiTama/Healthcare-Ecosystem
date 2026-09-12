@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw, LogOut, Building2, Users, CheckCircle, Landmark, Plus, CheckCircle2, ClipboardIcon, Activity } from 'lucide-react'
+import { RefreshCw, LogOut, Building2, Users, CheckCircle, Landmark, Plus, CheckCircle2, ClipboardIcon, Activity, Clock } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import {
   getAgentPortfolio, getAgentCommissions, getAgentPayouts,
@@ -61,6 +61,8 @@ export default function AgentDashboard() {
 
   const earned = commissions.filter(c => c.status !== 'void')
   const lifetime = earned.reduce((s, c) => s + Number(c.amount || 0), 0)
+  const paid = earned.filter(c => c.status === 'paid').reduce((s, c) => s + Number(c.amount || 0), 0)
+  const outstanding = lifetime - paid
   const pending = earned.filter(c => c.status === 'accrued' || c.status === 'payable')
     .reduce((s, c) => s + Number(c.amount || 0), 0)
   const signups = portfolio.length
@@ -124,7 +126,7 @@ export default function AgentDashboard() {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ padding: '9px 18px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t.id ? theme.tealDeep : '#fff', color: tab === t.id ? 'white' : gray500, boxShadow: tab === t.id ? theme.elevation[2] : theme.elevation[1] }}>
+              style={{ padding: '9px 18px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t.id ? theme.tealDeep : theme.cardBg, color: tab === t.id ? 'white' : gray500, boxShadow: tab === t.id ? theme.elevation[2] : theme.elevation[1] }}>
               {t.label}
             </button>
           ))}
@@ -134,11 +136,12 @@ export default function AgentDashboard() {
           <>
             {tab === 'overview' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: '12px', marginBottom: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '12px', marginBottom: '20px' }}>
                   <StatCard icon={<Building2 />} label='Business Onboarded' value={signups} />
-                  <StatCard icon={<Landmark />} label='Lifetime Earnings' value={'₦' + lifetime.toLocaleString()} />
-                  <StatCard icon={<CheckCircle />} label='Pending Balance' value={'₦' + pending.toLocaleString()} />
-                  <StatCard icon={<Users />} label='Active Agent' value={agent?.status === 'active' ? 'Yes' : agent?.status || '—'} />
+                  <StatCard icon={<Landmark />} label='Total Earnings' value={'₦' + lifetime.toLocaleString()} sub="Lifetime" />
+                  <StatCard icon={<CheckCircle />} label='Paid Earnings' value={'₦' + paid.toLocaleString()} sub="Settled" />
+                  <StatCard icon={<Clock />} label='Outstanding' value={'₦' + outstanding.toLocaleString()} sub="Unpaid" />
+                  <StatCard icon={<Users />} label='Pending Balance' value={'₦' + pending.toLocaleString()} sub="Payable soon" />
                 </div>
 
                 <Card style={{ padding: '18px' }}>

@@ -1,7 +1,8 @@
 # CareFind Architecture
 
 Architecture reference for the CareFind application. Update when architecture
-changes. This mirrors the audited state as of 2026-08-14.
+changes. This mirrors the audited state as of 2026-08-14, with §1 and §10
+updated 2026-08-24 for the post-permalinks work.
 
 ---
 
@@ -10,9 +11,26 @@ changes. This mirrors the audited state as of 2026-08-14.
 - **Stack:** React 18 (createRoot + StrictMode), React Router v6 (`BrowserRouter`
   in `src/main.jsx`), Vite 5, Vitest for tests.
 - **Entry/routing:** `src/main.jsx` — AuthProvider wraps BrowserRouter; routes
-  for feed (`/feed`), search (`/search`), news (`/news`, `/news/:id`),
-  business profiles (`/business/:id`), public profiles (`/u/:id`), account
-  pages (wrapped in `RequireAuth`), admin (`/admin-login`, `/admin-panel`).
+  for feed (`/feed`), a post's permalink (`/post/:id`), search (`/search`),
+  news (`/news`, `/news/:id`), business profiles (`/business/:id`), public
+  profiles (`/u/:id`), account pages (wrapped in `RequireAuth`), admin
+  (`/admin-login`, `/admin-panel`).
+- **`/post/:id` — one URL, two surfaces**, via React Router's
+  background-location pattern (`components/BackgroundRoutes.jsx`): an in-feed
+  tap navigates with `state: { background: location }`, so the feed stays
+  mounted underneath at its scroll position and `PostModalRoute.jsx` renders
+  the post as an overlay on top; a cold load — shared link, new tab, refresh,
+  crawler, a notification — carries no `background` in history state, so the
+  same route renders the standalone `PostPage.jsx` instead. Closing the
+  overlay is `navigate(-1)`, which pops the entry that carried `background`
+  and reveals the feed untouched; a full-page reload while the overlay is
+  open therefore lands on the standalone page, not the modal. The legacy
+  `/feed?post=<id>` shape — already-shared links and every pre-existing
+  `notifications.link` row — redirects to `/post/:id` via
+  `<Navigate replace>` inside `Feed.jsx`. Notification rows still STORE the
+  legacy `link` (`/`, `/feed`); `Notifications.jsx` derives the destination
+  from `post_id` at render for post-linked types, so already-written rows
+  resolve to the permalink too — no backfill needed.
 - **Page modules** under `src/modules/*`: `social-feed` (Feed, Stories,
   FollowersSheet, SavedPosts), `healthcare-discovery` (Search, DrugProfile),
   `news-publishing` (News, NewsArticle, ArticleEditor), `account` (Profile,
@@ -121,8 +139,36 @@ changes. This mirrors the audited state as of 2026-08-14.
 ## 10. API / Data-Fetching Patterns
 
 - Direct Supabase queries in page components + `social-feed/engagement.js`
-  (action layer) + `repositories/*` (comments; postRepository is legacy/dead).
+  (action layer) + `repositories/*` (`postRepository`, `commentRepository`).
 - Batch fetches to avoid N+1 (profiles `.in('id',...)`, gift stats batch).
 - Fire-and-forget writes guarded with `.catch`; optimistic UI with rollback.
-- **Dead/legacy layers:** `PostCard.jsx`, `postRepository.js`, `useFeed.js`,
-  `useComments.js` are not wired into the live app (Feed.jsx is authoritative).
+- **The post-engagement seam.** `social-feed/usePostEngagement.js` owns a
+  post's engagement state (reactions, profiles, follows, saves, reposts,
+  comments, gift/share/save counts, …), the reads that populate it, and the
+  handlers that mutate it (`toggleLike`, `toggleSave`, `toggleRepost`,
+  `toggleFollow`, `sharePost`, `handleEditPost`, `handleDeletePost`, …). Its
+  one read path is `hydrate(posts, { merge })`: `merge: false` overwrites the
+  state slices (a feed refetch must drop rows for posts that fell out of the
+  batch), `merge: true` appends by id (a single deep-linked post must not
+  clobber an already-loaded feed). Three call sites each instantiate their
+  own copy of the hook rather than sharing one: `Feed.jsx` (many posts,
+  ranked, `merge: false`), `PostPage.jsx` (the standalone `/post/:id` page,
+  one post, `merge: true`) and `PostModalRoute.jsx` (the `/post/:id` overlay,
+  one post, `merge: true` — a separate instance from Feed's so a mutation
+  made inside the overlay can't touch the feed's copy of the same post;
+  `postSync.js`'s window event is what tells Feed to reload once the overlay
+  closes dirty). `PostCard.jsx` is the single renderer all three feed their
+  `cardProps` into — preview mode (clamped body, "See more") from the feed,
+  non-preview from the standalone page and the overlay.
+- **`postRepository.js`** has two real callers, both `getPostById` —
+  `PostPage.jsx` and `PostModalRoute.jsx`. Its other methods (`getFeed`,
+  `createPost`, `addReaction`, …) have no callers; `Feed.jsx` still queries
+  `posts`/`post_reactions`/etc. directly rather than through it.
+- **`useFeed.js`** (`social-feed/hooks/useFeed.js`) is still unwired —
+  re-checked for this work: `hooks/index.js` only re-exports it and
+  `usePostComposer`, nothing outside that barrel imports it, and no test
+  references it. `Feed.jsx` remains the authoritative fetch/rank path.
+  **`useComments.js` no longer exists** — it was dead code (174 lines, zero
+  callers) deleted in the 2026-08-16 CareFind pending-issues batch, so the
+  old "not wired into the live app" claim is moot for it rather than merely
+  correct.

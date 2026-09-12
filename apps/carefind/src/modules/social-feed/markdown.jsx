@@ -58,6 +58,26 @@ function renderInline(text, keyPrefix = '', mentions = null) {
       rest = rest.slice(m[0].length)
       continue
     }
+    if ((m = rest.match(/^==(#[0-9a-fA-F]{3,8})\|([\s\S]+?)==/))) {
+      flush()
+      out.push(
+        <mark key={keyPrefix + out.length} style={{ background: m[1], color: '#1f2937', padding: '1px 4px', borderRadius: 4 }}>
+          {renderInline(m[2], `${keyPrefix}${out.length}_`, mentions)}
+        </mark>,
+      )
+      rest = rest.slice(m[0].length)
+      continue
+    }
+    if ((m = rest.match(/^==([\s\S]+?)==/))) {
+      flush()
+      out.push(
+        <mark key={keyPrefix + out.length} style={{ background: '#fef08a', color: '#1a1a1a', padding: '0 2px', borderRadius: 3 }}>
+          {renderInline(m[1], `${keyPrefix}${out.length}_`, mentions)}
+        </mark>,
+      )
+      rest = rest.slice(m[0].length)
+      continue
+    }
     if (mentions && (m = rest.match(MENTION_AT))) {
       const userId = mentions[m[1].toLowerCase()]
       if (userId) {
@@ -145,7 +165,11 @@ function renderInline(text, keyPrefix = '', mentions = null) {
 // `options.mentions` maps lower-cased @username -> user id for linking.
 export function renderMarkdown(text, options = {}) {
   if (text == null) return null
-  const source = String(text)
+  // Stored content can carry literal "\n" escape sequences (e.g. pasted or
+  // imported bodies). Normalise them to real line breaks so the parser below
+  // — which splits on real newlines — renders them as paragraphs/breaks
+  // instead of printing the raw characters.
+  const source = String(text).replace(/\\n/g, '\n')
   if (!source.trim()) return null
   const lines = source.split(/\r?\n/)
   const blocks = []

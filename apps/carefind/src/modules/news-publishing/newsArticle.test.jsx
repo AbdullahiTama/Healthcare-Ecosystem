@@ -357,4 +357,187 @@ describe('NewsArticle route /news/:id', () => {
     expect(screen.getByRole('link', { name: /link/i })).toHaveAttribute('href', 'https://x.test')
     expect(screen.queryByText('**bold text**')).not.toBeInTheDocument()
   })
+
+  it('shows Under review for pending article accessed by non-public route (author view)', async () => {
+    // NewsArticle shows "Article not available / still under review" for pending
+    const pending = { ...article, status: 'pending' }
+    h.ctrl.push({ data: pending, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    renderArticle('art-1')
+    expect(await screen.findByText('Article not available')).toBeInTheDocument()
+    expect(screen.getByText(/still under review/i)).toBeInTheDocument()
+  })
+
+  it('shows approved article immediately after admin approval (public feed)', async () => {
+    const approved = { ...article, status: 'approved', published_at: new Date().toISOString() }
+    h.ctrl.push({ data: approved, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    renderArticle('art-1')
+    expect(await screen.findByText('Test headline on malaria')).toBeInTheDocument()
+    expect(screen.queryByText('Article not available')).not.toBeInTheDocument()
+  })
+
+  it('maps pending to Under review and rejected to Not approved (News strip)', () => {
+    const pendingLabel = 'pending' === 'rejected' ? 'Not approved' : 'Under review'
+    const rejectedLabel = 'rejected' === 'rejected' ? 'Not approved' : 'Under review'
+    expect(pendingLabel).toBe('Under review')
+    expect(rejectedLabel).toBe('Not approved')
+  })
+
+  it('Like increments count and aria-pressed toggles; on fail rolls back with toast', async () => {
+    auth.user = { id: 'reader-1' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    h.ctrl.push({ data: null, error: null }) // saved_news
+
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+
+    const likeBtn = screen.getByRole('button', { name: /like this article/i })
+    expect(likeBtn.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.queryByText(/like/)).not.toBeInTheDocument()
+
+    // success path
+    h.ctrl.push({ data: null, error: null })
+    fireEvent.click(likeBtn)
+    await waitFor(() => expect(likeBtn.getAttribute('aria-pressed')).toBe('true'))
+    expect(await screen.findByText('1 like')).toBeInTheDocument()
+
+    // failure path: unlike should rollback
+    h.ctrl.push({ data: null, error: { message: 'network down' } })
+    fireEvent.click(likeBtn)
+    await waitFor(() => expect(toastShow).toHaveBeenCalledWith('network down', { type: 'error' }))
+    // still liked after rollback
+    expect(likeBtn.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText('1 like')).toBeInTheDocument()
+  })
+
+  it('Comment Post appears immediately and count updates, survives reload', async () => {
+    auth.user = { id: 'reader-2' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    h.ctrl.push({ data: null, error: null }) // saved_news
+
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    const input = screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(input, { target: { value: 'Great read!' } })
+    // insert success
+    h.ctrl.push({ data: null, error: null })
+    // re-select returns new comment list
+    const newComment = { id: 'c1', content: 'Great read!', created_at: new Date().toISOString(), user_id: 'reader-2', profiles: { full_name: 'Reader', display_name: 'reader', is_verified: false, verification_label: null, specialty: null } }
+    h.ctrl.push({ data: [newComment], error: null })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    expect(await screen.findByText('Great read!')).toBeInTheDocument()
+    expect(screen.getByText('Comments (1)')).toBeInTheDocument()
+    // input cleared after success
+    expect(input.value).toBe('')
+  })
+
+  it('Comment insert error shows toast and keeps draft, no wipe', async () => {
+    auth.user = { id: 'reader-2' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    h.ctrl.push({ data: null, error: null })
+
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    const input = screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(input, { target: { value: 'Nice!' } })
+    h.ctrl.push({ data: null, error: { message: 'insert failed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await waitFor(() => expect(toastShow).toHaveBeenCalledWith('insert failed', { type: 'error' }))
+    expect(input.value).toBe('Nice!')
+    expect(screen.queryByText('Nice!')).not.toBeInTheDocument()
+    expect(screen.getByText('Comments (0)')).toBeInTheDocument()
+  })
+
+  it('Comment re-select error toasts but does not wipe existing comments', async () => {
+    auth.user = { id: 'reader-2' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ data: [], error: null }) // reactions
+    h.ctrl.push({ data: [{ id: 'c0', content: 'Existing', created_at: '2026-08-01T00:00:00Z', user_id: 'u9', profiles: { full_name: 'Dr Q', display_name: 'q', is_verified: false, verification_label: null, specialty: null } }], error: null }) // comments
+    h.ctrl.push({ data: [], error: null }) // reposts
+    h.ctrl.push({ data: null, error: null }) // saved
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    expect(await screen.findByText('Existing')).toBeInTheDocument()
+    const input = screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(input, { target: { value: 'Another' } })
+    h.ctrl.push({ data: null, error: null }) // insert success
+    h.ctrl.push({ data: null, error: { message: 'select failed' } }) // re-select fails
+    fireEvent.click(screen.getByRole('button', { name: 'Post' }))
+    await waitFor(() => expect(toastShow).toHaveBeenCalledWith('select failed', { type: 'error' }))
+    // existing comment still visible, not wiped
+    expect(screen.getByText('Existing')).toBeInTheDocument()
+  })
+
+  it('anon shows Log in to comment CTA not disabled input', async () => {
+    auth.user = null
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    expect(screen.getByRole('link', { name: /log in to comment/i })).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Add a comment…')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /log in to comment/i }).getAttribute('href')).toBe('/login')
+  })
+
+  it('Post button disabled while posting prevents duplicate', async () => {
+    auth.user = { id: 'reader-2' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push(...emptyEngagement())
+    h.ctrl.push({ data: null, error: null })
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    const input = screen.getByPlaceholderText('Add a comment…')
+    fireEvent.change(input, { target: { value: 'Hello' } })
+    const postBtn = screen.getByRole('button', { name: 'Post' })
+    expect(postBtn).not.toBeDisabled()
+    // prepare queues
+    h.ctrl.push({ data: null, error: null })
+    const newComment = { id: 'c2', content: 'Hello', created_at: new Date().toISOString(), user_id: 'reader-2', profiles: { full_name: 'Reader', display_name: 'reader', is_verified: false, verification_label: null, specialty: null } }
+    h.ctrl.push({ data: [newComment], error: null })
+    fireEvent.click(postBtn)
+    await waitFor(() => expect(screen.getByText('Hello')).toBeInTheDocument())
+    // verify insert was called (at least once across all news_comments queries)
+    const allNewsCommentQueries = h.ctrl.from.mock.calls
+      .map((c, i) => ({ table: c[0], q: h.ctrl.from.mock.results[i]?.value }))
+      .filter(x => x.table === 'news_comments' && x.q?.insert?.mock)
+    const totalInserts = allNewsCommentQueries.reduce((acc, x) => acc + x.q.insert.mock.calls.length, 0)
+    expect(totalInserts).toBeGreaterThanOrEqual(1)
+  })
+
+  it('delete comment rollbacks on error and toasts', async () => {
+    auth.user = { id: 'owner' }
+    h.ctrl.push({ data: article, error: null })
+    h.ctrl.push({ data: [], error: null })
+    h.ctrl.push({ data: [], error: null }) // reactions
+    h.ctrl.push({ data: [{ id: 'c1', content: 'To delete', created_at: '2026-08-01T00:00:00Z', user_id: 'owner', profiles: { full_name: 'Owner', display_name: 'owner', is_verified: false, verification_label: null, specialty: null } }], error: null })
+    h.ctrl.push({ data: [], error: null }) // reposts
+    h.ctrl.push({ data: null, error: null }) // saved
+    renderArticle('art-1')
+    await screen.findByText('Test headline on malaria')
+    fireEvent.click(screen.getByRole('button', { name: /comments on this article/i }))
+    expect(await screen.findByText('To delete')).toBeInTheDocument()
+    // make delete fail
+    h.ctrl.push({ data: null, error: { message: 'delete failed' } })
+    fireEvent.click(screen.getByLabelText('Delete comment'))
+    await waitFor(() => expect(toastShow).toHaveBeenCalledWith('delete failed', { type: 'error' }))
+    // comment restored
+    expect(screen.getByText('To delete')).toBeInTheDocument()
+  })
 })

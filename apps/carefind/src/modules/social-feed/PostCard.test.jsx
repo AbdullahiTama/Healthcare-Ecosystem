@@ -107,8 +107,9 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps()} />
       </MemoryRouter>
     )
-    const seeMore = await screen.findByRole('button', { name: /read the full post by dr test/i })
+    const seeMore = await screen.findByRole('button', { name: /expand the full post by dr test/i })
     expect(seeMore).toBeInTheDocument()
+    expect(seeMore).toHaveTextContent(/see more/i)
   })
 
   it('never shows See more when the body fits', async () => {
@@ -119,10 +120,10 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps()} />
       </MemoryRouter>
     )
-    await waitFor(() => expect(screen.queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument())
   })
 
-  it('See more calls onOpenDetail with the post', async () => {
+  it('See more expands inline and then collapses with Show less (no navigation)', async () => {
     scrollH = 100
     clientH = 50
     const onOpenDetail = vi.fn()
@@ -131,8 +132,14 @@ describe('PostCard preview clamp + See more', () => {
         <PostCard post={makePost()} {...makeCardProps({ onOpenDetail })} />
       </MemoryRouter>
     )
-    fireEvent.click(await screen.findByRole('button', { name: /read the full post by dr test/i }))
-    expect(onOpenDetail).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
+    const seeMore = await screen.findByRole('button', { name: /expand the full post by dr test/i })
+    fireEvent.click(seeMore)
+    // Expands: Show less appears, onOpenDetail is NOT called (inline, not modal)
+    expect(await screen.findByRole('button', { name: /collapse post by dr test/i })).toBeInTheDocument()
+    expect(onOpenDetail).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /collapse post by dr test/i })).toHaveTextContent(/show less/i)
+    fireEvent.click(screen.getByRole('button', { name: /collapse post by dr test/i }))
+    expect(await screen.findByRole('button', { name: /expand the full post by dr test/i })).toBeInTheDocument()
   })
 
   it('the detail modal renders the full post with no See more button', async () => {
@@ -152,7 +159,8 @@ describe('PostCard preview clamp + See more', () => {
     )
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/The complete post body shown in full inside the modal/)).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: /collapse post by dr test/i })).not.toBeInTheDocument()
   })
 
   it('the detail modal shows its loading and error states', async () => {
@@ -196,7 +204,8 @@ describe('PostCard preview clamp + See more', () => {
     expect(container.textContent).not.toContain('**')
     expect(container.querySelector('strong')).not.toBeNull()
     expect(container.querySelector('strong').textContent).toBe('bold')
-    expect(screen.queryByRole('button', { name: /read the full post by dr test/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /expand the full post by dr test/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /collapse post by dr test/i })).not.toBeInTheDocument()
   })
 
   it('still shows the engagement bar and its Share action', async () => {
@@ -208,5 +217,51 @@ describe('PostCard preview clamp + See more', () => {
       </MemoryRouter>
     )
     expect(screen.getByRole('button', { name: /share this post/i })).toBeInTheDocument()
+  })
+})
+
+// Issue #2 — a repost must name BOTH who shared it and who wrote it. The
+// reposter's name sits above the source card, and the explicit "Originally
+// posted by Y" clause means even a reader who never scrolls into the source
+// card cannot mistake the reposter for the writer.
+describe('PostCard repost attribution (issue #2)', () => {
+  const source = makePost({ id: 'p0', user_id: 'author-1', content: 'The original words of the article.' })
+  const namesByUser = (p) => (p.user_id === 'author-1' ? 'Dr Original' : 'Ms Reposter')
+
+  function renderRepost({ resolveSource }) {
+    return render(
+      <MemoryRouter>
+        <PostCard
+          post={makePost({ id: 'p9', user_id: 'reposter-1', repost_of: 'p0', content: '', image_url: null })}
+          {...makeCardProps({ authorName: namesByUser })}
+          resolveSource={resolveSource}
+        />
+      </MemoryRouter>
+    )
+  }
+
+  it('credits the reposter AND the original author', () => {
+    scrollH = 50
+    clientH = 100
+    const { container } = renderRepost({ resolveSource: (id) => (id === 'p0' ? source : null) })
+    const text = container.textContent
+    expect(text).toContain('Reposted by')
+    expect(text).toContain('Ms Reposter')
+    expect(text).toContain('Originally posted by')
+    expect(text).toContain('Dr Original')
+    // The body shown is the SOURCE's words, not the repost row's emptiness.
+    expect(text).toContain('The original words of the article.')
+  })
+
+  it('keeps the reposter credit honest when the source cannot be resolved', () => {
+    scrollH = 50
+    clientH = 100
+    const { container } = renderRepost({ resolveSource: () => null })
+    const text = container.textContent
+    expect(text).toContain('Reposted by')
+    expect(text).toContain('Ms Reposter')
+    expect(text).toContain('This post is no longer available.')
+    // Never fall back to crediting the reposter as the writer.
+    expect(text).not.toContain('Originally posted by')
   })
 })
