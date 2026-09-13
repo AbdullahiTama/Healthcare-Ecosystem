@@ -31,7 +31,7 @@ export default function AdminLogin() {
         localStorage.setItem('admin_permissions', JSON.stringify(permissions))
       }
 
-      navigate('/admin/dashboard')
+      navigate('/admin-panel')
     } catch (err) {
       setError(err.message || 'Invalid credentials')
     } finally {
