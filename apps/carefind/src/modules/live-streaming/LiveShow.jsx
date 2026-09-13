@@ -5,7 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import {
   Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
-  Radio, Repeat2, Share2, X,
+  Radio, Repeat2, Share2, X, Calendar,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -18,6 +18,7 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading, Toast, useToast } from '../../components/ui'
 import { shareOrCopy } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
+import { generateCalendarUrl, downloadIcs } from '../../utils/calendar.js'
 
 function LiveShow() {
   const { id } = useParams()
@@ -329,6 +330,67 @@ function LiveShow() {
             <div style={{ marginBottom: 24 }}>
               <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}><Film size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />WATCH THE TRAILER</p>
               <video src={show.trailer_url} controls playsInline style={{ width: '100%', borderRadius: 14, display: 'block' }} />
+            </div>
+          )}
+
+          {/* Add to Calendar */}
+          {!expired && (
+            <div style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 12 }}>
+                <Calendar size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />REMIND ME
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {(() => {
+                  const calData = generateCalendarUrl({
+                    title: show.title,
+                    scheduled_at: show.scheduled_at,
+                    description: `Live show hosted by ${show.host?.full_name || show.host?.display_name || 'CareFind creator'}`,
+                    host_name: show.host?.full_name || show.host?.display_name,
+                  })
+                  if (!calData) return null
+                  return (
+                    <>
+                      <a
+                        href={calData.gcalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '10px 18px',
+                          background: 'rgba(255,255,255,0.15)',
+                          borderRadius: 20,
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Google Calendar
+                      </a>
+                      <button
+                        onClick={() => downloadIcs(calData.icsContent, `${show.title || 'live-show'}.ics`)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '10px 18px',
+                          background: 'rgba(255,255,255,0.15)',
+                          borderRadius: 20,
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Apple/Outlook
+                      </button>
+                    </>
+                  )
+                })()}
+              </div>
             </div>
           )}
 

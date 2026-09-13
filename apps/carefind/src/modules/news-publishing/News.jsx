@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
-import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
+import NewsEngagementBar from './NewsEngagementBar.jsx'
 import { validateArticleForPublish } from './articleContent.js'
+import { getNewsQueueInfo } from './newsQueue.js'
 import { ErrorState, CardSkeleton, Toast, useToast } from '../../components/ui'
 
 function News() {
@@ -39,13 +41,21 @@ function News() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const [queueInfo, setQueueInfo] = useState({ totalPending: 0, userSubmissions: [] })
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     loadNews()
     checkCanSubmit()
     markNewsSeen()
+    loadQueueInfo()
   }, [user])
+
+  async function loadQueueInfo() {
+    if (!user) return
+    const info = await getNewsQueueInfo(user.id)
+    setQueueInfo(info)
+  }
 
   async function markNewsSeen() {
     if (!user) return
@@ -144,7 +154,7 @@ function News() {
       setSubmitMsg('Submitted! Your news is under review and will publish once approved.')
       setHeadline(''); setSubtitle(''); setBody(''); setHeroFile(null); setHeroPreview(null)
       setContactPhone(''); setContactEmail(''); setPreviewing(false)
-      setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews() }, 1800)
+      setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews(); loadQueueInfo() }, 1800)
     }
     setSubmitting(false)
   }
@@ -192,14 +202,31 @@ function News() {
       {myPending.length > 0 && (
         <div style={{ padding: '12px 16px 0', fontFamily: theme.fontFamily }}>
           <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Your submissions</p>
-          {myPending.map(m => (
-            <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: theme.bg, borderRadius: 10, marginBottom: 6 }}>
-              <span style={{ fontSize: 12.5, color: theme.textMid, flex: 1, marginRight: 8 }}>{m.headline}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: m.status === 'rejected' ? theme.alert : theme.amberText }}>
-                {m.status === 'rejected' ? 'Not approved' : 'Under review'}
-              </span>
+          {myPending.map(m => {
+            const submissionQueue = queueInfo.userSubmissions.find(s => s.id === m.id)
+            return (
+              <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: theme.bg, borderRadius: 10, marginBottom: 6 }}>
+                <div style={{ flex: 1, marginRight: 8 }}>
+                  <div style={{ fontSize: 12.5, color: theme.textMid }}>{m.headline}</div>
+                  {submissionQueue && m.status === 'pending' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: theme.tealDeep }}>
+                      <Clock size={10} />
+                      <span>Position #{submissionQueue.position} · Est. review: {submissionQueue.estimatedText}</span>
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: m.status === 'rejected' ? theme.alert : theme.amberText }}>
+                  {m.status === 'rejected' ? 'Not approved' : 'Under review'}
+                </span>
+              </div>
+            )
+          })}
+          {queueInfo.totalPending > 0 && (
+            <div style={{ marginTop: 8, padding: '8px 10px', background: theme.tealMist, borderRadius: 10, fontSize: 11, color: theme.tealDeep }}>
+              <Clock size={11} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+              {queueInfo.totalPending} submission{queueInfo.totalPending !== 1 ? 's' : ''} in queue
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -231,6 +258,7 @@ function News() {
           <p style={{ margin: 0, fontFamily: theme.fontFamily, fontSize: 12, color: theme.textLight }}>
             By <strong style={{ color: theme.navy }}>{authorName(lead)}</strong> · {timeAgo(lead.published_at || lead.created_at)}
           </p>
+          <NewsEngagementBar article={lead} user={user} compact={false} />
         </Link>
       )}
 
@@ -241,13 +269,14 @@ function News() {
           the width for it (GRID_SYSTEM.md), each still its own row-style card */}
       <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24 }}>
         {rest.map((a) => (
-          <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}` }}>
-            <div style={{ flex: 1 }}>
+          <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <h3 style={{ margin: '0 0 5px 0', fontSize: 16.5, fontWeight: 800, color: theme.navy, lineHeight: 1.25 }}>{a.headline}</h3>
               {a.subtitle && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{a.subtitle.slice(0, 90)}{a.subtitle.length > 90 ? '…' : ''}</p>}
               <p style={{ margin: 0, fontFamily: theme.fontFamily, fontSize: 11, color: theme.textLight }}>
                 By {authorName(a)} · {timeAgo(a.published_at || a.created_at)}
               </p>
+              <NewsEngagementBar article={a} user={user} compact />
             </div>
             {a.hero_image_url && (
               <div style={{ width: 92, height: 92, borderRadius: 6, flexShrink: 0, background: `url(${a.hero_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />

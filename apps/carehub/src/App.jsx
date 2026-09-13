@@ -85,6 +85,17 @@ export default function App() {
     return () => { cancelled = true }
   }, [])
 
+  // Listen for auth state changes — redirect to login when session expires
+  useEffect(() => {
+    const { data: { subscription } } = authClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
+        logout()
+        window.location.href = '/login'
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
   return (
     <Sentry.ErrorBoundary>
     <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>

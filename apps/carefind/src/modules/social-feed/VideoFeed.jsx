@@ -5,12 +5,14 @@ import {
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
+import ContinueWatchingRow from '../../components/ContinueWatchingRow.jsx'
 import { CommentThread } from './components/CommentThread.jsx'
 import { renderMarkdown } from './markdown.jsx'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from './components/StoryViewer.jsx'
 import { supabase } from '../../config/supabaseClient'
 import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
+import { useVideoProgress } from '../../hooks/useVideoProgress.js'
 
 // TikTok-style vertical video feed: full-bleed, one clip per view, swiped
 // vertically. Each slide has a right-hand engagement rail (Like, Comment,
@@ -41,6 +43,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
   const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
   const [viewer, setViewer] = useState(null)
   const [captionExpanded, setCaptionExpanded] = useState({})
+  const { progress, updateProgress, clearProgress } = useVideoProgress(user?.id)
 
   // Scroll to the focused video when deep-linked from the main feed
   useEffect(() => {
@@ -127,6 +130,12 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
         .vf-caption { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
         .vf-caption.expanded { -webkit-line-clamp: unset !important; }
       `}</style>
+      <ContinueWatchingRow
+        videos={posts}
+        progress={progress}
+        onClear={clearProgress}
+        authorName={authorName}
+      />
       {posts.map((post, index) => {
         const isActive = index === activeIndex
         const followBtnVisible = user && post.user_id !== user.id
@@ -154,6 +163,11 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
               ariaLabel={`Video by ${authorName(post)}`}
               controls={false}
               autoUnmute={isActive}
+              onTimeUpdate={(currentTime, duration) => {
+                if (isActive && duration) {
+                  updateProgress(post.id, currentTime, duration)
+                }
+              }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             />
 

@@ -112,6 +112,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // linger as phantom rows after completion (#17).
   const [resumedSaleId, setResumedSaleId] = useState(null)
   const [printing, setPrinting] = useState(false)
+  const [charging, setCharging] = useState(false)
   const [clients, setClients] = useState([])
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
@@ -294,7 +295,10 @@ function POSInner({ brand, products, setProducts, role, perms }) {
 
   async function charge() {
     if (!cart.length) return
+    if (charging) return
     if (method === 'Split' && splitTotal < total) { showToast('Split amounts do not add up to total.', { type: 'warning' }); return }
+    setCharging(true)
+    try {
     const txnNo = genId('TXN')
     const clientName = client || 'Walk-in'
     const clientId = resolveClientId(clientName)
@@ -365,10 +369,14 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     }
 
     loadSalesData()
+    } finally { setCharging(false) }
   }
 
   async function chargeCredit() {
     if (!cart.length) return
+    if (charging) return
+    setCharging(true)
+    try {
     const txnNo = genId('TXN')
     const amtPaid = parseFloat(creditAmountPaid) || 0
     const balance = total - amtPaid
@@ -415,6 +423,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       })
     }
     loadSalesData()
+    } finally { setCharging(false) }
   }
 
   async function holdSale() {
@@ -1046,9 +1055,9 @@ function POSInner({ brand, products, setProducts, role, perms }) {
                 (balance 0, is_credit false), the `creditAmountPaid` the
                 cashier typed would be ignored, and the debt would never be
                 recorded — the balance simply disappears. */}
-            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length} className="pos-charge"
-              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', fontWeight: 800, fontSize: 14 }}>
-              {chargeLabel}
+            <button onClick={method === 'Credit' ? chargeCredit : charge} disabled={!cart.length || charging} className="pos-charge"
+              style={{ flex: 1, padding: '14px 0', borderRadius: theme.radius.md, border: 'none', fontWeight: 800, fontSize: 14, opacity: charging ? 0.6 : 1, cursor: charging ? 'not-allowed' : 'pointer' }}>
+              {charging ? 'Processing...' : chargeLabel}
             </button>
           </div>
         </div>

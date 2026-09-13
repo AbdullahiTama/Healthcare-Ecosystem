@@ -4,14 +4,17 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { orderRepository } from './orderRepository'
 import { trackingRepository } from './trackingRepository'
+import { vendorRatingRepository } from './vendorRatingRepository'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
-import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download, Link, Copy } from 'lucide-react'
+import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download, Link, Copy, Star } from 'lucide-react'
 import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery } from './orderConstants'
 import { useCart } from './CartProvider'
 import DeliveryTrackingMap from '../../components/shop/DeliveryTrackingMap'
+import VendorRating from './VendorRating'
+import OrderProgressBar from './OrderProgressBar'
 
 export default function OrderDetail() {
   const { orderId } = useParams()
@@ -36,6 +39,7 @@ export default function OrderDetail() {
   const [trackingToken, setTrackingToken] = useState(null)
   const [copiedLink, setCopiedLink] = useState(false)
   const [paymentJustConfirmed, setPaymentJustConfirmed] = useState(false)
+  const [existingRating, setExistingRating] = useState(null)
 
   function handleReorder() {
     if (!order || !order.order_items) return
@@ -291,6 +295,16 @@ export default function OrderDetail() {
       // Load tracking events
       const events = await trackingRepository.getTrackingEvents(orderId)
       setTrackingEvents(events)
+      
+      // Load existing rating if any
+      if (data.status === 'delivered' && data.vendor_business_id) {
+        try {
+          const rating = await vendorRatingRepository.getByOrder(orderId)
+          setExistingRating(rating)
+        } catch (err) {
+          console.error('Failed to load rating:', err)
+        }
+      }
     } catch (err) {
       console.error('Failed to load order:', err)
       setError(err.message || 'Failed to load order')
@@ -493,6 +507,27 @@ export default function OrderDetail() {
               </div>
             </div>
           </div>
+
+          {/* Emotional Status Message */}
+          {statusConfig.message && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 16px',
+              borderRadius: theme.radius.md,
+              background: statusConfig.color + '10',
+              marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 20 }}>{statusConfig.emoji}</span>
+              <span style={{ fontSize: 13, color: statusConfig.color, fontWeight: 500 }}>
+                {statusConfig.message}
+              </span>
+            </div>
+          )}
+
+          {/* Order Progress Bar */}
+          <OrderProgressBar order={order} />
 
           {/* Delivery Info */}
           <div style={{ display: 'flex', gap: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}`, flexWrap: 'wrap' }}>
@@ -801,6 +836,50 @@ export default function OrderDetail() {
             </div>
           )}
         </Card>
+
+        {/* Vendor Rating */}
+        {order.status === 'delivered' && isCustomer && order.vendor_business_id && !existingRating && (
+          <Card style={{ padding: 0 }}>
+            <VendorRating order={order} user={user} onRated={() => loadOrder()} />
+          </Card>
+        )}
+
+        {/* Existing Rating Display */}
+        {existingRating && isCustomer && (
+          <Card style={{ padding: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: theme.navy }}>
+              Your Rating
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 14, color: theme.textMid }}>Overall:</span>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Star
+                      key={star}
+                      size={18}
+                      fill={star <= existingRating.overall_rating ? '#FBBF24' : 'none'}
+                      color={star <= existingRating.overall_rating ? '#FBBF24' : theme.gray300}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 13, color: theme.textMid }}>
+                <span>⚡ Speed: {existingRating.fulfillment_speed}/5</span>
+                <span>📦 Packaging: {existingRating.packaging_quality}/5</span>
+                <span>✓ Accuracy: {existingRating.accuracy}/5</span>
+              </div>
+              {existingRating.comment && (
+                <div style={{ padding: 12, background: theme.bg, borderRadius: 8, fontSize: 13, color: theme.textDark }}>
+                  "{existingRating.comment}"
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: theme.textLight }}>
+                Rated on {new Date(existingRating.created_at).toLocaleDateString()}
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Status Timeline */}
         <Card style={{ padding: 24 }}>

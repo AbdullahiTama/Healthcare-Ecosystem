@@ -17,22 +17,25 @@ const STATUS_PILL = {
 
 export default function AdrReportsAnalytics({ brand }) {
   const [rows, setRows] = useState(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState(null)
 
   useEffect(() => { load() }, [brand?.id])
 
   async function load() {
-    setError(false)
+    if (!brand?.id) return
+    setError(null)
     setRows(null)
     try {
       const data = await adrReportRepository.getAnalytics(brand.id)
       setRows(data || [])
     } catch (e) {
-      setError(true)
+      const detail = e?.message || 'Unknown error'
+      console.error('ADR analytics load error:', detail, e)
+      setError(detail)
     }
   }
 
-  if (error) return <ErrorState message="We couldn't load ADR analytics. Check your connection and try again." onRetry={load} />
+  if (error) return <ErrorState message={`We couldn't load ADR analytics: ${error}`} onRetry={load} />
   if (rows === null) return <Loading text="Loading ADR analytics..." />
 
   if (rows.length === 0) {

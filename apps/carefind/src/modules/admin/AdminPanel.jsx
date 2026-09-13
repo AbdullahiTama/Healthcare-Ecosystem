@@ -1,12 +1,17 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import AdminLayout from './AdminLayout.jsx'
 import AdminShop from './AdminShop.jsx'
+import CommandPalette from './CommandPalette.jsx'
+import HealthPulse from './HealthPulse.jsx'
+import AdminAiCopilot from './AdminAiCopilot.jsx'
+import useCommandPalette from './useCommandPalette.js'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import { NAV_GROUPS } from './AdminSidebar.jsx'
+import { Sparkles } from 'lucide-react'
 
 import OverviewTab from './tabs/OverviewTab.jsx'
 import VerificationsTab from './tabs/VerificationsTab.jsx'
@@ -26,6 +31,7 @@ import PromotionsTab from './tabs/PromotionsTab.jsx'
 import SearchesTab from './tabs/SearchesTab.jsx'
 import GoLiveTab from './tabs/GoLiveTab.jsx'
 import NotificationsTab from './tabs/NotificationsTab.jsx'
+import EmailTemplatesTab from './tabs/EmailTemplatesTab.jsx'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
 
@@ -141,6 +147,7 @@ export default function AdminPanel() {
   const [postAuthor, setPostAuthor] = useState(null)
   const [phoneMap, setPhoneMap] = useState({})
   const [adminPermissions, setAdminPermissions] = useState({})
+  const [aiCopilotOpen, setAiCopilotOpen] = useState(false)
   const [adminRoles, setAdminRoles] = useState([])
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
@@ -156,6 +163,13 @@ export default function AdminPanel() {
   function askConfirm({ title, consequence, confirmLabel = 'Delete', action }) {
     setConfirmState({ title, consequence, confirmLabel, action })
   }
+  const { open: cmdOpen, setOpen: setCmdOpen, addToRecent } = useCommandPalette()
+
+  const handleCmdNavigate = useCallback((tabKey) => {
+    setTab(tabKey)
+    addToRecent(tabKey)
+    setCmdOpen(false)
+  }, [addToRecent, setCmdOpen])
 
   useEffect(() => {
     try {
@@ -909,6 +923,7 @@ export default function AdminPanel() {
       onSignOut={handleSignOut}
     >
       <>
+        {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
@@ -928,6 +943,7 @@ export default function AdminPanel() {
         {tab === 'golive' && <GoLiveTab activeShows={activeShows} scheduledShows={scheduledShows} liveTitle={liveTitle} setLiveTitle={setLiveTitle} scheduledAt={scheduledAt} setScheduledAt={setScheduledAt} trailerFile={trailerFile} setTrailerFile={setTrailerFile} creatingShow={creatingShow} liveGuests={liveGuests} setLiveGuests={setLiveGuests} guestSearch={guestSearch} setGuestSearch={setGuestSearch} users={users} startLiveShow={startLiveShow} scheduleShow={scheduleShow} endLiveShow={endLiveShow} startScheduledShow={startScheduledShow} cancelScheduledShow={cancelScheduledShow} liveDraft={liveDraft} setLiveDraft={setLiveDraft} liveImage={liveImage} setLiveImage={setLiveImage} postingLive={postingLive} postLiveItem={postLiveItem} liveItems={liveItems} liveStats={liveStats} liveComments={liveComments} hideLiveComment={hideLiveComment} loadLiveControl={loadLiveControl} toggleGuest={toggleGuest} showToast={showToast} postLiveVoice={postLiveVoice} postLiveSlide={postLiveSlide} postLiveVideo={postLiveVideo} />}
         {tab === 'shop' && <AdminShop showToast={showToast} />}
         {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
+        {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
       </>
 
     <ConfirmDialog
@@ -939,6 +955,46 @@ export default function AdminPanel() {
       confirmLabel={confirmState?.confirmLabel || 'Delete'}
     />
     <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
+    <CommandPalette
+      open={cmdOpen}
+      onClose={() => setCmdOpen(false)}
+      onNavigate={handleCmdNavigate}
+      onSignOut={handleSignOut}
+      onRefresh={loadAll}
+      permissions={adminPermissions}
+    />
+    
+    {/* AI Copilot Button */}
+    <button
+      onClick={() => setAiCopilotOpen(true)}
+      style={{
+        position: 'fixed',
+        bottom: 20,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        background: theme.tealDeep,
+        border: 'none',
+        boxShadow: '0 4px 12px rgba(14, 111, 90, 0.3)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999,
+        transition: 'transform 0.2s',
+      }}
+      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+    >
+      <Sparkles size={24} color="#fff" />
+    </button>
+    
+    {/* AI Copilot */}
+    <AdminAiCopilot
+      isOpen={aiCopilotOpen}
+      onClose={() => setAiCopilotOpen(false)}
+    />
     </AdminLayout>
   )
 }

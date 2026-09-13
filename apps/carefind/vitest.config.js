@@ -14,7 +14,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.js'],
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx}', 'api/**/*.test.{js,jsx}'],
     globals: true,
     // Above the 5000ms `asyncUtilTimeout` configured in src/test/setup.js (see
     // the reasoning there): when a findBy* runs out of time it must fail with

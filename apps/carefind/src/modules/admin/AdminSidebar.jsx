@@ -3,7 +3,7 @@ import {
   LayoutDashboard, UserCheck, Flag, FileText, Image, Newspaper, Radio,
   ShoppingBag, DollarSign, Landmark, Building2, Users, Shield,
   Pill, ClipboardList, Target, Search, Bell, LogOut, Menu, X,
-  ChevronDown, Settings
+  ChevronDown, Settings, Mail
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 
@@ -55,6 +55,7 @@ const NAV_GROUPS = [
       { key: 'tasks', label: 'Tasks', icon: ClipboardList },
       { key: 'promotions', label: 'Promotions', icon: Target },
       { key: 'searches', label: 'Searches', icon: Search },
+      { key: 'email_templates', label: 'Email Templates', icon: Mail },
     ],
   },
 ]

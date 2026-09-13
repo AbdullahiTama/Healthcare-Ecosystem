@@ -28,6 +28,7 @@ function VideoPlayer({
   loop = true,
   muted: initialMuted = true,
   autoUnmute = false,
+  onTimeUpdate,
   style,
 }) {
   const videoRef = useRef(null)
@@ -171,6 +172,11 @@ function VideoPlayer({
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onError={() => setStatus('error')}
+        onTimeUpdate={(e) => {
+          if (onTimeUpdate && e.target) {
+            onTimeUpdate(e.target.currentTime, e.target.duration)
+          }
+        }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
       />
 

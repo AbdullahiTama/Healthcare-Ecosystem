@@ -55,9 +55,11 @@ describe('initiate-withdrawal PIN gate', () => {
     pinRow = []
     verifyResult = true
     mockSupabase.rpc.mockImplementation(async (fn) => {
+      if (fn === 'get_withdrawal_trust') return { data: [{ trust_level: 'new', total_withdrawals: 0, total_amount: 0, instant_threshold: 0, device_trust_enabled: false, biometric_enabled: false, consecutive_success: 0 }], error: null }
       if (fn === 'get_withdrawal_pin') return { data: pinRow, error: null }
       if (fn === 'verify_withdrawal_pin') return { data: verifyResult, error: null }
       if (fn === 'request_withdrawal') return { data: 'ok', error: null }
+      if (fn === 'update_withdrawal_trust_after_withdrawal') return { data: 'new', error: null }
       return { data: null, error: null }
     })
 
@@ -100,7 +102,7 @@ describe('initiate-withdrawal PIN gate', () => {
     pinRow = [{ pin_hash: 'h'.repeat(128), pin_salt: 's'.repeat(32), failed_attempts: 0, locked_until: null }]
     const res = await handler(makeReq({ ...VALID_BODY, pin: undefined }), makeRes())
     expect(res.statusCode).toBe(400)
-    expect(res.body.error).toContain('Withdrawal PIN is required')
+    expect(res.body.error).toContain('Authentication required')
   })
 
   it('rejects a malformed pin with 400', async () => {

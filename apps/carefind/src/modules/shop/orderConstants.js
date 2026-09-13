@@ -4,20 +4,118 @@ import { Clock, CheckCircle, Package, Truck, MapPin, XCircle, AlertTriangle, Rot
 import { theme } from '../../styles/theme'
 
 export const STATUS_CONFIG = {
-  pending_payment: { label: 'Pending Payment', icon: Clock, color: theme.warning, step: 0 },
-  delivery_quote_pending: { label: 'Quote Pending', icon: Truck, color: theme.warning, step: 1 },
-  paid: { label: 'Paid', icon: CheckCircle, color: theme.success, step: 2 },
-  accepted: { label: 'Accepted', icon: CheckCircle, color: theme.success, step: 3 },
-  processing: { label: 'Processing', icon: Package, color: theme.tealDeep, step: 4 },
-  packed: { label: 'Packed', icon: Package, color: theme.tealDeep, step: 5 },
-  at_pickup_station: { label: 'At Pickup Station', icon: MapPin, color: '#8b5cf6', step: 6 },
-  ready_for_pickup: { label: 'Ready for Pickup', icon: MapPin, color: theme.tealDeep, step: 7 },
-  in_transit: { label: 'In Transit', icon: Truck, color: theme.tealDeep, step: 8 },
-  delivered: { label: 'Delivered', icon: CheckCircle, color: theme.success, step: 9 },
-  cancelled: { label: 'Cancelled', icon: XCircle, color: theme.danger, step: -1 },
-  refund_requested: { label: 'Refund Requested', icon: RotateCcw, color: theme.warning, step: -2 },
-  refunded: { label: 'Refunded', icon: RotateCcw, color: theme.textMid, step: -3 },
-  disputed: { label: 'Disputed', icon: AlertTriangle, color: theme.danger, step: -4 }
+  pending_payment: { 
+    label: 'Pending Payment', 
+    icon: Clock, 
+    color: theme.warning, 
+    step: 0,
+    message: 'Complete payment to start processing your order',
+    emoji: '💳'
+  },
+  delivery_quote_pending: { 
+    label: 'Quote Pending', 
+    icon: Truck, 
+    color: theme.warning, 
+    step: 1,
+    message: 'We\'re calculating delivery costs for your area',
+    emoji: '📍'
+  },
+  paid: { 
+    label: 'Paid', 
+    icon: CheckCircle, 
+    color: theme.success, 
+    step: 2,
+    message: 'Payment received! Vendor will confirm shortly',
+    emoji: '✅'
+  },
+  accepted: { 
+    label: 'Accepted', 
+    icon: CheckCircle, 
+    color: theme.success, 
+    step: 3,
+    message: 'Vendor has accepted your order',
+    emoji: '🎉'
+  },
+  processing: { 
+    label: 'Processing', 
+    icon: Package, 
+    color: theme.tealDeep, 
+    step: 4,
+    message: 'Your items are being carefully prepared',
+    emoji: '📦'
+  },
+  packed: { 
+    label: 'Packed', 
+    icon: Package, 
+    color: theme.tealDeep, 
+    step: 5,
+    message: 'All packed up and ready for the next step',
+    emoji: '📫'
+  },
+  at_pickup_station: { 
+    label: 'At Pickup Station', 
+    icon: MapPin, 
+    color: '#8b5cf6', 
+    step: 6,
+    message: 'Your order has arrived at the pickup station',
+    emoji: '🏪'
+  },
+  ready_for_pickup: { 
+    label: 'Ready for Pickup', 
+    icon: MapPin, 
+    color: theme.tealDeep, 
+    step: 7,
+    message: 'Come grab your order whenever you\'re ready!',
+    emoji: '🙌'
+  },
+  in_transit: { 
+    label: 'In Transit', 
+    icon: Truck, 
+    color: theme.tealDeep, 
+    step: 8,
+    message: 'On its way to you! Track the journey below',
+    emoji: '🚚'
+  },
+  delivered: { 
+    label: 'Delivered', 
+    icon: CheckCircle, 
+    color: theme.success, 
+    step: 9,
+    message: 'Enjoy your purchase! Don\'t forget to rate your experience',
+    emoji: '🎊'
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    icon: XCircle, 
+    color: theme.danger, 
+    step: -1,
+    message: 'Order cancelled. Refund will be processed if paid',
+    emoji: '❌'
+  },
+  refund_requested: { 
+    label: 'Refund Requested', 
+    icon: RotateCcw, 
+    color: theme.warning, 
+    step: -2,
+    message: 'Refund request under review',
+    emoji: '🔄'
+  },
+  refunded: { 
+    label: 'Refunded', 
+    icon: RotateCcw, 
+    color: theme.textMid, 
+    step: -3,
+    message: 'Refund processed successfully',
+    emoji: '💰'
+  },
+  disputed: { 
+    label: 'Disputed', 
+    icon: AlertTriangle, 
+    color: theme.danger, 
+    step: -4,
+    message: 'Order under dispute review',
+    emoji: '⚠️'
+  }
 }
 
 export const CUSTOMER_STATUSES = [

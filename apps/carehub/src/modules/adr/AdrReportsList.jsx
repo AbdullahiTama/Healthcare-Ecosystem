@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, Plus } from 'lucide-react'
-import { adrReportRepository } from './repositories'
+import { adrReportRepository, getModuleTypeFromBusinessType } from './repositories'
 import { ADR_FORM } from './formEngine'
 import AdrReportsAnalytics from './AdrReportsAnalytics'
 import { theme } from '../../styles/theme'
@@ -21,25 +21,32 @@ export default function AdrReportsList({ brand, embedded = false }) {
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
   const [tab, setTab] = useState('list')
   const [reports, setReports] = useState(null)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => { load() }, [brand?.id])
 
   async function load() {
-    setError(false)
+    if (!brand?.id) return
+    setError(null)
     try {
       const data = await adrReportRepository.getReports(brand.id)
       setReports(data || [])
     } catch (e) {
-      setError(true)
+      const detail = e?.message || 'Unknown error'
+      console.error('ADR load error:', detail, e)
+      setError(detail)
     }
   }
 
   async function handleNewReport() {
+    if (!brand?.id) {
+      showToast('Business not loaded yet — try again', { type: 'warning' })
+      return
+    }
     setCreating(true)
     try {
-      const moduleType = ADR_FORM.getModuleType(brand.business_type || brand.type || 'pharmacy')
+      const moduleType = getModuleTypeFromBusinessType(brand.business_type || brand.type || 'pharmacy')
       const staffId = (auth && auth.staff && auth.staff.id) ? auth.staff.id : null
       const result = await adrReportRepository.createReport(brand.id, {
         module_type: moduleType,
@@ -50,11 +57,12 @@ export default function AdrReportsList({ brand, embedded = false }) {
       if (id) {
         navigate(`/dashboard/adr-reports/${id}/detail`)
       } else {
-        showToast('Could not start a new ADR report', { type: 'warning' })
+        showToast('Could not start a new ADR report — no ID returned', { type: 'warning' })
         setCreating(false)
       }
     } catch (e) {
-      showToast('Error creating ADR report', { type: 'warning' })
+      const detail = e?.message || 'Unknown error'
+      showToast('Error creating ADR report: ' + detail, { type: 'error' })
       setCreating(false)
     }
   }
@@ -99,7 +107,7 @@ export default function AdrReportsList({ brand, embedded = false }) {
         <AdrReportsAnalytics brand={brand} />
       ) : error ? (
         <ErrorState
-          message="We couldn't load your ADR reports. Check your connection and try again."
+          message={`We couldn't load your ADR reports: ${error}`}
           onRetry={load}
         />
       ) : reports === null ? (

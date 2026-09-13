@@ -14,20 +14,37 @@ import { pagedQuery } from '../lib/pagedQuery.js'
 // refresh would succeed, otherwise the RPC hits RLS 42501.
 async function authToken() {
   const { data } = await authClient.auth.getSession()
-  if (data?.session?.access_token) return data.session.access_token
+  if (data?.session?.access_token) {
+    console.log('[Auth] Valid session found for:', data.session.user?.email)
+    return data.session.access_token
+  }
+  console.warn('[Auth] No valid session, attempting refresh...')
   try {
     const { data: refreshed } = await authClient.auth.refreshSession()
-    if (refreshed?.session?.access_token) return refreshed.session.access_token
-  } catch {}
+    if (refreshed?.session?.access_token) {
+      console.log('[Auth] Session refreshed for:', refreshed.session.user?.email)
+      return refreshed.session.access_token
+    }
+  } catch (e) {
+    console.error('[Auth] Refresh failed:', e)
+  }
+  console.error('[Auth] Falling back to anon key - no valid session!')
   return SB_KEY
 }
 
 export async function sbFetch(path, options = {}) {
+  const token = await authToken()
+  const isAnon = token === SB_KEY
+  if (isAnon) {
+    console.warn('[sbFetch] Using anon key for:', path)
+  } else {
+    console.log('[sbFetch] Using auth token for:', path, 'Token prefix:', token.substring(0, 20) + '...')
+  }
   const res = await fetch(SB_URL + '/rest/v1/' + path, {
     method: options.method || 'GET',
     headers: {
       'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + await authToken(),
+      'Authorization': 'Bearer ' + token,
       'Content-Type': 'application/json',
       'Prefer': options.prefer || 'return=representation',
     },
@@ -37,6 +54,11 @@ export async function sbFetch(path, options = {}) {
   if (!res.ok) {
     let detail = text
     try { detail = JSON.parse(text).message || text } catch (e) {}
+    console.error('[sbFetch] Error response:', res.status, detail)
+    if (res.status === 403 && isAnon) {
+      authClient.auth.signOut().catch(() => {})
+      throw new Error('Session expired. Please log in again.')
+    }
     throw new Error('Supabase error (' + res.status + '): ' + detail)
   }
   return text ? JSON.parse(text) : []
