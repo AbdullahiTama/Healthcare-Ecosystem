@@ -47,8 +47,9 @@ export default async function handler(req, res) {
     if (!admin) return res.status(401).json({ error: 'Invalid email or password' })
     await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id)
     const sessionToken = generateToken(admin.id, admin.role)
-    const { data: perms } = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }).catch(() => ({ data: {} }))
-    return res.status(200).json({ token: sessionToken, admin: { id: admin.id, email: admin.email, full_name: admin.full_name, role: admin.role }, permissions: perms || {} })
+    let perms = {}
+    try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
+    return res.status(200).json({ token: sessionToken, admin: { id: admin.id, email: admin.email, full_name: admin.full_name, role: admin.role }, permissions: perms })
   }
 
   if (action === 'verify') {
@@ -57,7 +58,8 @@ export default async function handler(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data: admin } = await supabase.from('admin_users').select('id, email, full_name, role, is_active, role_id').eq('id', payload.adminId).eq('is_active', true).maybeSingle()
     if (!admin) return res.status(401).json({ error: 'Admin not found' })
-    const { data: perms } = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }).catch(() => ({ data: {} }))
+    let perms = {}
+    try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
     return res.status(200).json({ admin, permissions: perms || {} })
   }
 
@@ -671,21 +673,21 @@ export default async function handler(req, res) {
     if (notifType) {
       const { data: order } = await supabase.from('shop_orders').select('customer_id').eq('id', orderId).maybeSingle()
       if (order?.customer_id) {
-        await supabase.rpc('record_shop_notification', {
+        try { await supabase.rpc('record_shop_notification', {
           p_order_id: orderId, p_notification_type: notifType,
           p_message: NOTIF_MESSAGES[notifType] || 'Order status updated.',
           p_recipient_id: order.customer_id,
-        }).catch(() => {})
+        }) } catch {}
       }
     }
     if (status === 'delivered') {
       const { data: order } = await supabase.from('shop_orders').select('customer_id').eq('id', orderId).maybeSingle()
       if (order?.customer_id) {
-        await supabase.rpc('record_shop_notification', {
+        try { await supabase.rpc('record_shop_notification', {
           p_order_id: orderId, p_notification_type: 'review_request',
           p_message: 'How was your order? Leave a review to help other customers.',
           p_recipient_id: order.customer_id,
-        }).catch(() => {})
+        }) } catch {}
       }
     }
     return res.status(200).json({ success: true })
@@ -707,7 +709,8 @@ export default async function handler(req, res) {
     if (error) return res.status(400).json({ error: error.message })
     if (!order) return res.status(404).json({ error: 'Order not found' })
     const { data: tracking } = await supabase.from('shop_order_tracking_events').select('*').eq('order_id', orderId).order('created_at')
-    const { data: notifications } = await supabase.rpc('get_order_notification_history', { p_order_id: orderId }).catch(() => ({ data: [] }))
+    let notifications = []
+    try { const r = await supabase.rpc('get_order_notification_history', { p_order_id: orderId }); notifications = r.data || [] } catch {}
     const { data: messages } = await supabase.from('shop_order_messages').select('*, profiles(full_name, display_name)').eq('order_id', orderId).order('created_at')
     return res.status(200).json({ data: { ...order, tracking_events: tracking || [], notifications: notifications || [], messages: messages || [] } })
   }
@@ -753,7 +756,8 @@ export default async function handler(req, res) {
       .order('created_at', { ascending: false })
       .limit(200)
     if (error) return res.status(400).json({ error: error.message })
-    const { data: summary } = await supabase.rpc('get_customer_purchase_summary', { p_customer_id: customerId }).catch(() => ({ data: {} }))
+    let summary = {}
+    try { const r = await supabase.rpc('get_customer_purchase_summary', { p_customer_id: customerId }); summary = r.data || {} } catch {}
     const { data: profile } = await supabase.from('profiles').select('id, full_name, display_name, email, phone').eq('id', customerId).maybeSingle()
     return res.status(200).json({ orders: orders || [], summary: summary || {}, profile: profile || {} })
   }
