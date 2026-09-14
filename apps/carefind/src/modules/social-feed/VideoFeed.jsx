@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Music, Plus, Repeat2, Share2,
+  BadgeCheck, Bookmark, Eye, Gift, Heart, MessageCircle, Music, Plus, Repeat2, Share2, ThumbsDown,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import VideoPlayer from '../../components/VideoPlayer.jsx'
@@ -11,6 +11,7 @@ import { renderMarkdown } from './markdown.jsx'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from './components/StoryViewer.jsx'
 import { supabase } from '../../config/supabaseClient'
+import { storyRepository } from './repositories/storyRepository'
 import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
 import { useVideoProgress } from '../../hooks/useVideoProgress.js'
 
@@ -23,6 +24,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
   const {
     user, navigate, profiles, formatCount,
     likeCount, userHasLiked, toggleLike,
+    dislikeCount, userHasDisliked, toggleDislike,
     commentTotal, toggleComments,
     shareCount, sharePost,
     saveCount, isSaved, toggleSave,
@@ -83,8 +85,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     async function loadStoryMeta() {
       const ids = [...new Set(posts.map((p) => p.user_id).filter(Boolean))]
       if (!ids.length) { setStoryMeta({ stories: [], viewedIds: new Set() }); return }
-      const { data: rows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', ids).gt('expires_at', new Date().toISOString())
-      const stories = rows || []
+      const stories = await storyRepository.getActiveStoriesByUsers(ids)
       let viewedIds = new Set()
       if (stories.length && user?.id) viewedIds = await fetchViewedStoryIds(supabase, stories.map((s) => s.id))
       if (!cancelled) setStoryMeta({ stories, viewedIds })
@@ -94,8 +95,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
   }, [posts.map((p) => p.user_id).join(','), user?.id])
 
   async function openStoryForUser(uid) {
-    const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', uid).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })
-    const list = data || []
+    const list = await storyRepository.getStoriesByUser(uid)
     if (!list.length) return
     setViewer({ stories: list, index: 0, userId: uid })
   }
@@ -346,9 +346,9 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
               </Link>
             </div>
 
-            {/* Right engagement rail — TikTok-style */}
+            {/* Right engagement rail — TikTok-style, tighter in Shorts so it sits just above auto-hide nav */}
             <div style={{
-              position: 'absolute', right: 8, bottom: isMobile ? 140 : 100,
+              position: 'absolute', right: 8, bottom: isFullscreen ? (isMobile ? 96 : 24) : (isMobile ? 140 : 100),
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
               color: '#fff', pointerEvents: 'auto',
             }}>
@@ -403,6 +403,23 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
                 {likeCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(likeCount(post.id))}</span>}
               </button>
 
+              {/* Dislike — YouTube parity, mutual exclusive with Like */}
+              <button
+                type="button"
+                className="vf-rail-btn"
+                onClick={() => user ? toggleDislike(post.id) : navigate('/login')}
+                aria-pressed={userHasDisliked(post.id)}
+                aria-label={userHasDisliked(post.id) ? 'Remove dislike' : 'Dislike'}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
+              >
+                <span style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <ThumbsDown size={24} fill={userHasDisliked(post.id) ? '#fff' : 'none'} color="#fff" aria-hidden="true" />
+                </span>
+              </button>
+
               {/* Comment */}
               <button
                 type="button"
@@ -435,23 +452,6 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
                   <Share2 size={24} aria-hidden="true" />
                 </span>
                 {shareCount(post.id) > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(shareCount(post.id))}</span>}
-              </button>
-
-              {/* Repost */}
-              <button
-                type="button"
-                className="vf-rail-btn"
-                onClick={() => user ? toggleRepost(post) : navigate('/login')}
-                aria-label="Repost"
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0 }}
-              >
-                <span style={{
-                  width: 42, height: 42, borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Repeat2 size={24} fill={userHasReposted(post.id) ? theme.tealDeep : 'none'} color={userHasReposted(post.id) ? theme.tealDeep : '#fff'} aria-hidden="true" />
-                </span>
-                {post.repost_count > 0 && <span style={{ fontSize: 11, fontWeight: 700 }}>{formatCount(post.repost_count)}</span>}
               </button>
 
               {/* Gift */}

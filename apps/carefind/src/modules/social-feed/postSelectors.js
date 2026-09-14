@@ -4,12 +4,21 @@
 // single-post page.
 
 export function likeCount(reactions, postId) {
-  return (reactions || []).filter((r) => r.post_id === postId).length
+  return (reactions || []).filter((r) => r.post_id === postId && (r.reaction_type === 'like' || !r.reaction_type)).length
 }
 
 export function userHasLiked(reactions, postId, userId) {
   if (!userId) return false
-  return (reactions || []).some((r) => r.post_id === postId && r.user_id === userId)
+  return (reactions || []).some((r) => r.post_id === postId && r.user_id === userId && (r.reaction_type === 'like' || !r.reaction_type))
+}
+
+export function dislikeCount(reactions, postId) {
+  return (reactions || []).filter((r) => r.post_id === postId && r.reaction_type === 'dislike').length
+}
+
+export function userHasDisliked(reactions, postId, userId) {
+  if (!userId) return false
+  return (reactions || []).some((r) => r.post_id === postId && r.user_id === userId && r.reaction_type === 'dislike')
 }
 
 // Counts that arrive pre-aggregated as { [postId]: n }.

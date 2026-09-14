@@ -1,5 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
+import { postRepository } from './repositories/postRepository'
+import { commentRepository } from './repositories/commentRepository'
+import { followRepository } from './repositories/followRepository'
 import { buildInterestProfile } from './feedEngine'
 import * as sel from './postSelectors.js'
 import { insertRowResolvingConflict, writeRepost, undoRepost, REPOST_CONTENT } from './engagement'
@@ -152,7 +155,7 @@ export function usePostEngagement({
 
     const { data: reactionData } = await supabase
       .from('post_reactions')
-      .select('id, post_id, user_id')
+      .select('id, post_id, user_id, reaction_type')
       .in('post_id', postIds)
     applyRows(setReactions, reactionData || [], { merge })
 
@@ -212,7 +215,7 @@ export function usePostEngagement({
       supabase.from('businesses')
         .select('id, business_type, status, city, state, location_label')
         .in('id', postedAsIds),
-      supabase.from('follows').select('id, follower_id, following_id').in('following_id', userIds),
+      followRepository.getFollowsForUsers(userIds),
       user ? supabase.from('saved_posts').select('post_id').eq('user_id', user.id).in('post_id', postIds) : null,
       user ? supabase.from('user_subscriptions').select('professional_id').eq('subscriber_id', user.id).eq('status', 'active') : null,
     ])
@@ -388,9 +391,10 @@ export function usePostEngagement({
       content = check.content
     }
 
-    const { error } = await supabase.from('posts').update({ content }).eq('id', postId).eq('user_id', user.id)
-    if (error) {
-      toast.show('Could not save the edit: ' + (error.message || 'unknown error'), { type: 'error' })
+    try {
+      await postRepository.updatePost(postId, user.id, { content })
+    } catch (error) {
+      toast.show('Could not save the edit: ' + (error?.message || 'unknown error'), { type: 'error' })
       return
     }
     onEditingPostChange(null)
@@ -420,13 +424,14 @@ export function usePostEngagement({
   // that does surface an error: transport failures, and any database error.
   async function handleDeletePost(postId) {
     setDeletingId(postId)
-    const { error } = await supabase.from('posts').delete().eq('id', postId).eq('user_id', user.id)
-    setDeletingId(null)
-
-    if (error) {
-      toast.show('Could not delete the post: ' + (error.message || 'unknown error'), { type: 'error' })
+    try {
+      await postRepository.deletePost(postId, user.id)
+    } catch (error) {
+      setDeletingId(null)
+      toast.show('Could not delete the post: ' + (error?.message || 'unknown error'), { type: 'error' })
       return
     }
+    setDeletingId(null)
 
     onPostDeleted()
   }
@@ -435,19 +440,29 @@ export function usePostEngagement({
     if (!user) return
     const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
 
-    // Optimistic update: instant UI response. Both writes are reconciled
-    // against the DB: the insert returns the real row (so an unlike has a
-    // valid id to delete), a failed write rolls the UI back, and a fast
-    // double-tap hitting the post_reactions_user_post_uniq index reads the
-    // existing row instead of leaving a phantom temp id. Without this, a
-    // silently failed insert made the like vanish on the next feed reload.
+    // Mutual exclusion with dislike (YouTube): like and dislike share the same unique row.
     if (existing) {
-      setReactions((prev) => prev.filter((r) => r.id !== existing.id))
-      const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
-      if (error) {
-        setReactions((prev) => [...prev, existing])
-        toast.show('Could not unlike right now.', { type: 'error' })
+      const isLike = existing.reaction_type === 'like' || !existing.reaction_type
+      if (isLike) {
+        setReactions((prev) => prev.filter((r) => r.id !== existing.id))
+        const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
+        if (error) {
+          setReactions((prev) => [...prev, existing])
+          toast.show('Could not unlike right now.', { type: 'error' })
+        }
+        return
       }
+      // Dislike -> Like switch
+      setReactions((prev) => prev.map((r) => r.id === existing.id ? { ...r, reaction_type: 'like' } : r))
+      const { error } = await supabase.from('post_reactions').update({ reaction_type: 'like' }).eq('id', existing.id)
+      if (error) {
+        setReactions((prev) => prev.map((r) => r.id === existing.id ? existing : r))
+        toast.show('Could not like right now.', { type: 'error' })
+        return
+      }
+      logEngagement(postId)
+      const post = postsById[postId]
+      if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
       return
     }
 
@@ -475,15 +490,50 @@ export function usePostEngagement({
     if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
   }
 
+  async function toggleDislike(postId) {
+    if (!user) return
+    const existing = reactions.find((r) => r.post_id === postId && r.user_id === user.id)
+    if (existing) {
+      const isDislike = existing.reaction_type === 'dislike'
+      if (isDislike) {
+        setReactions((prev) => prev.filter((r) => r.id !== existing.id))
+        const { error } = await supabase.from('post_reactions').delete().eq('id', existing.id)
+        if (error) {
+          setReactions((prev) => [...prev, existing])
+          toast.show('Could not remove dislike.', { type: 'error' })
+        }
+        return
+      }
+      // Like -> Dislike switch
+      setReactions((prev) => prev.map((r) => r.id === existing.id ? { ...r, reaction_type: 'dislike' } : r))
+      const { error } = await supabase.from('post_reactions').update({ reaction_type: 'dislike' }).eq('id', existing.id)
+      if (error) {
+        setReactions((prev) => prev.map((r) => r.id === existing.id ? existing : r))
+        toast.show('Could not dislike right now.', { type: 'error' })
+      }
+      return
+    }
+    const temp = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'dislike' }
+    setReactions((prev) => [...prev, temp])
+    const { data, error } = await insertRowResolvingConflict(
+      supabase,
+      'post_reactions',
+      { post_id: postId, user_id: user.id, reaction_type: 'dislike' },
+      ['post_id', 'user_id'],
+    )
+    if (error) {
+      setReactions((prev) => prev.filter((r) => r.id !== temp.id))
+      toast.show('Could not dislike right now.', { type: 'error' })
+      return
+    }
+    setReactions((prev) => prev.map((r) => (r.id === temp.id ? data : r)))
+  }
+
   async function toggleComments(postId) {
     setOpenComments(prev => ({ ...prev, [postId]: !prev[postId] }))
 
     if (!openComments[postId] && !comments[postId]) {
-      const { data } = await supabase
-        .from('post_comments')
-        .select('id, content, created_at, user_id, parent_id, mentions, profiles!user_id(id, display_name, full_name, is_verified, specialty, avatar_url), post_comment_likes(id, user_id)')
-        .eq('post_id', postId)
-        .order('created_at', { ascending: true })
+      const data = await commentRepository.getComments(postId)
       setComments(prev => ({ ...prev, [postId]: data || [] }))
     }
   }
@@ -718,6 +768,8 @@ export function usePostEngagement({
     timeAgo: sel.timeAgo,
     likeCount: (id) => sel.likeCount(reactions, id),
     userHasLiked: (id) => sel.userHasLiked(reactions, id, user?.id),
+    dislikeCount: (id) => sel.dislikeCount(reactions, id),
+    userHasDisliked: (id) => sel.userHasDisliked(reactions, id, user?.id),
     commentTotal: (id) => sel.commentTotal(comments, commentCounts, id),
     shareCount: (id) => sel.countFrom(shareCounts, id),
     saveCount: (id) => sel.countFrom(saveCounts, id),
@@ -728,6 +780,7 @@ export function usePostEngagement({
     isLocked: (post) => sel.isLocked(post, unlockedCreators, user?.id),
     resolveSource: (id) => sel.resolveSourceFrom(posts, repostSources, id),
     toggleLike,
+    toggleDislike,
     toggleComments,
     toggleRepost,
     toggleSave,

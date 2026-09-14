@@ -1,14 +1,46 @@
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom'
 import { Home, Store, Newspaper, User, Plus, ShoppingCart } from 'lucide-react'
 import { theme } from '../styles/theme'
 import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 import { useCart } from '../modules/shop/CartProvider'
 
-function BottomNav({ onCompose }) {
+function BottomNav({ onCompose, autoHide = false }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { count } = useCart()
+  const [visible, setVisible] = useState(true)
+  const hideTimerRef = useRef(null)
+
+  // B — show then auto-hide after 2.5s of idle, re-show on any interaction
+  useEffect(() => {
+    if (!autoHide) {
+      setVisible(true)
+      return
+    }
+    function scheduleHide() {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+      hideTimerRef.current = setTimeout(() => setVisible(false), 2500)
+    }
+    function showAndReschedule() {
+      setVisible(true)
+      scheduleHide()
+    }
+    setVisible(true)
+    scheduleHide()
+    window.addEventListener('touchstart', showAndReschedule, { passive: true })
+    window.addEventListener('mousemove', showAndReschedule)
+    window.addEventListener('click', showAndReschedule)
+    window.addEventListener('scroll', showAndReschedule, true)
+    return () => {
+      window.removeEventListener('touchstart', showAndReschedule)
+      window.removeEventListener('mousemove', showAndReschedule)
+      window.removeEventListener('click', showAndReschedule)
+      window.removeEventListener('scroll', showAndReschedule, true)
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current)
+    }
+  }, [autoHide])
 
   const isFeed = location.pathname === '/feed'
   const isProfile = location.pathname === '/profile'
@@ -66,7 +98,7 @@ function BottomNav({ onCompose }) {
         position: 'fixed',
         bottom: 0,
         left: '50%',
-        transform: 'translateX(-50%)',
+        transform: `translateX(-50%) translateY(${autoHide && !visible ? '100%' : '0'})`,
         width: '100%',
         maxWidth: 480,
         background: theme.cardBg,
@@ -80,6 +112,8 @@ function BottomNav({ onCompose }) {
         zIndex: 100,
         boxSizing: 'border-box',
         overflow: 'hidden',
+        transition: `transform 0.28s ${theme.motion?.easeOut || 'ease'}`,
+        pointerEvents: autoHide && !visible ? 'none' : 'auto',
       }}
     >
       <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
