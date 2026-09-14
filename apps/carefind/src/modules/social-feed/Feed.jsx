@@ -633,6 +633,22 @@ function Feed() {
     if (dedicated.includes(feedTab) || dedicated.includes(prev)) loadFeed()
   }, [feedTab])
 
+  // Shorts takeover: lock body scroll so only the shorts column scrolls, and Escape exits.
+  useEffect(() => {
+    const isShorts = feedTab === 'video' && feedResults === null
+    if (!isShorts) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKey(e) {
+      if (e.key === 'Escape') setFeedTab('foryou')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [feedTab, feedResults])
+
   // #7 In-feed search: debounced. While a query is present, feedResults is
   // non-null and the list renders search hits instead of the ranked feed.
   useEffect(() => {
@@ -1795,11 +1811,9 @@ function Feed() {
           <CardSkeleton />
         </div>
       )}
-      {!loading && feedTab !== 'series' && !isSearching && visiblePosts.length === 0 && (
+      {!loading && feedTab !== 'series' && feedTab !== 'video' && !isSearching && visiblePosts.length === 0 && (
         <Empty
-          icon={feedTab === 'video'
-            ? <Film size={44} color={theme.gray300} strokeWidth={1.5} />
-            : feedTab === 'medical'
+          icon={feedTab === 'medical'
               ? <Stethoscope size={44} color={theme.gray300} strokeWidth={1.5} />
               : feedTab === 'nearby'
                 ? <MapPin size={44} color={theme.gray300} strokeWidth={1.5} />
@@ -1903,38 +1917,98 @@ function Feed() {
         ) : null}
       </div>
 
-      <div
-style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
-        onTouchStart={pullStart}
-        onTouchMove={pullMove}
-        onTouchEnd={pullEnd}
-      >
-        {/* AC-14 disambiguation: the Medical tab is professional-only, never a
-            mixed slice of general content. The query itself is server-filtered
-            (loadFeed .or(user_id in verified, posted_as_id in medical biz)); the
-            banner makes the rule explicit to the reader. */}
-        {feedTab === 'medical' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md }}>
-            <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
-            <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
-              Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
-            </span>
+      {feedTab === 'video' && !isSearching ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 50,
+            background: '#000',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full-screen video feed"
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '0 12px',
+              zIndex: 3,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)',
+              pointerEvents: 'none',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setFeedTab('foryou')}
+              aria-label="Exit full-screen video and return to For you"
+              style={{
+                pointerEvents: 'auto',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.45)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#fff',
+              }}
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+            <span style={{ color: '#fff', fontWeight: 800, fontSize: 14, letterSpacing: '0.02em', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>Videos</span>
           </div>
-        )}
-        {feedTab === 'video' ? (
-          <VideoFeed
-            posts={displayPosts}
-            cardProps={cardProps}
-            authorName={(p) => authorName(p)}
-            isMobile={isMobile}
-            focusPostId={videoFocusPostRef.current}
-          />
-        ) : feedTab !== 'series' ? (
-          displayPosts.map((post) => (
-            <PostCard key={post.id} {...cardProps} post={post} />
-          ))
-        ) : null}
-      </div>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'hidden', background: '#000' }}>
+            <div style={{ width: '100%', maxWidth: isMobile ? '100%' : 380, height: '100%', background: '#000', position: 'relative' }}>
+              <VideoFeed
+                posts={displayPosts}
+                cardProps={cardProps}
+                authorName={(p) => authorName(p)}
+                isMobile={isMobile}
+                focusPostId={videoFocusPostRef.current}
+                isFullscreen
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+          onTouchStart={pullStart}
+          onTouchMove={pullMove}
+          onTouchEnd={pullEnd}
+        >
+          {/* AC-14 disambiguation: the Medical tab is professional-only, never a
+              mixed slice of general content. The query itself is server-filtered
+              (loadFeed .or(user_id in verified, posted_as_id in medical biz)); the
+              banner makes the rule explicit to the reader. */}
+          {feedTab === 'medical' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: theme.tealMist, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md }}>
+              <Stethoscope size={15} color={theme.tealDeep} aria-hidden="true" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: theme.navy }}>
+                Medical professionals only — posts from verified professionals and approved facilities. General posts are never mixed in here.
+              </span>
+            </div>
+          )}
+          {feedTab !== 'series' ? (
+            displayPosts.map((post) => (
+              <PostCard key={post.id} {...cardProps} post={post} />
+            ))
+          ) : null}
+        </div>
+      )}
       <Modal show={createOpen} onClose={() => setCreateOpen(false)} title="Create" sheet>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
           {CREATE_OPTIONS.map((opt) => {

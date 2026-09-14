@@ -30,6 +30,8 @@ function VideoPlayer({
   autoUnmute = false,
   onTimeUpdate,
   style,
+  objectFit = 'cover',
+  fill = true,
 }) {
   const videoRef = useRef(null)
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
@@ -152,9 +154,13 @@ function VideoPlayer({
     zIndex: 2,
   }
 
+  const videoStyle = fill
+    ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit, display: 'block' }
+    : { width: '100%', height: 'auto', display: 'block', objectFit, background: '#000' }
+
   return (
     <div
-      style={{ position: 'relative', background: '#0B4A3E', ...style }}
+      style={{ position: 'relative', background: '#000', overflow: 'hidden', ...style }}
       onClick={controls ? togglePlay : undefined}
     >
       <video
@@ -177,7 +183,7 @@ function VideoPlayer({
             onTimeUpdate(e.target.currentTime, e.target.duration)
           }
         }}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        style={videoStyle}
       />
 
       {status === 'loading' && (

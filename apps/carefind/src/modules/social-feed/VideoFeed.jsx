@@ -19,7 +19,7 @@ import { useVideoProgress } from '../../hooks/useVideoProgress.js'
 // Share, Repost, Gift, Save) and a bottom overlay with author + caption.
 // The BottomNav overlays the feed on mobile — no space is reserved.
 
-export default function VideoFeed({ posts, cardProps, authorName, isMobile, focusPostId }) {
+export default function VideoFeed({ posts, cardProps, authorName, isMobile, focusPostId, isFullscreen = false }) {
   const {
     user, navigate, profiles, formatCount,
     likeCount, userHasLiked, toggleLike,
@@ -43,6 +43,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
   const [storyMeta, setStoryMeta] = useState({ stories: [], viewedIds: new Set() })
   const [viewer, setViewer] = useState(null)
   const [captionExpanded, setCaptionExpanded] = useState({})
+  const [timeMap, setTimeMap] = useState({})
   const { progress, updateProgress, clearProgress } = useVideoProgress(user?.id)
 
   // Scroll to the focused video when deep-linked from the main feed
@@ -109,18 +110,49 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
     }
   }
 
+  // Keyboard Shorts controls (YouTube Shorts: ↑/↓ navigate, Space/k pause, m mute, Escape handled by parent)
+  useEffect(() => {
+    if (!isFullscreen) return
+    function onKey(e) {
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const dir = e.key === 'ArrowDown' ? 1 : -1
+        const next = Math.min(Math.max(activeIndex + dir, 0), posts.length - 1)
+        if (next !== activeIndex) {
+          const slide = containerRef.current?.querySelector(`[data-index="${next}"]`)
+          if (slide) slide.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      } else if (e.key === ' ' || e.key === 'k' || e.key === 'K') {
+        e.preventDefault()
+        const v = containerRef.current?.querySelector(`[data-index="${activeIndex}"] video`)
+        if (v) { if (v.paused) v.play().catch(() => {}); else v.pause() }
+      } else if (e.key === 'm' || e.key === 'M') {
+        const v = containerRef.current?.querySelector(`[data-index="${activeIndex}"] video`)
+        if (v) v.muted = !v.muted
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isFullscreen, activeIndex, posts.length])
+
   return (
     <div
       ref={containerRef}
       role="list"
-      aria-label="Vertical video feed"
+      aria-label={isFullscreen ? 'Shorts video feed — full-screen vertical' : 'Vertical video feed'}
+      tabIndex={isFullscreen ? 0 : undefined}
       style={{
         display: 'flex', flexDirection: 'column',
-        scrollSnapType: isMobile ? 'y mandatory' : 'y mandatory',
-        overflowY: isMobile ? 'auto' : 'visible',
-        maxHeight: isMobile ? '100%' : undefined,
+        scrollSnapType: 'y mandatory',
+        overflowY: isFullscreen ? 'auto' : (isMobile ? 'auto' : 'visible'),
+        height: isFullscreen ? '100dvh' : undefined,
+        maxHeight: isFullscreen ? '100dvh' : (isMobile ? '100%' : undefined),
         WebkitOverflowScrolling: 'touch',
         gap: 0,
+        background: isFullscreen ? '#000' : undefined,
+        outline: 'none',
       }}
     >
       <style>{`
@@ -130,12 +162,20 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
         .vf-caption { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
         .vf-caption.expanded { -webkit-line-clamp: unset !important; }
       `}</style>
-      <ContinueWatchingRow
-        videos={posts}
-        progress={progress}
-        onClear={clearProgress}
-        authorName={authorName}
-      />
+      {!isFullscreen && (
+        <ContinueWatchingRow
+          videos={posts}
+          progress={progress}
+          onClear={clearProgress}
+          authorName={authorName}
+        />
+      )}
+      {isFullscreen && posts.length === 0 && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', padding: 24, textAlign: 'center', gap: 10 }}>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>No videos yet</span>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>Videos you post will appear here. Tap Create to make the first one.</span>
+        </div>
+      )}
       {posts.map((post, index) => {
         const isActive = index === activeIndex
         const followBtnVisible = user && post.user_id !== user.id
@@ -150,7 +190,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
             className="vf-slide"
             style={{
               position: 'relative',
-              height: isMobile ? '100dvh' : 'min(80vh, 720px)',
+              height: isFullscreen ? '100dvh' : (isMobile ? '100dvh' : 'min(80vh, 720px)'),
               flexShrink: 0,
               overflow: 'hidden',
               background: '#000',
@@ -166,23 +206,64 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
               onTimeUpdate={(currentTime, duration) => {
                 if (isActive && duration) {
                   updateProgress(post.id, currentTime, duration)
+                  setTimeMap(prev => ({ ...prev, [post.id]: { currentTime, duration, percent: Math.min(100, (currentTime / duration) * 100) } }))
                 }
               }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             />
 
-            {/* Tap to play/pause (invisible overlay) */}
-            {!isMobile && (
+            {/* YouTube Shorts: tap anywhere to pause/play — visible on mobile and desktop when fullscreen, otherwise desktop only */}
+            {(isFullscreen || !isMobile) && (
               <button
                 type="button"
                 aria-label="Play or pause video"
                 onClick={() => {
-                  const v = document.querySelector(`[data-index="${index}"] video`)
+                  const v = containerRef.current?.querySelector(`[data-index="${index}"] video`) || document.querySelector(`[data-index="${index}"] video`)
                   if (v) { if (v.paused) v.play().catch(() => {}); else v.pause() }
+                }}
+                onDoubleClick={() => {
+                  // Double-tap to like (Shorts heart burst)
+                  if (user) toggleLike(post.id)
+                  else navigate('/login')
                 }}
                 style={{ position: 'absolute', inset: 0, background: 'none', border: 'none', cursor: 'pointer', zIndex: 1 }}
               />
             )}
+
+            {/* Progress bar — thin Shorts scrubber at bottom */}
+            {(() => {
+              const tm = timeMap[post.id]
+              const pct = tm?.percent ?? 0
+              if (!tm || !pct) return null
+              return (
+                <div
+                  role="progressbar"
+                  aria-valuenow={Math.round(pct)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label="Video progress"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const ratio = (e.clientX - rect.left) / rect.width
+                    const v = containerRef.current?.querySelector(`[data-index="${index}"] video`)
+                    const dur = tm.duration
+                    if (v && dur) v.currentTime = ratio * dur
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: isFullscreen ? (isMobile ? 0 : 0) : 0,
+                    height: 3,
+                    background: 'rgba(255,255,255,0.3)',
+                    zIndex: 4,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ width: `${pct}%`, height: '100%', background: '#fff', transition: 'width 0.15s linear' }} />
+                </div>
+              )
+            })()}
 
             {/* Bottom gradient overlay */}
             <div style={{
@@ -422,13 +503,62 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
               </span>
             )}
 
-            {/* Inline comments panel */}
+            {/* Comments — Shorts bottom-sheet when fullscreen, otherwise inline */}
             {openComments[post.id] && (
-              <div style={{
-                position: 'absolute', left: 0, right: 0, bottom: 0, top: '55%',
-                background: theme.cardBg, borderTopLeftRadius: theme.radius.lg, borderTopRightRadius: theme.radius.lg,
-                overflowY: 'auto', padding: '12px 14px', zIndex: 10,
-              }}>
+              isFullscreen ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close comments"
+                    onClick={() => toggleComments(post.id)}
+                    style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', border: 'none', zIndex: 10, cursor: 'pointer' }}
+                  />
+                  <div style={{
+                    position: 'absolute', left: 0, right: 0, bottom: 0, height: '68%',
+                    background: theme.cardBg, borderTopLeftRadius: theme.radius.lg, borderTopRightRadius: theme.radius.lg,
+                    overflowY: 'auto', padding: '12px 14px', zIndex: 11,
+                    boxShadow: '0 -8px 30px rgba(0,0,0,0.35)',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>
+                      <span style={{ width: 36, height: 4, borderRadius: 999, background: theme.gray300, display: 'block' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: theme.navy }}>{commentTotal(post.id) || 0} comments</span>
+                      <button type="button" onClick={() => toggleComments(post.id)} aria-label="Close comments" style={{ background: 'none', border: 'none', color: theme.gray500, cursor: 'pointer', padding: 4, display: 'flex' }}><span style={{ fontSize: 18, lineHeight: 1 }}>×</span></button>
+                    </div>
+                  </div>
+                  <div style={{
+                    position: 'absolute', left: 0, right: 0, bottom: 0, height: '68%',
+                    background: 'transparent', overflowY: 'auto', padding: '44px 14px 12px', zIndex: 12, pointerEvents: 'none',
+                  }}>
+                    <div style={{ pointerEvents: 'auto' }}>
+                      <CommentThread
+                        postId={post.id}
+                        user={user}
+                        comments={comments[post.id] || []}
+                        onCommentsChange={(updated) => setComments(prev => ({ ...prev, [post.id]: updated }))}
+                        editingComment={editingComment}
+                        setEditingComment={setEditingComment}
+                        replyingTo={replyingTo}
+                        setReplyingTo={setReplyingTo}
+                        commentDrafts={commentDrafts}
+                        setCommentDrafts={setCommentDrafts}
+                        myUsername={myUsername}
+                        myAvatar={myAvatar}
+                        onCommentAdded={handleCommentAdded}
+                        stories={storyMeta.stories}
+                        viewedIds={storyMeta.viewedIds}
+                        onStoryClick={openStoryForUser}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 0, top: '55%',
+                  background: theme.cardBg, borderTopLeftRadius: theme.radius.lg, borderTopRightRadius: theme.radius.lg,
+                  overflowY: 'auto', padding: '12px 14px', zIndex: 10,
+                }}>
                 <CommentThread
                   postId={post.id}
                   user={user}
@@ -448,6 +578,7 @@ export default function VideoFeed({ posts, cardProps, authorName, isMobile, focu
                   onStoryClick={openStoryForUser}
                 />
               </div>
+            )
             )}
 
             {/* Story viewer */}

@@ -408,16 +408,39 @@ export default function PostCard({
         </div>
       ) : post.post_type === 'video' ? (
         <div>
-          <div style={{ borderRadius: theme.radius.md, overflow: 'hidden' }}>
+          {/* X-style: edge-to-edge, not centered. Video fills card width, capped height, overflow hidden crops tall portrait like X timeline. */}
+          <div
+            style={{
+              width: '100%',
+              maxHeight: 510,
+              overflow: 'hidden',
+              background: '#000',
+              borderRadius: theme.radius.lg,
+              cursor: onOpenDetail ? 'pointer' : undefined,
+            }}
+            role={onOpenDetail ? 'button' : undefined}
+            tabIndex={onOpenDetail ? 0 : undefined}
+            aria-label={onOpenDetail ? `Open video by ${authorName(post)} in full-screen` : undefined}
+            onClick={(e) => {
+              if (e.target.closest('button, a')) return
+              if (onOpenDetail) onOpenDetail(post)
+            }}
+            onKeyDown={(e) => {
+              if (!onOpenDetail) return
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenDetail(post) }
+            }}
+          >
             <VideoPlayer
               src={post.video_url}
               poster={post.image_url}
               ariaLabel={`Video by ${authorName(post)}`}
-              style={{ aspectRatio: '9/16', maxHeight: 460 }}
+              fill={false}
+              objectFit="cover"
+              style={{ width: '100%', maxHeight: 510, background: '#000', borderRadius: theme.radius.lg, overflow: 'hidden' }}
             />
           </div>
           {post.content && (
-            <div style={{ margin: '10px 16px 0' }}>
+            <div style={{ margin: '10px 0 0', padding: '0 2px' }}>
               <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                 {renderMarkdown(post.content)}
               </p>
