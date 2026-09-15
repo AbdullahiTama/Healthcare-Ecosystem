@@ -1,4 +1,4 @@
-import { resolveAccount } from './_lib/paystackTransfer.js'
+import { resolveAccount } from '../_lib/paystackTransfer.js'
 
 // POST /api/resolve-account
 // Resolves a bank account name from bank code + account number via Paystack.

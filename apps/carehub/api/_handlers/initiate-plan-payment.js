@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { verifyBusiness } from './_lib/verifyBusiness.js'
-import { paystackFetch } from './_lib/paystack.js'
-import { PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA } from '../src/lib/planLimits.js'
+import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { paystackFetch } from '../_lib/paystack.js'
+import { PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA } from '../../src/lib/planLimits.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

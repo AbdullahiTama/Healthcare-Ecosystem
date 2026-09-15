@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { verifyBusiness } from './_lib/verifyBusiness.js'
+import { verifyBusiness } from '../_lib/verifyBusiness.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,

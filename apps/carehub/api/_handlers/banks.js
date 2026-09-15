@@ -1,7 +1,7 @@
 // Proxies Paystack's banks list so the client doesn't need the secret key.
 // Cached server-side for 5 minutes so we're not hitting Paystack on every
 // dropdown open — Paystack's bank list rarely changes.
-import { paystackFetch } from './_lib/paystack.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 // Curated list of major Nigerian banks — ensures the most common ones
 // are always available even if Paystack's paginated list has issues.

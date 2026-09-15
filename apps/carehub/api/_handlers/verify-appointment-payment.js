@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { verifyBusiness } from './_lib/verifyBusiness.js'
-import { paystackFetch } from './_lib/paystack.js'
+import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { paystackFetch } from '../_lib/paystack.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
