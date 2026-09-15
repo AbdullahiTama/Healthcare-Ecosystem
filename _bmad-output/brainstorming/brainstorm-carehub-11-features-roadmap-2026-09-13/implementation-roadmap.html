@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareHub/CareFind — 11-Feature Implementation Roadmap</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg-primary:#0a0e14;--bg-secondary:#111820;--bg-tertiary:#1a2230;--bg-card:#151d28;
+--border:#1e2a3a;--border-hover:#2a3a4e;
+--text-primary:#e4e8ef;--text-secondary:#8892a4;--text-muted:#5a6478;
+--accent:#06b6d4;--accent-hover:#22d3ee;--accent-dim:rgba(6,182,212,0.15);
+--teal:#14b8a6;--teal-dim:rgba(20,184,166,0.15);
+--cyan:#06b6d4;--cyan-dim:rgba(6,182,212,0.1);
+--success:#10b981;--success-dim:rgba(16,185,129,0.15);
+--warning:#f59e0b;--warning-dim:rgba(245,158,11,0.15);
+--danger:#ef4444;--danger-dim:rgba(239,68,68,0.15);
+--purple:#8b5cf6;--purple-dim:rgba(139,92,246,0.15);
+--orange:#f97316;--orange-dim:rgba(249,115,22,0.15);
+--radius:8px;--radius-lg:12px;--radius-xl:16px;
+--shadow:0 4px 24px rgba(0,0,0,0.3);--shadow-lg:0 8px 48px rgba(0,0,0,0.4);
+--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+--mono:'SF Mono','Fira Code','Cascadia Code',monospace;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg-primary);color:var(--text-primary);line-height:1.6;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover)}
+
+.container{max-width:1440px;margin:0 auto;padding:24px}
+
+header{padding:48px 0 32px;border-bottom:1px solid var(--border);margin-bottom:32px}
+header h1{font-size:2rem;font-weight:700;letter-spacing:-0.02em;background:linear-gradient(135deg,var(--accent),var(--teal));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+header p{color:var(--text-secondary);margin-top:8px;font-size:0.95rem}
+.meta-row{display:flex;gap:24px;margin-top:16px;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted)}
+.meta-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:32px}
+.stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;transition:border-color 0.2s}
+.stat-card:hover{border-color:var(--border-hover)}
+.stat-label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px}
+.stat-value{font-size:1.8rem;font-weight:700;color:var(--text-primary)}
+.stat-sub{font-size:0.8rem;color:var(--text-secondary);margin-top:4px}
+
+.risk-heatmap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:32px}
+.risk-heatmap h3{font-size:0.95rem;margin-bottom:16px;color:var(--text-secondary)}
+.heatmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.heatmap-cell{padding:10px 12px;border-radius:var(--radius);font-size:0.78rem;display:flex;justify-content:space-between;align-items:center}
+.heatmap-cell.high{background:var(--danger-dim);color:var(--danger);border:1px solid rgba(239,68,68,0.2)}
+.heatmap-cell.medium{background:var(--warning-dim);color:var(--warning);border:1px solid rgba(245,158,11,0.2)}
+.heatmap-cell.low{background:var(--success-dim);color:var(--success);border:1px solid rgba(16,185,129,0.2)}
+
+.filters{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:32px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.filter-group{display:flex;align-items:center;gap:8px}
+.filter-group label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);white-space:nowrap}
+.filter-group select{background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px;font-size:0.82rem;cursor:pointer;outline:none}
+.filter-group select:focus{border-color:var(--accent)}
+.filter-reset{background:transparent;border:1px solid var(--border);color:var(--text-secondary);border-radius:var(--radius);padding:6px 14px;font-size:0.82rem;cursor:pointer;transition:all 0.2s}
+.filter-reset:hover{border-color:var(--accent);color:var(--accent)}
+
+.gantt-container{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:32px;overflow-x:auto}
+.gantt-container h3{font-size:0.95rem;margin-bottom:16px;color:var(--text-secondary)}
+.gantt{display:flex;flex-direction:column;gap:6px;min-width:800px}
+.gantt-header{display:grid;grid-template-columns:200px 1fr;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.gantt-header-labels{display:grid;grid-template-columns:repeat(14,1fr);font-size:0.65rem;color:var(--text-muted);text-align:center}
+.gantt-row{display:grid;grid-template-columns:200px 1fr;gap:12px;align-items:center;padding:4px 0}
+.gantt-row-label{font-size:0.78rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gantt-row-bars{position:relative;height:24px}
+.gantt-bar{position:absolute;height:20px;border-radius:4px;top:2px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:600;color:rgba(255,255,255,0.9);cursor:pointer;transition:opacity 0.2s}
+.gantt-bar:hover{opacity:0.85}
+.gantt-bar.phase1{background:linear-gradient(90deg,var(--accent),var(--teal))}
+.gantt-bar.phase2{background:linear-gradient(90deg,var(--purple),#a78bfa)}
+.gantt-bar.phase3{background:linear-gradient(90deg,var(--orange),#fb923c)}
+.gantt-bar.phase4{background:linear-gradient(90deg,var(--success),#34d399)}
+.gantt-bar.phase5{background:linear-gradient(90deg,var(--warning),#fbbf24)}
+
+.phases{display:flex;flex-direction:column;gap:24px}
+.phase{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;transition:border-color 0.2s}
+.phase:hover{border-color:var(--border-hover)}
+.phase.hidden{display:none}
+.phase-header{padding:24px;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:16px;user-select:none}
+.phase-header:hover{background:rgba(255,255,255,0.01)}
+.phase-title-group{flex:1}
+.phase-number{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px}
+.phase-number.p1{color:var(--accent)}
+.phase-number.p2{color:var(--purple)}
+.phase-number.p3{color:var(--orange)}
+.phase-number.p4{color:var(--success)}
+.phase-number.p5{color:var(--warning)}
+.phase-name{font-size:1.25rem;font-weight:700;margin-bottom:4px}
+.phase-duration{font-size:0.82rem;color:var(--text-secondary)}
+.phase-meta{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+.phase-tag{font-size:0.72rem;padding:3px 10px;border-radius:20px;background:var(--bg-tertiary);color:var(--text-secondary);border:1px solid var(--border)}
+.phase-chevron{width:24px;height:24px;color:var(--text-muted);transition:transform 0.3s;flex-shrink:0;margin-top:4px}
+.phase.expanded .phase-chevron{transform:rotate(180deg)}
+.phase-body{max-height:0;overflow:hidden;transition:max-height 0.4s ease}
+.phase.expanded .phase-body{max-height:none}
+.phase-content{padding:0 24px 24px}
+.phase-objective{background:var(--bg-tertiary);border-radius:var(--radius);padding:16px;margin-bottom:20px;font-size:0.88rem;color:var(--text-secondary);border-left:3px solid var(--accent)}
+.phase-objective strong{color:var(--text-primary)}
+.phase-dependencies{font-size:0.82rem;color:var(--text-muted);margin-bottom:16px}
+.phase-success{font-size:0.82rem;color:var(--success);margin-bottom:20px}
+
+.feature-section{border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:16px;overflow:hidden}
+.feature-section.hidden{display:none}
+.feature-header{padding:16px 20px;background:var(--bg-tertiary);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.feature-header:hover{background:rgba(255,255,255,0.03)}
+.feature-name{font-size:0.95rem;font-weight:600}
+.feature-badges{display:flex;gap:6px;align-items:center}
+.badge{font-size:0.65rem;padding:2px 8px;border-radius:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em}
+.badge.s{background:var(--success-dim);color:var(--success)}
+.badge.m{background:var(--accent-dim);color:var(--accent)}
+.badge.l{background:var(--warning-dim);color:var(--warning)}
+.badge.xl{background:var(--danger-dim);color:var(--danger)}
+.badge.low{background:var(--success-dim);color:var(--success)}
+.badge.medium{background:var(--warning-dim);color:var(--warning)}
+.badge.high{background:var(--danger-dim);color:var(--danger)}
+.feature-body{padding:0 20px;max-height:0;overflow:hidden;transition:max-height 0.3s ease,padding 0.3s}
+.feature-section.expanded .feature-body{max-height:none;padding:16px 20px}
+.feature-state{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.state-box{padding:12px;border-radius:var(--radius);font-size:0.82rem}
+.state-box.current{background:var(--bg-tertiary);border:1px solid var(--border)}
+.state-box.gap{background:var(--accent-dim);border:1px solid rgba(6,182,212,0.2)}
+.state-box h4{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:6px}
+.state-box p{color:var(--text-secondary);line-height:1.5}
+
+.task-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.task{background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius);padding:14px;transition:border-color 0.2s}
+.task:hover{border-color:var(--border-hover)}
+.task-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
+.task-name{font-size:0.88rem;font-weight:600}
+.task-badges{display:flex;gap:4px;flex-shrink:0}
+.task-desc{font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px}
+.task-tech{font-size:0.78rem;color:var(--text-muted);font-family:var(--mono);margin-bottom:6px}
+.task-files{font-size:0.75rem;color:var(--text-muted)}
+.task-files code{background:var(--bg-tertiary);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:0.72rem}
+.task-deps{font-size:0.75rem;color:var(--purple);margin-top:4px}
+
+.testing-section{background:var(--bg-tertiary);border-radius:var(--radius);padding:14px;margin-top:12px}
+.testing-section h4{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:8px}
+.testing-section ul{list-style:none;padding:0}
+.testing-section li{font-size:0.8rem;color:var(--text-secondary);padding:3px 0;padding-left:16px;position:relative}
+.testing-section li::before{content:'';position:absolute;left:0;top:10px;width:6px;height:6px;border-radius:50%;background:var(--teal)}
+
+.critical-path{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;margin-bottom:32px}
+.critical-path h3{font-size:0.95rem;margin-bottom:16px;color:var(--text-secondary)}
+.cp-steps{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cp-step{padding:8px 14px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius);font-size:0.78rem;color:var(--text-secondary)}
+.cp-step.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.cp-arrow{color:var(--text-muted);font-size:0.8rem}
+
+footer{padding:32px 0;border-top:1px solid var(--border);margin-top:48px;text-align:center;color:var(--text-muted);font-size:0.8rem}
+
+@media(max-width:768px){
+.container{padding:16px}
+header h1{font-size:1.5rem}
+.dashboard{grid-template-columns:repeat(2,1fr)}
+.feature-state{grid-template-columns:1fr}
+.phase-header{flex-direction:column}
+.gantt-header,.gantt-row{grid-template-columns:120px 1fr}
+.filters{flex-direction:column;align-items:flex-start}
+}
+@media(max-width:480px){
+.dashboard{grid-template-columns:1fr}
+.heatmap-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>CareHub / CareFind — Implementation Roadmap</h1>
+<p>11-feature phased plan derived from brainstorming session. Progressive disclosure, trust-building transparency, and security-without-friction as unifying patterns.</p>
+<div class="meta-row">
+<div class="meta-item"><span class="meta-dot"></span> Generated 2026-09-13</div>
+<div class="meta-item"><span class="meta-dot" style="background:var(--teal)"></span> 14-week horizon</div>
+<div class="meta-item"><span class="meta-dot" style="background:var(--purple)"></span> 5 phases</div>
+<div class="meta-item"><span class="meta-dot" style="background:var(--warning)"></span> React 18 + Supabase + Vercel</div>
+</div>
+</header>
+
+<div class="dashboard" id="dashboard">
+<div class="stat-card">
+<div class="stat-label">Total Tasks</div>
+<div class="stat-value" id="stat-tasks">0</div>
+<div class="stat-sub">across 11 feature areas</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Total Effort</div>
+<div class="stat-value" id="stat-effort">0</div>
+<div class="stat-sub">story points (S=1 M=3 L=5 XL=8)</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">High-Risk Tasks</div>
+<div class="stat-value" id="stat-risk">0</div>
+<div class="stat-sub">requiring extra review</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Critical Path</div>
+<div class="stat-value" style="font-size:1.1rem" id="stat-critical">—</div>
+<div class="stat-sub">longest dependency chain</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Files Affected</div>
+<div class="stat-value" id="stat-files">0</div>
+<div class="stat-sub">unique file paths touched</div>
+</div>
+</div>
+
+<div class="risk-heatmap">
+<h3>Risk Heatmap by Feature Area</h3>
+<div class="heatmap-grid" id="heatmap"></div>
+</div>
+
+<div class="critical-path">
+<h3>Critical Path</h3>
+<div class="cp-steps">
+<div class="cp-step active">Admin Repository Pattern</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step active">Command Palette</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step active">Progressive Disclosure</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step">Withdrawal Trust Levels</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step">Email Template Engine</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step">News Engagement Cards</div>
+<span class="cp-arrow">&rarr;</span>
+<div class="cp-step">Story Ring Expansion</div>
+</div>
+</div>
+
+<div class="gantt-container">
+<h3>Timeline Overview (14 Weeks)</h3>
+<div class="gantt" id="gantt">
+<div class="gantt-header">
+<div>Feature</div>
+<div class="gantt-header-labels">
+<span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span><span>W7</span><span>W8</span><span>W9</span><span>W10</span><span>W11</span><span>W12</span><span>W13</span><span>W14</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="filters">
+<div class="filter-group">
+<label>Phase</label>
+<select id="filter-phase"><option value="all">All Phases</option><option value="1">Phase 1</option><option value="2">Phase 2</option><option value="3">Phase 3</option><option value="4">Phase 4</option><option value="5">Phase 5</option></select>
+</div>
+<div class="filter-group">
+<label>Feature</label>
+<select id="filter-feature"><option value="all">All Features</option></select>
+</div>
+<div class="filter-group">
+<label>Effort</label>
+<select id="filter-effort"><option value="all">All Sizes</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option></select>
+</div>
+<div class="filter-group">
+<label>Risk</label>
+<select id="filter-risk"><option value="all">All Levels</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+</div>
+<button class="filter-reset" id="filter-reset">Reset Filters</button>
+</div>
+
+<div class="phases" id="phases"></div>
+
+<footer>CareHub Engineering &mdash; Generated from brainstorming session 2026-09-13 &mdash; Living document</footer>
+</div>
+
+<script>
+const ROADMAP = {
+phases: [
+{
+id: 1,
+number: "Phase 1",
+theme: "Foundation & Admin Excellence",
+duration: "Weeks 1-4",
+objective: "Restructure the admin dashboard with command palette navigation, progressive disclosure, and repository pattern extraction. Establish the roles/permissions template system that all subsequent features depend on for access control.",
+dependencies: "None — this is the starting foundation. CareHub repository seam pattern (16/24 modules complete) provides the architectural template.",
+successCriteria: ["AdminPanel reduced from 944 lines to <400 via repository extraction", "Command palette (Cmd+K) navigates all 18 tabs with fuzzy search", "Progressive disclosure: 5 key metrics visible, full tabs on expand", "Role templates CRUD functional with pre-built pharmacy/hospital defaults", "All admin writes go through injected transport seam"],
+color: "p1",
+features: [
+{
+id: "admin-dashboard",
+name: "Admin Dashboard Restructuring",
+priority: 1,
+currentState: "AdminPanel.jsx is 944 lines mixing data access, business logic, and presentation. AdminSidebar.jsx (380 lines) handles navigation for 18 tabs with no search. No command palette. All admin data flows through direct Supabase calls without repository abstraction. Revenue and Shop tabs are separate despite overlapping financial data.",
+gap: "No command palette for fast navigation across 18 tabs. No progressive disclosure — all tabs visible at once causing cognitive overload. No repository pattern for admin data access. Revenue and Shop tabs fragmented. No real-time activity feed. No anomaly detection alerts. No 30-second health pulse widget.",
+risk: "high",
+totalEffort: "XL",
+files: ["apps/carefind/src/modules/admin/AdminPanel.jsx","apps/carefind/src/modules/admin/AdminSidebar.jsx","apps/carefind/src/modules/admin/AdminShop.jsx","apps/carefind/api/_handlers/admin-auth.js"],
+testing: ["Repository in-memory adapter tests for all admin queries","Command palette fuzzy search unit tests","Progressive disclosure responsive at 375/768/1280","Keyboard navigation (j/k, Cmd+K, Escape) integration tests","Cross-tenant isolation verified on all admin repository methods"],
+tasks: [
+{name:"Extract admin repository seam",desc:"Create createAdminRepository({ request, upload }) factory following the CareHub pattern. Migrate all AdminPanel.jsx data access off direct Supabase calls onto the repository with injected transport.",tech:"Factory pattern with sbFetch injection. In-memory adapter for tests. business_id scoping on every read/write.",effort:"XL",risk:"high",deps:"None",files:["apps/carefind/src/modules/admin/repositories/index.js","apps/carefind/src/modules/admin/AdminPanel.jsx"]},
+{name:"Build command palette (Cmd+K)",desc:"Linear-style command palette with fuzzy search across all 18 admin tabs, recent items, and keyboard shortcuts. Shows results as you type with instant navigation.",tech:"New CommandPalette.jsx component. Fuse.js or lightweight fuzzy match. Portal-rendered modal with focus trap. Register route metadata for each tab.",effort:"L",risk:"low",deps:"None",files:["apps/carefind/src/components/CommandPalette.jsx","apps/carefind/src/modules/admin/AdminSidebar.jsx"]},
+{name:"Implement progressive disclosure",desc:"Show 5 key metrics on dashboard (revenue today, pending verifications, active lives, open disputes, new registrations). Full 18-tab navigation revealed on scroll or 'Show All' tap. Stripe-style inline table editing with keyboard nav.",tech:"HealthPulse widget component. Collapsible section pattern. Anomaly detection: compare current metrics to 7-day rolling average, flag >2σ deviations.",effort:"L",risk:"medium",deps:"Admin repository",files:["apps/carefind/src/modules/admin/HealthPulse.jsx","apps/carefind/src/modules/admin/AdminPanel.jsx"]},
+{name:"Unified Commerce view",desc:"Merge Revenue tab and Shop tab into a single Commerce dashboard showing orders, revenue, and withdrawals in one financial view. Bank-statement design: running balance, categorization, merchant name.",tech:"Compose saleRepository + orderRepository + withdrawal queries. Tab sub-navigation: Overview | Orders | Withdrawals | Revenue.",effort:"L",risk:"medium",deps:"Admin repository",files:["apps/carefind/src/modules/admin/AdminShop.jsx","apps/carefind/src/modules/admin/CommerceDashboard.jsx"]},
+{name:"Real-time activity feed",desc:"Vercel-style deployment feed showing platform events as they happen: new registrations, orders, withdrawals, live sessions. Color-coded by type with auto-scroll.",tech:"Supabase Realtime channel subscribing to key tables. ActivityFeed component with virtualized list for performance.",effort:"M",risk:"low",deps:"Admin repository",files:["apps/carefind/src/modules/admin/ActivityFeed.jsx"]},
+{name:"Anomaly detection alerts",desc:"Hospital ER triage system for admin alerts: color-code by urgency (red=immediate, yellow=soon, green=routine). Flag unusual withdrawal spikes, order failure rate increases, negative review clusters. Auto-escalate if ignored.",tech:"Pure JS comparison functions against rolling averages. AlertBanner component. Notification integration for critical alerts.",effort:"M",risk:"medium",deps:"Activity feed",files:["apps/carefind/src/modules/admin/AlertSystem.jsx","apps/carefind/src/modules/admin/AdminPanel.jsx"]}
+]
+},
+{
+id: "roles-permissions",
+name: "Roles & Permissions Template System",
+priority: 10,
+currentState: "permissions.js (417 lines) defines role-based access. TeamsTab.jsx handles role management. Roles table has RLS applied. Basic role CRUD exists but no templates or granular permission matrix.",
+gap: "No pre-built role templates by business type (pharmacy team, hospital team). No visual permission matrix (rows=features, columns=actions). No time-bound temporary elevated access. No confirmation dialogs for destructive actions scoped by role. No 'always ask me' option per user.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carehub/src/lib/permissions.js","apps/carefind/src/modules/admin/tabs/TeamsTab.jsx","apps/carefind/sql/"],
+testing: ["Template CRUD with in-memory adapter tests","Permission matrix rendering at all breakpoints","Time-bound access auto-revocation test (mock timer)","Template customization preserves recommended baseline"],
+tasks: [
+{name:"Role template data model",desc:"Create role_templates table with pre-built templates: Pharmacy Team (Owner, Pharmacist, Cashier, Stock Manager), Hospital Team (Owner, Doctor, Nurse, Receptionist, Lab Tech). Each template defines a permission matrix.",tech:"SQL migration with role_templates + template_permissions tables. Seed data for 2 business types. RLS: service-role-only writes, authenticated reads scoped by business_type.",effort:"M",risk:"medium",deps:"None",files:["apps/carefind/sql/20260913_role_templates.sql","apps/carefind/src/modules/admin/repositories/roleTemplateRepository.js"]},
+{name:"Visual permission matrix UI",desc:"Linear-style granular permission matrix: rows=features (POS, Inventory, Reports, Live, News, etc.), columns=actions (view/create/edit/delete). Visual toggle grid with recommended baseline highlighted. Show 'customized from template' indicator.",tech:"PermissionMatrix.jsx component with CSS grid layout. Toggle cells with optimistic updates. Diff view showing deviations from template.",effort:"L",risk:"low",deps:"Template data model",files:["apps/carefind/src/modules/admin/PermissionMatrix.jsx","apps/carefind/src/modules/admin/tabs/TeamsTab.jsx"]},
+{name:"Time-bound elevated access",desc:"Grant temporary elevated permissions that auto-revoke after configurable duration (1h/4h/24h). For incident response or temporary coverage. Visible countdown on user's profile.",tech:"role_elevations table with expires_at timestamp. Cron job or Realtime-triggered cleanup. UI: grant modal with duration picker + active elevations list.",effort:"M",risk:"medium",deps:"Permission matrix",files:["apps/carefind/src/modules/admin/TemporaryAccess.jsx","apps/carefind/sql/"]}
+]
+}
+]
+},
+{
+id: 2,
+number: "Phase 2",
+theme: "Security & Financial Trust",
+duration: "Weeks 3-7",
+objective: "Implement the progressive trust withdrawal system that enables no-admin-approval withdrawals while maintaining security. Add emotional status updates to e-commerce to reduce customer anxiety about orders.",
+dependencies: "Phase 1 admin repository (for withdrawal monitoring UI). Withdrawal PIN system already exists (applied 2026-08-16).",
+successCriteria: ["Progressive trust levels functional: new→PIN+email, 10+ withdrawals→PIN only, 50+→biometric", "Withdrawal under threshold auto-approved with good history", "E-commerce orders show emotional status messages at each stage", "Withdrawal notification to trusted contact optional feature working", "Fraud detection flags unusual patterns without blocking legitimate users"],
+color: "p2",
+features: [
+{
+id: "withdrawal-trust",
+name: "Withdrawal Progressive Trust System",
+priority: 2,
+currentState: "Withdrawal PIN gate applied 2026-08-16 (withdrawal_pins table, scrypt hashing, lockout after 5 failed attempts). initiate-withdrawal.js gates every withdrawal between JWT verification and balance transfer. All withdrawals require manual admin approval currently.",
+gap: "No progressive trust levels — every withdrawal treated identically regardless of history. No auto-approval for low-risk amounts. No trusted contact notification. No device trust tracking. No withdrawal scheduling. No biometric confirmation path. No fraud pattern detection beyond PIN lockout.",
+risk: "high",
+totalEffort: "XL",
+files: ["apps/carefind/api/_handlers/initiate-withdrawal.js","apps/carefind/api/_handlers/withdrawal-pin.js","apps/carefind/src/modules/wallet-payments/Wallet.jsx","apps/carefind/sql/"],
+testing: ["Progressive trust level calculation tests (boundary: 10th, 50th withdrawal)", "Auto-approval threshold tests with various history combinations", "Fraud detection pattern matching tests (new device, unusual amount, rapid successive)", "Trusted contact notification delivery tests", "Device trust scoring unit tests"],
+tasks: [
+{name:"Trust level data model",desc:"Create withdrawal_trust table tracking: total_successful_withdrawals, total_volume, average_amount, days_since_first, devices_used, failed_attempts_history. Trust levels: bronze (0-9 withdrawals), silver (10-49), gold (50+). Each level unlocks different approval requirements.",tech:"SQL migration for withdrawal_trust + withdrawal_devices tables. Trigger on successful withdrawal to update trust metrics. Service-role RPC calculate_trust_level(user_id).",effort:"L",risk:"high",deps:"None",files:["apps/carefind/sql/20260913_withdrawal_trust.sql","apps/carefind/api/_lib/trustEngine.js"]},
+{name:"Progressive approval flow",desc:"Bronze: PIN + email confirmation + admin review (current). Silver: PIN only for amounts under 50,000 Naira, admin review for larger. Gold: PIN only for amounts under 200,000 Naira, instant approval under 50,000. Configurable thresholds.",tech:"Modify initiate-withdrawal.js to check trust level before routing to approval queue. Trust-aware middleware. Threshold config in environment variables.",effort:"L",risk:"high",deps:"Trust level model",files:["apps/carefind/api/_handlers/initiate-withdrawal.js","apps/carefind/api/_lib/trustEngine.js"]},
+{name:"Device trust tracking",desc:"Track devices used for withdrawals (fingerprint of user-agent + screen resolution + timezone). Known devices get trust boost. New devices trigger additional verification (email confirm). Device management UI in wallet settings.",tech:"Device fingerprinting in client JS. withdrawal_devices table. Compare incoming device against known set in initiate-withdrawal.js.",effort:"M",risk:"medium",deps:"Trust level model",files:["apps/carefind/src/modules/wallet-payments/DeviceManagement.jsx","apps/carefind/api/_handlers/initiate-withdrawal.js"]},
+{name:"Trusted contact notifications",desc:"Optional: user designates a trusted contact (email/phone) who receives notification when withdrawal exceeds a threshold. 'Your account just sent ₦50,000 to Access Bank ****1234'. Revocable anytime.",tech:"trusted_contacts table. Notification via Resend email API. Threshold configurable per contact. Wallet.jsx settings section.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/wallet-payments/TrustedContact.jsx","apps/carefind/api/_handlers/initiate-withdrawal.js"]},
+{name:"Fraud pattern detection",desc:"Banking fraud detection applied to withdrawals: flag unusual patterns (new device + large amount, rapid successive withdrawals within 1h, amount >3x average, withdrawal to new bank account). Flagged withdrawals enter manual review queue with risk score.",tech:"Pure JS pattern matching in trustEngine.js. risk_score calculation 0-100. Score >70 auto-holds for admin review. Admin UI shows risk indicators.",effort:"L",risk:"high",deps:"Trust level model, Device tracking",files:["apps/carefind/api/_lib/trustEngine.js","apps/carefind/src/modules/admin/WithdrawalReview.jsx"]},
+{name:"Withdrawal scheduling",desc:"Wise-style: schedule a withdrawal for a future date/time. System executes automatically with full audit trail. User can cancel before execution. Useful for planned payments.",tech:"scheduled_withdrawals table with execute_at, status (pending/cancelled/executed/failed). Cron handler checks every 5 minutes. Executes through same trust-aware flow.",effort:"M",risk:"medium",deps:"Progressive approval flow",files:["apps/carefind/src/modules/wallet-payments/ScheduleWithdrawal.jsx","apps/carefind/api/_handlers/scheduled-withdrawal.js"]}
+]
+},
+{
+id: "ecommerce-status",
+name: "E-commerce Emotional Status Updates",
+priority: 7,
+currentState: "Orders have a 13-status timeline (submitted → approved → prepared → shipped → delivered, etc.). Status displayed as plain text labels. No emotional context or proactive notifications at each transition.",
+gap: "Status updates are mechanical ('processing', 'shipped') with no empathy. No proactive push notifications at key transitions. No estimated delivery countdown. No vendor rating system. No delivery map tracking. No 'check in' flow for delivery time slot selection.",
+risk: "low",
+totalEffort: "M",
+files: ["apps/carefind/src/modules/shop/","apps/carehub/src/modules/ecommerce/","apps/carefind/api/"],
+testing: ["Emotional status message rendering for all 13 statuses", "Notification delivery on status transition", "ETA countdown accuracy test", "Vendor rating submission and composite score calculation"],
+tasks: [
+{name:"Emotional status message map",desc:"Replace mechanical labels with empathetic messages: 'Your order is being carefully packed by the pharmacy' instead of 'preparing'. 'Our driver is heading to you — almost there!' instead of 'out_for_delivery'. Map all 13 statuses.",tech:"Pure data module: statusMessages.js mapping status codes to {title, description, icon}. No backend change needed — client-side transformation.",effort:"S",risk:"low",deps:"None",files:["apps/carefind/src/modules/shop/statusMessages.js","apps/carefind/src/modules/shop/OrderTracking.jsx"]},
+{name:"Proactive transition notifications",desc:"Push notification at each status transition: order confirmed, packing started, out for delivery, delivered. Uber Eats-style live vendor status (preparing/packed/handed-to-driver).",tech:"Supabase Realtime subscription on orders table for authenticated user's orders. Notification service integration on status change trigger.",effort:"M",risk:"low",deps:"Emotional status map",files:["apps/carefind/src/modules/shop/OrderNotifications.jsx","apps/carefind/api/_handlers/order-status.js"]},
+{name:"ETA countdown + delivery time slot",desc:"Amazon-style ETA countdown for active deliveries. Airline check-in flow: let users 'check in' 24h before delivery window, choose time slot, get boarding-pass-style delivery confirmation.",tech:"ETA calculation from order status + historical delivery times. TimeSlotPicker component. BoardingPass.jsx for delivery confirmation card.",effort:"M",risk:"low",deps:"Notification system",files:["apps/carefind/src/modules/shop/DeliveryETA.jsx","apps/carefind/src/modules/shop/TimeSlotPicker.jsx"]},
+{name:"Vendor fulfillment rating",desc:"Ride-sharing driver rating applied to vendors: rate fulfillment speed, packaging quality, accuracy. Composite score visible on shop page. Influences vendor visibility in search results.",tech:"vendor_ratings table (order_id, vendor_id, speed, packaging, accuracy, comment). Composite score = weighted average. Display on business profile.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/shop/VendorRating.jsx","apps/carefind/sql/"]}
+]
+}
+]
+},
+{
+id: 3,
+number: "Phase 3",
+theme: "Communication & Content Excellence",
+duration: "Weeks 5-9",
+objective: "Build the custom email template builder for professional communication and marketing. Enhance news engagement with inline interactions on preview cards. Establish the editorial workflow for news submissions.",
+dependencies: "Phase 1 admin repository (for email template management). CareFind content modules (news, feed) already functional.",
+successCriteria: ["Email template builder with drag-and-drop block editor functional", "Branded email signatures and custom from-name working", "Win-back email sequences automated (7d no login, 30d no purchase)", "News preview cards on feed show like/comment/share without opening article", "News submission queue with editorial feedback loop operational", "AI pre-screening for spam/formatting reduces manual review time"],
+color: "p3",
+features: [
+{
+id: "email-templates",
+name: "Custom Email Template Builder",
+priority: 3,
+currentState: "Email sent via Resend API through apps/carefind/api/_lib/email.js and apps/carehub/api/_lib/email.js. Hardcoded HTML templates. No customization. No template management. No drag-and-drop builder.",
+gap: "No visual email template builder. No block editor (text, image, button, divider, social links). No branded email signatures. No custom from-name or reply-to routing. No win-back sequences. No template preview/test send. No domain verification for custom from-addresses.",
+risk: "medium",
+totalEffort: "XL",
+files: ["apps/carefind/api/_lib/email.js","apps/carehub/api/_lib/email.js","apps/carefind/src/modules/admin/"],
+testing: ["Template CRUD with in-memory adapter tests", "Block editor rendering at all breakpoints", "Email rendering in Gmail/Outlook/Apple Mail (manual QA matrix)", "SPF/DKIM domain verification flow", "Win-back sequence trigger timing tests"],
+tasks: [
+{name:"Email template data model",desc:"Create email_templates table: id, business_id, name, subject, blocks (JSONB array of {type, content, style}), from_name, reply_to, status (draft/active/archived). Support template variables: {{user_name}}, {{business_name}}, etc.",tech:"SQL migration with JSONB blocks column. Template repository with business_id scoping. Variable substitution engine (pure JS).",effort:"M",risk:"low",deps:"None",files:["apps/carefind/sql/20260913_email_templates.sql","apps/carefind/src/modules/admin/repositories/emailTemplateRepository.js"]},
+{name:"Block editor component",desc:"Mailchimp-style drag-and-drop email builder with block types: text (rich text), image (upload), button (URL + label), divider, social links, header, footer. Live preview panel showing mobile/desktop rendering.",tech:"EmailBlockEditor.jsx with drag-and-drop (HTML5 DnD API or lightweight library). Block registry pattern for extensibility. Preview iframe with responsive toggle.",effort:"XL",risk:"medium",deps:"Template data model",files:["apps/carefind/src/modules/admin/EmailBlockEditor.jsx","apps/carefind/src/modules/admin/email-blocks/"]},
+{name:"Email rendering engine",desc:"Convert block JSON to mobile-responsive HTML email. Use validated blocks (header, body, CTA) that guarantee mobile rendering. Inline all CSS (email client compatibility). Table-based layout for Outlook.",tech:"Pure JS: blocksToHtml(blocks) → table-based HTML with inline styles. Test rendering across email clients. Guardrails: max-width 600px, web-safe fonts, fallback colors.",effort:"L",risk:"medium",deps:"Block editor",files:["apps/carefind/src/lib/emailRenderer.js","apps/carefind/api/_lib/email.js"]},
+{name:"Branded signatures + from-name",desc:"Let businesses set custom from-name ('Dr. Ada from CarePharmacy'), branded email signature (logo, social links, contact info), and reply-to routing to support inbox. Domain verification for custom from-address (SPF/DKIM).",tech:"email_settings table per business. DNS verification flow: generate TXT record value, user adds to DNS, periodic check. Resend API supports custom from-name natively.",effort:"M",risk:"medium",deps:"Template data model",files:["apps/carefind/src/modules/admin/EmailSettings.jsx","apps/carefind/api/_lib/email.js"]},
+{name:"Win-back email sequences",desc:"Automated sequences: 7 days no login → 'We miss you' with trending content. 30 days no purchase → personalized discount or new arrivals. Configurable triggers and content per sequence.",tech:"scheduled job (Vercel cron) checking last_login/last_purchase dates. Sequence engine: trigger → template → send with cooldown. Track sends to prevent spam.",effort:"L",risk:"low",deps:"Rendering engine",files:["apps/carefind/api/_handlers/email-sequences.js","apps/carefind/src/modules/admin/EmailSequences.jsx"]},
+{name:"Template preview + test send",desc:"Preview template with real data substitution before sending. Test send to self. Render in iframe showing mobile/desktop. Variable inspector showing available placeholders.",tech:"Preview modal with variable substitution. Test send endpoint using Resend. Iframe with postMessage for responsive preview.",effort:"M",risk:"low",deps:"Block editor, Rendering engine",files:["apps/carefind/src/modules/admin/EmailPreview.jsx"]}
+]
+},
+{
+id: "news-engagement",
+name: "News Engagement on Preview Cards",
+priority: 4,
+currentState: "News articles have likes/comments/saves/reposts (news_reposts table added 2026-08-16). Engagement happens on the full article page (NewsArticle.jsx). Feed preview cards show headline + image only.",
+gap: "Engagement bar not visible on feed preview cards — users must open article to interact. No LinkedIn-style reaction picker (Like/Celebrate/Insightful/Concerned). No Reddit-style nested comments with collapse/expand. No reaction streaks or badges. No 'For You' personalization.",
+risk: "low",
+totalEffort: "L",
+files: ["apps/carefind/src/modules/news-publishing/News.jsx","apps/carefind/src/modules/news-publishing/NewsArticle.jsx","apps/carefind/src/modules/social-feed/"],
+testing: ["Inline engagement bar rendering on preview cards", "Reaction picker with health-context emojis", "Optimistic update + rollback on engagement actions", "Comment thread collapse/expand state persistence"],
+tasks: [
+{name:"Inline engagement bar on news cards",desc:"Embed engagement icons (like, comment, share, save) directly in the news preview card on the feed — not just on the article page. LinkedIn-style: compact bar below the card preview.",tech:"Extend NewsCard component with engagement bar. Reuse usePostEngagement pattern from social feed. Optimistic updates with rollback.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/news-publishing/NewsCard.jsx","apps/carefind/src/modules/news-publishing/News.jsx"]},
+{name:"Health-context reaction picker",desc:"LinkedIn-style reaction picker adapted for health content: Like, Celebrate (health milestone), Insightful (learned something), Concerned (health worry). Long-press to open picker. Reaction counts shown per type.",tech:"news_reactions table (news_id, user_id, reaction_type, created_at). ReactionPicker.jsx with animated icons. Unique constraint prevents double-reaction.",effort:"M",risk:"low",deps:"Inline engagement bar",files:["apps/carefind/src/modules/news-publishing/ReactionPicker.jsx","apps/carefind/sql/"]},
+{name:"Nested comment threads",desc:"Reddit-style nested comments with collapse/expand, sort by top/new/controversial. Auto-collapse low-engagement threads. Pin most insightful comment. Thread depth limit at 3 levels.",tech:"CommentThread component with recursive rendering. Sort controls. Collapse state in localStorage. 'Insightful' pin based on reaction count.",effort:"L",risk:"low",deps:"Inline engagement bar",files:["apps/carefind/src/modules/news-publishing/CommentThread.jsx","apps/carefind/src/modules/news-publishing/NewsArticle.jsx"]},
+{name:"Engagement streaks + badges",desc:"Fitness-app streaks for news engagement: 'You've engaged with health news 7 days in a row'. Badge rewards at milestones (3-day, 7-day, 30-day). Visible on profile. Motivational messaging.",tech:"engagement_streaks table tracking daily engagement. Streak calculation on each interaction. Badge component. Profile integration.",effort:"M",risk:"low",deps:"Reaction picker",files:["apps/carefind/src/modules/news-publishing/EngagementStreaks.jsx","apps/carefind/src/modules/account/Profile.jsx"]}
+]
+},
+{
+id: "news-submission",
+name: "News Submission Editorial Workflow",
+priority: 11,
+currentState: "News publishing exists via News.jsx composer with block editor. Articles submit for review. Admin reviews and approves/rejects. Basic status tracking.",
+gap: "No submission queue with position/estimated review time. No editorial feedback loop (request revisions before approving). No AI pre-screening for spam/formatting. No contributor onboarding with writing guidelines. No style checker. No AI-assisted headline suggestions.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carefind/src/modules/news-publishing/News.jsx","apps/carefind/src/modules/admin/"],
+testing: ["Submission queue ordering and ETA calculation", "Editorial feedback loop (revision request → resubmit)", "AI pre-screening accuracy (test with known spam/good content)", "Contributor onboarding flow completion"],
+tasks: [
+{name:"Submission queue with ETA",desc:"Medium-style submission queue showing: position in queue, estimated review time (based on current queue depth and average review speed), status tracker (submitted → under_review → revision_requested → approved/published).",tech:"submission_queue view ordering by created_at with status filter. ETA = avg_review_time * queue_position. Status tracker component with timeline visualization.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/news-publishing/SubmissionTracker.jsx","apps/carefind/src/modules/news-publishing/News.jsx"]},
+{name:"Editorial feedback loop",desc:"Admin can request revisions with inline comments before approving. Author receives feedback, edits, and resubmits. Version history tracks changes between submissions. Approval only after all feedback addressed.",tech:"article_feedback table (article_id, admin_id, comment, block_index, resolved). Version tracking via article_versions table. Resubmission resets status.",effort:"L",risk:"medium",deps:"Submission queue",files:["apps/carefind/src/modules/news-publishing/EditorialFeedback.jsx","apps/carefind/src/modules/admin/NewsReview.jsx"]},
+{name:"AI pre-screening",desc:"Auto-check submissions for: spam patterns (excessive links, promotional language), inappropriate content (profanity filter), formatting issues (empty sections, missing images, broken markdown). Flag issues before human review, speeding up approval.",tech:"Pure JS screening functions: spamScore(), formatCheck(), contentFilter(). Run on submit, show warnings to author before submission. Admin sees screening results in review queue.",effort:"M",risk:"medium",deps:"None",files:["apps/carefind/src/lib/articleScreening.js","apps/carefind/src/modules/news-publishing/News.jsx"]},
+{name:"Contributor onboarding + style guide",desc:"Substack-style onboarding for new contributors: writing guidelines, tone/voice expectations, content policies, example articles. In-composer style checker (sentence length, passive voice, jargon). AI headline suggestions based on content.",tech:"ContributorGuide.jsx modal shown on first submission. StyleChecker runs in composer showing inline suggestions. Headline suggestions via keyword extraction.",effort:"L",risk:"low",deps:"None",files:["apps/carefind/src/modules/news-publishing/ContributorGuide.jsx","apps/carefind/src/modules/news-publishing/StyleChecker.jsx"]}
+]
+}
+]
+},
+{
+id: 4,
+number: "Phase 4",
+theme: "Social & Live Enhancement",
+duration: "Weeks 7-11",
+objective: "Expand the story ring system into a multi-signal attention system. Enhance scheduled live management with calendar integration and reminders. Improve post sharing with rich-link previews. Add video/reels enhancements.",
+dependencies: "Phase 1 admin dashboard (for live management monitoring). CareFind social feed and video modules already functional. Post permalink system shipped 2026-08-24.",
+successCriteria: ["Story rings show 3 signal types: teal=stories, purple=recently live, orange=unread posts", "Scheduled lives have countdown timers, reminder notifications, calendar integration", "Post sharing generates platform-specific rich previews (WhatsApp, Twitter, Facebook)", "Video feed has chapter markers, layout toggle, 'Continue Watching' row", "Live sessions auto-save as editable video posts"],
+color: "p4",
+features: [
+{
+id: "story-rings",
+name: "Story Ring Multi-Signal Attention System",
+priority: 6,
+currentState: "StoryAvatar.jsx renders story rings. useStoryRing.js determines ring visibility. Rings show only for users with active stories (24h expiry). Single signal type: teal ring = has stories.",
+gap: "Story ring only signals one thing (active stories). No 'active now' green dot alongside ring. No purple ring for recently live. No orange ring for unread posts. No story highlights (pinned after 24h). No voice note replies. No configurable story duration (6h/12h/24h/48h). No share-to-story feature.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carefind/src/components/StoryAvatar.jsx","apps/carefind/src/components/useStoryRing.js","apps/carefind/src/modules/social-feed/"],
+testing: ["Multi-signal ring rendering (all 3 types + combinations)", "Smart visibility: only show for users you interact with regularly", "Story reply with voice note recording and playback", "Share-to-story card generation"],
+tasks: [
+{name:"Multi-signal ring system",desc:"Expand useStoryRing.js to return signal type: 'story' (teal), 'live' (purple, went live in last 2h), 'unread_posts' (orange, has posts you haven't seen). StoryAvatar renders appropriate gradient. Priority: live > story > unread.",tech:"useStoryRing.js returns {type, color, gradient}. CSS gradient definitions per type. Feed query extends to check recent live_sessions and unseen posts.",effort:"L",risk:"medium",deps:"None",files:["apps/carefind/src/components/useStoryRing.js","apps/carefind/src/components/StoryAvatar.jsx"]},
+{name:"Smart visibility rules",desc:"Only show story ring for users you interact with regularly (commented, liked, messaged in last 14 days). Hide for acquaintances unless they're currently live. Reduces visual clutter in dense feeds.",tech:"interaction_score calculated from recent engagement. Threshold: score > 0 → show ring. Live status always shows regardless of score. Computed in feed enrichment step.",effort:"M",risk:"low",deps:"Multi-signal system",files:["apps/carefind/src/components/useStoryRing.js","apps/carefind/src/modules/social-feed/Feed.jsx"]},
+{name:"'Active now' green dot",desc:"Show green dot alongside story ring when user is currently online and posting. Uses Supabase Realtime presence or last_active timestamp. Dot positioned bottom-right of avatar.",tech:"last_active timestamp on profiles updated via heartbeat. Green dot CSS absolute positioned. Refresh every 60s or via Realtime presence channel.",effort:"S",risk:"low",deps:"None",files:["apps/carefind/src/components/StoryAvatar.jsx"]},
+{name:"Story voice note replies",desc:"Snapchat-style: reply to a story with a voice note (up to 60 seconds). Converts to DM conversation. Recording UI with waveform preview. More personal than text reply.",tech:"MediaRecorder API for audio capture. Upload to story-replies storage bucket. VoiceNote.jsx player component. Creates message thread between viewer and story author.",effort:"L",risk:"medium",deps:"None",files:["apps/carefind/src/modules/social-feed/StoryReply.jsx","apps/carefind/src/modules/social-feed/VoiceNoteRecorder.jsx"]},
+{name:"Share-to-story feature",desc:"When sharing a post, offer to also add it to your story with one tap. Auto-generated card with post preview, your comment, and styled background. Combines sharing and stories.",tech:"ShareToStory modal in share flow. Generates story content from post data + user comment. Predefined background templates. Creates story row linked to source post.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/ShareToStory.jsx","apps/carefind/src/utils/share.js"]},
+{name:"Configurable story duration",desc:"Let users choose 6h, 12h, 24h (default), or 48h for each story. Duration picker in story creation flow. Expiry calculated from chosen duration, not fixed 24h.",tech:"stories table already has expires_at column. Duration picker UI before publish. Calculate expires_at from created_at + chosen duration.",effort:"S",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/StoryCreator.jsx"]}
+]
+},
+{
+id: "live-management",
+name: "Scheduled Live Management Enhancements",
+priority: 5,
+currentState: "LiveDashboard.jsx and GoLive.jsx handle live streaming. Scheduled lives can be created. Basic countdown exists. No calendar integration. No reminder notifications. No registration/waitlist. No post-event replay access management.",
+gap: "No countdown timers with reminder notifications (1h/15m/5m before). No 'notify me' button on scheduled shows. No calendar integration (Google/Apple). No registration page or attendee limit. No waitlist. No trailer embed for scheduled shows. No post-live auto-save as video. No stream markers for bookmarking moments.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carefind/src/modules/live-streaming/LiveDashboard.jsx","apps/carefind/src/modules/live-streaming/GoLive.jsx","apps/carefind/api/"],
+testing: ["Calendar event generation (ICS file format)", "Reminder notification timing accuracy", "Auto-save live-to-video conversion", "Stream marker creation and navigation"],
+tasks: [
+{name:"Countdown + reminder notifications",desc:"YouTube-style countdown page for scheduled lives. Reminder notifications at 1h/15m/5m before start. 'Notify me' button on scheduled show cards. Push notification integration.",tech:"LiveCountdown.jsx component with real-time countdown. Notification scheduling via service worker or Vercel cron. 'Notify me' toggles subscription in live_reminders table.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/live-streaming/LiveCountdown.jsx","apps/carefind/src/modules/live-streaming/GoLive.jsx"]},
+{name:"Calendar integration",desc:"Auto-generate ICS calendar file for scheduled lives. One-click add to Google/Apple calendar. Include: title, description, start/end time, join URL. Appears in personal calendars automatically.",tech:"generateICS(event) pure function returning .ics file content. Download link on scheduled show card. Include VTIMEZONE for correct time handling.",effort:"S",risk:"low",deps:"None",files:["apps/carefind/src/lib/calendarExport.js","apps/carefind/src/modules/live-streaming/GoLive.jsx"]},
+{name:"Registration + waitlist",desc:"Webinar-style: registration page for scheduled lives with attendee limit. Waitlist when full. Confirmation email with calendar invite. Registration count visible on show card.",tech:"live_registrations table (live_id, user_id, status: registered/waitlisted/cancelled). Capacity limit on live_items. Waitlist auto-promotes on cancellation.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/live-streaming/LiveRegistration.jsx","apps/carefind/sql/"]},
+{name:"Auto-save live as video",desc:"Record every live session and auto-save as a video post after stream ends. Host can edit title/description and publish or discard. Combines live and recorded video content.",tech:"Live recording via MediaRecorder or server-side capture. Post-stream: create draft video post with recording URL. Host reviews in dashboard before publishing.",effort:"L",risk:"high",deps:"None",files:["apps/carefind/src/modules/live-streaming/LiveRecorder.jsx","apps/carefind/src/modules/social-feed/VideoFeed.jsx"]},
+{name:"Stream markers",desc:"Twitch-style: viewers bookmark moments during live to revisit later. Host can also add markers (chapter points). Markers shown as timeline dots during replay. Click to jump to that moment.",tech:"stream_markers table (live_id, user_id, timestamp, label). Realtime insertion during live. Timeline visualization component. Video player seekTo(timestamp).",effort:"M",risk:"low",deps:"Auto-save live",files:["apps/carefind/src/modules/live-streaming/StreamMarkers.jsx","apps/carefind/src/modules/social-feed/VideoPlayer.jsx"]}
+]
+},
+{
+id: "post-sharing",
+name: "Post Sharing Rich-Link Preview Improvements",
+priority: 8,
+currentState: "share.js handles sharing. Per-post Open Graph tags served via api/_handlers/og.js for crawlers (applied 2026-08-22). Deep links via /post/:id permalinks. Share URLs are deep links.",
+gap: "No platform-specific preview optimization (same OG for all platforms). No share-with-context option (personal note when sharing). No WhatsApp-style inline content preview. No 'add to story' integration from share flow. Share link not context-aware of destination platform.",
+risk: "low",
+totalEffort: "M",
+files: ["apps/carefind/src/utils/share.js","apps/carefind/api/_handlers/og.js","apps/carefind/src/lib/openGraph.js"],
+testing: ["Platform detection and preview generation", "Share-with-context note attachment", "Deep link rendering for shared posts with notes", "OG tag correctness per platform crawler"],
+tasks: [
+{name:"Platform-specific OG previews",desc:"Detect sharing platform via user-agent or Web Share API level. Generate optimized preview: full image for WhatsApp, video thumbnail for Twitter, article card for Facebook. Same URL, different og:* tags per crawler.",tech:"Extend og.js to vary output by User-Agent. WhatsApp: large image, full description. Twitter: video player card. Facebook: article card with author. Test with each platform's crawler.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/api/_handlers/og.js","apps/carefind/src/lib/openGraph.js"]},
+{name:"Share-with-context option",desc:"When sharing, offer to attach a personal note: 'This helped me manage my diabetes'. Note appears in the shared link preview. Creates a personalized landing page for shared links.",tech:"ShareModal.jsx with optional note textarea. Note stored in share_contexts table keyed by share_id. Landing page reads note and shows it above the post content.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/ShareModal.jsx","apps/carefind/src/utils/share.js"]},
+{name:"Auto-generate share card image",desc:"Generate a branded card image for each post when shared. Includes: post excerpt, author avatar/name, CareFind branding. Used as og:image when no post image exists. Canvas-based generation.",tech:"Server-side canvas rendering (or pre-generated on post create). ShareCard generator: 1200x630px with post content, gradient background, branding. Cache per post.",effort:"L",risk:"low",deps:"None",files:["apps/carefind/api/_handlers/share-card.js","apps/carefind/src/lib/shareCardGenerator.js"]}
+]
+},
+{
+id: "video-reels",
+name: "Video/Reels Enhancements",
+priority: 9,
+currentState: "VideoFeed.jsx handles vertical video feed. Videos have likes/comments/shares. Basic feed with infinite scroll. No chapter markers. No layout toggle. No 'Continue Watching'. No remix/duet. No curated collections.",
+gap: "No chapter markers or transcript search. No layout toggle (vertical vs grid). No 'Continue Watching' row for partially watched videos. No intelligent scroll breaks ('You're caught up' card). No remix audio library. No themed video collections/playlists. No Duet/Stitch for responding to other videos.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carefind/src/modules/social-feed/VideoFeed.jsx","apps/carefind/src/modules/social-feed/"],
+testing: ["Chapter marker navigation accuracy", "Layout toggle state persistence", "Continue Watching row ordering", "Adaptive loading performance (metadata-first)"],
+tasks: [
+{name:"Chapter markers + transcript",desc:"Let creators add chapter markers to videos with timestamps and labels. Viewers see chapter dots on progress bar and can jump to sections. Transcript search for text-based navigation.",tech:"video_chapters table (video_id, timestamp, label). ChapterDots component on progress bar. Transcript optional upload (SRT format). Search highlights matching timestamp.",effort:"L",risk:"medium",deps:"None",files:["apps/carefind/src/modules/social-feed/VideoChapters.jsx","apps/carefind/src/modules/social-feed/VideoPlayer.jsx"]},
+{name:"Layout toggle (vertical/grid)",desc:"YouTube Shorts vs YouTube: toggle between vertical swipe feed (discovery) and grid view (browsing). Grid shows thumbnails in 3-column layout with title/author overlay.",tech:"LayoutToggle component in VideoFeed header. Grid mode uses CSS grid with video thumbnails. State persisted in localStorage. Same data, different presentation.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/VideoFeed.jsx","apps/carefind/src/modules/social-feed/VideoGrid.jsx"]},
+{name:"'Continue Watching' row",desc:"Streaming service pattern: show 'Pick up where you left off' row at top of video tab for partially watched videos. Progress bar on each thumbnail showing watch position.",tech:"Track watch progress in video_progress table (user_id, video_id, position, duration). Query for position > 0 AND position < duration * 0.9. Top row in VideoFeed.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/ContinueWatching.jsx","apps/carefind/src/modules/social-feed/VideoPlayer.jsx"]},
+{name:"Intelligent scroll breaks",desc:"Every 10 videos show a 'You're caught up' card with summary of what you've seen and trending topics. Prevents infinite scroll fatigue. Offers related content or suggests taking a break.",tech:"Insert break card at index 10, 20, 30 in feed. Content: count of videos watched, top topics, 'Take a break' or 'See trending' CTA. Pure UI, no backend.",effort:"S",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/VideoFeed.jsx","apps/carefind/src/modules/social-feed/ScrollBreak.jsx"]},
+{name:"Curated video collections",desc:"Music streaming playlist pattern: let users create themed video collections ('Diabetes Management Tips', 'Pharmacy Career Advice'). Others can follow collections. Collection page with ordered videos.",tech:"video_collections table (id, user_id, title, description, is_public). collection_videos join. Collection page with drag-to-reorder. Follow/unfollow toggle.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/modules/social-feed/VideoCollection.jsx","apps/carefind/sql/"]}
+]
+}
+]
+},
+{
+id: 5,
+number: "Phase 5",
+theme: "Integration, Polish & Scale",
+duration: "Weeks 10-14",
+objective: "Cross-feature integration testing. Performance optimization for new features. Polish UI/UX across all 11 areas. Documentation and knowledge transfer. Prepare for production rollout.",
+dependencies: "All previous phases. Features from Phases 1-4 must be functional before integration testing.",
+successCriteria: ["All 11 features pass cross-browser testing (Chrome, Safari, Firefox, Edge)", "Performance budget: no feature adds >100KB to bundle", "Accessibility audit passes WCAG 2.1 AA for all new components", "Documentation updated for all new features", "E2E test coverage for critical user journeys"],
+color: "p5",
+features: [
+{
+id: "integration-polish",
+name: "Cross-Feature Integration & Polish",
+priority: 0,
+currentState: "Each feature developed in isolation within its phase. Cross-feature interactions not yet tested. Performance impact of new features not measured. Accessibility not verified for new components.",
+gap: "No cross-feature integration testing. No performance budget enforcement. No accessibility audit for new components. No E2E tests for new user journeys. Documentation not updated. No feature flag system for gradual rollout.",
+risk: "medium",
+totalEffort: "L",
+files: ["apps/carefind/src/","apps/carehub/src/","docs/"],
+testing: ["E2E tests for critical journeys (Playwright)", "Cross-browser manual testing matrix", "Accessibility audit with axe-core", "Performance profiling (Lighthouse scores)", "Feature flag integration tests"],
+tasks: [
+{name:"Cross-feature integration testing",desc:"Test feature interactions: story ring signals update correctly when live/video/news features create content. Email templates render with data from all modules. Admin dashboard shows metrics from all new features.",tech:"Integration test suite covering cross-module data flows. Manual QA checklist for feature interactions. Bug bash session with team.",effort:"L",risk:"medium",deps:"All previous phases",files:["apps/carefind/src/__tests__/integration/"]},
+{name:"Performance optimization",desc:"Audit bundle size impact of all new features. Lazy-load heavy components (email editor, video collection, permission matrix). Code-split by route. Ensure no feature adds >100KB to initial bundle.",tech:"Vite bundle analyzer. Dynamic imports for heavy components. Tree-shaking verification. Lighthouse performance audit targeting >90 score.",effort:"M",risk:"low",deps:"All features implemented",files:["apps/carefind/vite.config.js","apps/carefind/src/modules/"]},
+{name:"Accessibility audit (WCAG 2.1 AA)",desc:"Run axe-core on all new components. Fix violations: color contrast, keyboard navigation, screen reader labels, focus management, ARIA attributes. Test with screen reader (VoiceOver/NVDA).",tech:"axe-core automated scan. Manual keyboard navigation test. Screen reader testing. Fix violations: contrast ratios, focus traps in modals, aria-labels on icon buttons.",effort:"M",risk:"low",deps:"All features implemented",files:["apps/carefind/src/"]},
+{name:"Feature flag system",desc:"Implement feature flags for gradual rollout of new features. Toggle per feature: email-builder, withdrawal-trust, story-signals, etc. Admin UI to toggle flags. Flags stored in localStorage + remote config.",tech:"useFeatureFlag hook. FeatureFlagProvider context. Admin toggle page. Flags: email_builder, withdrawal_trust_levels, story_multi_signal, live_auto_save, etc.",effort:"M",risk:"low",deps:"None",files:["apps/carefind/src/lib/featureFlags.js","apps/carefind/src/modules/admin/FeatureFlags.jsx"]},
+{name:"E2E test suite (Playwright)",desc:"Write E2E tests for critical new user journeys: admin command palette navigation, withdrawal with progressive trust, email template creation, news engagement on cards, scheduled live with calendar export.",tech:"Playwright test files per feature journey. CI integration. Test data seeding. Visual regression for key screens.",effort:"L",risk:"low",deps:"All features implemented",files:["apps/carefind/e2e/","apps/carehub/e2e/"]},
+{name:"Documentation update",desc:"Update all relevant docs: README, module docs, knowledge/modules/*.md for each new feature. API documentation for new endpoints. Migration guide for database changes. User guide for admin features.",tech:"Markdown documentation per feature. Update PROJECT_OVERVIEW.md with new capabilities. Generate API docs from endpoint definitions.",effort:"M",risk:"low",deps:"All features implemented",files:["docs/","knowledge/modules/","README.md"]}
+]
+}
+]
+}
+]
+};
+
+const EFFORT_POINTS = { S: 1, M: 3, L: 5, XL: 8 };
+
+function computeStats() {
+let totalTasks = 0, totalPoints = 0, highRisk = 0;
+const allFiles = new Set();
+ROADMAP.phases.forEach(p => p.features.forEach(f => {
+f.tasks.forEach(t => {
+totalTasks++;
+totalPoints += EFFORT_POINTS[t.effort] || 0;
+if (t.risk === 'high') highRisk++;
+t.files.forEach(fi => allFiles.add(fi));
+});
+}));
+document.getElementById('stat-tasks').textContent = totalTasks;
+document.getElementById('stat-effort').textContent = totalPoints;
+document.getElementById('stat-risk').textContent = highRisk;
+document.getElementById('stat-files').textContent = allFiles.size;
+document.getElementById('stat-critical').textContent = 'Admin → Withdrawal → Email';
+}
+
+function buildHeatmap() {
+const el = document.getElementById('heatmap');
+ROADMAP.phases.forEach(p => p.features.forEach(f => {
+const highCount = f.tasks.filter(t => t.risk === 'high').length;
+const medCount = f.tasks.filter(t => t.risk === 'medium').length;
+let level = 'low', label = 'Low Risk';
+if (highCount >= 2) { level = 'high'; label = 'High Risk'; }
+else if (highCount >= 1 || medCount >= 2) { level = 'medium'; label = 'Medium Risk'; }
+const cell = document.createElement('div');
+cell.className = `heatmap-cell ${level}`;
+cell.innerHTML = `<span>${f.name.split(' ').slice(0,3).join(' ')}</span><span>${label}</span>`;
+cell.dataset.feature = f.id;
+el.appendChild(cell);
+}));
+}
+
+function buildGantt() {
+const gantt = document.getElementById('gantt');
+const features = [];
+ROADMAP.phases.forEach(p => p.features.forEach(f => features.push({ ...f, phaseId: p.id, color: p.color })));
+features.forEach(f => {
+const row = document.createElement('div');
+row.className = 'gantt-row';
+row.dataset.feature = f.id;
+const phase = ROADMAP.phases.find(p => p.features.some(ff => ff.id === f.id));
+const phaseIdx = ROADMAP.phases.indexOf(phase);
+const startWeek = phaseIdx * 2 + 1;
+const effortTotal = f.tasks.reduce((s, t) => s + EFFORT_POINTS[t.effort], 0);
+const duration = Math.max(2, Math.ceil(effortTotal / 5));
+const endWeek = Math.min(14, startWeek + duration);
+const leftPct = ((startWeek - 1) / 14) * 100;
+const widthPct = ((endWeek - startWeek + 1) / 14) * 100;
+row.innerHTML = `
+<div class="gantt-row-label" title="${f.name}">${f.name.length > 25 ? f.name.slice(0,25)+'...' : f.name}</div>
+<div class="gantt-row-bars">
+<div class="gantt-bar ${phase.color}" style="left:${leftPct}%;width:${widthPct}%" title="${f.name}: W${startWeek}-W${endWeek}"></div>
+</div>`;
+gantt.appendChild(row);
+});
+}
+
+function buildPhases() {
+const container = document.getElementById('phases');
+const featureSelect = document.getElementById('filter-feature');
+ROADMAP.phases.forEach(phase => {
+const phaseEl = document.createElement('div');
+phaseEl.className = 'phase expanded';
+phaseEl.dataset.phase = phase.id;
+const taskCount = phase.features.reduce((s, f) => s + f.tasks.length, 0);
+const effortTotal = phase.features.reduce((s, f) => s + f.tasks.reduce((ss, t) => ss + EFFORT_POINTS[t.effort], 0), 0);
+let html = `
+<div class="phase-header" onclick="togglePhase(this)">
+<div class="phase-title-group">
+<div class="phase-number ${phase.color}">${phase.number} &mdash; ${phase.duration}</div>
+<div class="phase-name">${phase.theme}</div>
+<div class="phase-meta">
+<span class="phase-tag">${phase.features.length} features</span>
+<span class="phase-tag">${taskCount} tasks</span>
+<span class="phase-tag">${effortTotal} points</span>
+</div>
+</div>
+<svg class="phase-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+</div>
+<div class="phase-body"><div class="phase-content">
+<div class="phase-objective"><strong>Objective:</strong> ${phase.objective}</div>
+<div class="phase-dependencies"><strong>Dependencies:</strong> ${phase.dependencies}</div>
+<div class="phase-success"><strong>Success Criteria:</strong><ul style="margin-top:6px;padding-left:18px">${phase.successCriteria.map(c => `<li>${c}</li>`).join('')}</ul></div>`;
+phase.features.forEach(f => {
+const opt = document.createElement('option');
+opt.value = f.id;
+opt.textContent = f.name;
+featureSelect.appendChild(opt);
+const featureEffort = f.tasks.reduce((s, t) => s + EFFORT_POINTS[t.effort], 0);
+html += `
+<div class="feature-section" data-feature="${f.id}" data-risk="${f.risk}">
+<div class="feature-header" onclick="toggleFeature(this)">
+<div class="feature-name">${f.name}</div>
+<div class="feature-badges">
+<span class="badge ${f.risk}">${f.risk} risk</span>
+<span class="badge" style="background:var(--bg-primary);color:var(--text-secondary)">${featureEffort} pts</span>
+</div>
+</div>
+<div class="feature-body">
+<div class="feature-state">
+<div class="state-box current"><h4>Current State</h4><p>${f.currentState}</p></div>
+<div class="state-box gap"><h4>Gap</h4><p>${f.gap}</p></div>
+</div>
+<div class="task-list">`;
+f.tasks.forEach(t => {
+html += `
+<div class="task" data-effort="${t.effort}" data-risk="${t.risk}">
+<div class="task-top">
+<div class="task-name">${t.name}</div>
+<div class="task-badges">
+<span class="badge ${t.effort.toLowerCase()}">${t.effort}</span>
+<span class="badge ${t.risk}">${t.risk}</span>
+</div>
+</div>
+<div class="task-desc">${t.desc}</div>
+<div class="task-tech">${t.tech}</div>
+<div class="task-files">${t.files.map(fi => `<code>${fi.split('/').pop()}</code>`).join(' ')}</div>
+${t.deps !== 'None' ? `<div class="task-deps">Depends on: ${t.deps}</div>` : ''}
+</div>`;
+});
+html += `</div>
+<div class="testing-section">
+<h4>Testing Requirements</h4>
+<ul>${f.testing.map(t => `<li>${t}</li>`).join('')}</ul>
+</div>
+<div style="margin-top:12px;font-size:0.75rem;color:var(--text-muted)">
+<strong>Files affected:</strong> ${f.files.map(fi => `<code>${fi}</code>`).join(', ')}
+</div>
+</div>
+</div>`;
+});
+html += `</div></div>`;
+phaseEl.innerHTML = html;
+container.appendChild(phaseEl);
+});
+}
+
+function togglePhase(header) {
+header.closest('.phase').classList.toggle('expanded');
+}
+function toggleFeature(header) {
+header.closest('.feature-section').classList.toggle('expanded');
+}
+
+function applyFilters() {
+const pf = document.getElementById('filter-phase').value;
+const ff = document.getElementById('filter-feature').value;
+const ef = document.getElementById('filter-effort').value;
+const rf = document.getElementById('filter-risk').value;
+document.querySelectorAll('.phase').forEach(p => {
+const phaseMatch = pf === 'all' || p.dataset.phase === pf;
+const hasVisibleFeature = Array.from(p.querySelectorAll('.feature-section')).some(fs => {
+const featureMatch = ff === 'all' || fs.dataset.feature === ff;
+const hasVisibleTask = Array.from(fs.querySelectorAll('.task')).some(t => {
+const effortMatch = ef === 'all' || t.dataset.effort === ef;
+const riskMatch = rf === 'all' || t.dataset.risk === rf;
+t.style.display = (effortMatch && riskMatch) ? '' : 'none';
+return effortMatch && riskMatch;
+});
+fs.style.display = (featureMatch && (hasVisibleFeature || ff === 'all')) ? '' : 'none';
+if (ff !== 'all' && fs.dataset.feature === ff) fs.classList.add('expanded');
+return featureMatch;
+});
+p.style.display = (phaseMatch && hasVisibleFeature) ? '' : 'none';
+if (!p.classList.contains('expanded') && phaseMatch) p.classList.add('expanded');
+});
+document.querySelectorAll('.gantt-row').forEach(r => {
+const featureMatch = ff === 'all' || r.dataset.feature === ff;
+r.style.display = featureMatch ? '' : 'none';
+});
+document.querySelectorAll('.heatmap-cell').forEach(c => {
+const featureMatch = ff === 'all' || c.dataset.feature === ff;
+c.style.display = featureMatch ? '' : 'none';
+});
+}
+
+document.getElementById('filter-phase').addEventListener('change', applyFilters);
+document.getElementById('filter-feature').addEventListener('change', applyFilters);
+document.getElementById('filter-effort').addEventListener('change', applyFilters);
+document.getElementById('filter-risk').addEventListener('change', applyFilters);
+document.getElementById('filter-reset').addEventListener('click', () => {
+['filter-phase','filter-feature','filter-effort','filter-risk'].forEach(id => document.getElementById(id).value = 'all');
+applyFilters();
+});
+
+computeStats();
+buildHeatmap();
+buildGantt();
+buildPhases();
+</script>
+</body>
+</html>

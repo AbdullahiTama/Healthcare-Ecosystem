@@ -7,7 +7,8 @@ import { useNavigate } from 'react-router-dom'
 // gets passed as the tenant. `getSales` was imported here but never used —
 // dropped rather than repointed.
 import { saleRepository } from '../pos/repositories'
-import { getAllLocations, addBranch, cloneBranchData, getProducts } from '../../services/supabase'
+import { locationsRepository } from './repositories'
+import { productRepository } from '../inventory/repositories'
 import { fmt, todayDate, businessLucideIcon } from '../../lib/utils'
 import { NIG_STATES } from '../../config/constants'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
@@ -35,7 +36,7 @@ export default function Locations({ brand, role }) {
   async function load() {
     setLoading(true)
     try {
-      const locs = await getAllLocations(brand.id)
+      const locs = await locationsRepository.getAll(brand.id)
       setLocations(locs || [])
       // Get stats for each location
       const statsData = {}
@@ -43,7 +44,7 @@ export default function Locations({ brand, role }) {
         try {
           const [today, products] = await Promise.all([
             saleRepository.getToday(loc.id),
-            getProducts(loc.id),
+            productRepository.getAll(loc.id),
           ])
           statsData[loc.id] = {
             todayRevenue: (today || []).reduce((s, x) => s + (x.total || 0), 0),
@@ -69,7 +70,7 @@ export default function Locations({ brand, role }) {
     }
     setSaving(true)
     try {
-      const created = await addBranch({
+      const created = await locationsRepository.addBranch({
         name: brand.name + ' — ' + form.name,
         branch_name: form.name,
         parent_business_id: mainId,
@@ -95,7 +96,7 @@ export default function Locations({ brand, role }) {
       // opens ready to operate. Never blocks branch creation — a failed clone
       // still leaves a working (if empty) branch.
       const newId = Array.isArray(created) ? created[0]?.id : created?.id
-      if (newId) { cloneBranchData(mainId, newId).catch(() => {}) }
+      if (newId) { locationsRepository.cloneBranchData(mainId, newId).catch(() => {}) }
       showToast('Branch added successfully!', { type: 'success' })
       setForm({}); setShowAdd(false); load()
     } catch (e) { showToast('Could not add branch. Please try again.', { type: 'error' }) }

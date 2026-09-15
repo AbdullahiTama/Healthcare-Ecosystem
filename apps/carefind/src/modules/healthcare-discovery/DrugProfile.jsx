@@ -2,11 +2,13 @@
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { healthcareRepository } from './repositories'
 import {
   AlertTriangle, CheckCircle2, MapPin, MessageCircle, Phone, Pill as PillIcon,
   Sparkles, Star, ThumbsDown, ThumbsUp,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
+import { notifyReview } from '../../services/reviewNotifications.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
@@ -18,6 +20,7 @@ import BottomNav from '../../components/BottomNav.jsx'
 import { Loading, StarPicker, Stars } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
 import { canShowPrice, distanceLabel, SALE_TYPE_LABELS, whatsappLink, telLink } from '../utils/marketplace.js'
+import { recordContactLead } from '../utils/contactLeads.js'
 import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 
 function DrugProfile() {
@@ -44,11 +47,7 @@ function DrugProfile() {
     const decodedName = decodeURIComponent(name)
 
     // Pull BOTH pathways: CareHub inventory (business_id) and CareFind uploads (owner_id)
-    const { data: productData } = await supabase
-      .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, description, whatsapp, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, owner_id, business_id, businesses(id, name, city, state, whatsapp, visible_on_carefind, latitude, longitude, lat, lng, phone, show_prices)')
-      .ilike('name', `%${decodedName}%`)
-      .eq('list_on_carefind', true)
+    const productData = await healthcareRepository.searchProductsByName(decodedName)
 
     // Keep a product if it belongs to a visible business (and is in stock),
     // OR if it was uploaded directly on CareFind (no business attached).
@@ -65,21 +64,14 @@ function DrugProfile() {
     if (filtered.length > 0) {
       const productIds = filtered.map((p) => p.id)
 
-      const { data: reviewData } = await supabase
-        .from('product_reviews')
-        .select('id, rating, comment, created_at, product_id, user_id')
-        .in('product_id', productIds)
-        .order('created_at', { ascending: false })
+      const reviewData = await healthcareRepository.getReviewsByProductIds(productIds)
       const rv = reviewData || []
       setReviews(rv)
 
       // Reviewer names (separate query so it works without a FK join)
       const userIds = [...new Set(rv.map((r) => r.user_id).filter(Boolean))]
       if (userIds.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, full_name, display_name, is_verified, specialty, verification_label')
-          .in('id', userIds)
+        const profs = await healthcareRepository.getProfilesByIds(userIds)
         const map = {}
         ;(profs || []).forEach((pr) => { map[pr.id] = pr })
         setReviewers(map)
@@ -113,20 +105,22 @@ function DrugProfile() {
     if (!user || !selectedProductId) return
     setSubmitting(true)
 
-    const { error } = await supabase.from('product_reviews').insert({
+    await healthcareRepository.insertProductReview({
       user_id: user.id,
       product_id: selectedProductId,
       rating,
       comment: comment.trim(),
     })
 
-    if (!error) {
-      setComment('')
-      setRating(5)
-      loadAll()
-    } else {
-      console.error('Review error:', error)
-    }
+    // Issue #7: product reviews emitted no notification. The recipient is
+    // the listing's owner_id (null for CareHub-sourced listings).
+    const sent = await notifyReview(supabase, {
+      kind: 'product', actorId: user.id, productId: selectedProductId, rating, link: `/drug/${encodeURIComponent(name)}`,
+    })
+    if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+    setComment('')
+    setRating(5)
+    loadAll()
     setSubmitting(false)
   }
 
@@ -175,7 +169,7 @@ function DrugProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -441,6 +435,14 @@ function DrugProfile() {
                   const wa = waLinkFor(p)
                   const call = telLink(sellerPhone(p))
                   if (!wa && !call) return null
+                  // Record the lead intent before the deep link takes the
+                  // viewer out of the app (fire-and-forget, throttled).
+                  const lead = (channel) => recordContactLead({
+                    businessId: p.business_id,
+                    productId: p.id,
+                    productName: p.name,
+                    channel,
+                  })
                   return (
                     <div style={{ display: 'flex', gap: 8 }}>
                       {wa && (
@@ -448,6 +450,7 @@ function DrugProfile() {
                           href={wa}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={() => lead('whatsapp')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: '#25D366', color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                         >
                           <MessageCircle size={16} aria-hidden="true" /> WhatsApp
@@ -456,6 +459,7 @@ function DrugProfile() {
                       {call && (
                         <a
                           href={call}
+                          onClick={() => lead('call')}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center', minHeight: 44, padding: '7px 14px', background: theme.tealDeep, color: '#fff', borderRadius: 12, textDecoration: 'none', fontSize: 12.5, fontWeight: 700 }}
                         >
                           <Phone size={16} aria-hidden="true" /> Call
@@ -574,7 +578,6 @@ function DrugProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

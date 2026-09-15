@@ -1,5 +1,5 @@
 import { sbFetch } from '../../../services/supabase'
-import { translateConstraintError } from '../../../lib/dbErrors'
+import { translateConstraintError, isDuplicateError } from '../../../lib/dbErrors'
 
 // Four tables reference `territories` and none of those foreign keys cascade.
 // The rep-assignment one is the reachable case: assigning a rep is a normal
@@ -49,6 +49,37 @@ export function createTerritoryRepository(request = sbFetch) {
         method: 'POST',
         body: JSON.stringify({ ...territory, business_id: businessId }),
       })
+    },
+
+    // Bulk import (CSV upload): same contract as the clients repository —
+    // many creates in safe-sized parallel batches with per-row error capture,
+    // so one bad row can never sink the whole file. Returns
+    // { added, skipped, failed } where skipped counts rows the SERVER refused
+    // as duplicates and failed is [{ name, message }] for everything else.
+    async createMany(businessId, territories, batchSize = 20) {
+      let added = 0
+      let skipped = 0
+      const failed = []
+      for (let i = 0; i < territories.length; i += batchSize) {
+        const batch = territories.slice(i, i + batchSize)
+        const results = await Promise.all(batch.map(t =>
+          request('territories', {
+            method: 'POST',
+            body: JSON.stringify({ ...t, business_id: businessId }),
+          })
+            .then(() => true)
+            .catch(err => {
+              if (isDuplicateError(err)) return 'skipped'
+              return { name: t.name || 'Unknown', message: err.message || 'error' }
+            })
+        ))
+        results.forEach(r => {
+          if (r === true) added++
+          else if (r === 'skipped') skipped++
+          else failed.push(r)
+        })
+      }
+      return { added, skipped, failed }
     },
 
     // Previously an id-only PATCH in services/supabase.js.

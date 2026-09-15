@@ -5,6 +5,7 @@ import { warehouseRepository } from './repositories'
 import { staffRepository } from '../staff/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, dangerBg } = theme
 const TYPE_SUGGESTIONS = ['Headquarters', 'Warehouse', 'Regional Office', 'Branch', 'Distribution Hub']
@@ -116,15 +117,14 @@ export default function Warehouses({ brand }) {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '760px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '20px', fontWeight: '900', color: navy }}>Warehouses & Branches</div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>Structure this however your company works — headquarters, regional offices, warehouses, whatever you call them.</div>
-        </div>
-        <TealBtn onClick={openNew} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Plus size={15} /> Add location</TealBtn>
-      </div>
+    <>
+      <PageHeader
+        title="Warehouses & Branches"
+        description="Structure this however your company works — headquarters, regional offices, warehouses, whatever you call them."
+        primaryAction={{ label: 'Add location', leftIcon: <Plus size={15} />, onClick: openNew }}
+      />
+      <div style={{ padding: '24px', maxWidth: '760px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       {loading && <Loading />}
 
@@ -225,6 +225,7 @@ export default function Warehouses({ brand }) {
         title={'Delete "' + (locationToDelete ? locationToDelete.name : '') + '"?'}
         consequence="This permanently removes the location record. This cannot be undone."
         confirmLabel="Delete" />
-    </div>
+      </div>
+    </>
   )
 }

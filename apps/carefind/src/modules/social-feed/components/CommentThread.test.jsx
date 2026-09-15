@@ -88,6 +88,55 @@ describe('CommentThread (Feature 4 — comment notifications)', () => {
   })
 })
 
+// Issue #6 — comments were a single-line input that silently cut off anything
+// longer than one visual line. The box is now an auto-growing textarea with no
+// length limit; Enter sends, Shift+Enter inserts a newline.
+describe('CommentThread multi-line comment box (issue #6)', () => {
+  beforeEach(() => {
+    mockSupabase.ctrl.comments = []
+    notify.mockClear()
+    supabase.from.mockClear()
+  })
+
+  it('accepts a long comment in full, with no truncation', () => {
+    renderThread({})
+    const long = `${'Consider a patient presenting with persistent symptoms. '.repeat(12)}End of note.`
+    const box = screen.getByPlaceholderText('Add a comment')
+    fireEvent.change(box, { target: { value: long } })
+    expect(box.value).toBe(long)
+    expect(box.tagName).toBe('TEXTAREA')
+  })
+
+  it('Shift+Enter inserts a newline instead of sending', async () => {
+    const onCommentAdded = vi.fn()
+    renderThread({ onCommentAdded })
+    const box = screen.getByPlaceholderText('Add a comment')
+    fireEvent.change(box, { target: { value: 'first line' } })
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
+    expect(onCommentAdded).not.toHaveBeenCalled()
+  })
+
+  it('sends on Enter without Shift', async () => {
+    const onCommentAdded = vi.fn()
+    renderThread({ onCommentAdded })
+    const box = screen.getByPlaceholderText('Add a comment')
+    fireEvent.change(box, { target: { value: 'a longer comment that wraps onto several lines in the box' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    await waitFor(() => expect(onCommentAdded).toHaveBeenCalledWith({ postId: 'post1', parentId: null }))
+  })
+
+  it('the reply box also accepts multi-line replies', () => {
+    const comment = { id: 'c1', content: 'parent', user_id: 'user2', created_at: new Date().toISOString(), parent_id: null, profiles: {} }
+    renderThread({ comments: [comment] })
+    fireEvent.click(screen.getByRole('button', { name: /reply/i }))
+    const box = screen.getByPlaceholderText(/Write a reply/)
+    const longReply = `${'Replying with detail. '.repeat(20)}Done.`
+    fireEvent.change(box, { target: { value: longReply } })
+    expect(box.value).toBe(longReply)
+    expect(box.tagName).toBe('TEXTAREA')
+  })
+})
+
 function HarnessWith({ comments, onCommentAdded }) {
   const [drafts, setDrafts] = useState({})
   const [replyingTo, setReplyingTo] = useState(null)

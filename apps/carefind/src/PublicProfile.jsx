@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, BadgeCheck, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
+  ArrowLeft, CalendarDays, Check, ChevronRight, Coins, Film, Link2, Lock, MapPin,
   MessageSquare, Play, Repeat2, Star, User, X,
 } from 'lucide-react'
 import { supabase } from './config/supabaseClient'
@@ -13,7 +13,7 @@ import AppShell from './components/layout/AppShell.jsx'
 import { StickySidebar, SidebarSection } from './components/layout/SidebarSection.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import { notify } from './services/notify.js'
-import { previewText } from './modules/social-feed/richText.jsx'
+import { notifyReview } from './services/reviewNotifications.js'
 import { renderMarkdown } from './modules/social-feed/markdown.jsx'
 import { subscribe, checkAccess, cancelAutoRenew, coinsToNaira } from './modules/subscriptions-monetization/subscriptions.js'
 import {
@@ -24,7 +24,8 @@ import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
 import { Card, CardSkeleton, ConfirmDialog, Empty, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
 import VerifiedBadge from './components/VerifiedBadge.jsx'
-import { PostTileGrid, isRepost, withoutRepostMark } from './modules/social-feed/postDisplay.jsx'
+import ProfileHeader from './components/ProfileHeader.jsx'
+import { PostTileGrid, isRepost } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
 
 function PublicProfile() {
@@ -61,17 +62,8 @@ function PublicProfile() {
   const [confirmConsultOpen, setConfirmConsultOpen] = useState(false)
   const [consultPayMethod, setConsultPayMethod] = useState('coins')
   const [bookingConsult, setBookingConsult] = useState(false)
-  const [openPost, setOpenPost] = useState(null)
   const [confirmSubOpen, setConfirmSubOpen] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-
-  const visualThemes = {
-    teal: 'linear-gradient(135deg, #0E6F5A, #0B4A3E)',
-    sunset: 'linear-gradient(135deg, #f97316, #db2777)',
-    ocean: 'linear-gradient(135deg, #0ea5e9, #1e3a8a)',
-    purple: 'linear-gradient(135deg, #7c3aed, #4c1d95)',
-    forest: 'linear-gradient(135deg, #16a34a, #14532d)',
-  }
 
   useEffect(() => {
     async function load() {
@@ -99,14 +91,30 @@ function PublicProfile() {
       }
 
       const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
-        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
+        // repost_of is load-bearing: without it isRepost() misreads every
+        // reference repost as an original post (issue #6).
+        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, image_urls, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
         supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
         supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
       ])
 
-      setPosts(postData.data || [])
+      // Resolve each repost to the post it points at, so the grid shows what
+      // was actually shared rather than a bare marker (issues #6/#8).
+      const ownPosts = postData.data || []
+      const sourceIds = [...new Set(ownPosts.filter((p) => p.repost_of).map((p) => p.repost_of))]
+      if (sourceIds.length) {
+        const { data: sources } = await supabase
+          .from('posts')
+          .select('id, content, created_at, post_type, theme, image_url, image_urls, user_id')
+          .in('id', sourceIds)
+        const byId = {}
+        ;(sources || []).forEach((s) => { byId[s.id] = s })
+        setPosts(ownPosts.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)))
+      } else {
+        setPosts(ownPosts)
+      }
       setFollowerCount(followerData.count || 0)
       setFollowingCount(followingData.count || 0)
       setPostCount(postData.data?.length || 0)
@@ -287,6 +295,15 @@ function PublicProfile() {
       rating: myRating,
       comment: myComment.trim() || null,
     })
+
+    // Issue #7: this is the exact case reported — a 5-star review that
+    // produced no notification. Nothing was ever emitted here.
+    if (!error) {
+      const sent = await notifyReview(supabase, {
+        kind: 'user', actorId: user.id, subjectId: id, rating: myRating, link: `/u/${user.id}`,
+      })
+      if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+    }
     setPostingReview(false)
     if (error) { showToast('Could not post review: ' + error.message, { type: 'error' }); return }
     setMyRating(5)
@@ -367,7 +384,7 @@ function PublicProfile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -399,7 +416,7 @@ function PublicProfile() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -486,43 +503,11 @@ function PublicProfile() {
     </div>
   )
 
-  // Menu-item look for the story chooser, matching PostMenu's menu styling.
-  const storyMenuItemStyle = {
-    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-    padding: '9px 10px', borderRadius: theme.radius.sm, border: 'none',
-    background: 'transparent', cursor: 'pointer', textAlign: 'left',
-    fontSize: 13, fontWeight: 600, fontFamily: theme.fontFamily, color: theme.gray600,
-  }
-
-  // The avatar, wearing a teal ring when there's an unexpired story to open.
-  // One definition, two sizes: large over the mobile cover, small in the
-  // desktop sidebar card. Tapping the ring opens a two-option chooser (View
-  // Stories / View Profile) instead of jumping straight into the viewer —
-  // a story ring that is also the identity avatar shouldn't force playback.
-  // With no stories the ring is plain identity chrome, not a button.
+  // WhatsApp Status-style avatar ring. When the profile has unexpired
+  // stories, the avatar wears a teal (or grey when all seen) ring and
+  // tapping it opens the sequential viewer directly. No separate tile,
+  // no chooser — the ring IS the affordance.
   function StoryAvatar({ size, fontSize, borderWidth = 3, style = {} }) {
-    const [chooserOpen, setChooserOpen] = useState(false)
-    const wrapRef = useRef(null)
-
-    useEffect(() => {
-      if (!chooserOpen) return
-      function onDocClick(e) {
-        if (!wrapRef.current?.contains(e.target)) setChooserOpen(false)
-      }
-      function onKeyDown(e) {
-        if (e.key === 'Escape') {
-          setChooserOpen(false)
-          wrapRef.current?.querySelector('button')?.focus()
-        }
-      }
-      document.addEventListener('mousedown', onDocClick)
-      document.addEventListener('keydown', onKeyDown)
-      return () => {
-        document.removeEventListener('mousedown', onDocClick)
-        document.removeEventListener('keydown', onKeyDown)
-      }
-    }, [chooserOpen])
-
     const ringPad = hasStory ? Math.round(size * 0.045) + 2 : 0
     const face = (
       <div style={{
@@ -546,48 +531,14 @@ function PublicProfile() {
     if (!hasStory) return <div style={ringStyle}>{face}</div>
 
     return (
-      <div ref={wrapRef} style={{ position: 'relative', ...style }}>
-        <button
-          type="button"
-          onClick={() => setChooserOpen(true)}
-          aria-label={`View ${displayName}'s story`}
-          aria-haspopup="menu"
-          aria-expanded={chooserOpen}
-          style={{ ...ringStyle, cursor: 'pointer' }}
-        >
-          {face}
-        </button>
-
-        {chooserOpen && (
-          <div
-            role="menu"
-            aria-label={`${displayName} options`}
-            style={{
-              position: 'absolute', top: size + 6, left: 0, zIndex: 30, minWidth: 184,
-              background: theme.cardBg, border: `1px solid ${theme.gray200}`,
-              borderRadius: theme.radius.md, boxShadow: theme.elevation[3],
-              padding: 6, display: 'flex', flexDirection: 'column', gap: 2,
-            }}
-          >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { setChooserOpen(false); setViewerIndex(0) }}
-              style={storyMenuItemStyle}
-            >
-              <Play size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Stories
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { setChooserOpen(false); scrollToProfileContent() }}
-              style={storyMenuItemStyle}
-            >
-              <User size={16} aria-hidden="true" style={{ flexShrink: 0 }} /> View Profile
-            </button>
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => setViewerIndex(0)}
+        aria-label={`View ${displayName}'s story`}
+        style={{ ...ringStyle, cursor: 'pointer', ...style }}
+      >
+        {face}
+      </button>
     )
   }
 
@@ -599,21 +550,7 @@ function PublicProfile() {
     const big = scale === 'hero'
     return (
       <>
-        <h1 style={{ fontSize: big ? 20 : 17, fontWeight: 900, color: theme.navy, margin: '0 0 2px 0' }}>{displayName}</h1>
-        {profile.display_name && (
-          <p style={{ margin: '0 0 6px 0', fontSize: big ? 13 : 12.5, color: theme.gray400, fontWeight: 600 }}>@{profile.display_name}</p>
-        )}
-        {profile.is_verified && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
-            fontSize: big ? 11 : 10.5, fontWeight: 800, color: theme.tealDeep,
-            background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
-          }}>
-            {/* The stored label usually already reads "Verified Doctor" —
-                prefixing it printed "Verified Verified Doctor". */}
-            <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
-          </span>
-        )}
+        <ProfileHeader profile={profile} name={displayName} context="profile" size={big ? 20 : 17} />
         {profile.bio && (
           <p style={{ margin: big ? '10px 0 0 0' : '6px 0 0 0', fontSize: big ? 13.5 : 13, color: theme.textMid, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
             {profile.bio}
@@ -761,31 +698,9 @@ function PublicProfile() {
           </div>
         )}
 
-        {/* Story rail — a quick-access TikTok-style row, read-only mirror of
-            the own-profile rail (Profile.jsx). One circle per story, ordered
-            position → views → newest. Empty profiles render nothing. */}
-        {userStories.length > 0 && (
-          <div className="cf-hscroll" style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12, WebkitOverflowScrolling: 'touch' }}>
-            {userStories.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setViewerIndex(i)}
-                aria-label={`View story${s.title ? `: ${s.title}` : ''}`}
-                style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: allSeen ? theme.gray300 : theme.tealDeep }}>
-                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>
-                    {!s.image_url && (s.title?.[0]?.toUpperCase() || displayName[0]?.toUpperCase() || '?')}
-                  </div>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.title || 'Story'}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* WhatsApp-style: no separate story rail. Stories are accessed via the
+            avatar ring — tapping the ring opens the sequential viewer which
+            auto-advances through all stories. */}
 
         {/* Content tabs */}
         <div role="group" aria-label="Profile sections" className="cf-hscroll" style={{ display: 'flex', borderBottom: `1px solid ${theme.gray200}`, marginBottom: 14, WebkitOverflowScrolling: 'touch' }}>
@@ -917,28 +832,9 @@ function PublicProfile() {
               />
             )
           }
-          return <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
+          return <PostTileGrid posts={list} isMobile={isMobile} />
         })()}
       </div>
-
-      {/* Expanded post */}
-      {openPost && (
-        <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
-            </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type === 'visual' && !openPost.image_url && (
-              <div style={{ background: visualThemes[openPost.theme] || visualThemes.teal, padding: 22, borderRadius: 12, marginBottom: 12 }}>
-                <p style={{ color: '#fff', fontSize: 16, fontWeight: 800, textAlign: 'center', margin: 0, whiteSpace: 'pre-wrap' }}>{openPost.content}</p>
-              </div>
-            )}
-            {openPost.post_type !== 'visual' && <div style={{ margin: 0, fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>}
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? timeAgo(openPost.created_at) : ''}</p>
-          </div>
-        </div>
-      )}
 
       {/* Story viewer */}
       {viewerIndex !== null && userStories[viewerIndex] && (
@@ -1033,7 +929,6 @@ function PublicProfile() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

@@ -1,21 +1,20 @@
 /* Global tokens and resets for CareHub.
-   Mirrors apps/carehub/src/styles/theme.js — kept in sync by hand, since the
+   Mirrors @care-ecosystem/design-system tokens — kept in sync by hand, since the
    app is inline-style-driven and theme.js is the source of truth for JS.
    This file exists only for what inline styles cannot express: CSS variables
    for use in the few places that need real CSS (keyframes, media queries,
    pseudo-classes), plus the resets and animations documented in
-   docs/design/MOTION.md and docs/design/ACCESSIBILITY.md. Mirrors
-   apps/carefind/src/styles/global.css's shape (ch- prefix instead of cf-). */
+   docs/design/MOTION.md and docs/design/ACCESSIBILITY.md. */
 
 :root {
   /* Brand */
   --teal-600: #0E6F5A;
-  --teal-500: #0E6F5A;
-  --navy-900: #182722;
+  --teal-500: #1A8A72;
+  --navy-900: #0B4A3E;
   --navy-800: #3C4B44;
   --teal-mist: #E3EEE8;
 
-  /* Neutrals */
+  /* Neutrals (unified warm gray scale) */
   --bg-page: #F7F5EF;
   --canvas-bg: #E7E5DC;
   --gray-50: #FBFAF6;
@@ -28,8 +27,8 @@
   --gray-900: #182722;
 
   /* Semantic */
-  --success: #0E6F5A;
-  --success-bg: #E3EEE8;
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
   --warning: #d97706;
   --warning-bg: #fffbeb;
   --danger: #dc2626;
@@ -37,6 +36,7 @@
   --info: #2563eb;
   --info-bg: #eff6ff;
   --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
 
   /* Spacing (SPACING.md) */
   --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px;
@@ -122,10 +122,10 @@ body {
 /* ── Display serif (marketing pages only — TYPOGRAPHY.md) ───────────────────
    @font-face only, never preloaded: a browser only fetches these files when
    an element actually rendered on screen uses font-family: var(--font-display).
-   No dashboard/POS/table/form screen does, so this costs nothing there.
    Self-hosted from Lora's variable-font source (covers the whole 600–700
    range from 2 subset files, latin + latin-ext, instead of 4 static-weight
    files) — smaller total payload for the same two weights this system uses. */
+
 @font-face {
   font-family: 'Lora';
   src: url('/fonts/lora-latin.woff2') format('woff2');
@@ -185,6 +185,150 @@ body {
 }
 .ch-data-row td {
   transition: background 0.12s ease;
+}
+
+/* ── Custom scrollbars (brand-aligned, accessible) ───────────────────────────
+   The app is inline-style-driven, but scrollbar styling cannot be expressed
+   inline, so it lives here. Every scrollable region uses native overflow, so
+   these global rules style the Sidebar, dashboard main content, modals,
+   dropdowns and all module lists consistently. Standard properties
+   (scrollbar-width / scrollbar-color) cover Firefox; the -webkit- pseudo-
+   elements cover Chromium/Safari/Edge. The thumb uses the brand teal so the
+   scroll affordance reads as part of the product, not a foreign OS control. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal-600) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--teal-600);
+  /* transparent border insets the thumb so it never touches the track edge */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--teal-500);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--teal-600);
+}
+
+/* The webkit scrollbar corner (where horizontal + vertical meet) — keep it
+   clean so nested scroll areas don't show a jarring square. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Modal scrollbars (explicit, brand-matched) ─────────────────────────────
+   The shared design-system Modal renders every dialog/drawer/sheet in the
+   ecosystem. The global * rule above already styles these, but we repeat the
+   contract here, scoped to the Modal's own classes, so the brand scrollbar is
+   guaranteed inside modals (the overlay scrolls when a dialog is taller than
+   the viewport; the body scrolls for long content) and stays DRY from the
+   rest of the app's scroll areas. */
+.ds-modal-overlay,
+.ds-modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--teal-600) transparent;
+}
+
+.ds-modal-overlay::-webkit-scrollbar,
+.ds-modal-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-track,
+.ds-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-thumb,
+.ds-modal-body::-webkit-scrollbar-thumb {
+  background-color: var(--teal-600);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+
+.ds-modal-overlay::-webkit-scrollbar-thumb:hover,
+.ds-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--teal-500);
+}
+
+.ds-modal-overlay::-webkit-scrollbar-corner,
+.ds-modal-body::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── POS cart polish (carehub) ───────────────────────────────────────────────
+   Cart rows and the payment/charge controls need hover + active feedback and
+   box-shadow elevation that inline styles can't express. These properties live
+   here (not inline) so :hover / :active / :disabled can override them cleanly. */
+.pos-cart-item {
+  background: white;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.pos-cart-item:hover {
+  background: var(--gray-100);
+  box-shadow: var(--elevation-1);
+}
+
+.pos-pay-chip {
+  background: white;
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.pos-pay-chip:hover {
+  border-color: var(--teal-600);
+  color: var(--teal-600);
+}
+.pos-pay-chip.is-active {
+  background: var(--teal-mist);
+  color: var(--teal-600);
+  border-color: var(--teal-600);
+}
+
+.pos-hold {
+  background: white;
+  color: var(--navy-900);
+  border: 1px solid var(--gray-200);
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+.pos-hold:hover:not(:disabled) {
+  border-color: var(--teal-600);
+  color: var(--teal-600);
+}
+
+.pos-charge {
+  background: var(--teal-600);
+  color: white;
+  box-shadow: var(--elevation-2);
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+.pos-charge:hover:not(:disabled) {
+  background: var(--teal-500);
+  box-shadow: var(--elevation-3);
+}
+.pos-charge:disabled {
+  background: var(--gray-200);
+  color: var(--gray-400);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */

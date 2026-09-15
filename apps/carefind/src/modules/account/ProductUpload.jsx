@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { Camera, MapPin, AlertTriangle, Plus, X, Loader2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -34,7 +35,7 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
 
   // Pull seller's location from their profile (shown to buyers as "Listed in …")
   async function loadSellerLocation() {
-    const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).maybeSingle()
+    const prof = await profileRepository.getProfileLocation(user.id)
     if (prof?.location) setSellerLocation(prof.location)
   }
 
@@ -74,8 +75,11 @@ function ProductUpload({ businesses, claimBusinesses = [], onClose, onAdded }) {
     }
     if (bizId) row.business_id = bizId
     else row.owner_id = user.id
-    const { error: insErr } = await supabase.from('products').insert(row)
-    if (insErr) { setError('Could not add product: ' + insErr.message); setSaving(false); return }
+    try {
+      await profileRepository.insertProduct(row)
+    } catch (insErr) {
+      setError('Could not add product: ' + insErr.message); setSaving(false); return
+    }
     setSaving(false)
     showToast('Product added!', { type: 'success' })
     // Refresh the parent page so the new product appears, then reset the form

@@ -10,6 +10,7 @@ import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
 import { Card, Inp, TealBtn, GhostBtn, Modal, Empty, DataTable, useToast, Toast } from '../../components/ui'
 import { theme } from '../../styles/theme'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
 const PIPELINE = ['submitted', 'approved', 'processing', 'dispatched', 'delivered']
@@ -340,15 +341,14 @@ export default function Orders({ brand }) {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '900px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '18px', fontWeight: '900', color: navy }}>Orders & LPO</div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>Submit an order, tag the manager who approves it, copy anyone else who should see it.</div>
-        </div>
-        <TealBtn onClick={openNew}>+ New Order</TealBtn>
-      </div>
+    <>
+      <PageHeader
+        title="Orders & LPO"
+        description="Submit an order, tag the manager who approves it, copy anyone else who should see it."
+        primaryAction={{ label: 'New Order', onClick: openNew }}
+      />
+      <div style={{ padding: '24px', maxWidth: '900px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       {awaitingMe.length > 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
@@ -802,6 +802,7 @@ export default function Orders({ brand }) {
             </div>
           )}
       </Modal>
-    </div>
+      </div>
+    </>
   )
 }

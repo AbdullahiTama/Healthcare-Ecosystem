@@ -1,0 +1,28 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{--teal:#0E6F5A;--ink:#182722;--muted:#8B978F;--border:#ECEAE0;--card:#FBFAF6;--bg:#F7F5EF;--warn:#d97706}
+body{margin:0;font-family:Geist,system-ui;background:var(--bg);color:var(--ink)}
+.wrap{max-width:720px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.gallery{height:320px;background:#E3EEE8;display:grid;place-items:center;position:relative;border-radius:14px}
+.dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.5);display:inline-block;margin:2px}
+.dot.on{background:#fff}
+.atc{background:var(--teal);color:#fff;width:100%;padding:12px;border:0;border-radius:10px;font-weight:800}
+.warn{border-left:3px solid var(--warn);padding-left:8px;color:var(--muted);font-size:12px}
+</style>
+<div class="wrap">
+  <a href="#" style="color:var(--teal);font-weight:700;font-size:13px">← Back to Shop</a>
+  <div class="gallery" style="margin:12px 0">Image 2/5 — swipe 50px + chevrons
+    <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:6px 10px;border-radius:999px"><span class="dot"></span><span class="dot on"></span><span class="dot"></span></div>
+    <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:6px">2/5</div>
+  </div>
+  <div class="card">
+    <div style="font-size:18px;font-weight:800">Amoxil 500mg</div>
+    <i style="color:var(--muted);font-size:13px">Amoxicillin</i>
+    <div style="color:var(--teal);font-weight:800;font-size:18px;margin:8px 0">₦3,500</div>
+    <div style="font-size:12px;font-weight:700;background:var(--warn);color:#fff;display:inline-block;padding:2px 8px;border-radius:999px">⚠️ Prescription required</div>
+    <p style="font-size:13px;line-height:1.5">Amoxicillin 500mg for bacterial infections…</p>
+    <div class="warn"><b>Warnings:</b> Do not use if allergic to penicillin…</div>
+    <div style="font-size:12px;color:var(--muted);margin:8px 0">Availability: 12 in stock · Category: medicine</div>
+    <button class="atc">Add to Cart</button>
+  </div>
+</div>

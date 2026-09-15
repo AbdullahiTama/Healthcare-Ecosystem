@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
+import { newsRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
-import { ArrowLeft, Eye, Image as ImageIcon, Newspaper, Pencil, Phone, X } from 'lucide-react'
+import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
-import { ErrorState, CardSkeleton } from '../../components/ui'
+import NewsEngagementBar from './NewsEngagementBar.jsx'
+import { validateArticleForPublish } from './articleContent.js'
+import { getNewsQueueInfo } from './newsQueue.js'
+import { ErrorState, CardSkeleton, Toast, useToast } from '../../components/ui'
 
 function News() {
   const { user } = useAuth()
@@ -38,16 +41,25 @@ function News() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const [queueInfo, setQueueInfo] = useState({ totalPending: 0, userSubmissions: [] })
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   useEffect(() => {
     loadNews()
     checkCanSubmit()
     markNewsSeen()
+    loadQueueInfo()
   }, [user])
+
+  async function loadQueueInfo() {
+    if (!user) return
+    const info = await getNewsQueueInfo(user.id)
+    setQueueInfo(info)
+  }
 
   async function markNewsSeen() {
     if (!user) return
-    await supabase.from('profiles').update({ news_last_seen: new Date().toISOString() }).eq('id', user.id)
+    await newsRepository.markNewsSeen(user.id)
   }
 
   async function checkCanSubmit() {
@@ -59,23 +71,11 @@ function News() {
     setLoading(true)
     setLoadError('')
     try {
-      const { data, error } = await supabase
-        .from('news')
-        .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
-        .eq('status', 'approved')
-        .order('published_at', { ascending: false })
-        .limit(40)
-      if (error) throw error
-      setArticles(data || [])
+      const data = await newsRepository.getApprovedNews()
+      setArticles(data)
 
       if (user) {
-        const { data: mine, error: mineErr } = await supabase
-          .from('news')
-          .select('id, headline, status, created_at')
-          .eq('author_id', user.id)
-          .neq('status', 'approved')
-          .order('created_at', { ascending: false })
-        if (mineErr) throw mineErr
+        const mine = await newsRepository.getPendingNewsByAuthor(user.id)
         setMyPending(mine || [])
       }
     } catch (e) {
@@ -96,6 +96,15 @@ function News() {
     if (!body.trim()) { setSubmitOk(false); setSubmitMsg('Please write the article body.'); return }
     if (!contactPhone.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact phone number.'); return }
     if (!contactEmail.trim()) { setSubmitOk(false); setSubmitMsg('Please add a contact email.'); return }
+    if (!user?.id) { setSubmitOk(false); setSubmitMsg('Please sign in to submit news.'); showToast('Please sign in to submit news.', { type: 'error' }); return }
+
+    // Issue #4: validate and repair the block body before the hero upload and
+    // the insert, so a body that would lose a section is refused with a clear
+    // message instead of being published short.
+    const check = validateArticleForPublish(body)
+    if (!check.ok) { setSubmitOk(false); setSubmitMsg(check.error); return }
+    const articleBody = check.content
+
     setSubmitting(true)
     setSubmitMsg('')
 
@@ -107,13 +116,15 @@ function News() {
       if (!upErr) {
         const { data: urlData } = supabase.storage.from('news-images').getPublicUrl(path)
         heroUrl = urlData.publicUrl
+      } else {
+        showToast('Hero image upload failed, submitting without image.', { type: 'warning' })
       }
     }
 
-    const { error } = await supabase.from('news').insert({
+    const { error } = await newsRepository.insertArticle({
       headline: headline.trim(),
       subtitle: subtitle.trim() || null,
-      body: body.trim(),
+      body: articleBody,
       hero_image_url: heroUrl,
       author_id: user.id,
       contact_phone: contactPhone.trim(),
@@ -123,13 +134,15 @@ function News() {
 
     if (error) {
       setSubmitOk(false)
-      setSubmitMsg('Could not submit: ' + error.message)
+      const msg = 'Could not submit: ' + error.message
+      setSubmitMsg(msg)
+      showToast(msg, { type: 'error' })
     } else {
       setSubmitOk(true)
       setSubmitMsg('Submitted! Your news is under review and will publish once approved.')
       setHeadline(''); setSubtitle(''); setBody(''); setHeroFile(null); setHeroPreview(null)
       setContactPhone(''); setContactEmail(''); setPreviewing(false)
-      setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews() }, 1800)
+      setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews(); loadQueueInfo() }, 1800)
     }
     setSubmitting(false)
   }
@@ -177,14 +190,31 @@ function News() {
       {myPending.length > 0 && (
         <div style={{ padding: '12px 16px 0', fontFamily: theme.fontFamily }}>
           <p style={{ margin: '0 0 6px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase' }}>Your submissions</p>
-          {myPending.map(m => (
-            <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: theme.bg, borderRadius: 10, marginBottom: 6 }}>
-              <span style={{ fontSize: 12.5, color: theme.textMid, flex: 1, marginRight: 8 }}>{m.headline}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: m.status === 'rejected' ? theme.alert : theme.amberText }}>
-                {m.status === 'rejected' ? 'Not approved' : 'Under review'}
-              </span>
+          {myPending.map(m => {
+            const submissionQueue = queueInfo.userSubmissions.find(s => s.id === m.id)
+            return (
+              <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: theme.bg, borderRadius: 10, marginBottom: 6 }}>
+                <div style={{ flex: 1, marginRight: 8 }}>
+                  <div style={{ fontSize: 12.5, color: theme.textMid }}>{m.headline}</div>
+                  {submissionQueue && m.status === 'pending' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, fontSize: 10, color: theme.tealDeep }}>
+                      <Clock size={10} />
+                      <span>Position #{submissionQueue.position} · Est. review: {submissionQueue.estimatedText}</span>
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 12, background: m.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: m.status === 'rejected' ? theme.alert : theme.amberText }}>
+                  {m.status === 'rejected' ? 'Not approved' : 'Under review'}
+                </span>
+              </div>
+            )
+          })}
+          {queueInfo.totalPending > 0 && (
+            <div style={{ marginTop: 8, padding: '8px 10px', background: theme.tealMist, borderRadius: 10, fontSize: 11, color: theme.tealDeep }}>
+              <Clock size={11} style={{ verticalAlign: '-2px', marginRight: 4 }} />
+              {queueInfo.totalPending} submission{queueInfo.totalPending !== 1 ? 's' : ''} in queue
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -216,6 +246,7 @@ function News() {
           <p style={{ margin: 0, fontFamily: theme.fontFamily, fontSize: 12, color: theme.textLight }}>
             By <strong style={{ color: theme.navy }}>{authorName(lead)}</strong> · {timeAgo(lead.published_at || lead.created_at)}
           </p>
+          <NewsEngagementBar article={lead} user={user} compact={false} />
         </Link>
       )}
 
@@ -226,13 +257,14 @@ function News() {
           the width for it (GRID_SYSTEM.md), each still its own row-style card */}
       <div style={isMobile ? {} : { display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 24 }}>
         {rest.map((a) => (
-          <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}` }}>
-            <div style={{ flex: 1 }}>
+          <Link key={a.id} to={`/news/${a.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <h3 style={{ margin: '0 0 5px 0', fontSize: 16.5, fontWeight: 800, color: theme.navy, lineHeight: 1.25 }}>{a.headline}</h3>
               {a.subtitle && <p style={{ margin: '0 0 6px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.4 }}>{a.subtitle.slice(0, 90)}{a.subtitle.length > 90 ? '…' : ''}</p>}
               <p style={{ margin: 0, fontFamily: theme.fontFamily, fontSize: 11, color: theme.textLight }}>
                 By {authorName(a)} · {timeAgo(a.published_at || a.created_at)}
               </p>
+              <NewsEngagementBar article={a} user={user} compact />
             </div>
             {a.hero_image_url && (
               <div style={{ width: 92, height: 92, borderRadius: 6, flexShrink: 0, background: `url(${a.hero_image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
@@ -277,6 +309,51 @@ function News() {
                 {heroPreview && <img src={heroPreview} alt="hero" style={{ width: '100%', display: 'block', marginBottom: 18, borderRadius: 4 }} />}
                 <div style={{ fontSize: 17, lineHeight: 1.7, color: '#1f2937' }}>
                   <ArticleEditor value={body} readOnly />
+                </div>
+                <div className="cf-eng-row" style={{ padding: '4px 18px', borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, margin: '8px 0' }}>
+                  <div className="cf-eng-group">
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Like this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Heart size={18} aria-hidden="true" />
+                      <span>Like</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Comments on this article"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <MessageCircle size={18} aria-hidden="true" />
+                      <span>Comment</span>
+                    </button>
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Share this article" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Share2 size={18} aria-hidden="true" />
+                      <span>Share</span>
+                    </button>
+                    <button
+                      className="cf-eng-item"
+                      disabled
+                      title="Publish to enable engagement"
+                      aria-label="Repost this article"
+                      aria-pressed="false"
+                      style={{ color: theme.gray500, opacity: 0.6 }}
+                    >
+                      <Repeat2 size={18} aria-hidden="true" />
+                      <span>Repost</span>
+                    </button>
+                  </div>
+                  <div className="cf-eng-group">
+                    <button className="cf-eng-item" disabled title="Publish to enable engagement" aria-label="Save this article" aria-pressed="false" style={{ color: theme.gray500, opacity: 0.6 }}>
+                      <Bookmark size={18} aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
                   <span style={{ fontSize: 18, color: theme.tealDeep, fontWeight: 900 }}>■</span>
@@ -338,13 +415,14 @@ function News() {
       )}
 
       {isMobile && <BottomNav />}
+      <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
     </div>
   )
 
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

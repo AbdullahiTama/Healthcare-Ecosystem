@@ -10,7 +10,7 @@
 // a silent failure.
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Play, VideoOff } from 'lucide-react'
+import { Loader2, Play, VideoOff, Volume2, VolumeX } from 'lucide-react'
 import { theme } from '../styles/theme'
 
 function prefersReducedMotion() {
@@ -26,12 +26,17 @@ function VideoPlayer({
   controls = false,
   autoPlay = true,
   loop = true,
-  muted = true,
+  muted: initialMuted = true,
+  autoUnmute = false,
+  onTimeUpdate,
   style,
+  objectFit = 'cover',
+  fill = true,
 }) {
   const videoRef = useRef(null)
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [playing, setPlaying] = useState(false)
+  const [muted, setMuted] = useState(initialMuted)
 
   // Feed autoplay is a nice-to-have, never a requirement: reduced-motion
   // users get a paused, controllable video instead of an unasked-for one.
@@ -75,11 +80,51 @@ function VideoPlayer({
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [wantsAutoplay])
 
+  // Keep the DOM element's muted property in sync with state so a user
+  // gesture can actually make audio audible (browser autoplay policy requires
+  // muted for autoplay, but unmuting via a tap must reach the element).
+  useEffect(() => {
+    const el = videoRef.current
+    if (el) el.muted = muted
+  }, [muted])
+
+  // Auto-unmute: when the video becomes active in the VideoFeed, listen for
+  // the first user gesture (scroll/tap) and unmute. Browsers require a user
+  // gesture before allowing sound — this hooks into that moment so the viewer
+  // gets audio without manually tapping the mute button.
+  useEffect(() => {
+    if (!autoUnmute || !initialMuted) return
+    function handleGesture() {
+      setMuted(false)
+      document.removeEventListener('touchstart', handleGesture)
+      document.removeEventListener('click', handleGesture)
+    }
+    document.addEventListener('touchstart', handleGesture, { once: true })
+    document.addEventListener('click', handleGesture, { once: true })
+    return () => {
+      document.removeEventListener('touchstart', handleGesture)
+      document.removeEventListener('click', handleGesture)
+    }
+  }, [autoUnmute, initialMuted])
+
+  // If the caller changes the initial muted prop, reflect it.
+  useEffect(() => {
+    setMuted(initialMuted)
+  }, [initialMuted])
+
   function togglePlay() {
     const video = videoRef.current
     if (!video) return
     if (video.paused) video.play().catch(() => {})
     else video.pause()
+  }
+
+  function toggleMute(e) {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    setMuted((m) => !m)
   }
 
   const overlay = {
@@ -109,9 +154,13 @@ function VideoPlayer({
     zIndex: 2,
   }
 
+  const videoStyle = fill
+    ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit, display: 'block' }
+    : { width: '100%', height: 'auto', display: 'block', objectFit, background: '#000' }
+
   return (
     <div
-      style={{ position: 'relative', background: '#0B4A3E', ...style }}
+      style={{ position: 'relative', background: '#000', overflow: 'hidden', ...style }}
       onClick={controls ? togglePlay : undefined}
     >
       <video
@@ -129,7 +178,12 @@ function VideoPlayer({
         onPlaying={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onError={() => setStatus('error')}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        onTimeUpdate={(e) => {
+          if (onTimeUpdate && e.target) {
+            onTimeUpdate(e.target.currentTime, e.target.duration)
+          }
+        }}
+        style={videoStyle}
       />
 
       {status === 'loading' && (
@@ -171,6 +225,33 @@ function VideoPlayer({
               <Play size={24} fill="#fff" color="#fff" style={{ marginLeft: 3 }} aria-hidden="true" />
             </span>
           )}
+        </button>
+      )}
+
+      {/* Tap-to-unmute: autoplay is muted for browser policy; user gesture toggles audio */}
+      {status === 'ready' && (
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? 'Unmute video' : 'Mute video'}
+          style={{
+            position: 'absolute',
+            bottom: 10,
+            right: 10,
+            width: 36,
+            height: 36,
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.55)',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#fff',
+            zIndex: 3,
+          }}
+        >
+          {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
         </button>
       )}
     </div>

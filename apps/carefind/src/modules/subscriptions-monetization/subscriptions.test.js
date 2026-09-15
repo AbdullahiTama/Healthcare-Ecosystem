@@ -47,10 +47,16 @@ describe('coinsToNaira', () => {
 })
 
 describe('subscribe', () => {
-  it('rejects missing users without touching supabase', async () => {
-    const result = await subscribe(null, 'c1', 5)
-    expect(result).toEqual({ error: 'Missing user' })
+  it('rejects missing creator without touching supabase', async () => {
+    const result = await subscribe('u1', null, 5)
+    expect(result).toEqual({ error: 'Missing creator' })
     expect(mockSupabase.q.select).not.toHaveBeenCalled()
+  })
+
+it('accepts missing subscriber (derived from auth.uid()) without touching supabase', async () => {
+    mockSupabase.data = 'not_signed_in'
+    const result = await subscribe(null, 'c1', 5)
+    expect(result.error).toContain('Please log in again')
   })
 
   it('rejects a non-positive price', async () => {

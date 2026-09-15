@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
+import { walletRepository } from './repositories/index.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
 import { ArrowLeft, Banknote, Coins, Gift, Landmark, Lock, RotateCcw, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme.js'
@@ -46,6 +47,8 @@ function Wallet() {
   const [wdAccountName, setWdAccountName] = useState('')
   const [wdPin, setWdPin] = useState('')
   const [wdSubmitting, setWdSubmitting] = useState(false)
+  const [wdAccountResolving, setWdAccountResolving] = useState(false)
+  const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
@@ -81,14 +84,11 @@ function Wallet() {
         }
         if (data.alreadyProcessed) return
 
-        const { data: freshWallet } = await supabase
-          .from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+        const freshWallet = await walletRepository.getBalance(user.id)
         setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? data.newBalance }))
 
-        const { data: txData } = await supabase
-          .from('transactions').select('*').eq('user_id', user.id)
-          .order('created_at', { ascending: false }).limit(20)
-        setTransactions(txData || [])
+        const txData = await walletRepository.getTransactions(user.id)
+        setTransactions(txData)
 
         setTab('history')
         showToast(`${data.credited} CareCoin${data.credited > 1 ? 's' : ''} added! New balance: ${data.newBalance} coins`, { type: 'success' })
@@ -105,20 +105,15 @@ function Wallet() {
       if (!user) { setLoading(false); return }
       setLoading(true)
 
-      let { data: walletData } = await supabase
-        .from('wallets').select('*').eq('user_id', user.id).maybeSingle()
+      let walletData = await walletRepository.getWallet(user.id)
 
       if (!walletData) {
-        const { data: newWallet } = await supabase
-          .from('wallets').insert({ user_id: user.id, balance: 0 }).select().single()
-        walletData = newWallet
+        walletData = await walletRepository.ensureWallet(user.id)
       }
       setWallet(walletData)
 
-      const { data: txData } = await supabase
-        .from('transactions').select('*').eq('user_id', user.id)
-        .order('created_at', { ascending: false }).limit(20)
-      setTransactions(txData || [])
+      const txData = await walletRepository.getTransactions(user.id)
+      setTransactions(txData)
       setLoading(false)
     }
     if (!authLoading) load()
@@ -136,6 +131,49 @@ function Wallet() {
     }
     loadBanks()
   }, [])
+
+  // Resolve account name when bank code and 10-digit account number are both set.
+  // Debounced to avoid firing on every keystroke — only resolves after the user
+  // pauses typing or pastes a complete 10-digit number.
+  const resolveTimer = useRef(null)
+  useEffect(() => {
+    if (resolveTimer.current) clearTimeout(resolveTimer.current)
+
+    // Clear resolved state when inputs change
+    setWdAccountResolved(false)
+    setWdAccountName('')
+
+    if (!wdBankCode || !wdAccountNumber || wdAccountNumber.length !== 10) return
+
+    resolveTimer.current = setTimeout(async () => {
+      setWdAccountResolving(true)
+      try {
+        const res = await fetch('/api/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bankCode: wdBankCode, accountNumber: wdAccountNumber }),
+        })
+        const data = await res.json()
+        if (res.ok && data.accountName) {
+          setWdAccountName(data.accountName)
+          setWdAccountResolved(true)
+        } else if (data.unsupportedBank) {
+          setWdAccountResolved(false)
+          showToast(data.error || 'This bank does not support automatic verification. Please enter your account name manually.', { type: 'warning' })
+        } else {
+          setWdAccountResolved(false)
+          showToast(data.error || data.detail || 'Could not verify account name.', { type: 'error' })
+        }
+      } catch {
+        setWdAccountResolved(false)
+        showToast('Network error. Please check your connection.', { type: 'error' })
+      } finally {
+        setWdAccountResolving(false)
+      }
+    }, 500)
+
+    return () => { if (resolveTimer.current) clearTimeout(resolveTimer.current) }
+  }, [wdBankCode, wdAccountNumber])
 
   async function handleTopUp(pkg) {
     if (!user) return
@@ -168,6 +206,10 @@ function Wallet() {
 
   async function handleWithdraw(e) {
     e.preventDefault()
+    if (Number(wdAmount) > (wallet?.balance || 0)) {
+      showToast("You don't have enough CareCoins for that amount.", { type: 'error' })
+      return
+    }
     setWdSubmitting(true)
 
     try {
@@ -201,13 +243,11 @@ function Wallet() {
         return
       }
 
-      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin('')
-      const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
+      const freshWallet = await walletRepository.getBalance(user.id)
       setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
-      const { data: txData } = await supabase
-        .from('transactions').select('*').eq('user_id', user.id)
-        .order('created_at', { ascending: false }).limit(20)
-      setTransactions(txData || [])
+      const txData = await walletRepository.getTransactions(user.id)
+      setTransactions(txData)
       setTab('history')
       showToast(`₦${data.payoutNaira.toLocaleString()} sent to your bank!`, { type: 'success' })
     } catch (err) {
@@ -436,11 +476,17 @@ function Wallet() {
                   onChange={setWdAmount}
                   placeholder={`5–${wallet.balance}`}
                   min={5}
+                  max={wallet?.balance || 0}
                   required
                 />
-                {wdAmount >= 5 && (
+                {wdAmount && Number(wdAmount) > (wallet?.balance || 0) && (
+                  <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.danger, fontWeight: 700 }}>
+                    Amount exceeds your balance of {wallet?.balance || 0} CareCoins
+                  </p>
+                )}
+                {Number(wdAmount) >= 5 && Number(wdAmount) <= (wallet?.balance || 0) && (
                   <p style={{ margin: '-4px 0 0 0', fontSize: 12, color: theme.textLight }}>
-                    You'll receive ≈ ₦{Math.floor(wdAmount * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
+                    You'll receive ≈ ₦{Math.floor(Number(wdAmount) * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
                   </p>
                 )}
                 <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -468,8 +514,27 @@ function Wallet() {
                     <span style={{ fontSize: 11, color: theme.textLight }}>Loading banks…</span>
                   )}
                 </label>
-                <Inp label="Account number" value={wdAccountNumber} onChange={setWdAccountNumber} placeholder="0123456789" required />
-                <Inp label="Account name" value={wdAccountName} onChange={setWdAccountName} placeholder="As it appears on your bank account" required />
+                <Inp label="Account number" value={wdAccountNumber} onChange={v => setWdAccountNumber(String(v || '').replace(/\D/g, '').slice(0, 10))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
+                <div>
+                  <Inp
+                    label={wdAccountResolving ? 'Account name (resolving…)' : 'Account name'}
+                    value={wdAccountName}
+                    onChange={setWdAccountName}
+                    placeholder={wdAccountResolving ? 'Verifying account…' : 'Enter bank and account number first'}
+                    readOnly={wdAccountResolved || wdAccountResolving}
+                    required
+                    style={wdAccountResolved ? { background: '#f0fdf4', borderColor: '#22c55e' } : undefined}
+                  />
+                  {wdAccountResolving && (
+                    <span style={{ fontSize: 11, color: theme.textLight }}>Verifying account name with your bank…</span>
+                  )}
+                  {wdAccountResolved && wdAccountName && (
+                    <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Account name verified</span>
+                  )}
+                  {!wdAccountResolved && !wdAccountResolving && wdBankCode && wdAccountNumber.length === 10 && (
+                    <span style={{ fontSize: 11, color: theme.warning }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                  )}
+                </div>
                 <Inp
                   label="Withdrawal PIN"
                   type="password"
@@ -484,11 +549,11 @@ function Wallet() {
                 />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || wdAmount < 5 || wdAmount > wallet.balance || !wdBankCode || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
@@ -534,7 +599,7 @@ function Wallet() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )
