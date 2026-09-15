@@ -299,6 +299,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         onToggleWishlist={toggleWishlist}
         hasWishlist={hasWishlist}
         ratings={ratings}
+        variant="shop"
         emptyTitle={externalQuery ? `No products found for "${externalQuery}"` : 'No products match'}
         emptyHint={externalQuery ? 'Try a different search term or adjust filters.' : 'Try adjusting filters or search.'}
       />

@@ -1,15 +1,19 @@
 import { Link } from 'react-router-dom'
-import { Heart, ShoppingCart, Package, Star } from 'lucide-react'
+import { Heart, ShoppingCart, Package, Star, Phone, MessageCircle } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Pill } from '../../components/ui'
+import { whatsappLink, telLink } from '../utils/marketplace.js'
+import { sellerContact, sellerPhone, sellerName } from '../utils/sellerLookup.js'
 
-export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished, rating }) {
+export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished, rating, variant = 'shop' }) {
   const p = row.products || row
   const rowId = row.id || p.id
   const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
   const priceLabel = priceKobo != null ? `₦${(priceKobo / 100).toLocaleString()}` : null
   const thumb = row.primary_image_url || p.image_url || null
   const isAskForPrice = priceLabel == null
+  const isEcommerce = !!row.ecommerce_product_id
+  const showContact = variant === 'products' || !isEcommerce
 
   return (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -107,37 +111,70 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
               </div>
             ) : null}
 
-            {/* Add to Cart */}
+            {/* Add to Cart — shop/ecommerce only; Contact buttons for CareFind products */}
             <div style={{ marginTop: 4 }}>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault(); e.stopPropagation()
-                  const k = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
-                  if (k != null) onAddToCart?.({ ecommerce_product_id: row.id || p.id, product_name: p.name, unit_price_kobo: k, quantity: 1, image_url: thumb, vendor_id: row.business_id, sale_type: p.sale_type })
-                }}
-                aria-label={`Add ${p.name} to cart`}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  minHeight: 44,
-                  borderRadius: 10,
-                  background: theme.tealDeep,
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  padding: '0 10px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  touchAction: 'manipulation',
-                }}
-              >
-                <ShoppingCart size={14} aria-hidden="true" />
-                Add to Cart
-              </button>
+              {showContact ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <a
+                    href={telLink(sellerPhone(row))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Call ${sellerName(row)}`}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      minHeight: 44, borderRadius: 10, background: theme.tealDeep, color: '#fff',
+                      fontSize: 12, fontWeight: 700, padding: '0 10px', border: 'none', cursor: 'pointer',
+                      touchAction: 'manipulation', textDecoration: 'none',
+                    }}
+                  >
+                    <Phone size={14} aria-hidden="true" /> Call
+                  </a>
+                  <a
+                    href={whatsappLink(sellerContact(row), `Hi, I'm interested in "${p.name}" on CareFind.`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`WhatsApp ${sellerName(row)}`}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      minHeight: 44, borderRadius: 10, background: '#25D366', color: '#fff',
+                      fontSize: 12, fontWeight: 700, padding: '0 10px', border: 'none', cursor: 'pointer',
+                      touchAction: 'manipulation', textDecoration: 'none',
+                    }}
+                  >
+                    <MessageCircle size={14} aria-hidden="true" /> WhatsApp
+                  </a>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault(); e.stopPropagation()
+                    const k = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
+                    if (k != null) onAddToCart?.({ ecommerce_product_id: row.id || p.id, product_name: p.name, unit_price_kobo: k, quantity: 1, image_url: thumb, vendor_id: row.business_id, sale_type: p.sale_type })
+                  }}
+                  aria-label={`Add ${p.name} to cart`}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    minHeight: 44,
+                    borderRadius: 10,
+                    background: theme.tealDeep,
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '0 10px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    touchAction: 'manipulation',
+                  }}
+                >
+                  <ShoppingCart size={14} aria-hidden="true" />
+                  Add to Cart
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -531,7 +531,7 @@ function Search() {
 
         {/* Loading states */}
         {loading && tab !== 'shop' && (
-          <ProductGrid rows={[]} loading={true} skeletonType={tab === 'products' ? 'grid' : 'list'} />
+          <ProductGrid rows={[]} loading={true} skeletonType={tab === 'products' ? 'grid' : 'list'} variant={tab === 'products' ? 'products' : 'shop'} />
         )}
 
         {/* Shop tab — delegates to Shop component */}
@@ -550,6 +550,7 @@ function Search() {
             onAddToCart={() => {}}
             emptyTitle="No products match"
             emptyHint="Try adjusting filters or search."
+            variant="products"
           />
         )}
 

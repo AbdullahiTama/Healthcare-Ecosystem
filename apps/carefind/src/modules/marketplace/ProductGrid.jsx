@@ -49,6 +49,7 @@ export default function ProductGrid({
   emptyTitle = 'No products found',
   emptyHint = 'Try another search or filter.',
   skeletonType = 'grid',
+  variant = 'shop',
 }) {
 
   if (loading) {
@@ -90,6 +91,7 @@ export default function ProductGrid({
               onToggleWishlist={onToggleWishlist}
               wished={hasWishlist ? hasWishlist(id) : false}
               rating={ratings?.[id]}
+              variant={variant}
             />
           </div>
         )
