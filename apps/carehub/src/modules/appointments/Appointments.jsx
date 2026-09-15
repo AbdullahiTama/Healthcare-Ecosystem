@@ -3,7 +3,9 @@ import { Calendar, Hourglass, CheckCircle, Search, Download, Wallet, Banknote } 
 import { appointmentRepository } from './repositories'
 // Cross-aggregate read: the client list belongs to the clients module. Still
 // the shared services/supabase read, used by several unmigrated modules too.
-import { getClients, notify, sbFetch } from '../../services/supabase'
+import { clientRepository } from '../clients/repositories'
+import { notificationRepository } from '../notifications/repositories'
+import { sbFetch } from '../../services/supabase'
 import { todayDate } from '../../lib/utils'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
@@ -66,7 +68,7 @@ export default function Appointments({ brand, role, perms }) {
   useEffect(() => { load() }, [brand?.id])
   useEffect(() => {
     let live = true
-    getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
+    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
 
@@ -233,7 +235,7 @@ export default function Appointments({ brand, role, perms }) {
           return
         }
         // Notify patient and refresh wallet
-        notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        notificationRepository.notify(brand.id, [{ }], 'booking_confirmed', `Appointment confirmed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
         // Refresh wallet balances
         sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
           if (Array.isArray(w) && w[0]) setWallet(w[0])
@@ -251,7 +253,7 @@ export default function Appointments({ brand, role, perms }) {
           else showToast('Could not complete appointment. Please try again.', { type: 'error' })
           return
         }
-        notify(brand.id, [{ }], 'booking_completed', `Appointment completed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
+        notificationRepository.notify(brand.id, [{ }], 'booking_completed', `Appointment completed — ${appt.client_name}`, `${appt.date} at ${appt.time}`, '/dashboard/appointments')
         sbFetch(`business_wallets?business_id=eq.${brand.id}`).then(w => {
           if (Array.isArray(w) && w[0]) setWallet(w[0])
         }).catch(() => {})

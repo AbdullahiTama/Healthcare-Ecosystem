@@ -1,78 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../../config/supabaseClient'
+import { agentRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { Button, Card, Input, Select, Loading, ErrorState, Empty, ConfirmDialog } from '../../components/ui'
-
-export async function fetchAgents() {
-  const { data, error } = await supabase.from('agents').select('id, full_name, email, referral_code, tier, state, status').order('created_at', { ascending: false }).limit(200)
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export async function fetchReferralsForAgent(agentId) {
-  if (!agentId) return []
-  const { data, error } = await supabase.from('agent_referrals').select('id, agent_id, business_id, referral_code, created_at').eq('agent_id', agentId).order('created_at', { ascending: false }).limit(100)
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export async function transferAgentOwnership({ fromAgentId, toAgentId, businessId, agentReferralId, reason, byAdminId }) {
-  if (!fromAgentId || !toAgentId) throw new Error('fromAgentId and toAgentId required')
-  if (fromAgentId === toAgentId) throw new Error('from and to cannot be the same')
-  // eslint-disable-next-line no-console
-  console.info('[AgentTransfer] transfer', { fromAgentId, toAgentId, businessId, agentReferralId, reason })
-  // Reassign agent_referrals
-  if (agentReferralId) {
-    const { error } = await supabase.from('agent_referrals').update({ agent_id: toAgentId }).eq('id', agentReferralId).eq('agent_id', fromAgentId)
-    if (error) throw error
-  } else if (businessId) {
-    const { error } = await supabase.from('agent_referrals').update({ agent_id: toAgentId }).eq('business_id', businessId).eq('agent_id', fromAgentId)
-    if (error) throw error
-  } else {
-    // transfer all referrals for from -> to
-    const { error } = await supabase.from('agent_referrals').update({ agent_id: toAgentId }).eq('agent_id', fromAgentId)
-    if (error) throw error
-  }
-
-  // Reassign agent_earnings for that business or all
-  if (businessId) {
-    const { error } = await supabase.from('agent_earnings').update({ agent_id: toAgentId }).eq('business_id', businessId).eq('agent_id', fromAgentId)
-    if (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[AgentTransfer] earnings reassign warning', error.message)
-    }
-  } else if (agentReferralId) {
-    // if referralId, need businessId from referral row; fetch if not provided
-    // For now, also transfer earnings where business matches referral's business
-    // Caller should supply businessId when using referralId to keep transfer atomic
-  } else {
-    // transfer all earnings
-    const { error } = await supabase.from('agent_earnings').update({ agent_id: toAgentId }).eq('agent_id', fromAgentId)
-    if (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[AgentTransfer] earnings bulk reassign warning', error.message)
-    }
-  }
-
-  // Insert audit
-  const audit = {
-    agent_referral_id: agentReferralId || null,
-    business_id: businessId || null,
-    from_agent_id: fromAgentId,
-    to_agent_id: toAgentId,
-    by_admin_id: byAdminId || null,
-    reason: reason || null,
-  }
-  const { data, error: auditErr } = await supabase.from('agent_transfers').insert(audit).select('id, from_agent_id, to_agent_id, business_id, created_at').single()
-  if (auditErr) {
-    // eslint-disable-next-line no-console
-    console.warn('[AgentTransfer] audit insert failed', auditErr.message)
-    throw auditErr
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentTransfer] audit created', data.id)
-  return data
-}
 
 export default function AgentTransfer() {
   const [loading, setLoading] = useState(true)
@@ -94,7 +23,7 @@ export default function AgentTransfer() {
     setLoading(true)
     setError(null)
     try {
-      const list = await fetchAgents()
+      const list = await agentRepository.fetchAgents()
       setAgents(list)
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -112,7 +41,7 @@ export default function AgentTransfer() {
     let cancelled = false
     async function fetchRefs() {
       try {
-        const refs = await fetchReferralsForAgent(fromId)
+        const refs = await agentRepository.fetchReferralsForAgent(fromId)
         if (!cancelled) setReferrals(refs)
       } catch {
         if (!cancelled) setReferrals([])
@@ -136,7 +65,34 @@ export default function AgentTransfer() {
     setSaving(true)
     setSaveError(null)
     try {
-      const audit = await transferAgentOwnership(confirm)
+      const { fromAgentId, toAgentId, businessId, agentReferralId, reason, byAdminId } = confirm
+
+      // Reassign agent_referrals
+      if (agentReferralId) {
+        await agentRepository.transferReferralsByReferralId({ fromAgentId, toAgentId, agentReferralId })
+      } else if (businessId) {
+        await agentRepository.transferReferralsByBusinessId({ fromAgentId, toAgentId, businessId })
+      } else {
+        await agentRepository.transferAllReferrals({ fromAgentId, toAgentId })
+      }
+
+      // Reassign agent_earnings
+      if (businessId) {
+        await agentRepository.transferEarningsByBusinessId({ fromAgentId, toAgentId, businessId })
+      } else {
+        await agentRepository.transferAllEarnings({ fromAgentId, toAgentId })
+      }
+
+      // Insert audit
+      const audit = await agentRepository.insertTransferAudit({
+        agentReferralId,
+        businessId,
+        fromAgentId,
+        toAgentId,
+        byAdminId,
+        reason,
+      })
+
       setSaveSuccess(`Transferred ownership — audit ${audit.id}. New owner ${confirm.toAgentId}.`)
       setConfirm(null)
       // clear fields
@@ -145,7 +101,7 @@ export default function AgentTransfer() {
       setReason('')
       // reload referrals
       if (confirm.fromAgentId) {
-        const refs = await fetchReferralsForAgent(confirm.fromAgentId)
+        const refs = await agentRepository.fetchReferralsForAgent(confirm.fromAgentId)
         setReferrals(refs)
       }
     } catch (e) {

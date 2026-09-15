@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, LogOut, Building2, Users, CheckCircle, Landmark, Plus, CheckCircle2, ClipboardIcon, Activity, Clock } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
-import {
-  getAgentPortfolio, getAgentCommissions, getAgentPayouts,
-  getAgentSupportLogs, addAgentSupportLog,
-} from '../../services/supabase'
+import { agentDashboardRepository } from './repositories'
 import { fmt, fmtDate, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Inp, Sel, TealBtn, GhostBtn, Loading, Empty, Modal, useToast, Toast } from '../../components/ui'
@@ -41,8 +38,8 @@ export default function AgentDashboard() {
     setLoading(true)
     try {
       const [p, c, o, s] = await Promise.all([
-        getAgentPortfolio(), getAgentCommissions(agent.id),
-        getAgentPayouts(agent.id), getAgentSupportLogs(agent.id),
+        agentDashboardRepository.getAgentPortfolio(), agentDashboardRepository.getAgentCommissions(agent.id),
+        agentDashboardRepository.getAgentPayouts(agent.id), agentDashboardRepository.getAgentSupportLogs(agent.id),
       ])
       setPortfolio(p || [])
       setCommissions(c || [])
@@ -84,7 +81,7 @@ export default function AgentDashboard() {
     if (!logForm.business_id) { showToast('Choose a business first.', { type: 'warning' }); return }
     if (!logForm.details.trim()) { showToast('Add a short note.', { type: 'warning' }); return }
     try {
-      await addAgentSupportLog({
+      await agentDashboardRepository.addAgentSupportLog({
         agent_id: agent.id,
         business_id: logForm.business_id,
         kind: logForm.kind,

@@ -223,19 +223,17 @@ export default function PostModalRoute() {
     if (!user || !postId) return
     setReportingId(postId)
 
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
-    setReportPostId(null)
-
-    if (error) {
+    try {
+      await postRepository.reportPost(postId, user.id, reason)
+    } catch (error) {
+      setReportingId(null)
+      setReportPostId(null)
       toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
       return
     }
+
+    setReportingId(null)
+    setReportPostId(null)
 
     // Reporting is one of the two mutations this overlay owns itself rather
     // than borrowing from the hook, so `wrapMutations` cannot see it: mark

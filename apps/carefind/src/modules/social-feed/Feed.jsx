@@ -8,6 +8,7 @@ import {
   Stethoscope, Trash2, Trees, Unlock, Waves, X, Flag,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
+import { postRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { createViewRecorder } from './engagement'
 import { usePostEngagement } from './usePostEngagement.js'
@@ -283,14 +284,12 @@ function Feed() {
     if (!q.trim()) return
     setReviewSearching(true)
     const [bizRes, prodRes] = await Promise.all([
-      supabase.from('businesses').select('id, name, business_type').eq('visible_on_carefind', true).ilike('name', `%${q}%`).limit(4),
-      supabase.from('products').select('id, name, emoji').eq('list_on_carefind', true).ilike('name', `%${q}%`).limit(4),
+      postRepository.searchBusinesses(q),
+      postRepository.searchProducts(q),
     ])
     const results = [
-      ...(bizRes.data || []).map((b) => ({ type: 'business', id: b.id, name: b.name, sub: b.business_type })),
-      // The row's type is carried by its leading lucide icon (ICONS.md), not
-      // by a glyph pasted into the name string.
-      ...(prodRes.data || []).map((p) => ({ type: 'product', id: p.id, name: p.name, sub: 'Medication' })),
+      ...bizRes.map((b) => ({ type: 'business', id: b.id, name: b.name, sub: b.business_type })),
+      ...prodRes.map((p) => ({ type: 'product', id: p.id, name: p.name, sub: 'Medication' })),
     ]
     if (results.length === 0) {
       results.push({ type: 'unclaimed', id: null, name: q.trim(), sub: 'Not yet listed: review anyway' })
@@ -301,17 +300,19 @@ function Feed() {
 
   async function checkProfileComplete() {
     if (!user) { setProfileComplete(true); setCanGoLive(false); return }
-    const { data } = await supabase
-      .from('profiles')
-      .select('full_name, display_name, phone, is_verified, verification_label, avatar_url')
-      .eq('id', user.id)
-      .maybeSingle()
-    const complete = !!(data && data.full_name && data.display_name && data.phone)
-    setProfileComplete(complete)
-    setMyUsername(data?.display_name || data?.full_name || '')
-    setMyAvatar(data?.avatar_url || null)
-    // Only verified businesses or professionals can go live
-    setCanGoLive(!!(data && data.is_verified))
+    try {
+      const data = await postRepository.getProfileById(user.id)
+      const complete = !!(data && data.full_name && data.display_name && data.phone)
+      setProfileComplete(complete)
+      setMyUsername(data?.display_name || data?.full_name || '')
+      setMyAvatar(data?.avatar_url || null)
+      // Only verified businesses or professionals can go live
+      setCanGoLive(!!(data && data.is_verified))
+    } catch (e) {
+      console.error('Profile check error:', e)
+      setProfileComplete(false)
+      setCanGoLive(false)
+    }
   }
 
   // The ranking half of the old enrichAndSetPosts. engagement.hydrate() does
@@ -517,48 +518,41 @@ function Feed() {
   // 20260813_feed_engine migration makes the config real; without it every
   // read degrades to the built-in defaults and the feed still ranks.
   async function loadEngineConfig() {
-    const { data: rows } = await supabase.from('feed_ranking_config').select('key, value')
-    if (rows && rows.length) {
-      const byKey = {}
-      rows.forEach((r) => { byKey[r.key] = r.value })
-      setRankConfig({
-        weights: { ...DEFAULT_RANKING_CONFIG.weights, ...(byKey.weights || {}) },
-        diversity: { ...DEFAULT_RANKING_CONFIG.diversity, ...(byKey.diversity || {}) },
-      })
-    }
-    const { data: poolRows } = await supabase.from('candidate_generation_pools').select('pool, enabled, priority, limit_count')
-    if (poolRows && poolRows.length) {
-      const next = {}
-      poolRows.forEach((r) => { next[r.pool] = { enabled: r.enabled !== false, priority: r.priority, limitCount: r.limit_count } })
-      setPoolsConfig({ ...DEFAULT_POOLS, ...next })
-    }
-    if (user) {
-      const { data: me } = await supabase.from('profiles').select('location, country').eq('id', user.id).maybeSingle()
-      if (me) setMyRegion(normalizeRegion(`${me.location || ''} ${me.country || ''}`))
-    }
-    const [{ data: vp }, { data: mb }] = await Promise.all([
-      supabase.from('profiles').select('id').eq('is_verified', true),
-      supabase.from('businesses').select('id').in('business_type', MEDICAL_BUSINESS_TYPES).eq('status', 'active'),
-    ])
-    setMedicalContext({
-      verifiedIds: (vp || []).map((r) => r.id),
-      medicalBizIds: (mb || []).map((r) => r.id),
-    })
+    try {
+      const rows = await postRepository.getFeedRankingConfig()
+      if (rows && rows.length) {
+        const byKey = {}
+        rows.forEach((r) => { byKey[r.key] = r.value })
+        setRankConfig({
+          weights: { ...DEFAULT_RANKING_CONFIG.weights, ...(byKey.weights || {}) },
+          diversity: { ...DEFAULT_RANKING_CONFIG.diversity, ...(byKey.diversity || {}) },
+        })
+      }
+      const poolRows = await postRepository.getCandidatePools()
+      if (poolRows && poolRows.length) {
+        const next = {}
+        poolRows.forEach((r) => { next[r.pool] = { enabled: r.enabled !== false, priority: r.priority, limitCount: r.limit_count } })
+        setPoolsConfig({ ...DEFAULT_POOLS, ...next })
+      }
+      if (user) {
+        const me = await postRepository.getProfileLocation(user.id)
+        if (me) setMyRegion(normalizeRegion(`${me.location || ''} ${me.country || ''}`))
+      }
+      const [verifiedIds, medicalBizIds] = await Promise.all([
+        postRepository.getVerifiedProfessionalIds(),
+        postRepository.getMedicalBusinessIds(MEDICAL_BUSINESS_TYPES),
+      ])
+      setMedicalContext({ verifiedIds, medicalBizIds })
 
-    // Phase 7: resolve the reader's staged-rollout group (deterministic bucket
-    // over user/session id). No experiment staged ⇒ null ⇒ the feed uses the
-    // base config and logs no metrics. When the reader lands in the treatment
-    // group the For You ranking must apply its config, so reload the current
-    // feed once the group is known (experiments are off by default; this only
-    // costs a refetch while one is actually staged).
-    const { data: expRows } = await supabase
-      .from('content_distribution_experiments')
-      .select('key, label, enabled, rollout_pct, variant, config, start_at, end_at')
-    setActiveExperiment(resolveExperiment({
-      experiments: expRows || [],
-      userId: user?.id || null,
-      sessionId: recordFeedView.sessionId,
-    }))
+      const expRows = await postRepository.getExperiments()
+      setActiveExperiment(resolveExperiment({
+        experiments: expRows || [],
+        userId: user?.id || null,
+        sessionId: recordFeedView.sessionId,
+      }))
+    } catch (e) {
+      console.error('Feed engine config error:', e)
+    }
   }
   useEffect(() => { loadEngineConfig() }, [user])
 
@@ -596,15 +590,10 @@ function Feed() {
   useEffect(() => {
     if (!user) { feedConfigLoadedRef.current = true; return }
     if (urlTabAppliedRef.current) { feedConfigLoadedRef.current = true; return }
-    supabase
-      .from('feed_config')
-      .select('value')
-      .eq('user_id', user.id)
-      .eq('key', 'feed_tab')
-      .maybeSingle()
-      .then(({ data }) => {
+    postRepository.getFeedConfig(user.id)
+      .then((row) => {
         feedConfigLoadedRef.current = true
-        const saved = data?.value
+        const saved = row?.value
         if (saved && FEED_TABS.some(([key]) => key === saved)) setFeedTab(saved)
       })
       .catch(() => { feedConfigLoadedRef.current = true })
@@ -612,9 +601,7 @@ function Feed() {
 
   useEffect(() => {
     if (!user || !feedConfigLoadedRef.current) return
-    supabase
-      .from('feed_config')
-      .upsert({ user_id: user.id, key: 'feed_tab', value: feedTab })
+    postRepository.upsertFeedConfig(user.id, feedTab)
       .then(() => {})
       .catch(() => {})
   }, [user, feedTab])
@@ -707,23 +694,23 @@ function Feed() {
   }, [])
 
   async function loadLiveSessions() {
-    const { data } = await supabase
-      .from('live_sessions')
-      .select('*, profiles(full_name, display_name, specialty)')
-      .eq('status', 'live')
-      .order('started_at', { ascending: false })
-      .limit(5)
-    setLiveSessions(data || [])
+    try {
+      const data = await postRepository.getLiveSessions()
+      setLiveSessions(data)
+    } catch (e) {
+      console.error('Live sessions load error:', e)
+      setLiveSessions([])
+    }
   }
 
   async function loadLatestNews() {
-    const { data } = await supabase
-      .from('news')
-      .select('id, headline, hero_image_url, published_at')
-      .eq('status', 'approved')
-      .order('published_at', { ascending: false })
-      .limit(6)
-    setLatestNews(data || [])
+    try {
+      const data = await postRepository.getLatestNews()
+      setLatestNews(data)
+    } catch (e) {
+      console.error('News load error:', e)
+      setLatestNews([])
+    }
   }
 
   // Short clip as the card backdrop. Kept small on purpose: data is expensive.
@@ -762,33 +749,34 @@ function Feed() {
   // The banner is for CareFind's own broadcasts only. A user going live
   // shows up in the stories rail and in notifications, not here.
   async function loadPlatformLive() {
-    const { data } = await supabase
-      .from('live_shows')
-      .select('id, title')
-      .eq('status', 'live')
-      .eq('is_platform', true)
-      .order('started_at', { ascending: false })
-      .limit(1)
-    setPlatformLive(data && data[0] ? data[0] : null)
+    try {
+      const data = await postRepository.getPlatformLive()
+      setPlatformLive(data)
+    } catch (e) {
+      console.error('Platform live load error:', e)
+      setPlatformLive(null)
+    }
   }
 
   async function loadSeries() {
-    const { data } = await supabase
-      .from('playlists')
-      .select('id, title, description, owner_id, created_at')
-      .order('created_at', { ascending: false })
-      .limit(30)
-    setSeriesList(data || [])
+    try {
+      const data = await postRepository.getSeriesList()
+      setSeriesList(data)
+    } catch (e) {
+      console.error('Series load error:', e)
+      setSeriesList([])
+    }
   }
 
   async function loadUnreadNotifs() {
     if (!user) { setUnreadNotifs(0); return }
-    const { count } = await supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('recipient_id', user.id)
-      .eq('read', false)
-    setUnreadNotifs(count || 0)
+    try {
+      const count = await postRepository.getUnreadNotificationCount(user.id)
+      setUnreadNotifs(count)
+    } catch (e) {
+      console.error('Notifications load error:', e)
+      setUnreadNotifs(0)
+    }
   }
 
 
@@ -900,32 +888,42 @@ function Feed() {
     // fk_posts_user guard: ensure the poster has a profiles row first
     await ensureProfile(user)
 
-    const { error } = await supabase.from('posts').insert({
-      user_id: user.id,
-      content: postContent,
-      post_type: postType,
-      subscriber_only: subscriberOnly,
-      audio_url: postType === 'visual' ? cardAudio : null,
-      video_url: postType === 'visual' || postType === 'video' ? cardVideo : null,
-      theme: postType === 'visual' ? visualTheme : null,
-      rating: postType === 'review' ? postRating : null,
-      image_url: imageUrls[0] || null,
-      image_urls: imageUrls,
-      posted_as_type: identity ? identity.type : null,
-      posted_as_id: identity ? (identity.type === 'business' ? identity.id : identity.staffId) : null,
-      posted_as_name: identity ? (identity.type === 'business' ? identity.name : identity.businessName) : null,
-      posted_as_title: identity && identity.type === 'staff' ? identity.publicTitle : null,
-    })
+    let postError = null
+    try {
+      await postRepository.createPost({
+        user_id: user.id,
+        content: postContent,
+        post_type: postType,
+        subscriber_only: subscriberOnly,
+        audio_url: postType === 'visual' ? cardAudio : null,
+        video_url: postType === 'visual' || postType === 'video' ? cardVideo : null,
+        theme: postType === 'visual' ? visualTheme : null,
+        rating: postType === 'review' ? postRating : null,
+        image_url: imageUrls[0] || null,
+        image_urls: imageUrls,
+        posted_as_type: identity ? identity.type : null,
+        posted_as_id: identity ? (identity.type === 'business' ? identity.id : identity.staffId) : null,
+        posted_as_name: identity ? (identity.type === 'business' ? identity.name : identity.businessName) : null,
+        posted_as_title: identity && identity.type === 'staff' ? identity.publicTitle : null,
+      })
+    } catch (e) {
+      postError = e
+    }
 
     // If it's a review and a target is tagged, also write to the intelligence layer
-    if (!error && postType === 'review' && reviewTarget) {
+    if (!postError && postType === 'review' && reviewTarget) {
       if (reviewTarget.type === 'business') {
-        const { error: reviewError } = await supabase.from('reviews').insert({
-          business_id: reviewTarget.id,
-          user_id: user.id,
-          rating: postRating,
-          comment: postContent,
-        })
+        let reviewError = null
+        try {
+          await postRepository.insertReview({
+            business_id: reviewTarget.id,
+            user_id: user.id,
+            rating: postRating,
+            comment: postContent,
+          })
+        } catch (e) {
+          reviewError = e
+        }
         // Issue #7: a review posted through the feed composer notified nobody
         // either — same gap as the business/product/profile review forms.
         if (!reviewError) {
@@ -936,12 +934,17 @@ function Feed() {
           if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
         }
       } else if (reviewTarget.type === 'product') {
-        const { error: reviewError } = await supabase.from('product_reviews').insert({
-          product_id: reviewTarget.id,
-          user_id: user.id,
-          rating: postRating,
-          comment: postContent,
-        })
+        let reviewError = null
+        try {
+          await postRepository.insertProductReview({
+            product_id: reviewTarget.id,
+            user_id: user.id,
+            rating: postRating,
+            comment: postContent,
+          })
+        } catch (e) {
+          reviewError = e
+        }
         if (!reviewError) {
           const sent = await notifyReview(supabase, {
             kind: 'product', actorId: user.id, productId: reviewTarget.id, rating: postRating, link: '/feed',
@@ -949,18 +952,22 @@ function Feed() {
           if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
         }
       } else if (reviewTarget.type === 'unclaimed') {
-        await supabase.from('unclaimed_entities').insert({
-          name: reviewTarget.name,
-          entity_type: reviewTarget.entityType || 'business',
-          submitted_by: user.id,
-        })
+        try {
+          await postRepository.insertUnclaimedEntity({
+            name: reviewTarget.name,
+            entity_type: reviewTarget.entityType || 'business',
+            submitted_by: user.id,
+          })
+        } catch (e) {
+          console.error('Unclaimed entity insert error:', e)
+        }
       }
       setReviewTarget(null)
       setReviewSearch('')
       setReviewSearchResults([])
     }
 
-    if (!error) {
+    if (!postError) {
       setContent('')
       imagePreviews.forEach((u) => { try { URL.revokeObjectURL(u) } catch {} })
       setImageFiles([])
@@ -972,9 +979,9 @@ function Feed() {
       setCardVideoPreview(null)
       loadFeed()
     } else {
-      console.error('Post error:', error)
+      console.error('Post error:', postError)
       // Surface it: a silent failure just looks like a broken button on a phone.
-      toast.show('Could not post: ' + (error.message || 'unknown error'))
+      toast.show('Could not post: ' + (postError.message || 'unknown error'))
     }
     setPosting(false)
   }
@@ -1024,17 +1031,18 @@ function Feed() {
     if (!user || !postId) return
     setReportingId(postId)
 
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
+    let reportError = null
+    try {
+      await postRepository.reportPost(postId, user.id, reason)
+    } catch (e) {
+      reportError = e
+    }
 
     setReportingId(null)
     setReportPostId(null)
 
-    if (error) {
-      toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
+    if (reportError) {
+      toast.show('Could not send the report: ' + (reportError.message || 'unknown error'), { type: 'error' })
       return
     }
 

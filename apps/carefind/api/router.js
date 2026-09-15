@@ -43,6 +43,7 @@ import bookingInterestHandler from './_handlers/booking-interest.js'
 import requestShopReturnHandler from './_handlers/request-shop-return.js'
 import withdrawalTrustHandler from './_handlers/withdrawal-trust.js'
 import emailTemplatesHandler from './_handlers/email-templates.js'
+import emailHandler from './_handlers/email.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -70,6 +71,9 @@ const ROUTES = {
   'request-shop-return': requestShopReturnHandler,
   'withdrawal-trust': withdrawalTrustHandler,
   'email-templates': emailTemplatesHandler,
+  'email': emailHandler,
+  'cron': emailHandler,
+  'webhooks': emailHandler,
 }
 
 // This route must receive the untouched request stream so it can hash the raw

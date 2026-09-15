@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { playlistRepository } from './repositories'
 import {
   Check, FileText, Film, HelpCircle, Image as ImageIcon, MessageSquare, Paperclip,
   Palette, Pen, Plus, Star, Video,
@@ -53,12 +53,12 @@ function PlaylistCreate() {
 
   useEffect(() => {
     if (existingId) {
-      supabase.from('playlist_parts').select('id, title, kind, position').eq('playlist_id', existingId).order('position', { ascending: true }).then(({ data }) => {
+      playlistRepository.listPartsLight(existingId).then((data) => {
         if (data) setParts(data)
       })
     }
     if (editPartId) {
-      supabase.from('playlist_parts').select('*').eq('id', editPartId).maybeSingle().then(({ data }) => {
+      playlistRepository.getPartById(editPartId).then((data) => {
         if (data) {
           setPTitle(data.title || '')
           setPKind(data.kind || 'text')
@@ -84,12 +84,18 @@ function PlaylistCreate() {
   async function createPlaylist() {
     if (!title.trim()) { setError('Give your playlist a title.'); return }
     setSaving(true); setError('')
-    const { data, error: insErr } = await supabase.from('playlists').insert({
-      owner_id: user.id, title: title.trim(), description: description.trim() || null,
-    }).select().maybeSingle()
-    if (insErr || !data) { setError('Could not create: ' + (insErr?.message || 'unknown')); setSaving(false); return }
-    setPlaylistId(data.id)
-    setStep('parts')
+    try {
+      const data = await playlistRepository.createPlaylist({
+        ownerId: user.id,
+        title: title.trim(),
+        description: description.trim() || null,
+      })
+      if (!data) { setError('Could not create: unknown error'); setSaving(false); return }
+      setPlaylistId(data.id)
+      setStep('parts')
+    } catch (insErr) {
+      setError('Could not create: ' + (insErr?.message || 'unknown'))
+    }
     setSaving(false)
   }
 
@@ -123,17 +129,17 @@ function PlaylistCreate() {
       // EDIT existing part
       const updates = { title: pTitle.trim(), kind: pKind, content }
       if (mediaUrl) updates.media_url = mediaUrl // only replace media if new one uploaded
-      const { error: upErr2 } = await supabase.from('playlist_parts').update(updates).eq('id', editingId)
+      const { error: upErr2 } = await playlistRepository.updatePart(editingId, updates)
       if (upErr2) { setError('Could not save: ' + upErr2.message); setAddingPart(false); return }
       setAddingPart(false)
       navigate(`/playlist/${existingId || playlistId}`)
       return
     }
 
-    const { data, error: insErr } = await supabase.from('playlist_parts').insert({
-      playlist_id: playlistId, position: parts.length, title: pTitle.trim(),
-      kind: pKind, content, media_url: mediaUrl,
-    }).select().maybeSingle()
+    const { data, error: insErr } = await playlistRepository.insertPart({
+      playlistId, position: parts.length, title: pTitle.trim(),
+      kind: pKind, content, mediaUrl,
+    })
     if (insErr) { setError('Could not add part: ' + insErr.message); setAddingPart(false); return }
     setParts(prev => [...prev, data])
     resetDraft()

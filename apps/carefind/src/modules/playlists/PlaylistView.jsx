@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { playlistRepository } from './repositories'
 import { Check, ChevronRight, Film, Image as ImageIcon, Pen, PartyPopper, Play, Plus, Star, Trash2, Video, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Stars } from '../../components/ui'
@@ -34,8 +34,8 @@ function PlaylistView() {
 
   async function load() {
     setLoading(true)
-    const { data: pl } = await supabase.from('playlists').select('*, profiles:owner_id(full_name, display_name, is_verified, specialty, verification_label)').eq('id', id).maybeSingle()
-    const { data: pts } = await supabase.from('playlist_parts').select('*').eq('playlist_id', id).order('position', { ascending: true })
+    const pl = await playlistRepository.getPlaylistWithOwner(id)
+    const pts = await playlistRepository.listParts(id)
     setPlaylist(pl)
     setParts(pts || [])
     setLoading(false)
@@ -44,7 +44,7 @@ function PlaylistView() {
   async function performDeletePart() {
     const partId = confirmDeletePartId
     setConfirmDeletePartId(null)
-    await supabase.from('playlist_parts').delete().eq('id', partId)
+    await playlistRepository.deletePart(partId)
     if (current >= parts.length - 1) setCurrent(Math.max(0, current - 1))
     load()
   }
@@ -62,7 +62,7 @@ function PlaylistView() {
   async function saveTitleEdit(part) {
     const newTitle = editTitleValue.trim()
     if (!newTitle || newTitle === part.title) { cancelTitleEdit(); return }
-    await supabase.from('playlist_parts').update({ title: newTitle }).eq('id', part.id)
+    await playlistRepository.updatePart(part.id, { title: newTitle })
     setEditingPartId(null)
     setEditTitleValue('')
     await load()

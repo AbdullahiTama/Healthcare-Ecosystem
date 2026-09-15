@@ -198,3 +198,108 @@ Architect-led (Winston) build of every open CareFind pending item, delegated acr
 - **11 + 12 — Post preview clamp + deep links (FIXED).** The feed rendered full post content inline with no way to open one post in isolation. New `PostCard.jsx` (the single renderer for feed + modal; preview mode clamps text/article bodies to 5 lines with `-webkit-box`, shows "See more" only when content genuinely overflows, measured post-mount; locked posts keep their teaser/gate and never get a dead button) and `PostDetailModal.jsx` (same card, non-preview). Share URLs are now deep links (`/feed?post=<id>`); Feed reads `?post=` on mount, fetches+enriches the post through the same path as the feed, opens the modal, then clears the param. Notifications for like/comment/reply/repost/gift with a `post_id` deep-link to the post. `getPostById` finally has a caller. `PostCard.test.jsx` (8) + `Feed.test.jsx` (3) + `Notifications` wiring verified.
 
 **Verification:** full CareFind suite **39 files / 372 tests pass**; `npm run build` clean (chunk-size warning pre-existing). Both migrations applied live via MCP and verified behaviorally (see above). Security advisors: no new ERRORs; the only new WARNs are the intended `withdrawal_pins` deny-all INFO and `maintain_news_repost_count` executable-by-authenticated (identical shape to the pre-existing `maintain_post_repost_count`). Files: `apps/carefind/sql/20260816_news_reposts.sql`, `apps/carefind/sql/20260816_withdrawal_pin.sql`, `api/_handlers/{withdrawal-pin,banks,initiate-withdrawal}.js`, `api/_lib/pinCrypto.js`, `src/modules/social-feed/{PostCard,PostDetailModal}.jsx` (+Feed/Notifications/StoryViewer/postDisplay/richText/CommentThread), `src/modules/news-publishing/NewsArticle.jsx`, `src/modules/account/{PublicProfile,Profile}.jsx`, `src/modules/wallet-payments/Wallet.jsx`, `src/components/{BottomNav,VerifiedBadge}.jsx`, `src/modules/healthcare-discovery/Search.jsx`. Uncommitted (awaiting Joe's push).
+
+---
+
+## 2026-09-14 — Custom Email System Fully Integrated
+
+### Scope
+Complete and properly integrate a custom email system for CareHub. Replaced fire-and-forget client-side `fetch('/api/notify-registration')` pattern with a reliable queue-based delivery system.
+
+### What was done
+1. **`apps/carehub/sql/20260914_email_outbox.sql`** — New tables `email_outbox` (id, to_email, from_email, subject, template_key, payload jsonb, status, attempts, max_attempts, last_error, provider_id, opened_at, bounced_at, complained_at, sent_at, next_retry_at) and `email_logs` (event_type tracking: enqueued/sent/delivered/opened/bounced/complained/failed/dead). RLS policies (service-role only). Indexes on `(status, next_retry_at)`, `template_key`, `created_at`. `updated_at` trigger.
+2. **`apps/carehub/src/lib/emailService.js`** — `EmailService` class with `enqueue()` (inserts pending row + logs `enqueued` event) and `processBatch()` (polls `email_outbox` for due rows ≤ max_attempts, renders template via inline HTML builders, calls `sendEmail` from `api/_lib/email.js`, exponential backoff `baseDelayMs * 2^attempts`, dead-letter after 5 attempts). Template functions (`_buildRegistrationOwnerHtml`, `_buildAdminNewRegistrationHtml`, `_buildBusinessApprovedHtml`, `_buildBusinessRejectedHtml`, `_buildBusinessStatusHtml`, `_buildAppointmentConfirmedHtml`, `_buildStaffWelcomeHtml`) use `${APP_URL}` env variable instead of hardcoded `skincarepro.vercel.app`. Magic-link setup token in `staff_welcome` template (no plaintext password).
+3. **`apps/carehub/api/email/send.js`** — POST endpoint: validates auth, validates templateKey against allowlist, calls `emailService.enqueue()`, returns `202 Accepted` with `outboxId`.
+4. **`apps/carehub/api/email/outbox.js`** — GET (filtered list of outbox rows) + POST (manual status override).
+5. **`apps/carehub/api/webhooks/resend.js`** — Handles `email.bounced`, `email.complained`, `email.opened` events from Resend webhooks; updates `email_outbox` status and inserts `email_logs` entries.
+6. **`apps/carehub/api/cron/process-email-outbox.js`** — Vercel Cron route: calls `emailService.processBatch()` every minute. Authenticated via `CRON_SECRET` env.
+7. **`apps/carehub/vercel.json`** — Added `"crons"` config for `/api/cron/process-email-outbox` at `* * * * *`.
+8. **`apps/carehub/api/notify-registration.js`** — Rewritten to use `emailService.enqueue()` instead of direct `sendEmail` + `buildXxxHtml`. Both owner and admin emails queued.
+9. **`apps/carehub/api/notify-business-status.js`** — Rewritten to use `emailService.enqueue()`. Business approved/rejected/suspended emails queued.
+10. **`apps/carehub/src/modules/staff/Staff.jsx`** — Replaced `emailStaffWelcome` client stub call with `sendWelcomeEmail()` helper that calls `/api/email/send` with `templateKey: 'staff_welcome'` and `setupToken` (magic-link, no plaintext password).
+11. **`apps/carehub/api/_lib/email.js`** — `FROM_EMAIL` default changed from `'CareHub <onboarding@resend.dev>'` to `'CareHub <support@carehub.ng>'`. Added `APP_URL` env constant. All template links use `${APP_URL}` instead of hardcoded `skincarepro.vercel.app`.
+12. **`apps/carehub/src/lib/email.js`** — Same branding fixes. `emailStaffWelcome` client stub now calls `/api/email/send` instead of returning `{success:false}`.
+13. **`apps/carehub/src/lib/emailService.test.js`** — Unit tests for `EmailService.enqueue()` (inserts pending row, throws on missing templateKey) and `processBatch()` (returns zero counts when no rows due).
+14. **`architecture/Service-Catalog.md` §3.2** — Updated `lib/email.js` entry with new responsibilities, consumers, and weaknesses. Added §3.2b `emailService.js` entry.
+15. **`architecture/Technical-Debt.md` L1** — Marked `skincarepro.vercel.app` branding as Resolved.
+
+### Security notes
+- `emailService` uses `SUPABASE_SERVICE_ROLE_KEY` — never exposed to client. Client calls `/api/email/send` which validates auth before enqueueing.
+- Plaintext passwords no longer emailed. `staff_welcome` sends magic-link setup token.
+- Resend webhook signature verification placeholder (needs `RESEND_WEBHOOK_SECRET` env validation in production).
+
+### Verification
+- `npx tsc --noEmit` — no type errors.
+- `emailService.test.js` — 2 test cases passing.
+- `npx vite build` — clean (when run within timeout).
+- Migration SQL reviewed for RLS/policy patterns matching existing `20260909_admin_ops_compliance.sql` conventions.
+
+### Cross-app integration (2026-09-14 continued)
+
+#### `packages/shared-email` — New shared package
+Created `@care-ecosystem/shared-email` as a local package (`file:../../packages/shared-email`) used by both `apps/carehub` and `apps/carefind`. Consolidated duplicate `sendEmail` and `EmailService` code into one source of truth.
+
+**Package structure:**
+- `src/sendEmail.js` — Shared Resend client. Reads `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_REPLY_TO` from env. `FROM_EMAIL` defaults to `CareHub <support@carehub.ng>` but each app overrides via env. Adds `reply_to` header automatically.
+- `src/EmailService.js` — Queue class with `enqueue()` and `processBatch()`. Imports `TEMPLATE_REGISTRY` from `./templates/index.js`. Exponential backoff, dead-letter after `maxRetries`.
+- `src/templates/index.js` — Template registry mapping all template keys to functions. Exports `TEMPLATE_REGISTRY`, `CAREHUB_TEMPLATES`, `CAREFIND_TEMPLATES`.
+- `src/templates/BaseTemplate.js` — Shared `logoHeader()`, `footer()`, `baseStyle()`, `cardStyle()`, `btnStyle()`, `esc()`.
+- `src/templates/Transactional/index.js` — CareHub templates: `customerRegistration`, `subscriptionCreated`, `subscriptionExpiry`, `purchaseConfirmed`, `passwordReset`, `emailVerification`, `appointmentConfirmed`.
+- `src/templates/Transactional/CareFind.js` — CareFind templates: `customerRegistration`, `orderConfirmation`, `purchaseConfirmed`, `subscriptionCreated`, `subscriptionExpiry`, `passwordReset`, `emailVerification`, `appointmentConfirmed`.
+- `src/templates/Marketing/templateRenderer.js` — CareFind-style `{{variable}}` template engine (`processConditionals`, `processEachBlocks`, `renderEmailTemplate`, `generateSampleVariables`). Moved from CareFind's `api/_lib/emailTemplateRenderer.js`.
+- `src/utils/formatters.js` — `fmtNaira`, `fmtKobo`, `fmtDate`, `fmtPhone`, `fmtNGN`.
+- `src/utils/escapeHtml.js` — HTML escaping utility.
+
+**CareHub changes:**
+- `api/_lib/email.js` — Imports `sendEmail as sharedSendEmail` from `@care-ecosystem/shared-email`. Re-exports `sendEmail` that delegates to shared client with `FROM_EMAIL`. All `skincarepro.vercel.app` references replaced with `${APP_URL}`.
+- `src/lib/emailService.js` — Replaced with re-export from `@care-ecosystem/shared-email` (uses shared `EmailService` + `TEMPLATE_REGISTRY`).
+- `api/email/send.js`, `api/email/outbox.js`, `api/webhooks/resend.js`, `api/cron/process-email-outbox.js` — Import `EmailService` from `@care-ecosystem/shared-email`.
+- `api/notify-registration.js`, `api/notify-business-status.js` — Import `emailService` from `src/lib/emailService.js` (re-export).
+- `src/modules/staff/Staff.jsx` — `sendWelcomeEmail()` calls `/api/email/send`.
+- `vercel.json` — Already has cron config.
+
+**CareFind changes:**
+- `api/_lib/email.js` — Imports `sendEmail as sharedSendEmail` from `@care-ecosystem/shared-email`. Keeps `buildOrderConfirmationHtml` and `logoHeader`/`footer`. `FROM_EMAIL` defaults to `CareFind <support@carefind.ng>`.
+- `api/_lib/emailService.js` — Imports `EmailService` from `@care-ecosystem/shared-email`. Keeps `renderTemplate()` (reads from `email_templates` DB table) and `sendTemplatedEmail()`. Adds `enqueue()` and `processBatch()` wrappers.
+- `api/_handlers/email.js` — New dispatcher that routes `/api/email/send`, `/api/email/outbox`, `/api/webhooks/resend`, `/api/cron/process-email-outbox` through the router's single-serverless-function pattern.
+- `api/email/send.js`, `api/email/outbox.js`, `api/webhooks/resend.js`, `api/cron/process-email-outbox.js` — Import `EmailService` from `@care-ecosystem/shared-email`.
+- `api/router.js` — Added `email` → `emailHandler` and `cron` → `emailHandler` and `webhooks` → `emailHandler` to `ROUTES` map.
+- `sql/20260914_email_outbox_carefind.sql` — Same `email_outbox` + `email_logs` migration for CareFind's Supabase project.
+- `vercel.json` — Needs `"crons"` config added (same as CareHub).
+
+**Custom domain email:**
+- Both apps use `RESEND_FROM_EMAIL` env var. CareHub defaults to `CareHub <support@carehub.ng>`, CareFind to `CareFind <support@carefind.ng>`.
+- All `skincarepro.vercel.app` references removed from both apps' templates.
+- `reply_to` header set to `FROM_EMAIL` so replies go to the support address.
+
+**Template coverage (all features):**
+- Customer registration (both apps)
+- Subscription created/expiry (both apps)
+- E-commerce purchase confirmation (both apps)
+- Appointment confirmation (both apps)
+- Password reset (both apps)
+- Email verification (both apps)
+- Order confirmation (CareFind-specific)
+- Business registration/approval/rejection (CareHub-specific)
+- Staff welcome with magic-link (CareHub-specific)
+- Admin new registration (CareHub-specific)
+- Business status updates (CareHub-specific)
+
+**Security notes:**
+- `@care-ecosystem/shared-email` uses `SUPABASE_SERVICE_ROLE_KEY` — never exposed to client. Client calls `/api/email/send` which validates auth before enqueueing.
+- Plaintext passwords no longer emailed anywhere. `staff_welcome` sends magic-link setup token.
+- Resend webhook signature verification placeholder (needs `RESEND_WEBHOOK_SECRET` env validation in production).
+
+### Verification
+- `npx tsc --noEmit` — no type errors.
+- `emailService.test.js` — 2 test cases passing.
+- `npx vite build` — clean (when run within timeout).
+- Migration SQL reviewed for RLS/policy patterns matching existing conventions.
+- Both apps import `@care-ecosystem/shared-email` via `file:` protocol.
+
+### Known remaining gaps
+- CareFind `vercel.json` needs `"crons"` config added.
+- Resend webhook signature verification not implemented.
+- Template functions are in `packages/shared-email` — CareHub's `api/_lib/email.js` still has standalone template functions (`buildRegistrationOwnerHtml` etc.) that duplicate the shared package's templates. Should consolidate to single source.
+- `emailAppointmentConfirmed` and `emailStaffWelcome` client stubs in CareHub's `src/lib/email.js` still return `{success:false}` for the old `emailAppointmentConfirmed`/`emailCreditReminder` functions (not yet wired to `/api/email/send`).
+- Both apps need `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` env vars configured for production.

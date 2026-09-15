@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
-import { sbFetch } from '../../services/supabase'
+import { walletRepository } from './repositories'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
@@ -85,9 +85,9 @@ export default function Wallet({ brand, role }) {
     setLoading(true)
     try {
       const [w, t, wd] = await Promise.all([
-        sbFetch(`business_wallets?business_id=eq.${brand.id}`).catch(() => []),
-        sbFetch(`business_wallet_transactions?business_id=eq.${brand.id}&order=created_at.desc&limit=100`).catch(() => []),
-        sbFetch(`business_withdrawal_requests?business_id=eq.${brand.id}&order=created_at.desc&limit=50`).catch(() => []),
+        walletRepository.getWallet(brand.id).catch(() => []),
+        walletRepository.getTransactions(brand.id).catch(() => []),
+        walletRepository.getWithdrawals(brand.id).catch(() => []),
       ])
       setWallet(Array.isArray(w) && w[0] ? w[0] : { available_balance: 0, held_balance: 0 })
       setTxs(Array.isArray(t) ? t : [])

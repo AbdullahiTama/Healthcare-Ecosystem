@@ -6,6 +6,7 @@ import { orderRepository } from './orderRepository'
 import { trackingRepository } from './trackingRepository'
 import { vendorRatingRepository } from './vendorRatingRepository'
 import { supabase } from '../../config/supabaseClient'
+import { shopRepository } from './shopRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
@@ -189,14 +190,8 @@ export default function OrderDetail() {
 
   async function loadReturnData() {
     try {
-      const { data } = await supabase
-        .from('shop_order_returns')
-        .select('*')
-        .eq('order_id', orderId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      setReturnData(data || null)
+      const data = await shopRepository.getOrderReturn(orderId)
+      setReturnData(data)
     } catch (err) {
       console.error('Failed to load return data:', err)
     }
@@ -284,8 +279,8 @@ export default function OrderDetail() {
       setMessages(msgs)
       if (data.pickup_station_id) {
         try {
-          const { data: st } = await supabase.from('shop_pickup_stations').select('id,name,address,city,state').eq('id', data.pickup_station_id).maybeSingle()
-          setStation(st || null)
+          const st = await shopRepository.getPickupStationById(data.pickup_station_id)
+          setStation(st)
         } catch {}
       }
       // Load return data if order is delivered

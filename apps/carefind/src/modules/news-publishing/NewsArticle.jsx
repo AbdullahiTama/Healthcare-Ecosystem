@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { newsRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
 import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Repeat2, Share2, X } from 'lucide-react'
@@ -47,26 +48,14 @@ function NewsArticle() {
       setLoading(true)
       setError(false)
       try {
-        const { data, error: readErr } = await supabase
-          .from('news')
-          .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles!news_author_id_fkey(full_name, display_name, verification_label, is_verified)')
-          .eq('id', id)
-          .maybeSingle()
+        const data = await newsRepository.getArticleById(id)
         if (cancelled) return
-        if (readErr) throw readErr
         setArticle(data || null)
         // Fire-and-forget view counter — never let it block or blank the page.
         if (data) supabase.rpc('increment_news_view', { news_id: data.id }).then(() => {}).catch(() => {})
 
         // A few more approved stories to show at the bottom
-        const { data: moreData, error: moreErr } = await supabase
-          .from('news')
-          .select('id, headline, hero_image_url, published_at, created_at')
-          .eq('status', 'approved')
-          .neq('id', id)
-          .order('published_at', { ascending: false })
-          .limit(4)
-        if (moreErr) throw moreErr
+        const moreData = await newsRepository.getMoreApprovedNews(id)
         if (!cancelled) setMore(moreData || [])
         setLoading(false)
         window.scrollTo(0, 0)
@@ -84,15 +73,15 @@ function NewsArticle() {
 
   async function loadEngagement() {
     const [likeRes, commentRes, repostRes] = await Promise.all([
-      supabase.from('news_reactions').select('id, user_id').eq('news_id', id),
-      supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true }),
-      supabase.from('news_reposts').select('id, user_id').eq('news_id', id),
+      newsRepository.getReactionsByNewsId(id),
+      newsRepository.getCommentsByNewsId(id),
+      newsRepository.getRepostsByNewsId(id),
     ])
-    setLikes(likeRes.data || [])
-    setComments(commentRes.data || [])
-    setReposts(repostRes.data || [])
+    setLikes(likeRes || [])
+    setComments(commentRes || [])
+    setReposts(repostRes || [])
     if (user) {
-      const { data: sv } = await supabase.from('saved_news').select('id').eq('news_id', id).eq('user_id', user.id).maybeSingle()
+      const sv = await newsRepository.getSavedNewsForUser(id, user.id)
       setSaved(!!sv)
     }
   }
@@ -123,21 +112,22 @@ function NewsArticle() {
     if (userLiked) {
       const prev = likes
       setLikes(prev => prev.filter(l => l.user_id !== user.id))
-      const { error } = await supabase.from('news_reactions').delete().eq('news_id', id).eq('user_id', user.id)
-      if (error) {
+      try {
+        await newsRepository.removeReaction(id, user.id)
+      } catch (err) {
         setLikes(prev)
-        toast.show(error.message || 'Could not update like.', { type: 'error' })
+        toast.show(err.message || 'Could not update like.', { type: 'error' })
       }
     } else {
       const temp = { id: `t${Date.now()}`, user_id: user.id }
       setLikes(prev => [...prev, temp])
-      const { error } = await supabase.from('news_reactions').insert({ news_id: id, user_id: user.id })
-      if (error) {
+      try {
+        await newsRepository.addReaction(id, user.id)
+      } catch (err) {
         setLikes(prev => prev.filter(l => l.id !== temp.id))
-        toast.show(error.message || 'Could not like.', { type: 'error' })
+        toast.show(err.message || 'Could not like.', { type: 'error' })
         return
       }
-      // Tell the author someone liked their article (never fires for self-likes).
       notify({ recipientId: article.author_id, actorId: user.id, type: 'news_like', message: 'liked your article', link: `/news/${article.id}`, postId: article.id })
     }
   }
@@ -146,17 +136,19 @@ function NewsArticle() {
     if (!user) { window.location.href = '/login'; return }
     if (saved) {
       setSaved(false)
-      const { error } = await supabase.from('saved_news').delete().eq('news_id', id).eq('user_id', user.id)
-      if (error) {
+      try {
+        await newsRepository.removeSavedNews(id, user.id)
+      } catch (err) {
         setSaved(true)
-        toast.show(error.message || 'Could not unsave.', { type: 'error' })
+        toast.show(err.message || 'Could not unsave.', { type: 'error' })
       }
     } else {
       setSaved(true)
-      const { error } = await supabase.from('saved_news').insert({ news_id: id, user_id: user.id })
-      if (error) {
+      try {
+        await newsRepository.addSavedNews(id, user.id)
+      } catch (err) {
         setSaved(false)
-        toast.show(error.message || 'Could not save.', { type: 'error' })
+        toast.show(err.message || 'Could not save.', { type: 'error' })
       }
     }
   }
@@ -172,8 +164,9 @@ function NewsArticle() {
     const existing = reposts.find(r => r.user_id === user.id)
     if (existing) {
       setReposts(prev => prev.filter(r => r.user_id !== user.id))
-      const { error } = await supabase.from('news_reposts').delete().eq('id', existing.id)
-      if (error) {
+      try {
+        await newsRepository.removeRepost(existing.id)
+      } catch (err) {
         setReposts(prev => [...prev, existing])
         toast.show('Could not undo repost right now.', { type: 'error' })
         return
@@ -182,14 +175,14 @@ function NewsArticle() {
     } else {
       const temp = { id: `temp_${Date.now()}`, user_id: user.id }
       setReposts(prev => [...prev, temp])
-      const { data, error } = await supabase.from('news_reposts').insert({ news_id: id, user_id: user.id }).select().maybeSingle()
-      if (error || !data) {
+      try {
+        const data = await newsRepository.addRepost(id, user.id)
+        setReposts(prev => prev.map(r => (r.id === temp.id ? data : r)))
+        toast.show('Reposted', { type: 'success' })
+      } catch (err) {
         setReposts(prev => prev.filter(r => r.id !== temp.id))
         toast.show('Could not repost right now.', { type: 'error' })
-        return
       }
-      setReposts(prev => prev.map(r => (r.id === temp.id ? data : r)))
-      toast.show('Reposted', { type: 'success' })
     }
   }
 
@@ -199,36 +192,27 @@ function NewsArticle() {
     if (!user) { window.location.href = '/login'; return }
     if (postingComment) return
     setPostingComment(true)
-    const { error } = await supabase.from('news_comments').insert({ news_id: id, user_id: user.id, content: text })
-    if (error) {
-      toast.show(error.message || 'Could not post comment.', { type: 'error' })
+    try {
+      await newsRepository.addComment(id, user.id, text)
+      const data = await newsRepository.getCommentsByNewsId(id)
+      setComments(data || [])
+      setCommentDraft('')
+    } catch (err) {
+      toast.show(err.message || 'Could not post comment.', { type: 'error' })
+    } finally {
       setPostingComment(false)
-      return
     }
-    const { data, error: selErr } = await supabase
-      .from('news_comments')
-      .select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)')
-      .eq('news_id', id)
-      .order('created_at', { ascending: true })
-    if (selErr) {
-      toast.show(selErr.message || 'Could not load comments.', { type: 'error' })
-      setPostingComment(false)
-      return
-    }
-    setComments(data || [])
-    setCommentDraft('')
-    setPostingComment(false)
-    // Tell the author someone commented on their article (never self-notifies).
     notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
   }
 
   async function deleteComment(cid) {
     const prev = comments
     setComments(prev => prev.filter(c => c.id !== cid))
-    const { error } = await supabase.from('news_comments').delete().eq('id', cid).eq('user_id', user.id)
-    if (error) {
+    try {
+      await newsRepository.deleteComment(cid, user.id)
+    } catch (err) {
       setComments(prev)
-      toast.show(error.message || 'Could not delete comment.', { type: 'error' })
+      toast.show(err.message || 'Could not delete comment.', { type: 'error' })
     }
   }
 

@@ -2,6 +2,7 @@ import { Building2, MapPin, Star, Download, X, ExternalLink } from 'lucide-react
 import { Card, Button, Empty, StatCard, Input } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
 import { AdminPageHeader, AdminFilterBar, FilterPills } from '../ui'
+import { feedConfigRepository } from '../repositories/feedConfigRepository'
 
 function exportCSV(data, filename) {
   if (!data.length) return
@@ -32,12 +33,12 @@ export default function BusinessesTab({
 
   async function selectBiz(b) {
     setSelectedBiz(b)
-    const [revRes, prodRes] = await Promise.all([
-      supabase.from('reviews').select('*').eq('business_id', b.id),
-      supabase.from('products').select('*').eq('business_id', b.id),
+    const [revData, prodData] = await Promise.all([
+      feedConfigRepository.getBusinessReviews(b.id),
+      feedConfigRepository.getBusinessProducts(b.id),
     ])
-    setBizReviews(revRes.data || [])
-    setBizProducts(prodRes.data || [])
+    setBizReviews(revData || [])
+    setBizProducts(prodData || [])
   }
 
   return (

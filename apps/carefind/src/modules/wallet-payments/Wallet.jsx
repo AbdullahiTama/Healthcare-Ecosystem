@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
+import { walletRepository } from './repositories/index.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
 import { ArrowLeft, Banknote, Coins, Gift, Landmark, Lock, RotateCcw, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme.js'
@@ -83,14 +84,11 @@ function Wallet() {
         }
         if (data.alreadyProcessed) return
 
-        const { data: freshWallet } = await supabase
-          .from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+        const freshWallet = await walletRepository.getBalance(user.id)
         setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? data.newBalance }))
 
-        const { data: txData } = await supabase
-          .from('transactions').select('*').eq('user_id', user.id)
-          .order('created_at', { ascending: false }).limit(20)
-        setTransactions(txData || [])
+        const txData = await walletRepository.getTransactions(user.id)
+        setTransactions(txData)
 
         setTab('history')
         showToast(`${data.credited} CareCoin${data.credited > 1 ? 's' : ''} added! New balance: ${data.newBalance} coins`, { type: 'success' })
@@ -107,20 +105,15 @@ function Wallet() {
       if (!user) { setLoading(false); return }
       setLoading(true)
 
-      let { data: walletData } = await supabase
-        .from('wallets').select('*').eq('user_id', user.id).maybeSingle()
+      let walletData = await walletRepository.getWallet(user.id)
 
       if (!walletData) {
-        const { data: newWallet } = await supabase
-          .from('wallets').insert({ user_id: user.id, balance: 0 }).select().single()
-        walletData = newWallet
+        walletData = await walletRepository.ensureWallet(user.id)
       }
       setWallet(walletData)
 
-      const { data: txData } = await supabase
-        .from('transactions').select('*').eq('user_id', user.id)
-        .order('created_at', { ascending: false }).limit(20)
-      setTransactions(txData || [])
+      const txData = await walletRepository.getTransactions(user.id)
+      setTransactions(txData)
       setLoading(false)
     }
     if (!authLoading) load()
@@ -251,12 +244,10 @@ function Wallet() {
       }
 
       setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
-      const { data: freshWallet } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
+      const freshWallet = await walletRepository.getBalance(user.id)
       setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
-      const { data: txData } = await supabase
-        .from('transactions').select('*').eq('user_id', user.id)
-        .order('created_at', { ascending: false }).limit(20)
-      setTransactions(txData || [])
+      const txData = await walletRepository.getTransactions(user.id)
+      setTransactions(txData)
       setTab('history')
       showToast(`₦${data.payoutNaira.toLocaleString()} sent to your bank!`, { type: 'success' })
     } catch (err) {

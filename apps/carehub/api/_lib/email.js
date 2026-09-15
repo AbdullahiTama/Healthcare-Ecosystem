@@ -1,42 +1,18 @@
 // Server-only Resend email helper. Never imported by client code.
+// Uses @care-ecosystem/shared-email sendEmail for consistent delivery.
 // Reads RESEND_API_KEY from process.env (server env), not Vite.
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <onboarding@resend.dev>'
+import { sendEmail as sharedSendEmail } from '@care-ecosystem/shared-email'
+
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@carehub.ng>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carehub.ng'
+const APP_URL = process.env.APP_URL || 'https://carehub.ng'
+
+export async function sendEmail({ to, subject, html, from }) {
+  return sharedSendEmail({ to, subject, html, from: from || FROM_EMAIL })
+}
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
-
-export async function sendEmail({ to, subject, html }) {
-  if (!RESEND_API_KEY) {
-    console.warn('[email] RESEND_API_KEY missing — skipping send to', Array.isArray(to) ? to.join(',') : to)
-    return { success: false, error: 'RESEND_API_KEY not configured' }
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + RESEND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: Array.isArray(to) ? to : [to],
-        subject,
-        html,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      console.error('[email] Resend error', res.status, data)
-      return { success: false, error: data?.message || `Resend ${res.status}`, data }
-    }
-    return { success: true, data }
-  } catch (e) {
-    console.error('[email] send error', e)
-    return { success: false, error: e.message }
-  }
-}
 
 // ── Templates (shared HTML) ──────────────────────────────────────────────────
 
@@ -106,7 +82,7 @@ export function buildRegistrationOwnerHtml({ businessName, ownerName }) {
         <div style="background: #f9fafb; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
           <p style="margin: 0; color: #888; font-size: 12px; line-height: 1.6;">You can sign in now to see your pending status. Full access unlocks after approval.</p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to Sign In →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Go to Sign In →</a>
       </div>
       ${footer()}
     </div>
@@ -139,7 +115,7 @@ export function buildAdminNewRegistrationHtml({ businessName, ownerName, busines
         <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
           <p style="margin: 0; color: #92400e; font-size: 13px; font-weight: 600;">⏳ This business is pending your approval. Log in to the admin panel to review and approve.</p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to Admin Panel →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Go to Admin Panel →</a>
       </div>
       ${footer()}
     </div>
@@ -162,11 +138,11 @@ export function buildBusinessApprovedHtml({ businessName, ownerName, ownerEmail 
         </div>
         <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
           <p style="margin: 0 0 12px; font-weight: 700; color: #0f172a; font-size: 14px;">Your Login Details:</p>
-          <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Website:</strong> skincarepro.vercel.app</p>
+          <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Website:</strong> ${APP_URL}</p>
           <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Email:</strong> ${ownerEmail}</p>
           <p style="margin: 0; font-size: 13px; color: #555;"><strong>Password:</strong> The password you set during registration</p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Log In to Your Dashboard →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Log In to Your Dashboard →</a>
         <p style="margin-top: 20px; font-size: 12px; color: #aaa; text-align: center;">Need help? Reply to this email or contact support@carehub.ng</p>
       </div>
       ${footer()}
@@ -216,7 +192,7 @@ export function buildBusinessStatusHtml({ businessName, ownerName, ownerEmail, s
         <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your application for <strong>${businessName}</strong> requires attention. ${reason ? `<br/><strong>Details:</strong> ${reason}` : ''}</p>
         <p style="color: #555; font-size: 13px; line-height: 1.7;">Please log in or contact support@carehub.ng for next steps.</p>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to CareHub →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Go to CareHub →</a>
       </div>
       ${footer()}
     </div>`

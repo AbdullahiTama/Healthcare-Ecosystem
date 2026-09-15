@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
@@ -131,13 +132,16 @@ function Profile() {
     const postId = reportPostId
     if (!user || !postId) return
     setReportingId(postId)
-    const { error } = await supabase.from('reports').insert({ reporter_id: user.id, post_id: postId, reason })
-    setReportingId(null)
-    setReportPostId(null)
-    if (error) {
-      showToast('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
+    try {
+      await profileRepository.reportPost(user.id, postId, reason)
+    } catch (err) {
+      setReportingId(null)
+      setReportPostId(null)
+      showToast('Could not send the report: ' + (err.message || 'unknown error'), { type: 'error' })
       return
     }
+    setReportingId(null)
+    setReportPostId(null)
     showToast('Thanks: our team will review this post.', { type: 'success' })
   }
   // Counts, likes, saves, follows for these posts live in the hook's slices;
@@ -211,7 +215,7 @@ function Profile() {
     const bizIds = [...new Set(list.map((c) => c.staff?.business_id).filter(Boolean))]
     let bizMap = {}
     if (bizIds.length > 0) {
-      const { data: bizzes } = await supabase.from('businesses').select('id, name').in('id', bizIds)
+      const bizzes = await profileRepository.getBusinessesByIds(bizIds)
       ;(bizzes || []).forEach((b) => { bizMap[b.id] = b.name })
     }
 
@@ -335,7 +339,7 @@ function Profile() {
   useEffect(() => {
     if (viewerIndex === null) return
     const st = myStories[viewerIndex]
-    if (st) supabase.rpc('increment_story_view', { story_id: st.id }).then(() => {}).catch(() => {})
+    if (st) profileRepository.incrementStoryView(st.id)
   }, [viewerIndex])
 
   function closeStoryViewer() {
@@ -405,13 +409,14 @@ function Profile() {
     }
     const patch = { title: editTitle.trim(), scheduled_at: newDate.toISOString() }
     if (trailerUrl !== editingShow.trailer_url) patch.trailer_url = trailerUrl
-    const { error } = await supabase.from('live_shows').update(patch).eq('id', editingShow.id).eq('host_id', user.id).eq('status', 'scheduled')
-    setEditSaving(false)
-    if (error) {
+    try {
+      await profileRepository.updateLiveShow(editingShow.id, user.id, patch)
+    } catch (error) {
+      setEditSaving(false)
       setEditError(error.message || 'Could not save.')
-      if (error.code === '42501') showToast('You can only edit your own scheduled shows.', { type: 'error' })
       return
     }
+    setEditSaving(false)
     setEditingShow(null)
     showToast('Show updated.', { type: 'success' })
     loadMyShows()
@@ -421,10 +426,12 @@ function Profile() {
     if (!cancelConfirmId) return
     setCancellingId(cancelConfirmId)
     const targetId = cancelConfirmId
-    const { error: delErr } = await supabase.from('live_shows').delete().eq('id', targetId).eq('host_id', user.id).eq('status', 'scheduled')
-    if (delErr) {
-      const { error: updErr } = await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', targetId).eq('host_id', user.id).eq('status', 'scheduled')
-      if (updErr) {
+    try {
+      await profileRepository.cancelLiveShow(targetId, user.id)
+    } catch (delErr) {
+      try {
+        await profileRepository.cancelLiveShowFallback(targetId, user.id)
+      } catch (updErr) {
         showToast('Could not cancel: ' + (updErr.message || delErr.message), { type: 'error' })
         setCancellingId(null)
         return
@@ -455,63 +462,64 @@ function Profile() {
       }
     }
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
-    const { error } = await supabase.from('stories').insert({
-      title: sTitle.trim() || null, body: sBody.trim() || null,
-      image_url: imageUrl, bg_color: sBg, is_platform: false,
-      user_id: user.id, expires_at: expiresAt,
-    })
-    setPostingStory(false)
-    if (!error) {
-      setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
-      loadMyStories()
-    } else {
+    try {
+      await profileRepository.createStory({
+        title: sTitle.trim() || null, body: sBody.trim() || null,
+        image_url: imageUrl, bg_color: sBg, is_platform: false,
+        user_id: user.id, expires_at: expiresAt,
+      })
+    } catch (error) {
+      setPostingStory(false)
       showToast('Could not post story: ' + error.message, { type: 'error' })
+      return
     }
+    setPostingStory(false)
+    setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
+    loadMyStories()
   }
 
   async function loadProfile() {
     setLoading(true)
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id, full_name, display_name, is_verified, verification_label, location, website, cover_url, avatar_url, subscription_price, bio')
-      .eq('id', user.id)
-      .maybeSingle()
+    try {
+      const profileData = await profileRepository.getProfileById(user.id)
+      if (profileData) {
+        setProfile(profileData)
+        setFullName(profileData.full_name || '')
+        setDisplayName(profileData.display_name || '')
+        setLocation(profileData.location || '')
+        setSubPrice(profileData.subscription_price || 0)
+        setBio(profileData.bio || '')
+        setWebsite(profileData.website || '')
+      }
 
-    if (profileData) {
-      setProfile(profileData)
-      setFullName(profileData.full_name || '')
-      setDisplayName(profileData.display_name || '')
-      setLocation(profileData.location || '')
-      setSubPrice(profileData.subscription_price || 0)
-      setBio(profileData.bio || '')
-      setWebsite(profileData.website || '')
+      const [bizData, postCountData, followerCountData, followingCountData, walletBalanceData] = await Promise.all([
+        profileRepository.getMyBusinesses(user.id),
+        profileRepository.getMyPostCount(user.id),
+        profileRepository.getFollowingCount(user.id),
+        profileRepository.getFollowerCount(user.id),
+        profileRepository.getWalletBalance(user.id),
+      ])
+
+      setOwnedBusinesses(bizData || [])
+      setPostCount(postCountData || 0)
+      setFollowerCount(followerCountData || 0)
+      setFollowingCount(followingCountData || 0)
+      setWalletBalance(walletBalanceData || 0)
+    } catch (e) {
+      console.warn('loadProfile failed:', e)
     }
-
-    const [bizRes, postRes, followerRes, followingRes, walletRes] = await Promise.all([
-      supabase.from('businesses').select('id, name, business_type, cover_url, visible_on_carefind').eq('owner_id', user.id),
-      supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
-      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', user.id),
-      supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle(),
-    ])
-
-    setOwnedBusinesses(bizRes.data || [])
-    setPostCount(postRes.count || 0)
-    setFollowerCount(followerRes.count || 0)
-    setFollowingCount(followingRes.count || 0)
-    setWalletBalance(walletRes.data?.balance || 0)
     setLoading(false)
   }
 
   async function saveProfile() {
     setSaving(true)
-    await supabase.from('profiles').update({
+    await profileRepository.updateProfile(user.id, {
       full_name: fullName.trim(),
       display_name: displayName.trim(),
       location: location.trim() || null,
       website: website.trim() || null,
       bio: bio.trim() || null,
-    }).eq('id', user.id)
+    })
     setEditing(false)
     setSaving(false)
     loadProfile()
@@ -529,7 +537,7 @@ function Profile() {
       .upload(path, resized, { contentType: 'image/jpeg' })
     if (!upErr) {
       const { data: urlData } = supabase.storage.from('covers').getPublicUrl(path)
-      await supabase.from('profiles').update({ cover_url: urlData.publicUrl }).eq('id', user.id)
+      await profileRepository.updateProfile(user.id, { cover_url: urlData.publicUrl })
       loadProfile()
     } else {
       showToast('Could not upload cover: ' + upErr.message, { type: 'error' })
@@ -540,9 +548,14 @@ function Profile() {
   async function savePrice() {
     const price = Math.max(0, Math.min(MAX_PRICE_COINS, Number(subPrice) || 0))
     setSavingPrice(true)
-    const { error } = await supabase.from('profiles').update({ subscription_price: price }).eq('id', user.id)
+    try {
+      await profileRepository.updateProfile(user.id, { subscription_price: price })
+    } catch (error) {
+      setSavingPrice(false)
+      showToast('Could not save price: ' + error.message, { type: 'error' })
+      return
+    }
     setSavingPrice(false)
-    if (error) { showToast('Could not save price: ' + error.message, { type: 'error' }); return }
     loadProfile()
     showToast(price > 0
       ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
@@ -561,7 +574,7 @@ function Profile() {
       .upload(path, resized, { contentType: 'image/jpeg' })
     if (!upErr) {
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-      await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id)
+      await profileRepository.updateProfile(user.id, { avatar_url: urlData.publicUrl })
       loadProfile()
     } else {
       showToast('Could not upload photo: ' + upErr.message, { type: 'error' })

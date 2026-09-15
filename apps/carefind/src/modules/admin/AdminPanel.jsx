@@ -1,6 +1,12 @@
 ﻿import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { dashboardRepository } from './repositories/dashboardRepository'
+import { usersRepository } from './repositories/usersRepository'
+import { contentRepository } from './repositories/contentRepository'
+import { commerceRepository } from './repositories/commerceRepository'
+import { liveRepository } from './repositories/liveRepository'
+import { feedConfigRepository } from './repositories/feedConfigRepository'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import AdminLayout from './AdminLayout.jsx'
@@ -200,25 +206,26 @@ export default function AdminPanel() {
   }, [])
 
   async function loadAll() {
-    // Load posts and profiles separately to isolate any failures
-    const postsRes = await supabase.from('posts').select('id, content, post_type, created_at, user_id').order('created_at', { ascending: false }).limit(50)
-    const usersRes2 = await supabase.from('profiles').select('id, full_name, display_name, is_verified, verification_label, specialty, location, website, created_at, cover_url').order('created_at', { ascending: false }).limit(100)
-    if (usersRes2.data) setUsers(usersRes2.data)
+    const postsData = await contentRepository.getPosts({ limit: 50 }).catch(() => [])
+    const usersData = await usersRepository.getUsers({ limit: 100 }).catch(() => [])
+    const postsRes = { data: postsData }
+    const usersRes2 = { data: usersData }
+    if (usersData) setUsers(usersData)
 
     const adminToken = localStorage.getItem('admin_token')
-    const [usersRes, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+    const [usersCount, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
+      usersRepository.getUsers({ limit: 1 }).then(() => 0).catch(() => 0),
       callAdminAuth('list_verification_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_business_claims', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_reports', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_transactions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+      dashboardRepository.getTasks().then(data => ({ data })).catch(() => ({ data: [] })),
       callAdminAuth('list_teams', { token: adminToken }).then(r => ({ data: r.teams })).catch(() => ({ data: [] })),
-      supabase.from('businesses').select('id, name, business_type, city, state, whatsapp, visible_on_carefind, created_at').order('created_at', { ascending: false }).limit(100),
+      commerceRepository.getBusinesses().then(data => ({ data })).catch(() => ({ data: [] })),
       callAdminAuth('list_staff', { token: adminToken }).then(r => ({ data: r.staff })).catch(() => ({ data: [] })),
       callAdminAuth('list_withdrawal_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       callAdminAuth('list_task_submissions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      supabase.from('professional_consultations').select('*, profiles!professional_consultations_professional_id_fkey(full_name, display_name)').eq('status', 'paid').order('created_at', { ascending: false }).limit(20),
+      dashboardRepository.getProfessionalConsultations().then(data => ({ data })).catch(() => ({ data: [] })),
       callAdminAuth('list_news', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
     ])
     setVerifications(verifRes.data || [])
@@ -254,7 +261,7 @@ export default function AdminPanel() {
     const openReports = (reportsRes.data || []).filter(r => r.status === 'pending').length
 
     setStats({
-      users: usersRes.count ?? usersRes2.data?.length ?? 0,
+      users: usersCount || usersRes2.data?.length || 0,
       posts: postsRes.data?.length || 0,
       pendingVerifs,
       pendingClaims,
@@ -439,22 +446,10 @@ export default function AdminPanel() {
   }
 
   async function loadLiveControl(showId) {
-    const [itemsRes, commentsRes, likeRes, shareRes, viewRes, giftRes] = await Promise.all([
-      supabase.from('live_items').select('id, kind, content, created_at').eq('show_id', showId).order('created_at', { ascending: false }),
-      supabase.from('live_comments').select('id, content, hidden, created_at, profiles(full_name, display_name)').eq('show_id', showId).order('created_at', { ascending: false }).limit(60),
-      supabase.from('live_reactions').select('id', { count: 'exact', head: true }).eq('show_id', showId),
-      supabase.from('live_shares').select('id', { count: 'exact', head: true }).eq('show_id', showId),
-      supabase.from('live_views').select('id', { count: 'exact', head: true }).eq('show_id', showId),
-      supabase.from('gifts').select('coins').eq('post_id', showId),
-    ])
-    setLiveItems(itemsRes.data || [])
-    setLiveComments(commentsRes.data || [])
-    setLiveStats({
-      likes: likeRes.count || 0,
-      shares: shareRes.count || 0,
-      views: viewRes.count || 0,
-      gifts: (giftRes.data || []).reduce((s, g) => s + (g.coins || 0), 0),
-    })
+    const result = await liveRepository.getLiveControl(showId)
+    setLiveItems(result.items || [])
+    setLiveComments(result.comments || [])
+    setLiveStats(result.stats || { likes: 0, shares: 0, views: 0, gifts: 0 })
   }
 
   async function postLiveItem(showId) {
@@ -513,7 +508,7 @@ export default function AdminPanel() {
   }
 
   async function loadPromotions() {
-    const { data } = await supabase.from('promotions').select('*').order('created_at', { ascending: false })
+    const data = await commerceRepository.getPromotions()
     setPromotions(data || [])
   }
 
@@ -567,12 +562,12 @@ export default function AdminPanel() {
 
   async function viewUserDetails(u) {
     setSelectedUser(u)
-    const { data } = await supabase.from('posts').select('id, content, post_type, created_at').eq('user_id', u.id).order('created_at', { ascending: false }).limit(10)
+    const data = await usersRepository.getUserPosts(u.id)
     setUserPosts(data || [])
   }
 
   async function loadStories() {
-    const { data } = await supabase.from('stories').select('*').order('created_at', { ascending: false })
+    const data = await contentRepository.getStories()
     setStories(data || [])
   }
 
@@ -697,8 +692,8 @@ export default function AdminPanel() {
     setSelectedPost(p)
     setPostAuthor(null)
     if (p.user_id) {
-      const { data } = await supabase.from('profiles').select('id, full_name, display_name, is_verified, verification_label, cover_url').eq('id', p.user_id).single()
-      setPostAuthor(data || null)
+      const profile = await usersRepository.getUserProfile(p.user_id)
+      setPostAuthor(profile || null)
     }
   }
 
@@ -846,10 +841,10 @@ export default function AdminPanel() {
 
   async function searchDrugs() {
     if (!drugSearch.trim()) return
-    const { data: products } = await supabase.from('products').select('id, name').ilike('name', `%${drugSearch}%`).limit(5)
+    const products = await commerceRepository.searchProducts(drugSearch)
     if (!products?.length) { setDrugReviews([]); return }
     setDrugName(products[0].name)
-    const { data: reviews } = await supabase.from('product_reviews').select('*').in('product_id', products.map(p => p.id)).order('created_at', { ascending: false })
+    const reviews = await commerceRepository.getProductReviews(products.map(p => p.id))
     setDrugReviews(reviews || [])
   }
 

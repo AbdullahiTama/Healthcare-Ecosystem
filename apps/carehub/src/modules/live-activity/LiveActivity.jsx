@@ -1,12 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapPin, BadgeCheck, AlertTriangle, Clock } from 'lucide-react'
-import {
-  getActivityFields, addActivityField, deleteActivityField,
-  getDefaultViewers, setDefaultViewers,
-  getFieldActivities, countFieldActivities, getActivityViewers, getActivityReactions, getActivityComments,
-  reactToActivity, unreactToActivity, commentOnActivity,
-  uploadActivityVoice, reverseGeocode,
-} from '../../services/supabase'
+import { liveActivityRepository } from './repositories'
 // Pure distance helpers for the GPS-driven facility verification.
 import { facilityVerification, FACILITY_VERIFICATION, haversineMeters } from '../../lib/geo'
 // GPS-driven facility discovery (issue #1) — replaces free-text Place of Visit.
@@ -191,8 +185,8 @@ export default function LiveActivity({ brand }) {
     if (!brand || !brand.id) return
     setLoading(true)
     try {
-      const flds = await getActivityFields(brand.id)
-      const acts = await getFieldActivities(brand.id)
+      const flds = await liveActivityRepository.getActivityFields(brand.id)
+      const acts = await liveActivityRepository.getFieldActivities(brand.id)
       const stf = await staffRepository.getAll(brand.id)
       const ters = await territoryRepository.getAll(brand.id)
       setFields(flds || [])
@@ -205,8 +199,8 @@ export default function LiveActivity({ brand }) {
       if (isManager) {
         try {
           const [mine, team] = await Promise.all([
-            countFieldActivities(brand.id, meStaffId),
-            countFieldActivities(brand.id),
+            liveActivityRepository.countFieldActivities(brand.id, meStaffId),
+            liveActivityRepository.countFieldActivities(brand.id),
           ])
           setCounts({ mine: mine, team: team })
         } catch (e) {
@@ -216,7 +210,7 @@ export default function LiveActivity({ brand }) {
       }
 
       const ids = (acts || []).map(function (a) { return a.id })
-      const vs = await getActivityViewers(ids)
+      const vs = await liveActivityRepository.getActivityViewers(ids)
       const vmap = {}
       ;(vs || []).forEach(function (v) {
         if (!vmap[v.activity_id]) vmap[v.activity_id] = []
@@ -224,7 +218,7 @@ export default function LiveActivity({ brand }) {
       })
       setViewersByAct(vmap)
 
-      const rs = await getActivityReactions(ids)
+      const rs = await liveActivityRepository.getActivityReactions(ids)
       const rmap = {}
       ;(rs || []).forEach(function (r) {
         if (!rmap[r.activity_id]) rmap[r.activity_id] = []
@@ -232,7 +226,7 @@ export default function LiveActivity({ brand }) {
       })
       setReactionsByAct(rmap)
 
-      const cs = await getActivityComments(ids)
+      const cs = await liveActivityRepository.getActivityComments(ids)
       const cmap = {}
       ;(cs || []).forEach(function (c) {
         if (!cmap[c.activity_id]) cmap[c.activity_id] = []
@@ -241,7 +235,7 @@ export default function LiveActivity({ brand }) {
       setCommentsByAct(cmap)
 
       if (meStaffId) {
-        const dv = await getDefaultViewers(meStaffId)
+        const dv = await liveActivityRepository.getDefaultViewers(meStaffId)
         setMyViewers(dv || [])
       }
     } catch (e) {
@@ -298,7 +292,7 @@ export default function LiveActivity({ brand }) {
   async function saveField() {
     if (!newField.label.trim()) { showToast('Give the field a name.', { type: 'warning' }); return }
     try {
-      await addActivityField({
+      await liveActivityRepository.addActivityField({
         business_id: brand.id,
         label: newField.label.trim(),
         field_type: newField.field_type,
@@ -319,7 +313,7 @@ export default function LiveActivity({ brand }) {
   async function removeField() {
     if (!fieldToRemove) return
     try {
-      await deleteActivityField(fieldToRemove.id)
+      await liveActivityRepository.deleteActivityField(fieldToRemove.id)
       setFieldToRemove(null)
       showToast('Field removed', { type: 'success' })
       load()
@@ -344,7 +338,7 @@ export default function LiveActivity({ brand }) {
       const viewers = viewerDraft.map(function (id) {
         return { viewer_staff_id: id, viewer_name: nameFor(id) }
       })
-      await setDefaultViewers(brand.id, meStaffId, viewers)
+      await liveActivityRepository.setDefaultViewers(brand.id, meStaffId, viewers)
       showToast('Saved — these people see your activity by default', { type: 'success' })
       setPickingViewers(false)
       load()
@@ -454,7 +448,7 @@ export default function LiveActivity({ brand }) {
           // Best-effort area label (reverse geocode) for the location caption;
           // the precise place now comes from the auto-detected facility.
           // Capture address/LGA/State via reverseGeocode for location_label enrichment
-          reverseGeocode(coords.lat, coords.lng).then(function (name) {
+          liveActivityRepository.reverseGeocode(coords.lat, coords.lng).then(function (name) {
             if (name) {
               setPlaceName(name)
               setGpsAddress(name)
@@ -510,7 +504,7 @@ export default function LiveActivity({ brand }) {
       let voiceUrl = null
       if (voiceBlob) {
         setSaveStatus('Uploading voice note...')
-        voiceUrl = await uploadActivityVoice(voiceBlob)
+        voiceUrl = await liveActivityRepository.uploadActivityVoice(voiceBlob)
       }
       setSaveStatus('Saving...')
 
@@ -580,8 +574,8 @@ export default function LiveActivity({ brand }) {
   async function toggleReaction(actId) {
     const existing = myReaction(actId)
     try {
-      if (existing) await unreactToActivity(existing.id)
-      else await reactToActivity(actId, meStaffId, meName)
+      if (existing) await liveActivityRepository.unreactToActivity(existing.id)
+      else await liveActivityRepository.reactToActivity(actId, meStaffId, meName)
       load()
     } catch (e) {
       showToast('Could not react: ' + e.message, { type: 'error' })
@@ -594,7 +588,7 @@ export default function LiveActivity({ brand }) {
     if (!text) return
     const act = activities.filter(function (a) { return a.id === actId })[0]
     try {
-      await commentOnActivity({
+      await liveActivityRepository.commentOnActivity({
         activity_id: actId,
         staff_id: meStaffId,
         actor_name: meName,

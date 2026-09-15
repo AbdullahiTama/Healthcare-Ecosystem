@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Bookmark } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
+import { postRepository } from './repositories/postRepository'
+import { storyRepository } from './repositories/storyRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -74,8 +76,7 @@ function SavedPosts() {
       setProfiles(profileMap)
 
       // Batch story ring for all saved-post authors
-      const { data: storyRows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', userIds).gt('expires_at', new Date().toISOString())
-      const storiesForAuthors = storyRows || []
+      const storiesForAuthors = await storyRepository.getActiveStoriesByUsers(userIds)
       let viewedIds = new Set()
       if (storiesForAuthors.length && user?.id) viewedIds = await fetchViewedStoryIds(supabase, storiesForAuthors.map((s) => s.id))
       setStoryMeta({ stories: storiesForAuthors, viewedIds })
@@ -99,8 +100,7 @@ function SavedPosts() {
   }
 
   async function openStoryForUser(uid) {
-    const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', uid).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })
-    const list = data || []
+    const list = await storyRepository.getStoriesByUser(uid)
     if (!list.length) return
     setViewer({ stories: list, index: 0, userId: uid })
   }

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { showRepository } from './repositories/showRepository'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
 import { CalendarClock, Eye, FileText, Gift, Heart, Image as ImageIcon, Lock, Pencil, Radio, Send, Share2, Trash2 } from 'lucide-react'
@@ -49,18 +50,22 @@ function LiveDashboard() {
   }, [id, user])
 
   async function loadStats() {
-    const [likeRes, shareRes, viewRes, giftRes] = await Promise.all([
-      supabase.from('live_reactions').select('id', { count: 'exact', head: true }).eq('show_id', id),
-      supabase.from('live_shares').select('id', { count: 'exact', head: true }).eq('show_id', id),
-      supabase.from('live_views').select('id', { count: 'exact', head: true }).eq('show_id', id),
-      supabase.from('gifts').select('coins').eq('post_id', id),
-    ])
-    setStats(prev => ({
-      likes: Math.max(prev.likes, likeRes.count || 0),
-      shares: Math.max(prev.shares, shareRes.count || 0),
-      views: Math.max(prev.views, viewRes.count || 0),
-      gifts: Math.max(prev.gifts, (giftRes.data || []).reduce((s, g) => s + (g.coins || 0), 0)),
-    }))
+    try {
+      const [likeCount, shareCount, viewCount, giftData] = await Promise.all([
+        showRepository.getReactionCount(id),
+        showRepository.getShareCount(id),
+        showRepository.getViewCount(id),
+        showRepository.getGiftStats(id),
+      ])
+      setStats(prev => ({
+        likes: Math.max(prev.likes, likeCount || 0),
+        shares: Math.max(prev.shares, shareCount || 0),
+        views: Math.max(prev.views, viewCount || 0),
+        gifts: Math.max(prev.gifts, (giftData || []).reduce((s, g) => s + (g.coins || 0), 0)),
+      }))
+    } catch (e) {
+      console.warn('loadStats failed:', e)
+    }
   }
 
   function fmtCount(n) {
@@ -72,16 +77,16 @@ function LiveDashboard() {
 
   async function load() {
     setLoading(true)
-    const { data: showData } = await supabase.from('live_shows').select('*').eq('id', id).maybeSingle()
-    setShow(showData || null)
-    const { data: parts } = await supabase
-      .from('live_participants')
-      .select('user_id, role, joined, profiles(full_name, display_name)')
-      .eq('show_id', id)
-    setParticipants(parts || [])
-    // Mark self as joined
-    if (user) {
-      await supabase.from('live_participants').update({ joined: true }).eq('show_id', id).eq('user_id', user.id)
+    try {
+      const showData = await showRepository.getShowById(id)
+      setShow(showData || null)
+      const parts = await showRepository.getParticipants(id)
+      setParticipants(parts || [])
+      if (user) {
+        await showRepository.markParticipantJoined(id, user.id)
+      }
+    } catch (e) {
+      console.warn('load failed:', e)
     }
     await loadItems()
     await loadComments()
@@ -90,22 +95,21 @@ function LiveDashboard() {
   }
 
   async function loadItems() {
-    const { data } = await supabase
-      .from('live_items')
-      .select('id, kind, content, created_at, sender_id, profiles(full_name, display_name)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-    setItems(data || [])
+    try {
+      const data = await showRepository.getItems(id)
+      setItems(data || [])
+    } catch (e) {
+      console.warn('loadItems failed:', e)
+    }
   }
 
   async function loadComments() {
-    const { data } = await supabase
-      .from('live_comments')
-      .select('id, content, hidden, created_at, profiles(full_name, display_name)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-      .limit(60)
-    setComments(data || [])
+    try {
+      const data = await showRepository.getDashboardComments(id, 60)
+      setComments(data || [])
+    } catch (e) {
+      console.warn('loadComments failed:', e)
+    }
   }
 
   async function sendItem() {
@@ -123,17 +127,20 @@ function LiveDashboard() {
         showToast(`Couldn't upload the image: ${upErr.message}`, { type: 'error' })
       } else {
         const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
-        const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'image', content: urlData.publicUrl })
-        if (error) showToast(`Couldn't post the image: ${error.message}`, { type: 'error' })
+        try {
+          await showRepository.addItem(id, user.id, 'image', urlData.publicUrl)
+        } catch (error) {
+          showToast(`Couldn't post the image: ${error.message}`, { type: 'error' })
+        }
       }
       setImage(null)
     }
     if (draft.trim()) {
-      const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'text', content: draft.trim() })
-      if (error) {
-        showToast(`Couldn't post live: ${error.message}`, { type: 'error' })
-      } else {
+      try {
+        await showRepository.addItem(id, user.id, 'text', draft.trim())
         setDraft('')
+      } catch (error) {
+        showToast(`Couldn't post live: ${error.message}`, { type: 'error' })
       }
     }
     setSending(false)
@@ -141,34 +148,43 @@ function LiveDashboard() {
   }
 
   async function hideComment(cid) {
-    await supabase.from('live_comments').update({ hidden: true }).eq('id', cid)
+    await showRepository.hideComment(cid)
     loadComments()
   }
 
   async function sendVoice(url) {
     await ensureProfile(user)
-    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'voice', content: url })
-    if (error) showToast(`Couldn't post the voice note: ${error.message}`, { type: 'error' })
+    try {
+      await showRepository.addItem(id, user.id, 'voice', url)
+    } catch (error) {
+      showToast(`Couldn't post the voice note: ${error.message}`, { type: 'error' })
+    }
     loadItems()
   }
 
   async function sendSlide(url, num, total) {
     await ensureProfile(user)
-    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'slide', content: `${url}|||${num}|||${total}` })
-    if (error) showToast(`Couldn't post the slide: ${error.message}`, { type: 'error' })
+    try {
+      await showRepository.addItem(id, user.id, 'slide', `${url}|||${num}|||${total}`)
+    } catch (error) {
+      showToast(`Couldn't post the slide: ${error.message}`, { type: 'error' })
+    }
     loadItems()
   }
 
   async function sendVideo(url) {
     await ensureProfile(user)
-    const { error } = await supabase.from('live_items').insert({ show_id: id, sender_id: user.id, kind: 'video', content: url })
-    if (error) showToast(`Couldn't post the video: ${error.message}`, { type: 'error' })
+    try {
+      await showRepository.addItem(id, user.id, 'video', url)
+    } catch (error) {
+      showToast(`Couldn't post the video: ${error.message}`, { type: 'error' })
+    }
     loadItems()
   }
 
   async function endShow() {
     setConfirmEndOpen(false)
-    await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id)
+    await showRepository.endShow(id)
     navigate('/feed')
   }
 
@@ -208,13 +224,15 @@ function LiveDashboard() {
     }
     const patch = { title: editTitle.trim(), scheduled_at: newDate.toISOString() }
     if (trailerUrl !== show.trailer_url) patch.trailer_url = trailerUrl
-    const { error } = await supabase.from('live_shows').update(patch).eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
-    setEditSaving(false)
-    if (error) {
+    try {
+      await showRepository.updateScheduledShow(id, user.id, patch)
+    } catch (error) {
+      setEditSaving(false)
       setEditError(error.message || 'Could not save.')
       if (error.code === '42501') showToast('You can only edit your own scheduled shows.', { type: 'error' })
       return
     }
+    setEditSaving(false)
     setEditingScheduled(false)
     showToast('Show updated.', { type: 'success' })
     load()
@@ -222,10 +240,12 @@ function LiveDashboard() {
 
   async function cancelScheduledShow() {
     setCancelling(true)
-    const { error: delErr } = await supabase.from('live_shows').delete().eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
-    if (delErr) {
-      const { error: updErr } = await supabase.from('live_shows').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', id).eq('host_id', user.id).eq('status', 'scheduled')
-      if (updErr) {
+    try {
+      await showRepository.cancelScheduledShow(id, user.id)
+    } catch (delErr) {
+      try {
+        await showRepository.cancelScheduledShowFallback(id, user.id)
+      } catch (updErr) {
         showToast('Could not cancel: ' + (updErr.message || delErr.message), { type: 'error' })
         setCancelling(false)
         setCancelConfirm(false)
@@ -267,7 +287,7 @@ function LiveDashboard() {
   const scheduled = show.status === 'scheduled'
 
   async function startNow() {
-    await supabase.from('live_shows').update({ status: 'live', started_at: new Date().toISOString() }).eq('id', id)
+    await showRepository.startShow(id)
     load()
   }
 

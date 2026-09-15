@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../../config/supabaseClient'
+import { agentRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { Button, Card, Input, Select, Loading, ErrorState, Empty, ConfirmDialog } from '../../components/ui'
 
@@ -12,66 +12,6 @@ const TIER_OPTIONS = [
 const TIER_DEFAULT_PCT = { agent: 10, community_coordinator: 5, state_coordinator: 3, unplaced: 0 }
 
 function pctForTier(tier) { return TIER_DEFAULT_PCT[tier] ?? 10 }
-
-export async function fetchPendingAgents() {
-  const { data, error } = await supabase
-    .from('agents')
-    .select('id, full_name, email, state, tier, status, referral_code, parent_agent_id, commission_pct, created_at')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-    .limit(50)
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export async function fetchPotentialParents() {
-  // Parents are approved agents who can have children (all approved, but UI highlights community coordinator cap)
-  const { data, error } = await supabase
-    .from('agents')
-    .select('id, full_name, email, tier, state, referral_code, commission_pct')
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false })
-    .limit(100)
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export async function fetchChildrenCounts() {
-  // Best-effort counts for 20-cap display; derive from agents table where parent_agent_id not null
-  const { data, error } = await supabase
-    .from('agents')
-    .select('id, parent_agent_id')
-  if (error) return {}
-  const counts = {}
-  ;(Array.isArray(data) ? data : []).forEach((r) => {
-    if (r.parent_agent_id) counts[r.parent_agent_id] = (counts[r.parent_agent_id] || 0) + 1
-  })
-  return counts
-}
-
-export async function approveAgent({ agentId, tier, parentAgentId, commissionPct }) {
-  const pct = commissionPct != null && commissionPct !== '' ? Number(commissionPct) : pctForTier(tier)
-  const payload = {
-    tier,
-    parent_agent_id: parentAgentId || null,
-    commission_pct: pct,
-    status: 'approved',
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentApproval] approve', { agentId, tier, parentAgentId, pct })
-  const { data, error } = await supabase
-    .from('agents')
-    .update(payload)
-    .eq('id', agentId)
-    .select('id, tier, parent_agent_id, commission_pct, status')
-    .single()
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[AgentApproval] approve failed', error.message, error.code)
-    throw error
-  }
-  return data
-}
 
 export default function AgentApproval() {
   const [loading, setLoading] = useState(true)
@@ -92,7 +32,11 @@ export default function AgentApproval() {
     setLoading(true)
     setError(null)
     try {
-      const [pend, pars, counts] = await Promise.all([fetchPendingAgents(), fetchPotentialParents(), fetchChildrenCounts()])
+      const [pend, pars, counts] = await Promise.all([
+        agentRepository.fetchPendingAgents(),
+        agentRepository.fetchPotentialParents(),
+        agentRepository.fetchChildrenCounts(),
+      ])
       setPending(pend)
       setParents(pars)
       setChildrenCounts(counts)
@@ -139,7 +83,7 @@ export default function AgentApproval() {
     setSaving(true)
     setSaveError(null)
     try {
-      await approveAgent({ agentId: confirm.agentId, tier: confirm.tier, parentAgentId: confirm.parentAgentId, commissionPct: confirm.commissionPct })
+      await agentRepository.approveAgent({ agentId: confirm.agentId, tier: confirm.tier, parentAgentId: confirm.parentAgentId, commissionPct: confirm.commissionPct })
       setConfirm(null)
       setSelected(null)
       await load()
@@ -196,7 +140,8 @@ export default function AgentApproval() {
             <h2 style={{ fontSize: theme.type.h2.size, fontWeight: theme.type.h2.weight, color: theme.navy, margin: '0 0 10px 0' }}>Pending ({filtered.length})</h2>
             <div role="list" aria-label="Pending agents" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {filtered.map((a) => (
-                <Card key={a.id} style={{ padding: 14 }} data-testid="pending-agent-row">
+                <div key={a.id} data-testid="pending-agent-row">
+                <Card style={{ padding: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 800, fontSize: 14, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.full_name || 'Unnamed'}</div>
@@ -207,6 +152,7 @@ export default function AgentApproval() {
                     <Button variant="primary" size="sm" onClick={() => openApprove(a)} aria-label={`Review ${a.full_name || a.email}`}>Review</Button>
                   </div>
                 </Card>
+                </div>
               ))}
             </div>
           </div>

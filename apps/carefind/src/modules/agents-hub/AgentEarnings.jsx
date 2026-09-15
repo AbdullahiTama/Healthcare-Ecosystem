@@ -1,55 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../../config/supabaseClient'
+import { agentRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { Button, Card, Input, Loading, ErrorState, Empty } from '../../components/ui'
-
-// Spec: earnings via security-definer calculate_agent_earnings (idempotent via payment_reference partial unique)
-// plan_value × commission_pct for 3 tiers: direct (10), community (5), state (3)
-
-export async function calculateAgentEarnings({ businessId, planValue, paymentReference }) {
-  if (!businessId || planValue == null || !paymentReference) {
-    throw new Error('businessId, planValue and paymentReference required')
-  }
-  const p_plan_value = Number(planValue)
-  if (!Number.isFinite(p_plan_value) || p_plan_value <= 0) throw new Error('planValue must be > 0')
-  // eslint-disable-next-line no-console
-  console.info('[AgentEarnings] calculate', { businessId, p_plan_value, paymentReference })
-  const { data, error } = await supabase.rpc('calculate_agent_earnings', {
-    p_business_id: businessId,
-    p_plan_value: p_plan_value,
-    p_payment_reference: paymentReference,
-  })
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[AgentEarnings] calculate failed', error.message, error.code)
-    throw error
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentEarnings] calculate done', { businessId, paymentReference, data })
-  return data
-}
-
-export async function fetchEarnings({ agentId = null, limit = 100 } = {}) {
-  let q = supabase.from('agent_earnings').select('id, agent_id, business_id, amount_owed, amount_paid, commission_pct, plan_value, payment_reference, status, payout_period, created_at, paid_at').order('created_at', { ascending: false }).limit(limit)
-  if (agentId) q = q.eq('agent_id', agentId)
-  const { data, error } = await q
-  if (error) throw error
-  return Array.isArray(data) ? data : []
-}
-
-export async function fetchAgentsMap() {
-  const { data, error } = await supabase.from('agents').select('id, full_name, email, referral_code, tier').limit(200)
-  if (error) return {}
-  const map = {}
-  ;(Array.isArray(data) ? data : []).forEach((a) => { map[a.id] = a })
-  return map
-}
-
-export async function simulateBusinessPayment({ businessId, planValue, paymentReference }) {
-  // Webhook helper: calls calculateAgentEarnings twice to verify idempotency if needed
-  // Here single call; caller can call twice
-  return calculateAgentEarnings({ businessId, planValue, paymentReference })
-}
 
 export default function AgentEarnings({ agentId = null }) {
   const [loading, setLoading] = useState(true)
@@ -69,7 +21,10 @@ export default function AgentEarnings({ agentId = null }) {
     setLoading(true)
     setError(null)
     try {
-      const [earn, map] = await Promise.all([fetchEarnings({ agentId }), fetchAgentsMap()])
+      const [earn, map] = await Promise.all([
+        agentRepository.fetchEarnings({ agentId }),
+        agentRepository.fetchAgentsMap(),
+      ])
       setEarnings(earn)
       setAgentsMap(map)
     } catch (e) {
@@ -93,7 +48,7 @@ export default function AgentEarnings({ agentId = null }) {
     }
     setTriggering(true)
     try {
-      await calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
+      await agentRepository.calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
       setTriggerSuccess(`Earnings calculated for ${paymentRef.trim()} (idempotent — retry will not duplicate)`)
       // reload list
       await load()
@@ -114,8 +69,8 @@ export default function AgentEarnings({ agentId = null }) {
     setTriggerError(null)
     setTriggerSuccess(null)
     try {
-      await calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
-      await calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
+      await agentRepository.calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
+      await agentRepository.calculateAgentEarnings({ businessId: businessId.trim(), planValue: Number(planValue), paymentReference: paymentRef.trim() })
       setTriggerSuccess('Webhook retry simulated: second call was idempotent (no duplicate rows)')
       await load()
     } catch (err) {
@@ -148,7 +103,7 @@ export default function AgentEarnings({ agentId = null }) {
 
       <Card style={{ padding: 16, marginBottom: 16 }}>
         <h2 style={{ margin: '0 0 12px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>Trigger earnings (webhook simulation)</h2>
-        <form onSubmit={handleCalculate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <form onSubmit={handleCalculate} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             <Input label="Business ID" value={businessId} onChange={setBusinessId} placeholder="business uuid" required id="earn-business-id" />
             <Input label="Plan value (NGN)" type="number" value={planValue} onChange={setPlanValue} placeholder="e.g. 10000" required id="earn-plan-value" helperText="plan_value × pct per tier" />

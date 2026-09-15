@@ -7,6 +7,7 @@ import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 import StoryViewer from './components/StoryViewer.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './storyViews.js'
+import { storyRepository } from './repositories/storyRepository'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
@@ -169,19 +170,19 @@ function Stories() {
     }
     const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
     await ensureProfile(user)
-    const { error } = await supabase.from('stories').insert({
-      title: sTitle.trim() || null,
-      body: sBody.trim() || null,
-      image_url: imageUrl,
-      bg_color: sBg,
-      is_platform: false,
-      user_id: user.id,
-      expires_at: expiresAt,
-    })
-    if (!error) {
+    try {
+      await storyRepository.createStory({
+        title: sTitle.trim() || null,
+        body: sBody.trim() || null,
+        image_url: imageUrl,
+        bg_color: sBg,
+        is_platform: false,
+        user_id: user.id,
+        expires_at: expiresAt,
+      })
       setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setComposerOpen(false)
       loadStories()
-    } else {
+    } catch (error) {
       showToast('Could not post story: ' + error.message, { type: 'error' })
     }
     setPosting(false)

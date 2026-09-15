@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
+import { businessRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { Loading, ErrorState, Empty, Card, Button, Input, ConfirmDialog, Modal } from '../../components/ui'
 
@@ -101,26 +101,13 @@ export default function BusinessesHub() {
     setLoading(true)
     setError(null)
     try {
-      const offset = page * PAGE_SIZE
-      // Spec exact pattern: supabase.from('businesses').select(..., {count:'exact'}).ilike('name', `%q%`).range(offset,offset+19).order(created_at desc)
-      // Build query step by step to match spec; conditionally add ilike only when query present
-      let query = supabase.from('businesses').select(BUSINESS_COLUMNS, { count: 'exact' })
-      if (searchQuery) {
-        query = query.ilike('name', `%${searchQuery}%`)
-      }
-      query = query.range(offset, offset + PAGE_SIZE - 1).order('created_at', { ascending: false })
-      const res = await query
-      if (res.error) throw new Error(res.error.message || 'Failed to load businesses')
-      const data = Array.isArray(res.data) ? res.data : []
-      // filter out soft-deleted locally (also supports .is('deleted_at', null) if query used)
+      const { data, count } = await businessRepository.listBusinesses({
+        searchQuery,
+        page,
+        pageSize: PAGE_SIZE,
+        columns: BUSINESS_COLUMNS,
+      })
       const visible = data.filter((b) => !b.deleted_at)
-      // count is exact total matching before pagination; if mock provides count, use it, else derived
-      // For filtered deleted, adjust total if needed by filtering? But spec says count exact, so respect res.count
-      // If res.count exists, use it minus deleted? For now use res.count if present else visible length plus offset logic
-      const count = typeof res.count === 'number' ? res.count : visible.length + (visible.length === PAGE_SIZE ? 0 : 0)
-      // If we filtered deleted locally, count may overcount; adjust by subtracting deleted in page? Keep count as res.count for now
-      // For test simplicity where deleted rows are removed from table via update, count will be correct after reload without local filter.
-      // We keep visible for display, but total from server
       setBusinesses(visible)
       setTotal(count != null ? count : visible.length)
     } catch (e) {
@@ -158,11 +145,8 @@ export default function BusinessesHub() {
           if (!cancelled) setEcommerceProducts([])
           return
         }
-        // Spec: supabase.from('ecommerce_products').eq('business_id', id).select('name,price,units_sold,is_live')
-        // Real schema uses status/ecommerce_price_kobo etc; request superset for compatibility with both mock and live
-        const res = await supabase.from('ecommerce_products').select('id,business_id,name,price,units_sold,is_live,status,ecommerce_price_kobo,description,category,product_id,created_at').eq('business_id', selected.id)
-        if (res.error) throw new Error(res.error.message)
-        if (!cancelled) setEcommerceProducts(Array.isArray(res.data) ? res.data : [])
+        const data = await businessRepository.getEcommerceProducts(selected.id)
+        if (!cancelled) setEcommerceProducts(data)
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('[BusinessesHub] ecommerce load failed:', e)
@@ -212,8 +196,7 @@ export default function BusinessesHub() {
         }
         // eslint-disable-next-line no-console
         console.info('[BusinessesHub] suspend', biz.id)
-        const res = await supabase.from('businesses').update({ status: 'suspended' }).eq('id', biz.id).eq('status', 'active')
-        if (res.error) throw new Error(res.error.message)
+        await businessRepository.suspendBusiness(biz.id)
         // update local state
         setBusinesses((prev) => prev.map((b) => b.id === biz.id ? { ...b, status: 'suspended' } : b))
         if (selected && selected.id === biz.id) setSelected((s) => s ? { ...s, status: 'suspended' } : s)
@@ -223,17 +206,14 @@ export default function BusinessesHub() {
         }
         // eslint-disable-next-line no-console
         console.info('[BusinessesHub] revoke', biz.id)
-        const res = await supabase.from('businesses').update({ status: 'revoked' }).eq('id', biz.id)
-        if (res.error) throw new Error(res.error.message)
+        await businessRepository.revokeBusiness(biz.id)
         setBusinesses((prev) => prev.map((b) => b.id === biz.id ? { ...b, status: 'revoked' } : b))
         if (selected && selected.id === biz.id) setSelected((s) => s ? { ...s, status: 'revoked' } : s)
       } else if (confirm.type === 'delete') {
         // eslint-disable-next-line no-console
         console.info('[BusinessesHub] delete', biz.id, USE_SOFT_DELETE ? 'soft' : 'hard')
         if (USE_SOFT_DELETE) {
-          const now = new Date().toISOString()
-          const res = await supabase.from('businesses').update({ deleted_at: now }).eq('id', biz.id)
-          if (res.error) throw new Error(res.error.message)
+          await businessRepository.softDeleteBusiness(biz.id)
           // remove from list (soft-deleted are hidden)
           setBusinesses((prev) => prev.filter((b) => b.id !== biz.id))
           setTotal((t) => Math.max(0, t - 1))
@@ -241,8 +221,7 @@ export default function BusinessesHub() {
             closeDetail()
           }
         } else {
-          const res = await supabase.from('businesses').delete().eq('id', biz.id)
-          if (res.error) throw new Error(res.error.message)
+          await businessRepository.hardDeleteBusiness(biz.id)
           setBusinesses((prev) => prev.filter((b) => b.id !== biz.id))
           setTotal((t) => Math.max(0, t - 1))
           if (selected && selected.id === biz.id) closeDetail()
@@ -274,11 +253,11 @@ export default function BusinessesHub() {
     try {
       // eslint-disable-next-line no-console
       console.info('[BusinessesHub] export filtered', { searchQuery })
-      let q = supabase.from('businesses').select(BUSINESS_COLUMNS).order('created_at', { ascending: false })
-      if (searchQuery) q = q.ilike('name', `%${searchQuery}%`)
-      const res = await q
-      if (res.error) throw new Error(res.error.message)
-      const rows = (Array.isArray(res.data) ? res.data : []).filter((b) => !b.deleted_at)
+      const data = await businessRepository.listAllBusinesses({
+        searchQuery,
+        columns: BUSINESS_COLUMNS,
+      })
+      const rows = (Array.isArray(data) ? data : []).filter((b) => !b.deleted_at)
       const mapped = rows.map(toExportRow)
       exportToCSV(mapped, 'businesses_filtered.csv')
     } catch (e) {
@@ -294,9 +273,10 @@ export default function BusinessesHub() {
     try {
       // eslint-disable-next-line no-console
       console.info('[BusinessesHub] export all')
-      const res = await supabase.from('businesses').select(BUSINESS_COLUMNS).order('created_at', { ascending: false })
-      if (res.error) throw new Error(res.error.message)
-      const rows = (Array.isArray(res.data) ? res.data : []).filter((b) => !b.deleted_at)
+      const data = await businessRepository.listAllBusinesses({
+        columns: BUSINESS_COLUMNS,
+      })
+      const rows = (Array.isArray(data) ? data : []).filter((b) => !b.deleted_at)
       const mapped = rows.map(toExportRow)
       exportToCSV(mapped, 'businesses_all.csv')
     } catch (e) {

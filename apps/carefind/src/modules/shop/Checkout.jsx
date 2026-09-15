@@ -10,6 +10,7 @@ import { addressesRepository } from '../account/addressesRepository'
 import { calculateTotalFees } from './pricing'
 import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
 import { supabase } from '../../config/supabaseClient'
+import { shopRepository } from './shopRepository'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
 import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star, Tag, CheckCircle, X, ShoppingCart } from 'lucide-react'
@@ -103,9 +104,9 @@ export default function Checkout() {
   useEffect(() => {
     async function loadStations() {
       try {
-        const { data } = await supabase.from('shop_pickup_stations').select('id,name,address,city,state').eq('is_active', true).limit(20)
-        setStations(data || [])
-        if (data && data.length > 0) setPickupStationId(data[0].id)
+        const data = await shopRepository.getPickupStations()
+        setStations(data)
+        if (data.length > 0) setPickupStationId(data[0].id)
       } catch {}
     }
     loadStations()
@@ -116,9 +117,8 @@ export default function Checkout() {
     const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
     if (vendorIds.length !== 1) { setAllowPayOnDelivery(false); return }
     let live = true
-    supabase.from('businesses').select('shop_allow_pay_on_delivery').eq('id', vendorIds[0]).maybeSingle().then(({ data }) => {
+    shopRepository.getVendorPayOnDelivery(vendorIds[0]).then((allowed) => {
       if (live) {
-        const allowed = !!data?.shop_allow_pay_on_delivery
         setAllowPayOnDelivery(allowed)
         if (!allowed) setPayMethod('paystack')
       }
@@ -238,11 +238,7 @@ export default function Checkout() {
   async function validateStock() {
     const ecomIds = [...new Set(items.map(i => i.ecommerce_product_id).filter(Boolean))]
     if (ecomIds.length === 0) return []
-    const { data, error } = await supabase
-      .from('ecommerce_products')
-      .select('id, product_id, products(id, name, stock)')
-      .in('id', ecomIds)
-    if (error || !data) return []
+    const data = await shopRepository.validateStock(ecomIds)
     const errors = []
     for (const item of items) {
       const ecom = data.find(d => d.id === item.ecommerce_product_id)

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { BadgeCheck, ChevronRight, Stethoscope, Users, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -29,17 +30,17 @@ function ProfessionalDashboard() {
       }
       setLoading(true)
 
-      const [profileRes, commentsRes, followersRes, postsRes] = await Promise.all([
-        supabase.from('profiles').select('display_name, avatar_url, is_verified, verification_label').eq('id', user.id).single(),
-        supabase.from('post_comments').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
-        supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      const [profileData, questionsData, followersData, postsData] = await Promise.all([
+        profileRepository.getProfilePublic(user.id),
+        profileRepository.getCommentCount(user.id),
+        profileRepository.getFollowingCount(user.id),
+        profileRepository.getMyPostCount(user.id),
       ])
 
-      setProfile(profileRes.data)
-      setQuestionsAnswered(commentsRes.count || 0)
-      setFollowerCount(followersRes.count || 0)
-      setPostCount(postsRes.count || 0)
+      setProfile(profileData)
+      setQuestionsAnswered(questionsData || 0)
+      setFollowerCount(followersData || 0)
+      setPostCount(postsData || 0)
       setLoading(false)
     }
     if (!authLoading) load()

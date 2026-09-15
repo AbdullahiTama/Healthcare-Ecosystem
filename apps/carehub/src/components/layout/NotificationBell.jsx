@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
-import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../../services/supabase'
+import { notificationRepository } from '../../modules/notifications/repositories'
 import { watchTable } from '../../lib/realtime'
 import { categoryForKind, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
 import { theme } from '../../styles/theme'
@@ -51,7 +51,7 @@ export default function NotificationBell({ brand }) {
   async function load() {
     if (!brand || !brand.id) return
     try {
-      const rows = await getMyNotifications(brand.id, meStaffId)
+      const rows = await notificationRepository.getAll(brand.id, meStaffId)
       setItems(rows || [])
     } catch (e) {
       // Silent — a failed notification fetch must not break the dashboard.
@@ -86,7 +86,7 @@ export default function NotificationBell({ brand }) {
         })
       })
       try {
-        await markNotificationRead(n.id)
+        await notificationRepository.markRead(n.id)
       } catch (e) {
         console.error('Mark-as-read failed:', e)
         setItems(function (prev) {
@@ -101,7 +101,7 @@ export default function NotificationBell({ brand }) {
 
   async function clearAll() {
     try {
-      await markAllNotificationsRead(brand.id, meStaffId)
+      await notificationRepository.markAllRead(brand.id, meStaffId)
       setItems(function (prev) {
         const stamp = new Date().toISOString()
         return prev.map(function (x) {

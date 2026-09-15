@@ -14,6 +14,9 @@ const supabaseMock = vi.hoisted(() => {
   return { from: vi.fn(() => q) }
 })
 vi.mock('../config/supabaseClient', () => ({ supabase: supabaseMock }))
+vi.mock('../modules/shop/CartProvider', () => ({
+  useCart: vi.fn(() => ({ count: 0, total: 0, items: [], addItem: vi.fn(), removeItem: vi.fn() })),
+}))
 
 function renderNav(initialPath) {
   return render(

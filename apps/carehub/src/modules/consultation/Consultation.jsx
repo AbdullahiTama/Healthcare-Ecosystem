@@ -6,7 +6,8 @@ import { Card, StatCard, SectionHead, Modal, Pill, TealBtn, GhostBtn, Avatar, Lo
 import ConsultationForm from './ConsultationForm'
 import PharmacyForm, { PHARMACY_TYPE_LABEL } from './PharmacyForm'
 import { printConsultation, printPharmacyConsultation } from './consultationPrint'
-import { getConsultations, getClients } from '../../services/supabase'
+import { consultationRepository } from './repositories'
+import { clientRepository } from '../clients/repositories'
 
 const { tealDeep, navy, gray600, gray500, gray400, border, bg } = theme
 
@@ -57,7 +58,7 @@ export default function Consultation({ brand, products, staffName }) {
     if (!brand?.id) return
     setLoading(true)
     try {
-      const data = await getConsultations(brand.id, {
+      const data = await consultationRepository.getAll(brand.id, {
         query: search.trim() || undefined,
         type: typeFilter || undefined,
         from: from || undefined,
@@ -80,7 +81,7 @@ export default function Consultation({ brand, products, staffName }) {
 
   useEffect(() => {
     if (!brand?.id) return
-    getClients(brand.id).then(c => setClients(c || [])).catch(() => {})
+    clientRepository.getAll(brand.id).then(c => setClients(c || [])).catch(() => {})
   }, [brand?.id])
 
   // Deep link from Clients.jsx ("New Consultation" in the client's file):

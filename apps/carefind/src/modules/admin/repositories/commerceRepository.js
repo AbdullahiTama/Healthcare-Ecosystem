@@ -65,6 +65,33 @@ export function createCommerceRepository(transport = adminTransport) {
 
       return data
     },
+
+    async getPromotions() {
+      const { data } = await transport.query('promotions', {
+        select: '*',
+        order: { column: 'created_at', ascending: false },
+      })
+      return data
+    },
+
+    async searchProducts(query, limit = 5) {
+      const { data } = await transport.query('products', {
+        select: 'id, name',
+        filters: [{ op: 'ilike', col: 'name', val: `%${query}%` }],
+        limit,
+      })
+      return data
+    },
+
+    async getProductReviews(productIds) {
+      if (!productIds || productIds.length === 0) return []
+      const { data } = await transport.query('product_reviews', {
+        select: '*',
+        filters: [{ op: 'in', col: 'product_id', val: productIds }],
+        order: { column: 'created_at', ascending: false },
+      })
+      return data
+    },
   }
 }
 

@@ -12,9 +12,9 @@ import { debtRepository } from '../debts/repositories'
 // Receipt/currency/tax configuration belongs to the settings module; the
 // receipt printer reads it through that module's repository.
 import { settingsRepository } from '../settings/repositories'
-// Cross-aggregate reads owned by modules that have not adopted the repository
-// seam yet (clients, consultations).
-import { getClients, getLatestConsultation } from '../../services/supabase'
+// Cross-aggregate reads: clients and consultations adopted the repository seam.
+import { clientRepository } from '../clients/repositories'
+import { consultationRepository } from '../consultation/repositories'
 import { fmt, genId, todayDate, nowStr } from '../../lib/utils'
 import { buildReceiptHtml, buildReceiptQrDataUrl } from './receiptPrint'
 import { buildReceiptEscpos } from './receiptEscpos'
@@ -198,7 +198,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   useEffect(() => {
     if (brand?.id) {
       settingsRepository.get(brand.id).then(s => setSettings(s))
-      getClients(brand.id).then(c => setClients(c || [])).catch(() => {})
+      clientRepository.getAll(brand.id).then(c => setClients(c || [])).catch(() => {})
       loadSalesData()
     }
   }, [brand?.id])
@@ -255,7 +255,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     const recIds = new Set()
     if (clientId) {
       try {
-        const latest = await getLatestConsultation(clientId)
+        const latest = await consultationRepository.getLatest(clientId)
         ;(latest?.recommended_products || []).forEach(p => recIds.add(p.id))
       } catch (e) {}
     }

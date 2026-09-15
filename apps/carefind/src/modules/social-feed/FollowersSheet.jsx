@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { followRepository } from './repositories/followRepository'
+import { storyRepository } from './repositories/storyRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { UserX, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -48,9 +50,9 @@ function FollowersSheet({ profileId, kind, count, onClose, onCountChange }) {
         if (user && !isOwner) {
           const ids = list.map((p) => p.id)
           if (ids.length) {
-            const { data: myFollows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).in('following_id', ids)
+            const followingIds = await followRepository.getMyFollowing(user.id, ids)
             const map = {}
-            ;(myFollows || []).forEach((f) => { map[f.following_id] = true })
+            followingIds.forEach((id) => { map[id] = true })
             if (active) setFollowingMap(map)
           }
         }
@@ -58,8 +60,7 @@ function FollowersSheet({ profileId, kind, count, onClose, onCountChange }) {
         // Batch stories for all people in sheet (avoid N+1 per avatar)
         const userIds = list.map((p) => p.id)
         if (userIds.length) {
-          const { data: storyRows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', userIds).gt('expires_at', new Date().toISOString())
-          const s = storyRows || []
+          const s = await storyRepository.getActiveStoriesByUsers(userIds)
           if (active) setStories(s)
           if (s.length && user?.id) {
             const seen = await fetchViewedStoryIds(supabase, s.map((x) => x.id))
@@ -82,24 +83,23 @@ function FollowersSheet({ profileId, kind, count, onClose, onCountChange }) {
     setBusyId(targetId)
     const currentlyFollowing = !!followingMap[targetId]
     if (currentlyFollowing) {
-      const { error: err } = await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId)
-      if (!err) {
+      try {
+        await followRepository.unfollow(user.id, targetId)
         setFollowingMap((m) => { const n = { ...m }; delete n[targetId]; return n })
         if (onCountChange) onCountChange(-1)
-      } else showToast('Could not unfollow: ' + err.message, { type: 'error' })
+      } catch (err) { showToast('Could not unfollow: ' + err.message, { type: 'error' }) }
     } else {
-      const { error: err } = await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId })
-      if (!err) {
+      try {
+        await followRepository.follow(user.id, targetId)
         setFollowingMap((m) => ({ ...m, [targetId]: true }))
         if (onCountChange) onCountChange(1)
-      } else showToast('Could not follow: ' + err.message, { type: 'error' })
+      } catch (err) { showToast('Could not follow: ' + err.message, { type: 'error' }) }
     }
     setBusyId(null)
   }
 
   async function openStoryForUser(targetId) {
-    const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', targetId).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false })
-    const list = data || []
+    const list = await storyRepository.getStoriesByUser(targetId)
     if (!list.length) return
     setViewer({ stories: list, index: 0, userId: targetId })
   }

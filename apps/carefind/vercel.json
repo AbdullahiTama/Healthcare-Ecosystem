@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/process-email-outbox",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/router" },
     {

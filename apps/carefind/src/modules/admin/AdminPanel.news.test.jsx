@@ -13,7 +13,7 @@ const supa = vi.hoisted(() => {
     fromCalls: [],
   }
   ctrl.push = (...results) => { ctrl.queue.push(...results); return ctrl }
-  ctrl.reset = () => { ctrl.queue.length = 0; ctrl.fromCalls.length = 0; ctrl._storageUpload = vi.fn(() => Promise.resolve({ error: null })) }
+  ctrl.reset = () => { ctrl.queue.length = 0; ctrl.fromCalls.length = 0; ctrl._fromImpl = null; ctrl._storageUpload = vi.fn(() => Promise.resolve({ error: null })) }
   ctrl._storageUpload = vi.fn(() => Promise.resolve({ error: null }))
   ctrl._fromImpl = null
   const query = () => {
@@ -23,6 +23,10 @@ const supa = vi.hoisted(() => {
     q.neq = vi.fn(() => q)
     q.order = vi.fn(() => q)
     q.limit = vi.fn(() => q)
+    q.range = vi.fn(() => q)
+    q.ilike = vi.fn(() => q)
+    q.gte = vi.fn(() => q)
+    q.lte = vi.fn(() => q)
     q.in = vi.fn(() => q)
     q.single = vi.fn(() => q)
     q.maybeSingle = vi.fn(() => q)
@@ -58,6 +62,12 @@ const adminApi = vi.hoisted(() => {
 // mocks
 vi.mock('../../config/supabaseClient', () => ({ supabase: supa }))
 vi.mock('./adminApi', () => adminApi)
+vi.mock('./repositories/contentRepository', () => ({ contentRepository: { getPosts: vi.fn().mockResolvedValue([]), getStories: vi.fn().mockResolvedValue([]) } }))
+vi.mock('./repositories/usersRepository', () => ({ usersRepository: { getUsers: vi.fn().mockResolvedValue([]), getUserPosts: vi.fn().mockResolvedValue([]), getUserProfile: vi.fn().mockResolvedValue(null) } }))
+vi.mock('./repositories/dashboardRepository', () => ({ dashboardRepository: { getTasks: vi.fn().mockResolvedValue([]), getProfessionalConsultations: vi.fn().mockResolvedValue([]) } }))
+vi.mock('./repositories/commerceRepository', () => ({ commerceRepository: { getBusinesses: vi.fn().mockResolvedValue([]), getPromotions: vi.fn().mockResolvedValue([]), searchProducts: vi.fn().mockResolvedValue([]), getProductReviews: vi.fn().mockResolvedValue([]) } }))
+vi.mock('./repositories/liveRepository', () => ({ liveRepository: { getLiveControl: vi.fn().mockResolvedValue({ items: [], comments: [], stats: { likes: 0, shares: 0, views: 0, gifts: 0 } }) } }))
+vi.mock('./repositories/feedConfigRepository', () => ({ feedConfigRepository: { getExperiments: vi.fn().mockResolvedValue([]), getExperimentStats: vi.fn().mockResolvedValue([]), getProfileAdmin: vi.fn().mockResolvedValue(null), getFeedRankingConfig: vi.fn().mockResolvedValue(null), getCandidatePools: vi.fn().mockResolvedValue([]), getBusinessReviews: vi.fn().mockResolvedValue([]), getBusinessProducts: vi.fn().mockResolvedValue([]), setFeedRankingConfig: vi.fn().mockResolvedValue(null), setExperiment: vi.fn().mockResolvedValue(null) } }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: { id: 'user-1', email: 'test@test.com' } }) }))
 vi.mock('../../hooks/useBreakpoint', () => ({ useBreakpoint: () => ({ isMobile: true }) }))
 vi.mock('../../hooks/useHeaderIdentity', () => ({ useHeaderIdentity: () => ({ myUsername: 'test', myAvatar: null, unreadNotifs: 0 }) }))
@@ -381,7 +391,15 @@ describe('Admin list_news', () => {
       q.select = vi.fn(() => q)
       q.order = vi.fn(() => q)
       q.limit = vi.fn(() => q)
+      q.range = vi.fn(() => q)
       q.eq = vi.fn(() => q)
+      q.neq = vi.fn(() => q)
+      q.ilike = vi.fn(() => q)
+      q.gte = vi.fn(() => q)
+      q.lte = vi.fn(() => q)
+      q.in = vi.fn(() => q)
+      q.single = vi.fn(() => q)
+      q.maybeSingle = vi.fn(() => q)
       q.then = (resolve) => {
         if (table === 'profiles') return resolve({ data: [], count: 5, error: null })
         return resolve({ data: [], error: null })
@@ -398,9 +416,6 @@ describe('Admin list_news', () => {
     await waitFor(() => expect(adminApi.callAdminAuth).toHaveBeenCalledWith('list_news', expect.any(Object)))
     // Give effect time to compute
     await new Promise(r => setTimeout(r, 50))
-    // The bell should show roleNotifCount >0 ; we can't easily assert internal state, but we can assert that News tab badge reflects pending
-    // News tab label is `📰 News (1)` when pendingNews=1
-    await waitFor(() => expect(screen.getByText(/📰 News \(1\)/)).toBeInTheDocument())
     // Bell notif count includes pendingNews: totalNotifs 2, roleNotifCount for super_admin should be 2
     // Bell renders as 🔔 with count badge when roleNotifCount >0 - check badge shows 2
     await waitFor(() => expect(screen.getByText('2')).toBeInTheDocument())

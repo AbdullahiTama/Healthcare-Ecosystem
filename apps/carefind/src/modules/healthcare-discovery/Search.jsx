@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import Shop from '../shop/Shop'
 import { useAuth } from '../../providers/AuthContext'
+import { healthcareRepository } from './repositories'
 import {
   BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
   Search as SearchIcon, SearchX, ShoppingBag, Sparkles, Star, Stethoscope,
@@ -161,34 +162,18 @@ function Search() {
   }, [])
 
   async function loadFeatured() {
-    const { data } = await supabase
-      .from('promotions')
-      .select('id, title, image_url, link_url, expires_at')
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .order('created_at', { ascending: false })
-      .limit(20)
-    if (data && data.length > 0) {
+    const data = await healthcareRepository.getFeaturedPromotions()
+    if (data.length > 0) {
       setFeatured(data)
       setFeaturedType('promo')
       return
     }
-    const { data: prods } = await supabase
-      .from('products')
-      .select('id, name, emoji, price, show_price, latitude, longitude, business_id, list_on_carefind, businesses(name, latitude, longitude, lat, lng, show_prices)')
-      .order('created_at', { ascending: false })
-      .limit(14)
-    setFeatured((prods || []).filter(p => p.list_on_carefind !== false))
+    const prods = await healthcareRepository.getFeaturedProducts()
+    setFeatured(prods.filter(p => p.list_on_carefind !== false))
     setFeaturedType('product')
   }
 
-  const businessesQuery = (q, st) => {
-    let bq = supabase.from('businesses').select('id, name, business_type, city, state, cover_url, booking_enabled, latitude, longitude, lat, lng')
-      .eq('visible_on_carefind', true)
-      .eq('status', 'active')
-    if (q) bq = bq.or(`name.ilike.%${q}%,business_type.ilike.%${q}%,city.ilike.%${q}%,state.ilike.%${q}%`)
-    if (st) bq = bq.ilike('state', `%${st}%`)
-    return bq
-  }
+  const businessesQuery = (q, st) => healthcareRepository.buildBusinessesQuery(q, st)
 
   async function loadMoreBusinesses() {
     const offset = businesses.length
@@ -219,12 +204,8 @@ function Search() {
     let resultCount = 0
 
     if (tab === 'products') {
-      let pq = supabase.from('products').select('id, name, emoji, price, show_price, category, generic_name, whatsapp, image_url, sale_type, price_unit, min_purchase, seller_location, latitude, longitude, business_id, owner_id, list_on_carefind, created_at, businesses(name, city, state, whatsapp, phone, latitude, longitude, lat, lng, show_prices)')
-      if (q) pq = pq.or(`name.ilike.%${q}%,generic_name.ilike.%${q}%,category.ilike.%${q}%`)
-      if (saleType && saleType !== 'all') pq = pq.eq('sale_type', saleType)
-      pq = pq.order('created_at', { ascending: false }).limit(100)
-      const { data } = await pq
-      let list = (data || []).filter(p => p.list_on_carefind !== false)
+      const data = await healthcareRepository.searchProducts(q, saleType)
+      let list = data.filter(p => p.list_on_carefind !== false)
       if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
       list = await attachOwnerProfiles(list)
       if (nearMe && userCoords) list = [...list].sort((a, b) => {
@@ -253,17 +234,13 @@ function Search() {
       resultCount = list.length
     }
     else if (tab === 'professionals') {
-      let pf = supabase.from('profiles').select('id, full_name, display_name, verification_label, specialty, location, is_verified, avatar_url').eq('is_verified', true)
-      if (q) pf = pf.or(`full_name.ilike.%${q}%,display_name.ilike.%${q}%`)
-      if (specialtyFilter.trim()) pf = pf.ilike('specialty', `%${specialtyFilter}%`)
-      if (stateFilter) pf = pf.ilike('location', `%${stateFilter}%`)
-      const { data } = await pf.limit(40)
-      setProfessionals(data || [])
+      const data = await healthcareRepository.searchVerifiedProfiles(q, specialtyFilter, stateFilter)
+      setProfessionals(data)
       setProducts([]); setBusinesses([])
-      resultCount = (data || []).length
-      const ids = (data || []).map((p) => p.id)
+      resultCount = data.length
+      const ids = data.map((p) => p.id)
       if (ids.length) {
-        const { data: rows } = await supabase.from('stories').select('id, user_id, expires_at').in('user_id', ids).gt('expires_at', new Date().toISOString())
+        const rows = await healthcareRepository.getActiveStoriesByUsers(ids)
         const s = rows || []
         setProStories(s)
         if (s.length && user?.id) {
@@ -278,14 +255,17 @@ function Search() {
     setLoading(false)
 
     if (q || stateFilter || specialtyFilter) {
-      const { error: logErr } = await supabase.from('search_logs').insert({
-        query: q || null,
-        category: tab,
-        user_id: user?.id || null,
-        results_count: resultCount,
-        found: resultCount > 0,
-      })
-      if (logErr) toast.show('Search log failed: ' + logErr.message)
+      try {
+        await healthcareRepository.logSearch({
+          query: q || null,
+          category: tab,
+          user_id: user?.id || null,
+          results_count: resultCount,
+          found: resultCount > 0,
+        })
+      } catch (logErr) {
+        toast.show('Search log failed: ' + logErr.message)
+      }
     }
   }
 
@@ -638,7 +618,7 @@ function Search() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {professionals.map((pr) => (
               <Link key={pr.id} to={`/u/${pr.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12, padding: 16, border: `1px solid ${theme.border}`, borderRadius: 14, background: '#fff', alignItems: 'center' }}>
-                <StoryAvatar userId={pr.id} stories={proStories} viewedIds={proViewed} size={48} src={pr.avatar_url} name={pr.full_name || pr.display_name} onClick={async (e) => { e.preventDefault(); const { data } = await supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, user_id, view_count, is_platform, expires_at').eq('user_id', pr.id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }); if (data?.length) setStoryViewer({ stories: data, index: 0, userId: pr.id }) }} />
+                <StoryAvatar userId={pr.id} stories={proStories} viewedIds={proViewed} size={48} src={pr.avatar_url} name={pr.full_name || pr.display_name} onClick={async (e) => { e.preventDefault(); const data = await healthcareRepository.getStoriesByUser(pr.id); if (data?.length) setStoryViewer({ stories: data, index: 0, userId: pr.id }) }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: '0 0 2px 0', display: 'flex', alignItems: 'center', gap: 5, fontSize: 15, fontWeight: 800, color: theme.navy }}>{pr.full_name || pr.display_name}<BadgeCheck size={14} color={theme.tealDeep} aria-label="Verified" /></p>
                   <p style={{ margin: 0, fontSize: 13, color: theme.textMid }}>{pr.verification_label || pr.specialty}{pr.location ? ` · ${pr.location}` : ''}</p>

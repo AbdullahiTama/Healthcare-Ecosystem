@@ -29,6 +29,37 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('../../config/supabaseClient', () => ({ supabase: h.ctrl }))
+vi.mock('./repositories', () => {
+  const shift = () => {
+    const r = h.ctrl.queue.shift()
+    if (!r) return Promise.resolve(null)
+    if (r.error) return Promise.reject(r.error)
+    return Promise.resolve(r.data)
+  }
+  return {
+    newsRepository: {
+      markNewsSeen: () => shift(),
+      getApprovedNews: () => shift(),
+      getPendingNewsByAuthor: () => shift(),
+      getArticleById: () => shift(),
+      getMoreApprovedNews: () => shift(),
+      insertArticle: () => shift(),
+      getReactionsByNewsId: () => shift(),
+      getReactionForUser: () => shift(),
+      addReaction: () => shift(),
+      removeReaction: () => shift(),
+      getCommentsByNewsId: () => shift(),
+      addComment: () => shift(),
+      deleteComment: () => shift(),
+      getRepostsByNewsId: () => shift(),
+      addRepost: () => shift(),
+      removeRepost: () => shift(),
+      getSavedNewsForUser: () => shift(),
+      addSavedNews: () => shift(),
+      removeSavedNews: () => shift(),
+    },
+  }
+})
 const auth = vi.hoisted(() => ({ user: null }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
 const toastShow = vi.hoisted(() => vi.fn())

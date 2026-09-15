@@ -4,6 +4,7 @@ import {
   ArrowLeft, AtSign, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -75,7 +76,7 @@ function Notifications() {
     setItems(data || [])
     // Mark all as read
     if ((data || []).some(n => !n.read)) {
-      await supabase.from('notifications').update({ read: true }).eq('recipient_id', user.id).eq('read', false)
+      await profileRepository.markNotificationsRead(user.id)
     }
   }
 

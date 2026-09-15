@@ -85,6 +85,24 @@ export function createDashboardRepository(transport = adminTransport) {
         openDisputes: reportsRes.filter(r => r.status === 'pending').length,
       }
     },
+
+    async getTasks() {
+      const { data } = await transport.query('tasks', {
+        select: '*',
+        order: { column: 'created_at', ascending: false },
+      })
+      return data
+    },
+
+    async getProfessionalConsultations({ status = 'paid', limit = 20 } = {}) {
+      const { data } = await transport.query('professional_consultations', {
+        select: '*, profiles!professional_consultations_professional_id_fkey(full_name, display_name)',
+        filters: [{ op: 'eq', col: 'status', val: status }],
+        order: { column: 'created_at', ascending: false },
+        limit,
+      })
+      return data
+    },
   }
 }
 

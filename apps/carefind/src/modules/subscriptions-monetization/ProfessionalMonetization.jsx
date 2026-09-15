@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
+import { subscriptionRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import {
   BadgeCheck, CalendarDays, ChevronRight, ClipboardList, Coins, FileText,
@@ -42,31 +42,31 @@ function ProfessionalMonetization() {
       setLoading(true)
 
       const [profileRes, subRes, subscribersRes, consultRes, tasksRes, submissionsRes, walletRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('subscriptions').select('*').eq('professional_id', user.id).maybeSingle(),
-        supabase.from('user_subscriptions').select('id, subscriber_id, started_at, status, profiles(full_name, display_name)').eq('professional_id', user.id).eq('status', 'active'),
-        supabase.from('professional_consultations').select('*').eq('professional_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('tasks').select('*').eq('status', 'open').order('created_at', { ascending: false }),
-        supabase.from('task_submissions').select('*, tasks(title, compensation)').eq('professional_id', user.id),
-        supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle(),
+        subscriptionRepository.getProfile(user.id),
+        subscriptionRepository.getSubscription(user.id),
+        subscriptionRepository.getActiveSubscribers(user.id),
+        subscriptionRepository.getConsultations(user.id),
+        subscriptionRepository.getOpenTasks(),
+        subscriptionRepository.getTaskSubmissions(user.id),
+        subscriptionRepository.getWalletBalance(user.id),
       ])
 
-      setProfile(profileRes.data)
-      setSubscription(subRes.data)
-      setSubscribers(subscribersRes.data || [])
-      setConsultations(consultRes.data || [])
-      const setupRow = (consultRes.data || []).find(c => c.status === 'setup')
+      setProfile(profileRes)
+      setSubscription(subRes)
+      setSubscribers(subscribersRes)
+      setConsultations(consultRes)
+      const setupRow = (consultRes || []).find(c => c.status === 'setup')
       if (setupRow) {
         setConsultFee(setupRow.fee?.toString() || '')
         setConsultType(setupRow.type || 'text')
         setConsultNotes(setupRow.notes || '')
       }
-      setTasks(tasksRes.data || [])
-      setSubmissions(submissionsRes.data || [])
-      setWallet(walletRes.data)
-      if (subRes.data) {
-        setNewPrice(subRes.data.price?.toString() || '500')
-        setNewDescription(subRes.data.description || '')
+      setTasks(tasksRes)
+      setSubmissions(submissionsRes)
+      setWallet({ balance: walletRes })
+      if (subRes) {
+        setNewPrice(subRes.price?.toString() || '500')
+        setNewDescription(subRes.description || '')
       }
       setLoading(false)
     }
@@ -77,11 +77,11 @@ function ProfessionalMonetization() {
     if (!newPrice || parseInt(newPrice) < 100) return
     setSaving(true)
     if (subscription) {
-      await supabase.from('subscriptions').update({ price: parseInt(newPrice), description: newDescription, is_active: true }).eq('id', subscription.id)
+      await subscriptionRepository.updateSubscription(subscription.id, { price: parseInt(newPrice), description: newDescription, is_active: true })
     } else {
-      await supabase.from('subscriptions').insert({ professional_id: user.id, price: parseInt(newPrice), description: newDescription })
+      await subscriptionRepository.createSubscription(user.id, newPrice, newDescription)
     }
-    const { data } = await supabase.from('subscriptions').select('*').eq('professional_id', user.id).maybeSingle()
+    const data = await subscriptionRepository.getSubscription(user.id)
     setSubscription(data)
     setEditingPrice(false)
     setSaving(false)
@@ -90,32 +90,21 @@ function ProfessionalMonetization() {
   async function submitConsultationSetup() {
     if (!consultFee || parseInt(consultFee) < 100) return
     setSaving(true)
-    const { error } = await supabase.from('professional_consultations').upsert({
-      professional_id: user.id,
-      patient_id: user.id,
+    await subscriptionRepository.upsertConsultation(user.id, {
       type: consultType,
       fee: parseInt(consultFee),
       notes: consultNotes,
-      status: 'setup',
-    }, { onConflict: 'professional_id' })
+    })
     setSaving(false)
-    if (error) {
-      showToast(`Could not save: ${error.message}`, { type: 'error' })
-      return
-    }
-    const { data } = await supabase.from('professional_consultations').select('*').eq('professional_id', user.id).order('created_at', { ascending: false })
+    const data = await subscriptionRepository.getConsultations(user.id)
     setConsultations(data || [])
     showToast('Consultation profile saved! Patients can now book you.', { type: 'success' })
   }
 
   async function acceptTask(taskId) {
-    const { error } = await supabase.from('task_submissions').insert({
-      task_id: taskId,
-      professional_id: user.id,
-      status: 'pending',
-    })
+    const { error } = await subscriptionRepository.insertTaskSubmission(taskId, user.id)
     if (!error) {
-      const { data } = await supabase.from('task_submissions').select('*, tasks(title, compensation)').eq('professional_id', user.id)
+      const data = await subscriptionRepository.getTaskSubmissions(user.id)
       setSubmissions(data || [])
     }
   }

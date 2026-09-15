@@ -9,7 +9,7 @@ import {
 // keeping a second copy of either query. Same shape as Reports.
 import { saleRepository } from '../pos/repositories'
 import { appointmentRepository } from '../appointments/repositories'
-import { notify } from '../../services/supabase'
+import { notificationRepository } from '../notifications/repositories'
 import { classifySalesVelocity } from '../../lib/velocity'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
@@ -114,25 +114,25 @@ export default function DashboardHome({ brand, products, role, perms }) {
     async function raiseAlerts() {
       try {
         if (outStock.length > 0 && !sentToday('out_of_stock')) {
-          await notify(brand.id, [{ staffId: null }], 'out_of_stock',
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'out_of_stock',
             outStock.length + ' product' + (outStock.length === 1 ? '' : 's') + ' out of stock',
             names(outStock), '/dashboard/inventory?stock=out')
           markSent('out_of_stock')
         }
         if (lowStock.length > 0 && !sentToday('low_stock')) {
-          await notify(brand.id, [{ staffId: null }], 'low_stock',
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'low_stock',
             lowStock.length + ' product' + (lowStock.length === 1 ? '' : 's') + ' running low',
             names(lowStock), '/dashboard/inventory?stock=low')
           markSent('low_stock')
         }
         if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
-          await notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
             expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
             names(expiringSoon), '/dashboard/inventory?expiry=expiring')
           markSent('product_expiring_soon')
         }
         if (expiredProducts.length > 0 && !sentToday('product_expired')) {
-          await notify(brand.id, [{ staffId: null }], 'product_expired',
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expired',
             expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
             names(expiredProducts), '/dashboard/inventory?expiry=expired')
           markSent('product_expired')
@@ -148,7 +148,7 @@ export default function DashboardHome({ brand, products, role, perms }) {
           if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
           if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
           if (parts.length > 0) {
-            await notify(brand.id, [{ staffId: null }], 'sales_velocity',
+            await notificationRepository.notify(brand.id, [{ staffId: null }], 'sales_velocity',
               '30-day sales velocity: ' + parts.join(', '),
               v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
               '/dashboard/reports')

@@ -12,9 +12,11 @@
   "dependencies": {
     "@care-ecosystem/shared-marketplace": "file:../../packages/shared-marketplace",
     "@care-ecosystem/shared-notifications": "file:../../packages/shared-notifications",
+    "@care-ecosystem/shared-email": "file:../../packages/shared-email",
     "@sentry/react": "^10.73.0",
     "@sentry/vite-plugin": "^5.4.0",
     "@supabase/supabase-js": "^2.45.0",
+    "resend": "^2.0.0",
     "cmdk": "^1.1.1",
     "command-score": "^0.1.2",
     "gsap": "^3.15.0",

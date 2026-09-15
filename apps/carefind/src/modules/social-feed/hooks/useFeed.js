@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { supabase } from '../../../config/supabaseClient'
+import { postRepository } from '../repositories/postRepository'
+import { followRepository } from '../repositories/followRepository'
 import { useAuth } from '../../../providers/AuthContext'
 import { notify } from '../../../services/notify.js'
 import { useToast } from '../../../components/ui'
@@ -19,29 +21,24 @@ export function useFeed() {
   const loadFeed = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: postData } = await supabase
-        .from('posts')
-        .select('id, content, created_at, user_id, post_type, image_url, image_urls, audio_url, video_url, rating, is_premium, subscriber_only, preview_text, posting_as_business_id, posted_as_type, posted_as_id, posted_as_name, posted_as_title, live_session_id, view_count, theme')
-        .order('created_at', { ascending: false })
-        .limit(50)
+      const postData = await postRepository.getFeed('foryou', 50, 0)
 
-      if (!postData) {
+      if (!postData || postData.length === 0) {
         setPosts([])
         setLoading(false)
         return
       }
 
       const postIds = postData.map(p => p.id)
+      const userIds = [...new Set(postData.map(p => p.user_id))]
 
-      const [{ data: reactionData }, { data: profileData }, { data: followData }, { data: commentData }] = await Promise.all([
-        supabase.from('post_reactions').select('id, post_id, user_id, reaction_type').in('post_id', postIds),
-        supabase.from('profiles').select('id, display_name, full_name, is_verified, verification_label, specialty, avatar_url').in('id', [...new Set(postData.map(p => p.user_id))]),
-        supabase.from('follows').select('id, follower_id, following_id').in('following_id', [...new Set(postData.map(p => p.user_id))]),
-        supabase.from('post_comments').select('post_id').in('post_id', postIds)
+      const [reactionData, followData] = await Promise.all([
+        postRepository.getReactions(postIds),
+        followRepository.getFollowsForUsers(userIds),
       ])
 
       const profileMap = {}
-      profileData?.forEach(p => { profileMap[p.id] = p })
+      postData.forEach(p => { if (p.profiles) profileMap[p.user_id] = p.profiles })
       setProfiles(profileMap)
 
       const followMap = {}
@@ -50,8 +47,7 @@ export function useFeed() {
         followMap[f.following_id].push(f.follower_id)
       })
 
-      const cCounts = {}
-      commentData?.forEach(row => { cCounts[row.post_id] = (cCounts[row.post_id] || 0) + 1 })
+      const cCounts = await postRepository.getCommentCounts(postIds)
       setCommentCounts(cCounts)
 
       const lCounts = {}
@@ -91,11 +87,11 @@ export function useFeed() {
 
     if (existing) {
       setReactions(prev => prev.filter(r => r.id !== existing.id))
-      await supabase.from('post_reactions').delete().eq('id', existing.id)
+      await postRepository.removeReaction(postId, user.id)
     } else {
       const tempReaction = { id: `temp_${Date.now()}`, post_id: postId, user_id: user.id, reaction_type: 'like' }
       setReactions(prev => [...prev, tempReaction])
-      await supabase.from('post_reactions').insert({ post_id: postId, user_id: user.id, reaction_type: 'like' })
+      await postRepository.addReaction(postId, user.id)
       const post = posts.find(p => p.id === postId)
       if (post) notify({ recipientId: post.user_id, actorId: user.id, type: 'like', message: 'liked your post', link: '/', postId })
     }

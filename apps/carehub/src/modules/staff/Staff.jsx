@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
 import { provisionStaffAuth } from '../../services/supabase'
-import { emailStaffWelcome } from '../../lib/email'
 import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
@@ -10,6 +9,21 @@ import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
+
+const sendWelcomeEmail = async ({ staffName, staffEmail, businessName, setupToken }) => {
+  try {
+    await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateKey: 'staff_welcome',
+        toEmail: staffEmail,
+        payload: { fullName: staffName, businessName, setupToken },
+        subject: `Welcome to ${businessName} — Set Your Password`,
+      }),
+    })
+  } catch (e) { console.warn('[Staff] welcome email failed', e) }
+}
 
 export default function Staff({ brand, role, perms }) {
   const [staff, setStaff] = useState([])
@@ -189,16 +203,15 @@ export default function Staff({ brand, role, perms }) {
       // would have no way to sign in, so it is rolled back rather than left
       // behind as a member who can never log in.
       await provisionStaffAuth(brand.id, form.email.toLowerCase(), form.password)
-      // Send welcome email to staff
-      try {
-        await emailStaffWelcome({
-          staffName: form.fullName,
-          staffEmail: form.email,
-          businessName: brand.name,
-          role: form.role,
-          password: form.password,
-        })
-      } catch (e) {}
+       // Send welcome email to staff (magic-link setup, no plaintext password)
+       try {
+         await sendWelcomeEmail({
+           staffName: form.fullName,
+           staffEmail: form.email,
+           businessName: brand.name,
+           setupToken: '',
+         })
+       } catch (e) {}
       showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
       setForm({}); setShowAdd(false); load()
     } catch (e) {

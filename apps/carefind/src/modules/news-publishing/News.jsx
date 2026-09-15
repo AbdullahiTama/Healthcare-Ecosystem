@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
+import { newsRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -59,7 +59,7 @@ function News() {
 
   async function markNewsSeen() {
     if (!user) return
-    await supabase.from('profiles').update({ news_last_seen: new Date().toISOString() }).eq('id', user.id)
+    await newsRepository.markNewsSeen(user.id)
   }
 
   async function checkCanSubmit() {
@@ -71,23 +71,11 @@ function News() {
     setLoading(true)
     setLoadError('')
     try {
-      const { data, error } = await supabase
-        .from('news')
-        .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
-        .eq('status', 'approved')
-        .order('published_at', { ascending: false })
-        .limit(40)
-      if (error) throw error
-      setArticles(data || [])
+      const data = await newsRepository.getApprovedNews()
+      setArticles(data)
 
       if (user) {
-        const { data: mine, error: mineErr } = await supabase
-          .from('news')
-          .select('id, headline, status, created_at')
-          .eq('author_id', user.id)
-          .neq('status', 'approved')
-          .order('created_at', { ascending: false })
-        if (mineErr) throw mineErr
+        const mine = await newsRepository.getPendingNewsByAuthor(user.id)
         setMyPending(mine || [])
       }
     } catch (e) {
@@ -133,7 +121,7 @@ function News() {
       }
     }
 
-    const { error } = await supabase.from('news').insert({
+    const { error } = await newsRepository.insertArticle({
       headline: headline.trim(),
       subtitle: subtitle.trim() || null,
       body: articleBody,

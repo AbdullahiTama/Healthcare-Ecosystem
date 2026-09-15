@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../../config/supabaseClient'
+import { newsRepository } from './repositories'
 import { notify } from '../../services/notify.js'
 import { Bookmark, Heart, MessageCircle, Share2 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -18,12 +18,12 @@ function NewsEngagementBar({ article, user, compact, onNavigate }) {
     async function load() {
       if (!user) return
       const [reactRes, saveRes] = await Promise.all([
-        supabase.from('news_reactions').select('id').eq('news_id', article.id).eq('user_id', user.id).maybeSingle(),
-        supabase.from('saved_news').select('id').eq('news_id', article.id).eq('user_id', user.id).maybeSingle(),
+        newsRepository.getReactionForUser(article.id, user.id),
+        newsRepository.getSavedNewsForUser(article.id, user.id),
       ])
       if (!cancelled) {
-        setLiked(!!reactRes.data)
-        setSaved(!!saveRes.data)
+        setLiked(!!reactRes)
+        setSaved(!!saveRes)
       }
     }
     load()
@@ -40,10 +40,10 @@ function NewsEngagementBar({ article, user, compact, onNavigate }) {
     setLiked(!wasLiked)
     setLikeCount(c => wasLiked ? Math.max(0, c - 1) : c + 1)
     if (wasLiked) {
-      const { error } = await supabase.from('news_reactions').delete().eq('news_id', article.id).eq('user_id', user.id)
+      const { error } = await newsRepository.removeReaction(article.id, user.id)
       if (error) { setLiked(false); setLikeCount(c => c + 1) }
     } else {
-      const { error } = await supabase.from('news_reactions').insert({ news_id: article.id, user_id: user.id })
+      const { error } = await newsRepository.addReaction(article.id, user.id)
       if (error) {
         setLiked(false); setLikeCount(c => Math.max(0, c - 1))
       } else if (article.author_id && article.author_id !== user.id) {
@@ -82,10 +82,10 @@ function NewsEngagementBar({ article, user, compact, onNavigate }) {
     const wasSaved = saved
     setSaved(!wasSaved)
     if (wasSaved) {
-      const { error } = await supabase.from('saved_news').delete().eq('news_id', article.id).eq('user_id', user.id)
+      const { error } = await newsRepository.removeSavedNews(article.id, user.id)
       if (error) setSaved(true)
     } else {
-      const { error } = await supabase.from('saved_news').insert({ news_id: article.id, user_id: user.id })
+      const { error } = await newsRepository.addSavedNews(article.id, user.id)
       if (error) setSaved(false)
     }
     setBusy(false)

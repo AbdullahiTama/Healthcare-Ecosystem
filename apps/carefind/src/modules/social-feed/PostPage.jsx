@@ -161,19 +161,17 @@ export default function PostPage() {
     if (!user || !postId) return
     setReportingId(postId)
 
-    const { error } = await supabase.from('reports').insert({
-      reporter_id: user.id,
-      post_id: postId,
-      reason,
-    })
-
-    setReportingId(null)
-    setReportPostId(null)
-
-    if (error) {
+    try {
+      await postRepository.reportPost(postId, user.id, reason)
+    } catch (error) {
+      setReportingId(null)
+      setReportPostId(null)
       toast.show('Could not send the report: ' + (error.message || 'unknown error'), { type: 'error' })
       return
     }
+
+    setReportingId(null)
+    setReportPostId(null)
 
     engagement.state.setReportedPosts((prev) => [...prev, postId])
     toast.show("Thanks: our team will review this post.", { type: 'success' })

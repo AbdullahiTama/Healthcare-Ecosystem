@@ -40,6 +40,24 @@ export function createUsersRepository(transport = adminTransport) {
       return { id, posts }
     },
 
+    async getUserPosts(userId, limit = 10) {
+      const { data } = await transport.query('posts', {
+        select: 'id, content, post_type, created_at',
+        filters: [{ op: 'eq', col: 'user_id', val: userId }],
+        order: { column: 'created_at', ascending: false },
+        limit,
+      })
+      return data
+    },
+
+    async getUserProfile(userId) {
+      const { data } = await transport.query('profiles', {
+        select: 'id, full_name, display_name, is_verified, verification_label, cover_url',
+        filters: [{ op: 'eq', col: 'id', val: userId }],
+      })
+      return data?.[0] || null
+    },
+
     async suspendUser(userId, days) {
       return transport.api('suspend_user', { userId, days })
     },

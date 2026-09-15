@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { showRepository } from './repositories/showRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import {
@@ -74,42 +75,43 @@ function LiveShow() {
   }, [id])
 
   async function loadStats() {
-    const [likeRes, shareRes, giftRes, recentLikes, viewRes] = await Promise.all([
-      supabase.from('live_reactions').select('id').eq('show_id', id),
-      supabase.from('live_shares').select('id').eq('show_id', id),
-      supabase.from('gifts').select('coins, sender_id, created_at, profiles:sender_id(full_name, display_name)').eq('post_id', id),
-      supabase.from('live_reactions').select('created_at, profiles(full_name, display_name)').eq('show_id', id).order('created_at', { ascending: false }).limit(8),
-      supabase.from('live_views').select('id').eq('show_id', id),
-    ])
-    // Real row counts (array length is reliable; head:true count can return null right after login)
-    const likeN = (likeRes.data || []).length
-    const shareN = (shareRes.data || []).length
-    const viewN = (viewRes.data || []).length
-    // Only update if we actually got data (don't overwrite a good number with 0 on a failed read)
-    if (!likeRes.error) setLikeCount(c => Math.max(c, likeN))
-    if (!shareRes.error) setShareCount(c => Math.max(c, shareN))
-    if (!viewRes.error) setViewCount(c => Math.max(c, viewN))
-    const gifts = giftRes.data || []
-    setGiftTotal(gifts.reduce((sum, g) => sum + (g.coins || 0), 0))
-    const byUser = {}
-    gifts.forEach(g => {
-      if (!g.sender_id) return
-      const name = g.profiles?.full_name || g.profiles?.display_name || 'Someone'
-      byUser[g.sender_id] = byUser[g.sender_id] || { name, total: 0 }
-      byUser[g.sender_id].total += (g.coins || 0)
-    })
-    setTopGifters(Object.values(byUser).sort((a, b) => b.total - a.total).slice(0, 3))
-    // Live activity feed: recent likers + gifters
-    const acts = []
-    ;(recentLikes.data || []).forEach(r => {
-      acts.push({ type: 'like', name: r.profiles?.full_name || r.profiles?.display_name || 'Someone', at: r.created_at })
-    })
-    gifts.slice(-5).forEach(g => {
-      acts.push({ type: 'gift', name: g.profiles?.full_name || g.profiles?.display_name || 'Someone', at: g.created_at, amount: g.coins })
-    })
-    acts.sort((a, b) => new Date(b.at) - new Date(a.at))
-    setActivity(acts.slice(0, 6))
-    if (!likeRes.error) setStatsLoaded(true)
+    try {
+      const [likeRows, shareRows, giftData, recentLikes, viewRows] = await Promise.all([
+        showRepository.getReactionRows(id),
+        showRepository.getShareCount(id),
+        showRepository.getGiftStats(id),
+        showRepository.getRecentReactions(id),
+        showRepository.getViewCount(id),
+      ])
+      const likeN = (likeRows || []).length
+      const shareN = shareRows || 0
+      const viewN = viewRows || 0
+      setLikeCount(c => Math.max(c, likeN))
+      setShareCount(c => Math.max(c, shareN))
+      setViewCount(c => Math.max(c, viewN))
+      const gifts = giftData || []
+      setGiftTotal(gifts.reduce((sum, g) => sum + (g.coins || 0), 0))
+      const byUser = {}
+      gifts.forEach(g => {
+        if (!g.sender_id) return
+        const name = g.profiles?.full_name || g.profiles?.display_name || 'Someone'
+        byUser[g.sender_id] = byUser[g.sender_id] || { name, total: 0 }
+        byUser[g.sender_id].total += (g.coins || 0)
+      })
+      setTopGifters(Object.values(byUser).sort((a, b) => b.total - a.total).slice(0, 3))
+      const acts = []
+      ;(recentLikes || []).forEach(r => {
+        acts.push({ type: 'like', name: r.profiles?.full_name || r.profiles?.display_name || 'Someone', at: r.created_at })
+      })
+      gifts.slice(-5).forEach(g => {
+        acts.push({ type: 'gift', name: g.profiles?.full_name || g.profiles?.display_name || 'Someone', at: g.created_at, amount: g.coins })
+      })
+      acts.sort((a, b) => new Date(b.at) - new Date(a.at))
+      setActivity(acts.slice(0, 6))
+      setStatsLoaded(true)
+    } catch (e) {
+      console.warn('loadStats failed:', e)
+    }
   }
 
   async function loadLikes() { loadStats() }
@@ -118,20 +120,23 @@ function LiveShow() {
     setWhoOpen(kind)
     setWhoList([])
     let data = []
-    if (kind === 'likes') {
-      const r = await supabase.from('live_reactions').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'shares') {
-      const r = await supabase.from('live_shares').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'views') {
-      const r = await supabase.from('live_views').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'gifts') {
-      const r = await supabase.from('gifts').select('sender_id, coins, created_at, profiles:sender_id(id, full_name, display_name, is_verified, specialty, verification_label)').eq('post_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, amount: x.coins, when: x.created_at }))
+    try {
+      if (kind === 'likes') {
+        const r = await showRepository.getWhoReactions(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'shares') {
+        const r = await showRepository.getWhoShares(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'views') {
+        const r = await showRepository.getWhoViews(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'gifts') {
+        const r = await showRepository.getWhoGifts(id)
+        data = (r || []).map(x => ({ ...x.profiles, amount: x.coins, when: x.created_at }))
+      }
+    } catch (e) {
+      console.warn('openWho failed:', e)
     }
-    // Filter out null profiles (guests/anon), keep unique
     setWhoList(data.filter(d => d && d.id))
   }
 
@@ -157,7 +162,7 @@ function LiveShow() {
   async function tapLike() {
     spawnHeart()
     setLikeCount(c => c + 1)
-    supabase.from('live_reactions').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addReaction(id, user?.id || null).catch(() => {})
   }
 
   async function tapAnywhere(e) {
@@ -165,12 +170,12 @@ function LiveShow() {
     const xPct = ((e.clientX - rect.left) / rect.width) * 100
     spawnHeart(Math.max(10, Math.min(85, xPct)))
     setLikeCount(c => c + 1)
-    supabase.from('live_reactions').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addReaction(id, user?.id || null).catch(() => {})
   }
 
   async function shareLive() {
     setShareCount(c => c + 1)
-    supabase.from('live_shares').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addShare(id, user?.id || null).catch(() => {})
     const text = toShareText(show?.title ? `Watch ${show.title} live on CareFind` : 'Watch this live on CareFind')
     const result = await shareOrCopy({ title: show?.title || 'CareFind Live', text, url: window.location.href })
     if (result === 'copied') showToast('Live link copied! Share it anywhere.', { type: 'success' })
@@ -181,61 +186,62 @@ function LiveShow() {
     if (!user) { window.location.href = '/login'; return }
     if (reposted) return
     setReposted(true)
-    // Repost counts as a share too
     setShareCount(c => c + 1)
-    supabase.from('live_shares').insert({ show_id: id, user_id: user.id })
+    showRepository.addShare(id, user.id).catch(() => {})
     await ensureProfile(user)
-    await supabase.from('posts').insert({
-      user_id: user.id,
-      content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
-      post_type: 'text',
-    })
+    try {
+      const { postRepository } = await import('../social-feed/repositories/postRepository')
+      await postRepository.createPost({
+        user_id: user.id,
+        content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
+        post_type: 'text',
+      })
+    } catch (e) {
+      console.warn('repostLive failed:', e)
+    }
   }
 
   async function loadShow() {
     setLoading(true)
-    const { data } = await supabase
-      .from('live_shows')
-      .select('*, host:profiles!live_shows_host_id_fkey(full_name, display_name, is_verified, specialty, verification_label), guest:profiles!live_shows_guest_id_fkey(full_name, display_name)')
-      .eq('id', id)
-      .maybeSingle()
-    setShow(data || null)
+    try {
+      const data = await showRepository.getShowById(id)
+      setShow(data || null)
+    } catch (e) {
+      console.warn('loadShow failed:', e)
+    }
     await loadItems()
     await loadComments()
     await loadStats()
     setLoading(false)
-    // Count a view each time someone opens the show
     recordView()
   }
 
   async function recordView() {
-    const { error } = await supabase.from('live_views').insert({ show_id: id, user_id: user?.id || null })
-    if (error) {
-      // View insert failure is non-critical — silently ignored
-    } else {
-      // Optimistically bump the visible count so the creator sees it immediately
+    try {
+      await showRepository.addView(id, user?.id || null)
       setViewCount(c => c + 1)
       loadStats()
+    } catch (e) {
+      // View insert failure is non-critical
     }
   }
 
   async function loadItems() {
-    const { data } = await supabase
-      .from('live_items')
-      .select('id, kind, content, created_at, sender_id, profiles(full_name, display_name)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-    setItems(data || [])
+    try {
+      const data = await showRepository.getItems(id)
+      setItems(data || [])
+    } catch (e) {
+      console.warn('loadItems failed:', e)
+    }
   }
 
   async function loadComments() {
-    const { data } = await supabase
-      .from('live_comments')
-      .select('id, content, hidden, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setComments(data || [])
+    try {
+      const data = await showRepository.getComments(id, 100)
+      setComments(data || [])
+    } catch (e) {
+      console.warn('loadComments failed:', e)
+    }
   }
 
   async function postComment() {
@@ -243,12 +249,12 @@ function LiveShow() {
     if (!text) return
     if (!user) { window.location.href = '/login'; return }
     setCommentDraft('')
-    await supabase.from('live_comments').insert({ show_id: id, user_id: user.id, content: text })
+    await showRepository.addComment(id, user.id, text)
     loadComments()
   }
 
   async function hideComment(cid) {
-    await supabase.from('live_comments').update({ hidden: true }).eq('id', cid)
+    await showRepository.hideComment(cid)
     loadComments()
   }
 

@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { claimRepository } from './repositories'
 import { Search } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -28,11 +28,8 @@ function ClaimBusiness() {
         setLoading(false)
         return
       }
-      const { data } = await supabase
-        .from('business_claims')
-        .select('id, business_id, status, businesses(name)')
-        .eq('user_id', user.id)
-      setMyClaims(data || [])
+      const data = await claimRepository.getClaimsForUser(user.id)
+      setMyClaims(data)
       setLoading(false)
     }
     if (!authLoading) load()
@@ -42,28 +39,17 @@ function ClaimBusiness() {
     e.preventDefault()
     if (!query.trim()) return
     setSearching(true)
-    const { data } = await supabase
-      .from('businesses')
-      .select('id, name, address, city, state, business_type')
-      .ilike('name', `%${query}%`)
-    setResults(data || [])
+    const data = await claimRepository.searchBusinesses(query)
+    setResults(data)
     setSearching(false)
   }
 
   async function handleClaim(businessId) {
     if (!user) return
     setSubmittingId(businessId)
-    const { error } = await supabase.from('business_claims').insert({
-      user_id: user.id,
-      business_id: businessId,
-    })
-    if (!error) {
-      const { data } = await supabase
-        .from('business_claims')
-        .select('id, business_id, status, businesses(name)')
-        .eq('user_id', user.id)
-      setMyClaims(data || [])
-    }
+    await claimRepository.createClaim(user.id, businessId)
+    const data = await claimRepository.getClaimsForUser(user.id)
+    setMyClaims(data)
     setSubmittingId(null)
   }
 

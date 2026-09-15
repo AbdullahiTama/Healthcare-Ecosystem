@@ -3,6 +3,7 @@
 // This file must never contain the Resend key or call the Resend API directly.
 
 const ADMIN_EMAIL = 'admin@carehub.ng'
+const APP_URL = typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carehub.ng'
 
 const baseStyle = `
   font-family: system-ui, -apple-system, sans-serif;
@@ -69,7 +70,7 @@ export function buildRegistrationOwnerHtml({ businessName, ownerName }) {
             Your application is <strong>under review</strong> by the CareHub admin team. You will receive an email within <strong>24 hours</strong> once your account is approved or if any action is required.
           </p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to Sign In →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Go to Sign In →</a>
       </div>
       ${footer()}
     </div>
@@ -102,7 +103,7 @@ export function buildAdminNewRegistrationHtml({ businessName, ownerName, busines
         <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
           <p style="margin: 0; color: #92400e; font-size: 13px; font-weight: 600;">⏳ This business is pending your approval. Log in to the admin panel to review and approve.</p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Go to Admin Panel →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Go to Admin Panel →</a>
       </div>
       ${footer()}
     </div>
@@ -125,11 +126,11 @@ export function buildBusinessApprovedHtml({ businessName, ownerName, ownerEmail 
         </div>
         <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
           <p style="margin: 0 0 12px; font-weight: 700; color: #0f172a; font-size: 14px;">Your Login Details:</p>
-          <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Website:</strong> skincarepro.vercel.app</p>
+          <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Website:</strong> ${APP_URL}</p>
           <p style="margin: 0 0 6px; font-size: 13px; color: #555;"><strong>Email:</strong> ${ownerEmail}</p>
           <p style="margin: 0; font-size: 13px; color: #555;"><strong>Password:</strong> The password you set during registration</p>
         </div>
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">Log In to Your Dashboard →</a>
+        <a href="${APP_URL}/login" style="${btnStyle}">Log In to Your Dashboard →</a>
       </div>
       ${footer()}
     </div>
@@ -218,7 +219,16 @@ export async function emailCreditReminder(args) {
   if (!args.clientEmail) return { success: false, error: 'No client email' }
   return { success: false, error: 'Use server endpoint' }
 }
-export async function emailStaffWelcome(args) { return { success: false, error: 'Use server endpoint' } }
+export async function emailStaffWelcome(args) {
+  try {
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: 'staff_welcome', toEmail: args.staffEmail, payload: { fullName: args.staffName, businessName: args.businessName, setupToken: '' }, subject: `Welcome to ${args.businessName} — Set Your Password` }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) { return { success: false, error: e.message } }
+}
 export async function emailAgentApproved(args) { return { success: false, error: 'Use server endpoint' } }
 export async function emailAgentRejected(args) { return { success: false, error: 'Use server endpoint' } }
 

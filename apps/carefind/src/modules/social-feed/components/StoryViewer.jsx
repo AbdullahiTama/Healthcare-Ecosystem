@@ -3,6 +3,7 @@ import { Eye, Gift, Heart, MessageCircle, Share2, X } from 'lucide-react'
 import { theme } from '../../../styles/theme'
 import { renderMarkdown } from '../markdown.jsx'
 import { supabase } from '../../../config/supabaseClient'
+import { storyRepository } from '../repositories/storyRepository'
 import { useAuth } from '../../../providers/AuthContext'
 import { Toast, useToast } from '../../../components/ui'
 import GiftPanel from '../../subscriptions-monetization/GiftPanel.jsx'
@@ -72,9 +73,9 @@ const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderH
     let cancelled = false
     async function loadEng() {
       try {
-        const [{ data: likeRows }, { data: commentRows }] = await Promise.all([
-          supabase.from('story_reactions').select('id, user_id').eq('story_id', story.id),
-          supabase.from('story_comments').select('id, content, created_at, user_id, parent_id, profiles(full_name, display_name, avatar_url)').eq('story_id', story.id).order('created_at', { ascending: true }),
+        const [likeRows, commentRows] = await Promise.all([
+          storyRepository.getStoryReactions(story.id),
+          storyRepository.getStoryComments(story.id),
         ])
         if (cancelled) return
         const likes = likeRows || []
@@ -118,8 +119,9 @@ const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderH
     // RLS 42501 handling
     if (userLiked) {
       setUserLiked(false); setLikeCount((c) => Math.max(0, c - 1))
-      const { error } = await supabase.from('story_reactions').delete().eq('story_id', story.id).eq('user_id', user.id)
-      if (error) {
+      try {
+        await storyRepository.removeStoryReaction(story.id, user.id)
+      } catch (error) {
         setUserLiked(true); setLikeCount((c) => c + 1)
         if (error.code === '42501') showToast('Not allowed', { type: 'error' })
         else if (error.message?.toLowerCase().includes('expired')) showToast('This story has expired', { type: 'error' })
@@ -127,8 +129,9 @@ const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderH
       }
     } else {
       setUserLiked(true); setLikeCount((c) => c + 1)
-      const { error } = await supabase.from('story_reactions').insert({ story_id: story.id, user_id: user.id, type: 'like' })
-      if (error) {
+      try {
+        await storyRepository.addStoryReaction(story.id, user.id)
+      } catch (error) {
         setUserLiked(false); setLikeCount((c) => Math.max(0, c - 1))
         if (error.code === '42501') showToast('Not allowed', { type: 'error' })
         else if (error.code === '23505') { setUserLiked(true); setLikeCount((c) => c + 1) }
@@ -143,13 +146,15 @@ const StoryViewer = ({ stories, index, onNavigate, onClose, onViewStory, renderH
     if (!text) return
     if (!user) { showToast('Log in to comment', { type: 'warning' }); return }
     if (isExpired) { showToast('This story has expired', { type: 'error' }); return }
-    const { data, error } = await supabase.from('story_comments').insert({ story_id: story.id, user_id: user.id, content: text }).select('id, content, created_at, user_id, profiles(full_name, display_name, avatar_url)').single()
-    if (error) {
+    let comment
+    try {
+      comment = await storyRepository.addStoryComment(story.id, user.id, text)
+    } catch (error) {
       if (error.code === '42501') showToast('Not allowed', { type: 'error' })
       else showToast(error.message || 'Could not post comment', { type: 'error' })
       return
     }
-    setComments((prev) => [...prev, data])
+    setComments((prev) => [...prev, comment])
     setCommentCount((c) => c + 1)
     setCommentDraft('')
   }

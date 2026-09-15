@@ -1,7 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { claimRepository } from './repositories'
 import { Building2, Star, TrendingUp } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Loading, Stars } from '../../components/ui'
@@ -31,31 +31,19 @@ function BusinessDashboard() {
 
   async function loadBusinesses() {
     if (!user) return
-    const { data: claims } = await supabase
-      .from('business_claims')
-      .select('business_id, businesses(id, name, business_type, visible_on_carefind)')
-      .eq('user_id', user.id)
-      .eq('status', 'approved')
+    const claims = await claimRepository.getApprovedClaimsForUser(user.id)
 
-    const list = (claims || []).map((c) => c.businesses).filter(Boolean)
+    const list = claims.map((c) => c.businesses).filter(Boolean)
     setBusinesses(list)
     if (list.length > 0 && !selectedId) setSelectedId(list[0].id)
   }
 
   async function loadBusinessData(businessId) {
-    const { data: productData } = await supabase
-      .from('products')
-      .select('id, name, price, show_price, stock, sale_type, min_purchase, price_unit, list_on_carefind')
-      .eq('business_id', businessId)
+    const productData = await claimRepository.getProductsForBusiness(businessId)
+    const reviewData = await claimRepository.getReviewsForBusiness(businessId)
 
-    const { data: reviewData } = await supabase
-      .from('reviews')
-      .select('id, rating, comment, created_at')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false })
-
-    setProducts(productData || [])
-    setReviews(reviewData || [])
+    setProducts(productData)
+    setReviews(reviewData)
   }
 
   useEffect(() => {
@@ -73,17 +61,17 @@ function BusinessDashboard() {
   }, [selectedId])
 
   async function toggleBusinessVisibility(biz) {
-    await supabase.from('businesses').update({ visible_on_carefind: !biz.visible_on_carefind }).eq('id', biz.id)
+    await claimRepository.toggleBusinessVisibility(biz.id, !biz.visible_on_carefind)
     loadBusinesses()
   }
 
   async function toggleProductVisibility(product) {
-    await supabase.from('products').update({ list_on_carefind: !product.list_on_carefind }).eq('id', product.id)
+    await claimRepository.toggleProductVisibility(product.id, !product.list_on_carefind)
     loadBusinessData(selectedId)
   }
 
   async function togglePriceVisibility(product) {
-    await supabase.from('products').update({ show_price: !product.show_price }).eq('id', product.id)
+    await claimRepository.togglePriceVisibility(product.id, !product.show_price)
     loadBusinessData(selectedId)
   }
 
@@ -147,10 +135,7 @@ function BusinessDashboard() {
 
   async function saveProduct(productId) {
     setSavingProduct(true)
-    await supabase.from('products').update({
-      price: parseInt(editPrice),
-      stock: parseInt(editStock),
-    }).eq('id', productId)
+    await claimRepository.updateProductPriceAndStock(productId, parseInt(editPrice), parseInt(editStock))
     setEditingProduct(null)
     await loadBusinessData(selectedId)
     setSavingProduct(false)
@@ -205,12 +190,7 @@ function BusinessDashboard() {
         if (!name || price <= 0) { errors++; continue }
 
         // Check if product exists
-        const { data: existing } = await supabase
-          .from('products')
-          .select('id')
-          .eq('business_id', selectedId)
-          .ilike('name', name)
-          .maybeSingle()
+        const existing = await claimRepository.findProductByName(selectedId, name)
 
         const productData = {
           name,
@@ -224,10 +204,10 @@ function BusinessDashboard() {
         }
 
         if (existing) {
-          await supabase.from('products').update({ price, stock, list_on_carefind: true }).eq('id', existing.id)
+          await claimRepository.updateProductFromCsv(existing.id, price, stock)
           updated++
         } else {
-          await supabase.from('products').insert(productData)
+          await claimRepository.insertProductFromCsv(productData)
           added++
         }
       } catch { errors++ }

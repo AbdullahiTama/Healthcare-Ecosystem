@@ -31,6 +31,48 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('../../config/supabaseClient', () => ({ supabase: h.ctrl }))
+
+// Mock repositories: reads dequeue from the queue, mutations route through
+// h.ctrl.from() so that queryFor() assertions in the tests still work.
+// Mutations throw on error to match the real repository contract.
+vi.mock('./repositories', () => {
+  const shift = () => {
+    const r = h.ctrl.queue.shift()
+    if (!r) return Promise.resolve(null)
+    if (r.error) return Promise.reject(r.error)
+    return Promise.resolve(r.data)
+  }
+  const fromTable = (table) => h.ctrl.from(table)
+  const mutate = async (chain) => {
+    const result = await chain
+    if (result && result.error) throw result.error
+    return result && result.data !== undefined ? result.data : result
+  }
+  return {
+    newsRepository: {
+      markNewsSeen: (userId) => mutate(fromTable('profiles').update({ news_last_seen: new Date().toISOString() }).eq('id', userId)),
+      getApprovedNews: () => shift(),
+      getPendingNewsByAuthor: () => shift(),
+      getArticleById: () => shift(),
+      getMoreApprovedNews: () => shift(),
+      insertArticle: (article) => fromTable('news').insert(article),
+      getReactionsByNewsId: () => shift(),
+      getReactionForUser: () => shift(),
+      addReaction: (newsId, userId) => mutate(fromTable('news_reactions').insert({ news_id: newsId, user_id: userId })),
+      removeReaction: (newsId, userId) => mutate(fromTable('news_reactions').delete().eq('news_id', newsId).eq('user_id', userId)),
+      getCommentsByNewsId: () => shift(),
+      addComment: (newsId, userId, content) => mutate(fromTable('news_comments').insert({ news_id: newsId, user_id: userId, content })),
+      deleteComment: (commentId, userId) => mutate(fromTable('news_comments').delete().eq('id', commentId).eq('user_id', userId)),
+      getRepostsByNewsId: () => shift(),
+      addRepost: (newsId, userId) => mutate(fromTable('news_reposts').insert({ news_id: newsId, user_id: userId }).select().maybeSingle()),
+      removeRepost: (repostId) => mutate(fromTable('news_reposts').delete().eq('id', repostId)),
+      getSavedNewsForUser: () => shift(),
+      addSavedNews: (newsId, userId) => mutate(fromTable('saved_news').insert({ news_id: newsId, user_id: userId })),
+      removeSavedNews: (newsId, userId) => mutate(fromTable('saved_news').delete().eq('news_id', newsId).eq('user_id', userId)),
+    },
+  }
+})
+
 const auth = vi.hoisted(() => ({ user: null }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
 const notifyMock = vi.hoisted(() => vi.fn())

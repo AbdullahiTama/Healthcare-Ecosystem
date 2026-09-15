@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { AlertCircle, BadgeCheck, CheckCircle2, Clock, Paperclip } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -121,22 +122,27 @@ function VerifyProfessional() {
     // The bucket is private (licence documents are identity documents), so
     // there is no public URL. The stored value is the object path; admin
     // review resolves it to a short-lived signed URL server-side.
-    const { error: insertError } = await supabase.from('verification_requests').insert({
-      user_id: user.id,
-      full_name: form.full_name.trim(),
-      profession: form.profession,
-      credential_url: filePath,
-      phone: form.phone.trim(),
-      workplace: form.workplace.trim(),
-      work_address: form.work_address.trim(),
-      years_experience: form.years_experience,
-    })
+    let insertError = null
+    try {
+      await profileRepository.submitVerificationRequest({
+        user_id: user.id,
+        full_name: form.full_name.trim(),
+        profession: form.profession,
+        credential_url: filePath,
+        phone: form.phone.trim(),
+        workplace: form.workplace.trim(),
+        work_address: form.work_address.trim(),
+        years_experience: form.years_experience,
+      })
+    } catch (e) {
+      insertError = e
+    }
 
     if (insertError) {
       console.error('Verification request insert failed', insertError)
       setError('Your document uploaded, but the request could not be saved: ' + (insertError.message || 'please try again.'))
     } else {
-      await supabase.from('profiles').update({ specialty: form.profession }).eq('id', user.id)
+      await profileRepository.updateProfile(user.id, { specialty: form.profession })
       setExistingRequest({ full_name: form.full_name, profession: form.profession, status: 'pending' })
     }
     setSubmitting(false)

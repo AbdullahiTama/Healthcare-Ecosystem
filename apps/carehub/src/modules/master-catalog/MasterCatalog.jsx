@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Lock, Layers, Building2, Trash2, RefreshCw } from 'lucide-react'
 import { masterCatalogRepository } from './repositories'
-import { getAllLocations } from '../../services/supabase'
+import { locationsRepository } from '../locations/repositories'
 import { fmt } from '../../lib/utils'
 import { PRODUCT_CATS } from '../../config/constants'
 import { theme } from '../../styles/theme'
@@ -40,7 +40,7 @@ export default function MasterCatalog({ brand, role }) {
     try {
       const [m, l] = await Promise.all([
         masterCatalogRepository.getAll(mainId),
-        getAllLocations(mainId),
+        locationsRepository.getAll(mainId),
       ])
       setMasters(m || [])
       setLocs(l || [])

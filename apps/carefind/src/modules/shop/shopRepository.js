@@ -94,6 +94,57 @@ export function createShopRepository(client = supabase) {
         throw error
       }
       return data || []
+    },
+
+    async getPickupStations() {
+      const { data, error } = await client
+        .from('shop_pickup_stations')
+        .select('id,name,address,city,state')
+        .eq('is_active', true)
+        .limit(20)
+      if (error) throw error
+      return data || []
+    },
+
+    async getPickupStationById(stationId) {
+      const { data, error } = await client
+        .from('shop_pickup_stations')
+        .select('id,name,address,city,state')
+        .eq('id', stationId)
+        .maybeSingle()
+      if (error) throw error
+      return data || null
+    },
+
+    async getVendorPayOnDelivery(vendorId) {
+      const { data, error } = await client
+        .from('businesses')
+        .select('shop_allow_pay_on_delivery')
+        .eq('id', vendorId)
+        .maybeSingle()
+      if (error) throw error
+      return !!data?.shop_allow_pay_on_delivery
+    },
+
+    async validateStock(ecommerceIds) {
+      const { data, error } = await client
+        .from('ecommerce_products')
+        .select('id, product_id, products(id, name, stock)')
+        .in('id', ecommerceIds)
+      if (error) throw error
+      return data || []
+    },
+
+    async getOrderReturn(orderId) {
+      const { data, error } = await client
+        .from('shop_order_returns')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      return data || null
     }
   }
 }

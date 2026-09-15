@@ -46,7 +46,7 @@ class ErrorBoundary extends React.Component {
           color: '#c33',
         }}>
           <h2 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>
-            Something went wrong
+            Something went wrong here
           </h2>
           <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
             {this.state.error?.message || 'An unexpected error occurred'}
@@ -84,6 +84,22 @@ class ErrorBoundary extends React.Component {
             }}
           >
             Try Again
+          </button>
+          <button
+            onClick={() => { window.location.href = '/feed' }}
+            style={{
+              marginTop: '10px',
+              marginLeft: '10px',
+              padding: '8px 16px',
+              backgroundColor: '#c33',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            Go to Feed
           </button>
         </div>
       )

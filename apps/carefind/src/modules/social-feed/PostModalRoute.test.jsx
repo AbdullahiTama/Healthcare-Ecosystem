@@ -61,7 +61,10 @@ vi.mock('../../config/supabaseClient', () => {
 // component does.
 vi.mock('./repositories', async (importOriginal) => ({
   ...(await importOriginal()),
-  postRepository: { getPostById: vi.fn() },
+  postRepository: {
+    getPostById: vi.fn(),
+    reportPost: vi.fn().mockResolvedValue(undefined),
+  },
   commentRepository: {},
 }))
 // The real thread's edit/delete/like handlers all end the same way — a fresh

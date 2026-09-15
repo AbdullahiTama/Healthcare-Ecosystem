@@ -157,7 +157,7 @@ export default function AgentLogin() {
           <p style={{ margin: 0, fontSize: 13, color: theme.textLight }}>Sign in with your agent email & password to view your referrals & earnings. RLS own-record scoped.</p>
         </div>
         <Card style={{ padding: 20 }}>
-          <form onSubmit={handleLogin} aria-label="Agent login form" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleLogin} noValidate aria-label="Agent login form" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Input label="Agent email" type="email" value={email} onChange={setEmail} placeholder="agent@example.com" required id="agent-login-email" />
             <Input label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" required id="agent-login-password" />
             {error && <div data-testid="login-error" role="alert" aria-live="assertive" style={{ background: theme.dangerBg, border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: theme.radius.md, padding: '10px 12px', fontSize: 13 }}>{error}</div>}

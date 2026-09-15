@@ -425,7 +425,7 @@ describe('AgentRegistration — tier=unplaced/status=pending CF- unique', () => 
     fireEvent.change(screen.getByLabelText(/Email address/i), { target: { value: 'one@test.com' } })
     fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secret123' } })
     fireEvent.change(screen.getByLabelText(/State/i), { target: { value: 'Lagos' } })
-    fireEvent.click(screen.getByRole('button', { name: /Register as agent/i }))
+    fireEvent.click(screen.getByText(/Register as agent/i))
     await waitFor(() => expect(screen.getByTestId('registration-success')).toBeInTheDocument())
     const code1 = mockSupabase.tables.agents[0].referral_code
     fireEvent.click(screen.getByText(/Register another agent/i))
@@ -434,7 +434,7 @@ describe('AgentRegistration — tier=unplaced/status=pending CF- unique', () => 
     fireEvent.change(screen.getByLabelText(/Email address/i), { target: { value: 'two@test.com' } })
     fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secret123' } })
     fireEvent.change(screen.getByLabelText(/State/i), { target: { value: 'Lagos' } })
-    fireEvent.click(screen.getByRole('button', { name: /Register as agent/i }))
+    fireEvent.click(screen.getByText(/Register as agent/i))
     await waitFor(() => expect(screen.getByTestId('registration-success')).toBeInTheDocument())
     const code2 = mockSupabase.tables.agents[1].referral_code
     expect(code1).not.toBe(code2)
@@ -448,7 +448,7 @@ describe('AgentRegistration — tier=unplaced/status=pending CF- unique', () => 
     fireEvent.change(screen.getByLabelText(/Email address/i), { target: { value: 'dup@test.com' } })
     fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secret123' } })
     fireEvent.change(screen.getByLabelText(/State/i), { target: { value: 'Lagos' } })
-    fireEvent.click(screen.getByRole('button', { name: /Register as agent/i }))
+    fireEvent.click(screen.getByText(/Register as agent/i))
     await waitFor(() => expect(screen.getByTestId('registration-error')).toBeInTheDocument())
     expect(screen.getByTestId('registration-error').textContent).toMatch(/already registered/i)
   })
@@ -587,7 +587,7 @@ describe('AgentEarnings — calculate_agent_earnings 3 tiers idempotent', () => 
     const amounts = mockSupabase.tables.agent_earnings.map((e) => Number(e.amount_owed)).sort((a, b) => b - a)
     expect(amounts).toEqual([1000, 500, 300])
     // paid/unpaid totals
-    await waitFor(() => expect(screen.getByText('₦1,800') || screen.getByText('₦1800')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText(/₦1,800/).length).toBeGreaterThan(0))
   })
 
   it('webhook retry is idempotent — second call with same payment_reference does not duplicate', async () => {
@@ -668,7 +668,8 @@ describe('AgentTransfer — reassign + audit requires confirmation', () => {
     fireEvent.click(screen.getByRole('button', { name: /Request transfer/i }))
     await waitFor(() => expect(screen.getByText(/Confirm transfer\?/i)).toBeInTheDocument())
     // cancel
-    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Cancel$/i }))
     await waitFor(() => expect(screen.queryByText(/Confirm transfer\?/i)).not.toBeInTheDocument())
     // still from
     expect(mockSupabase.tables.agent_referrals[0].agent_id).toBe('a-from')
@@ -748,7 +749,7 @@ describe('AgentLogin — /agent-login own-record isolation', () => {
     expect(screen.getByText(/b-own/)).toBeInTheDocument()
     expect(screen.queryByText(/b-other/)).not.toBeInTheDocument()
     // earnings: own 1000, not 5000
-    expect(screen.getByText(/₦1,000/)).toBeInTheDocument()
+    expect(screen.getAllByText(/₦1,000/).length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText(/₦5,000/)).not.toBeInTheDocument()
     // paid/unpaid
     expect(screen.getByTestId('paid-earnings')).toBeInTheDocument()

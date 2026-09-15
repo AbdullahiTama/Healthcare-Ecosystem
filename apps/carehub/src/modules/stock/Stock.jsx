@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { stockRepository } from './repositories'
 import { warehouseRepository } from '../warehouses/repositories'
-import { getProducts } from '../../services/supabase'
-import { notify } from '../../services/supabase'
+import { productRepository } from '../inventory/repositories'
+import { notificationRepository } from '../notifications/repositories'
 import { theme } from '../../styles/theme'
 import { Card, Inp, TealBtn, GhostBtn, Modal, DataTable, useToast, Toast, ConfirmDialog } from '../../components/ui'
 import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
@@ -55,7 +55,7 @@ async function checkAndNotifyExpiry(brandId) {
         const title = 'Product approaching expiry'
         const body = `${productName}${batchNumber} expires in ${daysUntilExpiry} days`
 
-        await notify(brandId, [{ staffId: null }], 'product_expiring_soon', title, body, `/inventory/${batch.product_id || ''}`)
+        await notificationRepository.notify(brandId, [{ staffId: null }], 'product_expiring_soon', title, body, `/inventory/${batch.product_id || ''}`)
       }
     }
   } catch (e) {
@@ -120,7 +120,7 @@ export default function Stock({ brand }) {
     try {
       const b = await stockRepository.getBatches(brand.id)
       const l = await warehouseRepository.getAll(brand.id)
-      const p = await getProducts(brand.id)
+      const p = await productRepository.getAll(brand.id)
       setBatches(b || [])
       setLocations(l || [])
       setProducts(p || [])

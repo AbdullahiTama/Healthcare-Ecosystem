@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { businessProfileRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import {
   ArrowLeft, Building2, Eye, Hospital, Leaf, MapPin,
@@ -156,7 +157,7 @@ function BookingCard({ biz }) {
   useEffect(() => {
     if (!isBookingEnabled) return
     let live = true
-    supabase.from('business_services').select('id,name,price_kobo,duration_minutes,is_active').eq('business_id', biz.id).eq('is_active', true).then(({ data }) => {
+    businessProfileRepository.getBusinessServices(biz.id).then((data) => {
       if (live) {
         setServices(data || [])
         if (data && data.length === 1) setSelectedService(data[0].id)
@@ -170,10 +171,9 @@ function BookingCard({ biz }) {
     if (!selectedService || !date) { setServiceAvailability([]); setAvailLoading(false); return }
     let live = true
     setAvailLoading(true)
-    supabase.from('service_availability').select('id,date,time,start_time,end_time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data, error }) => {
+    businessProfileRepository.getServiceAvailability(biz.id, selectedService, date).then((data) => {
       if (live) {
-        if (!error && data) setServiceAvailability(data)
-        else setServiceAvailability([])
+        setServiceAvailability(data || [])
         setAvailLoading(false)
       }
     }).catch(() => { if (live) { setServiceAvailability([]); setAvailLoading(false) } })
@@ -305,9 +305,9 @@ function BookingCard({ biz }) {
         // If slot just taken (409), refresh availability
         if (errMsg.toLowerCase().includes('taken') || errMsg.toLowerCase().includes('booked')) {
           if (selectedService && date) {
-            supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+            businessProfileRepository.getServiceAvailability(biz.id, selectedService, date).then((data) => {
               if (data) setServiceAvailability(data)
-            })
+            }).catch(() => {})
           }
           setSlot('')
         }
@@ -391,9 +391,9 @@ function BookingCard({ biz }) {
                     toast.show('Appointment cancelled.', { type: 'success' })
                     // Refresh availability
                     if (selectedService && date) {
-                      supabase.from('service_availability').select('id,date,time,status,is_booked').eq('business_id', biz.id).eq('service_id', selectedService).eq('date', date).then(({ data }) => {
+                      businessProfileRepository.getServiceAvailability(biz.id, selectedService, date).then((data) => {
                         if (data) setServiceAvailability(data)
-                      })
+                      }).catch(() => {})
                     }
                   } else {
                     toast.show(data.error || 'Could not cancel appointment.', { type: 'error' })
@@ -570,11 +570,7 @@ function BusinessProfile() {
   async function loadAll() {
     setLoading(true)
 
-    const { data: bizData } = await supabase
-      .from('businesses')
-      .select('id, name, address, city, state, business_type, whatsapp, phone, website, hours, maps_link, cover_url, logo_url, description, booking_enabled, booking_type, booking_slots, status, visible_on_carefind, latitude, longitude, lat, lng, online_consultation_fee, physical_consultation_fee')
-      .eq('id', id)
-      .maybeSingle()
+    const bizData = await businessProfileRepository.getBusinessById(id)
 
     // Public eligibility, same rule the directory and the booking endpoint
     // enforce: the business must be approved (status 'active') and not opted
@@ -589,43 +585,23 @@ function BusinessProfile() {
       return
     }
 
-    const { data: productData } = await supabase
-      .from('products')
-      .select('id, name, generic_name, price, show_price, stock, emoji, image_url, price_unit, sale_type, min_purchase, list_on_carefind, latitude, longitude, businesses(show_prices, latitude, longitude, lat, lng)')
-      .eq('business_id', id)
+    const productData = await businessProfileRepository.getBusinessProducts(id)
 
     // list_on_carefind may be NULL on legacy CareHub rows — treat anything but
     // an explicit false as listed, matching MedMarket search semantics.
-    const listed = (productData || []).filter((p) => p.list_on_carefind !== false)
+    const listed = productData.filter((p) => p.list_on_carefind !== false)
 
     // Only hide products explicitly out of stock (stock may be null for some listings)
     const visibleProducts = listed.filter((p) => p.stock == null || p.stock > 0)
 
-    const { data: servicesData } = await supabase
-      .from('business_services')
-      .select('id, name, price_kobo, duration_minutes, is_active')
-      .eq('business_id', id)
-      .eq('is_active', true)
-    const visibleServices = (servicesData || []).filter((s) => s.is_active !== false)
+    const visibleServices = await businessProfileRepository.getBusinessServices(id)
 
-    const { data: reviewData } = await supabase
-      .from('reviews')
-      .select('id, rating, comment, created_at, user_id')
-      .eq('business_id', id)
-      .order('created_at', { ascending: false })
-
-    const rv = reviewData || []
+    const rv = await businessProfileRepository.getBusinessReviews(id)
 
     // Reviewer names (separate query so it works without a FK join)
     const userIds = [...new Set(rv.map((r) => r.user_id).filter(Boolean))]
     if (userIds.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, is_verified, specialty, verification_label')
-        .in('id', userIds)
-      const map = {}
-      ;(profs || []).forEach((pr) => { map[pr.id] = pr })
-      setReviewers(map)
+      setReviewers(await businessProfileRepository.getReviewerProfiles(userIds))
     } else {
       setReviewers({})
     }
@@ -647,14 +623,8 @@ function BusinessProfile() {
     if (!user) return
     setSubmitting(true)
 
-    const { error } = await supabase.from('reviews').insert({
-      business_id: id,
-      user_id: user.id,
-      rating,
-      comment,
-    })
-
-    if (!error) {
+    try {
+      await businessProfileRepository.createReview(id, user.id, rating, comment)
       // Issue #7: business reviews emitted no notification. The recipient is
       // whoever claimed the business, not a profile with this id.
       const sent = await notifyReview(supabase, {
@@ -665,7 +635,7 @@ function BusinessProfile() {
       setRating(5)
       toast.show('Review posted — thank you!')
       loadAll()
-    } else {
+    } catch (error) {
       console.error('Review error:', error)
       toast.show('Could not post your review: ' + error.message)
     }

@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { sessionRepository } from './repositories/sessionRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { Coins, Eraser, Gift, Heart, MessageSquare, Mic, Pen, Share2, X } from 'lucide-react'
@@ -245,15 +246,20 @@ export default function LiveSession() {
   }, [messages])
 
   async function loadSession() {
-    const { data } = await supabase.from('live_sessions').select('*, profiles(full_name, display_name, avatar_url, specialty, verification_label, is_verified)').eq('id', id).single()
-    if (!data) { navigate('/feed'); return }
-    setSession(data)
-    setStrokes(data.board_strokes || [])
-    setLikes(data.likes || 0)
-    setLoading(false)
+    try {
+      const data = await sessionRepository.getSessionById(id)
+      if (!data) { navigate('/feed'); return }
+      setSession(data)
+      setStrokes(data.board_strokes || [])
+      setLikes(data.likes || 0)
+      setLoading(false)
+    } catch (e) {
+      console.warn('loadSession failed:', e)
+      navigate('/feed')
+      return
+    }
 
-    // Load existing messages
-    const { data: msgs } = await supabase.from('live_messages').select('*, profiles(full_name, display_name, avatar_url)').eq('session_id', id).order('created_at').limit(100)
+    const msgs = await sessionRepository.getMessages(id, 100)
     setMessages(msgs || [])
 
     // Subscribe to realtime
@@ -275,8 +281,13 @@ export default function LiveSession() {
         setViewers(payload.count)
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'live_messages', filter: `session_id=eq.${id}` }, async ({ new: msg }) => {
-        const { data: full } = await supabase.from('live_messages').select('*, profiles(full_name, display_name, avatar_url)').eq('id', msg.id).single()
-        if (full) setMessages(prev => [...prev, full])
+        try {
+          const msgs = await sessionRepository.getMessages(id, 100)
+          const full = (msgs || []).find(m => m.id === msg.id)
+          if (full) setMessages(prev => [...prev, full])
+        } catch (e) {
+          console.warn('Failed to fetch new message:', e)
+        }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -290,57 +301,47 @@ export default function LiveSession() {
   }
 
   async function loadWallet() {
-    const { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-    setWallet(data?.balance || 0)
+    const balance = await sessionRepository.getWalletBalance(user.id)
+    setWallet(balance || 0)
   }
 
   async function sendMessage(text, type = 'text', audioUrl = null) {
     if (!user || (!text.trim() && !audioUrl)) return
-    await supabase.from('live_messages').insert({
-      session_id: id,
-      user_id: user.id,
-      content: text.trim() || '',
-      type,
-      audio_url: audioUrl,
-    })
+    await sessionRepository.addMessage(id, user.id, text.trim() || '', type, audioUrl)
     setInput('')
   }
 
   async function sendGift(gift) {
     if (!user || wallet < gift.coins) { showToast('Not enough CareCoins', { type: 'warning' }); return }
 
-    const { data: result, error } = await supabase.rpc('send_gift', {
-      p_recipient: session.host_id,
-      p_coins: gift.coins,
-      p_gift_type: gift.label,
-      p_gift_emoji: gift.emoji,
-      p_live_session_id: id,
-    })
+    const result = await sessionRepository.sendGift(
+      session.host_id,
+      gift.coins,
+      gift.label,
+      gift.emoji,
+      id,
+    )
 
-    if (error || result !== 'ok') {
-      showToast(result === 'insufficient' ? 'Not enough CareCoins' : 'Could not send gift: ' + (error?.message || result), { type: result === 'insufficient' ? 'warning' : 'error' })
+    if (result !== 'ok') {
+      showToast(result === 'insufficient' ? 'Not enough CareCoins' : 'Could not send gift: ' + result, { type: result === 'insufficient' ? 'warning' : 'error' })
       return
     }
 
     setWallet(w => w - gift.coins)
 
-    // 6. Broadcast gift animation to all viewers
     channelRef.current?.send({
       type: 'broadcast', event: 'gift',
       payload: { emoji: gift.emoji, label: gift.label, coins: gift.coins, sender: user.email?.split('@')[0] }
     })
 
-    // 7. Log in chat (will be wiped when live ends — that's fine)
     await sendMessage(`sent ${gift.emoji} ${gift.label} (${gift.coins} coins)`, 'gift')
     setGiftPanel(false)
   }
 
   function sendStroke(stroke) {
-    // Update DB
     const newStrokes = stroke.clear ? [] : [...strokes, stroke]
     setStrokes(newStrokes)
-    supabase.from('live_sessions').update({ board_strokes: newStrokes }).eq('id', id)
-    // Broadcast
+    sessionRepository.updateSession(id, { board_strokes: newStrokes }).catch(() => {})
     channelRef.current?.send({ type: 'broadcast', event: 'stroke', payload: stroke.clear ? { clear: true } : { stroke } })
   }
 
@@ -351,7 +352,7 @@ export default function LiveSession() {
     setTimeout(() => setLikeAnim(false), 600)
     const newLikes = likes + 1
     setLikes(newLikes)
-    await supabase.from('live_sessions').update({ likes: newLikes }).eq('id', id)
+    await sessionRepository.updateSession(id, { likes: newLikes })
     channelRef.current?.send({ type: 'broadcast', event: 'like', payload: { count: newLikes } })
   }
 
@@ -361,25 +362,16 @@ export default function LiveSession() {
     const duration = Math.floor((Date.now() - new Date(session.started_at)) / 60000)
     const totalGifts = messages.filter(m => m.type === 'gift').length
 
-    // Mark ended
-    await supabase.from('live_sessions').update({
-      status: 'ended',
-      ended_at: new Date().toISOString(),
-      board_strokes: [], // wipe board immediately
-    }).eq('id', id)
+    await sessionRepository.endSession(id)
+    await sessionRepository.deleteMessages(id)
 
-    // Delete all chat messages immediately
-    await supabase.from('live_messages').delete().eq('session_id', id)
-
-    // Save a lightweight summary post (auto-expires via expires_at)
     const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString()
     await ensureProfile(user)
-    await supabase.from('posts').insert({
-      user_id: user.id,
-      content: `🔴 Live Session ended\n\n📌 Topic: ${session.topic}\n⏱️ Duration: ${duration} min\n🎁 Gifts received: ${totalGifts}\n👥 Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
-      post_type: 'text',
-      expires_at: expiresAt,
-    })
+    await sessionRepository.createSummaryPost(
+      user.id,
+      `🔴 Live Session ended\n\n📌 Topic: ${session.topic}\n⏱️ Duration: ${duration} min\n🎁 Gifts received: ${totalGifts}\n👥 Peak viewers: ${viewers}${session.description ? '\n\n' + session.description : ''}`,
+      expiresAt,
+    )
 
     navigate('/feed')
   }

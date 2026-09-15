@@ -1,0 +1,27 @@
+{
+  "name": "@care-ecosystem/shared-email",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared email delivery and templating for CareHub + CareFind",
+  "main": "src/index.js",
+  "exports": {
+    ".": { "import": "./src/index.js" },
+    "./sendEmail": { "import": "./src/sendEmail.js" },
+    "./EmailService": { "import": "./src/EmailService.js" },
+    "./templates": { "import": "./src/templates/index.js" },
+    "./utils/formatters": { "import": "./src/utils/formatters.js" }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "Care Ecosystem",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.40.0",
+    "resend": "^2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}

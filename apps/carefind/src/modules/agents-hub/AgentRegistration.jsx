@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../../config/supabaseClient'
+import { agentRepository } from './repositories'
 import { theme } from '../../styles/theme'
 import { Button, Card, Input, Select, Loading, ErrorState, Empty } from '../../components/ui'
 
@@ -10,84 +10,10 @@ const NIGERIAN_STATES = [
   'Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara',
 ]
 
-const TIER_DEFAULTS = { agent: 10, community_coordinator: 5, state_coordinator: 3, unplaced: 0 }
-
-function hashPassword(password) {
-  // Mirrors admin-auth simple hash for carefind agents (no Supabase Auth for agents)
-  // Storage uses password_hash column; login checks same prefix
-  return `cf_agent_${password}`
-}
-
-export async function registerAgent({ full_name, email, password, state }) {
-  const payload = {
-    full_name: full_name.trim(),
-    email: email.trim().toLowerCase(),
-    password_hash: hashPassword(password),
-    tier: 'unplaced',
-    status: 'pending',
-    state: state || null,
-    commission_pct: null,
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentRegistration] insert', { email: payload.email, state: payload.state })
-  const { data, error } = await supabase
-    .from('agents')
-    .insert(payload)
-    .select('id, full_name, email, referral_code, tier, status, state, commission_pct, created_at')
-    .single()
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.warn('[AgentRegistration] insert failed', error.message)
-    throw error
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentRegistration] success', { id: data.id, referral_code: data.referral_code })
-  return data
-}
-
-// Handles business signup referral attribution: if referral_code supplied and valid, insert agent_referrals
 export async function recordBusinessReferral({ businessId, referralCode }) {
-  if (!referralCode || !businessId) return null
-  const code = String(referralCode).trim().toUpperCase()
-  if (!code) return null
-  // eslint-disable-next-line no-console
-  console.info('[AgentRegistration] record referral', { businessId, code })
-  const { data: agent, error: agentErr } = await supabase
-    .from('agents')
-    .select('id, referral_code, status')
-    .eq('referral_code', code)
-    .maybeSingle()
-  if (agentErr) {
-    // eslint-disable-next-line no-console
-    console.warn('[AgentRegistration] referral lookup failed', agentErr.message)
-    return null
-  }
-  if (!agent || !agent.id) {
-    // Invalid code → no referral, no error (per spec)
-    // eslint-disable-next-line no-console
-    console.warn('[AgentRegistration] invalid referral_code', code)
-    return null
-  }
-  // Insert referral attribution; unique on business_id ensures one referral per business
-  const { data, error } = await supabase
-    .from('agent_referrals')
-    .insert({ agent_id: agent.id, business_id: businessId, referral_code: code })
-    .select('id, agent_id, business_id')
-    .single()
-  if (error) {
-    // duplicate business (already referred) → 23505, treat as no-op
-    if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
-      // eslint-disable-next-line no-console
-      console.warn('[AgentRegistration] referral already exists for business', businessId)
-      return null
-    }
-    // eslint-disable-next-line no-console
-    console.warn('[AgentRegistration] referral insert failed', error.message)
-    return null
-  }
-  // eslint-disable-next-line no-console
-  console.info('[AgentRegistration] referral recorded', { agent_id: agent.id, business_id: businessId })
-  return data
+  const agent = await agentRepository.findAgentByReferralCode(referralCode)
+  if (!agent) return null
+  return agentRepository.recordBusinessReferral({ agentId: agent.id, businessId, referralCode })
 }
 
 export default function AgentRegistration() {
@@ -118,7 +44,7 @@ export default function AgentRegistration() {
     if (!validate()) return
     setLoading(true)
     try {
-      const data = await registerAgent({ full_name: fullName, email, password, state: stateVal })
+      const data = await agentRepository.registerAgent({ full_name: fullName, email, password, state: stateVal })
       setSuccess(data)
       // clear form
       setFullName('')
