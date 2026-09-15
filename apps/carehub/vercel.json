@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/process-email-outbox",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "rewrites": [

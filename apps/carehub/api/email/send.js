@@ -23,10 +23,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Invalid templateKey. Allowed: ${allowedTemplates.join(', ')}` })
   }
 
-  try {
-    const row = await emailService.enqueue({ templateKey, toEmail, payload, subject })
-    return res.status(202).json({ ok: true, outboxId: row.id })
-  } catch (e) {
+try {
+     const row = await emailService.enqueue({ templateKey, toEmail, payload, subject })
+     emailService.processBatch().catch(e => console.error('[email/send] immediate process failed', e))
+     return res.status(202).json({ ok: true, outboxId: row.id })
+   } catch (e) {
     console.error('[email/send] enqueue failed', e)
     return res.status(500).json({ error: e.message })
   }
