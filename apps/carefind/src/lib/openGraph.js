@@ -99,8 +99,8 @@ export function parseShareTarget(rawUrl) {
 // that shape, so this is a no-op for it.
 export function canonicalUrlFor(target, origin, requestCanonicalUrl) {
   if (target && target.kind === 'post') {
-    const base = 'https://carefind.app'
-    return `${base}/post/${target.id}`
+    if (origin) return `${origin.replace(/\/+$/, '')}/post/${target.id}`
+    return `/post/${target.id}`
   }
   return requestCanonicalUrl
 }
