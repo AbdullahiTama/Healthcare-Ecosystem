@@ -4,7 +4,7 @@
 import { sendEmail as sharedSendEmail } from '@care-ecosystem/shared-email'
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareFind <support@carefind.ng>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareFind <support@mail.carefind.ng>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carefind.ng'
 const APP_URL = process.env.APP_URL || 'https://carefind.app'
 
@@ -23,7 +23,7 @@ function logoHeader() {
 }
 
 function footer() {
-  return `<div style="text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid #f0f0f0;color:#aaa;font-size:12px"><p>CareFind — Healthcare Marketplace</p><p style="margin-top:4px">support@carefind.ng | carefind.ng</p></div>`
+  return `<div style="text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid #f0f0f0;color:#aaa;font-size:12px"><p>CareFind — Healthcare Marketplace</p><p style="margin-top:4px">support@mail.carefind.ng | carefind.ng</p></div>`
 }
 
 function fmtKobo(kobo) { return '\u20A6' + (Number(kobo) / 100).toLocaleString('en-NG', { minimumFractionDigits: 0 }) }

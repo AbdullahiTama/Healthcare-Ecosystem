@@ -4,7 +4,7 @@
 
 import { sendEmail as sharedSendEmail } from '@care-ecosystem/shared-email'
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@carehub.ng>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@mail.carehub.ng>'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carehub.ng'
 const APP_URL = process.env.APP_URL || 'https://carehub.ng'
 
@@ -59,7 +59,7 @@ function footer() {
   return `
     <div style="text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid #f0f0f0; color: #aaa; font-size: 12px;">
       <p>CareHub — One Platform for Every Healthcare Business in Nigeria</p>
-      <p style="margin-top: 4px;">support@carehub.ng | carehub.ng</p>
+      <p style="margin-top: 4px;">support@mail.carehub.ng | carehub.ng</p>
     </div>
   `
 }
@@ -143,7 +143,7 @@ export function buildBusinessApprovedHtml({ businessName, ownerName, ownerEmail 
           <p style="margin: 0; font-size: 13px; color: #555;"><strong>Password:</strong> The password you set during registration</p>
         </div>
         <a href="${APP_URL}/login" style="${btnStyle}">Log In to Your Dashboard →</a>
-        <p style="margin-top: 20px; font-size: 12px; color: #aaa; text-align: center;">Need help? Reply to this email or contact support@carehub.ng</p>
+        <p style="margin-top: 20px; font-size: 12px; color: #aaa; text-align: center;">Need help? Reply to this email or contact support@mail.carehub.ng</p>
       </div>
       ${footer()}
     </div>
@@ -159,8 +159,8 @@ export function buildBusinessRejectedHtml({ businessName, ownerName, ownerEmail,
         <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Thank you for registering <strong>${businessName}</strong> on CareHub. After reviewing your application, we were unable to approve your account at this time.</p>
         ${reason ? `<div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px; margin-bottom: 20px;"><p style="margin: 0; color: #dc2626; font-size: 13px;"><strong>Reason:</strong> ${reason}</p></div>` : ''}
-        <p style="color: #555; font-size: 13px; line-height: 1.7;">If you believe this is an error or would like to reapply with updated information, please contact our support team at <strong>support@carehub.ng</strong></p>
-        <a href="mailto:support@carehub.ng" style="${btnStyle}">Contact Support</a>
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">If you believe this is an error or would like to reapply with updated information, please contact our support team at <strong>support@mail.carehub.ng</strong></p>
+        <a href="mailto:support@mail.carehub.ng" style="${btnStyle}">Contact Support</a>
       </div>
       ${footer()}
     </div>
@@ -178,7 +178,7 @@ export function buildBusinessStatusHtml({ businessName, ownerName, ownerEmail, s
         <h2 style="color: #0f172a; margin: 0 0 8px;">Account Suspended</h2>
         <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your business <strong>${businessName}</strong> has been suspended. ${reason ? `<br/><strong>Reason:</strong> ${reason}` : ''}</p>
-        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please contact support@carehub.ng if you have questions.</p>
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please contact support@mail.carehub.ng if you have questions.</p>
       </div>
       ${footer()}
     </div>`
@@ -191,7 +191,7 @@ export function buildBusinessStatusHtml({ businessName, ownerName, ownerEmail, s
         <h2 style="color: #0f172a; margin: 0 0 8px;">Application Update — Action Required</h2>
         <p style="color: #888; margin: 0 0 24px;">Dear ${ownerName},</p>
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">Your application for <strong>${businessName}</strong> requires attention. ${reason ? `<br/><strong>Details:</strong> ${reason}` : ''}</p>
-        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please log in or contact support@carehub.ng for next steps.</p>
+        <p style="color: #555; font-size: 13px; line-height: 1.7;">Please log in or contact support@mail.carehub.ng for next steps.</p>
         <a href="${APP_URL}/login" style="${btnStyle}">Go to CareHub →</a>
       </div>
       ${footer()}
