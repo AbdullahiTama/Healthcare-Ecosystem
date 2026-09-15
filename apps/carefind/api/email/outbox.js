@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
-import { EmailService } from '@care-ecosystem/shared-email'
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-const emailService = new EmailService()
 
 export default async function handler(req, res) {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' })
+  }
+
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+
   if (req.method === 'GET') {
     const { status, templateKey, limit = 50, offset = 0 } = req.query
     let q = supabase.from('email_outbox').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(offset, offset + limit - 1)
