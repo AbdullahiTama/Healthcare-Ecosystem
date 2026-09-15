@@ -12,12 +12,12 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
   const priceLabel = priceKobo != null ? `₦${(priceKobo / 100).toLocaleString()}` : null
   const thumb = row.primary_image_url || p.image_url || null
   const isAskForPrice = priceLabel == null
-  const isEcommerce = !!row.ecommerce_product_id
+  const isEcommerce = variant === 'shop'
   const showContact = variant === 'products' || !isEcommerce
 
   return (
     <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Link to={row.ecommerce_product_id ? `/shop/${row.id}` : `/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <Link to={isEcommerce ? `/shop/${row.id}` : `/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', flex: 1 }}>
         <div
           style={{
             background: '#fff',
