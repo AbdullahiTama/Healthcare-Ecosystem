@@ -4,8 +4,8 @@
   "description": "One platform for every healthcare business in Nigeria",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f766e",
+  "background_color": "#0B4A3E",
+  "theme_color": "#0E6F5A",
   "orientation": "portrait",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
