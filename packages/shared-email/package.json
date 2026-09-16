@@ -9,6 +9,7 @@
     "./sendEmail": { "import": "./src/sendEmail.js" },
     "./EmailService": { "import": "./src/EmailService.js" },
     "./templates": { "import": "./src/templates/index.js" },
+    "./templates/samples": { "import": "./src/templates/samples.js" },
     "./utils/formatters": { "import": "./src/utils/formatters.js" }
   },
   "scripts": {

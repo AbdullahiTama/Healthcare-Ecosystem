@@ -1,5 +1,5 @@
 // CareFind email route dispatcher.
-// Handles /api/email/send, /api/email/outbox, /api/webhooks/resend, /api/cron/process-email-outbox
+// Handles /api/email/send, /api/email/outbox, /api/email/preview, /api/email/test-send, /api/webhooks/resend, /api/cron/process-email-outbox
 // via the router's single-serverless-function pattern.
 //
 // IMPORTANT: All sub-handler imports are dynamic to prevent module-level
@@ -11,6 +11,8 @@ function routeFromUrl(req) {
   const segments = pathname.split('/').filter(Boolean)
   if (segments[0] === 'api') segments.shift()
   if (segments[0] === 'email') return { type: 'send', subpath: segments.slice(1).join('/') }
+  if (segments[0] === 'preview') return { type: 'preview', subpath: segments.slice(1).join('/') }
+  if (segments[0] === 'test-send') return { type: 'test-send', subpath: segments.slice(1).join('/') }
   if (segments[0] === 'cron') return { type: 'cron', subpath: segments.slice(1).join('/') }
   if (segments[0] === 'webhooks') return { type: 'webhooks', subpath: segments.slice(1).join('/') }
   return null
@@ -20,6 +22,14 @@ async function resolveHandler(type) {
   switch (type) {
     case 'send': {
       const mod = await import('../email/send.js')
+      return mod.default
+    }
+    case 'preview': {
+      const mod = await import('../email/preview.js')
+      return mod.default
+    }
+    case 'test-send': {
+      const mod = await import('../email/test-send.js')
       return mod.default
     }
     case 'cron': {
