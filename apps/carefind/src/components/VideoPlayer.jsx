@@ -156,7 +156,7 @@ function VideoPlayer({
 
   const videoStyle = fill
     ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit, display: 'block' }
-    : { width: '100%', height: 'auto', display: 'block', objectFit, background: '#000' }
+    : { width: '100%', height: 'auto', maxHeight: '100%', maxWidth: '100%', display: 'block', objectFit, background: '#000' }
 
   return (
     <div
