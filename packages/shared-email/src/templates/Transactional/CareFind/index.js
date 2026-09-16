@@ -7,3 +7,5 @@ export const passwordReset = CareFind.passwordReset
 export const emailVerification = CareFind.emailVerification
 export const appointmentConfirmed = CareFind.appointmentConfirmed
 export const orderConfirmation = CareFind.orderConfirmation
+export const orderStatusUpdate = CareFind.orderStatusUpdate
+export const bookingConfirmed = CareFind.bookingConfirmed
