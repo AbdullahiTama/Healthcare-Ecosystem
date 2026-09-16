@@ -408,14 +408,13 @@ export default function PostCard({
         </div>
       ) : post.post_type === 'video' ? (
         <div>
-          {/* X-style: edge-to-edge, not centered. Video fills card width, capped height, overflow hidden crops tall portrait like X timeline. */}
+          {/* Full-height video: shows the entire clip (no 510px cap / crop) on both desktop and phone, so portrait vertical videos are not cut off like X timeline. */}
           <div
             style={{
               width: '100%',
-              maxHeight: 510,
-              overflow: 'hidden',
               background: '#000',
               borderRadius: theme.radius.lg,
+              overflow: 'hidden',
               cursor: onOpenDetail ? 'pointer' : undefined,
             }}
             role={onOpenDetail ? 'button' : undefined}
@@ -435,8 +434,8 @@ export default function PostCard({
               poster={post.image_url}
               ariaLabel={`Video by ${authorName(post)}`}
               fill={false}
-              objectFit="cover"
-              style={{ width: '100%', maxHeight: 510, background: '#000', borderRadius: theme.radius.lg, overflow: 'hidden' }}
+              objectFit="contain"
+              style={{ width: '100%', height: 'auto', background: '#000', borderRadius: theme.radius.lg, overflow: 'hidden' }}
             />
           </div>
           {post.content && (
