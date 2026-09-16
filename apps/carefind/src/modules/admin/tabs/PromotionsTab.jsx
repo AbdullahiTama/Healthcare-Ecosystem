@@ -1,16 +1,8 @@
 import { useState } from 'react'
 import { theme } from '../../../styles/theme'
 import { Card, Button, Empty, Input, Select, Textarea } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader, AdminSection } from '../ui'
+import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 import { Megaphone, Plus, Trash2, Clock, ExternalLink, Image as ImageIcon, Loader2 } from 'lucide-react'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 const DURATION_OPTIONS = [
   { value: '3', label: '3 days' },

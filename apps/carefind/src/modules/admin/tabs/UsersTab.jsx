@@ -1,25 +1,7 @@
 import { Users, Search, MapPin, Phone, Shield, CheckCircle, Ban, Trash2, Globe, ChevronRight } from 'lucide-react'
 import { Card, Button, Empty, Input, StatusBadge } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
-import { AdminPageHeader, AdminFilterBar, FilterPills } from '../ui'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-function exportCSV(data, filename) {
-  if (!data.length) return
-  const keys = Object.keys(data[0])
-  const csv = [keys.join(','), ...data.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
+import { AdminPageHeader, AdminFilterBar, FilterPills, timeAgo, exportCSV } from '../ui'
 
 export default function UsersTab({
   users, selectedUser, setSelectedUser, userSearch, setUserSearch,

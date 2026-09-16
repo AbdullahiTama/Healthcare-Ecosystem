@@ -1,15 +1,7 @@
 import { Building2, CheckCircle, XCircle } from 'lucide-react'
 import { theme } from '../../../styles/theme'
 import { Button, Card, StatusBadge, Empty } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader } from '../ui'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
+import { AdminPageHeader, timeAgo } from '../ui'
 
 export default function ClaimsTab({ claims, approveClaim, rejectClaim }) {
   return (

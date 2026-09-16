@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { theme } from '../../../styles/theme'
 import { Card, Button, Empty, Input, Select, Modal } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader, AdminSection } from '../ui'
+import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 import {
   Mail, Plus, Trash2, Edit3, Eye, Send, ArrowLeft, Loader2,
   ToggleLeft, ToggleRight, Check, AlertCircle,
@@ -42,15 +42,6 @@ async function callEmailTemplates(action, payload = {}) {
 
 function slugify(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-}
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 60) return 'Just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
 }
 
 export default function EmailTemplatesTab({ showToast }) {

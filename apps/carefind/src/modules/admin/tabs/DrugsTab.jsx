@@ -1,24 +1,8 @@
 import { useState } from 'react'
 import { theme } from '../../../styles/theme'
 import { Card, Button, Empty, StatCard, Input } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader, AdminSection, AdminFilterBar, FilterPills, DateRange } from '../ui'
+import { AdminPageHeader, AdminSection, AdminFilterBar, FilterPills, DateRange, timeAgo, exportCSV } from '../ui'
 import { Search, Pill, Star, TrendingUp, AlertTriangle, ThumbsUp, Minus, ThumbsDown, Download, Filter } from 'lucide-react'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-function exportCSV(data, filename) {
-  if (!data.length) return
-  const keys = Object.keys(data[0])
-  const csv = [keys.join(','), ...data.map(row => keys.map(k => `"${(row[k] || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
-}
 
 export default function DrugsTab({
   drugSearch,

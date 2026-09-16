@@ -1,15 +1,7 @@
 import { Users, UserPlus, Shield, Crown, Settings, Trash2, Edit, X, Check } from 'lucide-react'
 import { Card, Button, Empty, Input, Select, StatusBadge } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
-import { AdminPageHeader, AdminSection } from '../ui'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
+import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 
 const ROLE_OPTIONS = [
   { value: 'moderator', label: 'Content Moderator' },

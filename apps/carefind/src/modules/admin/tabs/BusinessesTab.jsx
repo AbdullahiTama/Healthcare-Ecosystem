@@ -1,18 +1,8 @@
 import { Building2, MapPin, Star, Download, X, ExternalLink } from 'lucide-react'
 import { Card, Button, Empty, StatCard, Input } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
-import { AdminPageHeader, AdminFilterBar, FilterPills } from '../ui'
+import { AdminPageHeader, AdminFilterBar, FilterPills, exportCSV } from '../ui'
 import { feedConfigRepository } from '../repositories/feedConfigRepository'
-
-function exportCSV(data, filename) {
-  if (!data.length) return
-  const keys = Object.keys(data[0])
-  const csv = [keys.join(','), ...data.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
 
 const TYPE_OPTIONS = ['all', 'pharmacy', 'hospital', 'clinic', 'dental', 'optical', 'wellness', 'skincare']
 const STATUS_OPTIONS = [{ value: 'all', label: 'All' }, { value: 'claimed', label: 'Claimed' }, { value: 'unclaimed', label: 'Unclaimed' }]

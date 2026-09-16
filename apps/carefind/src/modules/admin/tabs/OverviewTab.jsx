@@ -1,17 +1,9 @@
 import { Users, FileText, Shield, AlertTriangle, DollarSign, TrendingUp, Clock } from 'lucide-react'
 import { StatCard } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
-import { AdminPageHeader, DateRange } from '../ui'
+import { AdminPageHeader, DateRange, timeAgo } from '../ui'
 import FeedRankingConfig from '../FeedRankingConfig.jsx'
 import DistributionExperiments from '../DistributionExperiments.jsx'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 export default function OverviewTab({ stats, setTab, posts, users, transactions, dateFrom, setDateFrom, dateTo, setDateTo }) {
   const statCards = [

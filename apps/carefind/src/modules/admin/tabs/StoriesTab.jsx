@@ -1,16 +1,8 @@
 import { useState } from 'react'
 import { theme } from '../../../styles/theme'
 import { Card, Button, Empty, Input, Textarea } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader, AdminSection } from '../ui'
+import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 import { BookOpen, Plus, Trash2, Clock, Image as ImageIcon, Palette, Loader2 } from 'lucide-react'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 const COLOR_PRESETS = [
   { value: '#0E6F5A', label: 'Teal' },

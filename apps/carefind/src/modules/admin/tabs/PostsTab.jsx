@@ -1,25 +1,7 @@
-import { FileText, Search, Trash2, Eye, Clock, Download, X } from 'lucide-react'
+import { FileText, Search, Trash2, Eye, Clock, Download, X, Image, Film, Music } from 'lucide-react'
 import { Card, Button, Empty, Input } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
-import { AdminPageHeader, AdminFilterBar, FilterPills, DateRange } from '../ui'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
-function exportCSV(data, filename) {
-  if (!data.length) return
-  const keys = Object.keys(data[0])
-  const csv = [keys.join(','), ...data.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
+import { AdminPageHeader, AdminFilterBar, FilterPills, DateRange, timeAgo, exportCSV } from '../ui'
 
 const TYPE_OPTIONS = ['all', 'text', 'question', 'review', 'article', 'visual', 'premium']
 
@@ -76,6 +58,54 @@ export default function PostsTab({
             <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selectedPost.content}</p>
           </Card>
 
+          {selectedPost.image_urls && selectedPost.image_urls.filter(Boolean).length > 0 && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Image size={14} color={theme.tealDeep} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Images ({selectedPost.image_urls.filter(Boolean).length})</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                {selectedPost.image_urls.filter(Boolean).map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                    <img src={url} alt={`Post image ${i + 1}`} loading="lazy" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                  </a>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {selectedPost.image_url && (!selectedPost.image_urls || selectedPost.image_urls.length === 0) && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Image size={14} color={theme.tealDeep} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Image</span>
+              </div>
+              <a href={selectedPost.image_url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                <img src={selectedPost.image_url} alt="Post image" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', background: theme.gray100 }} />
+              </a>
+            </Card>
+          )}
+
+          {selectedPost.video_url && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Film size={14} color={theme.tealDeep} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Video</span>
+              </div>
+              <video src={selectedPost.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: theme.radius.md, background: '#000' }} />
+            </Card>
+          )}
+
+          {selectedPost.audio_url && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Music size={14} color={theme.tealDeep} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Audio</span>
+              </div>
+              <audio src={selectedPost.audio_url} controls preload="metadata" aria-label="Post audio" style={{ width: '100%' }} />
+            </Card>
+          )}
+
           <Button variant="danger" fullWidth onClick={() => { deletePost(selectedPost.id); setSelectedPost(null); setPostAuthor(null) }} leftIcon={<Trash2 size={14} />}>
             Delete This Post
           </Button>
@@ -111,6 +141,18 @@ export default function PostsTab({
               <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(p.created_at)}</span>
             </div>
             <p style={{ margin: `0 0 ${theme.space[3]}px 0`, fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '...' : ''}</p>
+            {((p.image_urls && p.image_urls.filter(Boolean).length > 0) || p.video_url || p.audio_url) && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: theme.space[2], flexWrap: 'wrap' }}>
+                {p.image_urls && p.image_urls.filter(Boolean).slice(0, 3).map((url, i) => (
+                  <img key={i} src={url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                ))}
+                {p.image_url && (!p.image_urls || p.image_urls.length === 0) && (
+                  <img src={p.image_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                )}
+                {p.video_url && <Film size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+                {p.audio_url && <Music size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
               <Eye size={12} /> Tap to read full post
             </div>

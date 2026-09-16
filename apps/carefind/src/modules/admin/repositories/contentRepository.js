@@ -3,26 +3,8 @@ import { adminTransport } from './transport.js'
 export function createContentRepository(transport = adminTransport) {
   return {
     async getPosts({ search = '', type = 'all', dateFrom = '', dateTo = '', limit = 50, offset = 0 } = {}) {
-      const filters = []
-
-      if (type !== 'all') filters.push({ op: 'eq', col: 'post_type', val: type })
-      if (dateFrom) filters.push({ op: 'gte', col: 'created_at', val: dateFrom })
-      if (dateTo) filters.push({ op: 'lte', col: 'created_at', val: dateTo })
-
-      const { data } = await transport.query('posts', {
-        select: 'id, content, post_type, created_at, user_id',
-        filters,
-        order: { column: 'created_at', ascending: false },
-        limit,
-        offset,
-      })
-
-      if (search) {
-        const q = search.toLowerCase()
-        return data.filter(p => (p.content || '').toLowerCase().includes(q))
-      }
-
-      return data
+      const { data } = await transport.api('list_posts', { search, type, dateFrom, dateTo, limit, offset })
+      return data || []
     },
 
     async deletePost(id) {

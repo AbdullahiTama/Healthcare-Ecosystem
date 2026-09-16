@@ -464,6 +464,77 @@ export default async function handler(req, res) {
   // via the service-role client instead.
   // --------------------------------------------------------------------
 
+  if (action === 'list_posts') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { search, type, dateFrom, dateTo, limit: lim, offset } = req.body
+    let query = supabase
+      .from('posts')
+      .select('id, content, post_type, created_at, user_id, image_url, image_urls, video_url, audio_url, theme, rating, view_count, subscriber_only')
+      .order('created_at', { ascending: false })
+      .limit(lim || 50)
+    if (offset) query = query.range(offset, offset + (lim || 50) - 1)
+    if (type && type !== 'all') query = query.eq('post_type', type)
+    if (dateFrom) query = query.gte('created_at', dateFrom)
+    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
+    if (search) query = query.ilike('content', `%${search}%`)
+    const { data, error } = await query
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ data: data || [] })
+  }
+
+  if (action === 'list_user_profiles') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { search, verified, specialty, limit: lim, offset } = req.body
+    let query = supabase
+      .from('profiles')
+      .select('id, full_name, display_name, is_verified, verification_label, specialty, location, website, created_at, cover_url')
+      .order('created_at', { ascending: false })
+      .limit(lim || 100)
+    if (offset) query = query.range(offset, offset + (lim || 100) - 1)
+    if (verified === 'verified') query = query.eq('is_verified', true)
+    else if (verified === 'unverified') query = query.neq('is_verified', true)
+    if (specialty) query = query.ilike('specialty', `%${specialty}%`)
+    if (search) query = query.or(`full_name.ilike.%${search}%,display_name.ilike.%${search}%`)
+    const { data, error } = await query
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ data: data || [] })
+  }
+
+  if (action === 'get_user_profile') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { userId } = req.body
+    if (!userId) return res.status(400).json({ error: 'Missing userId' })
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, display_name, is_verified, verification_label, cover_url')
+      .eq('id', userId)
+      .single()
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ data: data || null })
+  }
+
+  if (action === 'get_user_posts') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { userId, limit: lim } = req.body
+    if (!userId) return res.status(400).json({ error: 'Missing userId' })
+    const { data, error } = await supabase
+      .from('posts')
+      .select('id, content, post_type, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(lim || 10)
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ data: data || [] })
+  }
+
   if (action === 'list_verification_requests') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = verifyToken(token)

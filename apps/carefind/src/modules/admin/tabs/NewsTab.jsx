@@ -1,15 +1,7 @@
 import { theme } from '../../../styles/theme'
 import { Card, Button, Empty, StatusBadge, Input, Textarea } from '@care-ecosystem/design-system/components/ui'
-import { AdminPageHeader, AdminSection } from '../ui'
+import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 import { Newspaper, Phone, Mail, Edit, Trash2, Check, X, User, Clock, Image, Send, ExternalLink } from 'lucide-react'
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 export default function NewsTab({
   newsItems,

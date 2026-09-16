@@ -18,6 +18,7 @@ import useCommandPalette from './useCommandPalette.js'
 import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import { NAV_GROUPS } from './AdminSidebar.jsx'
 import { Sparkles } from 'lucide-react'
+import { timeAgo } from './ui'
 
 import OverviewTab from './tabs/OverviewTab.jsx'
 import VerificationsTab from './tabs/VerificationsTab.jsx'
@@ -40,14 +41,6 @@ import NotificationsTab from './tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from './tabs/EmailTemplatesTab.jsx'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
-
-function timeAgo(d) {
-  if (!d) return 'Never'
-  const diff = Math.floor((Date.now() - new Date(d)) / 1000)
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
 
 export default function AdminPanel() {
   const navigate = useNavigate()
@@ -886,14 +879,6 @@ export default function AdminPanel() {
     } catch (err) {
       setStaffMsg('Error: ' + err.message)
     }
-  }
-
-  function exportCSV(data, filename) {
-    if (!data.length) return
-    const keys = Object.keys(data[0])
-    const csv = [keys.join(','), ...data.map(row => keys.map(k => `"${(row[k] || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
 
   if (loading) return <Loading fullScreen />
