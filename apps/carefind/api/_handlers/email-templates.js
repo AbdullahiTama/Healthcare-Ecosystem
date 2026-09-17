@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { renderEmailTemplate, generateSampleVariables } from '../_lib/emailTemplateRenderer.js'
 import { sendEmail } from '../_lib/email.js'
+import { TEMPLATE_REGISTRY } from '@care-ecosystem/shared-email'
+import { SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email/src/templates/samples.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -38,6 +40,43 @@ export default async function handler(req, res) {
   }
 
   const { action } = req.body
+
+  if (action === 'list_system') {
+    const auth = await requireAdmin()
+    if (auth.error) return
+    return res.status(200).json({ data: TEMPLATE_META })
+  }
+
+  if (action === 'preview_system') {
+    const auth = await requireAdmin()
+    if (auth.error) return
+    const { key, payload: overridePayload } = req.body
+    if (!key) return res.status(400).json({ error: 'key required' })
+    const fn = TEMPLATE_REGISTRY[key]
+    if (!fn) return res.status(404).json({ error: `Unknown system template: ${key}` })
+    const payload = { ...(SAMPLES[key] || {}), ...(overridePayload || {}) }
+    try {
+      const html = fn(payload)
+      return res.status(200).json({ html, sampleVariables: payload, meta: TEMPLATE_META.find(t => t.key === key) })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
+
+  if (action === 'send_test_system') {
+    const auth = await requireAdmin()
+    if (auth.error) return
+    const { key, to, payload: overridePayload } = req.body
+    if (!key || !to) return res.status(400).json({ error: 'key and to required' })
+    const fn = TEMPLATE_REGISTRY[key]
+    if (!fn) return res.status(404).json({ error: `Unknown system template: ${key}` })
+    const meta = TEMPLATE_META.find(t => t.key === key)
+    const payload = { ...(SAMPLES[key] || {}), ...(overridePayload || {}) }
+    const html = fn(payload)
+    const subject = meta ? `[TEST] ${meta.label}` : `[TEST] ${key}`
+    const result = await sendEmail({ to, subject, html })
+    return res.status(200).json(result)
+  }
 
   if (action === 'list') {
     const auth = await requireAdmin()

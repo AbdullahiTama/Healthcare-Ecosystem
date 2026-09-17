@@ -59,6 +59,15 @@ export default function EmailTemplatesTab({ showToast }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [jsonError, setJsonError] = useState('')
   const [slugManual, setSlugManual] = useState(false)
+  const [systemTemplates, setSystemTemplates] = useState([])
+  const [systemLoading, setSystemLoading] = useState(true)
+  const [systemPreviewHtml, setSystemPreviewHtml] = useState(null)
+  const [systemPreviewVars, setSystemPreviewVars] = useState(null)
+  const [systemPreviewKey, setSystemPreviewKey] = useState(null)
+  const [systemTestModal, setSystemTestModal] = useState(false)
+  const [systemTestEmail, setSystemTestEmail] = useState('')
+  const [systemTestSending, setSystemTestSending] = useState(false)
+  const [systemTestKey, setSystemTestKey] = useState(null)
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -71,7 +80,19 @@ export default function EmailTemplatesTab({ showToast }) {
     }
   }, [showToast])
 
+  const loadSystemTemplates = useCallback(async () => {
+    try {
+      const { data } = await callEmailTemplates('list_system')
+      setSystemTemplates(data || [])
+    } catch (err) {
+      showToast(`Failed to load system templates: ${err.message}`, { type: 'error' })
+    } finally {
+      setSystemLoading(false)
+    }
+  }, [showToast])
+
   useEffect(() => { loadTemplates() }, [loadTemplates])
+  useEffect(() => { loadSystemTemplates() }, [loadSystemTemplates])
 
   function startCreate() {
     setEditing({ isNew: true })
@@ -228,6 +249,41 @@ export default function EmailTemplatesTab({ showToast }) {
       showToast(`Send failed: ${err.message}`, { type: 'error' })
     } finally {
       setTestSending(false)
+    }
+  }
+
+  async function previewSystem(key) {
+    setSystemPreviewKey(key)
+    try {
+      const { html, sampleVariables } = await callEmailTemplates('preview_system', { key })
+      setSystemPreviewHtml(html)
+      setSystemPreviewVars(sampleVariables)
+    } catch (err) {
+      showToast(`Preview failed: ${err.message}`, { type: 'error' })
+    }
+  }
+
+  function openSystemTest(key) {
+    setSystemTestKey(key)
+    setSystemTestEmail('')
+    setSystemTestModal(true)
+  }
+
+  async function sendSystemTest() {
+    if (!systemTestEmail.trim() || !systemTestKey) return
+    setSystemTestSending(true)
+    try {
+      const result = await callEmailTemplates('send_test_system', { key: systemTestKey, to: systemTestEmail.trim() })
+      if (result.success) {
+        showToast(`Test email sent to ${systemTestEmail}`, { type: 'success' })
+        setSystemTestModal(false)
+      } else {
+        showToast(`Send failed: ${result.error}`, { type: 'error' })
+      }
+    } catch (err) {
+      showToast(`Send failed: ${err.message}`, { type: 'error' })
+    } finally {
+      setSystemTestSending(false)
     }
   }
 
@@ -395,6 +451,70 @@ export default function EmailTemplatesTab({ showToast }) {
         </Button>
       </AdminPageHeader>
 
+      {systemTemplates.length > 0 && (
+        <AdminSection>
+          <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3], marginBottom: theme.space[4] }}>
+            <span style={{ fontWeight: 800, fontSize: theme.type.body.size, color: theme.textDark }}>System Templates</span>
+            <span style={{
+              fontSize: theme.type.micro.size, fontWeight: 700, padding: '2px 8px',
+              borderRadius: theme.radius.full, background: theme.gray100, color: theme.gray500,
+            }}>Read-only</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[3] }}>
+            {systemTemplates.map(tpl => {
+              const isPreviewing = systemPreviewKey === tpl.key
+              return (
+                <Card key={tpl.key} style={{ padding: theme.space[5] }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[4] }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: theme.radius.md, flexShrink: 0,
+                      background: theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Mail size={18} color={theme.tealDeep} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3], marginBottom: 2 }}>
+                        <span style={{ fontWeight: 800, fontSize: theme.type.body.size, color: theme.textDark }}>
+                          {tpl.label}
+                        </span>
+                        <span style={{
+                          fontSize: theme.type.micro.size, fontWeight: 700, padding: '2px 8px',
+                          borderRadius: theme.radius.full, background: theme.gray100, color: theme.gray500,
+                        }}>
+                          {tpl.category}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3] }}>
+                        <span style={{
+                          fontSize: theme.type.caption.size, color: theme.textLight,
+                          fontFamily: theme.fontMono,
+                        }}>
+                          {tpl.key}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[2] }}>
+                      <Button variant="ghost" size="sm" onClick={() => isPreviewing ? null : previewSystem(tpl.key)} leftIcon={<Eye size={14} />}>
+                        Preview
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => openSystemTest(tpl.key)} leftIcon={<Send size={14} />}>
+                        Test
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </AdminSection>
+      )}
+
+      {systemLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}>
+          <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: theme.tealDeep }} />
+        </div>
+      ) : null}
+
       {templates.length === 0 ? (
         <AdminSection>
           <Empty
@@ -474,6 +594,38 @@ export default function EmailTemplatesTab({ showToast }) {
           })}
         </div>
       )}
+
+      {systemPreviewHtml && (
+        <Modal show={!!systemPreviewHtml} onClose={() => { setSystemPreviewHtml(null); setSystemPreviewKey(null) }} title={`Preview: ${systemPreviewKey}`} size="lg">
+          {systemPreviewVars && (
+            <div style={{
+              background: theme.gray100, borderRadius: theme.radius.sm, padding: theme.space[4],
+              marginBottom: theme.space[4], fontSize: theme.type.bodySm.size, color: theme.textMid,
+            }}>
+              <strong>Sample variables used:</strong> {JSON.stringify(systemPreviewVars)}
+            </div>
+          )}
+          <div style={{ border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, overflow: 'hidden' }}>
+            <iframe
+              srcDoc={systemPreviewHtml || ''}
+              title="System template preview"
+              style={{ width: '100%', height: 500, border: 'none' }}
+            />
+          </div>
+        </Modal>
+      )}
+
+      <Modal show={systemTestModal} onClose={() => setSystemTestModal(false)} title="Send Test Email (System Template)">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[4] }}>
+          <Input label="Recipient Email" value={systemTestEmail} onChange={setSystemTestEmail} placeholder="admin@example.com" type="email" />
+          <p style={{ margin: 0, fontSize: theme.type.bodySm.size, color: theme.textLight }}>
+            The system template will be rendered with sample variable values.
+          </p>
+          <Button variant="primary" size="md" fullWidth onClick={sendSystemTest} loading={systemTestSending} leftIcon={systemTestSending ? <Loader2 size={16} /> : <Send size={16} />}>
+            Send Test Email
+          </Button>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         show={!!deleteConfirm}
