@@ -1188,5 +1188,230 @@ async function handleRequest(req, res) {
     return res.status(200).json({ success: true, results })
   }
 
+  // --------------------------------------------------------------------
+  // AI Copilot Intelligence (Phase 4)
+  // --------------------------------------------------------------------
+
+  if (action === 'analyze_sentiment') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { text } = req.body
+    if (!text) return res.status(400).json({ error: 'text required' })
+    const result = analyzeSentiment(text)
+    await supabase.from('admin_audit_log').insert({
+      actor_admin_id: payload.adminId,
+      action: 'copilot_sentiment_analysis',
+      target_table: 'copilot',
+      target_id: 'sentiment',
+      after: { text_preview: text.slice(0, 120), score: result.score, category: result.category },
+    }).then(() => null).catch(() => null)
+    return res.status(200).json(result)
+  }
+
+  if (action === 'get_recommendations') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { currentTab, recentActions } = req.body
+    const recommendations = generateRecommendations(currentTab, recentActions || [])
+    return res.status(200).json({ recommendations })
+  }
+
+  if (action === 'log_copilot_feedback') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { suggestionId, accepted, reasoning } = req.body
+    if (suggestionId === undefined || accepted === undefined) return res.status(400).json({ error: 'suggestionId and accepted required' })
+    const { error } = await supabase.from('admin_audit_log').insert({
+      actor_admin_id: payload.adminId,
+      action: accepted ? 'copilot_feedback_accept' : 'copilot_feedback_reject',
+      target_table: 'copilot',
+      target_id: String(suggestionId),
+      after: { accepted, reasoning: reasoning || null, timestamp: new Date().toISOString() },
+    })
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ success: true })
+  }
+
   return res.status(400).json({ error: 'Unknown action' })
+}
+
+// --- Sentiment Analysis Engine (regex-based, deterministic) ---
+
+const TOXIC_WORDS = [
+  'fuck', 'shit', 'damn', 'hell', 'ass', 'bitch', 'bastard', 'crap', 'piss',
+  'stupid', 'idiot', 'moron', 'dumb', 'loser', 'pathetic', 'worthless', 'trash',
+  'ugly', 'disgusting', 'hate', 'kill', 'die', 'murder', 'destroy', 'burn',
+  'attack', 'fight', 'beat', 'punch', 'slap', 'kick', 'threat', 'warning',
+  'rip', 'end you', 'shut up', 'go away', 'get lost', 'drop dead',
+]
+
+const HARASSMENT_WORDS = [
+  'ugly', 'fat', 'skinny', 'short', 'tall', 'weak', ' pathetic', 'failure',
+  'loser', 'nobody', 'nothing', 'waste', 'burden', 'annoying', 'stupid',
+  'dumb', 'retard', 'slow', 'special needs', 'handicapped', 'cripple',
+  'gay', 'fag', 'queer', 'dyke', 'tranny', 'slut', 'whore', 'ho',
+  'nigger', 'nigga', 'spic', 'chink', 'kike', 'wetback', 'towelhead',
+]
+
+const SPAM_SIGNALS = [
+  'buy now', 'limited time', 'act fast', 'click here', 'free money',
+  'make money fast', 'work from home', 'no experience needed', 'join now',
+  'earn cash', 'get rich', 'double your money', 'investment opportunity',
+  'whatsapp me', 'dm me', 'follow me', 'check my profile', 'link in bio',
+  'discount code', 'promo code', 'use code', 'shop now', 'order now',
+]
+
+function analyzeSentiment(text) {
+  if (!text || typeof text !== 'string') {
+    return { score: 0, category: 'neutral', confidence: 0, reason: 'No content to analyze' }
+  }
+
+  const lower = text.toLowerCase()
+  const words = lower.split(/\s+/)
+  const wordCount = words.length
+
+  let toxicHits = 0
+  let harassmentHits = 0
+  let spamHits = 0
+  const matchedPatterns = []
+
+  for (const word of TOXIC_WORDS) {
+    if (lower.includes(word)) {
+      toxicHits++
+      matchedPatterns.push(`toxic:${word}`)
+    }
+  }
+  for (const word of HARASSMENT_WORDS) {
+    if (lower.includes(word)) {
+      harassmentHits++
+      matchedPatterns.push(`harassment:${word}`)
+    }
+  }
+  for (const phrase of SPAM_SIGNALS) {
+    if (lower.includes(phrase)) {
+      spamHits++
+      matchedPatterns.push(`spam:${phrase}`)
+    }
+  }
+
+  const toxicDensity = Math.min(toxicHits / Math.max(wordCount, 1) * 10, 1)
+  const harassmentDensity = Math.min(harassmentHits / Math.max(wordCount, 1) * 10, 1)
+  const spamDensity = Math.min(spamHits / Math.max(wordCount, 1) * 5, 1)
+
+  const capsRatio = (text.replace(/[^A-Z]/g, '').length / Math.max(text.replace(/[^a-zA-Z]/g, '').length, 1))
+  const exclamationCount = (text.match(/!/g) || []).length
+  const capsBoost = capsRatio > 0.5 ? 0.2 : 0
+  const exclamationBoost = Math.min(exclamationCount * 0.05, 0.15)
+
+  const toxicScore = Math.min(toxicDensity + capsBoost + exclamationBoost, 1)
+  const harassmentScore = Math.min(harassmentDensity + capsBoost, 1)
+  const spamScore = Math.min(spamDensity + exclamationBoost, 1)
+
+  const scores = [
+    { category: 'toxic', score: toxicScore },
+    { category: 'harassment', score: harassmentScore },
+    { category: 'spam', score: spamScore },
+  ]
+
+  const top = scores.sort((a, b) => b.score - a.score)[0]
+  const overallScore = Math.min(Math.max(toxicScore, harassmentScore, spamScore), 1)
+  const confidence = Math.min(0.3 + (toxicHits + harassmentHits + spamHits) * 0.1, 0.95)
+
+  let category = 'neutral'
+  if (overallScore > 0.1) {
+    category = top.category
+  }
+
+  const CATEGORY_LABELS = {
+    toxic: 'Toxic content detected — contains aggressive or abusive language',
+    harassment: 'Harassment detected — targets or attacks individuals',
+    spam: 'Spam detected — promotional or unsolicited content',
+    neutral: 'No significant issues detected',
+  }
+
+  return {
+    score: Math.round(overallScore * 100) / 100,
+    category,
+    confidence: Math.round(confidence * 100) / 100,
+    reason: CATEGORY_LABELS[category],
+    matchedPatterns: matchedPatterns.slice(0, 5),
+    breakdown: { toxic: Math.round(toxicScore * 100) / 100, harassment: Math.round(harassmentScore * 100) / 100, spam: Math.round(spamScore * 100) / 100 },
+  }
+}
+
+function generateRecommendations(currentTab, recentActions) {
+  const recommendations = []
+
+  if (currentTab === 'reports' || currentTab === 'moderation') {
+    recommendations.push({
+      id: 'show_pending_reports',
+      text: 'Show pending reports',
+      reasoning: 'You\'re on the reports tab — reviewing pending reports is the most common next action.',
+      priority: 'high',
+    })
+    recommendations.push({
+      id: 'analyze_top_report',
+      text: 'Analyze top reported post for sentiment',
+      reasoning: 'Sentiment analysis can help prioritize which reports to handle first.',
+      priority: 'medium',
+    })
+  }
+
+  if (currentTab === 'users') {
+    recommendations.push({
+      id: 'show_pending_verifications',
+      text: 'Show pending verifications',
+      reasoning: 'User management is often paired with verification review.',
+      priority: 'medium',
+    })
+  }
+
+  if (currentTab === 'news') {
+    recommendations.push({
+      id: 'show_pending_news',
+      text: 'Show pending news submissions',
+      reasoning: 'You\'re on the news tab — reviewing submissions is the primary workflow.',
+      priority: 'high',
+    })
+  }
+
+  if (recentActions.length >= 3) {
+    const lastThree = recentActions.slice(-3)
+    const allApproved = lastThree.every(a => a.action === 'approve')
+    const allRejected = lastThree.every(a => a.action === 'reject')
+
+    if (allApproved) {
+      recommendations.push({
+        id: 'continue_approving',
+        text: 'You might want to approve the next item — you\'ve been approving recent ones.',
+        reasoning: 'Pattern detected: you\'ve approved the last 3 items. This suggestion is based on your recent behavior.',
+        priority: 'low',
+      })
+    }
+    if (allRejected) {
+      recommendations.push({
+        id: 'consider_approving',
+        text: 'Consider reviewing criteria — you\'ve rejected the last 3 items.',
+        reasoning: 'Pattern detected: you\'ve rejected the last 3 items. You may want to check if the criteria need adjustment.',
+        priority: 'low',
+      })
+    }
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push({
+      id: 'generic_stats',
+      text: 'Ask me about users, reports, or revenue',
+      reasoning: 'No specific pattern detected — here are some general things I can help with.',
+      priority: 'info',
+    })
+  }
+
+  return recommendations.sort((a, b) => {
+    const order = { high: 0, medium: 1, low: 2, info: 3 }
+    return (order[a.priority] ?? 3) - (order[b.priority] ?? 3)
+  })
 }

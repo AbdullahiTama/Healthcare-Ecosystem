@@ -152,6 +152,7 @@ export default function AdminPanel() {
   const [phoneMap, setPhoneMap] = useState({})
   const [adminPermissions, setAdminPermissions] = useState({})
   const [aiCopilotOpen, setAiCopilotOpen] = useState(false)
+  const [adminActionHistory, setAdminActionHistory] = useState([])
   const [adminRoles, setAdminRoles] = useState([])
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
@@ -653,6 +654,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
       logAuditAction('approve', 'news', item.id, { headline: item.headline })
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() }])
       showToast('News item approved', { type: 'success' })
       // Optimistic update so UI reflects immediately even before reload
       setNewsItems(prev => prev.map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n))
@@ -669,6 +671,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('reject', 'news', id, {})
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'news', id, timestamp: new Date().toISOString() }])
       showToast('News item rejected', { type: 'success' })
       setNewsItems(prev => prev.map(n => n.id === id ? { ...n, status: 'rejected' } : n))
     } catch (err) {
@@ -824,6 +827,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
       logAuditAction('approve', 'verification', id, { userId, profession })
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Verification approved', { type: 'success' })
     } catch (err) {
@@ -835,6 +839,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('reject', 'verification', id, {})
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Verification rejected', { type: 'success' })
     } catch (err) {
@@ -846,6 +851,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_claim', { token: localStorage.getItem('admin_token'), claimId: id, businessId })
       logAuditAction('approve', 'claim', id, { businessId })
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Claim approved', { type: 'success' })
     } catch (err) {
@@ -857,6 +863,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_claim', { token: localStorage.getItem('admin_token'), claimId: id })
       logAuditAction('reject', 'claim', id, {})
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Claim rejected', { type: 'success' })
     } catch (err) {
@@ -876,6 +883,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('delete', 'post', id, {})
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'post', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
@@ -887,6 +895,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('resolve', 'report', id, {})
+      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'report', id, timestamp: new Date().toISOString() }])
       loadAll()
       showToast('Report resolved', { type: 'success' })
     } catch (err) {
@@ -1053,6 +1062,11 @@ export default function AdminPanel() {
     <AdminAiCopilot
       isOpen={aiCopilotOpen}
       onClose={() => setAiCopilotOpen(false)}
+      currentTab={tab}
+      recentActions={adminActionHistory}
+      onFeedback={(suggestionId, accepted) => {
+        setAdminActionHistory(prev => [...prev.slice(-49), { action: accepted ? 'copilot_accept' : 'copilot_reject', target: suggestionId, timestamp: new Date().toISOString() }])
+      }}
     />
     </AdminLayout>
     </ModerationProvider>
