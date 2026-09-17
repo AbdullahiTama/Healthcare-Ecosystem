@@ -9,12 +9,13 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Hi! I'm your admin assistant. Ask me about users, news, orders, revenue, or posts.",
+      content: "Hi! I'm your admin assistant. Ask me about users, news, orders, revenue, posts, or the moderation queue.",
       suggestions: [
         'How many users do we have?',
         'Show pending news',
-        'What\'s today\'s revenue?',
-        'List pending orders',
+        "What's today's revenue?",
+        'Show moderation queue',
+        'Show audit log',
       ],
     },
   ])

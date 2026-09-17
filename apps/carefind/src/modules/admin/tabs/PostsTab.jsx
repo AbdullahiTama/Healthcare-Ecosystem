@@ -2,6 +2,7 @@ import { FileText, Search, Trash2, Eye, Clock, Download, X, Image, Film, Music }
 import { Card, Button, Empty, Input } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
 import { AdminPageHeader, AdminFilterBar, FilterPills, DateRange, timeAgo, exportCSV } from '../ui'
+import { useModerationStore } from '../stores/moderationStore'
 
 const TYPE_OPTIONS = ['all', 'text', 'question', 'review', 'article', 'visual', 'premium']
 
@@ -11,6 +12,7 @@ export default function PostsTab({
   postDateFrom, setPostDateFrom, postDateTo, setPostDateTo,
   viewPostDetails, deletePost,
 }) {
+  const { selectedIds, toggleSelect } = useModerationStore()
   const filtered = posts.filter(p => {
     const matchSearch = !postSearch || p.content?.toLowerCase().includes(postSearch.toLowerCase())
     const matchType = postTypeFilter === 'all' || p.post_type === postTypeFilter
@@ -134,27 +136,52 @@ export default function PostsTab({
       {filtered.length === 0 && <Empty icon={<FileText size={40} strokeWidth={1.5} />} message="No posts match your filters" />}
 
       {filtered.map(p => (
-        <Card key={p.id} style={{ padding: theme.space[5], marginBottom: theme.space[4] }}>
-          <div onClick={() => viewPostDetails(p)} style={{ cursor: 'pointer' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: theme.space[2] }}>
-              <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: theme.tealMist, padding: '2px 7px', borderRadius: theme.radius.full }}>{p.post_type}</span>
-              <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(p.created_at)}</span>
-            </div>
-            <p style={{ margin: `0 0 ${theme.space[3]}px 0`, fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '...' : ''}</p>
-            {((p.image_urls && p.image_urls.filter(Boolean).length > 0) || p.video_url || p.audio_url) && (
-              <div style={{ display: 'flex', gap: 6, marginBottom: theme.space[2], flexWrap: 'wrap' }}>
-                {p.image_urls && p.image_urls.filter(Boolean).slice(0, 3).map((url, i) => (
-                  <img key={i} src={url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
-                ))}
-                {p.image_url && (!p.image_urls || p.image_urls.length === 0) && (
-                  <img src={p.image_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
-                )}
-                {p.video_url && <Film size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
-                {p.audio_url && <Music size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+        <Card key={p.id} style={{ padding: theme.space[5], marginBottom: theme.space[4], borderColor: selectedIds.has(p.id) ? theme.tealBright : theme.border, background: selectedIds.has(p.id) ? theme.tealMist : theme.cardBg }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: theme.space[3] }}>
+            <button
+              onClick={() => toggleSelect(p.id)}
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 3,
+                border: `2px solid ${selectedIds.has(p.id) ? theme.tealDeep : theme.gray300}`,
+                background: selectedIds.has(p.id) ? theme.tealDeep : 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              {selectedIds.has(p.id) && (
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+            <div onClick={() => viewPostDetails(p)} style={{ cursor: 'pointer', flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: theme.space[2] }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: theme.tealMist, padding: '2px 7px', borderRadius: theme.radius.full }}>{p.post_type}</span>
+                <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(p.created_at)}</span>
               </div>
-            )}
-            <div style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Eye size={12} /> Tap to read full post
+              <p style={{ margin: `0 0 ${theme.space[3]}px 0`, fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '...' : ''}</p>
+              {((p.image_urls && p.image_urls.filter(Boolean).length > 0) || p.video_url || p.audio_url) && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: theme.space[2], flexWrap: 'wrap' }}>
+                  {p.image_urls && p.image_urls.filter(Boolean).slice(0, 3).map((url, i) => (
+                    <img key={i} src={url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                  ))}
+                  {p.image_url && (!p.image_urls || p.image_urls.length === 0) && (
+                    <img src={p.image_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                  )}
+                  {p.video_url && <Film size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+                  {p.audio_url && <Music size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Eye size={12} /> Tap to read full post
+              </div>
             </div>
           </div>
           <div style={{ marginTop: theme.space[3], paddingTop: theme.space[3], borderTop: `1px solid ${theme.gray100}` }}>

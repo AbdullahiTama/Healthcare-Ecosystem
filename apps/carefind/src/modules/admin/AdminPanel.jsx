@@ -41,6 +41,9 @@ import SearchesTab from './tabs/SearchesTab.jsx'
 import GoLiveTab from './tabs/GoLiveTab.jsx'
 import NotificationsTab from './tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from './tabs/EmailTemplatesTab.jsx'
+import ModerationQueue from './tabs/ModerationQueue.jsx'
+import AuditLog from './components/AuditLog.jsx'
+import { ModerationProvider } from './stores/moderationStore'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
 
@@ -157,6 +160,18 @@ export default function AdminPanel() {
   const [editingRoleTabs, setEditingRoleTabs] = useState({})
   const [savingRole, setSavingRole] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  async function logAuditAction(auditAction, targetType, targetId, metadata = {}) {
+    try {
+      await callAdminAuth('log_audit_action', {
+        token: localStorage.getItem('admin_token'),
+        auditAction,
+        targetType,
+        targetId,
+        metadata,
+      })
+    } catch { /* non-blocking — audit failure must not block moderation */ }
+  }
   // Generic confirmation-dialog state: { title, consequence, confirmLabel, action }.
   // `action` is the real, destructive operation — deferred until the admin confirms
   // (SCREEN_PATTERNS.md pattern 29: never a bare "Are you sure?", state the consequence).
@@ -185,6 +200,15 @@ export default function AdminPanel() {
     channelName: 'admin-posts',
     subscription: { schema: 'public', table: 'posts' },
     onInsert: () => loadAll(),
+    pollInterval: 30000,
+    pollFn: loadAll,
+  })
+
+  useRealtimeChannel({
+    channelName: 'admin-reports',
+    subscription: { schema: 'public', table: 'reports' },
+    onInsert: () => loadAll(),
+    onUpdate: () => loadAll(),
     pollInterval: 30000,
     pollFn: loadAll,
   })
@@ -628,6 +652,7 @@ export default function AdminPanel() {
       : {}
     try {
       await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
+      logAuditAction('approve', 'news', item.id, { headline: item.headline })
       showToast('News item approved', { type: 'success' })
       // Optimistic update so UI reflects immediately even before reload
       setNewsItems(prev => prev.map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n))
@@ -643,6 +668,7 @@ export default function AdminPanel() {
   async function rejectNews(id) {
     try {
       await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
+      logAuditAction('reject', 'news', id, {})
       showToast('News item rejected', { type: 'success' })
       setNewsItems(prev => prev.map(n => n.id === id ? { ...n, status: 'rejected' } : n))
     } catch (err) {
@@ -664,6 +690,7 @@ export default function AdminPanel() {
   async function reallyDeleteNews(id) {
     try {
       await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
+      logAuditAction('delete', 'news', id, {})
       setNewsItems(prev => prev.filter(n => n.id !== id))
       showToast('News item deleted', { type: 'success' })
       loadNews()
@@ -733,6 +760,7 @@ export default function AdminPanel() {
   async function suspendUser(userId, days) {
     try {
       await callAdminAuth('suspend_user', { token: localStorage.getItem('admin_token'), userId, days })
+      logAuditAction('suspend', 'user', userId, { days })
       setSelectedUser(null)
       loadAll()
       showToast(`User suspended for ${days} days`, { type: 'success' })
@@ -754,6 +782,7 @@ export default function AdminPanel() {
     setDeletingUser(true)
     try {
       await callAdminAuth('delete_user', { token: localStorage.getItem('admin_token'), userId })
+      logAuditAction('delete', 'user', userId, { name: selectedUser?.full_name || selectedUser?.display_name })
       showToast('User deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the user: ${err.message}`, { type: 'error' })
@@ -794,6 +823,7 @@ export default function AdminPanel() {
   async function approveVerif(id, userId, profession) {
     try {
       await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
+      logAuditAction('approve', 'verification', id, { userId, profession })
       loadAll()
       showToast('Verification approved', { type: 'success' })
     } catch (err) {
@@ -804,6 +834,7 @@ export default function AdminPanel() {
   async function rejectVerif(id) {
     try {
       await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
+      logAuditAction('reject', 'verification', id, {})
       loadAll()
       showToast('Verification rejected', { type: 'success' })
     } catch (err) {
@@ -814,6 +845,7 @@ export default function AdminPanel() {
   async function approveClaim(id, businessId) {
     try {
       await callAdminAuth('approve_claim', { token: localStorage.getItem('admin_token'), claimId: id, businessId })
+      logAuditAction('approve', 'claim', id, { businessId })
       loadAll()
       showToast('Claim approved', { type: 'success' })
     } catch (err) {
@@ -824,6 +856,7 @@ export default function AdminPanel() {
   async function rejectClaim(id) {
     try {
       await callAdminAuth('reject_claim', { token: localStorage.getItem('admin_token'), claimId: id })
+      logAuditAction('reject', 'claim', id, {})
       loadAll()
       showToast('Claim rejected', { type: 'success' })
     } catch (err) {
@@ -842,6 +875,7 @@ export default function AdminPanel() {
   async function reallyDeletePost(id) {
     try {
       await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
+      logAuditAction('delete', 'post', id, {})
       loadAll()
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
@@ -852,6 +886,7 @@ export default function AdminPanel() {
   async function resolveReport(id) {
     try {
       await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
+      logAuditAction('resolve', 'report', id, {})
       loadAll()
       showToast('Report resolved', { type: 'success' })
     } catch (err) {
@@ -935,6 +970,7 @@ export default function AdminPanel() {
   }
 
   return (
+    <ModerationProvider>
     <AdminLayout
       activeTab={tab}
       onTabChange={setTab}
@@ -946,6 +982,8 @@ export default function AdminPanel() {
       <div aria-live="polite" aria-busy={loading}>
         {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
+        {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
+        {tab === 'audit_log' && <AuditLog />}
         {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
         {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}
@@ -1017,5 +1055,6 @@ export default function AdminPanel() {
       onClose={() => setAiCopilotOpen(false)}
     />
     </AdminLayout>
+    </ModerationProvider>
   )
 }

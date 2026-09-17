@@ -1079,5 +1079,114 @@ async function handleRequest(req, res) {
     return res.status(200).json({ permissions: data || {} })
   }
 
+  // --------------------------------------------------------------------
+  // Audit Logging & Bulk Operations (Phase 3)
+  // --------------------------------------------------------------------
+
+  if (action === 'log_audit_action') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { auditAction, targetType, targetId, metadata } = req.body
+    if (!auditAction || !targetType || !targetId) return res.status(400).json({ error: 'auditAction, targetType and targetId required' })
+    const { error } = await supabase.from('admin_audit_log').insert({
+      actor_admin_id: payload.adminId,
+      action: auditAction,
+      target_table: targetType,
+      target_id: String(targetId),
+      after: metadata || null,
+    })
+    if (error) return res.status(400).json({ error: error.message })
+    return res.status(200).json({ success: true })
+  }
+
+  if (action === 'list_audit_logs') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { limit: lim, action: filterAction, target_type: filterTarget, dateFrom, dateTo } = req.body
+    let query = supabase.from('admin_audit_log').select('id, actor_admin_id, action, target_table, target_id, after, created_at').order('created_at', { ascending: false }).limit(lim || 100)
+    if (filterAction && filterAction !== 'all') query = query.eq('action', filterAction)
+    if (filterTarget && filterTarget !== 'all') query = query.eq('target_table', filterTarget)
+    if (dateFrom) query = query.gte('created_at', dateFrom)
+    if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59')
+    const { data, error } = await query
+    if (error) return res.status(400).json({ error: error.message })
+    // Resolve actor names from admin_users
+    const actorIds = [...new Set((data || []).map(l => l.actor_admin_id).filter(Boolean))]
+    let actorNames = {}
+    if (actorIds.length) {
+      const { data: admins } = await supabase.from('admin_users').select('id, full_name').in('id', actorIds)
+      ;(admins || []).forEach(a => { actorNames[a.id] = a.full_name })
+    }
+    const enriched = (data || []).map(l => ({
+      ...l,
+      actor_name: actorNames[l.actor_admin_id] || 'Admin',
+      target_type: l.target_table,
+      metadata: l.after,
+    }))
+    return res.status(200).json({ data: enriched })
+  }
+
+  if (action === 'bulk_action') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { bulkAction, items } = req.body
+    if (!bulkAction || !items?.length) return res.status(400).json({ error: 'bulkAction and items required' })
+
+    const results = []
+    let allSucceeded = true
+
+    for (const item of items) {
+      try {
+        if (bulkAction === 'delete') {
+          if (item.target_type === 'post') {
+            const { error } = await supabase.from('posts').delete().eq('id', item.target_id)
+            if (error) throw error
+          } else if (item.target_type === 'user') {
+            await supabase.from('post_reactions').delete().eq('user_id', item.target_id)
+            await supabase.from('post_comments').delete().eq('user_id', item.target_id)
+            await supabase.from('posts').delete().eq('user_id', item.target_id)
+            const { error } = await supabase.from('profiles').delete().eq('id', item.target_id)
+            if (error) throw error
+          }
+        } else if (bulkAction === 'approve') {
+          if (item.target_type === 'verification') {
+            const { error: e1 } = await supabase.from('verification_requests').update({ status: 'approved' }).eq('id', item.target_id)
+            if (e1) throw e1
+            const { error: e2 } = await supabase.from('profiles').update({ is_verified: true }).eq('id', item.target_id)
+            if (e2) throw e2
+          } else if (item.target_type === 'report') {
+            const { error } = await supabase.from('reports').update({ status: 'resolved' }).eq('id', item.target_id)
+            if (error) throw error
+          }
+        } else if (bulkAction === 'reject') {
+          if (item.target_type === 'verification') {
+            const { error } = await supabase.from('verification_requests').update({ status: 'rejected' }).eq('id', item.target_id)
+            if (error) throw error
+          }
+        }
+
+        await supabase.from('admin_audit_log').insert({
+          actor_admin_id: payload.adminId,
+          action: `bulk_${bulkAction}`,
+          target_table: item.target_type,
+          target_id: String(item.target_id),
+          after: item.metadata || null,
+        })
+        results.push({ id: item.target_id, success: true })
+      } catch (err) {
+        allSucceeded = false
+        results.push({ id: item.target_id, success: false, error: err.message })
+      }
+    }
+
+    if (!allSucceeded) {
+      return res.status(207).json({ success: false, results, message: 'Some operations failed — no further rollback attempted. Individual results in results array.' })
+    }
+    return res.status(200).json({ success: true, results })
+  }
+
   return res.status(400).json({ error: 'Unknown action' })
 }

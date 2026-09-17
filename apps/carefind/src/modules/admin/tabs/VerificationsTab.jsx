@@ -2,6 +2,7 @@ import { Shield, CheckCircle, XCircle, FileText, ExternalLink } from 'lucide-rea
 import { theme } from '../../../styles/theme'
 import { Button, Card, StatusBadge, Empty } from '@care-ecosystem/design-system/components/ui'
 import { AdminPageHeader, timeAgo } from '../ui'
+import { useModerationStore } from '../stores/moderationStore'
 
 export default function VerificationsTab({
   verifications,
@@ -11,6 +12,8 @@ export default function VerificationsTab({
   approveVerif,
   rejectVerif,
 }) {
+  const { selectedIds, toggleSelect } = useModerationStore()
+
   return (
     <div>
       <AdminPageHeader
@@ -38,45 +41,71 @@ export default function VerificationsTab({
             style={{
               padding: theme.space[5],
               marginBottom: theme.space[4],
-              borderColor: v.status === 'pending' ? theme.warning : theme.border,
+              borderColor: selectedIds.has(v.id) ? theme.tealBright : v.status === 'pending' ? theme.warning : theme.border,
+              background: selectedIds.has(v.id) ? theme.tealMist : theme.cardBg,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.space[4] }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3], marginBottom: theme.space[2] }}>
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: theme.radius.full,
-                      background: theme.tealGradient,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'var(--color-surface)',
-                      fontSize: 14,
-                      fontWeight: 800,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {(v.full_name || '?')[0]?.toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: theme.type.body.size, color: theme.textDark }}>
-                      {v.full_name}
+              <div style={{ flex: 1, display: 'flex', gap: theme.space[3] }}>
+                <button
+                  onClick={() => toggleSelect(v.id)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 3,
+                    border: `2px solid ${selectedIds.has(v.id) ? theme.tealDeep : theme.gray300}`,
+                    background: selectedIds.has(v.id) ? theme.tealDeep : 'transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }}
+                >
+                  {selectedIds.has(v.id) && (
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3], marginBottom: theme.space[2] }}>
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: theme.radius.full,
+                        background: theme.tealGradient,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--color-surface)',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {(v.full_name || '?')[0]?.toUpperCase()}
                     </div>
-                    <div style={{ fontSize: theme.type.caption.size, color: theme.tealDeep, fontWeight: 700 }}>
-                      {v.profession}
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: theme.type.body.size, color: theme.textDark }}>
+                        {v.full_name}
+                      </div>
+                      <div style={{ fontSize: theme.type.caption.size, color: theme.tealDeep, fontWeight: 700 }}>
+                        {v.profession}
+                      </div>
                     </div>
                   </div>
-                </div>
-                {v.phone && (
-                  <div style={{ fontSize: theme.type.bodySm.size, color: theme.textLight, marginLeft: 46 }}>
-                    {v.phone} · {v.workplace}
+                  {v.phone && (
+                    <div style={{ fontSize: theme.type.bodySm.size, color: theme.textLight, marginLeft: 46 }}>
+                      {v.phone} · {v.workplace}
+                    </div>
+                  )}
+                  <div style={{ fontSize: theme.type.caption.size, color: theme.textLight, marginTop: theme.space[2], marginLeft: 46 }}>
+                    {timeAgo(v.created_at)}
                   </div>
-                )}
-                <div style={{ fontSize: theme.type.caption.size, color: theme.textLight, marginTop: theme.space[2], marginLeft: 46 }}>
-                  {timeAgo(v.created_at)}
                 </div>
               </div>
               <StatusBadge status={v.status} />

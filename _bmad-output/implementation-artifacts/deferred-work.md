@@ -211,3 +211,30 @@
 - source_spec: spec-carefind-admin-upgrade-phase2.md
   summary: Migrate AdminPanel.jsx useState to Zustand stores for shared state.
   evidence: Spec says "create stores and migrate PostsTab/UsersTab first" as next step; stores created but adoption deferred.
+
+## Deferred from: code review of spec-carefind-admin-upgrade-phase3 (2026-09-16)
+
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Make bulk operations atomic using database transactions with rollback on partial failure.
+  evidence: Current implementation processes items sequentially; partial failures leave committed state. Spec requires all-or-nothing.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Migrate moderationStore from React Context to Zustand to avoid unnecessary re-renders across all tabs.
+  evidence: React Context causes all consumers to re-render on selection changes; Zustand supports selector-based subscriptions.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Add Realtime subscription for reports table to ensure new reports appear in queue within 2 seconds.
+  evidence: Added in patch but verify it works with existing Realtime infrastructure.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Fix AI copilot moderation queries to use service-role API instead of anon-key Supabase client.
+  evidence: adminAiQuery.js queries reports/posts tables directly; RLS blocks anon-key access.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Optimize Realtime handlers to diff-update only affected data source instead of full loadAll().
+  evidence: Single new verification triggers ~12 API calls; should only refresh affected data.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Add pagination to audit log viewer for continuously growing audit trail.
+  evidence: Current implementation loads hardcoded 200 entries with no offset or cursor.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Add test coverage for priorityScoring.js, bulk operations, and moderation/audit AI query patterns.
+  evidence: No tests exist for any new Phase 3 functionality.
+- source_spec: spec-carefind-admin-upgrade-phase3.md
+  summary: Add filtering support to AI copilot audit log queries (by action, actor, date range).
+  evidence: Current audit handler returns unfiltered entries; no way to query specific admin actions.

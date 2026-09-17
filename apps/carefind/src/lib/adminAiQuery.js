@@ -192,6 +192,7 @@ const QUERY_PATTERNS = {
       /how\s+many\s+posts/i,
       /reported\s+posts?/i,
       /popular\s+posts?/i,
+      /flagged\s+posts?/i,
     ],
     handler: async (match, supabase) => {
       if (match[0].includes('how many')) {
@@ -200,8 +201,8 @@ const QUERY_PATTERNS = {
           .select('*', { count: 'exact', head: true })
         return { type: 'count', value: count, label: 'Total posts' }
       }
-      
-      if (match[0].includes('reported')) {
+
+      if (match[0].includes('reported') || match[0].includes('flagged')) {
         const { data, error } = await supabase
           .from('posts')
           .select('id, content, created_at, user_id, report_count')
@@ -210,7 +211,7 @@ const QUERY_PATTERNS = {
           .limit(10)
         return { type: 'list', data, label: 'Reported posts' }
       }
-      
+
       if (match[0].includes('popular')) {
         const { data, error } = await supabase
           .from('posts')
@@ -219,7 +220,7 @@ const QUERY_PATTERNS = {
           .limit(10)
         return { type: 'list', data, label: 'Popular posts' }
       }
-      
+
       // Default: show recent posts
       const { data, error } = await supabase
         .from('posts')
@@ -227,6 +228,77 @@ const QUERY_PATTERNS = {
         .order('created_at', { ascending: false })
         .limit(10)
       return { type: 'list', data, label: 'Recent posts' }
+    }
+  },
+
+  // Moderation queue queries
+  moderation: {
+    patterns: [
+      /(?:show|find|get|list)\s+(?:me\s+)?(?:the\s+)?moderation\s*(?:queue)?/i,
+      /moderation\s+queue/i,
+      /pending\s+(?:reports?|moderation)/i,
+      /how\s+many\s+pending\s+(?:reports?|moderation)/i,
+      /show\s+me\s+posts?\s+flagged/i,
+    ],
+    handler: async (match, supabase) => {
+      if (match[0].includes('how many')) {
+        const { count } = await supabase
+          .from('reports')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending')
+        return { type: 'count', value: count, label: 'Pending moderation items' }
+      }
+
+      const { data: reports } = await supabase
+        .from('reports')
+        .select('id, reason, created_at, status, posts(content)')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      const { data: flaggedPosts } = await supabase
+        .from('posts')
+        .select('id, content, created_at, report_count')
+        .gt('report_count', 0)
+        .order('report_count', { ascending: false })
+        .limit(5)
+
+      const items = [
+        ...(reports || []).map(r => ({
+          id: r.id,
+          type: 'report',
+          reason: r.reason,
+          content: r.posts?.content?.slice(0, 60),
+          created_at: r.created_at,
+        })),
+        ...(flaggedPosts || []).map(p => ({
+          id: p.id,
+          type: 'flagged_post',
+          reason: `${p.report_count} reports`,
+          content: p.content?.slice(0, 60),
+          created_at: p.created_at,
+        })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+      return { type: 'list', data: items, label: 'Moderation queue items' }
+    }
+  },
+
+  // Audit log queries
+  audit: {
+    patterns: [
+      /(?:show|find|get|list)\s+(?:me\s+)?(?:the\s+)?audit\s*(?:log)?/i,
+      /audit\s+log/i,
+      /who\s+(?:did|approved|deleted|rejected)/i,
+      /admin\s+(?:actions?|activity)/i,
+    ],
+    handler: async (match, supabase) => {
+      const { data } = await supabase
+        .from('admin_audit_log')
+        .select('actor_name, action, target_type, target_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10)
+      return { type: 'list', data: data || [], label: 'Recent admin actions' }
     }
   },
 }
@@ -260,13 +332,14 @@ export async function parseAdminQuery(query, supabase) {
   // No pattern matched
   return {
     success: false,
-    error: 'I couldn\'t understand that query. Try asking about users, news, orders, revenue, or posts.',
+    error: 'I couldn\'t understand that query. Try asking about users, news, orders, revenue, posts, the moderation queue, or the audit log.',
     suggestions: [
       'Show me pending news',
       'How many users do we have?',
       'Show me today\'s revenue',
       'List pending orders',
-      'Show popular posts',
+      'Show moderation queue',
+      'Show audit log',
     ],
   }
 }

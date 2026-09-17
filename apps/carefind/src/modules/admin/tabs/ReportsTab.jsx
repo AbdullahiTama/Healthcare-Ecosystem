@@ -1,9 +1,12 @@
-import { AlertTriangle, Trash2, CheckCircle } from 'lucide-react'
+import { AlertTriangle, Trash2, CheckCircle, Square, CheckSquare } from 'lucide-react'
 import { theme } from '../../../styles/theme'
 import { Button, Card, StatusBadge, Empty } from '@care-ecosystem/design-system/components/ui'
 import { AdminPageHeader, timeAgo } from '../ui'
+import { useModerationStore } from '../stores/moderationStore'
 
 export default function ReportsTab({ reports, deletePost, resolveReport }) {
+  const { selectedIds, toggleSelect } = useModerationStore()
+
   return (
     <div>
       <AdminPageHeader
@@ -31,21 +34,46 @@ export default function ReportsTab({ reports, deletePost, resolveReport }) {
             style={{
               padding: theme.space[5],
               marginBottom: theme.space[4],
-              borderColor: r.status === 'pending' ? theme.warning : theme.border,
+              borderColor: selectedIds.has(r.id) ? theme.tealBright : r.status === 'pending' ? theme.warning : theme.border,
+              background: selectedIds.has(r.id) ? theme.tealMist : theme.cardBg,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.space[3] }}>
-              <div
-                style={{
-                  fontSize: theme.type.caption.size,
-                  fontWeight: 800,
-                  color: theme.danger,
-                  padding: `${theme.space[2]} ${theme.space[3]}`,
-                  background: theme.dangerBg,
-                  borderRadius: theme.radius.sm,
-                }}
-              >
-                {r.reason}
+              <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3] }}>
+                <button
+                  onClick={() => toggleSelect(r.id)}
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 3,
+                    border: `2px solid ${selectedIds.has(r.id) ? theme.tealDeep : theme.gray300}`,
+                    background: selectedIds.has(r.id) ? theme.tealDeep : 'transparent',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  {selectedIds.has(r.id) && (
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                      <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+                <div
+                  style={{
+                    fontSize: theme.type.caption.size,
+                    fontWeight: 800,
+                    color: theme.danger,
+                    padding: `${theme.space[2]} ${theme.space[3]}`,
+                    background: theme.dangerBg,
+                    borderRadius: theme.radius.sm,
+                  }}
+                >
+                  {r.reason}
+                </div>
               </div>
               <StatusBadge status={r.status} />
             </div>

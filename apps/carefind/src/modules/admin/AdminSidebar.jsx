@@ -3,7 +3,7 @@ import {
   LayoutDashboard, UserCheck, Flag, FileText, Image, Newspaper, Radio,
   ShoppingBag, DollarSign, Landmark, Building2, Users, Shield,
   Pill, ClipboardList, Target, Search, Bell, LogOut, Menu, X,
-  ChevronDown, Settings, Mail
+  ChevronDown, Settings, Mail, Layers, ClipboardCheck
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 
@@ -20,6 +20,7 @@ const NAV_GROUPS = [
     id: 'content',
     label: 'Content',
     items: [
+      { key: 'moderation', label: 'Moderation Queue', icon: Layers },
       { key: 'verifications', label: 'Verifications', icon: UserCheck },
       { key: 'reports', label: 'Reports', icon: Flag },
       { key: 'posts', label: 'Posts', icon: FileText },
@@ -50,6 +51,7 @@ const NAV_GROUPS = [
     id: 'system',
     label: 'System',
     items: [
+      { key: 'audit_log', label: 'Audit Log', icon: ClipboardCheck },
       { key: 'teams', label: 'Teams', icon: Users },
       { key: 'drugs', label: 'Drug Intel', icon: Pill },
       { key: 'tasks', label: 'Tasks', icon: ClipboardList },
