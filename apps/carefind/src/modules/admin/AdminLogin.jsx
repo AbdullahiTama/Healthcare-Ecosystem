@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../config/supabaseClient'
 import { callAdminAuth } from './adminApi'
 import { theme } from '../../styles/theme'
 import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react'
@@ -23,17 +24,51 @@ export default function AdminLogin() {
     setError('')
 
     try {
-      const { token, admin, permissions } = await callAdminAuth('login', { email, password })
-      
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password,
+      })
+
+      if (authErr || !data?.session) {
+        setError('Incorrect email or password. Please try again.')
+        setLoading(false)
+        return
+      }
+
+      const { data: admin, error: lookupErr } = await supabase
+        .from('admin_users')
+        .select('id, email, full_name, role, is_active')
+        .eq('email', email.toLowerCase())
+        .eq('is_active', true)
+        .maybeSingle()
+
+      if (lookupErr) {
+        setError('Database error: ' + lookupErr.message)
+        setLoading(false)
+        return
+      }
+
+      if (!admin) {
+        setError('No admin account matches this email.')
+        setLoading(false)
+        return
+      }
+
+      const { token } = await callAdminAuth('login', { email })
+
       localStorage.setItem('admin_token', token)
       localStorage.setItem('admin_user', JSON.stringify(admin))
-      if (permissions) {
-        localStorage.setItem('admin_permissions', JSON.stringify(permissions))
-      }
+
+      let perms = {}
+      try {
+        const r = await callAdminAuth('get_admin_permissions', { token })
+        perms = r.permissions || {}
+      } catch {}
+      localStorage.setItem('admin_permissions', JSON.stringify(perms))
 
       navigate('/admin-panel')
     } catch (err) {
-      setError(err.message || 'Invalid credentials')
+      setError(err.message || 'Connection error. Check your internet and try again.')
     } finally {
       setLoading(false)
     }
@@ -49,82 +84,51 @@ export default function AdminLogin() {
       padding: 20,
       fontFamily: theme.fontFamily,
     }}>
-      <div style={{
-        width: '100%',
-        maxWidth: 400,
-      }}>
-        <div style={{
-          textAlign: 'center',
-          marginBottom: 32,
-        }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
-            width: 56,
-            height: 56,
-            borderRadius: 14,
+            width: 56, height: 56, borderRadius: 14,
             background: theme.heroGradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px',
-            boxShadow: theme.elevation[2],
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px', boxShadow: theme.elevation[2],
           }}>
             <Shield size={28} color="#fff" strokeWidth={2.2} />
           </div>
           <h1 style={{
-            fontSize: theme.type.h1.size,
-            fontWeight: theme.type.h1.weight,
-            color: theme.navy,
-            margin: '0 0 6px',
-            letterSpacing: theme.type.h1.letterSpacing,
+            fontSize: theme.type.h1.size, fontWeight: theme.type.h1.weight,
+            color: theme.navy, margin: '0 0 6px', letterSpacing: theme.type.h1.letterSpacing,
           }}>
             CareFind Admin
           </h1>
-          <p style={{
-            fontSize: theme.type.body.size,
-            color: theme.textMid,
-            margin: 0,
-          }}>
+          <p style={{ fontSize: theme.type.body.size, color: theme.textMid, margin: 0 }}>
             Platform management console
           </p>
         </div>
 
         <div style={{
-          background: theme.cardBg,
-          borderRadius: theme.radius.lg,
-          padding: 28,
-          boxShadow: theme.elevation[1],
-          border: `1px solid ${theme.border}`,
+          background: theme.cardBg, borderRadius: theme.radius.lg,
+          padding: 28, boxShadow: theme.elevation[1], border: `1px solid ${theme.border}`,
         }}>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 20 }}>
               <label style={{
-                display: 'block',
-                fontSize: theme.type.caption.size,
-                fontWeight: theme.type.caption.weight,
-                color: theme.textMid,
-                marginBottom: 8,
-                letterSpacing: theme.type.caption.letterSpacing,
+                display: 'block', fontSize: theme.type.caption.size,
+                fontWeight: theme.type.caption.weight, color: theme.textMid,
+                marginBottom: 8, letterSpacing: theme.type.caption.letterSpacing,
                 textTransform: 'uppercase',
               }}>
                 Email Address
               </label>
               <input
-                type="email"
-                value={email}
+                type="email" value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@carefind.ng"
-                disabled={loading}
+                placeholder="admin@carefind.ng" disabled={loading}
                 style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  fontSize: theme.type.body.size,
-                  border: `1px solid ${theme.border}`,
-                  borderRadius: theme.radius.md,
-                  outline: 'none',
-                  boxSizing: 'border-box',
+                  width: '100%', padding: '12px 14px', fontSize: theme.type.body.size,
+                  border: `1px solid ${theme.border}`, borderRadius: theme.radius.md,
+                  outline: 'none', boxSizing: 'border-box',
                   transition: `border-color ${theme.motion.fast}`,
-                  background: theme.bg,
-                  color: theme.textDark,
+                  background: theme.bg, color: theme.textDark,
                 }}
                 onFocus={(e) => e.target.style.borderColor = theme.tealDeep}
                 onBlur={(e) => e.target.style.borderColor = theme.border}
@@ -133,53 +137,36 @@ export default function AdminLogin() {
 
             <div style={{ marginBottom: 24 }}>
               <label style={{
-                display: 'block',
-                fontSize: theme.type.caption.size,
-                fontWeight: theme.type.caption.weight,
-                color: theme.textMid,
-                marginBottom: 8,
-                letterSpacing: theme.type.caption.letterSpacing,
+                display: 'block', fontSize: theme.type.caption.size,
+                fontWeight: theme.type.caption.weight, color: theme.textMid,
+                marginBottom: 8, letterSpacing: theme.type.caption.letterSpacing,
                 textTransform: 'uppercase',
               }}>
                 Password
               </label>
               <div style={{ position: 'relative' }}>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
+                  type={showPassword ? 'text' : 'password'} value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  disabled={loading}
+                  placeholder="Enter your password" disabled={loading}
                   style={{
-                    width: '100%',
-                    padding: '12px 44px 12px 14px',
+                    width: '100%', padding: '12px 44px 12px 14px',
                     fontSize: theme.type.body.size,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: theme.radius.md,
-                    outline: 'none',
-                    boxSizing: 'border-box',
+                    border: `1px solid ${theme.border}`, borderRadius: theme.radius.md,
+                    outline: 'none', boxSizing: 'border-box',
                     transition: `border-color ${theme.motion.fast}`,
-                    background: theme.bg,
-                    color: theme.textDark,
+                    background: theme.bg, color: theme.textDark,
                   }}
                   onFocus={(e) => e.target.style.borderColor = theme.tealDeep}
                   onBlur={(e) => e.target.style.borderColor = theme.border}
                 />
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  type="button" onClick={() => setShowPassword(!showPassword)}
                   style={{
-                    position: 'absolute',
-                    right: 12,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 4,
-                    color: theme.textLight,
-                    display: 'flex',
-                    alignItems: 'center',
+                    position: 'absolute', right: 12, top: '50%',
+                    transform: 'translateY(-50%)', background: 'none',
+                    border: 'none', cursor: 'pointer', padding: 4,
+                    color: theme.textLight, display: 'flex', alignItems: 'center',
                   }}
                   tabIndex={-1}
                 >
@@ -190,22 +177,15 @@ export default function AdminLogin() {
 
             {error && (
               <div style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 10,
-                padding: '12px 14px',
-                background: theme.dangerBg,
-                borderRadius: theme.radius.md,
-                marginBottom: 20,
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '12px 14px', background: theme.dangerBg,
+                borderRadius: theme.radius.md, marginBottom: 20,
                 border: `1px solid ${theme.dangerBorder}`,
               }}>
                 <AlertCircle size={16} color={theme.alert} style={{ flexShrink: 0, marginTop: 1 }} />
                 <p style={{
-                  margin: 0,
-                  fontSize: theme.type.bodySm.size,
-                  color: theme.alert,
-                  fontWeight: theme.type.bodySm.weight,
-                  lineHeight: 1.4,
+                  margin: 0, fontSize: theme.type.bodySm.size,
+                  color: theme.alert, fontWeight: theme.type.bodySm.weight, lineHeight: 1.4,
                 }}>
                   {error}
                 </p>
@@ -213,20 +193,13 @@ export default function AdminLogin() {
             )}
 
             <button
-              type="submit"
-              disabled={loading}
+              type="submit" disabled={loading}
               style={{
-                width: '100%',
-                padding: '13px 20px',
-                fontSize: theme.type.body.size,
-                fontWeight: 700,
-                background: loading ? theme.textLight : theme.tealGradient,
-                color: '#fff',
-                border: 'none',
-                borderRadius: theme.radius.md,
+                width: '100%', padding: '13px 20px', fontSize: theme.type.body.size,
+                fontWeight: 700, background: loading ? theme.textLight : theme.tealGradient,
+                color: '#fff', border: 'none', borderRadius: theme.radius.md,
                 cursor: loading ? 'not-allowed' : 'pointer',
-                transition: `all ${theme.motion.fast}`,
-                boxShadow: theme.elevation[1],
+                transition: `all ${theme.motion.fast}`, boxShadow: theme.elevation[1],
               }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
@@ -235,10 +208,8 @@ export default function AdminLogin() {
         </div>
 
         <p style={{
-          textAlign: 'center',
-          marginTop: 24,
-          fontSize: theme.type.caption.size,
-          color: theme.textLight,
+          textAlign: 'center', marginTop: 24,
+          fontSize: theme.type.caption.size, color: theme.textLight,
         }}>
           Authorized personnel only
         </p>

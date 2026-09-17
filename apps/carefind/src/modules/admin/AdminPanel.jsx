@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import '../../styles/tokens.css'
 import { dashboardRepository } from './repositories/dashboardRepository'
 import { usersRepository } from './repositories/usersRepository'
 import { contentRepository } from './repositories/contentRepository'
@@ -111,7 +112,7 @@ export default function AdminPanel() {
   const [stories, setStories] = useState([])
   const [storyTitle, setStoryTitle] = useState('')
   const [storyBody, setStoryBody] = useState('')
-  const [storyBg, setStoryBg] = useState('#0E6F5A')
+  const [storyBg, setStoryBg] = useState('var(--color-primary)')
   const [storyImageFile, setStoryImageFile] = useState(null)
   const [savingStory, setSavingStory] = useState(false)
   const [newsItems, setNewsItems] = useState([])
@@ -171,30 +172,37 @@ export default function AdminPanel() {
   }, [addToRecent, setCmdOpen])
 
   useEffect(() => {
-    try {
-      const token = localStorage.getItem('admin_token')
-      const userData = localStorage.getItem('admin_user')
-      const permsData = localStorage.getItem('admin_permissions')
-      if (!token || !userData) { navigate('/admin'); return }
-      const decoded = atob(token)
-      const parts = decoded.split('|')
-      if (parts.length !== 3 || Date.now() - parseInt(parts[2]) > 86400000) {
-        localStorage.removeItem('admin_token')
-        localStorage.removeItem('admin_user')
-        localStorage.removeItem('admin_permissions')
-        navigate('/admin')
-        return
-      }
-      const parsedAdmin = JSON.parse(userData)
-      setAdminUser(parsedAdmin)
-      if (permsData) setAdminPermissions(JSON.parse(permsData))
-      loadAll()
-    } catch { navigate('/admin') }
+    const verifySession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error || !session) {
+          localStorage.removeItem('admin_token')
+          localStorage.removeItem('admin_user')
+          localStorage.removeItem('admin_permissions')
+          navigate('/admin')
+          return
+        }
 
-    // Auto-refresh notifications every 30 seconds
-    const interval = setInterval(() => {
-      loadAll()
-    }, 30000)
+        const token = localStorage.getItem('admin_token')
+        const userData = localStorage.getItem('admin_user')
+        const permsData = localStorage.getItem('admin_permissions')
+        if (!token || !userData) {
+          navigate('/admin')
+          return
+        }
+
+        const parsedAdmin = JSON.parse(userData)
+        setAdminUser(parsedAdmin)
+        if (permsData) setAdminPermissions(JSON.parse(permsData))
+        loadAll()
+      } catch {
+        navigate('/admin')
+      }
+    }
+
+    verifySession()
+
+    const interval = setInterval(() => { loadAll() }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -654,7 +662,7 @@ export default function AdminPanel() {
         imageUrl,
         bgColor: storyBg,
       })
-      setStoryTitle(''); setStoryBody(''); setStoryBg('#0E6F5A'); setStoryImageFile(null)
+      setStoryTitle(''); setStoryBody(''); setStoryBg('var(--color-primary)'); setStoryImageFile(null)
       loadStories()
       showToast('Story published', { type: 'success' })
     } catch (err) {
@@ -886,7 +894,8 @@ export default function AdminPanel() {
   const card = { border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, marginBottom: 10 }
   const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, boxSizing: 'border-box', background: theme.bg, color: theme.textDark }
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await supabase.auth.signOut()
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
     localStorage.removeItem('admin_permissions')

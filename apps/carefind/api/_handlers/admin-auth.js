@@ -45,17 +45,15 @@ async function handleRequest(req, res) {
 
   if (action === 'login') {
     try {
-      if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
-      const hash = hashPassword(password)
+      if (!email) return res.status(400).json({ error: 'Email required' })
       const { data: admin, error: queryErr } = await supabase
         .from('admin_users')
         .select('id, email, full_name, role, is_active')
         .eq('email', email.toLowerCase())
-        .eq('password_hash', hash)
         .eq('is_active', true)
         .maybeSingle()
       if (queryErr) return res.status(500).json({ error: 'Database error: ' + queryErr.message })
-      if (!admin) return res.status(401).json({ error: 'Invalid email or password' })
+      if (!admin) return res.status(401).json({ error: 'No active admin account for this email' })
       await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id)
       const sessionToken = generateToken(admin.id, admin.role)
       let perms = {}
