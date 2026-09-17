@@ -62,6 +62,8 @@ function Login() {
           .maybeSingle()
 
         if (admin) {
+          const token = btoa(`${admin.id}|${admin.role}|${Date.now()}`)
+          localStorage.setItem('admin_token', token)
           localStorage.setItem('admin_user', JSON.stringify(admin))
           navigate('/admin-panel')
         } else {
