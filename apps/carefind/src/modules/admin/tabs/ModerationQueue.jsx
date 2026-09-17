@@ -6,7 +6,7 @@ import { AdminPageHeader, timeAgo } from '../ui'
 import { getModerationItems } from '../lib/priorityScoring'
 import { useModerationStore } from '../stores/moderationStore'
 import PriorityBadge from '../components/PriorityBadge'
-import BulkActionBar from '../components/BulkActionBar'
+import { BulkActionBar } from '../components/BulkActionBar'
 import { callAdminAuth } from '../adminApi'
 
 const SOURCE_OPTIONS = [

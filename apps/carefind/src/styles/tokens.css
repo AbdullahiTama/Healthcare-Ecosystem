@@ -1,6 +1,9 @@
 /* Design tokens — CSS custom properties for dark/light mode.
    Source of truth: packages/design-system/src/theme.js
-   This file mirrors theme.js values for use in inline styles via var(). */
+   Mirrors theme.js values for use in inline styles via var().
+   CareHub-compatible variables (--bg, --panel, --fg, --muted, --border, --teal, etc.)
+   are injected by theme.js at runtime. This file provides fallback color-xxx
+   variables for existing components that haven't migrated yet. */
 
 :root {
   /* Brand */
@@ -69,7 +72,7 @@
     --color-text-light: #94a3b8;
     --color-text-muted: #64748b;
 
-    /* Semantic — keep accessible in dark mode */
+    /* Semantic */
     --color-success: #4ade80;
     --color-success-bg: rgba(74,222,128,0.12);
     --color-warning: #fbbf24;

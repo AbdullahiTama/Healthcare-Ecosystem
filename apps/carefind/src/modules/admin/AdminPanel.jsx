@@ -8,11 +8,11 @@ import { contentRepository } from './repositories/contentRepository'
 import { commerceRepository } from './repositories/commerceRepository'
 import { liveRepository } from './repositories/liveRepository'
 import { feedConfigRepository } from './repositories/feedConfigRepository'
-import { theme } from '../../styles/theme'
+import { theme, toggleTheme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import AdminLayout from './AdminLayout.jsx'
 import { useRealtimeChannel } from './hooks/useRealtimeChannel'
-import AdminShop from './AdminShop.jsx'
+import ShopTab from './tabs/ShopTab.jsx'
 import CommandPalette from './CommandPalette.jsx'
 import HealthPulse from './HealthPulse.jsx'
 import AdminAiCopilot from './AdminAiCopilot.jsx'
@@ -43,6 +43,9 @@ import NotificationsTab from './tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from './tabs/EmailTemplatesTab.jsx'
 import ModerationQueue from './tabs/ModerationQueue.jsx'
 import AuditLog from './components/AuditLog.jsx'
+import OrdersTab from './tabs/OrdersTab.jsx'
+import DashboardTab from './tabs/DashboardTab.jsx'
+import ErrorsTab from './tabs/ErrorsTab.jsx'
 import { ModerationProvider } from './stores/moderationStore'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
@@ -967,8 +970,8 @@ export default function AdminPanel() {
 
   if (loading) return <Loading fullScreen aria-live="polite" aria-busy="true" />
 
-  const card = { border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, marginBottom: 10 }
-  const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, boxSizing: 'border-box', background: theme.bg, color: theme.textDark }
+  const card = { border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--panel)', marginBottom: 10 }
+  const input = { width: '100%', padding: 10, fontSize: 13, border: '1px solid var(--border)', borderRadius: 10, boxSizing: 'border-box', background: 'var(--bg)', color: 'var(--fg)' }
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -987,18 +990,22 @@ export default function AdminPanel() {
       permissions={adminPermissions}
       notifCount={roleNotifCount}
       onSignOut={handleSignOut}
+      onOpenCmdPalette={() => setCmdOpen(true)}
     >
       <div aria-live="polite" aria-busy={loading}>
         {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
+        {tab === 'overview' && <DashboardTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} verifications={verifications} reports={reports} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
         {tab === 'audit_log' && <AuditLog />}
+        {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
         {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}
         {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
         {tab === 'revenue' && <RevenueTab transactions={transactions} />}
+        {tab === 'orders' && <OrdersTab transactions={transactions} showToast={showToast} loadAll={loadAll} />}
         {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
         {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={loadAdminRoles} showToast={showToast} ALL_TABS={ALL_TABS} />}
@@ -1009,7 +1016,7 @@ export default function AdminPanel() {
         {tab === 'promotions' && <PromotionsTab promotions={promotions} promoTitle={promoTitle} setPromoTitle={setPromoTitle} promoLink={promoLink} setPromoLink={setPromoLink} promoDays={promoDays} setPromoDays={setPromoDays} promoImage={promoImage} setPromoImage={setPromoImage} savingPromo={savingPromo} createPromotion={createPromotion} deletePromotion={deletePromotion} />}
         {tab === 'searches' && <SearchesTab searchLogs={searchLogs} />}
         {tab === 'golive' && <GoLiveTab activeShows={activeShows} scheduledShows={scheduledShows} liveTitle={liveTitle} setLiveTitle={setLiveTitle} scheduledAt={scheduledAt} setScheduledAt={setScheduledAt} trailerFile={trailerFile} setTrailerFile={setTrailerFile} creatingShow={creatingShow} liveGuests={liveGuests} setLiveGuests={setLiveGuests} guestSearch={guestSearch} setGuestSearch={setGuestSearch} users={users} startLiveShow={startLiveShow} scheduleShow={scheduleShow} endLiveShow={endLiveShow} startScheduledShow={startScheduledShow} cancelScheduledShow={cancelScheduledShow} liveDraft={liveDraft} setLiveDraft={setLiveDraft} liveImage={liveImage} setLiveImage={setLiveImage} postingLive={postingLive} postLiveItem={postLiveItem} liveItems={liveItems} liveStats={liveStats} liveComments={liveComments} hideLiveComment={hideLiveComment} loadLiveControl={loadLiveControl} toggleGuest={toggleGuest} showToast={showToast} postLiveVoice={postLiveVoice} postLiveSlide={postLiveSlide} postLiveVideo={postLiveVideo} />}
-        {tab === 'shop' && <AdminShop showToast={showToast} />}
+        {tab === 'shop' && <ShopTab showToast={showToast} />}
         {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
         {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
       </div>
@@ -1042,9 +1049,9 @@ export default function AdminPanel() {
         width: 56,
         height: 56,
         borderRadius: '50%',
-        background: theme.tealDeep,
-        border: 'none',
-        boxShadow: '0 4px 12px rgba(14, 111, 90, 0.3)',
+      background: 'var(--teal-deep)',
+      border: 'none',
+      boxShadow: '0 4px 12px rgba(14, 111, 90, 0.3)',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
@@ -1055,7 +1062,7 @@ export default function AdminPanel() {
       onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <Sparkles size={24} color="var(--color-surface)" />
+      <Sparkles size={24} color="var(--fg)" />
     </button>
     
     {/* AI Copilot */}

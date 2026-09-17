@@ -39,7 +39,7 @@ export default function PostsTab({
           {postAuthor && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', background: postAuthor.cover_url ? `url(${postAuthor.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: postAuthor.cover_url ? `url(${postAuthor.cover_url})` : 'var(--teal)', backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
                   {!postAuthor.cover_url && (postAuthor.full_name || postAuthor.display_name || '?')[0]?.toUpperCase()}
                 </div>
                 <div>
@@ -52,7 +52,7 @@ export default function PostsTab({
           )}
 
           <div style={{ display: 'flex', gap: 8, marginBottom: theme.space[4], alignItems: 'center' }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: 'var(--color-surface)', padding: '3px 9px', borderRadius: theme.radius.full }}>{selectedPost.post_type}</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--teal)', textTransform: 'uppercase', background: 'var(--teal-mist)', padding: '3px 9px', borderRadius: 9999 }}>{selectedPost.post_type}</span>
             <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(selectedPost.created_at)}</span>
           </div>
 
@@ -63,8 +63,8 @@ export default function PostsTab({
           {selectedPost.image_urls && selectedPost.image_urls.filter(Boolean).length > 0 && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
-                <Image size={14} color={theme.tealDeep} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Images ({selectedPost.image_urls.filter(Boolean).length})</span>
+                <Image size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Images ({selectedPost.image_urls.filter(Boolean).length})</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
                 {selectedPost.image_urls.filter(Boolean).map((url, i) => (
@@ -79,8 +79,8 @@ export default function PostsTab({
           {selectedPost.image_url && (!selectedPost.image_urls || selectedPost.image_urls.length === 0) && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
-                <Image size={14} color={theme.tealDeep} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Image</span>
+                <Image size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Image</span>
               </div>
               <a href={selectedPost.image_url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
                 <img src={selectedPost.image_url} alt="Post image" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', background: theme.gray100 }} />
@@ -91,8 +91,8 @@ export default function PostsTab({
           {selectedPost.video_url && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
-                <Film size={14} color={theme.tealDeep} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Video</span>
+                <Film size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Video</span>
               </div>
               <video src={selectedPost.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: theme.radius.md, background: 'var(--color-gray-900)' }} />
             </Card>
@@ -101,8 +101,8 @@ export default function PostsTab({
           {selectedPost.audio_url && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
-                <Music size={14} color={theme.tealDeep} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Audio</span>
+                <Music size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Audio</span>
               </div>
               <audio src={selectedPost.audio_url} controls preload="metadata" aria-label="Post audio" style={{ width: '100%' }} />
             </Card>
@@ -163,7 +163,7 @@ export default function PostsTab({
             </button>
             <div onClick={() => viewPostDetails(p)} style={{ cursor: 'pointer', flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: theme.space[2] }}>
-                <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: theme.tealMist, padding: '2px 7px', borderRadius: theme.radius.full }}>{p.post_type}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--teal)', textTransform: 'uppercase', background: 'var(--teal-mist)', padding: '2px 7px', borderRadius: 9999 }}>{p.post_type}</span>
                 <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(p.created_at)}</span>
               </div>
               <p style={{ margin: `0 0 ${theme.space[3]}px 0`, fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '...' : ''}</p>
@@ -175,11 +175,11 @@ export default function PostsTab({
                   {p.image_url && (!p.image_urls || p.image_urls.length === 0) && (
                     <img src={p.image_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
                   )}
-                  {p.video_url && <Film size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
-                  {p.audio_url && <Music size={16} color={theme.tealDeep} style={{ alignSelf: 'center' }} />}
+                  {p.video_url && <Film size={16} color="var(--teal)" style={{ alignSelf: 'center' }} />}
+                  {p.audio_url && <Music size={16} color="var(--teal)" style={{ alignSelf: 'center' }} />}
                 </div>
               )}
-              <div style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 11, color: 'var(--teal)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Eye size={12} /> Tap to read full post
               </div>
             </div>
