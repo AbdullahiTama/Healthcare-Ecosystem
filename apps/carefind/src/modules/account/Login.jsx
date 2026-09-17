@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthContext'
+import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Card, Inp, TealBtn } from '../../components/ui'
@@ -53,7 +54,19 @@ function Login() {
       if (authError) {
         setError(authError.message)
       } else {
-        navigate('/feed')
+        const { data: admin } = await supabase
+          .from('admin_users')
+          .select('id, email, full_name, role, is_active')
+          .eq('email', email.toLowerCase())
+          .eq('is_active', true)
+          .maybeSingle()
+
+        if (admin) {
+          localStorage.setItem('admin_user', JSON.stringify(admin))
+          navigate('/admin-panel')
+        } else {
+          navigate('/feed')
+        }
       }
     }
 

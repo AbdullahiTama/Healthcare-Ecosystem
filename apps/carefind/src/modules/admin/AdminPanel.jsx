@@ -222,7 +222,7 @@ export default function AdminPanel() {
           localStorage.removeItem('admin_token')
           localStorage.removeItem('admin_user')
           localStorage.removeItem('admin_permissions')
-          navigate('/admin')
+          navigate('/login')
           return
         }
 
@@ -230,7 +230,7 @@ export default function AdminPanel() {
         const userData = localStorage.getItem('admin_user')
         const permsData = localStorage.getItem('admin_permissions')
         if (!token || !userData) {
-          navigate('/admin')
+          navigate('/login')
           return
         }
 
@@ -239,7 +239,7 @@ export default function AdminPanel() {
           parsedAdmin = JSON.parse(userData)
         } catch {
           localStorage.removeItem('admin_user')
-          navigate('/admin')
+          navigate('/login')
           return
         }
 
@@ -256,7 +256,7 @@ export default function AdminPanel() {
         localStorage.removeItem('admin_token')
         localStorage.removeItem('admin_user')
         localStorage.removeItem('admin_permissions')
-        navigate('/admin')
+        navigate('/login')
       }
     }
 
@@ -975,7 +975,7 @@ export default function AdminPanel() {
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
     localStorage.removeItem('admin_permissions')
-    navigate('/admin')
+    navigate('/login')
   }
 
   return (

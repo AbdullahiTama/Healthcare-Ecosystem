@@ -34,7 +34,6 @@ const ProfessionalDashboard = lazy(() => import('./modules/account/ProfessionalD
 const DrugProfile = lazy(() => import('./modules/healthcare-discovery/DrugProfile.jsx'))
 const Wallet = lazy(() => import('./modules/wallet-payments/Wallet.jsx'))
 const ProfessionalMonetization = lazy(() => import('./modules/subscriptions-monetization/ProfessionalMonetization.jsx'))
-const AdminLogin = lazy(() => import('./modules/admin/AdminLogin.jsx'))
 const News = lazy(() => import('./modules/news-publishing/News.jsx'))
 const NewsArticle = lazy(() => import('./modules/news-publishing/NewsArticle.jsx'))
 const LiveSession = lazy(() => import('./modules/live-streaming/LiveSession.jsx'))
@@ -120,9 +119,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/playlist/:id/edit/:partId" element={<SuspenseWrapper><RequireAuth><PlaylistCreate /></RequireAuth></SuspenseWrapper>} />
             <Route path="/live-dashboard/:id" element={<SuspenseWrapper><RequireAuth><LiveDashboard /></RequireAuth></SuspenseWrapper>} />
 
-            {/* Admin */}
-            <Route path="/admin" element={<SuspenseWrapper><AdminLogin /></SuspenseWrapper>} />
-            <Route path="/admin-login" element={<SuspenseWrapper><AdminLogin /></SuspenseWrapper>} />
+            {/* Admin — accessible only via /login redirect */}
             <Route path="/admin-panel" element={<SuspenseWrapper><AdminPanel /></SuspenseWrapper>} />
             <Route path="/admin/businesses" element={<SuspenseWrapper><BusinessesHub /></SuspenseWrapper>} />
             <Route path="/admin/dashboard" element={<SuspenseWrapper><DashboardHub /></SuspenseWrapper>} />
