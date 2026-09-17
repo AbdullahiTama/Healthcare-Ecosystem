@@ -148,20 +148,22 @@ async function sendSequenceEmail(userId, sequenceType, stepIndex) {
       return { success: false, message: 'User email not found' }
     }
 
-    // Send email via Edge Function
-    const { data: emailData, error } = await supabase.functions.invoke('send-sequence-email', {
-      body: {
-        userId,
-        email: profile.email,
-        name: profile.full_name || profile.username,
-        template: step.template,
+    // Send email via API endpoint
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateKey: step.template,
+        toEmail: profile.email,
+        payload: {
+          fullName: profile.full_name || profile.username,
+          email: profile.email,
+        },
         subject: step.subject,
-        sequenceType,
-        stepIndex,
-      },
+      }),
     })
-
-    if (error) throw error
+    const emailData = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(emailData.error || 'Email send failed')
 
     // Update sequence progress
     await supabase

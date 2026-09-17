@@ -173,13 +173,31 @@ export async function emailAdminNewRegistration(args) {
 }
 
 export async function emailBusinessApproved(args) {
-  console.warn('[email] emailBusinessApproved should be called server-side via /api/notify-business-status; client stub doing nothing')
-  return { success: false, error: 'Use server endpoint' }
+  try {
+    const res = await fetch('/api/notify-business-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId: args.businessId, status: 'active' }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) {
+    console.error('[email] client notify-business-status failed', e)
+    return { success: false, error: e.message }
+  }
 }
 
 export async function emailBusinessRejected(args) {
-  console.warn('[email] emailBusinessRejected should be called server-side; client stub')
-  return { success: false, error: 'Use server endpoint' }
+  try {
+    const res = await fetch('/api/notify-business-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId: args.businessId, status: 'rejected', reason: args.reason }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) {
+    console.error('[email] client notify-business-status failed', e)
+    return { success: false, error: e.message }
+  }
 }
 
 export async function emailAppointmentConfirmed(args) {
@@ -217,7 +235,17 @@ export async function emailAppointmentConfirmed(args) {
 
 export async function emailCreditReminder(args) {
   if (!args.clientEmail) return { success: false, error: 'No client email' }
-  return { success: false, error: 'Use server endpoint' }
+  try {
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: 'credit_reminder', toEmail: args.clientEmail, payload: args }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) {
+    console.error('[email] client credit reminder failed', e)
+    return { success: false, error: e.message }
+  }
 }
 export async function emailStaffWelcome(args) {
   try {
@@ -229,7 +257,25 @@ export async function emailStaffWelcome(args) {
     return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
   } catch (e) { return { success: false, error: e.message } }
 }
-export async function emailAgentApproved(args) { return { success: false, error: 'Use server endpoint' } }
-export async function emailAgentRejected(args) { return { success: false, error: 'Use server endpoint' } }
+export async function emailAgentApproved(args) {
+  try {
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: 'agent_approved', toEmail: args.agentEmail, payload: args }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) { return { success: false, error: e.message } }
+}
+export async function emailAgentRejected(args) {
+  try {
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ templateKey: 'agent_rejected', toEmail: args.agentEmail, payload: args }),
+    })
+    return { success: res.ok, data: await res.json().catch(() => ({})), error: res.ok ? null : 'Send failed' }
+  } catch (e) { return { success: false, error: e.message } }
+}
 
 export { ADMIN_EMAIL }

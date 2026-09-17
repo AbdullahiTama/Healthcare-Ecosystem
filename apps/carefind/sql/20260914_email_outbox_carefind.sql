@@ -43,8 +43,8 @@ alter table email_logs enable row level security;
 do $$ declare r record; begin for r in select policyname from pg_policies where tablename='email_outbox' loop execute format('drop policy %I on email_outbox', r.policyname); end loop; end $$;
 do $$ declare r record; begin for r in select policyname from pg_policies where tablename='email_logs' loop execute format('drop policy %I on email_logs', r.policyname); end loop; end $$;
 
-execute 'create policy "email_outbox_service_role" on email_outbox for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)';
-execute 'create policy "email_logs_service_role" on email_logs for all to authenticated using (auth.uid() is not null) with check (auth.uid() is not null)';
+execute 'create policy "email_outbox_service_role" on email_outbox for all to authenticated using (auth.jwt() ->> ''role'' = ''service_role'') with check (auth.jwt() ->> ''role'' = ''service_role'')';
+execute 'create policy "email_logs_service_role" on email_logs for all to authenticated using (auth.jwt() ->> ''role'' = ''service_role'') with check (auth.jwt() ->> ''role'' = ''service_role'')';
 
 create or replace function update_email_outbox_updated_at() returns trigger language plpgsql set search_path=public as $$ begin new.updated_at=now(); return new; end $$;
 drop trigger if exists trg_email_outbox_updated_at on email_outbox;

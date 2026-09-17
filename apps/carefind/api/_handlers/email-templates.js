@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { renderEmailTemplate, generateSampleVariables } from '../_lib/emailTemplateRenderer.js'
+import { renderEmailTemplate, generateSampleVariables } from '@care-ecosystem/shared-email'
 import { sendEmail } from '../_lib/email.js'
 import { TEMPLATE_REGISTRY } from '@care-ecosystem/shared-email'
 import { SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email/src/templates/samples.js'

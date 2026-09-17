@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from './email.js'
-import { renderEmailTemplate } from './emailTemplateRenderer.js'
+import { renderEmailTemplate } from '@care-ecosystem/shared-email'
 
 function getSupabase() {
   return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
