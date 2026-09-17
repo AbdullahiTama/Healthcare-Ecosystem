@@ -54,12 +54,7 @@ function Login() {
       if (authError) {
         setError(authError.message)
       } else {
-        const { data: admin } = await supabase
-          .from('admin_users')
-          .select('id, email, full_name, role, is_active')
-          .eq('email', email.toLowerCase())
-          .eq('is_active', true)
-          .maybeSingle()
+        const { data: admin } = await supabase.rpc('get_my_admin_info')
 
         if (admin) {
           const token = btoa(`${admin.id}|${admin.role}|${Date.now()}`)
