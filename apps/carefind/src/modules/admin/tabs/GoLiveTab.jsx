@@ -1,4 +1,4 @@
-import { Radio, Play, Square, Calendar, Users, Heart, Eye, Share2, Gift, MessageSquare, Send, Image, Mic, Video, Slides, Clock, UserPlus, Trash2 } from 'lucide-react'
+import { Radio, Play, Square, Calendar, Users, Heart, Eye, Share2, Gift, MessageSquare, Send, Image, Mic, Video, Check, Clock, UserPlus, Trash2 } from 'lucide-react'
 import { Card, Button, Empty, Input, Textarea } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../styles/theme'
 import { AdminPageHeader, AdminSection } from '../ui'
