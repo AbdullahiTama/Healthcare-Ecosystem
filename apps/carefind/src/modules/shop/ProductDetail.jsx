@@ -340,7 +340,7 @@ export default function ProductDetail() {
           <div style={{ fontWeight:800, color:theme.navy, marginBottom:8 }}>You may also like</div>
           <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:8 }}>
             {recommendations.map(r=>(
-              <Link key={r.product_id} to={`/shop/${r.product_id}`} style={{ textDecoration:'none', flex:'0 0 140px' }}>
+              <Link key={r.ecommerce_product_id || r.product_id} to={`/shop/${r.ecommerce_product_id || r.product_id}`} style={{ textDecoration:'none', flex:'0 0 140px' }}>
                 <Card style={{ padding:8, textAlign:'center' }}>
                   <div style={{ height:80, borderRadius:8, background: r.image_url ? `url(${r.image_url}) center/cover` : theme.tealMist }} />
                   <div style={{ fontSize:12, fontWeight:700, color:theme.navy, marginTop:6, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</div>

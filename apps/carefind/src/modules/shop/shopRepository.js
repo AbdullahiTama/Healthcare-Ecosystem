@@ -63,7 +63,7 @@ export function createShopRepository(client = supabase) {
     },
 
     async getProductDetail(productId) {
-      const { data, error } = await client
+      let { data, error } = await client
         .from('ecommerce_products')
         .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
         .eq('id', productId)
@@ -71,13 +71,23 @@ export function createShopRepository(client = supabase) {
         .eq('is_restricted', false)
         .maybeSingle()
       if (error) throw error
+      if (!data) {
+        const { data: byProduct } = await client
+          .from('ecommerce_products')
+          .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,attributes,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url,description)')
+          .eq('product_id', productId)
+          .eq('status', 'Active')
+          .eq('is_restricted', false)
+          .maybeSingle()
+        data = byProduct
+      }
       if (!data) return null
       if (data.is_restricted) return null
       if ((data.products?.stock ?? 0) <= 0) return null
       const { data: images, error: imgErr } = await client
         .from('ecommerce_product_images')
         .select('id,url,position')
-        .eq('ecommerce_product_id', productId)
+        .eq('ecommerce_product_id', data.id)
         .order('position', { ascending: true })
       if (imgErr) throw imgErr
       return { ...data, images: images || [] }
