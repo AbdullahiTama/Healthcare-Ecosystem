@@ -1,6 +1,15 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 
 export default async function handler(req, res) {
+  try {
+    return await handleRequest(req, res)
+  } catch (err) {
+    console.error('[admin-auth] Unhandled error:', err)
+    return res.status(500).json({ error: 'Internal server error: ' + (err.message || 'Unknown error') })
+  }
+}
+
+async function handleRequest(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -35,32 +44,42 @@ export default async function handler(req, res) {
   const { action, email, password, token } = req.body
 
   if (action === 'login') {
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
-    const hash = hashPassword(password)
-    const { data: admin } = await supabase
-      .from('admin_users')
-      .select('id, email, full_name, role, is_active')
-      .eq('email', email.toLowerCase())
-      .eq('password_hash', hash)
-      .eq('is_active', true)
-      .maybeSingle()
-    if (!admin) return res.status(401).json({ error: 'Invalid email or password' })
-    await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id)
-    const sessionToken = generateToken(admin.id, admin.role)
-    let perms = {}
-    try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
-    return res.status(200).json({ token: sessionToken, admin: { id: admin.id, email: admin.email, full_name: admin.full_name, role: admin.role }, permissions: perms })
+    try {
+      if (!email || !password) return res.status(400).json({ error: 'Email and password required' })
+      const hash = hashPassword(password)
+      const { data: admin, error: queryErr } = await supabase
+        .from('admin_users')
+        .select('id, email, full_name, role, is_active')
+        .eq('email', email.toLowerCase())
+        .eq('password_hash', hash)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (queryErr) return res.status(500).json({ error: 'Database error: ' + queryErr.message })
+      if (!admin) return res.status(401).json({ error: 'Invalid email or password' })
+      await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id)
+      const sessionToken = generateToken(admin.id, admin.role)
+      let perms = {}
+      try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
+      return res.status(200).json({ token: sessionToken, admin: { id: admin.id, email: admin.email, full_name: admin.full_name, role: admin.role }, permissions: perms })
+    } catch (err) {
+      return res.status(500).json({ error: 'Login failed: ' + (err.message || 'Unknown error') })
+    }
   }
 
   if (action === 'verify') {
-    if (!token) return res.status(401).json({ error: 'No token' })
-    const payload = verifyToken(token)
-    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
-    const { data: admin } = await supabase.from('admin_users').select('id, email, full_name, role, is_active, role_id').eq('id', payload.adminId).eq('is_active', true).maybeSingle()
-    if (!admin) return res.status(401).json({ error: 'Admin not found' })
-    let perms = {}
-    try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
-    return res.status(200).json({ admin, permissions: perms || {} })
+    try {
+      if (!token) return res.status(401).json({ error: 'No token' })
+      const payload = verifyToken(token)
+      if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+      const { data: admin, error: queryErr } = await supabase.from('admin_users').select('id, email, full_name, role, is_active, role_id').eq('id', payload.adminId).eq('is_active', true).maybeSingle()
+      if (queryErr) return res.status(500).json({ error: 'Database error: ' + queryErr.message })
+      if (!admin) return res.status(401).json({ error: 'Admin not found' })
+      let perms = {}
+      try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
+      return res.status(200).json({ admin, permissions: perms || {} })
+    } catch (err) {
+      return res.status(500).json({ error: 'Verification failed: ' + (err.message || 'Unknown error') })
+    }
   }
 
   if (action === 'create_staff') {
