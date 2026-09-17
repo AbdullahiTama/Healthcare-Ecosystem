@@ -5,12 +5,12 @@ import { AdminPageHeader, AdminSection, timeAgo } from '../ui'
 import { BookOpen, Plus, Trash2, Clock, Image as ImageIcon, Palette, Loader2 } from 'lucide-react'
 
 const COLOR_PRESETS = [
-  { value: '#0E6F5A', label: 'Teal' },
-  { value: '#0B4A3E', label: 'Dark Teal' },
-  { value: '#7c3aed', label: 'Purple' },
-  { value: '#be123c', label: 'Rose' },
-  { value: '#c2410c', label: 'Orange' },
-  { value: '#0369a1', label: 'Blue' },
+  { value: 'var(--color-primary)', label: 'Teal' },
+  { value: 'var(--color-navy)', label: 'Dark Teal' },
+  { value: 'var(--color-purple)', label: 'Purple' },
+  { value: 'var(--color-danger)', label: 'Rose' },
+  { value: 'var(--color-warning)', label: 'Orange' },
+  { value: 'var(--color-info)', label: 'Blue' },
 ]
 
 export default function StoriesTab({
@@ -130,14 +130,14 @@ export default function StoriesTab({
                 padding: `${theme.space[3]}px ${theme.space[5]}px`,
                 borderRadius: theme.radius.md,
               }}>
-                <p style={{ margin: 0, fontSize: theme.type.bodySm.size, color: '#fff' }}>
+                <p style={{ margin: 0, fontSize: theme.type.bodySm.size, color: 'var(--color-surface)' }}>
                   Image selected — text shows over it
                 </p>
               </div>
             ) : (
               <div>
                 {storyTitle && (
-                  <p style={{ margin: '0 0 6px 0', color: '#fff', fontWeight: 900, fontSize: 16 }}>
+                  <p style={{ margin: '0 0 6px 0', color: 'var(--color-surface)', fontWeight: 900, fontSize: 16 }}>
                     {storyTitle}
                   </p>
                 )}
@@ -201,7 +201,7 @@ export default function StoriesTab({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#fff',
+                      color: 'var(--color-surface)',
                       fontWeight: 900,
                       fontSize: theme.type.body.size,
                     }}>

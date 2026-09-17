@@ -1,0 +1,89 @@
+/* Design tokens — CSS custom properties for dark/light mode.
+   Source of truth: packages/design-system/src/theme.js
+   This file mirrors theme.js values for use in inline styles via var(). */
+
+:root {
+  /* Brand */
+  --color-primary: #0E6F5A;
+  --color-primary-bright: #1A8A72;
+  --color-primary-hover: #0B5A49;
+  --color-navy: #0B4A3E;
+  --color-navy-soft: #3C4B44;
+
+  /* Neutrals */
+  --color-bg: #F7F5EF;
+  --color-surface: #FBFAF6;
+  --color-border: #ECEAE0;
+  --color-hairline: #E7E4D9;
+  --color-gray-400: #9AA69F;
+  --color-gray-500: #8B978F;
+  --color-gray-600: #5B6B63;
+  --color-gray-900: #182722;
+
+  /* Text */
+  --color-text: #182722;
+  --color-text-mid: #3C4B44;
+  --color-text-light: #8B978F;
+  --color-text-muted: #9AA69F;
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+  --color-purple: #7c3aed;
+  --color-purple-bg: #f5f3ff;
+  --color-teal-mist: #E3EEE8;
+  --color-star: #f5b301;
+
+  /* Overlay */
+  --color-overlay: rgba(15,23,42,0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Brand */
+    --color-primary: #1A8A72;
+    --color-primary-bright: #22B89A;
+    --color-primary-hover: #1A8A72;
+    --color-navy: #E2E8F0;
+    --color-navy-soft: #94A3B8;
+
+    /* Neutrals */
+    --color-bg: #0f172a;
+    --color-surface: #1e293b;
+    --color-border: #334155;
+    --color-hairline: #475569;
+    --color-gray-400: #64748b;
+    --color-gray-500: #94a3b8;
+    --color-gray-600: #cbd5e1;
+    --color-gray-900: #f1f5f9;
+
+    /* Text */
+    --color-text: #f1f5f9;
+    --color-text-mid: #cbd5e1;
+    --color-text-light: #94a3b8;
+    --color-text-muted: #64748b;
+
+    /* Semantic — keep accessible in dark mode */
+    --color-success: #4ade80;
+    --color-success-bg: rgba(74,222,128,0.12);
+    --color-warning: #fbbf24;
+    --color-warning-bg: rgba(251,191,36,0.12);
+    --color-danger: #f87171;
+    --color-danger-bg: rgba(248,113,113,0.12);
+    --color-info: #60a5fa;
+    --color-info-bg: rgba(96,165,250,0.12);
+    --color-purple: #a78bfa;
+    --color-purple-bg: rgba(167,139,250,0.12);
+    --color-teal-mist: rgba(26,138,114,0.15);
+    --color-star: #fbbf24;
+
+    /* Overlay */
+    --color-overlay: rgba(0,0,0,0.65);
+  }
+}

@@ -7,7 +7,7 @@ import { AdminPageHeader, timeAgo } from '../ui'
 
 const SEVERITY_STYLES = {
   urgent: { bg: theme.dangerBg, color: theme.danger, border: theme.danger },
-  warning: { bg: theme.amberBg, color: theme.amberText, border: '#f59e0b' },
+  warning: { bg: theme.amberBg, color: theme.amberText, border: 'var(--color-star)' },
   info: { bg: theme.tealMist, color: theme.tealDeep, border: theme.tealDeep },
 }
 

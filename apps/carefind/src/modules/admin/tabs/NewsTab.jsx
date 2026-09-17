@@ -134,7 +134,7 @@ export default function NewsTab({
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                    <Image size={24} color="rgba(255,255,255,0.5)" />
+                    <Image size={24} color="var(--color-surface)" />
                   </div>
                 )}
 

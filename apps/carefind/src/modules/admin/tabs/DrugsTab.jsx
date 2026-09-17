@@ -87,7 +87,7 @@ export default function DrugsTab({
             <div>
               <div style={{ fontWeight: 800, fontSize: theme.type.h2.size, color: theme.textDark }}>{drugName}</div>
               <div style={{ fontSize: theme.type.bodySm.size, color: theme.textLight }}>
-                {filtered.length} reviews · Avg: <Star size={12} style={{ display: 'inline', verticalAlign: 'middle', color: '#f59e0b' }} /> {avgRating}
+                {filtered.length} reviews · Avg: <Star size={12} style={{ display: 'inline', verticalAlign: 'middle', color: 'var(--color-star)' }} /> {avgRating}
               </div>
             </div>
             <Button
@@ -134,8 +134,8 @@ export default function DrugsTab({
                         <Star
                           key={i}
                           size={14}
-                          fill={i < r.rating ? '#f59e0b' : 'none'}
-                          color={i < r.rating ? '#f59e0b' : theme.gray300}
+                          fill={i < r.rating ? 'var(--color-star)' : 'none'}
+                          color={i < r.rating ? 'var(--color-star)' : theme.gray300}
                           strokeWidth={2}
                         />
                       ))}

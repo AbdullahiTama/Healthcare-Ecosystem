@@ -28,7 +28,7 @@ export default function GoLiveTab({
           {activeShows.map(s => (
             <Card key={s.id} style={{ padding: theme.space[5], marginBottom: theme.space[5] }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: theme.space[4] }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626', animation: 'pulse 2s infinite' }} />
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-danger)', animation: 'pulse 2s infinite' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: theme.navy }}>{s.title}</div>
                   <div style={{ fontSize: 11, color: theme.textLight }}>Started {new Date(s.started_at).toLocaleTimeString()}</div>
@@ -44,10 +44,10 @@ export default function GoLiveTab({
               </Button>
 
               <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: `${theme.space[3]}px 0`, marginBottom: theme.space[3], background: theme.navy, borderRadius: theme.radius.md }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}><Heart size={14} fill="#fff" /> {liveStats.likes}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}><Eye size={14} /> {liveStats.views}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 4 }}><Share2 size={14} /> {liveStats.shares}</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#fde68a', display: 'flex', alignItems: 'center', gap: 4 }}><Gift size={14} /> {liveStats.gifts}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-surface)', display: 'flex', alignItems: 'center', gap: 4 }}><Heart size={14} fill="var(--color-surface)" /> {liveStats.likes}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-surface)', display: 'flex', alignItems: 'center', gap: 4 }}><Eye size={14} /> {liveStats.views}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-surface)', display: 'flex', alignItems: 'center', gap: 4 }}><Share2 size={14} /> {liveStats.shares}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--color-star)', display: 'flex', alignItems: 'center', gap: 4 }}><Gift size={14} /> {liveStats.gifts}</span>
               </div>
 
               <Textarea value={liveDraft} onChange={setLiveDraft} placeholder="Type something to broadcast live..." rows={2} style={{ marginBottom: theme.space[3] }} />
@@ -135,7 +135,7 @@ export default function GoLiveTab({
                 const selected = liveGuests.some(g => g.id === u.id)
                 return (
                   <div key={u.id} onClick={() => toggleGuest(u)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: `${theme.space[3]}px ${theme.space[4]}px`, borderRadius: theme.radius.md, marginBottom: 4, cursor: 'pointer', background: selected ? theme.tealMist : theme.bg, border: `1px solid ${selected ? theme.tealDeep : 'transparent'}` }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 12 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: theme.tealGradient, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontWeight: 800, fontSize: 12 }}>
                       {(u.full_name?.[0] || u.display_name?.[0] || '?').toUpperCase()}
                     </div>
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: theme.navy }}>{u.full_name || u.display_name || 'User'}</span>

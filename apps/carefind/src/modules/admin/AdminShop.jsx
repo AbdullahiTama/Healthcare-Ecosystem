@@ -20,20 +20,20 @@ const STATUS_LABELS = {
 }
 
 const STATUS_COLORS = {
-  pending_payment: '#f59e0b',
-  delivery_quote_pending: '#f59e0b',
-  paid: '#059669',
-  accepted: '#059669',
-  delivered: '#059669',
-  processing: '#0d9488',
-  packed: '#0d9488',
-  at_pickup_station: '#8b5cf6',
-  ready_for_pickup: '#0d9488',
-  in_transit: '#2563eb',
-  cancelled: '#ef4444',
-  disputed: '#ef4444',
-  refund_requested: '#f59e0b',
-  refunded: '#6b7280',
+  pending_payment: 'var(--color-warning)',
+  delivery_quote_pending: 'var(--color-warning)',
+  paid: 'var(--color-success)',
+  accepted: 'var(--color-success)',
+  delivered: 'var(--color-success)',
+  processing: 'var(--color-primary)',
+  packed: 'var(--color-primary)',
+  at_pickup_station: 'var(--color-purple)',
+  ready_for_pickup: 'var(--color-primary)',
+  in_transit: 'var(--color-info)',
+  cancelled: 'var(--color-danger)',
+  disputed: 'var(--color-danger)',
+  refund_requested: 'var(--color-warning)',
+  refunded: 'var(--color-gray-500)',
 }
 
 const TRANSITIONS = {

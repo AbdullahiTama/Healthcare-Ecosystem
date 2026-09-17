@@ -33,7 +33,7 @@ export default function UsersTab({
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: theme.space[5] }}>
-            <div style={{ width: 50, height: 50, borderRadius: '50%', background: selectedUser.cover_url ? `url(${selectedUser.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
+            <div style={{ width: 50, height: 50, borderRadius: '50%', background: selectedUser.cover_url ? `url(${selectedUser.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
               {!selectedUser.cover_url && (selectedUser.full_name || selectedUser.display_name || '?')[0]?.toUpperCase()}
             </div>
             <div>
@@ -62,12 +62,12 @@ export default function UsersTab({
           {(phoneMap[selectedUser.id] || selectedUser.website) && (
             <div style={{ display: 'flex', gap: 8, marginBottom: theme.space[4] }}>
               {phoneMap[selectedUser.id] && (
-                <a href={`tel:${phoneMap[selectedUser.id]}`} style={{ flex: 1, textAlign: 'center', padding: 10, background: theme.tealGradient, color: '#fff', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <a href={`tel:${phoneMap[selectedUser.id]}`} style={{ flex: 1, textAlign: 'center', padding: 10, background: theme.tealGradient, color: 'var(--color-surface)', borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   <Phone size={14} /> Call
                 </a>
               )}
               {selectedUser.website && (
-                <a href={selectedUser.website.startsWith('http') ? selectedUser.website : `https://${selectedUser.website}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', padding: 10, background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <a href={selectedUser.website.startsWith('http') ? selectedUser.website : `https://${selectedUser.website}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', padding: 10, background: 'var(--color-surface)', color: theme.tealDeep, border: `1px solid ${theme.tealDeep}`, borderRadius: theme.radius.md, fontWeight: 800, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                   <Globe size={14} /> Website
                 </a>
               )}
@@ -88,7 +88,7 @@ export default function UsersTab({
           )}
 
           <div style={{ display: 'flex', gap: 8, marginBottom: theme.space[3] }}>
-            <select value={suspendDays} onChange={(e) => setSuspendDays(e.target.value)} style={{ flex: 1, minHeight: 40, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, background: '#fff', fontFamily: theme.fontFamily }}>
+            <select value={suspendDays} onChange={(e) => setSuspendDays(e.target.value)} style={{ flex: 1, minHeight: 40, padding: '8px 12px', fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, background: 'var(--color-surface)', fontFamily: theme.fontFamily }}>
               <option value="1">Suspend 1 day</option>
               <option value="3">Suspend 3 days</option>
               <option value="7">Suspend 7 days</option>
@@ -140,7 +140,7 @@ export default function UsersTab({
       {filtered.map(u => (
         <Card key={u.id} onClick={() => viewUserDetails(u)} style={{ padding: theme.space[5], marginBottom: theme.space[4] }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: u.cover_url ? `url(${u.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: u.cover_url ? `url(${u.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
               {!u.cover_url && (u.full_name || u.display_name || '?')[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
@@ -155,7 +155,7 @@ export default function UsersTab({
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
               <span style={{ fontSize: 10, color: theme.textLight }}>{timeAgo(u.created_at)}</span>
               {phoneMap[u.id] && (
-                <a href={`tel:${phoneMap[u.id]}`} onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: theme.tealDeep, padding: '3px 10px', borderRadius: theme.radius.full, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <a href={`tel:${phoneMap[u.id]}`} onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 800, color: 'var(--color-surface)', background: theme.tealDeep, padding: '3px 10px', borderRadius: theme.radius.full, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <Phone size={10} /> Call
                 </a>
               )}

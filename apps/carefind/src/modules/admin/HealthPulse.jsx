@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { DollarSign, Clock, Radio, AlertTriangle, RefreshCw } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { dashboardRepository } from './repositories'
+import { useRealtimeChannel } from './hooks/useRealtimeChannel'
 
 const PULSE_INTERVAL = 30000
 
@@ -23,9 +24,17 @@ export default function HealthPulse({ onNavigate }) {
 
   useEffect(() => {
     fetchPulse()
-    const interval = setInterval(fetchPulse, PULSE_INTERVAL)
-    return () => clearInterval(interval)
   }, [])
+
+  useRealtimeChannel({
+    channelName: 'health-pulse-realtime',
+    subscription: { schema: 'public', table: 'transactions' },
+    onUpdate: fetchPulse,
+    onInsert: fetchPulse,
+    onError: () => {},
+    pollInterval: PULSE_INTERVAL,
+    pollFn: fetchPulse,
+  })
 
   if (loading && !pulse) return null
 
@@ -34,14 +43,14 @@ export default function HealthPulse({ onNavigate }) {
       icon: DollarSign,
       label: 'Revenue Today',
       value: `₦${(pulse?.revenueToday || 0).toLocaleString()}`,
-      color: theme.success || '#0E6F5A',
+      color: theme.success || 'var(--color-success)',
       tab: 'revenue',
     },
     {
       icon: Clock,
       label: 'Pending Items',
       value: pulse?.pendingItems || 0,
-      color: (pulse?.pendingItems || 0) > 5 ? '#D97706' : theme.textMid,
+      color: (pulse?.pendingItems || 0) > 5 ? 'var(--color-warning)' : theme.textMid,
       tab: 'notifications',
       alert: (pulse?.pendingItems || 0) > 10,
     },
@@ -49,14 +58,14 @@ export default function HealthPulse({ onNavigate }) {
       icon: Radio,
       label: 'Active Lives',
       value: pulse?.activeLives || 0,
-      color: (pulse?.activeLives || 0) > 0 ? '#7C3AED' : theme.textMid,
+      color: (pulse?.activeLives || 0) > 0 ? 'var(--color-purple)' : theme.textMid,
       tab: 'golive',
     },
     {
       icon: AlertTriangle,
       label: 'Open Disputes',
       value: pulse?.openDisputes || 0,
-      color: (pulse?.openDisputes || 0) > 0 ? '#DC2626' : theme.textMid,
+      color: (pulse?.openDisputes || 0) > 0 ? 'var(--color-danger)' : theme.textMid,
       tab: 'reports',
       alert: (pulse?.openDisputes || 0) > 3,
     },

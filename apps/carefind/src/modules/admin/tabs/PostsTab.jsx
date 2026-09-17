@@ -37,7 +37,7 @@ export default function PostsTab({
           {postAuthor && (
             <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', background: postAuthor.cover_url ? `url(${postAuthor.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: postAuthor.cover_url ? `url(${postAuthor.cover_url})` : theme.tealGradient, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-surface)', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
                   {!postAuthor.cover_url && (postAuthor.full_name || postAuthor.display_name || '?')[0]?.toUpperCase()}
                 </div>
                 <div>
@@ -50,7 +50,7 @@ export default function PostsTab({
           )}
 
           <div style={{ display: 'flex', gap: 8, marginBottom: theme.space[4], alignItems: 'center' }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: '#fff', padding: '3px 9px', borderRadius: theme.radius.full }}>{selectedPost.post_type}</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase', background: 'var(--color-surface)', padding: '3px 9px', borderRadius: theme.radius.full }}>{selectedPost.post_type}</span>
             <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(selectedPost.created_at)}</span>
           </div>
 
@@ -92,7 +92,7 @@ export default function PostsTab({
                 <Film size={14} color={theme.tealDeep} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: theme.tealDeep, textTransform: 'uppercase' }}>Video</span>
               </div>
-              <video src={selectedPost.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: theme.radius.md, background: '#000' }} />
+              <video src={selectedPost.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: theme.radius.md, background: 'var(--color-gray-900)' }} />
             </Card>
           )}
 

@@ -146,7 +146,7 @@ export default function PromotionsTab({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#fff',
+                      color: 'var(--color-surface)',
                       fontWeight: 800,
                       fontSize: theme.type.caption.size,
                     }}>

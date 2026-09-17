@@ -12,169 +12,202 @@
   evidence: Split from Sajel Pharma bug report so the ESC/POS receipt printing fix could ship independently; disjoint subsystems (auth vs printing).
 - source_spec: `_bmad-output/implementation-artifacts/spec-issues-1-to-8-batch-fixes.md`
   summary: Component-level test for DashboardHome proactive-alert effects (daily dedupe, notify payloads, owner-only gate).
-  evidence: The pure classification is tested (velocity.test.js) and the NotificationBell is component-tested, but the effect wiring in DashboardHome.jsx (localStorage dedupe keys, markSent-after-await ordering) has no test — no module-level component harness exists (no @testing-library/react); same rationale as the Purchases save() entry above.
+  evidence: The pure classification is tested (velocity.test.js) and the NotificationBell is component-tested, but the effect wiring in DashboardHome.jsx (localStorage dedupe keys, markSent-after-await ordering) has no test - no module-level component harness exists (no @testing-library/react); same rationale as the Purchases save() entry above.
 - source_spec: `_bmad-output/implementation-artifacts/spec-issues-1-to-8-batch-fixes.md`
-  summary: Pre-existing advisor findings left untouched by this batch — SECURITY DEFINER views (staff_directory, professional_earnings), mutable search_path on legacy functions (handle_new_user, increment_*_view), anon-executable definer RPCs (register_business, attempt_staff_claim, etc.), pg_trgm in public schema, leaked-password protection disabled.
+  summary: Pre-existing advisor findings left untouched by this batch - SECURITY DEFINER views, mutable search_path, anon-executable definer RPCs, pg_trgm in public schema, leaked-password protection disabled.
   evidence: All present before this work; fixing them is a dedicated hardening pass, not a drive-by inside an issue-batch spec.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
   summary: Support choosing among multiple paired USB printers instead of always using the first device.
-  evidence: POS.jsx picks getPairedPrinters()[0] with no chooser; a user with two thermal printers has no way to switch — surfaced in blind-hunter review of POS.jsx:444.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  evidence: POS.jsx picks getPairedPrinters()[0] with no chooser.
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
   summary: Broaden WebUSB discovery to include vendor-specific (0xFF) printers so more thermal models are offered.
-  evidence: escposUsb.js filters to classCode 7 only; many ESC/POS thermals expose vendor class and are hidden from the picker — blind-hunter noted class-7 filter hides most hardware.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
+  evidence: escposUsb.js filters to classCode 7 only.
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
   summary: Add an automated parity check that HTML and ESC/POS receipt builders render the same business/items/totals/tax/payment/footer from one contract.
-  evidence: Both builders consume { receipt, business, settings } but no test asserts identical output; drift could ship — blind-hunter flagged missing parity enforcement.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
-  summary: Add structured observability for direct-print success vs fallback vs mid-transfer failure to validate the faint/blurry fix.
-  evidence: Current code logs only console.error and toasts; no counters or error codes to measure whether ESC/POS actually replaces rasterized prints — blind-hunter review.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
-  summary: Add timeout/abort handling for hanging USB operations (open/claim/transfer) to avoid a stuck Sending state.
-  evidence: printEscpos can hang indefinitely with no timeout; printing flag stays true and both Print buttons remain disabled — blind-hunter review of escposUsb.js:63.
-- source_spec: _bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md
-  summary: Add component-level test harness (@testing-library/react) and cover POS.jsx printReceipt branching plus Recent-sales reprint mapping.
-  evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx; verification-gap review showed no test observes the WebUSB-first decision matrix, duplicate-receipt guard, printing lock, or the sales-row to receipt-object reconstruction — repo has no component test harness.
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Add rate limiting and bot protection to public booking endpoint
-  evidence: Public POST /api/booking has no throttle per IP/phone; blind-hunter flagged as abuse vector — pre-existing, not in spec acceptance criteria, requires infra decision (e.g., Upstash, Turnstile).
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Implement TTL/expiry for unpaid pending appointments and held balance cleanup
-  evidence: Unpaid pending appointments block slots indefinitely with no timeout; spec 10 defers cancellation policy to product — surfaced in blind-hunter review.
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Implement wallet refund/reversal on appointment cancellation
-  evidence: free_slot_on_cancel frees service_availability but no wallet held refund movement; spec 10 defers refund policy — blind-hunter flagged as missing reversal.
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Enforce strict appointment status transition state machine at DB level
-  evidence: Direct PATCH via appointmentRepository.update allows any status transition; confirm RPC guards pending confirmed but other paths do not — blind-hunter noted missing state machine, requires product-defined allowed transitions.
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Add patient-facing booking confirmations and cancellation notifications
-  evidence: Business is notified on confirm, but patient receives no creation/cancel notification; spec 11 says integrate where available — requires product channel decision.
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Add handler-level tests for booking service validation, fee snapshot, and concurrent 409
-  evidence: Verification-gap review found POST /api/booking service active/fee/availableTimes branches and double-book 409 have no executing test — requires api test harness not present in repo.
-
-- source_spec: _bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md
-  summary: Add component tests for BookingCard availability filtering and review dialog
-  evidence: BusinessProfile BookingCard per-service availability filtering, past-time drop, and review dialog 409 refresh have no observable test — verification-gap noted no BusinessProfile.test file.
+  evidence: Both builders consume { receipt, business, settings } but no test asserts identical output.
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
+  summary: Add structured observability for direct-print success vs fallback vs mid-transfer failure.
+  evidence: Current code logs only console.error and toasts.
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
+  summary: Add timeout/abort handling for hanging USB operations (open/claim/transfer).
+  evidence: printEscpos can hang indefinitely with no timeout.
+- source_spec: `_bmad-output/implementation-artifacts/spec-escpos-receipt-printing.md`
+  summary: Add component-level test harness and cover POS.jsx printReceipt branching.
+  evidence: All 28 helper tests inject usb/device mocks and never drive POS.jsx.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Add rate limiting and bot protection to public booking endpoint.
+  evidence: Public POST /api/booking has no throttle per IP/phone.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Implement TTL/expiry for unpaid pending appointments and held balance cleanup.
+  evidence: Unpaid pending appointments block slots indefinitely with no timeout.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Implement wallet refund/reversal on appointment cancellation.
+  evidence: free_slot_on_cancel frees service_availability but no wallet held refund movement.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Enforce strict appointment status transition state machine at DB level.
+  evidence: Direct PATCH via appointmentRepository.update allows any status transition.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Add patient-facing booking confirmations and cancellation notifications.
+  evidence: Business is notified on confirm, but patient receives no creation/cancel notification.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Add handler-level tests for booking service validation, fee snapshot, and concurrent 409.
+  evidence: No executing test for POST /api/booking branches.
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-appointment-booking-hardening.md`
+  summary: Add component tests for BookingCard availability filtering and review dialog.
+  evidence: No BusinessProfile.test file exists.
 - source_spec: none
-  summary: Shop Goal 2 — Shop browse grid + product gallery (MedMarket 4th tab Shop, 2-per-row catalog + featured row, multi-photo swipe gallery)
-  evidence: Split from Shop spec per SCOPE STANDARD — independently shippable browse without checkout; deferred to keep Goal 1 (onboarding+activation) as single 900-1600 token spec.
-
+  summary: Shop Goal 2 - Shop browse grid + product gallery.
+  evidence: Split from Shop spec per SCOPE STANDARD.
 - source_spec: none
-  summary: Shop Goal 3 — Cart, Checkout, Orders + inventory sync (cart, stock re-check, order creation with price snapshot, vendor notification, order management)
-  evidence: Split from Shop spec per SCOPE STANDARD — requires Goal 1 tables (ecommerce_products) but shippable after; deferred.
-
+  summary: Shop Goal 3 - Cart, Checkout, Orders + inventory sync.
+  evidence: Split from Shop spec per SCOPE STANDARD.
 - source_spec: none
-  summary: Shop Goal 4 — Pickup-station pricing engine (commission 10/5/2.5, fulfilment MAX, delivery FREE =3km else 600/3km, Maps distance)
-  evidence: Split from Shop spec per SCOPE STANDARD — pure engine testable before checkout wiring; deferred per user choice Pure engine first, but after Goal 1.
+  summary: Shop Goal 4 - Pickup-station pricing engine.
+  evidence: Split from Shop spec per SCOPE STANDARD.
 - source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
-  summary: Integration test for RLS hard gate (unapproved POST via PostgREST rejected 42501) and DELETE gate for ecommerce_products/images
-  evidence: In-memory adapter does not evaluate is_ecommerce_vendor_approved; blind-hunter and verification-gap flagged that dropping WITH CHECK would still pass all 41 unit tests — requires Supabase live/PostgREST integration harness not present.
-
+  summary: Integration test for RLS hard gate and DELETE gate for ecommerce_products/images.
+  evidence: In-memory adapter does not evaluate is_ecommerce_vendor_approved.
 - source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
-  summary: Component test for Ecommerce.jsx mandatory gate (segment-specific terms, Apply disabled until checkbox, blocked banner and CTA scroll)
-  evidence: Verification-gap found no render test for Ecommerce.jsx — retail 10% vs wholesale 5% vs distributor 2.5% disclosure, disabled Apply, and Setup Locked vs E_COMMERCE_NOT_APPROVED — repo has no component harness for CareHub modules beyond repository tests.
-
+  summary: Component test for Ecommerce.jsx mandatory gate.
+  evidence: No render test for Ecommerce.jsx exists.
 - source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
-  summary: Backfill and NOT NULL hardening for existing ecommerce_applications after adding segment/terms_version_id/audit columns
-  evidence: Migration adds nullable columns with no backfill; legacy rows remain ambiguous for is_ecommerce_vendor_approved and audit trail — requires data backfill decision and follow-up NOT NULL constraints per review defer.
-
+  summary: Backfill and NOT NULL hardening for existing ecommerce_applications.
+  evidence: Migration adds nullable columns with no backfill.
 - source_spec: `_bmad-output/implementation-artifacts/spec-ecommerce-terms-mandatory-approval.md`
-  summary: Server-side audit enforcement (auth.uid() for applicant_user_id, commission_rate parity trigger, audit_metadata JSON schema)
-  evidence: applicant_user_id and audit_metadata currently trusted from client getSession; blind-hunter flagged spoofable audit and commission drift between terms row and accepted rate — needs DB trigger/RPC to stamp auth.uid() and validate parity server-side.
+  summary: Server-side audit enforcement (auth.uid() for applicant_user_id, commission_rate parity trigger).
+  evidence: applicant_user_id and audit_metadata currently trusted from client getSession.
 - source_spec: none
-  summary: Fix external sharing deep linking so WhatsApp preview card deep-links to original CareFind post (OG tags, preview)
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — independently shippable OG/metadata concern; deferred to ship Drawing auto-publish fix first as recommended critical data-integrity goal.
+  summary: Fix external sharing deep linking so WhatsApp preview card deep-links to original CareFind post.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Fix Health Facility search actions to View Profile/Book Appointment and add per-business profile product/service search
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — facility search UX + booking integration; deferred to ship Drawing auto-publish first.
+  summary: Fix Health Facility search actions to View Profile/Book Appointment.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Preserve post/article rich-text colours/highlights and formatting parity from editor to published render
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — rich-text pipeline editor→storage→renderer; deferred per recommended order.
+  summary: Preserve post/article rich-text colours/highlights and formatting parity.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Allow up to 5 images per post with multi-image layout/carousel and sixth-image guard
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — media upload/storage concern; deferred per recommended order.
+  summary: Allow up to 5 images per post with multi-image layout/carousel.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Increase video duration to 2 minutes and fix audio preservation/sync and playback controls
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — video pipeline upload/transcode/storage/playback; deferred per recommended order (critical but after Drawing).
+  summary: Increase video duration to 2 minutes and fix audio preservation/sync.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Fix News submission reaching Admin queue (pending → Admin review → Approve/Reject → publish) with count indicator
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — news submission workflow API/DB/Admin UI; deferred per recommended order (critical).
+  summary: Fix News submission reaching Admin queue with count indicator.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Show News preview engagement controls (Like/Comment/Share/Repost) and fix comment save/display
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — engagement row UI + API; deferred.
+  summary: Show News preview engagement controls and fix comment save/display.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Make scheduled Live events manageable (edit title/reschedule/delete, lifecycle Scheduled→Upcoming→Live→Ended)
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — live event lifecycle; deferred.
+  summary: Make scheduled Live events manageable.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: none
-  summary: Make Stories discoverable across avatars with indicator ring, tap-to-open, engagement and owner analytics
-  evidence: Split from CareFind QA compilation per SCOPE STANDARD — stories cross-surface ring + analytics; deferred.
+  summary: Make Stories discoverable across avatars with indicator ring.
+  evidence: Split from CareFind QA compilation per SCOPE STANDARD.
 - source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
-  summary: Extract shared useAccountResolve and useBanks hooks to eliminate duplicated account-resolution and bank-loading effects across CareFind Wallet, CareHub Wallet, and CareHub Appointments.
-  evidence: Three components carry identical ~35-line debounced resolve useEffect and loadBanks useEffect; blind-hunter flagged drift surface — pre-existing duplication, not caused by this fix.
+  summary: Extract shared useAccountResolve and useBanks hooks.
+  evidence: Three components carry identical debounced resolve useEffect.
 - source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
-  summary: Deduplicate disabled/opacity expressions in CareHub Wallet and Appointments withdraw buttons (same long condition repeated twice per file).
-  evidence: The disabled prop and opacity ternary copy-paste the same guard; any future change must update both or they drift — pre-existing pattern, not caused by this fix.
+  summary: Deduplicate disabled/opacity expressions in withdraw buttons.
+  evidence: Same long condition repeated twice per file.
 - source_spec: `_bmad-output/implementation-artifacts/spec-withdrawal-validation-and-account-resolve-fix.md`
-  summary: Align carehub paystack.js with carefind paystack.js by extracting shared paystackHeaders helper.
-  evidence: carefind exports paystackHeaders(); carehub inlines the same header construction; documented as deliberate mirrors but have diverged — pre-existing.
+  summary: Align carehub paystack.js with carefind paystack.js.
+  evidence: Documented as deliberate mirrors but have diverged.
 
 ## Deferred from: code review of spec-carefind-smart-facility-discovery (2026-09-05)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: dedupeFacilities O(n²) performance — nested loop freezes main thread for Nigeria-wide exports with hundreds of rows.
-  evidence: Pre-existing algorithm choice; optimize later with spatial indexing/grid-based dedup.
+  summary: dedupeFacilities O(n2) performance.
+  evidence: Pre-existing algorithm choice.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: No LGA backfill — migration adds nullable lga/area columns with no automated backfill; LGA filter returns zero for pre-existing businesses.
+  summary: No LGA backfill.
   evidence: Requires data migration decision.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: SQL RLS column visibility — migration claims existing policies cover new columns but no policy text shown; if any policy uses explicit column allowlist, new columns invisible.
+  summary: SQL RLS column visibility.
   evidence: Need to verify actual RLS policies.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: Google source inert — UI shows Google as source option but VITE_GOOGLE_PLACES_PROXY env var not configured; no Google data ever fetched.
+  summary: Google source inert.
   evidence: Requires infra/billing decision.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: Export doesn't enforce provider restrictions — Google Places ToS restricts re-export, but exportToCSV includes Google rows without filtering.
+  summary: Export doesn't enforce provider restrictions.
   evidence: Requires legal/ToS review.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: partitionBoundary inverted bbox edge case with invalid input (south > north).
-  evidence: Low probability; fix later if reported.
+  summary: partitionBoundary inverted bbox edge case.
+  evidence: Low probability.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: export.js division by zero edge case with 0 facilities produces NaN percent.
-  evidence: Low probability; fix later if reported.
+  summary: export.js division by zero edge case.
+  evidence: Low probability.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: FacilityDiscovery.jsx stale page state — React setState async lag can send duplicate page number.
-  evidence: Low probability; fix later if reported.
+  summary: FacilityDiscovery.jsx stale page state.
+  evidence: Low probability.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
   summary: normalizeFacility business_type non-string edge case.
-  evidence: Low probability; fix later if reported.
+  evidence: Low probability.
 - source_spec: `_bmad-output/implementation-artifacts/spec-carefind-smart-facility-discovery.md`
-  summary: nigeriaGeo Nominatim null address edge case when item.address is null.
-  evidence: Low probability; fix later if reported.
+  summary: nigeriaGeo Nominatim null address edge case.
+  evidence: Low probability.
 - source_spec: none
-  summary: Build Dashboard stats-only view with pending business approvals and pending agent applications
-  evidence: Split from CareFindHub Super Admin Panel upgrade per SCOPE STANDARD — stats-only landing view reads businesses/platform_team_members; deferred to ship SQL foundation first.
+  summary: Build Dashboard stats-only view with pending business approvals and pending agent applications.
+  evidence: Split from CareFindHub Super Admin Panel upgrade per SCOPE STANDARD.
 - source_spec: none
-  summary: Build Businesses management (search/paginate, detail, Suspend/Revoked/Delete, E-commerce sub-tab, Export)
-  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — high-priority businesses list/detail/actions/exports; deferred to ship SQL foundation first.
+  summary: Build Businesses management (search/paginate, detail, Suspend/Revoked/Delete, E-commerce sub-tab, Export).
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD.
 - source_spec: none
-  summary: Build Team → Agents (registration, approval/placement, referral tracking, earnings atomic trigger, 20-agent cap, transfer audit, agent self-service login)
-  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — largest financial blast radius, requires SQL foundation.
+  summary: Build Team - Agents (registration, approval/placement, referral tracking, earnings atomic trigger).
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD.
 - source_spec: none
-  summary: Build Team → Platform Admin Team (roles, hiring, permission-scoped login via CareHub pattern)
-  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — admin_roles/admin_team_members + navCatalogueFor; deferred.
+  summary: Build Team - Platform Admin Team (roles, hiring, permission-scoped login).
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD.
 - source_spec: none
-  summary: Build Applications unified list (E-commerce/Agent/Team, none auto-approve)
-  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — unified Applications review flow; deferred.
+  summary: Build Applications unified list (E-commerce/Agent/Team, none auto-approve).
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD.
 - source_spec: none
-  summary: Build Ledger aggregation + Payouts (pending→processing→paid) + Coverage carry-over
-  evidence: Split from CareFindHub upgrade per SCOPE STANDARD — Ledger aggregates existing sources + Payouts atomic financial updates; deferred.
+  summary: Build Ledger aggregation + Payouts (pending to processing to paid) + Coverage carry-over.
+  evidence: Split from CareFindHub upgrade per SCOPE STANDARD.
+- source_spec: none
+  summary: Prevent duplicate product activation per vendor in CareFind Hub E-commerce.
+  evidence: Split from Stock Validation + Duplicate Activation batch per SCOPE STANDARD.
 
-- source_spec: none
-  summary: Prevent duplicate product activation per vendor in CareFind Hub E-commerce (UNIQUE vendor+product, allow different vendors same product)
-  evidence: Split from Stock Validation + Duplicate Activation batch per SCOPE STANDARD � independently shippable marketplace integrity fix; deferred to ship critical Stock Validation laptop/desktop save fix first (Supabase error on Save)
+## Deferred from: code review of spec-carefind-admin-upgrade-phase1 (2026-09-16)
+
+- source_spec: spec-carefind-admin-upgrade-phase1.md
+  summary: Add input length limits and character restrictions for admin API search parameters.
+  evidence: Blind-hunter flagged no validation on ilike/or() filter inputs; Supabase parameterizes queries so no SQL injection risk, but length limits prevent abuse.
+- source_spec: spec-carefind-admin-upgrade-phase1.md
+  summary: Add audit logging for all admin API actions (list_posts, list_user_profiles, get_user_profile, get_user_posts).
+  evidence: Blind-hunter flagged no server-side logging for sensitive data access; required for compliance and incident response.
+- source_spec: spec-carefind-admin-upgrade-phase1.md
+  summary: Add test coverage for adminHelpers (timeAgo, exportCSV) and new API actions.
+  evidence: Blind-hunter and verification-gap flagged no tests for new code; shipping without tests increases regression risk.
+- source_spec: spec-carefind-admin-upgrade-phase1.md
+  summary: Consider standardizing exportCSV to produce RFC 4180-compliant CSV (proper double-quoting, newline escaping).
+  evidence: Current JSON.stringify escaping works for most cases but does not handle embedded newlines or leading equals signs that could enable CSV injection.
+- source_spec: spec-carefind-admin-upgrade-phase1.md
+  summary: Consider lazy loading and placeholder skeletons for PostsTab media previews.
+  evidence: Blind-hunter flagged missing loading states; images load asynchronously but show no skeleton during load.
+
+## Deferred from: code review of spec-carefind-admin-upgrade-phase2 (2026-09-16)
+
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add class-based dark mode toggle support ([data-theme="dark"] selector) for manual theme switching.
+  evidence: adminMetaStore stores theme preference but only prefers-color-scheme is implemented; manual toggle deferred per spec.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add shadow, radius, spacing, and typography tokens to tokens.css for complete design system coverage.
+  evidence: tokens.css only defines color variables; elevation, radius, spacing remain hardcoded in components.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add pagination support to usersStore for server-paginated user lists.
+  evidence: postsStore has pagination but usersStore does not; currently fetches all users with limit: 100.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add reconnection/retry logic to useRealtimeChannel after CHANNEL_ERROR/TIMED_OUT.
+  evidence: Current implementation starts polling on error but never retries Realtime; stays degraded permanently.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add test coverage for useRealtimeChannel hook and Zustand stores.
+  evidence: No test harness exists for hooks/stores; verification-gap flagged untested fallback behavior.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add automated dark mode contrast ratio verification (WCAG AA 4.5:1).
+  evidence: Dark mode colors defined but no test verifies contrast compliance; manual check only.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Add transition for prefers-color-scheme changes to prevent abrupt color flip.
+  evidence: No transition defined on :root; jarring visual change when OS theme toggles.
+- source_spec: spec-carefind-admin-upgrade-phase2.md
+  summary: Migrate AdminPanel.jsx useState to Zustand stores for shared state.
+  evidence: Spec says "create stores and migrate PostsTab/UsersTab first" as next step; stores created but adoption deferred.

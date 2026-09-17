@@ -90,7 +90,7 @@ export default function SearchesTab({ searchLogs }) {
                   fontSize: theme.type.caption.size,
                   fontWeight: 800,
                   color: theme.danger,
-                  background: '#fff',
+                  background: 'var(--color-surface)',
                   padding: '4px 10px',
                   borderRadius: theme.radius.full,
                 }}>

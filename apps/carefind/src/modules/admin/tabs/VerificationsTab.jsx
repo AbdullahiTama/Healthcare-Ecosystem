@@ -53,7 +53,7 @@ export default function VerificationsTab({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#fff',
+                      color: 'var(--color-surface)',
                       fontSize: 14,
                       fontWeight: 800,
                       flexShrink: 0,

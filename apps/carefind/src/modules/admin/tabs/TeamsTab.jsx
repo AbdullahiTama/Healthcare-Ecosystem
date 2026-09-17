@@ -81,11 +81,11 @@ export default function TeamsTab({
       ))}
 
       {superAdmins.map(m => (
-        <Card key={m.id} style={{ padding: theme.space[4], marginTop: theme.space[4], border: '1px solid #e9d5ff', background: '#faf5ff' }}>
+        <Card key={m.id} style={{ padding: theme.space[4], marginTop: theme.space[4], border: '1px solid var(--color-purple-bg)', background: 'var(--color-purple-bg)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Crown size={16} color="#7c3aed" />
+            <Crown size={16} color="var(--color-purple)" />
             <div>
-              <div style={{ fontWeight: 800, fontSize: 13, color: '#7c3aed' }}>{m.full_name}</div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--color-purple)' }}>{m.full_name}</div>
               <div style={{ fontSize: 11, color: theme.textLight }}>{m.email} · Super Admin · Last login: {timeAgo(m.last_login)}</div>
             </div>
           </div>
@@ -126,12 +126,12 @@ export default function TeamsTab({
           </Card>
 
           {adminRoles.map(r => (
-            <Card key={r.id} style={{ padding: theme.space[4], marginBottom: theme.space[3], background: r.is_system ? '#faf5ff' : theme.cardBg }}>
+            <Card key={r.id} style={{ padding: theme.space[4], marginBottom: theme.space[3], background: r.is_system ? 'var(--color-purple-bg)' : theme.cardBg }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 12, color: theme.navy, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {r.name.replace(/_/g, ' ')}
-                    {r.is_system && <span style={{ fontSize: 9, background: '#e9d5ff', color: '#7c3aed', padding: '1px 6px', borderRadius: 8 }}>SYSTEM</span>}
+                    {r.is_system && <span style={{ fontSize: 9, background: 'var(--color-purple-bg)', color: 'var(--color-purple)', padding: '1px 6px', borderRadius: 8 }}>SYSTEM</span>}
                   </div>
                   <div style={{ fontSize: 10, color: theme.textLight, marginBottom: theme.space[2] }}>{r.description || 'No description'}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

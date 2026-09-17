@@ -68,7 +68,7 @@ export default function BusinessesTab({
 
           {bizReviews.map(r => (
             <div key={r.id} style={{ padding: `${theme.space[3]}px 0`, borderTop: `1px solid ${theme.border}` }}>
-              <div style={{ color: '#f59e0b', fontSize: 12 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
+              <div style={{ color: 'var(--color-star)', fontSize: 12 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
               {r.comment && <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>{r.comment}</p>}
             </div>
           ))}

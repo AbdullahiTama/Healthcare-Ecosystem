@@ -11,6 +11,7 @@ import { feedConfigRepository } from './repositories/feedConfigRepository'
 import { theme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import AdminLayout from './AdminLayout.jsx'
+import { useRealtimeChannel } from './hooks/useRealtimeChannel'
 import AdminShop from './AdminShop.jsx'
 import CommandPalette from './CommandPalette.jsx'
 import HealthPulse from './HealthPulse.jsx'
@@ -171,6 +172,23 @@ export default function AdminPanel() {
     setCmdOpen(false)
   }, [addToRecent, setCmdOpen])
 
+  useRealtimeChannel({
+    channelName: 'admin-notifications',
+    subscription: { schema: 'public', table: 'verification_requests' },
+    onInsert: () => loadAll(),
+    onUpdate: () => loadAll(),
+    pollInterval: 30000,
+    pollFn: loadAll,
+  })
+
+  useRealtimeChannel({
+    channelName: 'admin-posts',
+    subscription: { schema: 'public', table: 'posts' },
+    onInsert: () => loadAll(),
+    pollInterval: 30000,
+    pollFn: loadAll,
+  })
+
   useEffect(() => {
     const verifySession = async () => {
       try {
@@ -191,19 +209,33 @@ export default function AdminPanel() {
           return
         }
 
-        const parsedAdmin = JSON.parse(userData)
+        let parsedAdmin
+        try {
+          parsedAdmin = JSON.parse(userData)
+        } catch {
+          localStorage.removeItem('admin_user')
+          navigate('/admin')
+          return
+        }
+
         setAdminUser(parsedAdmin)
-        if (permsData) setAdminPermissions(JSON.parse(permsData))
+        if (permsData) {
+          try {
+            setAdminPermissions(JSON.parse(permsData))
+          } catch {
+            localStorage.removeItem('admin_permissions')
+          }
+        }
         loadAll()
       } catch {
+        localStorage.removeItem('admin_token')
+        localStorage.removeItem('admin_user')
+        localStorage.removeItem('admin_permissions')
         navigate('/admin')
       }
     }
 
     verifySession()
-
-    const interval = setInterval(() => { loadAll() }, 30000)
-    return () => clearInterval(interval)
   }, [])
 
   async function loadAll() {
@@ -889,7 +921,7 @@ export default function AdminPanel() {
     }
   }
 
-  if (loading) return <Loading fullScreen />
+  if (loading) return <Loading fullScreen aria-live="polite" aria-busy="true" />
 
   const card = { border: `1px solid ${theme.border}`, borderRadius: theme.radius.lg, padding: 14, background: theme.cardBg, marginBottom: 10 }
   const input = { width: '100%', padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, boxSizing: 'border-box', background: theme.bg, color: theme.textDark }
@@ -911,7 +943,7 @@ export default function AdminPanel() {
       notifCount={roleNotifCount}
       onSignOut={handleSignOut}
     >
-      <>
+      <div aria-live="polite" aria-busy={loading}>
         {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
@@ -933,7 +965,7 @@ export default function AdminPanel() {
         {tab === 'shop' && <AdminShop showToast={showToast} />}
         {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
         {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
-      </>
+      </div>
 
     <ConfirmDialog
       show={!!confirmState}
@@ -976,7 +1008,7 @@ export default function AdminPanel() {
       onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
       onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
     >
-      <Sparkles size={24} color="#fff" />
+      <Sparkles size={24} color="var(--color-surface)" />
     </button>
     
     {/* AI Copilot */}

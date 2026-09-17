@@ -85,7 +85,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
           justifyContent: 'center',
           flexShrink: 0,
         }}>
-          {isUser ? <User size={16} color="#fff" /> : <Bot size={16} color="#fff" />}
+          {isUser ? <User size={16} color="var(--color-surface)" /> : <Bot size={16} color="var(--color-surface)" />}
         </div>
         
         <div style={{
@@ -219,7 +219,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
             <div style={{
               padding: 12,
               background: isUser ? theme.tealDeep : theme.cardBg,
-              color: isUser ? '#fff' : theme.textDark,
+              color: isUser ? 'var(--color-surface)' : theme.textDark,
               borderRadius: theme.radius.md,
               fontSize: 13,
               lineHeight: 1.5,
@@ -241,7 +241,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
                           border: `1px solid ${isUser ? 'rgba(255,255,255,0.3)' : theme.border}`,
                           borderRadius: theme.radius.sm,
                           fontSize: 11,
-                          color: isUser ? '#fff' : theme.textDark,
+                          color: isUser ? 'var(--color-surface)' : theme.textDark,
                           cursor: 'pointer',
                         }}
                       >
@@ -279,7 +279,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
       <div style={{
         padding: '16px 20px',
         background: theme.navy,
-        color: '#fff',
+        color: 'var(--color-surface)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -293,6 +293,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            color: 'var(--color-surface)',
           }}>
             <Sparkles size={16} />
           </div>
@@ -306,7 +307,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
           style={{
             background: 'none',
             border: 'none',
-            color: '#fff',
+            color: 'var(--color-surface)',
             cursor: 'pointer',
             padding: 4,
           }}
@@ -337,7 +338,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Bot size={16} color="#fff" />
+              <Bot size={16} color="var(--color-surface)" />
             </div>
             <div style={{
               padding: 12,
@@ -389,7 +390,7 @@ export default function AdminAiCopilot({ isOpen, onClose }) {
           style={{
             padding: '10px 16px',
             background: theme.tealDeep,
-            color: '#fff',
+            color: 'var(--color-surface)',
             border: 'none',
             borderRadius: theme.radius.md,
             cursor: loading || !query.trim() ? 'not-allowed' : 'pointer',
