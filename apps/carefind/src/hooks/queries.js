@@ -21,6 +21,7 @@ export const keys = {
   myStories: (userId) => ['myStories', userId],
   myShows: (userId) => ['myShows', userId],
   walletBalance: (userId) => ['wallet', userId],
+  postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
 }
@@ -243,6 +244,7 @@ export function useMyPosts(userId) {
 
       const posts = data || []
       const sourceIds = [...new Set(posts.filter(p => p.repost_of).map(p => p.repost_of))]
+      const sourceAuthors = {}
       if (sourceIds.length) {
         const { data: sources } = await supabase
           .from('posts')
@@ -250,9 +252,22 @@ export function useMyPosts(userId) {
           .in('id', sourceIds)
         const byId = {}
         ;(sources || []).forEach(s => { byId[s.id] = s })
-        return posts.map(p => p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)
+
+        const authorIds = [...new Set((sources || []).map(s => s.user_id).filter(Boolean))]
+        if (authorIds.length) {
+          const { data: authors } = await supabase
+            .from('profiles')
+            .select('id, display_name, full_name, is_verified')
+            .in('id', authorIds)
+          ;(authors || []).forEach(a => { sourceAuthors[a.id] = a })
+        }
+
+        return {
+          posts: posts.map(p => p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p),
+          sourceAuthors,
+        }
       }
-      return posts
+      return { posts, sourceAuthors }
     },
     enabled: !!userId,
     staleTime: 30_000,
@@ -271,6 +286,7 @@ export function useSavedPosts(userId) {
 
       const posts = (data || []).map(s => s.posts).filter(Boolean)
       const sourceIds = [...new Set(posts.filter(p => p.repost_of).map(p => p.repost_of))]
+      const sourceAuthors = {}
       if (sourceIds.length) {
         const { data: sources } = await supabase
           .from('posts')
@@ -278,9 +294,22 @@ export function useSavedPosts(userId) {
           .in('id', sourceIds)
         const byId = {}
         ;(sources || []).forEach(s => { byId[s.id] = s })
-        return posts.map(p => p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)
+
+        const authorIds = [...new Set((sources || []).map(s => s.user_id).filter(Boolean))]
+        if (authorIds.length) {
+          const { data: authors } = await supabase
+            .from('profiles')
+            .select('id, display_name, full_name, is_verified')
+            .in('id', authorIds)
+          ;(authors || []).forEach(a => { sourceAuthors[a.id] = a })
+        }
+
+        return {
+          posts: posts.map(p => p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p),
+          sourceAuthors,
+        }
       }
-      return posts
+      return { posts, sourceAuthors }
     },
     enabled: !!userId,
     staleTime: 30_000,
@@ -393,13 +422,28 @@ export function useOwnedBusinesses(userId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('businesses')
-        .select('id, name, slug, category')
+        .select('id, name, business_type, cover_url, visible_on_carefind')
         .eq('owner_id', userId)
       if (error) throw error
       return data || []
     },
     enabled: !!userId,
     staleTime: 60_000,
+  })
+}
+
+export function usePostCount(userId) {
+  return useQuery({
+    queryKey: keys.postCount(userId),
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+      return count || 0
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
   })
 }
 

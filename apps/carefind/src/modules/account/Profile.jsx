@@ -1,8 +1,9 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
   Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Flag, Link2, Lock, MapPin, Menu,
@@ -29,19 +30,48 @@ import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
 import { usePostEngagement } from '../social-feed/usePostEngagement'
 import { formatCount } from '../social-feed/postSelectors'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
+import {
+  useProfile, useMyPosts, useSavedPosts, useMyPlaylists, useMyReviews,
+  useMyStories, useMyShows, useFollowerCount, useFollowingCount,
+  useWalletBalance, useOwnedBusinesses, useApprovedClaims, usePostCount,
+  keys,
+} from '../../hooks/queries'
 
 function Profile() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
-  const [profile, setProfile] = useState(null)
-  const [ownedBusinesses, setOwnedBusinesses] = useState([])
-  const [approvedClaims, setApprovedClaims] = useState([])
-  const [postCount, setPostCount] = useState(0)
-  const [followerCount, setFollowerCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [walletBalance, setWalletBalance] = useState(0)
+  const qc = useQueryClient()
+
+  // ── React Query data ──────────────────────────────────────────────────────
+  const { data: profile, isLoading: profileLoading } = useProfile(user?.id)
+  const { data: ownedBusinesses = [] } = useOwnedBusinesses(user?.id)
+  const { data: approvedClaims = [] } = useApprovedClaims(user?.id)
+  const { data: postCount = 0 } = usePostCount(user?.id)
+  const { data: followerCount = 0 } = useFollowerCount(user?.id)
+  const { data: followingCount = 0 } = useFollowingCount(user?.id)
+  const { data: walletBalance = 0 } = useWalletBalance(user?.id)
+  const { data: myPostsData } = useMyPosts(user?.id)
+  const myPosts = myPostsData?.posts || []
+  const myPostsSourceAuthors = myPostsData?.sourceAuthors || {}
+  const { data: savedPostsData } = useSavedPosts(user?.id)
+  const savedPosts = savedPostsData?.posts || []
+  const savedPostsSourceAuthors = savedPostsData?.sourceAuthors || {}
+  const { data: myPlaylists = [] } = useMyPlaylists(user?.id)
+  const { data: myReviewsData } = useMyReviews(user?.id)
+  const myReviews = myReviewsData?.reviews || []
+  const reviewers = myReviewsData?.reviewers || {}
+  const { data: myStories = [] } = useMyStories(user?.id)
+  const { data: myShows = [] } = useMyShows(user?.id)
+
+  // ── Source authors (accumulated from posts queries) ────────────────────────
+  const sourceAuthors = useMemo(() => ({
+    ...myPostsSourceAuthors,
+    ...savedPostsSourceAuthors,
+  }), [myPostsSourceAuthors, savedPostsSourceAuthors])
+
+  // ── Form / UI state ────────────────────────────────────────────────────────
   const [editing, setEditing] = useState(false)
   const [fullName, setFullName] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -49,7 +79,6 @@ function Profile() {
   const [bio, setBio] = useState('')
   const [website, setWebsite] = useState('')
   const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [subPrice, setSubPrice] = useState(0)
@@ -57,28 +86,17 @@ function Profile() {
   const [activeBiz, setActiveBiz] = useState(getActiveBusiness())
   const [activeStaff, setActiveStaff] = useState(getActiveStaffIdentity())
   const [activeTab, setActiveTab] = useState('posts')
-  const [myPosts, setMyPosts] = useState([])
-  const [savedPosts, setSavedPosts] = useState([])
-  const [myPlaylists, setMyPlaylists] = useState([])
-  const [myReviews, setMyReviews] = useState([])
-  const [reviewers, setReviewers] = useState({})
-  const [tabLoading, setTabLoading] = useState(false)
-  // Authors of the posts this profile has reposted, so a repost can name and
-  // link the person who actually wrote it (issue #8).
-  const [sourceAuthors, setSourceAuthors] = useState({})
-  // Issues #3/#4: every post on this profile renders through the SAME
-  // full-featured PostCard the feed uses — like, comment, share, gift, save,
-  // and (on your own posts) Edit/Delete — driven by the same engagement layer,
-  // not a degraded tile grid.
-  const [unlockedCreators, setUnlockedCreators] = useState([])
-  const [giftingPost, setGiftingPost] = useState(null) // { postId, authorId }
-  // The four things a reader can report (same closed set as the feed).
-  const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
   const [menuOpen, setMenuOpen] = useState(false)
-  const [myStories, setMyStories] = useState([])
-  const [myShows, setMyShows] = useState([])
+  const [productUpload, setProductUpload] = useState(false)
+  const [sheetKind, setSheetKind] = useState(null)
+  const [viewerIndex, setViewerIndex] = useState(null)
+  const [storyComposer, setStoryComposer] = useState(false)
+  const [sTitle, setSTitle] = useState('')
+  const [sBody, setSBody] = useState('')
+  const [sBg, setSBg] = useState('#0E6F5A')
+  const [sImage, setSImage] = useState(null)
+  const [postingStory, setPostingStory] = useState(false)
   const [now, setNow] = useState(Date.now())
-  // Manage scheduled live: edit/reschedule/cancel lifecycle (spec-carefind-scheduled-live-manageable)
   const [editingShow, setEditingShow] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [editScheduledAt, setEditScheduledAt] = useState('')
@@ -87,36 +105,50 @@ function Profile() {
   const [editError, setEditError] = useState('')
   const [cancelConfirmId, setCancelConfirmId] = useState(null)
   const [cancellingId, setCancellingId] = useState(null)
-  const [storyComposer, setStoryComposer] = useState(false)
-  const [sTitle, setSTitle] = useState('')
-  const [sBody, setSBody] = useState('')
-  const [sBg, setSBg] = useState('#0E6F5A')
-  const [sImage, setSImage] = useState(null)
-  const [postingStory, setPostingStory] = useState(false)
-  // Sequential story viewer over myStories (Phase 5): progress bars + tap
-  // zones instead of the old one-story-at-a-time viewer.
-  const [viewerIndex, setViewerIndex] = useState(null)
-  const [productUpload, setProductUpload] = useState(false)
-  const [sheetKind, setSheetKind] = useState(null)
-  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-
-  // Issues #3/#4 — the feed's shared engagement layer (main's usePostEngagement)
-  // drives every PostCard on this profile. The index also contains the SOURCES
-  // of reposts, so an interaction on a reposted article targets the original.
-  const postIndex = []
-  {
-    const seen = new Set()
-    for (const p of [...savedPosts, ...myPosts]) {
-      if (p && !seen.has(p.id)) { seen.add(p.id); postIndex.push(p) }
-      if (p?.source && !seen.has(p.source.id)) { seen.add(p.source.id); postIndex.push(p.source) }
-    }
-  }
-  const postKey = postIndex.map((p) => p.id).join(',')
+  const [giftingPost, setGiftingPost] = useState(null)
+  const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
   const [sharingId, setSharingId] = useState(null)
   const [reportPostId, setReportPostId] = useState(null)
   const [reportingId, setReportingId] = useState(null)
   const [editingPost, setEditingPost] = useState(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  // ── Initialize form fields from profile data ───────────────────────────────
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '')
+      setDisplayName(profile.display_name || '')
+      setLocation(profile.location || '')
+      setBio(profile.bio || '')
+      setWebsite(profile.website || '')
+      setSubPrice(profile.subscription_price || 0)
+    }
+  }, [profile])
+
+  // ── Redirect if not logged in ──────────────────────────────────────────────
+  useEffect(() => {
+    if (user === null) navigate('/login')
+  }, [user])
+
+  // ── Timer for countdown ────────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // ── Post index + engagement ────────────────────────────────────────────────
+  const postIndex = useMemo(() => {
+    const idx = []
+    const seen = new Set()
+    for (const p of [...savedPosts, ...myPosts]) {
+      if (p && !seen.has(p.id)) { seen.add(p.id); idx.push(p) }
+      if (p?.source && !seen.has(p.source.id)) { seen.add(p.source.id); idx.push(p.source) }
+    }
+    return idx
+  }, [myPosts, savedPosts])
+  const postKey = postIndex.map((p) => p.id).join(',')
+
   const engagement = usePostEngagement({
     user,
     navigate,
@@ -125,9 +157,46 @@ function Profile() {
     onSharingChange: setSharingId,
     onReportPost: setReportPostId,
     onEditingPostChange: setEditingPost,
-    reloadFeed: () => { loadMyPosts(); loadSavedPosts() },
-    onPostDeleted: () => { loadMyPosts(); loadSavedPosts() },
+    reloadFeed: () => {
+      qc.invalidateQueries({ queryKey: keys.myPosts(user?.id) })
+      qc.invalidateQueries({ queryKey: keys.savedPosts(user?.id) })
+    },
+    onPostDeleted: () => {
+      qc.invalidateQueries({ queryKey: keys.myPosts(user?.id) })
+      qc.invalidateQueries({ queryKey: keys.savedPosts(user?.id) })
+    },
   })
+
+  useEffect(() => {
+    if (!postKey || !user) return undefined
+    engagement.hydrate(postIndex).catch(() => {})
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postKey])
+
+  function authorName(post) {
+    if (post.posted_as_type) return post.posted_as_name || 'Business'
+    const profiles = { ...sourceAuthors, ...engagement.state.profiles }
+    const p = profiles[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
+  }
+
+  const cardProps = {
+    ...engagement.engagementProps,
+    user,
+    navigate,
+    authorName,
+    myUsername,
+    myAvatar,
+    sharingId,
+    editingPost,
+    setEditingPost,
+    setConfirmDeleteId,
+    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
+    onOpenDetail: (p) => navigate(`/post/${p.id}`),
+    resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
+  }
+
   async function submitReport(reason) {
     const postId = reportPostId
     if (!user || !postId) return
@@ -144,198 +213,23 @@ function Profile() {
     setReportPostId(null)
     showToast('Thanks: our team will review this post.', { type: 'success' })
   }
-  // Counts, likes, saves, follows for these posts live in the hook's slices;
-  // hydrate fills them whenever the loaded set changes.
-  useEffect(() => {
-    if (!postKey || !user) return undefined
-    engagement.hydrate(postIndex).catch(() => {})
-    return undefined
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [postKey])
-  function authorName(post) {
-    if (post.posted_as_type) return post.posted_as_name || 'Business'
-    const profiles = { ...sourceAuthors, ...engagement.state.profiles }
-    const p = profiles[post.user_id]
-    return p?.full_name || p?.display_name || 'CareFind user'
-  }
-  // Every prop PostCard needs besides `post`/`preview`. engagementProps carries
-  // the counts, toggles, isLocked and resolveSource; the profile adds its own
-  // chrome (gift/report/delete/detail modals) and overrides resolveSource so a
-  // repost resolves against THIS page's index, not the feed's list.
-  const cardProps = {
-    ...engagement.engagementProps,
-    user,
-    navigate,
-    authorName,
-    myUsername,
-    myAvatar,
-    sharingId,
-    editingPost,
-    setEditingPost,
-    setConfirmDeleteId,
-    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
-    // See more now expands inline in PostCard; tapping the post navigates to /post/:id
-    onOpenDetail: (p) => navigate(`/post/${p.id}`),
-    resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
+
+  function timeAgo(dateStr) {
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return `${Math.floor(diff / 86400)}d ago`
   }
 
-
-  useEffect(() => {
-    if (!user) { navigate('/login'); return }
-    loadProfile()
-    loadMyPosts()
-    loadSavedPosts()
-    loadMyPlaylists()
-    loadMyReviews()
-    loadMyStories()
-    loadMyShows()
-    loadApprovedClaims()
-  }, [user])
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  async function loadApprovedClaims() {
-    if (!user) return
-    const { data: claims, error } = await supabase
-      .from('staff_claims')
-      .select('id, staff_id, status, staff:staff_id(id, full_name, public_title, business_id)')
-      .eq('user_id', user.id)
-      .eq('status', 'approved')
-
-    if (error) {
-      console.error('Approved claims load error:', error)
-      setApprovedClaims([])
-      return
-    }
-
-    const list = claims || []
-    const bizIds = [...new Set(list.map((c) => c.staff?.business_id).filter(Boolean))]
-    let bizMap = {}
-    if (bizIds.length > 0) {
-      const bizzes = await profileRepository.getBusinessesByIds(bizIds)
-      ;(bizzes || []).forEach((b) => { bizMap[b.id] = b.name })
-    }
-
-    setApprovedClaims(list.map((c) => ({
-      ...c,
-      businessName: c.staff?.business_id ? (bizMap[c.staff.business_id] || 'Company') : 'Company',
-    })))
+  function toLocalDatetimeValue(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   }
 
-  // Issue #6: this query used to omit `repost_of`, so every reference repost
-  // looked like an ordinary post to isRepost() and the Reposts tab was always
-  // empty while the Posts tab showed a bare 🔁 row. It now selects repost_of
-  // AND resolves each source, so a reposted article appears on the reposting
-  // user's own profile showing the original author's words, labelled as a
-  // repost (issue #8).
-  async function loadMyPosts() {
-    if (!user) return
-    const { data } = await supabase
-      .from('posts')
-      .select('id, content, created_at, post_type, image_url, image_urls, repost_of, user_id')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(60)
-    setMyPosts(await withRepostSources(data || []))
-  }
-
-  // Attach `source` to every repost in a list, and remember who wrote each
-  // source so the original author can be named and linked (issue #8).
-  async function withRepostSources(list) {
-    const ids = [...new Set(list.filter((p) => p.repost_of).map((p) => p.repost_of))]
-    if (!ids.length) return list
-    const { data: sources } = await supabase
-      .from('posts')
-      .select('id, content, created_at, post_type, image_url, image_urls, user_id')
-      .in('id', ids)
-    const byId = {}
-    ;(sources || []).forEach((s) => { byId[s.id] = s })
-
-    const authorIds = [...new Set((sources || []).map((s) => s.user_id).filter(Boolean))]
-    if (authorIds.length) {
-      const { data: authors } = await supabase
-        .from('profiles')
-        .select('id, display_name, full_name, is_verified')
-        .in('id', authorIds)
-      if (authors?.length) {
-        setSourceAuthors((prev) => {
-          const next = { ...prev }
-          authors.forEach((a) => { next[a.id] = a })
-          return next
-        })
-      }
-    }
-
-    return list.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p))
-  }
-
-  async function loadSavedPosts() {
-    if (!user) return
-    const { data } = await supabase
-      .from('saved_posts')
-      .select('post_id, posts(id, content, created_at, post_type, image_url, image_urls, repost_of, user_id)')
-      .eq('user_id', user.id)
-      .limit(60)
-    setSavedPosts(await withRepostSources((data || []).map(s => s.posts).filter(Boolean)))
-  }
-
-  async function loadMyPlaylists() {
-    if (!user) return
-    const { data } = await supabase
-      .from('playlists')
-      .select('id, title, description, created_at')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false })
-    setMyPlaylists(data || [])
-  }
-
-  async function loadMyReviews() {
-    if (!user) return
-    const { data } = await supabase
-      .from('user_reviews')
-      .select('id, rating, comment, created_at, user_id')
-      .eq('subject_id', user.id)
-      .order('created_at', { ascending: false })
-    const rv = data || []
-    setMyReviews(rv)
-
-    const userIds = [...new Set(rv.map((r) => r.user_id).filter(Boolean))]
-    if (userIds.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, is_verified, specialty, verification_label')
-        .in('id', userIds)
-      const map = {}
-      ;(profs || []).forEach((pr) => { map[pr.id] = pr })
-      setReviewers(map)
-    } else {
-      setReviewers({})
-    }
-  }
-
-  async function loadMyStories() {
-    if (!user) return
-    const { data } = await supabase
-      .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at, position, view_count')
-      .eq('user_id', user.id)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-    const sorted = (data || []).sort((a, b) => {
-      const pa = a.position ?? Infinity
-      const pb = b.position ?? Infinity
-      if (pa !== pb) return pa - pb
-      if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
-      return new Date(b.created_at) - new Date(a.created_at)
-    })
-    setMyStories(sorted)
-  }
-
-  // Sequential story viewer: progress bar, auto-advance, tap zones. Mirrors
-  // the PublicProfile viewer so the same interaction works everywhere.
+  // ── Story viewer ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (viewerIndex === null) return
     const st = myStories[viewerIndex]
@@ -349,30 +243,143 @@ function Profile() {
     setViewerIndex(next === null || next < 0 || next >= myStories.length ? null : next)
   }
 
-  function timeAgo(dateStr) {
-    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
+  // ── Live shows derived data ────────────────────────────────────────────────
+  const nowDate = new Date(now)
+  const liveShows = myShows.filter((s) => s.status === 'live')
+  const upcomingShows = myShows.filter((s) => s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) > nowDate)
+  const pastShows = myShows.filter((s) => s.status === 'ended' || (s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) <= nowDate))
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  async function saveProfile() {
+    setSaving(true)
+    await profileRepository.updateProfile(user.id, {
+      full_name: fullName.trim(),
+      display_name: displayName.trim(),
+      location: location.trim() || null,
+      website: website.trim() || null,
+      bio: bio.trim() || null,
+    })
+    setEditing(false)
+    setSaving(false)
+    qc.invalidateQueries({ queryKey: keys.profile(user.id) })
   }
 
-  async function loadMyShows() {
-    if (!user) return
-    const { data } = await supabase
-      .from('live_shows')
-      .select('id, title, status, scheduled_at, trailer_url, host_id')
-      .eq('host_id', user.id)
-      .in('status', ['live', 'scheduled', 'ended'])
-      .order('scheduled_at', { ascending: true })
-    setMyShows(data || [])
+  async function handleCoverUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploadingCover(true)
+    const resized = await resizeImage(file, 1400, 0.82)
+    const path = `cover-${user.id}-${Date.now()}.jpg`
+    const { error: upErr } = await supabase.storage
+      .from('covers')
+      .upload(path, resized, { contentType: 'image/jpeg' })
+    if (!upErr) {
+      const { data: urlData } = supabase.storage.from('covers').getPublicUrl(path)
+      await profileRepository.updateProfile(user.id, { cover_url: urlData.publicUrl })
+      qc.invalidateQueries({ queryKey: keys.profile(user.id) })
+    } else {
+      showToast('Could not upload cover: ' + upErr.message, { type: 'error' })
+    }
+    setUploadingCover(false)
   }
 
-  function toLocalDatetimeValue(iso) {
-    if (!iso) return ''
-    const d = new Date(iso)
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  async function savePrice() {
+    const price = Math.max(0, Math.min(MAX_PRICE_COINS, Number(subPrice) || 0))
+    setSavingPrice(true)
+    try {
+      await profileRepository.updateProfile(user.id, { subscription_price: price })
+    } catch (error) {
+      setSavingPrice(false)
+      showToast('Could not save price: ' + error.message, { type: 'error' })
+      return
+    }
+    setSavingPrice(false)
+    qc.invalidateQueries({ queryKey: keys.profile(user.id) })
+    showToast(price > 0
+      ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
+      : 'Subscriptions turned off.', { type: 'success' })
+  }
+
+  async function handleAvatarUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setUploadingAvatar(true)
+    const resized = await resizeImage(file, 600, 0.85)
+    const path = `avatar-${user.id}-${Date.now()}.jpg`
+    const { error: upErr } = await supabase.storage
+      .from('avatars')
+      .upload(path, resized, { contentType: 'image/jpeg' })
+    if (!upErr) {
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      await profileRepository.updateProfile(user.id, { avatar_url: urlData.publicUrl })
+      qc.invalidateQueries({ queryKey: keys.profile(user.id) })
+    } else {
+      showToast('Could not upload photo: ' + upErr.message, { type: 'error' })
+    }
+    setUploadingAvatar(false)
+  }
+
+  function switchToBusiness(biz) {
+    setActiveBusiness(biz)
+    setActiveBiz({ id: biz.id, name: biz.name })
+    setActiveStaff(null)
+  }
+
+  function switchToStaff(claim) {
+    const identity = {
+      staffId: claim.staff_id,
+      fullName: claim.staff?.full_name,
+      publicTitle: claim.staff?.public_title,
+      businessId: claim.staff?.business_id,
+      businessName: claim.businessName,
+    }
+    setActiveStaffIdentity(identity)
+    setActiveStaff(identity)
+    setActiveBiz(null)
+  }
+
+  function switchToPersonal() {
+    clearActiveBusiness()
+    clearActiveStaffIdentity()
+    setActiveBiz(null)
+    setActiveStaff(null)
+  }
+
+  async function handleSignOut() {
+    clearActiveBusiness()
+    clearActiveStaffIdentity()
+    await signOut()
+    navigate('/login')
+  }
+
+  async function postStory() {
+    if (!sTitle.trim() && !sBody.trim() && !sImage) return
+    setPostingStory(true)
+    let imageUrl = null
+    if (sImage) {
+      const ext = sImage.name.split('.').pop()
+      const path = `user-${user.id}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('story-images').upload(path, sImage)
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('story-images').getPublicUrl(path)
+        imageUrl = urlData.publicUrl
+      }
+    }
+    const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
+    try {
+      await profileRepository.createStory({
+        title: sTitle.trim() || null, body: sBody.trim() || null,
+        image_url: imageUrl, bg_color: sBg, is_platform: false,
+        user_id: user.id, expires_at: expiresAt,
+      })
+    } catch (error) {
+      setPostingStory(false)
+      showToast('Could not post story: ' + error.message, { type: 'error' })
+      return
+    }
+    setPostingStory(false)
+    setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
+    qc.invalidateQueries({ queryKey: keys.myStories(user.id) })
   }
 
   function openEditShow(s) {
@@ -419,7 +426,7 @@ function Profile() {
     setEditSaving(false)
     setEditingShow(null)
     showToast('Show updated.', { type: 'success' })
-    loadMyShows()
+    qc.invalidateQueries({ queryKey: keys.myShows(user.id) })
   }
 
   async function confirmCancelShow() {
@@ -440,182 +447,10 @@ function Profile() {
     setCancelConfirmId(null)
     setCancellingId(null)
     showToast('Scheduled show cancelled.', { type: 'success' })
-    loadMyShows()
+    qc.invalidateQueries({ queryKey: keys.myShows(user.id) })
   }
 
-  const nowDate = new Date(now)
-  const liveShows = myShows.filter((s) => s.status === 'live')
-  const upcomingShows = myShows.filter((s) => s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) > nowDate)
-  const pastShows = myShows.filter((s) => s.status === 'ended' || (s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) <= nowDate))
-
-  async function postStory() {
-    if (!sTitle.trim() && !sBody.trim() && !sImage) return
-    setPostingStory(true)
-    let imageUrl = null
-    if (sImage) {
-      const ext = sImage.name.split('.').pop()
-      const path = `user-${user.id}-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('story-images').upload(path, sImage)
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from('story-images').getPublicUrl(path)
-        imageUrl = urlData.publicUrl
-      }
-    }
-    const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
-    try {
-      await profileRepository.createStory({
-        title: sTitle.trim() || null, body: sBody.trim() || null,
-        image_url: imageUrl, bg_color: sBg, is_platform: false,
-        user_id: user.id, expires_at: expiresAt,
-      })
-    } catch (error) {
-      setPostingStory(false)
-      showToast('Could not post story: ' + error.message, { type: 'error' })
-      return
-    }
-    setPostingStory(false)
-    setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
-    loadMyStories()
-  }
-
-  async function loadProfile() {
-    setLoading(true)
-    try {
-      const profileData = await profileRepository.getProfileById(user.id)
-      if (profileData) {
-        setProfile(profileData)
-        setFullName(profileData.full_name || '')
-        setDisplayName(profileData.display_name || '')
-        setLocation(profileData.location || '')
-        setSubPrice(profileData.subscription_price || 0)
-        setBio(profileData.bio || '')
-        setWebsite(profileData.website || '')
-      }
-
-      const [bizData, postCountData, followerCountData, followingCountData, walletBalanceData] = await Promise.all([
-        profileRepository.getMyBusinesses(user.id),
-        profileRepository.getMyPostCount(user.id),
-        profileRepository.getFollowingCount(user.id),
-        profileRepository.getFollowerCount(user.id),
-        profileRepository.getWalletBalance(user.id),
-      ])
-
-      setOwnedBusinesses(bizData || [])
-      setPostCount(postCountData || 0)
-      setFollowerCount(followerCountData || 0)
-      setFollowingCount(followingCountData || 0)
-      setWalletBalance(walletBalanceData || 0)
-    } catch (e) {
-      console.warn('loadProfile failed:', e)
-    }
-    setLoading(false)
-  }
-
-  async function saveProfile() {
-    setSaving(true)
-    await profileRepository.updateProfile(user.id, {
-      full_name: fullName.trim(),
-      display_name: displayName.trim(),
-      location: location.trim() || null,
-      website: website.trim() || null,
-      bio: bio.trim() || null,
-    })
-    setEditing(false)
-    setSaving(false)
-    loadProfile()
-  }
-
-  async function handleCoverUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setUploadingCover(true)
-    // Shrink before upload: covers are wide, so allow a bigger max
-    const resized = await resizeImage(file, 1400, 0.82)
-    const path = `cover-${user.id}-${Date.now()}.jpg`
-    const { error: upErr } = await supabase.storage
-      .from('covers')
-      .upload(path, resized, { contentType: 'image/jpeg' })
-    if (!upErr) {
-      const { data: urlData } = supabase.storage.from('covers').getPublicUrl(path)
-      await profileRepository.updateProfile(user.id, { cover_url: urlData.publicUrl })
-      loadProfile()
-    } else {
-      showToast('Could not upload cover: ' + upErr.message, { type: 'error' })
-    }
-    setUploadingCover(false)
-  }
-
-  async function savePrice() {
-    const price = Math.max(0, Math.min(MAX_PRICE_COINS, Number(subPrice) || 0))
-    setSavingPrice(true)
-    try {
-      await profileRepository.updateProfile(user.id, { subscription_price: price })
-    } catch (error) {
-      setSavingPrice(false)
-      showToast('Could not save price: ' + error.message, { type: 'error' })
-      return
-    }
-    setSavingPrice(false)
-    loadProfile()
-    showToast(price > 0
-      ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
-      : 'Subscriptions turned off.', { type: 'success' })
-  }
-
-  async function handleAvatarUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setUploadingAvatar(true)
-    // Avatars display small: 600px is plenty and keeps the upload tiny
-    const resized = await resizeImage(file, 600, 0.85)
-    const path = `avatar-${user.id}-${Date.now()}.jpg`
-    const { error: upErr } = await supabase.storage
-      .from('avatars')
-      .upload(path, resized, { contentType: 'image/jpeg' })
-    if (!upErr) {
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-      await profileRepository.updateProfile(user.id, { avatar_url: urlData.publicUrl })
-      loadProfile()
-    } else {
-      showToast('Could not upload photo: ' + upErr.message, { type: 'error' })
-    }
-    setUploadingAvatar(false)
-  }
-
-  function switchToBusiness(biz) {
-    setActiveBusiness(biz)
-    setActiveBiz({ id: biz.id, name: biz.name })
-    setActiveStaff(null)
-  }
-
-  function switchToStaff(claim) {
-    const identity = {
-      staffId: claim.staff_id,
-      fullName: claim.staff?.full_name,
-      publicTitle: claim.staff?.public_title,
-      businessId: claim.staff?.business_id,
-      businessName: claim.businessName,
-    }
-    setActiveStaffIdentity(identity)
-    setActiveStaff(identity)
-    setActiveBiz(null)
-  }
-
-  function switchToPersonal() {
-    clearActiveBusiness()
-    clearActiveStaffIdentity()
-    setActiveBiz(null)
-    setActiveStaff(null)
-  }
-
-  async function handleSignOut() {
-    clearActiveBusiness()
-    clearActiveStaffIdentity()
-    await signOut()
-    navigate('/login')
-  }
-
-  if (loading) {
+  if (profileLoading) {
     const loadingContent = (
       <div role="status" aria-live="polite" style={{ maxWidth: isMobile ? 480 : 640, margin: '0 auto', padding: isMobile ? '20px 16px 90px' : 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Loading your profile</span>
@@ -756,8 +591,6 @@ function Profile() {
                     fontSize: 11, fontWeight: 800, color: theme.tealDeep,
                     background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
                   }}>
-                    {/* The stored label usually already reads "Verified Doctor" : 
-                        prefixing it printed "Verified Verified Doctor". */}
                     <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
                   </span>
                 )}
@@ -784,10 +617,7 @@ function Profile() {
           </div>
         )}
 
-        {/* WhatsApp-style: story ring lives on avatar. This row now holds
-            only the Add-story action and live/upcoming shows — not story
-            circles. Tapping the avatar (with ring) opens the sequential viewer. */}
-        {/* Live & Upcoming row — expired scheduled are filtered out of Upcoming (spec) */}
+        {/* Live & Upcoming row */}
         {(liveShows.length > 0 || upcomingShows.length > 0) ? (
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
           <button onClick={() => setStoryComposer(true)} aria-label="Add to story" style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -839,7 +669,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Manage upcoming scheduled shows — edit / reschedule / cancel */}
+        {/* Manage upcoming scheduled shows */}
         {upcomingShows.length > 0 && (
           <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.cardBg }}>
             <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upcoming lives — manage</p>
@@ -861,7 +691,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Past / Ended — expired scheduled_at no longer in Upcoming */}
+        {/* Past / Ended */}
         {pastShows.length > 0 && (
           <div data-testid="past-shows-section" style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.bg }}>
             <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Past / Ended</p>
@@ -959,8 +789,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Sell on MedMarket: verified sellers, or anyone with an approved
-            position at a company (listings are tagged with that company) */}
+        {/* Sell on MedMarket */}
         {(profile?.is_verified || approvedClaims.length > 0 || ownedBusinesses.length > 0) ? (
           <button onClick={() => setProductUpload(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 14px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, marginBottom: 16, cursor: 'pointer' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800 }}>
@@ -1111,7 +940,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Reviews tab: what people say about you (read-only) */}
+        {/* Reviews tab */}
         {activeTab === 'reviews' && (() => {
           const total = myReviews.length
           const avg = avgMyRating
@@ -1195,9 +1024,6 @@ function Profile() {
           }
 
           return (
-            // Issues #3/#4: full PostCards, not tiles — every interaction the
-            // feed offers works here too, including Edit/Delete on your own
-            // posts via each card's overflow menu.
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
               {list.map((p) => (
                 <PostCard key={p.id} post={p} preview {...cardProps} />
@@ -1249,9 +1075,6 @@ function Profile() {
         </button>
       </div>
 
-      {/* Issues #3/#4 — gifting, reporting and deletion use the same
-          components the feed uses. */}
-
       {giftingPost && (
         <GiftPanel
           postId={giftingPost.postId}
@@ -1259,7 +1082,6 @@ function Profile() {
           onClose={() => {
             const { postId } = giftingPost
             setGiftingPost(null)
-            // Reflect a just-sent gift in the card's count.
             supabase
               .rpc('post_gift_stats', { p_post_id: postId })
               .then(({ data }) => {
@@ -1281,7 +1103,7 @@ function Profile() {
         confirmLabel="Delete"
       />
 
-      {/* Report reasons: a closed set, one tap each (same as the feed). */}
+      {/* Report reasons */}
       <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
         <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
           Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
@@ -1336,7 +1158,7 @@ function Profile() {
         </div>
       )}
 
-      {/* Story viewer — sequential playback with progress bars (Phase 5) */}
+      {/* Story viewer */}
       {viewerIndex !== null && myStories[viewerIndex] && (
         <StoryViewer
           stories={myStories}
@@ -1362,7 +1184,7 @@ function Profile() {
           businesses={ownedBusinesses}
           claimBusinesses={approvedClaims.map((c) => ({ id: c.staff?.business_id, name: c.businessName })).filter((b) => b.id)}
           onClose={() => setProductUpload(false)}
-          onAdded={() => { loadProfile() }}
+          onAdded={() => { qc.invalidateQueries({ queryKey: keys.profile(user.id) }) }}
         />
       )}
 
@@ -1373,8 +1195,8 @@ function Profile() {
           count={sheetKind === 'followers' ? followerCount : followingCount}
           onClose={() => setSheetKind(null)}
           onCountChange={(delta) => {
-            if (sheetKind === 'followers') setFollowerCount((n) => Math.max(0, n + delta))
-            else setFollowingCount((n) => Math.max(0, n + delta))
+            if (sheetKind === 'followers') qc.invalidateQueries({ queryKey: keys.followerCount(user.id) })
+            else qc.invalidateQueries({ queryKey: keys.followingCount(user.id) })
           }}
         />
       )}
