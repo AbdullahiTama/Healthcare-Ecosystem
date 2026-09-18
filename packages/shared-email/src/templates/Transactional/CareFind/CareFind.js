@@ -1,6 +1,6 @@
 import { logoHeader, footer, baseStyle, cardStyle, btnStyle, esc } from '../BaseTemplate.js'
 import { fmtNaira, fmtDate } from '../../../utils/formatters.js'
-const APP_URL = typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carefind.app'
+const APP_URL = (typeof process !== 'undefined' && process.env?.APP_URL) || 'https://carefind.app'
 
 export function customerRegistration({ fullName, email, password }) {
   return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">👋</div><h2 style="color:#0f172a;margin:0 0 8px">Welcome to CareFind, ${esc(fullName)}!</h2><p style="color:#888;margin:0">Your account is now active.</p></div><div style="background:#FDFBF7;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#555;font-size:13px;line-height:1.7">Explore healthcare products, book consultations, and manage orders.</p></div><a href="${APP_URL}/dashboard" style="${btnStyle()}">Go to Dashboard →</a></div>${footer('CareFind','carefind.ng')}</div>`
