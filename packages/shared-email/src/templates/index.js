@@ -34,8 +34,8 @@ const FIND_TEMPLATE_MAP = {
 
 // Build registry with snake_case keys, CareHub first then CareFind (Find overrides shared keys)
 export const TEMPLATE_REGISTRY = {
-  ...Object.fromEntries(Object.entries(HubTemplates).map(([fn, fnName]) => [HUB_TEMPLATE_MAP[fn] || fn, fn])),
-  ...Object.fromEntries(Object.entries(FindTemplates).map(([fn, fnName]) => [FIND_TEMPLATE_MAP[fn] || fn, fn])),
+  ...Object.fromEntries(Object.entries(HubTemplates).map(([name, fn]) => [HUB_TEMPLATE_MAP[name] || name, fn])),
+  ...Object.fromEntries(Object.entries(FindTemplates).map(([name, fn]) => [FIND_TEMPLATE_MAP[name] || name, fn])),
 }
 
 // Also export by original function names for backward compatibility
