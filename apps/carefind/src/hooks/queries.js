@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../config/supabaseClient'
+import { healthcareRepository } from '../modules/healthcare-discovery/repositories'
+import { attachOwnerProfiles } from '../modules/utils/sellerLookup'
+import { fetchViewedStoryIds } from '../modules/social-feed/storyViews'
 
 // ── Query Keys ───────────────────────────────────────────────────────────────
 export const keys = {
@@ -28,6 +31,8 @@ export const keys = {
   newsArticles: ['news', 'articles'],
   myPendingNews: (userId) => ['news', 'pending', userId],
   newsQueueInfo: (userId) => ['news', 'queue', userId],
+  featured: ['featured'],
+  searchResults: (params) => ['search', params],
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
@@ -464,7 +469,7 @@ export function useBanks() {
       if (!res.ok) throw new Error('Failed to load banks')
       return res.json()
     },
-    staleTime: FIVE_MIN,
+    staleTime: 300_000,
   })
 }
 
@@ -684,5 +689,63 @@ export function useNewsQueueInfo(userId) {
     },
     enabled: !!userId,
     staleTime: 60_000,
+  })
+}
+
+// ── Marketplace / Search Queries ─────────────────────────────────────────────
+
+export function useFeatured() {
+  return useQuery({
+    queryKey: keys.featured,
+    queryFn: async () => {
+      const promos = await healthcareRepository.getFeaturedPromotions()
+      if (promos.length > 0) return { items: promos, type: 'promo' }
+      const prods = await healthcareRepository.getFeaturedProducts()
+      return { items: prods.filter(p => p.list_on_carefind !== false), type: 'product' }
+    },
+    staleTime: 300_000,
+  })
+}
+
+export function useSearchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter, userId }) {
+  return useQuery({
+    queryKey: keys.searchResults({ searchQuery, tab, stateFilter, saleType, specialtyFilter }),
+    queryFn: async () => {
+      const q = (searchQuery || '').trim()
+      let products = [], businesses = [], professionals = [], proStories = [], proViewed = new Set(), filterCategories = ['all']
+
+      if (tab === 'products') {
+        const data = await healthcareRepository.searchProducts(q, saleType)
+        let list = data.filter(p => p.list_on_carefind !== false)
+        if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
+        list = await attachOwnerProfiles(list)
+        products = list
+        const cats = new Set(list.map(p => p.category).filter(Boolean))
+        filterCategories = ['all', ...Array.from(cats)]
+      } else if (tab === 'businesses') {
+        const { data } = await healthcareRepository.buildBusinessesQuery(q, stateFilter).range(0, 39)
+        businesses = data || []
+      } else if (tab === 'professionals') {
+        const data = await healthcareRepository.searchVerifiedProfiles(q, specialtyFilter, stateFilter)
+        professionals = data
+        const ids = data.map(p => p.id)
+        if (ids.length) {
+          const rows = await healthcareRepository.getActiveStoriesByUsers(ids)
+          proStories = rows || []
+          if (proStories.length && userId) {
+            proViewed = await fetchViewedStoryIds(supabase, proStories.map(x => x.id))
+          }
+        }
+      }
+
+      // Log search (fire-and-forget)
+      if (q || stateFilter || specialtyFilter) {
+        healthcareRepository.logSearch({ query: q || null, category: tab, user_id: userId || null, results_count: products.length || businesses.length || professionals.length, found: (products.length || businesses.length || professionals.length) > 0 }).catch(() => {})
+      }
+
+      return { products, businesses, professionals, proStories, proViewed, filterCategories }
+    },
+    enabled: tab !== 'shop',
+    staleTime: 30_000,
   })
 }
