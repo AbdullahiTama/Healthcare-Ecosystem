@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { theme } from '../../styles/theme';
+import { theme } from '../../../styles/theme';
 import { useCategories } from '../../business-directory/hooks';
 
 export default function SearchFilters({ filters, onFilterChange, onClearLocation, hasLocation }) {
@@ -166,7 +166,7 @@ export default function SearchFilters({ filters, onFilterChange, onClearLocation
               <span style={styles.filterTag}>
                 {categories.find((c) => c.id === filters.category)?.name || 'Category'}
                 <button onClick={() => handleCategoryChange(null)} style={styles.tagRemove}>
-                  ×
+                  Ã—
                 </button>
               </span>
             )}
@@ -174,7 +174,7 @@ export default function SearchFilters({ filters, onFilterChange, onClearLocation
               <span style={styles.filterTag}>
                 {filters.state}
                 <button onClick={() => handleStateChange(null)} style={styles.tagRemove}>
-                  ×
+                  Ã—
                 </button>
               </span>
             )}
@@ -182,7 +182,7 @@ export default function SearchFilters({ filters, onFilterChange, onClearLocation
               <span style={styles.filterTag}>
                 {filters.lga}
                 <button onClick={() => handleLgaChange(null)} style={styles.tagRemove}>
-                  ×
+                  Ã—
                 </button>
               </span>
             )}
@@ -190,7 +190,7 @@ export default function SearchFilters({ filters, onFilterChange, onClearLocation
               <span style={styles.filterTag}>
                 Near me ({filters.radius} km)
                 <button onClick={onClearLocation} style={styles.tagRemove}>
-                  ×
+                  Ã—
                 </button>
               </span>
             )}
@@ -350,5 +350,3 @@ const styles = {
     lineHeight: 1,
   },
 };
-
-export default SearchFilters;

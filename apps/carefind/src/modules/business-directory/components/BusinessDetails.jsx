@@ -345,5 +345,3 @@ const styles = {
     borderTop: `1px solid ${theme.gray200}`,
   },
 };
-
-export default BusinessDetails;

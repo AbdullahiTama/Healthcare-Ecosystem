@@ -351,5 +351,3 @@ const styles = {
     color: theme.gray600,
   },
 };
-
-export default BusinessDiscoveryPage;

@@ -110,5 +110,3 @@ const styles = {
     whiteSpace: 'nowrap',
   },
 };
-
-export default VerificationBadge;

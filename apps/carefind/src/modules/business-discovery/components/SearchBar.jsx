@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { theme } from '../../styles/theme';
+import { theme } from '../../../styles/theme';
 
 export default function SearchBar({ value, onSearch, onLocationSearch, hasLocation }) {
   const [inputValue, setInputValue] = useState(value);
@@ -154,5 +154,3 @@ const styles = {
     transition: 'background 0.2s',
   },
 };
-
-export default SearchBar;

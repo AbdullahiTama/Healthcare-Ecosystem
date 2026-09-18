@@ -1,5 +1,4 @@
-import { TEMPLATE_REGISTRY } from '@care-ecosystem/shared-email'
-import { SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email/src/templates/samples.js'
+import { TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email'
 
 export default async function handler(req, res) {
   if (req.method === 'GET' && !req.query?.key) {

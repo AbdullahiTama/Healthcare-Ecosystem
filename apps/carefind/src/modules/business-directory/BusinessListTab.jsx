@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { theme } from '../../../styles/theme';
+import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
 import DataTable from '@care-ecosystem/design-system/components/ui/DataTable';
 import Modal from '@care-ecosystem/design-system/components/ui/Modal';
 import StatusBadge from '@care-ecosystem/design-system/components/ui/StatusBadge';
-import BusinessForm from '../components/BusinessForm';
-import BusinessDetails from '../components/BusinessDetails';
-import VerificationBadge from '../components/VerificationBadge';
-import { useBusinessExport } from '../hooks';
-import { exportBusinesses } from '../services/exportService';
+import BusinessForm from './components/BusinessForm';
+import BusinessDetails from './components/BusinessDetails';
+import VerificationBadge from './components/VerificationBadge';
+import { useBusinessExport } from './hooks';
+import { exportBusinesses } from './services/exportService';
 
 export default function BusinessListTab({
   searchHook,
@@ -100,7 +100,7 @@ export default function BusinessListTab({
       label: 'Address',
       render: (business) => (
         <span style={styles.address}>
-          {business.address || '—'}
+          {business.address || 'â€”'}
           {business.city && `, ${business.city}`}
           {business.state && `, ${business.state}`}
         </span>
@@ -110,7 +110,7 @@ export default function BusinessListTab({
       key: 'phone',
       label: 'Phone',
       render: (business) => (
-        <span style={styles.phone}>{business.phone || '—'}</span>
+        <span style={styles.phone}>{business.phone || 'â€”'}</span>
       ),
     },
     {
@@ -164,7 +164,7 @@ export default function BusinessListTab({
                 onClick={() => setQuery('')}
                 style={styles.clearButton}
               >
-                ×
+                Ã—
               </button>
             )}
           </div>
@@ -488,5 +488,3 @@ const styles = {
     gap: '8px',
   },
 };
-
-export default BusinessListTab;

@@ -242,5 +242,3 @@ const styles = {
     },
   },
 };
-
-export default BusinessCard;

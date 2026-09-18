@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { theme } from '../../styles/theme';
+import { theme } from '../../../styles/theme';
 
 export default function ResultsList({
   businesses,
@@ -177,5 +177,3 @@ const styles = {
     textAlign: 'center',
   },
 };
-
-export default ResultsList;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { theme } from '../../styles/theme';
+import { theme } from '../../../styles/theme';
 
 export default function ResultsMap({
   businesses,
@@ -152,7 +152,7 @@ export default function ResultsMap({
               onClick={() => setSelectedBusiness(null)}
               style={styles.closeButton}
             >
-              ×
+              Ã—
             </button>
           </div>
           {selectedBusiness.category && (
@@ -326,5 +326,3 @@ const styles = {
     textDecoration: 'none',
   },
 };
-
-export default ResultsMap;

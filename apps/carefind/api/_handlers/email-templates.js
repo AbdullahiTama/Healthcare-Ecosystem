@@ -1,8 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { renderEmailTemplate, generateSampleVariables } from '@care-ecosystem/shared-email'
+import { renderEmailTemplate, generateSampleVariables, TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email'
 import { sendEmail } from '../_lib/email.js'
-import { TEMPLATE_REGISTRY } from '@care-ecosystem/shared-email'
-import { SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email/src/templates/samples.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

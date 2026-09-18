@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { theme } from '../../../styles/theme';
+import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
 import Modal from '@care-ecosystem/design-system/components/ui/Modal';
-import { businessDirectoryRepository } from '../repositories/businessDirectoryRepository';
+import { businessDirectoryRepository } from './repositories/businessDirectoryRepository';
 
 export default function BusinessCategoriesTab({ categoriesHook, onError }) {
   const { categories, isLoading, refresh, getSubcategories } = categoriesHook;
@@ -488,5 +488,3 @@ const styles = {
     padding: '24px',
   },
 };
-
-export default BusinessCategoriesTab;

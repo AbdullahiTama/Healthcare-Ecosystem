@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { theme } from '../../../styles/theme';
+import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
 import Modal from '@care-ecosystem/design-system/components/ui/Modal';
@@ -7,8 +7,8 @@ import Toast from '@care-ecosystem/design-system/components/ui/Toast';
 import BusinessListTab from './BusinessListTab';
 import BusinessImportTab from './BusinessImportTab';
 import BusinessCategoriesTab from './BusinessCategoriesTab';
-import BusinessForm from '../components/BusinessForm';
-import { useBusinessSearch, useCategories } from '../hooks';
+import BusinessForm from './components/BusinessForm';
+import { useBusinessSearch, useCategories } from './hooks';
 
 const TABS = [
   { id: 'list', label: 'Business List', icon: 'List' },
@@ -221,5 +221,3 @@ const styles = {
     minHeight: '400px',
   },
 };
-
-export default BusinessDirectoryPage;

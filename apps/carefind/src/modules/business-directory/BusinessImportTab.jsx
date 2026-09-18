@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
-import { theme } from '../../../styles/theme';
+import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
-import { useBusinessImport } from '../hooks';
-import { generateImportTemplate } from '../services/importService';
+import { useBusinessImport } from './hooks';
+import { generateImportTemplate } from './services/importService';
 
 const STEPS = [
   { id: 'upload', label: 'Upload File' },
@@ -683,5 +683,3 @@ const styles = {
     textDecoration: 'underline',
   },
 };
-
-export default BusinessImportTab;
