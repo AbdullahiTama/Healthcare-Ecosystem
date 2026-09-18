@@ -1,6 +1,12 @@
-import { TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email'
+let _shared = null
+async function shared() {
+  if (!_shared) _shared = await import('@care-ecosystem/shared-email')
+  return _shared
+}
 
 export default async function handler(req, res) {
+  const { TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } = await shared()
+
   if (req.method === 'GET' && !req.query?.key) {
     return res.status(200).json({ templates: TEMPLATE_META, available: Object.keys(TEMPLATE_REGISTRY) })
   }

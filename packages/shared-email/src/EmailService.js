@@ -2,11 +2,20 @@ import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from './sendEmail.js'
 import { TEMPLATE_REGISTRY } from './templates/index.js'
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+let _supabase = null
+function getSupabase() {
+  if (!_supabase) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set')
+    }
+    _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  }
+  return _supabase
+}
 
 export class EmailService {
   constructor(options = {}) {
-    this.db = options.supabase || supabase
+    this.db = options.supabase || getSupabase()
     this.maxRetries = options.maxRetries ?? 5
     this.baseDelayMs = options.baseDelayMs ?? 60000
     this.batchSize = options.batchSize ?? 20
@@ -58,4 +67,8 @@ export class EmailService {
   }
 }
 
-export const emailService = new EmailService()
+let _emailService = null
+export function getEmailService() {
+  if (!_emailService) _emailService = new EmailService()
+  return _emailService
+}

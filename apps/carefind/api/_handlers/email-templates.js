@@ -1,6 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
-import { renderEmailTemplate, generateSampleVariables, TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } from '@care-ecosystem/shared-email'
-import { sendEmail } from '../_lib/email.js'
+
+let _shared = null
+async function shared() {
+  if (!_shared) _shared = await import('@care-ecosystem/shared-email')
+  return _shared
+}
+
+let _sendEmail = null
+async function getSendEmail() {
+  if (!_sendEmail) {
+    const mod = await import('../_lib/email.js')
+    _sendEmail = mod.sendEmail
+  }
+  return _sendEmail
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -42,12 +55,14 @@ export default async function handler(req, res) {
   if (action === 'list_system') {
     const auth = await requireAdmin()
     if (auth.error) return
+    const { TEMPLATE_META } = await shared()
     return res.status(200).json({ data: TEMPLATE_META })
   }
 
   if (action === 'preview_system') {
     const auth = await requireAdmin()
     if (auth.error) return
+    const { TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } = await shared()
     const { key, payload: overridePayload } = req.body
     if (!key) return res.status(400).json({ error: 'key required' })
     const fn = TEMPLATE_REGISTRY[key]
@@ -64,6 +79,8 @@ export default async function handler(req, res) {
   if (action === 'send_test_system') {
     const auth = await requireAdmin()
     if (auth.error) return
+    const { TEMPLATE_REGISTRY, SAMPLES, TEMPLATE_META } = await shared()
+    const sendEmail = await getSendEmail()
     const { key, to, payload: overridePayload } = req.body
     if (!key || !to) return res.status(400).json({ error: 'key and to required' })
     const fn = TEMPLATE_REGISTRY[key]
