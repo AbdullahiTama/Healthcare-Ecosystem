@@ -25,6 +25,9 @@ export const keys = {
   transactions: (userId) => ['transactions', userId],
   banks: ['banks'],
   dashboardData: ['dashboard'],
+  newsArticles: ['news', 'articles'],
+  myPendingNews: (userId) => ['news', 'pending', userId],
+  newsQueueInfo: (userId) => ['news', 'queue', userId],
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
@@ -607,5 +610,79 @@ export function usePostReview(subjectId) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.profileReviews(subjectId) })
     },
+  })
+}
+
+// ── News Queries ─────────────────────────────────────────────────────────────
+
+export function useNewsArticles() {
+  return useQuery({
+    queryKey: keys.newsArticles,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('news')
+        .select('id, headline, subtitle, hero_image_url, published_at, created_at, status, author_id, profiles!news_author_id_fkey(full_name, display_name)')
+        .eq('status', 'approved')
+        .order('published_at', { ascending: false })
+        .limit(40)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 2 * 60_000,
+  })
+}
+
+export function useMyPendingNews(userId) {
+  return useQuery({
+    queryKey: keys.myPendingNews(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('news')
+        .select('id, headline, status, created_at')
+        .eq('author_id', userId)
+        .neq('status', 'approved')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+  })
+}
+
+const BASE_REVIEW_TIME_MIN = 30
+const REVIEW_TIME_PER_ITEM_MIN = 15
+
+function formatEstimatedTime(minutes) {
+  if (minutes < 60) return `~${minutes} minutes`
+  const hours = Math.ceil(minutes / 60)
+  if (hours < 24) return `~${hours} hour${hours > 1 ? 's' : ''}`
+  const days = Math.ceil(hours / 24)
+  return `~${days} day${days > 1 ? 's' : ''}`
+}
+
+export function useNewsQueueInfo(userId) {
+  return useQuery({
+    queryKey: keys.newsQueueInfo(userId),
+    queryFn: async () => {
+      const { data: pendingItems, error } = await supabase
+        .from('news')
+        .select('id, created_at, author_id')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      const userSubmissions = []
+      const totalPending = pendingItems?.length || 0
+      pendingItems?.forEach((item, index) => {
+        if (item.author_id === userId) {
+          const position = index + 1
+          const estimatedMinutes = BASE_REVIEW_TIME_MIN + (position * REVIEW_TIME_PER_ITEM_MIN)
+          userSubmissions.push({ id: item.id, position, estimatedMinutes, estimatedHours: Math.ceil(estimatedMinutes / 60), estimatedText: formatEstimatedTime(estimatedMinutes) })
+        }
+      })
+      return { totalPending, userSubmissions }
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
   })
 }

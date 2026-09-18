@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { newsRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
+import { supabase } from '../../config/supabaseClient'
 import { ArrowLeft, Bookmark, Eye, Heart, Image as ImageIcon, MessageCircle, Newspaper, Pencil, Phone, Repeat2, Share2, X, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -11,19 +12,20 @@ import BottomNav from '../../components/BottomNav.jsx'
 import ArticleEditor from './ArticleEditor.jsx'
 import NewsEngagementBar from './NewsEngagementBar.jsx'
 import { validateArticleForPublish } from './articleContent.js'
-import { getNewsQueueInfo } from './newsQueue.js'
 import { ErrorState, CardSkeleton, Toast, useToast } from '../../components/ui'
+import { useNewsArticles, useMyPendingNews, useNewsQueueInfo, keys } from '../../hooks/queries'
+import { useQueryClient } from '@tanstack/react-query'
 
 function News() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
-  const [articles, setArticles] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState('')
-  const [composerOpen, setComposerOpen] = useState(false)
-  const [canSubmit, setCanSubmit] = useState(false)
+  const qc = useQueryClient()
+
+  const { data: articles = [], isLoading, error: loadError, refetch } = useNewsArticles()
+  const { data: myPending = [] } = useMyPendingNews(user?.id)
+  const { data: queueInfo = { totalPending: 0, userSubmissions: [] } } = useNewsQueueInfo(user?.id)
 
   // Submit form
   const [headline, setHeadline] = useState('')
@@ -33,56 +35,11 @@ function News() {
   const [heroPreview, setHeroPreview] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitMsg, setSubmitMsg] = useState('')
-  // Whether `submitMsg` is a success or a problem. It used to be inferred
-  // from a check-mark prefix on the string, which tied the message's styling
-  // to its punctuation — every validation message rendered as a success.
   const [submitOk, setSubmitOk] = useState(false)
-  const [myPending, setMyPending] = useState([])
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
-  const [queueInfo, setQueueInfo] = useState({ totalPending: 0, userSubmissions: [] })
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-
-  useEffect(() => {
-    loadNews()
-    checkCanSubmit()
-    markNewsSeen()
-    loadQueueInfo()
-  }, [user])
-
-  async function loadQueueInfo() {
-    if (!user) return
-    const info = await getNewsQueueInfo(user.id)
-    setQueueInfo(info)
-  }
-
-  async function markNewsSeen() {
-    if (!user) return
-    await newsRepository.markNewsSeen(user.id)
-  }
-
-  async function checkCanSubmit() {
-    if (!user) { setCanSubmit(false); return }
-    setCanSubmit(true)
-  }
-
-  async function loadNews() {
-    setLoading(true)
-    setLoadError('')
-    try {
-      const data = await newsRepository.getApprovedNews()
-      setArticles(data)
-
-      if (user) {
-        const mine = await newsRepository.getPendingNewsByAuthor(user.id)
-        setMyPending(mine || [])
-      }
-    } catch (e) {
-      setLoadError('Could not load the newsroom. Check your connection and try again.')
-    }
-    setLoading(false)
-  }
 
   function handleHeroSelect(e) {
     const file = e.target.files[0]
@@ -142,7 +99,12 @@ function News() {
       setSubmitMsg('Submitted! Your news is under review and will publish once approved.')
       setHeadline(''); setSubtitle(''); setBody(''); setHeroFile(null); setHeroPreview(null)
       setContactPhone(''); setContactEmail(''); setPreviewing(false)
-      setTimeout(() => { setComposerOpen(false); setSubmitMsg(''); loadNews(); loadQueueInfo() }, 1800)
+      setTimeout(() => {
+        setComposerOpen(false); setSubmitMsg('')
+        qc.invalidateQueries({ queryKey: keys.newsArticles })
+        qc.invalidateQueries({ queryKey: keys.myPendingNews(user.id) })
+        qc.invalidateQueries({ queryKey: keys.newsQueueInfo(user.id) })
+      }, 1800)
     }
     setSubmitting(false)
   }
@@ -218,15 +180,15 @@ function News() {
         </div>
       )}
 
-      {loading && (
+      {isLoading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 16px 0' }}>
           <CardSkeleton />
           <CardSkeleton />
           <CardSkeleton />
         </div>
       )}
-      {!loading && loadError && <ErrorState message={loadError} onRetry={loadNews} />}
-      {!loading && !loadError && articles.length === 0 && (
+      {!isLoading && loadError && <ErrorState message={loadError.message || 'Could not load the newsroom.'} onRetry={refetch} />}
+      {!isLoading && !loadError && articles.length === 0 && (
         <div style={{ textAlign: 'center', padding: '50px 20px', fontFamily: theme.fontFamily }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Newspaper size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" /></div>
           <h3 style={{ fontSize: 15, fontWeight: 800, color: theme.navy, margin: '0 0 4px 0' }}>No news yet</h3>
