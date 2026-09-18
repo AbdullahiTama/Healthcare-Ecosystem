@@ -196,7 +196,8 @@ export default async function handler(req, res) {
 
     if (!templateHtml) return res.status(400).json({ error: 'No template HTML provided' })
 
-    const sampleVars = generateSampleVariables(varDefs)
+    const { generateSampleVariables, renderEmailTemplate } = await shared()
+    const sampleVars = generateSampleVariables(varDefs || [])
     const rendered = renderEmailTemplate(templateHtml, sampleVars)
     return res.status(200).json({ html: rendered, sampleVariables: sampleVars })
   }
@@ -225,7 +226,9 @@ export default async function handler(req, res) {
 
     if (!templateHtml) return res.status(400).json({ error: 'No template HTML provided' })
 
-    const sampleVars = generateSampleVariables(varDefs)
+    const { generateSampleVariables, renderEmailTemplate } = await shared()
+    const sendEmail = await getSendEmail()
+    const sampleVars = generateSampleVariables(varDefs || [])
     const rendered = renderEmailTemplate(templateHtml, sampleVars)
     const result = await sendEmail({ to, subject: `[TEST] ${subject}`, html: rendered })
     return res.status(200).json(result)
