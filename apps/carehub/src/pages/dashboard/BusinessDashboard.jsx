@@ -17,6 +17,7 @@ import { theme } from '../../styles/theme'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { MOBILE_MENU_TOP, MOBILE_MENU_LEFT, MOBILE_MENU_SIZE, MOBILE_MENU_CLEAR } from '../../components/layout/shellConstants'
+import { startRolePrefetching, stopPrefetching } from '../../utils/modulePrefetch'
 
 // Lazy-loaded modules for code splitting
 const DashboardHome = lazy(() => import('../../modules/dashboard-home/DashboardHome'))
@@ -113,6 +114,15 @@ export default function BusinessDashboard() {
   // guard below never disagrees with what the sidebar actually shows.
   const bType = brand?.business_type || brand?.type || 'skincare'
   const allowedRouteKeys = getNavItems(role, bType, customRoles).map(item => item[0])
+
+  // Role-based module prefetching: pre-load commonly-used modules during idle time
+  useEffect(() => {
+    if (role && bType && Object.keys(customRoles).length > 0) {
+      startRolePrefetching(role, bType, customRoles)
+    }
+    return () => stopPrefetching()
+  }, [role, bType, customRoles])
+
   // Route-level enforcement of lib/permissions.js's role/business-type matrix.
   // Previously this matrix only filtered what the Sidebar rendered — a user
   // could still reach any nested route by typing the URL directly, since the
