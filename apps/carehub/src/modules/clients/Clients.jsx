@@ -6,6 +6,7 @@ import { PHARMACY_TYPE_LABEL } from '../consultation/PharmacyForm'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
+import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
 
@@ -95,20 +96,12 @@ function TimelineRow({ e }) {
 export default function Clients({ brand, role, perms }) {
   const navigate = useNavigate()
   const canConsult = brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy'
-  const [clients, setClients] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
-  useEffect(() => { setPage(0) }, [search, clients.length])
   const [showAdd, setShowAdd] = useState(false)
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({})
-  const [saving, setSaving] = useState(false)
   const [historyTab, setHistoryTab] = useState('timeline')
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [clientSales, setClientSales] = useState([])
-  const [clientConsults, setClientConsults] = useState([])
   const [filters, setFilters] = useState({ dateFrom: '', dateTo: '', source: '', product: '', type: '' })
   const setF = (k, v) => setFilters(p => ({ ...p, [k]: v }))
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
@@ -118,52 +111,25 @@ export default function Clients({ brand, role, perms }) {
   const [showUpload, setShowUpload] = useState(false)
   const [uploadData, setUploadData] = useState([])
   const [uploadError, setUploadError] = useState('')
-  const [importing, setImporting] = useState(false)
 
-  useEffect(() => { load() }, [brand?.id])
+  // React Query hooks
+  const { data: clients = [], isLoading: loading } = useClients(brand?.id)
+  const createClient = useCreateClient(brand?.id)
+  const createManyClients = useCreateManyClients(brand?.id)
 
-  // Dedicated raw lists for the timeline merge + "currently on" traceability.
-  useEffect(() => {
-    if (!selected?.id || !brand?.id) { setClientSales([]); setClientConsults([]); return }
-    let live = true
-    clientRepository.getSales(selected.id, brand.id).then(s => { if (live) setClientSales(s || []) }).catch(() => { if (live) setClientSales([]) })
-    clientRepository.getConsultations(selected.id, brand.id).then(c => { if (live) setClientConsults(c || []) }).catch(() => { if (live) setClientConsults([]) })
-    return () => { live = false }
-  }, [selected?.id, brand?.id])
+  useEffect(() => { setPage(0) }, [search, clients.length])
 
-  // Full per-client history across POS, appointments, consultations and debts,
-  // linked via the client_id columns (20260801_customer_and_requisition_modules.sql).
-  useEffect(() => {
-    if (!selected?.id || !brand?.id) { setHistory([]); return }
-    let live = true
-    setHistoryLoading(true)
-    if (historyTab === 'timeline') {
-      const merged = [
-        ...clientSales.map(s => ({ ...s, kind: 'sale', when: s.created_at || '' })),
-        ...clientConsults.map(c => ({ ...c, kind: 'consultation', when: (c.consultation_date || '') + 'T' + (c.created_at?.split('T')[1] || '00:00:00') })),
-      ].sort((a, b) => b.when.localeCompare(a.when))
-      if (live) { setHistory(merged); setHistoryLoading(false) }
-      return () => { live = false }
-    }
-    const fetchHistory = historyTab === 'sales' ? clientRepository.getSales
-      : historyTab === 'appointments' ? clientRepository.getAppointments
-      : historyTab === 'consultations' ? clientRepository.getConsultations
-      : clientRepository.getDebts
-    fetchHistory(selected.id, brand.id).then(h => { if (live) setHistory(h || []) }).catch(() => { if (live) setHistory([]) }).finally(() => { if (live) setHistoryLoading(false) })
-    return () => { live = false }
-  }, [selected?.id, brand?.id, historyTab, clientSales, clientConsults])
-
-  async function load() {
-    setLoading(true)
-    try { const c = await clientRepository.getAll(brand.id); setClients(c || []) } catch (e) {}
-    setLoading(false)
-  }
+  // React Query hooks for client detail
+  const { data: clientSales = [] } = useClientSales(selected?.id, brand?.id)
+  const { data: clientConsults = [] } = useClientConsults(selected?.id, brand?.id)
+  const { data: history = [], isLoading: historyLoading } = useClientHistory(
+    selected?.id, brand?.id, historyTab, clientSales, clientConsults
+  )
 
   async function save() {
     if (!form.firstName || !form.lastName || !form.phone) { showToast('Please enter client first name, surname and phone number.', { type: 'warning' }); return }
-    setSaving(true)
     try {
-      await clientRepository.create(brand.id, {
+      await createClient.mutateAsync({
         full_name: [form.firstName, form.lastName].filter(Boolean).map(s => s.trim()).join(' '),
         phone: form.phone,
         email: form.email || '',
@@ -175,9 +141,8 @@ export default function Clients({ brand, role, perms }) {
         visit_count: 0,
       })
       showToast('Client added!', { type: 'success' })
-      setForm({}); setShowAdd(false); load()
+      setForm({}); setShowAdd(false)
     } catch (e) { showToast(isDuplicateError(e) ? 'A client with this phone number already exists.' : 'Could not save client. Please try again.', { type: 'error' }) }
-    setSaving(false)
   }
 
   function exportCsv() {
@@ -246,7 +211,6 @@ export default function Clients({ brand, role, perms }) {
 
   async function importClients() {
     if (uploadData.length === 0) return
-    setImporting(true)
     showToast('Importing ' + uploadData.length + ' clients…', { type: 'info' })
     const existingPhones = new Set(clients.map(c => normPhone(c.phone)))
     const fresh = []
@@ -276,11 +240,9 @@ export default function Clients({ brand, role, perms }) {
     // Server-side duplicates (a phone added after the list loaded — concurrent
     // upload, a single add, a direct API write) are rejected by the unique
     // index and counted as skipped here, not as failures.
-    const { added, skipped: serverSkipped, failed } = await clientRepository.createMany(brand.id, fresh)
-    await load()
+    const { added, skipped: serverSkipped, failed } = await createManyClients.mutateAsync(fresh)
     setUploadData([])
     setShowUpload(false)
-    setImporting(false)
     skipped += serverSkipped
     const parts = [added + ' imported']
     if (skipped > 0) parts.push(skipped + ' skipped (already exist)')

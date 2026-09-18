@@ -9,9 +9,6 @@ import { saleRepository } from './repositories'
 // module, so its repository is used here rather than a second copy of the
 // query shape living in POS.
 import { debtRepository } from '../debts/repositories'
-// Receipt/currency/tax configuration belongs to the settings module; the
-// receipt printer reads it through that module's repository.
-import { settingsRepository } from '../settings/repositories'
 // Cross-aggregate reads: clients and consultations adopted the repository seam.
 import { clientRepository } from '../clients/repositories'
 import { consultationRepository } from '../consultation/repositories'
@@ -22,6 +19,7 @@ import { EscposTransferError, getPairedPrinters, isEscposUsbSupported, printEscp
 import { theme } from '../../styles/theme'
 import { Card, Modal, ConfirmDialog, Pill, GhostBtn, TealBtn, DarkBtn, Inp, Sel, Avatar, Toast, useToast, Empty, Loading } from '../../components/ui'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useTodaySales, useAllSales, useSettings, useClients, useInvalidateSales } from '../../hooks/queries'
 
 const { tealDeep, tealMist, bg, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, warning, warningBg, success } = theme
 
@@ -93,12 +91,6 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   // the category pills opens a bottom sheet listing them so staff can see what
   // is unavailable without clogging the counter (mobile-focused issue #5).
   const [showOutOfStock, setShowOutOfStock] = useState(false)
-  const [settings, setSettings] = useState(null)
-  const [todaySales, setTodaySales] = useState([])
-  const [heldSales, setHeldSales] = useState([])
-  const [creditSales, setCreditSales] = useState([])
-  const [allSales, setAllSales] = useState([])
-  const [loadingSales, setLoadingSales] = useState(false)
   // Split payment
   const [splitAmounts, setSplitAmounts] = useState({ Cash: '', Transfer: '', POS: '' })
   // Credit
@@ -113,9 +105,19 @@ function POSInner({ brand, products, setProducts, role, perms }) {
   const [resumedSaleId, setResumedSaleId] = useState(null)
   const [printing, setPrinting] = useState(false)
   const [charging, setCharging] = useState(false)
-  const [clients, setClients] = useState([])
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
   const { isMobile } = useBreakpoint()
+
+  // React Query hooks
+  const { data: settings } = useSettings(brand?.id)
+  const { data: clients = [] } = useClients(brand?.id)
+  const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
+  const { data: allSales = [], isLoading: loadingAll } = useAllSales(brand?.id)
+  const invalidateSales = useInvalidateSales(brand?.id)
+  const loadingSales = loadingToday || loadingAll
+
+  const heldSales = allSales.filter(s => s.is_on_hold)
+  const creditSales = allSales.filter(s => s.is_credit && s.balance > 0)
 
   const cats = ['All', ...Array.from(new Set(products.map(p => p.cat)))]
   const visible = products.filter(p =>
@@ -194,26 +196,6 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  useEffect(() => {
-    if (brand?.id) {
-      settingsRepository.get(brand.id).then(s => setSettings(s))
-      clientRepository.getAll(brand.id).then(c => setClients(c || [])).catch(() => {})
-      loadSalesData()
-    }
-  }, [brand?.id])
-
-  async function loadSalesData() {
-    setLoadingSales(true)
-    try {
-      const [today, all] = await Promise.all([saleRepository.getToday(brand.id), saleRepository.getAll(brand.id)])
-      setTodaySales(today || [])
-      setAllSales(all || [])
-      setHeldSales((all || []).filter(s => s.is_on_hold))
-      setCreditSales((all || []).filter(s => s.is_credit && s.balance > 0))
-    } catch (e) {}
-    setLoadingSales(false)
-  }
 
   // Cart operations
   const add = p => {
@@ -368,7 +350,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       if (!isWalkIn) showToast('Sale saved! ₦' + balance.toLocaleString() + ' debt recorded for ' + clientName, { type: 'success' })
     }
 
-    loadSalesData()
+    invalidateSales()
     } finally { setCharging(false) }
   }
 
@@ -422,7 +404,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
         sourceRef: txnNo,
       })
     }
-    loadSalesData()
+    invalidateSales()
     } finally { setCharging(false) }
   }
 
@@ -455,7 +437,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     setCart([])
     setClient('Walk-in')
     setHoldNote('')
-    loadSalesData()
+    invalidateSales()
   }
 
   function askDeleteHeldSale(sale) {
@@ -469,7 +451,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     try {
       await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'deleted' })
       showToast('Held sale deleted.', { type: 'success' })
-      loadSalesData()
+      invalidateSales()
     } catch (e) { showToast('Could not delete held sale. Please try again.', { type: 'error' }) }
   }
 
@@ -481,7 +463,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
     try { await saleRepository.update(sale.id, brand.id, { is_on_hold: false, status: 'resumed' }) } catch (e) {}
     setView('pos')
     setResumedSaleId(sale.id)
-    loadSalesData()
+    invalidateSales()
   }
 
   async function collectCredit(sale, amount) {
@@ -498,7 +480,7 @@ function POSInner({ brand, products, setProducts, role, perms }) {
       }
     } catch (e) {}
     showToast('Payment collected!', { type: 'success' })
-    loadSalesData()
+    invalidateSales()
   }
 
   function newSale() { finishResumedSale(); setReceipt(null); setCart([]); setClient('Walk-in'); setDisc(''); setCash(''); setMethod('Cash'); setSplitAmounts({ Cash: '', Transfer: '', POS: '' }); setCreditAmountPaid('') }
