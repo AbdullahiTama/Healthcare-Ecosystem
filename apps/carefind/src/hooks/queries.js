@@ -24,7 +24,6 @@ export const keys = {
   walletData: (userId) => ['wallet', 'data', userId],
   transactions: (userId) => ['transactions', userId],
   banks: ['banks'],
-  dashboardData: ['dashboard'],
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
@@ -457,56 +456,11 @@ export function useBanks() {
   return useQuery({
     queryKey: keys.banks,
     queryFn: async () => {
-      const res = await fetch('/api/banks')
-      if (!res.ok) throw new Error('Failed to load banks')
-      return res.json()
+      const response = await fetch('/api/banks')
+      if (!response.ok) return []
+      return response.json()
     },
-    staleTime: FIVE_MIN,
-  })
-}
-
-const BUSINESSES_COLUMNS = 'id,name,owner_name,owner_email,status,ecommerce_enabled,created_at,category,state,plan'
-const AGENTS_COLUMNS = 'id,full_name,email,name,contact_email,status,created_at,tier,state'
-const APPLICATIONS_COLUMNS = 'id,applicant_name,applicant_email,type,status,submitted_at,created_at,details'
-
-function getData(res) {
-  if (!res) return []
-  if (Array.isArray(res.data)) return res.data
-  if (Array.isArray(res)) return res
-  return []
-}
-
-export function useDashboardData() {
-  return useQuery({
-    queryKey: keys.dashboardData,
-    queryFn: async () => {
-      const [bizRes, teamsRes, agentsRes, appsRes] = await Promise.all([
-        supabase.from('businesses').select(BUSINESSES_COLUMNS).order('created_at', { ascending: false }).limit(100),
-        supabase.from('admin_team_members').select('id').limit(1000),
-        supabase.from('agents').select(AGENTS_COLUMNS).eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
-        supabase.from('applications').select(APPLICATIONS_COLUMNS).eq('type', 'agent').eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
-      ])
-      if (bizRes.error) throw new Error(bizRes.error.message || 'Failed to load businesses')
-      const bizData = getData(bizRes)
-      const teamsCount = teamsRes && !teamsRes.error ? (typeof teamsRes.count === 'number' ? teamsRes.count : getData(teamsRes).length) : 0
-      const agentsData = !agentsRes || agentsRes.error ? [] : getData(agentsRes).slice(0, 5)
-      const appsData = !appsRes || appsRes.error ? [] : getData(appsRes).slice(0, 5)
-
-      const total = bizRes.count != null ? bizRes.count : bizData.length
-      const pending = bizData.filter(b => b.status === 'pending').length
-      const active = bizData.filter(b => b.status === 'active').length
-      const ecommerce = bizData.filter(b => b.ecommerce_enabled === true).length
-      const pendingBusinesses = bizData.filter(b => b.status === 'pending').slice(0, 5)
-
-      const seen = new Set()
-      const pendingAgents = [
-        ...agentsData.map(a => ({ id: a.id, name: a.full_name || a.name || a.email || a.contact_email || 'Agent', email: a.email || a.contact_email || '', source: 'agents', created_at: a.created_at })),
-        ...appsData.map(a => ({ id: a.id, name: a.applicant_name || a.applicant_email || 'Applicant', email: a.applicant_email || '', source: 'applications', created_at: a.submitted_at || a.created_at })),
-      ].filter(it => { if (seen.has(it.id)) return false; seen.add(it.id); return true }).slice(0, 5)
-
-      return { stats: { total, pending, active, teams: teamsCount, ecommerce }, pendingBusinesses, pendingAgents }
-    },
-    staleTime: 30 * 1000,
+    staleTime: 300_000,
   })
 }
 
