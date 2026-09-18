@@ -22,7 +22,6 @@ export const BASE_COMMANDS = [
   { id: 'action-search-businesses', label: 'Search businesses…', keywords: ['search','find','filter'], section: 'Actions', perm: 'Businesses', shortcut: '/', action: 'focusSearch' },
   { id: 'action-export-businesses', label: 'Export businesses CSV', keywords: ['export','csv','download'], section: 'Actions', perm: 'Businesses', shortcut: '', action: 'exportBusinesses' },
   { id: 'action-refresh', label: 'Refresh data', keywords: ['refresh','reload','sync'], section: 'Actions', perm: null, shortcut: 'R', action: 'refresh' },
-  { id: 'action-toggle-theme', label: 'Toggle theme (light/dark)', keywords: ['theme','dark','light'], section: 'Actions', perm: null, shortcut: 'T', action: 'toggleTheme' },
   { id: 'action-signout', label: 'Sign out', keywords: ['logout','sign out'], section: 'Actions', perm: null, shortcut: '', action: 'signout' },
   { id: 'action-review-applications', label: 'Review pending applications', keywords: ['review','applications','pending'], section: 'Actions', perm: 'Applications', shortcut: '', action: 'navigate', target: 'applications' },
   { id: 'action-view-payouts-pending', label: 'View pending payouts', keywords: ['payouts pending','pay'], section: 'Actions', perm: 'Payouts', shortcut: '', action: 'navigate', target: 'payouts' },

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
+  RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
 } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
 import {
@@ -16,7 +16,7 @@ import {
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
-import { theme, toggleTheme, getStoredTheme } from '../../styles/theme'
+import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo, Empty, ErrorState, ConfirmDialog } from '../../components/ui'
 import Sheet from '../../components/ui/Sheet'
 import { Command } from 'cmdk'
@@ -1386,10 +1386,6 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
       </nav>
 
       <div style={{ padding: collapsed ? 8 : 12, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button onClick={()=>toggleTheme()} style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: collapsed ? 'center' : 'flex-start', padding: collapsed ? '8px 0' : '8px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--muted)', fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%' }}>
-          <span style={{ display: 'flex' }}>{(getStoredTheme()||'dark')==='dark' ? <Sun size={14} /> : <Moon size={14} />}</span>
-          {!collapsed && <span>{(getStoredTheme()||'dark')==='dark' ? 'Light' : 'Dark'} mode</span>}
-        </button>
         {!collapsed && <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>Quiet Chrome • 13px body • color=state only</div>}
       </div>
     </div>
@@ -1597,8 +1593,6 @@ export default function AdminDashboard() {
         showToast('Payout → processing', {type:'success'}); setPayouts(prev=> prev.map(p=>p.id===cmd.payoutId?{...p,status:'processing'}:p))
       } else if (cmd.action==='refresh') {
         load()
-      } else if (cmd.action==='toggleTheme') {
-        toggleTheme()
       } else if (cmd.action==='signout') {
         logout()
       } else if (cmd.action==='focusSearch') {
