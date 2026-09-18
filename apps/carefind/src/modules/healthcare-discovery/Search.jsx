@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import Shop from '../shop/Shop'
 import { useAuth } from '../../providers/AuthContext'
-import { healthcareRepository } from './repositories'
 import {
   BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
   Search as SearchIcon, SearchX, ShoppingBag, Sparkles, Star, Stethoscope,
@@ -14,19 +13,22 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Card, Pill, Avatar, CardSkeleton, Empty, Toast, useToast } from '../../components/ui'
+import { Card, Pill, Avatar, Empty, Toast, useToast } from '../../components/ui'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
-import { fetchViewedStoryIds, markStoriesViewed } from '../social-feed/storyViews.js'
+import { markStoriesViewed } from '../social-feed/storyViews.js'
 import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
-import { attachOwnerProfiles, sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
+import { sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 import MarketplaceTabs from '../marketplace/MarketplaceTabs.jsx'
 import Logo from '../social-feed/Logo.jsx'
 import { useCart } from '../shop/CartProvider'
 import FilterSheet from '../../components/FilterSheet.jsx'
 import FilterFAB from '../../components/FilterFAB.jsx'
 import ProductGrid from '../marketplace/ProductGrid.jsx'
+import { useFeatured, useSearchResults, keys } from '../../hooks/queries'
+import { useQueryClient } from '@tanstack/react-query'
+import { healthcareRepository } from './repositories'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
@@ -41,6 +43,7 @@ function Search() {
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const { coords: userCoords } = useGeolocation()
   const { count: cartCount } = useCart()
+  const qc = useQueryClient()
 
   const distanceMeters = (p, u) => {
     const c = productCoords(p)
@@ -51,6 +54,7 @@ function Search() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab')
     if (t && ['shop','products','businesses','professionals'].includes(t)) return t
@@ -59,15 +63,6 @@ function Search() {
   const [stateFilter, setStateFilter] = useState('')
   const [nearMe, setNearMe] = useState(false)
   const [specialtyFilter, setSpecialtyFilter] = useState('')
-  const [businesses, setBusinesses] = useState([])
-  const [bizHasMore, setBizHasMore] = useState(false)
-  const [products, setProducts] = useState([])
-  const [professionals, setProfessionals] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [featured, setFeatured] = useState([])
-  const [featuredType, setFeaturedType] = useState('promo')
-  const [proStories, setProStories] = useState([])
-  const [proViewed, setProViewed] = useState(() => new Set())
   const [storyViewer, setStoryViewer] = useState(null)
   const trackRef = useRef(null)
   const toast = useToast()
@@ -82,8 +77,31 @@ function Search() {
   const [inStockOnly, setInStockOnly] = useState(true)
   const [sort, setSort] = useState('popular')
 
-  // Filter categories derived from products
-  const [filterCategories, setFilterCategories] = useState(['all'])
+  const { data: featuredData } = useFeatured()
+  const featured = featuredData?.items || []
+  const featuredType = featuredData?.type || 'promo'
+
+  const { data: searchResults, isLoading: loading, refetch } = useSearchResults({
+    searchQuery, tab, stateFilter, saleType, specialtyFilter, userId: user?.id,
+  })
+  const products = searchResults?.products || []
+  const businesses = searchResults?.businesses || []
+  const professionals = searchResults?.professionals || []
+  const proStories = searchResults?.proStories || []
+  const proViewed = searchResults?.proViewed || new Set()
+  const filterCategories = searchResults?.filterCategories || ['all']
+
+  // Client-side near-me sort for products and businesses
+  const sortedProducts = nearMe && userCoords
+    ? [...products].sort((a, b) => (distanceMeters(a, userCoords) - distanceMeters(b, userCoords)))
+    : products
+  const sortedBusinesses = nearMe && userCoords
+    ? [...businesses].sort((a, b) => {
+        const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
+        const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
+        return da - db
+      })
+    : businesses
 
   // Recent searches
   const RECENT_KEY = 'carefind_recent_searches'
@@ -143,9 +161,6 @@ function Search() {
     return () => cancelAnimationFrame(raf)
   }, [featured])
 
-  useEffect(() => { loadFeatured() }, [])
-  useEffect(() => { runSearch() }, [tab, stateFilter, saleType, specialtyFilter, nearMe])
-
   useEffect(() => {
     const cur = searchParams.get('tab')
     if (cur !== tab) {
@@ -161,112 +176,12 @@ function Search() {
     if (t && ['products','businesses','professionals','shop'].includes(t) && t !== tab) setTab(t)
   }, [])
 
-  async function loadFeatured() {
-    const data = await healthcareRepository.getFeaturedPromotions()
-    if (data.length > 0) {
-      setFeatured(data)
-      setFeaturedType('promo')
-      return
-    }
-    const prods = await healthcareRepository.getFeaturedProducts()
-    setFeatured(prods.filter(p => p.list_on_carefind !== false))
-    setFeaturedType('product')
-  }
-
-  const businessesQuery = (q, st) => healthcareRepository.buildBusinessesQuery(q, st)
-
-  async function loadMoreBusinesses() {
-    const offset = businesses.length
-    const { data } = await businessesQuery(query.trim(), stateFilter).range(offset, offset + 39)
-    let merged = [...businesses, ...(data || [])]
-    if (nearMe && userCoords) {
-      merged = [...merged].sort((a, b) => {
-        const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
-        const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
-        return da - db
-      })
-    }
-    setBusinesses(merged)
-    setBizHasMore((data || []).length === 40)
-  }
-
-  async function runSearch(e) {
+  function runSearch(e) {
     if (e) e.preventDefault()
-    if (tab === 'shop') {
-      setLoading(false)
-      setProducts([]); setBusinesses([]); setProfessionals([])
-      return
-    }
-    setLoading(true)
     setShowRecent(false)
     const q = query.trim()
     if (q) addRecentSearch(q)
-    let resultCount = 0
-
-    if (tab === 'products') {
-      const data = await healthcareRepository.searchProducts(q, saleType)
-      let list = data.filter(p => p.list_on_carefind !== false)
-      if (stateFilter) list = list.filter(p => (p.seller_location || p.businesses?.state || p.businesses?.city || '').toLowerCase().includes(stateFilter.toLowerCase()))
-      list = await attachOwnerProfiles(list)
-      if (nearMe && userCoords) list = [...list].sort((a, b) => {
-        const da = distanceMeters(a, userCoords)
-        const db = distanceMeters(b, userCoords)
-        return da - db
-      })
-      setProducts(list)
-      setBusinesses([]); setProfessionals([])
-      resultCount = list.length
-      // Extract categories for filter sheet
-      const cats = new Set(list.map(p => p.category).filter(Boolean))
-      setFilterCategories(['all', ...Array.from(cats)])
-    }
-    else if (tab === 'businesses') {
-      const { data } = await businessesQuery(q, stateFilter).range(0, 39)
-      let list = (data || [])
-      if (nearMe && userCoords) list = [...list].sort((a, b) => {
-        const da = businessCoords(a) ? haversineMeters(businessCoords(a).lat, businessCoords(a).lng, userCoords.lat, userCoords.lng) : Infinity
-        const db = businessCoords(b) ? haversineMeters(businessCoords(b).lat, businessCoords(b).lng, userCoords.lat, userCoords.lng) : Infinity
-        return da - db
-      })
-      setBusinesses(list)
-      setBizHasMore((data || []).length === 40)
-      setProducts([]); setProfessionals([])
-      resultCount = list.length
-    }
-    else if (tab === 'professionals') {
-      const data = await healthcareRepository.searchVerifiedProfiles(q, specialtyFilter, stateFilter)
-      setProfessionals(data)
-      setProducts([]); setBusinesses([])
-      resultCount = data.length
-      const ids = data.map((p) => p.id)
-      if (ids.length) {
-        const rows = await healthcareRepository.getActiveStoriesByUsers(ids)
-        const s = rows || []
-        setProStories(s)
-        if (s.length && user?.id) {
-          const seen = await fetchViewedStoryIds(supabase, s.map((x) => x.id))
-          setProViewed(seen)
-        } else setProViewed(new Set())
-      } else {
-        setProStories([]); setProViewed(new Set())
-      }
-    }
-
-    setLoading(false)
-
-    if (q || stateFilter || specialtyFilter) {
-      try {
-        await healthcareRepository.logSearch({
-          query: q || null,
-          category: tab,
-          user_id: user?.id || null,
-          results_count: resultCount,
-          found: resultCount > 0,
-        })
-      } catch (logErr) {
-        toast.show('Search log failed: ' + logErr.message)
-      }
-    }
+    setSearchQuery(q)
   }
 
   const activeFilterCount = [
@@ -543,9 +458,9 @@ function Search() {
         {!loading && tab === 'products' && products.length === 0 && (query.trim() || stateFilter) && (
           <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No products found</div><div style={{ fontSize: 12, color: theme.textMid }}>Try another name or state.</div></>} />
         )}
-        {!loading && tab === 'products' && products.length > 0 && (
+        {!loading && tab === 'products' && sortedProducts.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {products.map((p, idx) => {
+            {sortedProducts.map((p, idx) => {
               const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
               const callLink = telLink(sellerPhone(p))
               return (
@@ -639,12 +554,12 @@ function Search() {
         )}
 
         {/* Businesses tab */}
-        {!loading && tab === 'businesses' && businesses.length === 0 && (
+        {!loading && tab === 'businesses' && sortedBusinesses.length === 0 && (
           <Empty icon={<SearchX size={44} color={theme.gray300} strokeWidth={1.5} />} cause="filtered" message={<><div style={{ fontSize: 14, fontWeight: 700, color: theme.navy, marginBottom: 4 }}>No health facilities found</div><div style={{ fontSize: 12, color: theme.textMid }}>Try another state.</div></>} />
         )}
-        {!loading && tab === 'businesses' && businesses.length > 0 && (
+        {!loading && tab === 'businesses' && sortedBusinesses.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {businesses.map((b) => {
+            {sortedBusinesses.map((b) => {
               const isBookable = !!b.booking_enabled
               const handleBook = () => {
                 if (isBookable) {
@@ -686,12 +601,6 @@ function Search() {
                 </div>
               )
             })}
-          </div>
-        )}
-
-        {!loading && tab === 'businesses' && bizHasMore && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0 4px' }}>
-            <button onClick={loadMoreBusinesses} style={{ minHeight: 44, padding: '0 24px', border: `1px solid ${theme.border}`, borderRadius: 12, background: '#fff', color: theme.tealDeep, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Load more facilities</button>
           </div>
         )}
 
