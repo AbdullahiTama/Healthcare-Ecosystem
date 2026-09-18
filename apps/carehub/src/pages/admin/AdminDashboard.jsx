@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   RefreshCw, Bell, Building2, Hourglass, CheckCircle, Users, Check, X, Pause, Play, Search, Download, Store, Shield, UserCog, FileText, Wallet, Landmark, MapPin, AlertTriangle, Trash2, Eye, ExternalLink, ArrowRight, Filter, LayoutDashboard, Command as CommandIcon, ChevronLeft, ChevronRight, Sparkles, TrendingUp, Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen, ShieldAlert, Activity, ScrollText, Inbox
@@ -24,13 +24,39 @@ import commandScore from 'command-score'
 import { PLATFORM_PERMISSIONS, PLATFORM_NAV, normalizePlatformPermissions, navCatalogueFor, buildPlatformPermissions } from '../../lib/platformPermissions'
 import { toBusinessCsv, downloadCsv, buildStatementHtml, openPrintWindow } from '../../lib/carefindhubExports'
 import { buildCommandList, scoreCommand } from './commandRegistry'
-import { CoveragePanel as ReferralCoveragePanel } from './referral/AdminReferralPanels'
-import HealthPanel from './health/HealthPanel'
-import MoneyPanel from './money/MoneyPanel'
-import TrustPanel from './trust/TrustPanel'
-import GrowthPanel from './growth/GrowthPanel'
-import SupportInbox from './ops/SupportInbox'
-import Compliance from './compliance/Compliance'
+
+// Lazy-loaded admin sub-panels for code splitting
+const ReferralCoveragePanel = lazy(() => import('./referral/AdminReferralPanels').then(m => ({ default: m.CoveragePanel })))
+const HealthPanel = lazy(() => import('./health/HealthPanel'))
+const MoneyPanel = lazy(() => import('./money/MoneyPanel'))
+const TrustPanel = lazy(() => import('./trust/TrustPanel'))
+const GrowthPanel = lazy(() => import('./growth/GrowthPanel'))
+const SupportInbox = lazy(() => import('./ops/SupportInbox'))
+const Compliance = lazy(() => import('./compliance/Compliance'))
+
+// Loading fallback for admin panels
+const PanelLoading = () => (
+  <div style={{ 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minHeight: '100px',
+    padding: '20px'
+  }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ 
+        width: 24, 
+        height: 24, 
+        borderRadius: '50%', 
+        border: '2px solid #e2e8f0', 
+        borderTopColor: '#0E6F5A', 
+        animation: 'spin 0.7s linear infinite',
+        margin: '0 auto 8px'
+      }} />
+      <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Loading...</div>
+    </div>
+  </div>
+)
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function useDebounced(value, ms = 300) {
@@ -1672,13 +1698,13 @@ export default function AdminDashboard() {
               {tab==='applications' && (isPermitted('Applications') ? <ApplicationsUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Applications" />)}
               {tab==='ledger' && (isPermitted('Ledger') ? <LedgerUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Ledger" />)}
               {tab==='payouts' && (isPermitted('Payouts') ? <PayoutsUnifiedPanel /> : <Empty icon={<Shield size={28} />} message="No access to Payouts" />)}
-              {tab==='coverage' && (isPermitted('Coverage') ? <CoveragePanelWrapper /> : <Empty icon={<Shield size={28} />} message="No access to Coverage" />)}
-              {tab==='health' && (isPermitted('Health') ? <HealthPanel /> : <Empty icon={<Shield size={28} />} message="No access to Health" />)}
-              {tab==='money' && (isPermitted('Money') ? <MoneyPanel /> : <Empty icon={<Shield size={28} />} message="No access to Money" />)}
-              {tab==='trust' && (isPermitted('Trust') ? <TrustPanel /> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
-              {tab==='growth' && (isPermitted('Growth') ? <GrowthPanel /> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
-              {tab==='ops' && (isPermitted('Ops') ? <SupportInbox /> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
-              {tab==='compliance' && (isPermitted('Compliance') ? <Compliance /> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='coverage' && (isPermitted('Coverage') ? <Suspense fallback={<PanelLoading />}><CoveragePanelWrapper /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Coverage" />)}
+              {tab==='health' && (isPermitted('Health') ? <Suspense fallback={<PanelLoading />}><HealthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Health" />)}
+              {tab==='money' && (isPermitted('Money') ? <Suspense fallback={<PanelLoading />}><MoneyPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Money" />)}
+              {tab==='trust' && (isPermitted('Trust') ? <Suspense fallback={<PanelLoading />}><TrustPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
+              {tab==='growth' && (isPermitted('Growth') ? <Suspense fallback={<PanelLoading />}><GrowthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
+              {tab==='ops' && (isPermitted('Ops') ? <Suspense fallback={<PanelLoading />}><SupportInbox /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
+              {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
             </>
           )}
         </div>

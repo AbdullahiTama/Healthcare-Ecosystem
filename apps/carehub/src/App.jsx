@@ -1,20 +1,46 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense, lazy } from 'react'
 import { initSentry, Sentry } from './lib/sentry'
-import Landing from './pages/Landing'
-import Login from './pages/auth/Login'
-import Register from './pages/auth/Register'
-import ForgotPassword from './pages/auth/ForgotPassword'
-import ResetPassword from './pages/auth/ResetPassword'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import BusinessDashboard from './pages/dashboard/BusinessDashboard'
-import AgentLogin from './pages/agent/AgentLogin'
-import ApplyAgent from './pages/agent/ApplyAgent'
-import AgentDashboard from './modules/referral-agent/AgentDashboard'
-import ReceiptPage from './pages/ReceiptPage'
 import { authClient } from './lib/authClient'
 import { resolveAccountByEmail } from './services/supabase'
 import AuthProvider from './providers/AuthProvider'
+
+// Lazy-loaded pages for code splitting
+const Landing = lazy(() => import('./pages/Landing'))
+const Login = lazy(() => import('./pages/auth/Login'))
+const Register = lazy(() => import('./pages/auth/Register'))
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'))
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
+const BusinessDashboard = lazy(() => import('./pages/dashboard/BusinessDashboard'))
+const AgentLogin = lazy(() => import('./pages/agent/AgentLogin'))
+const ApplyAgent = lazy(() => import('./pages/agent/ApplyAgent'))
+const AgentDashboard = lazy(() => import('./modules/referral-agent/AgentDashboard'))
+const ReceiptPage = lazy(() => import('./pages/ReceiptPage'))
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div style={{ 
+    minHeight: '100vh', 
+    display: 'flex', 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    background: 'var(--bg, #f8f6f0)'
+  }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ 
+        width: 40, 
+        height: 40, 
+        borderRadius: '50%', 
+        border: '3px solid #e2e8f0', 
+        borderTopColor: '#0E6F5A', 
+        animation: 'spin 0.7s linear infinite',
+        margin: '0 auto 16px'
+      }} />
+      <div style={{ fontSize: 14, color: '#64748b', fontWeight: 500 }}>Loading...</div>
+    </div>
+  </div>
+)
 
 export default function App() {
   initSentry()
@@ -100,20 +126,22 @@ export default function App() {
     <Sentry.ErrorBoundary>
     <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <Routes>
-          <Route path='/' element={<Landing />} />
-          <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
-          <Route path='/register' element={<Register />} />
-          <Route path='/forgot-password' element={<ForgotPassword />} />
-          <Route path='/reset-password' element={<ResetPassword />} />
-          <Route path='/apply-agent' element={<ApplyAgent />} />
-          <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
-          <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
-          <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />
-          <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
-          <Route path='/receipt/:id' element={<ReceiptPage />} />
-          <Route path='*' element={<Navigate to='/' />} />
-        </Routes>
+        <Suspense fallback={<LoadingFallback />}>
+          <Routes>
+            <Route path='/' element={<Landing />} />
+            <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
+            <Route path='/register' element={<Register />} />
+            <Route path='/forgot-password' element={<ForgotPassword />} />
+            <Route path='/reset-password' element={<ResetPassword />} />
+            <Route path='/apply-agent' element={<ApplyAgent />} />
+            <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
+            <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
+            <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />
+            <Route path='/dashboard/*' element={auth && !auth.isAdmin ? <BusinessDashboard /> : <Navigate to='/login' />} />
+            <Route path='/receipt/:id' element={<ReceiptPage />} />
+            <Route path='*' element={<Navigate to='/' />} />
+          </Routes>
+        </Suspense>
       </div>
     </AuthProvider>
     </Sentry.ErrorBoundary>
