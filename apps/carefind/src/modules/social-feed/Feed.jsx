@@ -47,6 +47,7 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import AppShell from '../../components/layout/AppShell.jsx'
 import RightSidebar from '../../components/layout/RightSidebar.jsx'
 import { validateVideoFile, probeVideoDuration, MAX_POST_IMAGES } from './mediaLimits.js'
+import { useFeedProfile, useLatestNews, useUnreadNotifs, useLiveSessions, useSeriesList, usePlatformLive } from '../../hooks/queries'
 
 // #7 Feed search. Prefers the tsvector index; if the migration hasn't been
 // applied yet (search_vector missing), it falls back to a substring scan so
@@ -92,7 +93,6 @@ function Feed() {
   const { user } = useAuth()
   const [subscriberOnly, setSubscriberOnly] = useState(false)
   const [cardAudio, setCardAudio] = useState(null)
-  const [myUsername, setMyUsername] = useState('')
   const navigate = useNavigate()
   // The feed's own location — carried as `state.background` when a card
   // opens /post/:id, so BackgroundRoutes keeps this page mounted underneath
@@ -117,9 +117,6 @@ function Feed() {
   // guard logs one retention event per session per experiment.
   const [activeExperiment, setActiveExperiment] = useState(null)
   const feedViewLoggedRef = useRef({})
-  const [platformLive, setPlatformLive] = useState(null)
-  const [myAvatar, setMyAvatar] = useState(null)
-  const [seriesList, setSeriesList] = useState([])
   const [createOpen, setCreateOpen] = useState(false)
   const [cardVideo, setCardVideo] = useState(null)        // uploaded URL
   const [cardVideoPreview, setCardVideoPreview] = useState(null)
@@ -149,15 +146,23 @@ function Feed() {
   const [reviewSearch, setReviewSearch] = useState('')
   const [reviewSearchResults, setReviewSearchResults] = useState([])
   const [reviewSearching, setReviewSearching] = useState(false)
-  const [profileComplete, setProfileComplete] = useState(true)
-  const [canGoLive, setCanGoLive] = useState(false)
   const [bannerDismissed, setBannerDismissed] = useState(false)
-  const [latestNews, setLatestNews] = useState([])
-  const [unreadNotifs, setUnreadNotifs] = useState(0)
   const [showGoLive, setShowGoLive] = useState(false)
-  const [liveSessions, setLiveSessions] = useState([])
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const toast = useToast()
+
+  const { data: feedProfile } = useFeedProfile(user?.id)
+  const myUsername = feedProfile?.display_name || feedProfile?.full_name || ''
+  const myAvatar = feedProfile?.avatar_url || null
+  const profileComplete = !!(feedProfile && feedProfile.full_name && feedProfile.display_name && feedProfile.phone)
+  const canGoLive = !!(feedProfile && feedProfile.is_verified)
+  const { data: latestNews = [] } = useLatestNews()
+  const { data: unreadNotifs = 0 } = useUnreadNotifs(user?.id)
+  const { data: liveSessions = [] } = useLiveSessions()
+  const { data: seriesListData = [] } = useSeriesList()
+  const seriesList = seriesListData
+  const { data: platformLiveData = null } = usePlatformLive()
+  const platformLive = platformLiveData
 
   // Everything that answers "what is this post's engagement context?" — the
   // state, the reads that fill it and the handlers that change it — lives in
@@ -296,23 +301,6 @@ function Feed() {
     }
     setReviewSearchResults(results)
     setReviewSearching(false)
-  }
-
-  async function checkProfileComplete() {
-    if (!user) { setProfileComplete(true); setCanGoLive(false); return }
-    try {
-      const data = await postRepository.getProfileById(user.id)
-      const complete = !!(data && data.full_name && data.display_name && data.phone)
-      setProfileComplete(complete)
-      setMyUsername(data?.display_name || data?.full_name || '')
-      setMyAvatar(data?.avatar_url || null)
-      // Only verified businesses or professionals can go live
-      setCanGoLive(!!(data && data.is_verified))
-    } catch (e) {
-      console.error('Profile check error:', e)
-      setProfileComplete(false)
-      setCanGoLive(false)
-    }
   }
 
   // The ranking half of the old enrichAndSetPosts. engagement.hydrate() does
@@ -488,12 +476,6 @@ function Feed() {
 
   useEffect(() => {
     loadFeed()
-    checkProfileComplete()
-    loadLatestNews()
-    loadUnreadNotifs()
-    loadPlatformLive()
-    loadSeries()
-    loadLiveSessions()
   }, [user])
 
   // The /post/:id overlay (PostModalRoute) owns its own engagement state
@@ -693,28 +675,6 @@ function Feed() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  async function loadLiveSessions() {
-    try {
-      const data = await postRepository.getLiveSessions()
-      setLiveSessions(data)
-    } catch (e) {
-      console.error('Live sessions load error:', e)
-      setLiveSessions([])
-    }
-  }
-
-  async function loadLatestNews() {
-    try {
-      const data = await postRepository.getLatestNews()
-      setLatestNews(data)
-    } catch (e) {
-      console.error('News load error:', e)
-      setLatestNews([])
-    }
-  }
-
-  // Short clip as the card backdrop. Kept small on purpose: data is expensive.
-  // Now 2 minutes / 100MB with duration probe — no more 12MB size proxy.
   async function handleCardVideo(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -745,40 +705,6 @@ function Feed() {
     setImagePreviews([])
     setUploadingVideo(false)
   }
-
-  // The banner is for CareFind's own broadcasts only. A user going live
-  // shows up in the stories rail and in notifications, not here.
-  async function loadPlatformLive() {
-    try {
-      const data = await postRepository.getPlatformLive()
-      setPlatformLive(data)
-    } catch (e) {
-      console.error('Platform live load error:', e)
-      setPlatformLive(null)
-    }
-  }
-
-  async function loadSeries() {
-    try {
-      const data = await postRepository.getSeriesList()
-      setSeriesList(data)
-    } catch (e) {
-      console.error('Series load error:', e)
-      setSeriesList([])
-    }
-  }
-
-  async function loadUnreadNotifs() {
-    if (!user) { setUnreadNotifs(0); return }
-    try {
-      const count = await postRepository.getUnreadNotificationCount(user.id)
-      setUnreadNotifs(count)
-    } catch (e) {
-      console.error('Notifications load error:', e)
-      setUnreadNotifs(0)
-    }
-  }
-
 
   function handleImagesSelect(e) {
     const files = Array.from(e.target.files || [])

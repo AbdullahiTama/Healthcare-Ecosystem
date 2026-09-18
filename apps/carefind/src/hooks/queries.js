@@ -33,6 +33,12 @@ export const keys = {
   newsQueueInfo: (userId) => ['news', 'queue', userId],
   featured: ['featured'],
   searchResults: (params) => ['search', params],
+  feedProfile: (userId) => ['feed', 'profile', userId],
+  feedLatestNews: ['feed', 'latestNews'],
+  feedUnreadNotifs: (userId) => ['feed', 'unreadNotifs', userId],
+  feedLiveSessions: ['feed', 'liveSessions'],
+  feedSeriesList: ['feed', 'seriesList'],
+  feedPlatformLive: ['feed', 'platformLive'],
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
@@ -746,6 +752,110 @@ export function useSearchResults({ searchQuery, tab, stateFilter, saleType, spec
       return { products, businesses, professionals, proStories, proViewed, filterCategories }
     },
     enabled: tab !== 'shop',
+    staleTime: 30_000,
+  })
+}
+
+// ── Feed Ancillary Queries ───────────────────────────────────────────────────
+
+export function useFeedProfile(userId) {
+  return useQuery({
+    queryKey: keys.feedProfile(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, display_name, phone, is_verified, verification_label, avatar_url')
+        .eq('id', userId)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60_000,
+  })
+}
+
+export function useLatestNews() {
+  return useQuery({
+    queryKey: keys.feedLatestNews,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('news')
+        .select('id, headline, hero_image_url, published_at')
+        .eq('status', 'approved')
+        .order('published_at', { ascending: false })
+        .limit(6)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 2 * 60_000,
+  })
+}
+
+export function useUnreadNotifs(userId) {
+  return useQuery({
+    queryKey: keys.feedUnreadNotifs(userId),
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', userId)
+        .eq('read', false)
+      if (error) throw error
+      return count || 0
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+  })
+}
+
+export function useLiveSessions() {
+  return useQuery({
+    queryKey: keys.feedLiveSessions,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('live_sessions')
+        .select('*, profiles(full_name, display_name, specialty)')
+        .eq('status', 'live')
+        .order('started_at', { ascending: false })
+        .limit(5)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useSeriesList() {
+  return useQuery({
+    queryKey: keys.feedSeriesList,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('playlists')
+        .select('id, title, description, owner_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (error) throw error
+      return data || []
+    },
+    staleTime: 2 * 60_000,
+  })
+}
+
+export function usePlatformLive() {
+  return useQuery({
+    queryKey: keys.feedPlatformLive,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('live_shows')
+        .select('id, title')
+        .eq('status', 'live')
+        .eq('is_platform', true)
+        .order('started_at', { ascending: false })
+        .limit(1)
+      if (error) throw error
+      return data && data[0] ? data[0] : null
+    },
     staleTime: 30_000,
   })
 }
