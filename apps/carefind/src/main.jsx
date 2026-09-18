@@ -61,6 +61,10 @@ const AgentEarnings = lazy(() => import('./modules/agents-hub/AgentEarnings.jsx'
 const AgentTransfer = lazy(() => import('./modules/agents-hub/AgentTransfer.jsx'))
 const AgentLogin = lazy(() => import('./pages/AgentLogin.jsx'))
 
+// Business Directory & Discovery
+const BusinessDirectoryPage = lazy(() => import('./modules/business-directory/BusinessDirectoryPage'))
+const BusinessDiscoveryPage = lazy(() => import('./modules/business-discovery/BusinessDiscoveryPage'))
+
 const Loading = () => (
   <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div className="cf-spinner" style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0E6F5A', animation: 'cf-spin 0.7s linear infinite' }} />
@@ -127,6 +131,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/admin/applications" element={<SuspenseWrapper><AgentApproval /></SuspenseWrapper>} />
             <Route path="/admin/earnings" element={<SuspenseWrapper><AgentEarnings /></SuspenseWrapper>} />
             <Route path="/admin/transfers" element={<SuspenseWrapper><AgentTransfer /></SuspenseWrapper>} />
+
+            {/* Business Directory & Discovery */}
+            <Route path="/business-directory" element={<SuspenseWrapper><BusinessDirectoryPage /></SuspenseWrapper>} />
+            <Route path="/business-discovery" element={<SuspenseWrapper><BusinessDiscoveryPage /></SuspenseWrapper>} />
 
             {/* Agents */}
             <Route path="/agents/register" element={<SuspenseWrapper><AgentRegistration /></SuspenseWrapper>} />
