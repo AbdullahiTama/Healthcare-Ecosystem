@@ -3,6 +3,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { walletRepository } from './repositories/index.js'
 import { useAuth } from '../../providers/AuthContext.jsx'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Banknote, Coins, Gift, Landmark, Lock, RotateCcw, Wallet as WalletIcon } from 'lucide-react'
 import { theme } from '../../styles/theme.js'
 import { useBreakpoint } from '../../hooks/useBreakpoint.js'
@@ -10,6 +11,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Inp, Toast, useToast, CardSkeleton, Modal, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
+import { useWalletData, useTransactions, useBanks, keys } from '../../hooks/queries.js'
 
 const WITHDRAWAL_FEE_RATE = 0.2
 
@@ -34,12 +36,16 @@ function Wallet() {
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
-  const [wallet, setWallet] = useState(null)
-  const [transactions, setTransactions] = useState([])
-  const [loading, setLoading] = useState(true)
+  const qc = useQueryClient()
+
+  // ── React Query data ──────────────────────────────────────────────────────
+  const { data: wallet, isLoading: walletLoading } = useWalletData(user?.id)
+  const { data: transactions = [], isLoading: txLoading } = useTransactions(user?.id)
+  const { data: banks = [] } = useBanks()
+
+  // ── Form / UI state ────────────────────────────────────────────────────────
   const [tab, setTab] = useState('wallet')
   const [searchParams] = useSearchParams()
-  const [banks, setBanks] = useState([])
   const [wdAmount, setWdAmount] = useState('')
   const [wdBankCode, setWdBankCode] = useState('')
   const [wdBankName, setWdBankName] = useState('')
@@ -84,11 +90,9 @@ function Wallet() {
         }
         if (data.alreadyProcessed) return
 
-        const freshWallet = await walletRepository.getBalance(user.id)
-        setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? data.newBalance }))
-
-        const txData = await walletRepository.getTransactions(user.id)
-        setTransactions(txData)
+        qc.invalidateQueries({ queryKey: keys.walletData(user.id) })
+        qc.invalidateQueries({ queryKey: keys.walletBalance(user.id) })
+        qc.invalidateQueries({ queryKey: keys.transactions(user.id) })
 
         setTab('history')
         showToast(`${data.credited} CareCoin${data.credited > 1 ? 's' : ''} added! New balance: ${data.newBalance} coins`, { type: 'success' })
@@ -100,46 +104,11 @@ function Wallet() {
     if (!authLoading && user) handlePaystackReturn()
   }, [searchParams, user, authLoading])
 
-  useEffect(() => {
-    async function load() {
-      if (!user) { setLoading(false); return }
-      setLoading(true)
-
-      let walletData = await walletRepository.getWallet(user.id)
-
-      if (!walletData) {
-        walletData = await walletRepository.ensureWallet(user.id)
-      }
-      setWallet(walletData)
-
-      const txData = await walletRepository.getTransactions(user.id)
-      setTransactions(txData)
-      setLoading(false)
-    }
-    if (!authLoading) load()
-  }, [user, authLoading])
-
-  useEffect(() => {
-    async function loadBanks() {
-      try {
-        const response = await fetch('/api/banks')
-        if (response.ok) {
-          const data = await response.json()
-          setBanks(data)
-        }
-      } catch (err) {}
-    }
-    loadBanks()
-  }, [])
-
   // Resolve account name when bank code and 10-digit account number are both set.
-  // Debounced to avoid firing on every keystroke — only resolves after the user
-  // pauses typing or pastes a complete 10-digit number.
   const resolveTimer = useRef(null)
   useEffect(() => {
     if (resolveTimer.current) clearTimeout(resolveTimer.current)
 
-    // Clear resolved state when inputs change
     setWdAccountResolved(false)
     setWdAccountName('')
 
@@ -185,8 +154,6 @@ function Wallet() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
-          // packageId, not an amount — the server looks up the real price
-          // itself so a tampered request can't buy coins below cost.
           packageId: pkg.coins,
           callback_url: `${window.location.origin}/wallet`,
         }),
@@ -244,10 +211,9 @@ function Wallet() {
       }
 
       setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
-      const freshWallet = await walletRepository.getBalance(user.id)
-      setWallet((prev) => ({ ...(prev || {}), balance: freshWallet?.balance ?? prev?.balance }))
-      const txData = await walletRepository.getTransactions(user.id)
-      setTransactions(txData)
+      qc.invalidateQueries({ queryKey: keys.walletData(user.id) })
+      qc.invalidateQueries({ queryKey: keys.walletBalance(user.id) })
+      qc.invalidateQueries({ queryKey: keys.transactions(user.id) })
       setTab('history')
       showToast(`₦${data.payoutNaira.toLocaleString()} sent to your bank!`, { type: 'success' })
     } catch (err) {
@@ -256,9 +222,6 @@ function Wallet() {
     }
   }
 
-  // Set/replace the withdrawal PIN from the "Set withdrawal PIN" modal.
-  // The raw PIN only ever goes to /api/withdrawal-pin/set over HTTPS; the
-  // server derives scrypt(pin, salt) and never stores or logs the PIN itself.
   async function handleSetPin() {
     setPinError('')
     if (!/^\d{4,6}$/.test(newPin)) { setPinError('PIN must be 4-6 digits.'); return }
@@ -294,8 +257,6 @@ function Wallet() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  // Each transaction kind gets a distinct icon and a semantic colour, so a
-  // ledger can be scanned without reading every row (SCREEN_PATTERNS.md 20).
   const TX_KIND = {
     topup:             { Icon: Coins,     tint: theme.success },
     gift_sent:         { Icon: Gift,      tint: theme.gray500 },
@@ -306,7 +267,7 @@ function Wallet() {
   const txKind = (type) => TX_KIND[type] || { Icon: WalletIcon, tint: theme.gray500 }
   const isCredit = (type) => type === 'topup' || type === 'gift_received' || type === 'withdrawal_refund'
 
-  if (authLoading || loading) return (
+  if (authLoading || walletLoading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 20, maxWidth: 520, margin: '0 auto' }}>
       <CardSkeleton />
       <CardSkeleton />
@@ -402,7 +363,12 @@ function Wallet() {
 
         {tab === 'history' && (
           <div style={isMobile ? { display: 'flex', flexDirection: 'column', gap: 10 } : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10 }}>
-            {transactions.length === 0 && (
+            {txLoading && (
+              <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                <p style={{ color: theme.textLight, fontSize: 13 }}>Loading transactions…</p>
+              </div>
+            )}
+            {!txLoading && transactions.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                   <Coins size={40} color={theme.gray300} strokeWidth={1.5} aria-hidden="true" />

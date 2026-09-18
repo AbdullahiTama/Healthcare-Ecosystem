@@ -21,6 +21,9 @@ export const keys = {
   myStories: (userId) => ['myStories', userId],
   myShows: (userId) => ['myShows', userId],
   walletBalance: (userId) => ['wallet', userId],
+  walletData: (userId) => ['wallet', 'data', userId],
+  transactions: (userId) => ['transactions', userId],
+  banks: ['banks'],
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
@@ -413,6 +416,51 @@ export function useWalletBalance(userId) {
     },
     enabled: !!userId,
     staleTime: 30_000,
+  })
+}
+
+export function useWalletData(userId) {
+  return useQuery({
+    queryKey: keys.walletData(userId),
+    queryFn: async () => {
+      let { data: wallet } = await supabase
+        .from('wallets').select('*').eq('user_id', userId).maybeSingle()
+      if (!wallet) {
+        const { data: newWallet } = await supabase
+          .from('wallets').insert({ user_id: userId, balance: 0 }).select().single()
+        wallet = newWallet
+      }
+      return wallet
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+  })
+}
+
+export function useTransactions(userId) {
+  return useQuery({
+    queryKey: keys.transactions(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('transactions').select('*').eq('user_id', userId)
+        .order('created_at', { ascending: false }).limit(20)
+      if (error) throw error
+      return data || []
+    },
+    enabled: !!userId,
+    staleTime: 30_000,
+  })
+}
+
+export function useBanks() {
+  return useQuery({
+    queryKey: keys.banks,
+    queryFn: async () => {
+      const response = await fetch('/api/banks')
+      if (!response.ok) return []
+      return response.json()
+    },
+    staleTime: 300_000,
   })
 }
 
