@@ -103,7 +103,7 @@ export default function Landing() {
   }, [])
 
   return (
-    <main style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: bg, overflowX: 'hidden', width: '100%', maxWidth: '100%', color: navy }}>
+    <main style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: tealDeep, overflowX: 'hidden', width: '100%', maxWidth: '100%', color: '#fff' }}>
 
       {/* ── Glass Nav ─────────────────────────────────────────── */}
       <nav style={{
@@ -180,7 +180,7 @@ export default function Landing() {
 
       {/* ── Business Types Strip ──────────────────────────────── */}
       <div className="business-types-strip" style={{ padding: '28px 24px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: gray400, marginBottom: 16 }}>Built for your type of business</p>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>Built for your type of business</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
           {BUSINESS_TYPES.map(b => (
             <div key={b.id} className="business-type-pill" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 6px', borderRadius: 999, border: `1px solid ${border}`, background: 'white', fontSize: 12.5, fontWeight: 700, color: navy, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -194,10 +194,10 @@ export default function Landing() {
       {/* ── Core Positioning Bento Grid ───────────────────────── */}
       <div id="features" style={{ padding: '60px 24px', maxWidth: 1100, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
+          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: '#fff', margin: '0 0 12px', lineHeight: 1.2 }}>
             Everything Your Business Needs. In One Place.
           </h2>
-          <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
             CareHub brings the essential tools required to manage modern healthcare and related businesses into one connected platform.
           </p>
         </div>
@@ -269,14 +269,14 @@ export default function Landing() {
       </div>
 
       {/* ── Business Visibility ───────────────────────────────── */}
-      <div className="visibility-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="visibility-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 40 : 48 }}>
           {/* Left: text */}
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 66%' }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Don't Just Manage Your Business. Get Discovered.
             </h2>
-            <p style={{ fontSize: 14, color: gray500, lineHeight: 1.7, marginBottom: 20 }}>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', lineHeight: 1.7, marginBottom: 20 }}>
               CareHub gives businesses greater visibility across the CareFind health social platform, helping potential customers discover the business, its services, products and relevant information.
             </p>
             {[
@@ -284,12 +284,12 @@ export default function Landing() {
               'Customers discover your services, products and information',
               'Managed directly from your CareHub dashboard',
             ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: gray600, padding: '5px 0' }}>
-                <CheckIcon size={14} color={tealDeep} strokeWidth={3} />
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'rgba(255,255,255,0.9)', padding: '5px 0' }}>
+                <CheckIcon size={14} color="#fff" strokeWidth={3} />
                 {item}
               </div>
             ))}
-            <p style={{ fontWeight: 800, fontSize: 15, color: tealDeep, marginTop: 16 }}>
+            <p style={{ fontWeight: 800, fontSize: 15, color: '#fff', marginTop: 16 }}>
               Manage your business with CareHub. Get discovered through CareFind.
             </p>
           </div>
@@ -314,13 +314,13 @@ export default function Landing() {
       </div>
 
       {/* ── Inventory & Operations ──────────────────────────────── */}
-      <div className="inventory-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="inventory-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Know What You Have. Know What You Need.
             </h2>
-            <p style={{ fontSize: 14, color: gray500, maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
               CareHub helps businesses maintain better control over products and stock, monitor activity, identify what needs attention and make more informed purchasing and operational decisions.
             </p>
           </div>
@@ -345,9 +345,9 @@ export default function Landing() {
       </div>
 
       {/* ── Intelligent Technology ─────────────────────────────── */}
-      <div className="ai-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="ai-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
-          <div style={{ background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: isMobile ? 32 : 48, textAlign: 'center', color: 'white' }}>
+          <div style={{ background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: isMobile ? 32 : 48, textAlign: 'center', color: 'white', border: '1px solid rgba(255,255,255,0.12)' }}>
             <div style={{ display: 'inline-block', padding: '6px 14px', borderRadius: 999, background: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', marginBottom: 20 }}>INTELLIGENT TECHNOLOGY</div>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 30, margin: '0 0 16px', lineHeight: 1.2 }}>
               Built With Intelligent Technology for Modern Businesses.
@@ -363,13 +363,13 @@ export default function Landing() {
       </div>
 
       {/* ── E-Commerce ─────────────────────────────────────────── */}
-      <div className="ecom-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="ecom-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 700, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Turn Your Inventory Into an Online Storefront.
             </h2>
-            <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
               Businesses can select eligible products from their inventory and make them available through the CareFind Shop.
             </p>
           </div>
@@ -395,13 +395,13 @@ export default function Landing() {
       </div>
 
       {/* ── Business Intelligence ──────────────────────────────── */}
-      <div className="bi-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="bi-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Don't Just Run Your Business. Understand It.
             </h2>
-            <p style={{ fontSize: 14, color: gray500, maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', maxWidth: 560, margin: '0 auto', lineHeight: 1.6 }}>
               CareHub helps transform everyday business activity into useful information so owners and managers can better understand sales, inventory, expenses, debts, demand and financial performance.
             </p>
           </div>
@@ -421,14 +421,14 @@ export default function Landing() {
               </div>
             ))}
           </div>
-          <p style={{ textAlign: 'center', marginTop: 32, fontWeight: 800, fontSize: 15, color: tealDeep }}>
+          <p style={{ textAlign: 'center', marginTop: 32, fontWeight: 800, fontSize: 15, color: '#fff' }}>
             Make decisions based on your business data, not guesswork.
           </p>
         </div>
       </div>
 
       {/* ── Staff, Locations, Offline ────────────────────────────── */}
-      <div className="ops-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="ops-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
             {[
@@ -449,10 +449,10 @@ export default function Landing() {
       </div>
 
       {/* ── Who CareHub Is For ────────────────────────────────── */}
-      <div className="who-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="who-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Built for the Businesses That Keep Healthcare, Wellness and Personal Care Moving.
             </h2>
           </div>
@@ -480,10 +480,10 @@ export default function Landing() {
       </div>
 
       {/* ── Why CareHub ──────────────────────────────────────── */}
-      <div className="why-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="why-section" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ marginBottom: 32 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: '#fff', margin: '0 0 12px' }}>
               Why CareHub
             </h2>
           </div>
@@ -497,8 +497,8 @@ export default function Landing() {
               'Scalable for single and multiple-location businesses',
               '30-day free trial to experience the platform before committing',
             ].map((item, i) => (
-              <div key={i} className="why-item" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: gray600 }}>
-                <CheckIcon size={16} color={tealDeep} strokeWidth={3} />
+              <div key={i} className="why-item" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: 'rgba(255,255,255,0.9)' }}>
+                <CheckIcon size={16} color="#fff" strokeWidth={3} />
                 {item}
               </div>
             ))}
@@ -507,13 +507,13 @@ export default function Landing() {
       </div>
 
       {/* ── Pricing ───────────────────────────────────────────── */}
-      <div id="pricing" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div id="pricing" style={{ padding: '80px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'transparent' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
-            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 32, color: navy, margin: '0 0 8px' }}>
+            <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 32, color: '#fff', margin: '0 0 8px' }}>
               Plain pricing in Naira
             </h2>
-            <p style={{ fontSize: 13.5, color: gray500 }}>Every plan includes POS, inventory, reports and your CareFind listing.</p>
+            <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.75)' }}>Every plan includes POS, inventory, reports and your CareFind listing.</p>
           </div>
           <div className="pricing-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {PLANS.map(([name, price, period, items, popular]) => (
@@ -587,18 +587,18 @@ export default function Landing() {
         Manage smarter. Operate better. Get discovered. Grow with CareHub.
       </div>
 
-      <div style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderTop: `1px solid ${border}`, marginTop: 40 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: gray500 }}>
+      <div style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
           <Logo size={18} />
           &copy; 2026 CareHub &middot; Part of the Care ecosystem
         </div>
         <div style={{ display: 'flex', gap: 20 }}>
           {['Features', 'Pricing', 'CareFind', 'support@carehub.ng'].map(text => (
             text.startsWith('support')
-              ? <span key={text} style={{ fontSize: 12, fontWeight: 600, color: gray500 }}>{text}</span>
+              ? <span key={text} style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>{text}</span>
               : text === 'CareFind'
-                ? <a key={text} href="https://carefind.ng" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: gray500, textDecoration: 'none' }}>{text}</a>
-                : <a key={text} href={`#${text.toLowerCase()}`} style={{ fontSize: 12, fontWeight: 600, color: gray500, textDecoration: 'none' }}>{text}</a>
+                ? <a key={text} href="https://carefind.ng" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>{text}</a>
+                : <a key={text} href={`#${text.toLowerCase()}`} style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>{text}</a>
           ))}
         </div>
       </div>
