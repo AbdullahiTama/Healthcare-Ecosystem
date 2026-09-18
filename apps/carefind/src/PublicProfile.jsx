@@ -27,6 +27,13 @@ import VerifiedBadge from './components/VerifiedBadge.jsx'
 import ProfileHeader from './components/ProfileHeader.jsx'
 import { PostTileGrid, isRepost } from './modules/social-feed/postDisplay.jsx'
 import StoryViewer from './modules/social-feed/components/StoryViewer.jsx'
+import {
+  useProfile, useProfilePosts, useProfileReviews, useProfileStories,
+  useProfilePlaylists, useFollowerCount, useFollowingCount, useFollowStatus,
+  useSubscriptionAccess, useConsultationOffer, useConsultationBooked,
+  useToggleFollow, usePostReview, keys,
+} from './hooks/queries'
+import { useQueryClient } from '@tanstack/react-query'
 
 function PublicProfile() {
   const { id } = useParams()
@@ -34,159 +41,59 @@ function PublicProfile() {
   const { user } = useAuth()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
-  const [profile, setProfile] = useState(null)
-  const [posts, setPosts] = useState([])
-  const [followerCount, setFollowerCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [postCount, setPostCount] = useState(0)
-  const [isFollowing, setIsFollowing] = useState(false)
   const [sheetKind, setSheetKind] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  // Stories for this profile
-  const [userStories, setUserStories] = useState([])
-  const [viewedStoryIds, setViewedStoryIds] = useState(() => new Set())
-  const [viewerIndex, setViewerIndex] = useState(null)
   const [activeTab, setActiveTab] = useState('posts')
-  const [playlists, setPlaylists] = useState([])
-  const [userReviews, setUserReviews] = useState([])
-  const [reviewers, setReviewers] = useState({})
+  const [viewerIndex, setViewerIndex] = useState(null)
   const [myRating, setMyRating] = useState(5)
   const [myComment, setMyComment] = useState('')
   const [postingReview, setPostingReview] = useState(false)
-  const [subActive, setSubActive] = useState(false)
-  const [subInfo, setSubInfo] = useState(null)
   const [subscribing, setSubscribing] = useState(false)
-  const [consultOffer, setConsultOffer] = useState(null)
-  const [consultBooked, setConsultBooked] = useState(false)
   const [confirmConsultOpen, setConfirmConsultOpen] = useState(false)
   const [consultPayMethod, setConsultPayMethod] = useState('coins')
   const [bookingConsult, setBookingConsult] = useState(false)
   const [confirmSubOpen, setConfirmSubOpen] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
+  // React Query hooks
+  const { data: profile, isLoading: loading } = useProfile(id)
+  const { data: postsData = [] } = useProfilePosts(id)
+  const { data: reviewsData = { reviews: [], reviewers: {} } } = useProfileReviews(id)
+  const { data: userStories = [] } = useProfileStories(id)
+  const { data: playlists = [] } = useProfilePlaylists(id)
+  const { data: followerCount = 0 } = useFollowerCount(id)
+  const { data: followingCount = 0 } = useFollowingCount(id)
+  const { data: isFollowing = false } = useFollowStatus(user?.id, id)
+  const { data: subData = { active: false, sub: null } } = useSubscriptionAccess(user?.id, id)
+  const { data: consultOffer } = useConsultationOffer(id)
+  const { data: consultBooked = false } = useConsultationBooked(user?.id, id)
+  const toggleFollowMutation = useToggleFollow()
+  const postReview = usePostReview(id)
+  const qc = useQueryClient()
+
+  const userReviews = reviewsData.reviews
+  const reviewers = reviewsData.reviewers
+  const subActive = subData.active
+  const subInfo = subData.sub
+
+  const [viewedStoryIds, setViewedStoryIds] = useState(() => new Set())
+
+  // Notify profile owner of view (once per session)
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, is_verified, verification_label, location, website, avatar_url, cover_url, subscription_price, bio, show_followers')
-        .eq('id', id)
-        .maybeSingle()
-
-      if (!profileData) {
-        setLoading(false)
-        return
+    if (user && user.id !== id && profile) {
+      const seenKey = `pv_${user.id}_${id}`
+      if (!sessionStorage.getItem(seenKey)) {
+        sessionStorage.setItem(seenKey, '1')
+        notify({ recipientId: id, actorId: user.id, type: 'profile_view', message: 'viewed your profile', link: `/u/${user.id}` })
       }
-
-      setProfile(profileData)
-      // Notify the profile owner of the view (once per session to avoid spam)
-      if (user && user.id !== id) {
-        const seenKey = `pv_${user.id}_${id}`
-        if (!sessionStorage.getItem(seenKey)) {
-          sessionStorage.setItem(seenKey, '1')
-          notify({ recipientId: id, actorId: user.id, type: 'profile_view', message: 'viewed your profile', link: `/u/${user.id}` })
-        }
-      }
-
-      const [postData, followerData, followingData, storyData, playlistData] = await Promise.all([
-        // repost_of is load-bearing: without it isRepost() misreads every
-        // reference repost as an original post (issue #6).
-        supabase.from('posts').select('id, content, created_at, post_type, theme, image_url, image_urls, repost_of, user_id').eq('user_id', id).order('created_at', { ascending: false }).limit(60),
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', id),
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', id),
-        supabase.from('stories').select('id, title, body, image_url, bg_color, created_at, position, view_count').eq('user_id', id).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
-        supabase.from('playlists').select('id, title, description, created_at').eq('owner_id', id).order('created_at', { ascending: false }),
-      ])
-
-      // Resolve each repost to the post it points at, so the grid shows what
-      // was actually shared rather than a bare marker (issues #6/#8).
-      const ownPosts = postData.data || []
-      const sourceIds = [...new Set(ownPosts.filter((p) => p.repost_of).map((p) => p.repost_of))]
-      if (sourceIds.length) {
-        const { data: sources } = await supabase
-          .from('posts')
-          .select('id, content, created_at, post_type, theme, image_url, image_urls, user_id')
-          .in('id', sourceIds)
-        const byId = {}
-        ;(sources || []).forEach((s) => { byId[s.id] = s })
-        setPosts(ownPosts.map((p) => (p.repost_of ? { ...p, source: byId[p.repost_of] || null } : p)))
-      } else {
-        setPosts(ownPosts)
-      }
-      setFollowerCount(followerData.count || 0)
-      setFollowingCount(followingData.count || 0)
-      setPostCount(postData.data?.length || 0)
-      setPlaylists(playlistData.data || [])
-
-      // Rank the profile's stories the same way the feed rail does (Stories.jsx):
-      // explicit position first (nulls last), then view count, then newest.
-      const stories = (storyData.data || []).sort((a, b) => {
-        const pa = a.position ?? Infinity
-        const pb = b.position ?? Infinity
-        if (pa !== pb) return pa - pb
-        if ((b.view_count || 0) !== (a.view_count || 0)) return (b.view_count || 0) - (a.view_count || 0)
-        return new Date(b.created_at) - new Date(a.created_at)
-      })
-      setUserStories(stories)
-
-      // Which of this profile's stories the CURRENT viewer has already seen
-      // (RLS scopes the query to the viewer's own story_views rows) — this is
-      // what greys the ring out once every story has been watched.
-      if (user && stories.length) {
-        const seen = await fetchViewedStoryIds(supabase, stories.map((s) => s.id))
-        setViewedStoryIds(seen)
-      } else {
-        setViewedStoryIds(new Set())
-      }
-
-      await loadUserReviews()
-      await refreshAccess()
-
-      const offer = await fetchConsultationOffer(id)
-      setConsultOffer(offer)
-
-      let booked = false
-      if (user && user.id !== id) {
-        booked = await hasBookedConsultation(user.id, id)
-
-        // Resume a card booking that bounced back from Paystack: settle it
-        // server-side (idempotent against the webhook), then refresh state.
-        try {
-          const pendingRaw = sessionStorage.getItem('cf_consult_pending')
-          if (pendingRaw) {
-            const pending = JSON.parse(pendingRaw)
-            sessionStorage.removeItem('cf_consult_pending')
-            if (pending.professionalId === id && pending.reference) {
-              const settleRes = await settleConsultationCardPayment(user.id, id, pending.reference)
-              if (settleRes.ok && !settleRes.alreadyProcessed && !settleRes.alreadyBooked) {
-                booked = await hasBookedConsultation(user.id, id)
-                notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
-                showToast('Consultation booked! The professional has been notified.', { type: 'success' })
-              }
-            }
-          }
-        } catch (e) { /* malformed pending marker — ignore */ }
-      }
-      setConsultBooked(booked)
-
-      if (user) {
-        const { data: followData } = await supabase.from('follows').select('id').eq('follower_id', user.id).eq('following_id', id).maybeSingle()
-        setIsFollowing(!!followData)
-      }
-
-      setLoading(false)
     }
-    load()
-  }, [id, user])
+  }, [id, user, profile])
 
-  async function refreshAccess() {
-    if (!user || user.id === id) { setSubActive(false); return }
-    const res = await checkAccess(user.id, id)
-    setSubActive(!!res.active)
-    setSubInfo(res.sub || null)
-  }
+  // Fetch viewed story IDs
+  useEffect(() => {
+    if (user && userStories.length) {
+      fetchViewedStoryIds(supabase, userStories.map(s => s.id)).then(setViewedStoryIds)
+    }
+  }, [user, userStories])
 
   function handleSubscribe(priceCoins) {
     if (!user) { navigate('/login'); return }
@@ -228,13 +135,13 @@ function PublicProfile() {
     if (consultPayMethod === 'coins') {
       res = await bookConsultation(user.id, id)
       if (res.ok) {
-        setConsultBooked(true)
+        qc.invalidateQueries({ queryKey: keys.consultationBooked(user.id, id) })
         notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
         showToast('Consultation booked with CareCoins! The professional has been notified.', { type: 'success' })
       } else if (res.insufficient) {
         showToast('Not enough CareCoins to book. Top up your wallet or choose card payment.', { type: 'warning', actionLabel: 'Top up', onAction: () => navigate('/wallet') })
       } else if (res.alreadyBooked) {
-        setConsultBooked(true)
+        qc.invalidateQueries({ queryKey: keys.consultationBooked(user.id, id) })
         showToast('You already have a booking with this professional.', { type: 'info' })
       } else if (res.error) {
         showToast('Could not book: ' + res.error, { type: 'error' })
@@ -263,52 +170,27 @@ function PublicProfile() {
   }
 
   async function loadUserReviews() {
-    const { data } = await supabase
-      .from('user_reviews')
-      .select('id, rating, comment, created_at, user_id')
-      .eq('subject_id', id)
-      .order('created_at', { ascending: false })
-    const rv = data || []
-    setUserReviews(rv)
-
-    const userIds = [...new Set(rv.map((r) => r.user_id).filter(Boolean))]
-    if (userIds.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, is_verified, specialty, verification_label')
-        .in('id', userIds)
-      const map = {}
-      ;(profs || []).forEach((pr) => { map[pr.id] = pr })
-      setReviewers(map)
-    } else {
-      setReviewers({})
-    }
+    // Handled by React Query - trigger refetch
+    // This function is kept for backward compatibility with submitUserReview
   }
 
   async function submitUserReview(e) {
     e.preventDefault()
     if (!user) { navigate('/login'); return }
     setPostingReview(true)
-    const { error } = await supabase.from('user_reviews').insert({
-      subject_id: id,
-      user_id: user.id,
-      rating: myRating,
-      comment: myComment.trim() || null,
-    })
-
-    // Issue #7: this is the exact case reported — a 5-star review that
-    // produced no notification. Nothing was ever emitted here.
-    if (!error) {
+    try {
+      await postReview.mutateAsync({ userId: user.id, rating: myRating, comment: myComment })
       const sent = await notifyReview(supabase, {
         kind: 'user', actorId: user.id, subjectId: id, rating: myRating, link: `/u/${user.id}`,
       })
       if (!sent.sent) console.warn('[review] no notification sent', sent.reason)
+      setMyRating(5)
+      setMyComment('')
+      showToast('Review posted!', { type: 'success' })
+    } catch (error) {
+      showToast('Could not post review: ' + (error.message || 'unknown error'), { type: 'error' })
     }
     setPostingReview(false)
-    if (error) { showToast('Could not post review: ' + error.message, { type: 'error' }); return }
-    setMyRating(5)
-    setMyComment('')
-    loadUserReviews()
   }
 
   // Story viewer progress
@@ -343,15 +225,7 @@ function PublicProfile() {
 
   async function toggleFollow() {
     if (!user) return
-    if (isFollowing) {
-      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', id)
-      setIsFollowing(false)
-      setFollowerCount((n) => n - 1)
-    } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: id })
-      setIsFollowing(true)
-      setFollowerCount((n) => n + 1)
-    }
+    toggleFollowMutation.mutate({ followerId: user.id, followingId: id, isFollowing })
   }
 
   function timeAgo(dateStr) {
@@ -910,8 +784,8 @@ function PublicProfile() {
           count={sheetKind === 'followers' ? followerCount : followingCount}
           onClose={() => setSheetKind(null)}
           onCountChange={(delta) => {
-            if (sheetKind === 'followers') setFollowerCount((n) => Math.max(0, n + delta))
-            else setFollowingCount((n) => Math.max(0, n + delta))
+            if (sheetKind === 'followers') qc.invalidateQueries({ queryKey: keys.followerCount(id) })
+            else qc.invalidateQueries({ queryKey: keys.followingCount(id) })
           }}
         />
       )}
