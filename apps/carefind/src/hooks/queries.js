@@ -42,6 +42,14 @@ export const keys = {
   postCount: (userId) => ['postCount', userId],
   ownedBusinesses: (userId) => ['businesses', 'owned', userId],
   approvedClaims: (userId) => ['claims', 'approved', userId],
+  adminData: ['admin', 'data'],
+  adminStories: ['admin', 'stories'],
+  adminNews: ['admin', 'news'],
+  adminPromotions: ['admin', 'promotions'],
+  adminSearchLogs: ['admin', 'searchLogs'],
+  adminLiveShows: ['admin', 'liveShows'],
+  adminShopData: ['admin', 'shopData'],
+  adminRoles: ['admin', 'roles'],
 }
 
 // ── Profile Queries ──────────────────────────────────────────────────────────
@@ -857,5 +865,235 @@ export function usePlatformLive() {
       return data && data[0] ? data[0] : null
     },
     staleTime: 30_000,
+  })
+}
+
+// ── Admin Queries ─────────────────────────────────────────────────────────────
+
+function adminToken() {
+  return localStorage.getItem('admin_token')
+}
+
+function adminRole() {
+  try { return JSON.parse(localStorage.getItem('admin_user') || '{}').role || '' } catch { return '' }
+}
+
+export function useAdminData(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminData,
+    queryFn: async () => {
+      const { dashboardRepository } = await import('../modules/admin/repositories/dashboardRepository')
+      const { usersRepository } = await import('../modules/admin/repositories/usersRepository')
+      const { contentRepository } = await import('../modules/admin/repositories/contentRepository')
+      const { commerceRepository } = await import('../modules/admin/repositories/commerceRepository')
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const token = adminToken()
+      const [postsData, usersData, , verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
+        contentRepository.getPosts({ limit: 50 }).catch(() => []),
+        usersRepository.getUsers({ limit: 100 }).catch(() => []),
+        usersRepository.getUsers({ limit: 1 }).then(() => 0).catch(() => 0),
+        callAdminAuth('list_verification_requests', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_business_claims', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_reports', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_transactions', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        dashboardRepository.getTasks().then(data => ({ data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_teams', { token }).then(r => ({ data: r.teams })).catch(() => ({ data: [] })),
+        commerceRepository.getBusinesses().then(data => ({ data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_staff', { token }).then(r => ({ data: r.staff })).catch(() => ({ data: [] })),
+        callAdminAuth('list_withdrawal_requests', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_task_submissions', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        dashboardRepository.getProfessionalConsultations().then(data => ({ data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_news', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+      ])
+
+      const vData = verifRes.data || []
+      const cData = claimsRes.data || []
+      const rData = reportsRes.data || []
+      const txData = txRes.data || []
+      const tasksData = tasksRes.data || []
+      const teamsData = teamsRes.data || []
+      const bizData = bizRes.data || []
+      const staffData = staffRes.data || []
+      const wData = withdrawRes.data || []
+      const tsData = taskSubRes.data || []
+      const consultData = consultRes.data || []
+      const newsData = newsRes.data || []
+
+      const phoneMap = {}
+      vData.forEach(v => { if (v.user_id && v.phone) phoneMap[v.user_id] = v.phone })
+
+      const notifications = [
+        ...vData.filter(v => v.status === 'pending').map(v => ({ id: v.id, type: 'verification', icon: '\u{1FA7A}', title: `Verification request from ${v.full_name}`, subtitle: v.profession, time: v.created_at, severity: 'warning', tab: 'verifications', role: 'verification_officer' })),
+        ...cData.filter(c => c.status === 'pending').map(c => ({ id: c.id, type: 'claim', icon: '\u{1F3E5}', title: `Business claim: ${c.businesses?.name}`, subtitle: 'Pending approval', time: c.created_at, severity: 'warning', tab: 'claims', role: 'business_manager' })),
+        ...rData.filter(r => r.status === 'pending').map(r => ({ id: r.id, type: 'report', icon: '\u{1F6A9}', title: `Post reported: ${r.reason}`, subtitle: r.posts?.content?.slice(0, 60), time: r.created_at, severity: 'urgent', tab: 'reports', role: 'moderator' })),
+        ...wData.filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', icon: '\u{1F4B0}', title: `Withdrawal request: \u20A6${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, severity: 'warning', tab: 'withdrawals', role: 'super_admin' })),
+        ...tsData.filter(s => s.status === 'pending').map(s => ({ id: s.id, type: 'task', icon: '\u{1F4CB}', title: `Task submission: ${s.tasks?.title}`, subtitle: s.profiles?.full_name || 'Professional', time: s.created_at, severity: 'info', tab: 'tasks', role: 'super_admin' })),
+        ...consultData.map(c => ({ id: c.id, type: 'consultation', icon: '\u{1F4C5}', title: 'New consultation booking', subtitle: c.profiles?.full_name || 'Professional', time: c.created_at, severity: 'info', tab: 'overview', role: 'verification_officer' })),
+        ...newsData.filter(n => n.status === 'pending').map(n => ({ id: n.id, type: 'news', icon: '\u{1F4F0}', title: `News submission: ${(n.headline || 'New article').slice(0, 60)}`, subtitle: n.profiles?.full_name || n.profiles?.display_name || 'Contributor', time: n.created_at, severity: 'warning', tab: 'news', role: 'super_admin' })),
+      ].sort((a, b) => new Date(b.time) - new Date(a.time))
+
+      const usersCount = await usersRepository.getUsers({ limit: 1 }).then(() => 0).catch(() => 0)
+      const pendingVerifs = vData.filter(v => v.status === 'pending').length
+      const pendingClaims = cData.filter(c => c.status === 'pending').length
+      const openReports = rData.filter(r => r.status === 'pending').length
+      const rev = txData.filter(t => t.type === 'topup').reduce((s, t) => s + (t.naira_amount || 0), 0)
+      const pendingWithdrawals = wData.filter(w => w.status === 'pending').length
+      const pendingTaskSubs = tsData.filter(s => s.status === 'pending').length
+      const newConsults = consultData.length
+      const pendingNews = newsData.filter(n => n.status === 'pending').length
+      const totalNotifs = pendingVerifs + pendingClaims + openReports + pendingWithdrawals + pendingTaskSubs + pendingNews
+
+      const role = adminRole()
+      let roleNotifCount = 0
+      if (role === 'super_admin') roleNotifCount = totalNotifs
+      else if (role === 'verification_officer') roleNotifCount = pendingVerifs + newConsults
+      else if (role === 'business_manager') roleNotifCount = pendingClaims
+      else if (role === 'moderator' || role === 'content_manager') roleNotifCount = openReports + pendingNews
+      else if (role === 'analytics_manager') roleNotifCount = pendingWithdrawals
+      else roleNotifCount = pendingNews ? pendingNews : 0
+
+      return {
+        posts: postsData || [],
+        users: usersData || [],
+        verifications: vData,
+        claims: cData,
+        reports: rData,
+        transactions: txData,
+        tasks: tasksData,
+        teams: teamsData,
+        businesses: bizData,
+        staff: staffData,
+        withdrawals: wData,
+        notifications,
+        phoneMap,
+        notifCount: totalNotifs,
+        roleNotifCount,
+        stats: {
+          users: usersCount || usersData?.length || 0,
+          posts: postsData?.length || 0,
+          pendingVerifs,
+          pendingClaims,
+          reports: openReports,
+          revenue: rev / 100,
+          transactions: txData?.length || 0,
+        },
+      }
+    },
+    enabled,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+}
+
+export function useAdminStories(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminStories,
+    queryFn: async () => {
+      const { contentRepository } = await import('../modules/admin/repositories/contentRepository')
+      const data = await contentRepository.getStories()
+      return data || []
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminNews(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminNews,
+    queryFn: async () => {
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const token = adminToken()
+      try {
+        const { data, phones } = await callAdminAuth('list_news', { token })
+        return { items: data || [], phones: phones || {} }
+      } catch {
+        return { items: [], phones: {} }
+      }
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminPromotions(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminPromotions,
+    queryFn: async () => {
+      const { commerceRepository } = await import('../modules/admin/repositories/commerceRepository')
+      const data = await commerceRepository.getPromotions()
+      return data || []
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminSearchLogs(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminSearchLogs,
+    queryFn: async () => {
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const token = adminToken()
+      try {
+        const { data } = await callAdminAuth('list_search_logs', { token })
+        return data || []
+      } catch {
+        return []
+      }
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminLiveShows(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminLiveShows,
+    queryFn: async () => {
+      const [activeRes, schedRes] = await Promise.all([
+        supabase.from('live_shows').select('id, title, status, started_at, host_id').eq('status', 'live').order('started_at', { ascending: false }),
+        supabase.from('live_shows').select('id, title, status, scheduled_at, trailer_url, host_id').eq('status', 'scheduled').order('scheduled_at', { ascending: true }),
+      ])
+      return { active: activeRes.data || [], scheduled: schedRes.data || [] }
+    },
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
+export function useAdminShopData(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminShopData,
+    queryFn: async () => {
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const token = adminToken()
+      const [appsRes, prodsRes, ordersRes] = await Promise.all([
+        callAdminAuth('list_ecommerce_applications', { token }).catch(() => ({ data: [] })),
+        callAdminAuth('list_ecommerce_products_admin', { token }).catch(() => ({ data: [] })),
+        callAdminAuth('list_shop_orders_admin', { token }).catch(() => ({ data: [] })),
+      ])
+      return { apps: appsRes.data || [], products: prodsRes.data || [], orders: ordersRes.data || [] }
+    },
+    enabled,
+    staleTime: 60_000,
+  })
+}
+
+export function useAdminRoles(enabled = true) {
+  return useQuery({
+    queryKey: keys.adminRoles,
+    queryFn: async () => {
+      const { callAdminAuth } = await import('../modules/admin/adminApi')
+      const token = adminToken()
+      try {
+        const { data } = await callAdminAuth('list_admin_roles', { token })
+        return data || []
+      } catch {
+        return []
+      }
+    },
+    enabled,
+    staleTime: 60_000,
   })
 }

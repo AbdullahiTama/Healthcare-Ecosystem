@@ -2,12 +2,10 @@
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import '../../styles/tokens.css'
-import { dashboardRepository } from './repositories/dashboardRepository'
 import { usersRepository } from './repositories/usersRepository'
 import { contentRepository } from './repositories/contentRepository'
 import { commerceRepository } from './repositories/commerceRepository'
 import { liveRepository } from './repositories/liveRepository'
-import { feedConfigRepository } from './repositories/feedConfigRepository'
 import { theme, toggleTheme } from '../../styles/theme'
 import { callAdminAuth } from './adminApi'
 import AdminLayout from './AdminLayout.jsx'
@@ -21,6 +19,8 @@ import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
 import { NAV_GROUPS } from './AdminSidebar.jsx'
 import { Sparkles } from 'lucide-react'
 import { timeAgo } from './ui'
+import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../hooks/queries'
+import { useQueryClient } from '@tanstack/react-query'
 
 import OverviewTab from './tabs/OverviewTab.jsx'
 import VerificationsTab from './tabs/VerificationsTab.jsx'
@@ -52,23 +52,17 @@ const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
 
 export default function AdminPanel() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [adminUser, setAdminUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
-  const [stats, setStats] = useState({})
-  const [users, setUsers] = useState([])
-  const [verifications, setVerifications] = useState([])
+  const [adminPermissions, setAdminPermissions] = useState({})
+  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
   // Credential review: which document is being signed, and any failure to
   // report inline against that row.
   const [credentialLoadingId, setCredentialLoadingId] = useState(null)
   const [credentialError, setCredentialError] = useState({ id: null, message: '' })
-  const [claims, setClaims] = useState([])
-  const [reports, setReports] = useState([])
-  const [posts, setPosts] = useState([])
-  const [transactions, setTransactions] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [teams, setTeams] = useState([])
-  const [staff, setStaff] = useState([])
   const [userSearch, setUserSearch] = useState('')
   const [postSearch, setPostSearch] = useState('')
   const [drugSearch, setDrugSearch] = useState('')
@@ -87,7 +81,6 @@ export default function AdminPanel() {
   const [suspendDays, setSuspendDays] = useState('7')
   const [userPosts, setUserPosts] = useState([])
   const [deletingUser, setDeletingUser] = useState(false)
-  const [businesses, setBusinesses] = useState([])
   const [bizSearch, setBizSearch] = useState('')
   const [bizTypeFilter, setBizTypeFilter] = useState('all')
   const [bizStateFilter, setBizStateFilter] = useState('')
@@ -112,37 +105,23 @@ export default function AdminPanel() {
   const [verifySpecialty, setVerifySpecialty] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [notifCount, setNotifCount] = useState(0)
-  const [roleNotifCount, setRoleNotifCount] = useState(0)
-  const [withdrawals, setWithdrawals] = useState([])
-  const [notifications, setNotifications] = useState([])
-  const [stories, setStories] = useState([])
   const [storyTitle, setStoryTitle] = useState('')
   const [storyBody, setStoryBody] = useState('')
   const [storyBg, setStoryBg] = useState('var(--color-primary)')
   const [storyImageFile, setStoryImageFile] = useState(null)
   const [savingStory, setSavingStory] = useState(false)
-  const [newsItems, setNewsItems] = useState([])
   const [editingNews, setEditingNews] = useState(null)
-  const [newsPhones, setNewsPhones] = useState({})
   const [savingNews, setSavingNews] = useState(false)
-  const [promotions, setPromotions] = useState([])
   const [promoTitle, setPromoTitle] = useState('')
   const [promoLink, setPromoLink] = useState('')
   const [promoDays, setPromoDays] = useState('7')
   const [promoImage, setPromoImage] = useState(null)
   const [savingPromo, setSavingPromo] = useState(false)
-  const [searchLogs, setSearchLogs] = useState([])
-  const [ecomApps, setEcomApps] = useState([])
-  const [ecomProductsAdmin, setEcomProductsAdmin] = useState([])
-  const [shopOrdersAdmin, setShopOrdersAdmin] = useState([])
   const [liveTitle, setLiveTitle] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [trailerFile, setTrailerFile] = useState(null)
-  const [scheduledShows, setScheduledShows] = useState([])
-  const [liveGuests, setLiveGuests] = useState([])
-  const [activeShows, setActiveShows] = useState([])
   const [creatingShow, setCreatingShow] = useState(false)
+  const [liveGuests, setLiveGuests] = useState([])
   const [guestSearch, setGuestSearch] = useState('')
   const [liveItems, setLiveItems] = useState([])
   const [liveStats, setLiveStats] = useState({ likes: 0, views: 0, shares: 0, gifts: 0 })
@@ -152,18 +131,36 @@ export default function AdminPanel() {
   const [postingLive, setPostingLive] = useState(false)
   const [selectedPost, setSelectedPost] = useState(null)
   const [postAuthor, setPostAuthor] = useState(null)
-  const [phoneMap, setPhoneMap] = useState({})
-  const [adminPermissions, setAdminPermissions] = useState({})
   const [aiCopilotOpen, setAiCopilotOpen] = useState(false)
   const [adminActionHistory, setAdminActionHistory] = useState([])
-  const [adminRoles, setAdminRoles] = useState([])
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
   const [newRoleTabs, setNewRoleTabs] = useState({})
   const [editingRoleId, setEditingRoleId] = useState(null)
   const [editingRoleTabs, setEditingRoleTabs] = useState({})
   const [savingRole, setSavingRole] = useState(false)
-  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  const invalidateAdmin = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['admin'] })
+  }, [qc])
+
+  const { data: adminData } = useAdminData(!!adminUser)
+  const { data: stories = [] } = useAdminStories(!!adminUser)
+  const { data: newsData } = useAdminNews(!!adminUser)
+  const { data: promotions = [] } = useAdminPromotions(!!adminUser)
+  const { data: searchLogs = [] } = useAdminSearchLogs(!!adminUser)
+  const { data: liveShowsData } = useAdminLiveShows(!!adminUser)
+  const { data: shopData } = useAdminShopData(!!adminUser)
+  const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
+
+  const { posts = [], users = [], verifications = [], claims = [], reports = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const newsItems = newsData?.items || []
+  const newsPhones = newsData?.phones || {}
+  const activeShows = liveShowsData?.active || []
+  const scheduledShows = liveShowsData?.scheduled || []
+  const ecomApps = shopData?.apps || []
+  const ecomProductsAdmin = shopData?.products || []
+  const shopOrdersAdmin = shopData?.orders || []
 
   async function logAuditAction(auditAction, targetType, targetId, metadata = {}) {
     try {
@@ -194,27 +191,27 @@ export default function AdminPanel() {
   useRealtimeChannel({
     channelName: 'admin-notifications',
     subscription: { schema: 'public', table: 'verification_requests' },
-    onInsert: () => loadAll(),
-    onUpdate: () => loadAll(),
+    onInsert: () => invalidateAdmin(),
+    onUpdate: () => invalidateAdmin(),
     pollInterval: 30000,
-    pollFn: loadAll,
+    pollFn: invalidateAdmin,
   })
 
   useRealtimeChannel({
     channelName: 'admin-posts',
     subscription: { schema: 'public', table: 'posts' },
-    onInsert: () => loadAll(),
+    onInsert: () => invalidateAdmin(),
     pollInterval: 30000,
-    pollFn: loadAll,
+    pollFn: invalidateAdmin,
   })
 
   useRealtimeChannel({
     channelName: 'admin-reports',
     subscription: { schema: 'public', table: 'reports' },
-    onInsert: () => loadAll(),
-    onUpdate: () => loadAll(),
+    onInsert: () => invalidateAdmin(),
+    onUpdate: () => invalidateAdmin(),
     pollInterval: 30000,
-    pollFn: loadAll,
+    pollFn: invalidateAdmin,
   })
 
   useEffect(() => {
@@ -254,7 +251,7 @@ export default function AdminPanel() {
             localStorage.removeItem('admin_permissions')
           }
         }
-        loadAll()
+        setLoading(false)
       } catch {
         localStorage.removeItem('admin_token')
         localStorage.removeItem('admin_user')
@@ -266,140 +263,23 @@ export default function AdminPanel() {
     verifySession()
   }, [])
 
-  async function loadAll() {
-    const postsData = await contentRepository.getPosts({ limit: 50 }).catch(() => [])
-    const usersData = await usersRepository.getUsers({ limit: 100 }).catch(() => [])
-    const postsRes = { data: postsData }
-    const usersRes2 = { data: usersData }
-    if (usersData) setUsers(usersData)
+  useEffect(() => {
+    if (adminUser) invalidateAdmin()
+  }, [adminUser])
 
-    const adminToken = localStorage.getItem('admin_token')
-    const [usersCount, verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
-      usersRepository.getUsers({ limit: 1 }).then(() => 0).catch(() => 0),
-      callAdminAuth('list_verification_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_business_claims', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_reports', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_transactions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      dashboardRepository.getTasks().then(data => ({ data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_teams', { token: adminToken }).then(r => ({ data: r.teams })).catch(() => ({ data: [] })),
-      commerceRepository.getBusinesses().then(data => ({ data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_staff', { token: adminToken }).then(r => ({ data: r.staff })).catch(() => ({ data: [] })),
-      callAdminAuth('list_withdrawal_requests', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_task_submissions', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-      dashboardRepository.getProfessionalConsultations().then(data => ({ data })).catch(() => ({ data: [] })),
-      callAdminAuth('list_news', { token: adminToken }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-    ])
-    setVerifications(verifRes.data || [])
-    // Build phone lookup: user_id -> phone (from verification requests)
-    const pm = {}
-    ;(verifRes.data || []).forEach(v => { if (v.user_id && v.phone) pm[v.user_id] = v.phone })
-    setPhoneMap(pm)
-    setClaims(claimsRes.data || [])
-    setReports(reportsRes.data || [])
-    setPosts(postsRes.data || [])
-    setTransactions(txRes.data || [])
-    setTasks(tasksRes.data || [])
-    setTeams(teamsRes.data || [])
-    setStaff(staffRes.data || [])
-    setWithdrawals(withdrawRes.data || [])
+  const loadAll = invalidateAdmin
 
-    // Build notification feed
-    const allNotifs = [
-      ...(verifRes.data || []).filter(v => v.status === 'pending').map(v => ({ id: v.id, type: 'verification', icon: '🩺', title: `Verification request from ${v.full_name}`, subtitle: v.profession, time: v.created_at, severity: 'warning', tab: 'verifications', role: 'verification_officer' })),
-      ...(claimsRes.data || []).filter(c => c.status === 'pending').map(c => ({ id: c.id, type: 'claim', icon: '🏥', title: `Business claim: ${c.businesses?.name}`, subtitle: 'Pending approval', time: c.created_at, severity: 'warning', tab: 'claims', role: 'business_manager' })),
-      ...(reportsRes.data || []).filter(r => r.status === 'pending').map(r => ({ id: r.id, type: 'report', icon: '🚩', title: `Post reported: ${r.reason}`, subtitle: r.posts?.content?.slice(0, 60), time: r.created_at, severity: 'urgent', tab: 'reports', role: 'moderator' })),
-      ...(withdrawRes.data || []).filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', icon: '💰', title: `Withdrawal request: ₦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, severity: 'warning', tab: 'withdrawals', role: 'super_admin' })),
-      ...(taskSubRes.data || []).filter(s => s.status === 'pending').map(s => ({ id: s.id, type: 'task', icon: '📋', title: `Task submission: ${s.tasks?.title}`, subtitle: s.profiles?.full_name || 'Professional', time: s.created_at, severity: 'info', tab: 'tasks', role: 'super_admin' })),
-      ...(consultRes.data || []).map(c => ({ id: c.id, type: 'consultation', icon: '📅', title: 'New consultation booking', subtitle: c.profiles?.full_name || 'Professional', time: c.created_at, severity: 'info', tab: 'overview', role: 'verification_officer' })),
-      ...(newsRes.data || []).filter(n => n.status === 'pending').map(n => ({ id: n.id, type: 'news', icon: '📰', title: `News submission: ${(n.headline || 'New article').slice(0, 60)}`, subtitle: n.profiles?.full_name || n.profiles?.display_name || 'Contributor', time: n.created_at, severity: 'warning', tab: 'news', role: 'super_admin' })),
-    ].sort((a, b) => new Date(b.time) - new Date(a.time))
-
-    setNotifications(allNotifs)
-    setBusinesses(bizRes.data || [])
-    const rev = (txRes.data || []).filter(t => t.type === 'topup').reduce((s, t) => s + (t.naira_amount || 0), 0)
-    const pendingVerifs = (verifRes.data || []).filter(v => v.status === 'pending').length
-    const pendingClaims = (claimsRes.data || []).filter(c => c.status === 'pending').length
-    const openReports = (reportsRes.data || []).filter(r => r.status === 'pending').length
-
-    setStats({
-      users: usersCount || usersRes2.data?.length || 0,
-      posts: postsRes.data?.length || 0,
-      pendingVerifs,
-      pendingClaims,
-      reports: openReports,
-      revenue: rev / 100,
-      transactions: txRes.data?.length || 0,
-    })
-
-    const pendingWithdrawals = (withdrawRes.data || []).filter(w => w.status === 'pending').length
-    const pendingTaskSubs = (taskSubRes.data || []).filter(s => s.status === 'pending').length
-    const newConsults = (consultRes.data || []).length
-    const pendingNews = (newsRes.data || []).filter(n => n.status === 'pending').length
-
-    // Super admin sees all notifications
-    const totalNotifs = pendingVerifs + pendingClaims + openReports + pendingWithdrawals + pendingTaskSubs + pendingNews
-    setNotifCount(totalNotifs)
-
-    // Role-specific notifications
-    const role = JSON.parse(localStorage.getItem('admin_user') || '{}').role || ''
-    if (role === 'super_admin') setRoleNotifCount(totalNotifs)
-    else if (role === 'verification_officer') setRoleNotifCount(pendingVerifs + newConsults)
-    else if (role === 'business_manager') setRoleNotifCount(pendingClaims)
-    else if (role === 'moderator' || role === 'content_manager') setRoleNotifCount(openReports + pendingNews)
-    else if (role === 'analytics_manager') setRoleNotifCount(pendingWithdrawals)
-    else setRoleNotifCount(pendingNews ? pendingNews : 0)
-
-    setLoading(false)
-  }
-
-  useEffect(() => { if (adminUser) { loadStories(); loadNews(); loadPromotions(); loadSearchLogs(); loadActiveShows(); loadShopAdmin(); loadAdminRoles() } }, [adminUser])
-
-  async function loadAdminRoles() {
-    try {
-      const { data } = await callAdminAuth('list_admin_roles', { token: localStorage.getItem('admin_token') })
-      setAdminRoles(data || [])
-    } catch { setAdminRoles([]) }
-  }
-
-  async function loadShopAdmin() {
-    try {
-      const token = localStorage.getItem('admin_token')
-      const [appsRes, prodsRes, ordersRes] = await Promise.all([
-        callAdminAuth('list_ecommerce_applications', { token }).catch(()=>({ data: [] })),
-        callAdminAuth('list_ecommerce_products_admin', { token }).catch(()=>({ data: [] })),
-        callAdminAuth('list_shop_orders_admin', { token }).catch(()=>({ data: [] })),
-      ])
-      setEcomApps(appsRes.data || [])
-      setEcomProductsAdmin(prodsRes.data || [])
-      setShopOrdersAdmin(ordersRes.data || [])
-    } catch { /* ignore */ }
-  }
   async function updateEcomApp(id, status) {
     try {
       await callAdminAuth('update_ecommerce_application', { token: localStorage.getItem('admin_token'), id, status })
-      showToast(`Application ${status}`, { type: 'success' }); loadShopAdmin()
+      showToast(`Application ${status}`, { type: 'success' }); invalidateAdmin()
     } catch (e) { showToast(e.message, { type: 'error' }) }
   }
   async function moderateProduct(id, patch) {
     try {
       await callAdminAuth('moderate_ecommerce_product', { token: localStorage.getItem('admin_token'), id, ...patch })
-      showToast('Product updated', { type: 'success' }); loadShopAdmin()
+      showToast('Product updated', { type: 'success' }); invalidateAdmin()
     } catch (e) { showToast(e.message, { type: 'error' }) }
-  }
-
-  async function loadActiveShows() {
-    const { data } = await supabase
-      .from('live_shows')
-      .select('id, title, status, started_at, host_id')
-      .eq('status', 'live')
-      .order('started_at', { ascending: false })
-    setActiveShows(data || [])
-    const { data: sched } = await supabase
-      .from('live_shows')
-      .select('id, title, status, scheduled_at, trailer_url, host_id')
-      .eq('status', 'scheduled')
-      .order('scheduled_at', { ascending: true })
-    setScheduledShows(sched || [])
   }
 
   async function scheduleShow() {
@@ -431,14 +311,14 @@ export default function AdminPanel() {
     }
     setLiveTitle(''); setScheduledAt(''); setTrailerFile(null); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
-    loadActiveShows()
+    invalidateAdmin()
     showToast('Show scheduled! It will show a countdown to your audience. Tap "Start Now" when you\'re ready to go live.', { type: 'success' })
   }
 
   async function startScheduledShow(showId) {
     try {
       await callAdminAuth('start_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
-      loadActiveShows()
+      invalidateAdmin()
       showToast('You are now LIVE!', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't start the show: ${err.message}`, { type: 'error' })
@@ -456,7 +336,7 @@ export default function AdminPanel() {
   async function reallyCancelScheduledShow(showId) {
     try {
       await callAdminAuth('cancel_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
-      loadActiveShows()
+      invalidateAdmin()
       showToast('Scheduled show cancelled', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't cancel the show: ${err.message}`, { type: 'error' })
@@ -484,7 +364,7 @@ export default function AdminPanel() {
     }
     setLiveTitle(''); setLiveGuests([]); setGuestSearch('')
     setCreatingShow(false)
-    loadActiveShows()
+    invalidateAdmin()
     showToast('Live show started! Open the Control Room to begin posting.', { type: 'success' })
   }
 
@@ -499,7 +379,7 @@ export default function AdminPanel() {
   async function reallyEndLiveShow(showId) {
     try {
       await callAdminAuth('end_live_show', { token: localStorage.getItem('admin_token'), showId })
-      loadActiveShows()
+      invalidateAdmin()
       showToast('Live show ended', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't end the show: ${err.message}`, { type: 'error' })
@@ -559,20 +439,6 @@ export default function AdminPanel() {
     loadLiveControl(showId)
   }
 
-  async function loadSearchLogs() {
-    try {
-      const { data } = await callAdminAuth('list_search_logs', { token: localStorage.getItem('admin_token') })
-      setSearchLogs(data || [])
-    } catch {
-      setSearchLogs([])
-    }
-  }
-
-  async function loadPromotions() {
-    const data = await commerceRepository.getPromotions()
-    setPromotions(data || [])
-  }
-
   async function createPromotion() {
     if (!promoTitle.trim()) { showToast('Add a title', { type: 'warning' }); return }
     setSavingPromo(true)
@@ -595,7 +461,7 @@ export default function AdminPanel() {
         days: promoDays,
       })
       setPromoTitle(''); setPromoLink(''); setPromoDays('7'); setPromoImage(null)
-      loadPromotions()
+      invalidateAdmin()
       showToast('Promotion created', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't create the promotion: ${err.message}`, { type: 'error' })
@@ -614,7 +480,7 @@ export default function AdminPanel() {
   async function reallyDeletePromotion(id) {
     try {
       await callAdminAuth('delete_promotion', { token: localStorage.getItem('admin_token'), id })
-      loadPromotions()
+      invalidateAdmin()
       showToast('Promotion deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the promotion: ${err.message}`, { type: 'error' })
@@ -625,28 +491,6 @@ export default function AdminPanel() {
     setSelectedUser(u)
     const data = await usersRepository.getUserPosts(u.id)
     setUserPosts(data || [])
-  }
-
-  async function loadStories() {
-    const data = await contentRepository.getStories()
-    setStories(data || [])
-  }
-
-  async function loadNews() {
-    try {
-      const { data, phones } = await callAdminAuth('list_news', { token: localStorage.getItem('admin_token') })
-      setNewsItems(data || [])
-      setNewsPhones(phones || {})
-    } catch (err) {
-      const msg = err?.message || ''
-      const isAuth = msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('invalid or expired token') || msg.toLowerCase().includes('no token')
-      if (isAuth) {
-        showToast('Session expired, re-login', { type: 'error' })
-      } else {
-        showToast(`Could not load news: ${msg}`, { type: 'error' })
-      }
-      setNewsItems([])
-    }
   }
 
   async function approveNews(item) {
@@ -660,14 +504,14 @@ export default function AdminPanel() {
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() }])
       showToast('News item approved', { type: 'success' })
       // Optimistic update so UI reflects immediately even before reload
-      setNewsItems(prev => prev.map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n))
+      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n) }))
     } catch (err) {
       showToast(`Couldn't approve the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
     setSavingNews(false)
-    loadNews()
-    loadAll()
+    invalidateAdmin()
+    invalidateAdmin()
   }
 
   async function rejectNews(id) {
@@ -676,13 +520,13 @@ export default function AdminPanel() {
       logAuditAction('reject', 'news', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'news', id, timestamp: new Date().toISOString() }])
       showToast('News item rejected', { type: 'success' })
-      setNewsItems(prev => prev.map(n => n.id === id ? { ...n, status: 'rejected' } : n))
+      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === id ? { ...n, status: 'rejected' } : n) }))
     } catch (err) {
       showToast(`Couldn't reject the news item: ${err.message}`, { type: 'error' })
     }
     setEditingNews(null)
-    loadNews()
-    loadAll()
+    invalidateAdmin()
+    invalidateAdmin()
   }
 
   function deleteNews(id) {
@@ -697,10 +541,10 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('delete', 'news', id, {})
-      setNewsItems(prev => prev.filter(n => n.id !== id))
+      qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).filter(n => n.id !== id) }))
       showToast('News item deleted', { type: 'success' })
-      loadNews()
-      loadAll()
+      invalidateAdmin()
+      invalidateAdmin()
     } catch (err) {
       showToast(`Couldn't delete the news item: ${err.message}`, { type: 'error' })
     }
@@ -728,7 +572,7 @@ export default function AdminPanel() {
         bgColor: storyBg,
       })
       setStoryTitle(''); setStoryBody(''); setStoryBg('var(--color-primary)'); setStoryImageFile(null)
-      loadStories()
+      invalidateAdmin()
       showToast('Story published', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't create the story: ${err.message}`, { type: 'error' })
@@ -747,7 +591,7 @@ export default function AdminPanel() {
   async function reallyDeleteStory(id) {
     try {
       await callAdminAuth('delete_story', { token: localStorage.getItem('admin_token'), id })
-      loadStories()
+      invalidateAdmin()
       showToast('Story deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the story: ${err.message}`, { type: 'error' })
@@ -768,7 +612,7 @@ export default function AdminPanel() {
       await callAdminAuth('suspend_user', { token: localStorage.getItem('admin_token'), userId, days })
       logAuditAction('suspend', 'user', userId, { days })
       setSelectedUser(null)
-      loadAll()
+      invalidateAdmin()
       showToast(`User suspended for ${days} days`, { type: 'success' })
     } catch (err) {
       showToast(`Couldn't suspend the user: ${err.message}`, { type: 'error' })
@@ -795,7 +639,7 @@ export default function AdminPanel() {
     }
     setSelectedUser(null)
     setDeletingUser(false)
-    loadAll()
+    invalidateAdmin()
   }
 
   // Resolve a private credential document to a short-lived signed URL and
@@ -831,7 +675,7 @@ export default function AdminPanel() {
       await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
       logAuditAction('approve', 'verification', id, { userId, profession })
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Verification approved', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't approve the verification: ${err.message}`, { type: 'error' })
@@ -843,7 +687,7 @@ export default function AdminPanel() {
       await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('reject', 'verification', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Verification rejected', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't reject the verification: ${err.message}`, { type: 'error' })
@@ -855,7 +699,7 @@ export default function AdminPanel() {
       await callAdminAuth('approve_claim', { token: localStorage.getItem('admin_token'), claimId: id, businessId })
       logAuditAction('approve', 'claim', id, { businessId })
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Claim approved', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't approve the claim: ${err.message}`, { type: 'error' })
@@ -867,7 +711,7 @@ export default function AdminPanel() {
       await callAdminAuth('reject_claim', { token: localStorage.getItem('admin_token'), claimId: id })
       logAuditAction('reject', 'claim', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Claim rejected', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't reject the claim: ${err.message}`, { type: 'error' })
@@ -887,7 +731,7 @@ export default function AdminPanel() {
       await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('delete', 'post', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'post', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
@@ -899,7 +743,7 @@ export default function AdminPanel() {
       await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
       logAuditAction('resolve', 'report', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'report', id, timestamp: new Date().toISOString() }])
-      loadAll()
+      invalidateAdmin()
       showToast('Report resolved', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't resolve the report: ${err.message}`, { type: 'error' })
@@ -912,7 +756,7 @@ export default function AdminPanel() {
       await callAdminAuth('manual_verify', { token: localStorage.getItem('admin_token'), userId, specialty })
       setVerifyingUser(null)
       setVerifySpecialty('')
-      loadAll()
+      invalidateAdmin()
       showToast('User verified', { type: 'success' })
     } catch (err) {
       showToast(`Couldn't verify the user: ${err.message}`, { type: 'error' })
@@ -938,7 +782,7 @@ export default function AdminPanel() {
     } catch (err) {
       showToast(`Couldn't create the task: ${err.message}`, { type: 'error' })
     }
-    setSavingTask(false); loadAll()
+    setSavingTask(false); invalidateAdmin()
   }
 
   async function createStaff(e) {
@@ -951,7 +795,7 @@ export default function AdminPanel() {
       })
       setStaffMsg('Staff account created!')
       setStaffName(''); setStaffEmail(''); setStaffPass(''); setStaffRole('moderator'); setStaffTeam('')
-      loadAll()
+      invalidateAdmin()
     } catch (err) {
       setStaffMsg('Error: ' + err.message)
     }
@@ -962,7 +806,7 @@ export default function AdminPanel() {
     e.preventDefault()
     try {
       await callAdminAuth('create_team', { token: localStorage.getItem('admin_token'), name: teamName })
-      setTeamName(''); loadAll()
+      setTeamName(''); invalidateAdmin()
     } catch (err) {
       setStaffMsg('Error: ' + err.message)
     }
@@ -1008,8 +852,8 @@ export default function AdminPanel() {
         {tab === 'orders' && <OrdersTab transactions={transactions} showToast={showToast} loadAll={loadAll} />}
         {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
-        {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={loadAdminRoles} showToast={showToast} ALL_TABS={ALL_TABS} />}
-        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onApprove={async (id) => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id }); loadAll(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal: ${err.message}`, { type: 'error' }) } }} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id }); loadAll(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
+        {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
+        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onApprove={async (id) => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id }); invalidateAdmin(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal: ${err.message}`, { type: 'error' }) } }} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
         {tab === 'businesses' && <BusinessesTab businesses={businesses} bizSearch={bizSearch} setBizSearch={setBizSearch} bizTypeFilter={bizTypeFilter} setBizTypeFilter={setBizTypeFilter} bizStateFilter={bizStateFilter} setBizStateFilter={setBizStateFilter} bizStatusFilter={bizStatusFilter} setBizStatusFilter={setBizStatusFilter} selectedBiz={selectedBiz} setSelectedBiz={setSelectedBiz} bizReviews={bizReviews} setBizReviews={setBizReviews} bizProducts={bizProducts} setBizProducts={setBizProducts} supabase={supabase} />}
         {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
         {tab === 'news' && <NewsTab newsItems={newsItems} editingNews={editingNews} setEditingNews={setEditingNews} newsPhones={newsPhones} savingNews={savingNews} approveNews={approveNews} rejectNews={rejectNews} deleteNews={deleteNews} />}
