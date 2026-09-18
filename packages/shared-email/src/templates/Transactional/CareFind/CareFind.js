@@ -1,5 +1,5 @@
 import { logoHeader, footer, baseStyle, cardStyle, btnStyle, esc } from '../BaseTemplate.js'
-import { fmtNaira, fmtDate } from '../../utils/formatters.js'
+import { fmtNaira, fmtDate } from '../../../utils/formatters.js'
 const APP_URL = typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carefind.app'
 
 export function customerRegistration({ fullName, email, password }) {
