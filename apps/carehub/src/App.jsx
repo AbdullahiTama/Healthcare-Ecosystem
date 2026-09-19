@@ -67,10 +67,16 @@ export default function App() {
     localStorage.setItem('carehub_auth', JSON.stringify(authData))
   }
 
-  const logout = () => {
+let loggingOut = false
+
+  const logout = async () => {
+    if (loggingOut) return
+    loggingOut = true
     setAuth(null)
     localStorage.removeItem('carehub_auth')
-    authClient.auth.signOut().catch(() => {})
+    try { await authClient.auth.signOut() } catch (e) {}
+    loggingOut = false
+    window.location.href = '/login'
   }
 
   const loginAgent = (agentRow) => {
@@ -78,10 +84,11 @@ export default function App() {
     localStorage.setItem('carehub_agent_auth', JSON.stringify(agentRow))
   }
 
-  const logoutAgent = () => {
+  const logoutAgent = async () => {
     setAgent(null)
     localStorage.removeItem('carehub_agent_auth')
-    authClient.auth.signOut().catch(() => {})
+    try { await authClient.auth.signOut() } catch (e) {}
+    window.location.href = '/login'
   }
 
   const isAdmin = () => auth?.isAdmin === true
@@ -115,8 +122,9 @@ export default function App() {
   useEffect(() => {
     const { data: { subscription } } = authClient.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT' || (event === 'TOKEN_REFRESHED' && !session)) {
-        logout()
-        window.location.href = '/login'
+        if (!loggingOut) {
+          window.location.href = '/login'
+        }
       }
     })
     return () => subscription.unsubscribe()
