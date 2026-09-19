@@ -1,0 +1,8 @@
+import { sendEmail } from './sendEmail.js'
+export { sendEmail } from './sendEmail.js'
+export { EmailService } from './EmailService.js'
+export * from './templates/index.js'
+export { renderEmailTemplate, generateSampleVariables } from './templates/Marketing/templateRenderer.js'
+export { SAMPLES, TEMPLATE_META } from './templates/samples.js'
+export { fmtNaira, fmtKobo, fmtDate, fmtPhone } from './utils/formatters.js'
+export { escapeHtml } from './utils/escapeHtml.js'

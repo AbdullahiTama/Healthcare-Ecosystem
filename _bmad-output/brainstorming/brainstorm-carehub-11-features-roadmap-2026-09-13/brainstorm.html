@@ -1,0 +1,561 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareHub Brainstorm — 11-Feature Roadmap</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#060b14;--bg2:#0c1220;--bg3:#111827;--surface:#151d2e;--surface2:#1a2438;
+--border:#1e2d44;--border2:#2a3f5f;
+--teal:#00d4aa;--cyan:#06b6d4;--blue:#3b82f6;--purple:#8b5cf6;
+--orange:#f59e0b;--red:#ef4444;--green:#10b981;--pink:#ec4899;
+--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+--font:'Segoe UI',system-ui,-apple-system,sans-serif;
+--mono:'Cascadia Code','Fira Code','JetBrains Mono',monospace;
+--radius:12px;--radius-sm:8px;
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.6;overflow-x:hidden}
+::selection{background:var(--teal);color:var(--bg)}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--teal)}
+
+.hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:2rem;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,rgba(0,212,170,.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(6,182,212,.06) 0%,transparent 50%)}
+.hero-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.4rem 1rem;border:1px solid var(--border2);border-radius:999px;font-size:.75rem;color:var(--teal);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2rem;backdrop-filter:blur(8px);background:rgba(0,212,170,.04)}
+.hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--teal);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{font-size:clamp(2.5rem,6vw,5rem);font-weight:800;letter-spacing:-.03em;line-height:1.05;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--text) 0%,var(--teal) 50%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:clamp(1rem,2vw,1.25rem);color:var(--text2);max-width:700px;margin-bottom:3rem}
+.hero-stats{display:flex;gap:2rem;flex-wrap:wrap;justify-content:center}
+.hero-stat{text-align:center}
+.hero-stat-value{font-size:2.5rem;font-weight:800;color:var(--teal);font-family:var(--mono)}
+.hero-stat-label{font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:.25rem}
+.scroll-hint{position:absolute;bottom:2rem;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.scroll-hint svg{width:24px;height:24px;stroke:var(--text3);fill:none;stroke-width:2}
+
+nav.sticky-nav{position:sticky;top:0;z-index:100;background:rgba(6,11,20,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;gap:.5rem;overflow-x:auto;justify-content:center;flex-wrap:wrap}
+nav.sticky-nav a{padding:.4rem .8rem;border-radius:var(--radius-sm);font-size:.8rem;color:var(--text2);text-decoration:none;white-space:nowrap;transition:all .2s}
+nav.sticky-nav a:hover,nav.sticky-nav a.active{color:var(--teal);background:rgba(0,212,170,.08)}
+
+.section{padding:5rem 1.5rem;max-width:1200px;margin:0 auto}
+.section-label{display:inline-flex;align-items:center;gap:.5rem;font-size:.7rem;text-transform:uppercase;letter-spacing:.15em;color:var(--text3);margin-bottom:.75rem}
+.section-label::before{content:'';width:20px;height:1px;background:var(--teal)}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;margin-bottom:.5rem;letter-spacing:-.02em}
+.section-desc{color:var(--text2);max-width:600px;margin-bottom:3rem;font-size:1.05rem}
+
+.technique-header{display:flex;align-items:center;gap:1rem;margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.technique-icon{width:48px;height:48px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0}
+.technique-count{margin-left:auto;font-family:var(--mono);font-size:.8rem;color:var(--text3);padding:.3rem .7rem;border:1px solid var(--border);border-radius:999px}
+
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1.25rem}
+.idea-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;transition:all .3s;position:relative;overflow:hidden}
+.idea-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.idea-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;opacity:0;transition:opacity .3s}
+.idea-card:hover::before{opacity:1}
+.idea-card-source{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem;display:flex;align-items:center;gap:.4rem}
+.idea-card-source span{padding:.15rem .5rem;border-radius:4px;font-weight:600}
+.idea-card-feature{font-size:.7rem;color:var(--text3);margin-bottom:.5rem}
+.idea-card p{font-size:.9rem;color:var(--text);line-height:1.5}
+
+.analogical .idea-card::before{background:linear-gradient(90deg,var(--teal),var(--cyan))}
+.analogical .idea-card-source span{background:rgba(0,212,170,.12);color:var(--teal)}
+.analogical .technique-icon{background:rgba(0,212,170,.1);color:var(--teal)}
+
+.jtbd .idea-card{border-left:3px solid var(--purple)}
+.jtbd .idea-card::before{background:var(--purple)}
+.jtbd .idea-card-source span{background:rgba(139,92,246,.12);color:var(--purple)}
+.jtbd .technique-icon{background:rgba(139,92,246,.1);color:var(--purple)}
+.jtbd .idea-card p{font-style:italic}
+
+.scamper .idea-card::before{background:linear-gradient(90deg,var(--orange),var(--pink))}
+.scamper .idea-card-source span{font-weight:700}
+.scamper .technique-icon{background:rgba(245,158,11,.1);color:var(--orange)}
+.scamper-letter{display:inline-block;width:22px;height:22px;border-radius:4px;text-align:center;line-height:22px;font-weight:800;font-size:.7rem;margin-right:.3rem}
+.s-sub{background:rgba(239,68,68,.15);color:var(--red)}
+.s-com{background:rgba(245,158,11,.15);color:var(--orange)}
+.s-ada{background:rgba(16,185,129,.15);color:var(--green)}
+.s-mod{background:rgba(59,130,246,.15);color:var(--blue)}
+.s-put{background:rgba(139,92,246,.15);color:var(--purple)}
+.s-eli{background:rgba(236,72,153,.15);color:var(--pink)}
+.s-rev{background:rgba(6,182,212,.15);color:var(--cyan)}
+
+.triz .idea-card{background:linear-gradient(135deg,var(--surface) 0%,rgba(6,182,212,.03) 100%)}
+.triz .idea-card::before{background:linear-gradient(90deg,var(--cyan),var(--blue))}
+.triz .idea-card-source span{background:rgba(6,182,212,.12);color:var(--cyan)}
+.triz .technique-icon{background:rgba(6,182,212,.1);color:var(--cyan)}
+.triz-contradiction{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;font-size:.75rem;font-weight:600}
+.triz-vs{color:var(--text3);font-size:.65rem;padding:.1rem .4rem;border:1px solid var(--border);border-radius:4px}
+.triz-resolve{color:var(--cyan);font-size:.7rem;margin-top:.5rem;display:flex;align-items:center;gap:.3rem}
+.triz-resolve::before{content:'→';color:var(--teal)}
+
+.cross .idea-card{border-left:3px solid var(--green)}
+.cross .idea-card::before{background:linear-gradient(90deg,var(--green),var(--teal))}
+.cross .idea-card-source span{background:rgba(16,185,129,.12);color:var(--green)}
+.cross .technique-icon{background:rgba(16,185,129,.1);color:var(--green)}
+.cross-industry{font-size:.7rem;padding:.2rem .6rem;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:999px;color:var(--green);display:inline-block;margin-bottom:.5rem}
+
+.speculative .idea-card{background:linear-gradient(135deg,var(--surface) 0%,rgba(139,92,246,.04) 100%);border:1px solid rgba(139,92,246,.2)}
+.speculative .idea-card:hover{border-color:var(--purple);box-shadow:0 0 30px rgba(139,92,246,.1)}
+.speculative .idea-card::before{background:linear-gradient(90deg,var(--purple),var(--pink))}
+.speculative .idea-card-source span{background:rgba(139,92,246,.12);color:var(--purple)}
+.speculative .technique-icon{background:rgba(139,92,246,.1);color:var(--purple)}
+.speculative .idea-card{animation:glow 4s ease-in-out infinite alternate}
+@keyframes glow{0%{box-shadow:0 0 0 rgba(139,92,246,0)}100%{box-shadow:0 0 20px rgba(139,92,246,.05)}}
+
+.insights-section{background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 50%,var(--bg) 100%);padding:6rem 1.5rem;position:relative}
+.insights-section::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:1px;height:80px;background:linear-gradient(180deg,transparent,var(--teal),transparent)}
+.insights-inner{max-width:1000px;margin:0 auto}
+.insight-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;margin-bottom:1.5rem;position:relative;overflow:hidden}
+.insight-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--teal),var(--cyan))}
+.insight-number{font-family:var(--mono);font-size:.7rem;color:var(--teal);margin-bottom:.5rem;letter-spacing:.1em}
+.insight-card h3{font-size:1.2rem;margin-bottom:.75rem;color:var(--text)}
+.insight-card p{color:var(--text2);font-size:.95rem;line-height:1.7}
+
+.connections{margin-top:3rem;padding:2rem;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)}
+.connections h3{font-size:1.1rem;margin-bottom:1.5rem;color:var(--teal)}
+.connection-item{display:flex;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--border);align-items:flex-start}
+.connection-item:last-child{border-bottom:none}
+.connection-arrow{color:var(--teal);font-weight:700;flex-shrink:0;font-size:1.2rem}
+.connection-item p{color:var(--text2);font-size:.9rem;line-height:1.6}
+
+.priority-section{padding:5rem 1.5rem;max-width:1000px;margin:0 auto}
+.priority-list{counter-reset:priority}
+.priority-item{counter-increment:priority;display:flex;gap:1.5rem;padding:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:1rem;transition:all .3s;align-items:flex-start}
+.priority-item:hover{border-color:var(--teal);transform:translateX(4px)}
+.priority-item::before{content:counter(priority);font-family:var(--mono);font-size:1.5rem;font-weight:800;color:var(--teal);min-width:2rem;text-align:center;padding-top:.1rem}
+.priority-item h4{font-size:1rem;margin-bottom:.3rem}
+.priority-item p{color:var(--text2);font-size:.85rem}
+.priority-item:first-child{border-color:var(--teal);background:linear-gradient(135deg,var(--surface),rgba(0,212,170,.04))}
+
+.feature-nav{padding:3rem 1.5rem;max-width:1200px;margin:0 auto}
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem}
+.feature-chip{padding:.75rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.8rem;color:var(--text2);cursor:pointer;transition:all .2s;text-align:center}
+.feature-chip:hover{border-color:var(--teal);color:var(--teal);background:rgba(0,212,170,.04)}
+.feature-chip .count{display:block;font-family:var(--mono);font-size:.65rem;color:var(--text3);margin-top:.2rem}
+
+footer{text-align:center;padding:3rem 1.5rem;border-top:1px solid var(--border);color:var(--text3);font-size:.8rem}
+footer span{color:var(--teal)}
+
+.fade-in{opacity:0;transform:translateY(20px);transition:all .6s ease-out}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+
+@media(max-width:768px){
+.hero h1{font-size:2rem}
+.hero-stats{gap:1rem}
+.cards-grid{grid-template-columns:1fr}
+nav.sticky-nav{justify-content:flex-start}
+.section{padding:3rem 1rem}
+.priority-item{flex-direction:column;gap:.75rem}
+.feature-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:480px){
+.feature-grid{grid-template-columns:1fr}
+.hero-stat-value{font-size:1.8rem}
+}
+</style>
+</head>
+<body>
+
+<section class="hero">
+<div class="hero-badge"><span>Session Complete</span></div>
+<h1>CareHub Brainstorm</h1>
+<p class="hero-sub">11 feature areas. 6 creative techniques. 103 ideas forged into a unified product vision for the CareHub/CareFind platform.</p>
+<div class="hero-stats">
+<div class="hero-stat"><div class="hero-stat-value">103</div><div class="hero-stat-label">Ideas Generated</div></div>
+<div class="hero-stat"><div class="hero-stat-value">11</div><div class="hero-stat-label">Feature Areas</div></div>
+<div class="hero-stat"><div class="hero-stat-value">6</div><div class="hero-stat-label">Techniques</div></div>
+<div class="hero-stat"><div class="hero-stat-value">7</div><div class="hero-stat-label">Priority Actions</div></div>
+</div>
+<div class="scroll-hint"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+</section>
+
+<nav class="sticky-nav" id="nav">
+<a href="#analogical">Analogical</a>
+<a href="#jtbd">Job to Be Done</a>
+<a href="#scamper">SCAMPER</a>
+<a href="#triz">TRIZ</a>
+<a href="#cross">Cross-Pollination</a>
+<a href="#speculative">Speculative</a>
+<a href="#features">By Feature</a>
+<a href="#insights">Insights</a>
+<a href="#priority">Priority</a>
+</nav>
+
+<div class="feature-nav" id="features">
+<div class="section-label">Navigate by Feature Area</div>
+<h2 class="section-title" style="font-size:1.5rem;margin-bottom:1.5rem">Feature Areas</h2>
+<div class="feature-grid">
+<div class="feature-chip" onclick="filterFeature('admin')">Admin Dashboard<span class="count">14 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('ecommerce')">E-commerce Tracking<span class="count">10 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('roles')">Roles &amp; Permissions<span class="count">8 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('email')">Custom Email<span class="count">10 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('withdrawal')">Auth &amp; Withdrawal<span class="count">10 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('sharing')">Post Sharing<span class="count">8 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('video')">Video/Reels<span class="count">8 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('news-sub')">News Submission<span class="count">6 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('news-eng')">News Engagement<span class="count">8 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('live')">Go Live / Scheduled<span class="count">8 ideas</span></div>
+<div class="feature-chip" onclick="filterFeature('stories')">Stories on Feed<span class="count">7 ideas</span></div>
+</div>
+</div>
+
+<section class="section analogical" id="analogical">
+<div class="technique-header">
+<div class="technique-icon">&#x1F50D;</div>
+<div>
+<div class="section-label">Technique 01</div>
+<h2 class="section-title">Analogical Thinking</h2>
+<p class="section-desc">Stealing patterns from best-in-class products and adapting them for CareHub's healthcare context.</p>
+</div>
+<div class="technique-count">24 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Linear</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Adopt Linear's command palette (Cmd+K) for instant navigation across all 18 tabs, with fuzzy search and recent items.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Stripe</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Stripe-style inline table editing for verifications, with keyboard shortcuts (j/k nav, e to edit, enter to act).</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Vercel</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Real-time deployment-style activity feed showing platform events as they happen (new registrations, orders, withdrawals).</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Figma</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Figma-style branching for admin actions — test changes in a sandbox before applying to production data.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Notion</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Notion-style slash commands in every text field for quick formatting and @mentions of users/orders.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Shopify</span></div><div class="idea-card-feature">E-commerce Tracking</div><p>Shopify's order timeline view with full event history, internal notes, and customer communication thread in one scrollable pane.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Amazon</span></div><div class="idea-card-feature">E-commerce Tracking</div><p>Amazon-style delivery map tracking with driver photo and ETA countdown for pickup/delivery orders.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Uber Eats</span></div><div class="idea-card-feature">E-commerce Tracking</div><p>Uber Eats-style live vendor status (preparing/packed/handed-to-driver) with push notifications at each transition.</p></div>
+<div class="idea-card" data-feature="roles"><div class="idea-card-source"><span>Linear</span></div><div class="idea-card-feature">Roles &amp; Permissions</div><p>Linear-style granular permission matrix with visual toggle grid (rows=features, columns=actions: view/create/edit/delete).</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Mailchimp</span></div><div class="idea-card-feature">Custom Email</div><p>Mailchimp-style drag-and-drop email template builder with block editor (text, image, button, divider, social links).</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Revolut</span></div><div class="idea-card-feature">Auth &amp; Withdrawal Security</div><p>Revolut-style biometric confirmation (Face ID/Touch ID) for withdrawals, with fallback to PIN + device trust.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Wise</span></div><div class="idea-card-feature">Auth &amp; Withdrawal Security</div><p>Wise-style withdrawal scheduling — set a future date/time and the system executes automatically with full audit trail.</p></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span>Twitter/X</span></div><div class="idea-card-feature">Post Sharing</div><p>Twitter-style rich card preview when composing a share, showing exactly how the link will appear on each platform.</p></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span>WhatsApp</span></div><div class="idea-card-feature">Post Sharing</div><p>WhatsApp-style deep link preview that shows the exact post content inline in the chat, not just a URL card.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>TikTok</span></div><div class="idea-card-feature">Video/Reels</div><p>TikTok-style Duet/Stitch for CareFind videos, letting creators respond to or remix other health content.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>YouTube Shorts</span></div><div class="idea-card-feature">Video/Reels</div><p>YouTube Shorts-style remix audio library — curated health-themed background sounds for video creators.</p></div>
+<div class="idea-card" data-feature="news-sub"><div class="idea-card-source"><span>Medium</span></div><div class="idea-card-feature">News Submission</div><p>Medium-style submission queue with editorial feedback loop — admin can request revisions before approving.</p></div>
+<div class="idea-card" data-feature="news-sub"><div class="idea-card-source"><span>Substack</span></div><div class="idea-card-feature">News Submission</div><p>Substack-style contributor onboarding with writing guidelines, style checker, and AI-assisted headline suggestions.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>LinkedIn</span></div><div class="idea-card-feature">News Engagement</div><p>LinkedIn-style reaction picker (Like/Celebrate/Insightful/Concerned) specific to health content context.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>Reddit</span></div><div class="idea-card-feature">News Engagement</div><p>Reddit-style nested comment threads with collapse/expand, sort by top/new/controversial, and community moderation flags.</p></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>YouTube</span></div><div class="idea-card-feature">Go Live / Scheduled</div><p>YouTube-style countdown page for scheduled lives with reminder notifications, trailer embed, and live chat pre-show.</p></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>Twitch</span></div><div class="idea-card-feature">Go Live / Scheduled</div><p>Twitch-style stream markers that let viewers bookmark moments in a live show to revisit later.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Instagram</span></div><div class="idea-card-feature">Stories on Feed Avatars</div><p>Instagram-style story reply threading that converts into a DM conversation when the viewer taps reply.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Snapchat</span></div><div class="idea-card-feature">Stories on Feed Avatars</div><p>Snapchat-style story highlights — pin your best stories permanently to your profile even after 24h expiry.</p></div>
+</div>
+</section>
+
+<section class="section jtbd" id="jtbd">
+<div class="technique-header">
+<div class="technique-icon">&#x1F3AF;</div>
+<div>
+<div class="section-label">Technique 02</div>
+<h2 class="section-title">Job to Be Done</h2>
+<p class="section-desc">What users are really hiring each feature to do — the emotional and functional jobs behind the requirements.</p>
+</div>
+<div class="technique-count">18 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Admin Dashboard</span></div><div class="idea-card-feature">Functional Job</div><p>User hires admin to feel in control of the entire platform in 30 seconds — add a 30-second health pulse widget: revenue today, pending verifications, active lives, open disputes — one glance.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Admin Dashboard</span></div><div class="idea-card-feature">Functional Job</div><p>User hires admin to catch problems before users complain — add anomaly detection alerts: unusual withdrawal spike, order failure rate increase, negative review cluster.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>E-commerce</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires order tracking to reduce anxiety about where my money went — add emotional status updates: Your order is being carefully packed by the pharmacy, not just processing.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>E-commerce</span></div><div class="idea-card-feature">Functional Job</div><p>User hires fulfillment to not have to think about logistics — auto-assign nearest pickup station based on delivery address, pre-fill delivery preferences from past orders.</p></div>
+<div class="idea-card" data-feature="roles"><div class="idea-card-source"><span>Roles &amp; Permissions</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires permissions to not break anything important by accident — add confirmation dialogs for destructive actions scoped by role, with always ask me option per user.</p></div>
+<div class="idea-card" data-feature="roles"><div class="idea-card-source"><span>Roles &amp; Permissions</span></div><div class="idea-card-feature">Functional Job</div><p>User hires custom roles to onboard my team without giving them too much access — add role templates by business type (pharmacy team, hospital team) that can be customized.</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Custom Email</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires email to maintain a professional relationship with my customers — add branded email signatures, custom from-name, and reply-to routing to support inbox.</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Custom Email</span></div><div class="idea-card-feature">Functional Job</div><p>User hires email to re-engage people who stopped coming back — add automated win-back sequences: 7 days no login, 30 days no purchase, with personalized content.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Withdrawal Security</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires withdrawal security to sleep well knowing my money is safe — add withdrawal notifications to a trusted contact (optional), with amount and destination bank.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Withdrawal Security</span></div><div class="idea-card-feature">Functional Job</div><p>User hires no-admin-approval to get my money instantly when I need it — add instant withdrawal for amounts under threshold (e.g. 5000 Naira) with PIN only, no waiting.</p></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span>Post Sharing</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires sharing to look knowledgeable to my friends — add share-with-context option: attach a personal note when sharing a post, like This helped me manage my diabetes.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>Video/Reels</span></div><div class="idea-card-feature">Functional Job</div><p>User hires video to learn something useful in under a minute — add chapter markers and transcript search so users can jump to the relevant part of a video.</p></div>
+<div class="idea-card" data-feature="news-sub"><div class="idea-card-source"><span>News Submission</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires submission to have my voice heard by a wide audience — add submission status tracker with estimated review time and position in queue.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>News Engagement</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires engagement to feel connected to the health community — add reaction streaks: You've engaged with health news 7 days in a row with badge rewards.</p></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>Go Live / Scheduled</span></div><div class="idea-card-feature">Functional Job</div><p>User hires scheduled live to build anticipation and maximize attendance — add countdown timers, reminder notifications at 1h/15m/5m before, and notify me button on scheduled shows.</p></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>Go Live / Scheduled</span></div><div class="idea-card-feature">Functional Job</div><p>User hires live management to not forget about my commitments — add calendar integration (Google/Apple) so scheduled lives appear in personal calendars automatically.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Stories on Feed</span></div><div class="idea-card-feature">Functional Job</div><p>User hires story rings to know who's active right now without stalking profiles — add active now green dot alongside story ring when user is currently online and posting.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Stories on Feed</span></div><div class="idea-card-feature">Emotional Job</div><p>User hires story tap to feel connected to people I care about — add story reply with voice note option, making it feel more personal than text.</p></div>
+</div>
+</section>
+
+<section class="section scamper" id="scamper">
+<div class="technique-header">
+<div class="technique-icon">&#x2699;</div>
+<div>
+<div class="section-label">Technique 03</div>
+<h2 class="section-title">SCAMPER Method</h2>
+<p class="section-desc">Systematic improvement through 7 lenses — Substitute, Combine, Adapt, Modify, Put to other use, Eliminate, Reverse.</p>
+</div>
+<div class="technique-count">18 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span class="s-sub">S</span> Substitute</div><div class="idea-card-feature">Admin Dashboard</div><p>Replace tab navigation with a command palette + sidebar hybrid — sidebar shows pinned items, Cmd+K for everything else.</p></div>
+<div class="idea-card" data-feature="admin ecommerce"><div class="idea-card-source"><span class="s-com">C</span> Combine</div><div class="idea-card-feature">Admin + E-commerce</div><p>Merge the Revenue tab and Shop tab into a unified Commerce view showing orders, revenue, and withdrawals in one financial dashboard.</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span class="s-ada">A</span> Adapt</div><div class="idea-card-feature">Custom Email</div><p>Adapt email templates from the existing design system component library — build emails with the same Button/Card/Layout primitives used in the app.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span class="s-mod">M</span> Modify</div><div class="idea-card-feature">Withdrawal Security</div><p>Modify the withdrawal flow to support partial withdrawals — let users split a withdrawal across multiple bank accounts.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span class="s-put">P</span> Put to Other Use</div><div class="idea-card-feature">Stories on Feed</div><p>Use the story ring system for more than stories — show a purple ring for users who went live recently, orange for users with new posts you haven't seen.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span class="s-eli">E</span> Eliminate</div><div class="idea-card-feature">Admin Dashboard</div><p>Eliminate the separate admin login — unify with Supabase Auth and use RLS + admin role check for access control.</p></div>
+<div class="idea-card" data-feature="news-sub"><div class="idea-card-source"><span class="s-rev">R</span> Reverse</div><div class="idea-card-feature">News Submission</div><p>Reverse the submission flow — instead of submit-then-review, let approved contributors publish directly with post-moderation.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span class="s-sub">S</span> Substitute</div><div class="idea-card-feature">Video/Reels</div><p>Substitute the vertical-only feed with a layout toggle — vertical for discovery, grid for browsing (like YouTube Shorts vs regular YouTube).</p></div>
+<div class="idea-card" data-feature="sharing stories"><div class="idea-card-source"><span class="s-com">C</span> Combine</div><div class="idea-card-feature">Post Sharing + Stories</div><p>Combine sharing and stories — when you share a post, offer to also add it to your story with one tap, auto-generated card.</p></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span class="s-ada">A</span> Adapt</div><div class="idea-card-feature">Go Live / Scheduled</div><p>Adapt the scheduled live system from webinars — add registration page, attendee limit, waitlist, and post-event replay access.</p></div>
+<div class="idea-card" data-feature="roles"><div class="idea-card-source"><span class="s-mod">M</span> Modify</div><div class="idea-card-feature">Roles &amp; Permissions</div><p>Modify permissions to be time-bound — grant temporary elevated access that auto-revokes after 24 hours (for incident response).</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span class="s-put">P</span> Put to Other Use</div><div class="idea-card-feature">E-commerce Tracking</div><p>Use the order tracking system for non-commerce purposes — track vendor application status, business verification progress, content moderation queue.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span class="s-eli">E</span> Eliminate</div><div class="idea-card-feature">News Engagement</div><p>Eliminate the separate news engagement bar — embed engagement icons directly in the news preview card on the feed, not just on the article page.</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span class="s-rev">R</span> Reverse</div><div class="idea-card-feature">Custom Email</div><p>Reverse the email direction — let users compose emails from the app that get sent through Resend, with templates saved and reusable.</p></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span class="s-sub">S</span> Substitute</div><div class="idea-card-feature">Stories on Feed</div><p>Substitute the 24-hour expiry with configurable duration — let users choose 6h, 12h, 24h, or 48h for each story.</p></div>
+<div class="idea-card" data-feature="live video"><div class="idea-card-source"><span class="s-com">C</span> Combine</div><div class="idea-card-feature">Go Live + Video</div><p>Combine live and recorded video — auto-save every live session as a video post, editable before publishing.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span class="s-ada">A</span> Adapt</div><div class="idea-card-feature">Withdrawal Security</div><p>Adapt the PIN system for all sensitive operations — require PIN for changing email, changing bank details, and large transfers, not just withdrawals.</p></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span class="s-mod">M</span> Modify</div><div class="idea-card-feature">Post Sharing</div><p>Modify the share link to be context-aware — same URL shows different OG preview depending on the platform (Twitter card vs Facebook vs WhatsApp).</p></div>
+</div>
+</section>
+
+<section class="section triz" id="triz">
+<div class="technique-header">
+<div class="technique-icon">&#x26A1;</div>
+<div>
+<div class="section-label">Technique 04</div>
+<h2 class="section-title">TRIZ Contradiction</h2>
+<p class="section-desc">Resolving core tensions without trade-offs — finding the elegant solution that satisfies both sides of each contradiction.</p>
+</div>
+<div class="technique-count">19 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Security <span class="triz-vs">VS</span> Convenience</div><p>Progressive trust — new users need PIN + email confirm, after 10 successful withdrawals PIN only, after 50 biometric only.</p><div class="triz-resolve">Progressive trust levels eliminate the binary choice</div></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Admin Power <span class="triz-vs">VS</span> Simplicity</div><p>Progressive disclosure — show 5 key metrics on dashboard, expand to full 18 tabs only when user scrolls down or taps more.</p><div class="triz-resolve">Simple by default, powerful on demand</div></div>
+<div class="idea-card" data-feature="roles"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Customization <span class="triz-vs">VS</span> Consistency</div><p>Role templates + overrides — start from pre-built templates, allow granular customization but show recommended baseline.</p><div class="triz-resolve">Templates provide consistency, overrides provide flexibility</div></div>
+<div class="idea-card" data-feature="live video"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Real-time <span class="triz-vs">VS</span> Performance</div><p>Optimistic UI — show real-time updates immediately, reconcile with server state in background, never block user interaction.</p><div class="triz-resolve">Perceived real-time without performance cost</div></div>
+<div class="idea-card" data-feature="news-sub"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Content Quality <span class="triz-vs">VS</span> Speed</div><p>AI pre-screening — auto-check for spam, inappropriate content, and formatting issues before human review, speeding up approval.</p><div class="triz-resolve">AI handles the mundane, humans handle the nuanced</div></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Engagement <span class="triz-vs">VS</span> Intrusiveness</div><p>Smart visibility — only show story ring for users you interact with regularly, hide for acquaintances unless they're live.</p><div class="triz-resolve">Contextual relevance replaces blanket visibility</div></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Flexibility <span class="triz-vs">VS</span> Control</div><p>Guardrails — allow full HTML customization but provide validated blocks (header, body, CTA) that guarantee mobile rendering.</p><div class="triz-resolve">Freedom within a safe frame</div></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Privacy <span class="triz-vs">VS</span> Discovery</div><p>Granular share permissions — let users choose which posts are shareable, and whether shared links show full content or teaser only.</p><div class="triz-resolve">User-controlled visibility boundaries</div></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Live Energy <span class="triz-vs">VS</span> Production Quality</div><p>Post-live editing — record everything, let host edit and republish highlights as polished video content after the stream ends.</p><div class="triz-resolve">Raw live energy + polished replay = best of both</div></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Feature Richness <span class="triz-vs">VS</span> Performance</div><p>Adaptive loading — load only video metadata initially, prefetch next 2 videos, lazy-load engagement counts and comments.</p><div class="triz-resolve">Perceived speed through strategic loading</div></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Admin Approval <span class="triz-vs">VS</span> Instant Access</div><p>Smart limits — auto-approve withdrawals under threshold with good history, flag unusual patterns for review.</p><div class="triz-resolve">Risk-based automation replaces blanket approval</div></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Custom Email <span class="triz-vs">VS</span> Deliverability</div><p>Domain verification — let users customize from-address but require SPF/DKIM setup to prevent spam flagging.</p><div class="triz-resolve">Personalization with proven authenticity</div></div>
+<div class="idea-card" data-feature="sharing"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Post Sharing <span class="triz-vs">VS</span> Context Loss</div><p>Platform-specific previews — detect sharing platform and generate optimized preview (full image for WhatsApp, video for TikTok-style).</p><div class="triz-resolve">Context preserved through platform awareness</div></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Video Discovery <span class="triz-vs">VS</span> Overload</div><p>Intelligent breaks — every 10 videos show a You're caught up card with summary of what you've seen and trending topics.</p><div class="triz-resolve">Mindful consumption without limiting exploration</div></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">News Engagement <span class="triz-vs">VS</span> Noise</div><p>Threaded relevance — auto-collapse low-engagement comments, pin most insightful comment, show only replies to threads you're in.</p><div class="triz-resolve">Signal amplified, noise suppressed</div></div>
+<div class="idea-card" data-feature="live"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Scheduled Live <span class="triz-vs">VS</span> Flexibility</div><p>Smart rescheduling — if host cancels, auto-notify attendees with one-tap reschedule options and preserve reminder settings.</p><div class="triz-resolve">Commitment honored even when plans change</div></div>
+<div class="idea-card" data-feature="stories"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">Story Ring <span class="triz-vs">VS</span> Visual Clutter</div><p>Contextual rings — show story ring only in feed and comments, hide in dense lists like search results or follower counts.</p><div class="triz-resolve">Visibility where it matters, silence where it doesn't</div></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Contradiction Resolved</span></div><div class="triz-contradiction">E-commerce Tracking <span class="triz-vs">VS</span> Complexity</div><p>Progressive detail — show 3 key statuses (ordered/shipped/delivered) by default, expand to full 13-status timeline on tap.</p><div class="triz-resolve">Simple surface, deep detail on demand</div></div>
+</div>
+</section>
+
+<section class="section cross" id="cross">
+<div class="technique-header">
+<div class="technique-icon">&#x1F331;</div>
+<div>
+<div class="section-label">Technique 05</div>
+<h2 class="section-title">Cross-Pollination</h2>
+<p class="section-desc">How would other industries solve these problems — importing proven patterns from banking, airlines, gaming, and beyond.</p>
+</div>
+<div class="technique-count">18 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Banking</span></div><div class="cross-industry">Financial Services</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply bank statement design to e-commerce — show orders like transactions with running balance, merchant name, and categorization (medicine, wellness, etc.).</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Airlines</span></div><div class="cross-industry">Aviation</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply airline check-in flow to order fulfillment — let users check in 24h before delivery window opens, choose time slot, get boarding-pass-style delivery confirmation.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Hospital ER</span></div><div class="cross-industry">Healthcare</div><div class="idea-card-feature">Admin Dashboard</div><p>Apply triage system to admin alerts — color-code by urgency (red=immediate, yellow=soon, green=routine), show estimated response time, auto-escalate if ignored.</p></div>
+<div class="idea-card" data-feature="news-eng stories"><div class="idea-card-source"><span>Gaming</span></div><div class="cross-industry">Entertainment</div><div class="idea-card-feature">Platform Engagement</div><p>Apply achievement system to platform engagement — unlock badges for first order, first review, first live attended, 10 stories posted, etc. with visible progress bars.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Restaurant</span></div><div class="cross-industry">Food Service</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply kitchen display system to vendor order management — show orders in preparation sequence with countdown timers, color-coded by delivery urgency.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>Social Media Moderation</span></div><div class="cross-industry">Community</div><div class="idea-card-feature">News Engagement</div><p>Apply community moderation to news — let trusted users flag inappropriate content, auto-hide content with 5+ flags, human review for edge cases.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>Fitness Apps</span></div><div class="cross-industry">Health Tech</div><div class="idea-card-feature">News Engagement</div><p>Apply workout streaks to health engagement — You've engaged with health content 7 days in a row with motivational messaging and milestone rewards.</p></div>
+<div class="idea-card" data-feature="withdrawal"><div class="idea-card-source"><span>Banking Fraud Detection</span></div><div class="cross-industry">Financial Security</div><div class="idea-card-feature">Auth &amp; Withdrawal Security</div><p>Apply transaction monitoring to withdrawals — flag unusual patterns (new device, unusual amount, rapid successive withdrawals) for additional verification.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>Streaming Services</span></div><div class="cross-industry">Entertainment</div><div class="idea-card-feature">Video/Reels</div><p>Apply Continue Watching to video feed — show a Pick up where you left off row at top of video tab for partially watched videos.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Ride Sharing</span></div><div class="cross-industry">Transportation</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply driver rating to vendors — let customers rate vendor fulfillment speed, packaging quality, accuracy, with composite score visible on shop page.</p></div>
+<div class="idea-card" data-feature="email"><div class="idea-card-source"><span>Email Marketing</span></div><div class="cross-industry">Marketing</div><div class="idea-card-feature">Custom Email</div><p>Apply drip campaigns to user onboarding — automated email sequence: Day 1 welcome, Day 3 first order tips, Day 7 explore features, Day 14 invite to live event.</p></div>
+<div class="idea-card" data-feature="news-eng sharing"><div class="idea-card-source"><span>Dating Apps</span></div><div class="cross-industry">Social</div><div class="idea-card-feature">Post Engagement</div><p>Apply super like to post engagement — let users send a special highlight reaction that notifies the author with extra prominence.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Project Management</span></div><div class="cross-industry">Productivity</div><div class="idea-card-feature">Admin Dashboard</div><p>Apply Kanban board to admin workflow — drag orders/verifications/submissions through columns (pending/in-review/approved/completed) with WIP limits.</p></div>
+<div class="idea-card" data-feature="video"><div class="idea-card-source"><span>Music Streaming</span></div><div class="cross-industry">Entertainment</div><div class="idea-card-feature">Video/Reels</div><p>Apply playlist curation to video content — let users create themed video collections (Diabetes Management Tips, Pharmacy Career Advice) that others can follow.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>Insurance</span></div><div class="cross-industry">Financial Services</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply claims tracking to order disputes — show dispute status with timeline, assigned investigator, estimated resolution date, and document upload capability.</p></div>
+<div class="idea-card" data-feature="news-eng"><div class="idea-card-source"><span>News Aggregators</span></div><div class="cross-industry">Media</div><div class="idea-card-feature">News Engagement</div><p>Apply For You algorithm to news feed — personalize news recommendations based on reading history, engagement patterns, and stated health interests.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>E-commerce Returns</span></div><div class="cross-industry">Retail</div><div class="idea-card-feature">E-commerce Tracking</div><p>Apply no-questions-asked returns to digital content — let users return a purchased course or consultation within 24h for full refund, building trust.</p></div>
+</div>
+</section>
+
+<section class="section speculative" id="speculative">
+<div class="technique-header">
+<div class="technique-icon">&#x1F680;</div>
+<div>
+<div class="section-label">Technique 06</div>
+<h2 class="section-title">Speculative Futures</h2>
+<p class="section-desc">Blue-sky ideas that push the boundaries — AI, voice, AR, and experiences that don't exist yet but could define CareHub's future.</p>
+</div>
+<div class="technique-count">6 ideas</div>
+</div>
+<div class="cards-grid">
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>AI Co-Pilot</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Add AI co-pilot to admin dashboard — natural language queries like show me orders from Lagos pending delivery or what's the withdrawal volume this week.</p></div>
+<div class="idea-card" data-feature="admin"><div class="idea-card-source"><span>Voice Commands</span></div><div class="idea-card-feature">Admin Dashboard</div><p>Add voice commands to admin — Approve the next pending verification or Show me today's revenue — hands-free operation for busy business owners.</p></div>
+<div class="idea-card" data-feature="ecommerce"><div class="idea-card-source"><span>AR Preview</span></div><div class="idea-card-feature">E-commerce Tracking</div><p>Add AR product preview to e-commerce — let users point camera at shelf space and see where products would fit, or visualize medication packaging.</p></div>
+<div class="idea-card" data-feature="admin ecommerce"><div class="idea-card-source"><span>Predictive Analytics</span></div><div class="idea-card-feature">Platform Intelligence</div><p>Add predictive inventory alerts — AI forecasts demand spikes based on seasonal health patterns, local outbreaks, and historical order data.</p></div>
+<div class="idea-card" data-feature="video live"><div class="idea-card-source"><span>AI Highlights</span></div><div class="idea-card-feature">Video &amp; Live</div><p>Auto-generate highlight reels from live sessions using AI — detect peak engagement moments, audience reactions, and key health tips into shareable clips.</p></div>
+<div class="idea-card" data-feature="email news-eng"><div class="idea-card-source"><span>Hyper-Personalization</span></div><div class="idea-card-feature">Email &amp; Engagement</div><p>AI-generated personalized health digest emails — each user receives a unique newsletter based on their health interests, reading history, and community activity.</p></div>
+</div>
+</section>
+
+<section class="insights-section" id="insights">
+<div class="insights-inner">
+<div class="section-label" style="justify-content:center;display:flex">The Synthesis</div>
+<h2 class="section-title" style="text-align:center;margin-bottom:1rem">Five Insights That Shape Everything</h2>
+<p class="section-desc" style="text-align:center;margin:0 auto 3rem">From 103 ideas, five unifying patterns emerged — the architectural principles that should guide every design decision.</p>
+
+<div class="insight-card fade-in">
+<div class="insight-number">INSIGHT 01</div>
+<h3>Progressive Disclosure Is the Unifying Pattern</h3>
+<p>Show simple defaults, reveal complexity on demand. This pattern appeared across admin dashboard (5 metrics → 18 tabs), order tracking (3 statuses → 13-step timeline), permissions (templates → granular overrides), and video feed (metadata-first → lazy-load details). It is the single most important UX principle for CareHub — every feature should feel simple at first glance but reward exploration.</p>
+</div>
+
+<div class="insight-card fade-in">
+<div class="insight-number">INSIGHT 02</div>
+<h3>Trust-Building Through Transparency</h3>
+<p>Emotional status updates, timeline visibility, and proactive notifications reduce anxiety across e-commerce, withdrawals, and content moderation. Users don't just want their orders processed — they want to feel their money is safe, their content is being reviewed fairly, and their platform is healthy. Every touchpoint is a trust opportunity.</p>
+</div>
+
+<div class="insight-card fade-in">
+<div class="insight-number">INSIGHT 03</div>
+<h3>Cross-Feature Synergy Creates Exponential Value</h3>
+<p>Story rings can signal more than stories (teal=stories, purple=recently live, orange=unread posts). Live sessions auto-become videos. Shares can feed stories. Email can drive engagement loops. The platform becomes greater than the sum of its parts when features communicate through shared UI patterns and data flows.</p>
+</div>
+
+<div class="insight-card fade-in">
+<div class="insight-number">INSIGHT 04</div>
+<h3>Security Without Friction via Progressive Trust</h3>
+<p>Progressive trust levels, biometric auth, smart limits, and device trust resolve the security/convenience contradiction. New users get guardrails, trusted users get speed. The withdrawal system proves this: PIN + email → PIN only → biometric only, based on transaction history. Security should adapt to the user, not the other way around.</p>
+</div>
+
+<div class="insight-card fade-in">
+<div class="insight-number">INSIGHT 05</div>
+<h3>AI Augmentation at Every Surface</h3>
+<p>AI pre-screening for news, AI co-pilot for admin queries, AI-assisted email templates, smart recommendations across all surfaces, predictive inventory, auto-generated highlights. AI is not a feature — it is an accelerant that makes every other feature better. The question is not whether to use AI, but where to deploy it first for maximum leverage.</p>
+</div>
+
+<div class="connections fade-in">
+<h3>Critical Connections</h3>
+<div class="connection-item">
+<div class="connection-arrow">&#x2192;</div>
+<p><strong>Admin Dashboard unification</strong> (combining Revenue+Shop tabs) solves the fragmentation problem while the <strong>command palette</strong> (Linear analogical) makes 18 tabs navigable without restructuring.</p>
+</div>
+<div class="connection-item">
+<div class="connection-arrow">&#x2192;</div>
+<p><strong>Progressive trust for withdrawals</strong> (TRIZ) directly enables the no-admin-approval requirement while maintaining security — the contradiction dissolves.</p>
+</div>
+<div class="connection-item">
+<div class="connection-arrow">&#x2192;</div>
+<p><strong>Story ring expansion</strong> (SCAMPER put-to-other-use) creates a unified attention system across the platform — teal=stories, purple=recently live, orange=unread posts.</p>
+</div>
+<div class="connection-item">
+<div class="connection-arrow">&#x2192;</div>
+<p><strong>Email template builder</strong> (Mailchimp analogical) combined with <strong>design system primitives</strong> (SCAMPER adapt) creates a reusable component ecosystem.</p>
+</div>
+<div class="connection-item">
+<div class="connection-arrow">&#x2192;</div>
+<p><strong>Cross-pollination from banking</strong> (fraud detection + transaction monitoring) directly strengthens withdrawal security without adding user friction.</p>
+</div>
+</div>
+</div>
+</section>
+
+<section class="priority-section" id="priority">
+<div class="section-label">Recommended Priority</div>
+<h2 class="section-title" style="margin-bottom:2rem">Implementation Order</h2>
+<div class="priority-list">
+<div class="priority-item fade-in">
+<div>
+<h4>Admin Dashboard Restructuring</h4>
+<p>Command palette + progressive disclosure. Highest impact for daily operations. Combines Revenue+Shop tabs, adds 30-second health pulse widget, anomaly detection alerts, and keyboard-driven navigation.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>Withdrawal Progressive Trust System</h4>
+<p>Enables core requirement of no-admin-approval while maintaining security. Progressive trust levels (PIN+email → PIN → biometric), smart limits for auto-approval, and banking-grade fraud detection patterns.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>Custom Email Template Builder</h4>
+<p>Unlocks marketing, re-engagement, and professional communication. Drag-and-drop builder using design system primitives, branded signatures, automated win-back sequences, and domain verification for deliverability.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>News Engagement on Preview Cards</h4>
+<p>Quick win for content discovery. Embed engagement icons directly in news preview cards on the feed, add health-context reactions, threaded comments, and personalized For You recommendations.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>Scheduled Live Management Enhancements</h4>
+<p>Calendar integration (Google/Apple), countdown timers, reminder notifications at 1h/15m/5m, registration pages with waitlists, and auto-save as video post for replay access.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>Story Ring Multi-Signal Attention System</h4>
+<p>Expand story rings beyond stories — teal for active stories, purple for recently live, orange for unread posts. Contextual visibility (show in feed/comments, hide in dense lists) prevents visual clutter.</p>
+</div>
+</div>
+<div class="priority-item fade-in">
+<div>
+<h4>E-commerce Emotional Status Updates</h4>
+<p>Low effort, high trust impact. Replace generic status labels with empathetic messages (Your order is being carefully packed by the pharmacy), add delivery map tracking, and vendor rating system.</p>
+</div>
+</div>
+</div>
+</section>
+
+<footer>
+<p>CareHub Brainstorm Session — <span>September 13, 2026</span></p>
+<p style="margin-top:.5rem">103 ideas across 6 techniques — forged into a unified product vision</p>
+</footer>
+
+<script>
+function filterFeature(feature){
+document.querySelectorAll('.idea-card').forEach(function(card){
+var features=card.getAttribute('data-feature')||'';
+if(features.indexOf(feature)!==-1){
+card.style.display='';
+card.style.opacity='1';
+card.style.transform='scale(1)';
+}else{
+card.style.opacity='0.15';
+card.style.transform='scale(0.98)';
+}
+});
+setTimeout(function(){
+document.querySelectorAll('.idea-card').forEach(function(card){
+card.style.opacity='';
+card.style.transform='';
+});
+},3000);
+var section=document.getElementById('analogical');
+if(section)section.scrollIntoView({behavior:'smooth'});
+}
+
+var observer=new IntersectionObserver(function(entries){
+entries.forEach(function(entry){
+if(entry.isIntersecting){
+entry.target.classList.add('visible');
+}
+});
+},{threshold:0.1});
+
+document.querySelectorAll('.fade-in').forEach(function(el){
+observer.observe(el);
+});
+
+var navLinks=document.querySelectorAll('nav.sticky-nav a');
+var sections=document.querySelectorAll('section[id], div[id]');
+window.addEventListener('scroll',function(){
+var scrollPos=window.scrollY+100;
+sections.forEach(function(section){
+if(section.offsetTop<=scrollPos&&section.offsetTop+section.offsetHeight>scrollPos){
+navLinks.forEach(function(link){
+link.classList.remove('active');
+if(link.getAttribute('href')==='#'+section.id){
+link.classList.add('active');
+}
+});
+}
+});
+});
+</script>
+</body>
+</html>

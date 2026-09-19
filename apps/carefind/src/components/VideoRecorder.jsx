@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { supabase } from '../config/supabaseClient'
 import { RefreshCw, Send, Video } from 'lucide-react'
 import { theme } from '../styles/theme'
+import { MAX_VIDEO_SECONDS_120 } from '../modules/social-feed/mediaLimits.js'
 
 // Tap to record video from the camera, tap stop, preview, then post.
 // Uses MediaRecorder with camera + mic. Prefers mp4 for iOS playback.
@@ -68,7 +69,18 @@ function VideoRecorder({ showId, onRecorded }) {
       mr.start()
       setRecording(true)
       setSeconds(0)
-      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
+      timerRef.current = setInterval(() => {
+        setSeconds((s) => {
+          const next = s + 1
+          if (next >= MAX_VIDEO_SECONDS_120) {
+            // Auto-stop at 2 minutes — preserves audio track and respects upload cap
+            if (mediaRef.current && mediaRef.current.state !== 'inactive') mediaRef.current.stop()
+            setRecording(false)
+            if (timerRef.current) clearInterval(timerRef.current)
+          }
+          return next
+        })
+      }, 1000)
     } catch (err) {
       setError('Could not start recording.')
     }
@@ -162,7 +174,7 @@ function VideoRecorder({ showId, onRecorded }) {
             <button onClick={() => { discard(); openCamera(facing) }} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Re-record</button>
             <button onClick={discard} disabled={uploading} type="button" style={{ padding: '8px 12px', background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 16, fontWeight: 700, fontSize: 12 }}>Discard</button>
           </div>
-          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Keep clips short on weak networks. Video uploads are large.</p>
+          <p style={{ margin: '5px 0 0 0', fontSize: 10, color: theme.textLight }}>Max 2 minutes. Keep clips short on weak networks — uploads preserve audio.</p>
         </div>
       )}
     </div>

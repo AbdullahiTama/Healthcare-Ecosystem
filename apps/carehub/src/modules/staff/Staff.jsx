@@ -1,14 +1,29 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus } from 'lucide-react'
+import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
 import { provisionStaffAuth } from '../../services/supabase'
-import { emailStaffWelcome } from '../../lib/email'
 import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
+import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
+
+const sendWelcomeEmail = async ({ staffName, staffEmail, businessName, setupToken }) => {
+  try {
+    await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        templateKey: 'staff_welcome',
+        toEmail: staffEmail,
+        payload: { fullName: staffName, businessName, setupToken },
+        subject: `Welcome to ${businessName} — Set Your Password`,
+      }),
+    })
+  } catch (e) { console.warn('[Staff] welcome email failed', e) }
+}
 
 export default function Staff({ brand, role, perms }) {
   const [staff, setStaff] = useState([])
@@ -30,6 +45,7 @@ export default function Staff({ brand, role, perms }) {
   const [savingRoleEdit, setSavingRoleEdit] = useState(false)
   const [roleForm, setRoleForm] = useState({ name: '', label: '', nav: [], flags: {} })
   const [savingRole, setSavingRole] = useState(false)
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
@@ -89,8 +105,33 @@ export default function Staff({ brand, role, perms }) {
       setEditingRole(null)
       setRoleForm({ name: '', label: '', nav: ['dashboard'], flags: { canViewReports: false, canMakeSales: false } })
     }
+    setShowTemplatePicker(false)
     setRoleEditorOpen(true)
   }
+
+  function applyRoleTemplate(template) {
+    const perms = template.permissions
+    setRoleForm({
+      name: template.name,
+      label: template.name,
+      nav: perms.nav.filter(k => typeModuleIds.includes(k)),
+      flags: {
+        canEditPrice: !!perms.canEditPrice,
+        canEditStock: !!perms.canEditStock,
+        canDelete: !!perms.canDelete,
+        canViewReports: !!perms.canViewReports,
+        canExportReports: !!perms.canExportReports,
+        canManageStaff: !!perms.canManageStaff,
+        canViewFinance: !!perms.canViewFinance,
+        canMakeSales: !!perms.canMakeSales,
+        canViewSettings: !!perms.canViewSettings,
+      },
+    })
+    setShowTemplatePicker(false)
+    showToast(`Applied "${template.name}" template. Review and save to create the role.`, { type: 'success' })
+  }
+
+  const roleTemplatesForType = getTemplatesForBusinessType(bType)
 
   async function saveRole() {
     if (!roleForm.name.trim()) { showToast('Give the role a name.', { type: 'warning' }); return }
@@ -162,16 +203,15 @@ export default function Staff({ brand, role, perms }) {
       // would have no way to sign in, so it is rolled back rather than left
       // behind as a member who can never log in.
       await provisionStaffAuth(brand.id, form.email.toLowerCase(), form.password)
-      // Send welcome email to staff
-      try {
-        await emailStaffWelcome({
-          staffName: form.fullName,
-          staffEmail: form.email,
-          businessName: brand.name,
-          role: form.role,
-          password: form.password,
-        })
-      } catch (e) {}
+       // Send welcome email to staff (magic-link setup, no plaintext password)
+       try {
+         await sendWelcomeEmail({
+           staffName: form.fullName,
+           staffEmail: form.email,
+           businessName: brand.name,
+           setupToken: '',
+         })
+       } catch (e) {}
       showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
       setForm({}); setShowAdd(false); load()
     } catch (e) {
@@ -462,6 +502,44 @@ export default function Staff({ brand, role, perms }) {
       <Modal show={roleEditorOpen} onClose={() => setRoleEditorOpen(false)} title={editingRole ? 'Edit Role' : 'Create Custom Role'}
         footer={<><GhostBtn onClick={() => setRoleEditorOpen(false)} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn><TealBtn onClick={saveRole} style={{ flex: 1, padding: '12px' }}>{savingRole ? 'Saving...' : 'Save Role'}</TealBtn></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Template picker for new roles */}
+          {!editingRole && roleTemplatesForType.length > 0 && !showTemplatePicker && (
+            <div style={{ padding: '12px', borderRadius: theme.radius.md, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <Sparkles size={14} color={theme.tealDeep} />
+                <span style={{ fontSize: '12px', fontWeight: '700', color: theme.tealDeep }}>Start from a template?</span>
+              </div>
+              <button
+                onClick={() => setShowTemplatePicker(true)}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.tealDeep}`, background: 'white', color: theme.tealDeep, fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Browse templates
+              </button>
+            </div>
+          )}
+
+          {/* Template selection */}
+          {!editingRole && showTemplatePicker && roleTemplatesForType.length > 0 && (
+            <div style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${theme.border}`, background: theme.bg }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: theme.navy }}>Choose a template</span>
+                <button onClick={() => setShowTemplatePicker(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.gray500, fontSize: '12px' }}>Cancel</button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {roleTemplatesForType.map((template, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => applyRoleTemplate(template)}
+                    style={{ padding: '10px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: 'white', textAlign: 'left', cursor: 'pointer' }}
+                  >
+                    <div style={{ fontWeight: '700', fontSize: '13px', color: theme.navy }}>{template.name}</div>
+                    <div style={{ fontSize: '11px', color: theme.gray500, marginTop: '2px' }}>{template.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Inp label='Role Name *' value={roleForm.name} onChange={v => setRoleForm(p => ({ ...p, name: v }))} placeholder='e.g. Regional Manager, Lab Supervisor' required />
           <Inp label='Display Label (optional)' value={roleForm.label} onChange={v => setRoleForm(p => ({ ...p, label: v }))} placeholder='Shown in the app if you want a friendlier label' />
 

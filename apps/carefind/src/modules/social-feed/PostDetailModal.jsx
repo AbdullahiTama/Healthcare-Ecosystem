@@ -14,11 +14,17 @@ import PostCard from './PostCard.jsx'
 // `cardProps` is every PostCard prop except `post` and `preview`; the feed
 // owns those values (counts, handlers, comment state) so both surfaces share
 // the exact same engagement bar and comment thread.
+//
+// `onRetry` is optional and belongs to the error state: a caller passes it when
+// the error is a failed request, which trying again can fix, and omits it when
+// the post simply isn't available, where a Retry button would only re-run the
+// same answer. ErrorState renders the button only when it is given one.
 export default function PostDetailModal({
   show,
   post,
   loading = false,
   error = '',
+  onRetry,
   onClose,
   cardProps = {},
 }) {
@@ -30,7 +36,7 @@ export default function PostDetailModal({
         </div>
       ) : error ? (
         <div style={{ padding: '20px 0' }}>
-          <ErrorState variant="app" message={error} />
+          <ErrorState variant="app" message={error} onRetry={onRetry} />
         </div>
       ) : post ? (
         <div style={{ margin: '-4px -8px -8px' }}>

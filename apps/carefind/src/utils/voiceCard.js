@@ -63,23 +63,38 @@ function drawWrappedText(ctx, text, color) {
 }
 
 // The CareFind logo, bottom-left — the whole point of the export.
+// Location pin with person silhouette, matching the brand mark.
 function drawLogo(ctx, username) {
   const s = 64
   const x = 70
   const y = SIZE - 70 - s
+  const cx = x + s / 2
+  const cy = y + s / 2
 
-  const g = ctx.createLinearGradient(x, y, x + s, y + s)
-  g.addColorStop(0, '#0E6F5A')
-  g.addColorStop(1, '#1A8A72')
-  ctx.fillStyle = g
-  roundRect(ctx, x, y, s, s, s * 0.28)
+  // Draw location pin shape
+  ctx.fillStyle = '#0E6F5A'
+  ctx.beginPath()
+  ctx.moveTo(cx, y + s * 0.09)
+  ctx.bezierCurveTo(cx - s * 0.375, y + s * 0.09, x + s * 0.25, y + s * 0.25, x + s * 0.25, cy - s * 0.03)
+  ctx.bezierCurveTo(x + s * 0.25, y + s * 0.53, cx, y + s * 0.91, cx, y + s * 0.91)
+  ctx.bezierCurveTo(cx, y + s * 0.91, cx + s * 0.375, y + s * 0.53, cx + s * 0.375, cy - s * 0.03)
+  ctx.bezierCurveTo(cx + s * 0.375, y + s * 0.25, cx + s * 0.375, y + s * 0.09, cx, y + s * 0.09)
+  ctx.closePath()
   ctx.fill()
 
+  // Draw person silhouette (head)
   ctx.fillStyle = '#FFFFFF'
-  ctx.font = `900 ${s * 0.58}px system-ui, -apple-system, Helvetica, sans-serif`
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText('C', x + s / 2, y + s / 2 + 2)
+  ctx.beginPath()
+  ctx.arc(cx, cy - s * 0.125, s * 0.125, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Draw person silhouette (body arc)
+  ctx.strokeStyle = '#FFFFFF'
+  ctx.lineWidth = s * 0.04
+  ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.arc(cx, cy + s * 0.125, s * 0.1875, Math.PI * 1.15, Math.PI * 1.85)
+  ctx.stroke()
 
   ctx.textAlign = 'left'
   ctx.letterSpacing = '4px'

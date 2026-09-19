@@ -180,14 +180,23 @@ Grouped for brevity; each now confirmed at the component level during the full c
 - **Business Logic:** None — a thin, correctly-scoped wrapper.
 - **Weaknesses:** Severely underused given how many polling/manual-refresh screens (all six hospital stations, Orders' approval queue) would benefit from exactly this pattern.
 
-### 3.2 `lib/email.js` (Email Service)
-- **Purpose:** HTML email templating and sending.
-- **Responsibilities:** `emailStaffWelcome`, `emailBusinessApproved`, `emailBusinessRejected`, `emailAdminNewRegistration`.
-- **Consumers:** `Staff.jsx`, `AdminDashboard.jsx`, `Register.jsx`.
-- **Database Access:** None — takes plain JS objects, presumably relays through a third-party email API/SMTP not visible in the reviewed portion.
-- **Authentication:** Not applicable in the Supabase sense; whatever email-provider credential this needs wasn't visible in the reviewed code.
-- **Business Logic:** Template composition only.
-- **Weaknesses:** `emailStaffWelcome` embeds the new hire's plaintext password directly in the email body; hardcoded `skincarepro.vercel.app` branding/links throughout, a leftover from the product's prior identity.
+### 3.2 `lib/email.js` (Email Templates — Client)
+- **Purpose:** Pure HTML email template builders for the client; no direct sending.
+- **Responsibilities:** `buildRegistrationOwnerHtml`, `buildAdminNewRegistrationHtml`, `buildBusinessApprovedHtml`, `buildBusinessRejectedHtml`, `buildBusinessStatusHtml`, `emailAppointmentConfirmed`, `emailStaffWelcome` (client-side stub).
+- **Consumers:** `api/notify-registration.js`, `api/notify-business-status.js`, `Staff.jsx` (via `/api/email/send`).
+- **Database Access:** None — pure HTML string builders.
+- **Authentication:** N/A — templates are pure functions.
+- **Business Logic:** Template composition only. All `skincarepro.vercel.app` references replaced with `${APP_URL}` env variable. Plaintext password no longer emailed — `emailStaffWelcome` sends a magic-link setup token instead.
+- **Weaknesses:** Template strings are large inline HTML; could migrate to `react-email` components for type safety and previewability.
+
+### 3.2b `emailService.js` (Email Queue Service)
+- **Purpose:** Reliable email delivery via `email_outbox` queue table.
+- **Responsibilities:** `enqueue(templateKey, toEmail, payload, subject)` inserts a pending row; `processBatch()` polls `email_outbox` for due rows, renders templates via `Resend`, updates status with exponential backoff; dead-letter after `max_attempts`.
+- **Consumers:** `api/notify-registration.js`, `api/notify-business-status.js`, `api/email/send.js`, `api/cron/process-email-outbox.js`, `/api/webhooks/resend.js`.
+- **Database Access:** `email_outbox`, `email_logs` tables (Supabase service-role client).
+- **Authentication:** Service-role only — `SUPABASE_SERVICE_ROLE_KEY` never exposed to client.
+- **Business Logic:** Retry with exponential backoff (`baseDelayMs * 2^attempts`), dead-letter after 5 attempts, bounce/complaint handling via Resend webhooks.
+- **Weaknesses:** Template functions are duplicated inline in `emailService.js` rather than imported from `api/_lib/email.js` — should consolidate to a single template source.
 
 ### 3.3 `lib/permissions.js` (Authorization / Navigation Logic Service)
 - **Purpose:** Role → capability matrix and nav-item filtering by role and business type.

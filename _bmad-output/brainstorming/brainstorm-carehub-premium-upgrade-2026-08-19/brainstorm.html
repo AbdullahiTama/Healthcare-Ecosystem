@@ -1,0 +1,1092 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CareHub · Premium Value Upgrade — Brainstorm Keepsake</title>
+<style>
+  :root{
+    --paper:#F6F0E2;
+    --paper-2:#EDE4CE;
+    --card:#FFFDF6;
+    --ink:#14312B;
+    --ink-soft:#2E4B44;
+    --teal:#0E5A4C;
+    --teal-bright:#1D7A67;
+    --saffron:#E9A13B;
+    --saffron-deep:#C87F1E;
+    --terra:#C0502E;
+    --plum:#6A3B7D;
+    --night:#111D2E;
+    --night-2:#1C2E47;
+    --line:rgba(20,49,43,.14);
+    --line-strong:rgba(20,49,43,.32);
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    font-size:16px;
+  }
+  ::selection{background:var(--saffron);color:var(--ink)}
+
+  /* ---------- reading progress ---------- */
+  .progress{position:fixed;top:0;left:0;height:4px;width:0;background:var(--terra);z-index:60;transition:width .1s linear}
+
+  /* ---------- hero awning ---------- */
+  .awning{
+    height:26px;
+    background:repeating-linear-gradient(90deg,
+      var(--saffron) 0 64px,
+      var(--card) 64px 128px,
+      var(--teal) 128px 160px,
+      var(--card) 160px 192px);
+    border-bottom:2px solid var(--ink);
+  }
+  .scallop{
+    height:22px;
+    background:radial-gradient(circle at 50% 0, var(--ink) 0 11px, transparent 12px);
+    background-size:44px 22px;
+    background-repeat:repeat-x;
+    margin-top:-1px;
+  }
+  header.hero{
+    position:relative;
+    overflow:hidden;
+    background:linear-gradient(180deg,#FCF7EC 0%,var(--paper) 100%);
+    padding:64px 6vw 44px;
+  }
+  .badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+  .badge{
+    font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    padding:6px 10px;border:1px solid var(--line-strong);border-radius:999px;background:var(--card);
+  }
+  .badge.solid{background:var(--teal);border-color:var(--teal);color:#F3EFE2}
+  .hero h1{
+    font-family:var(--serif);font-weight:600;font-size:clamp(2.4rem,6vw,4.6rem);
+    line-height:1.02;letter-spacing:-.01em;max-width:18ch;
+  }
+  .hero h1 .strike{position:relative;white-space:nowrap}
+  .hero h1 .strike::after{
+    content:"";position:absolute;left:-2%;right:-2%;top:54%;height:4px;
+    background:var(--terra);transform:rotate(-1.5deg);border-radius:2px;opacity:.85;
+  }
+  .hero .lede{
+    max-width:56ch;margin-top:20px;font-size:clamp(1.02rem,1.6vw,1.18rem);color:var(--ink-soft);
+  }
+  .hero .lede strong{color:var(--teal);font-weight:700}
+  .stats{
+    display:flex;flex-wrap:wrap;gap:14px;margin-top:34px;
+  }
+  .stat{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:14px 18px;min-width:118px;box-shadow:0 1px 2px rgba(20,49,43,.06);
+  }
+  .stat b{display:block;font-family:var(--serif);font-size:1.9rem;line-height:1;color:var(--teal)}
+  .stat span{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+  .hero .egc{position:absolute;right:4vw;bottom:30px;width:min(340px,40vw);opacity:.9;pointer-events:none}
+  .barcode-band{
+    margin-top:44px;display:flex;align-items:center;gap:18px;color:var(--ink-soft);
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  }
+  .barcode-band svg{flex:0 0 auto}
+  .barcode-band .rule{flex:1;height:1px;background:var(--line-strong)}
+
+  /* ---------- sticky filter bar ---------- */
+  .filters{
+    position:sticky;top:0;z-index:50;background:rgba(246,240,226,.92);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border-top:2px solid var(--ink);border-bottom:1px solid var(--line-strong);
+    padding:10px 4vw;display:flex;gap:8px;overflow-x:auto;align-items:center;
+  }
+  .filters::-webkit-scrollbar{height:4px}
+  .filters::-webkit-scrollbar-thumb{background:var(--saffron-deep);border-radius:4px}
+  .fbtn{
+    flex:0 0 auto;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:8px 13px;border:1px solid var(--line-strong);border-radius:999px;cursor:pointer;
+    background:var(--card);color:var(--ink);transition:.16s ease;white-space:nowrap;
+  }
+  .fbtn:hover{border-color:var(--teal);color:var(--teal)}
+  .fbtn.on{background:var(--teal);border-color:var(--teal);color:#F3EFE2}
+  .fbtn.surprise{background:var(--terra);border-color:var(--terra);color:#FFF}
+  .fbtn.surprise:hover{filter:brightness(1.08)}
+  .fbtn small{opacity:.65;font-size:10px}
+
+  /* ---------- sections & layout ---------- */
+  .wrap{max-width:1280px;margin:0 auto;padding:0 4vw}
+  .context{padding:56px 0 24px}
+  .sec-head{margin-bottom:26px}
+  .kicker{
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--terra);
+  }
+  .sec-title{
+    font-family:var(--serif);font-weight:600;font-size:clamp(1.7rem,3.4vw,2.5rem);line-height:1.1;margin-top:6px;
+  }
+  .sec-sub{max-width:64ch;color:var(--ink-soft);margin-top:10px;font-size:1.02rem}
+
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .note{
+    position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px 20px 22px;box-shadow:0 1px 3px rgba(20,49,43,.07);
+  }
+  .note::before{
+    content:attr(data-tab);position:absolute;top:-11px;left:14px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    background:var(--teal);color:#F3EFE2;padding:3px 10px;border-radius:999px;
+  }
+  .note h3{font-family:var(--serif);font-size:1.22rem;margin:8px 0 8px}
+  .note p{font-size:.95rem;color:var(--ink-soft)}
+  .note .taglist{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .note .tag{font-family:var(--mono);font-size:10px;letter-spacing:.06em;border:1px solid var(--line-strong);border-radius:4px;padding:2px 7px;color:var(--ink-soft);background:var(--paper)}
+  .note .num{font-family:var(--serif);font-size:2.6rem;color:var(--saffron-deep);opacity:.85;line-height:1}
+
+  /* ---------- technique sections ---------- */
+  .tech{scroll-margin-top:64px;padding:60px 0 14px;border-top:1px dashed var(--line-strong)}
+  .tech.hidden{display:none}
+  .tech-head{display:flex;align-items:flex-start;gap:18px;margin-bottom:6px}
+  .tnum{
+    font-family:var(--serif);font-size:clamp(2.6rem,5vw,4rem);line-height:.9;color:var(--saffron-deep);
+    min-width:1.4em;font-weight:700;position:relative;top:2px;
+  }
+  .tech-name{font-family:var(--serif);font-weight:600;font-size:clamp(1.6rem,3.2vw,2.3rem);line-height:1.05}
+  .tech-tag{
+    display:inline-block;margin:8px 0 0;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:4px 11px;
+  }
+  .tech-desc{max-width:66ch;color:var(--ink-soft);margin:14px 0 26px;font-size:1.02rem}
+  .tech-desc b{color:var(--ink)}
+
+  /* generic card */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:18px}
+  .idx{
+    font-family:var(--mono);font-size:11px;color:var(--ink-soft);
+    border:1px solid var(--line-strong);border-radius:6px;padding:1px 7px;display:inline-block;
+  }
+  .chip{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-soft);opacity:.75;display:inline-block;margin-top:14px;
+  }
+
+  /* 01 · trait-transfer : the borrowed shelf */
+  .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:20px 24px;align-items:end}
+  .shelf-card{
+    position:relative;background:linear-gradient(180deg,#FFFEF9 0%,#F8F1E0 100%);
+    border:1px solid var(--line);border-bottom:7px solid #C9A45C;border-radius:10px 10px 4px 4px;
+    box-shadow:0 7px 0 rgba(20,49,43,.06),0 2px 3px rgba(20,49,43,.1);
+    padding:18px 18px 16px;transform-origin:bottom center;transition:transform .18s ease,box-shadow .18s ease;
+  }
+  .shelf-card:hover{transform:translateY(-5px);box-shadow:0 12px 0 rgba(20,49,43,.06),0 6px 12px rgba(20,49,43,.16)}
+  .shelf-card h3{font-family:var(--serif);font-size:1.12rem;margin:8px 0 6px;line-height:1.2}
+  .shelf-card p{font-size:.88rem;color:var(--ink-soft)}
+  .shelf-card .idx{position:absolute;top:-10px;right:14px;background:var(--card);border-radius:999px;padding:1px 9px}
+  .shelf-card .chip{display:block}
+  .shelf-slot{grid-column:1/-1;height:10px;border-radius:50%}
+
+  /* 02 · how-might-we : prescription pad */
+  .hmw-card{
+    position:relative;background:#FFFEFB;border:1px solid var(--line);border-radius:10px;
+    padding:20px 20px 18px;box-shadow:0 2px 0 rgba(20,49,43,.06);
+    border-left:6px solid var(--terra);overflow:hidden;transition:transform .16s ease;
+  }
+  .hmw-card:hover{transform:translateY(-4px)}
+  .hmw-card .q-mark{
+    position:absolute;right:-6px;top:-24px;font-family:var(--serif);font-size:7rem;color:var(--terra);
+    opacity:.1;font-weight:700;line-height:1;pointer-events:none;
+  }
+  .hmw-card .ask{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--terra);text-transform:uppercase}
+  .hmw-card h3{font-family:var(--serif);font-size:1.14rem;line-height:1.2;margin:8px 0 8px}
+  .hmw-card p{font-size:.9rem;color:var(--ink-soft)}
+  .hmw-card .answer{
+    margin-top:12px;border-top:1px dashed var(--line-strong);padding-top:10px;font-size:.9rem;color:var(--ink);
+  }
+  .hmw-card .answer b{color:var(--teal)}
+
+  /* 03 · scamper : riff board */
+  .scamper-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}
+  .scamper-card{
+    position:relative;background:var(--card);border:1px dashed var(--line-strong);border-radius:8px;
+    padding:18px;transform:rotate(var(--tilt,-.6deg));transition:transform .15s ease,box-shadow .15s ease;
+    box-shadow:2px 3px 0 rgba(20,49,43,.07);
+  }
+  .scamper-card:nth-child(even){--tilt:.7deg}
+  .scamper-card:hover{transform:rotate(0) translateY(-3px);box-shadow:4px 6px 0 rgba(20,49,43,.1)}
+  .scamper-card .stamp{
+    position:absolute;top:-8px;right:12px;font-family:var(--mono);font-size:9px;letter-spacing:.18em;
+    text-transform:uppercase;border:1.5px solid var(--teal);color:var(--teal);border-radius:4px;
+    padding:2px 7px;background:var(--card);transform:rotate(3deg);
+  }
+  .scamper-card h3{font-family:var(--serif);font-size:1.1rem;margin:8px 0 6px;line-height:1.2}
+  .scamper-card p{font-size:.88rem;color:var(--ink-soft)}
+  .scamper-card .chip{display:block}
+
+  /* 04 · job-to-be-done : job tickets */
+  .tickets{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+  .ticket{
+    position:relative;background:linear-gradient(180deg,#FFFDF6,var(--paper-2));
+    border:1px solid var(--line-strong);border-radius:12px;padding:20px 20px 18px;
+    box-shadow:0 3px 0 rgba(20,49,43,.07);
+  }
+  .ticket::before{
+    content:"❏ ❏ ❏";position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    font-size:10px;letter-spacing:8px;color:var(--ink-soft);opacity:.5;white-space:nowrap;
+  }
+  .ticket .job{
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);
+    margin-bottom:10px;display:block;
+  }
+  .ticket .job::before{content:"“I hire CareHub to… ”" ;display:none}
+  .ticket h3{font-family:var(--serif);font-size:1.1rem;line-height:1.22;margin-bottom:8px}
+  .ticket p{font-size:.9rem;color:var(--ink-soft)}
+  .ticket .hire{
+    display:inline-block;margin-top:14px;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:3px 10px;
+  }
+
+  /* 05 · reverse-brainstorming : inverted cards */
+  .inverts{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+  .invert-card{
+    position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px 18px;overflow:hidden;transition:transform .16s ease;
+  }
+  .invert-card:hover{transform:translateY(-4px)}
+  .invert-card .disaster{
+    display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--terra);position:relative;padding-left:4px;margin-bottom:10px;
+  }
+  .invert-card .disaster::before{content:"— ";color:var(--ink-soft)}
+  .invert-card .disaster::after{
+    content:"";position:absolute;left:0;right:0;top:55%;height:2px;background:var(--terra);transform:rotate(-1.2deg);
+  }
+  .invert-card .up{
+    position:absolute;top:-14px;right:-8px;font-family:var(--serif);font-size:4.6rem;color:var(--teal);
+    opacity:.08;font-weight:700;line-height:1;
+  }
+  .invert-card h3{font-family:var(--serif);font-size:1.1rem;line-height:1.2;margin-bottom:7px}
+  .invert-card p{font-size:.88rem;color:var(--ink-soft)}
+  .invert-card .fix{
+    display:inline-block;margin-top:12px;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--teal);
+  }
+
+  /* 06 · what-if : the night skyline */
+  .whatif-section{
+    margin-top:56px;border-radius:26px;overflow:hidden;position:relative;
+    background:linear-gradient(180deg,#141F33 0%,var(--night-2) 58%,#24314E 100%);
+    color:#E8E4D6;padding:54px 4vw 0;
+  }
+  .whatif-section .tech-desc,.whatif-section .sec-sub{color:#B9C2CE}
+  .whatif-section .kicker{color:var(--saffron)}
+  .whatif-section .tech-name{color:#F4EFDF}
+  .whatif-section .tech-tag{color:var(--saffron);border-color:var(--saffron)}
+  .star{position:absolute;border-radius:50%;background:#F7E9B0;opacity:.8;animation:twinkle 3.4s infinite}
+  @keyframes twinkle{0%,100%{opacity:.25}50%{opacity:.95}}
+  .skyline{position:relative;height:118px;margin-top:26px}
+  .skyline svg{position:absolute;left:0;bottom:0;width:100%;height:100%;display:block}
+  .wi-grid{position:relative;z-index:2;display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px;padding-bottom:46px}
+  .wi-card{
+    background:rgba(255,255,255,.06);border:1px solid rgba(244,239,223,.16);border-radius:14px;
+    padding:18px;backdrop-filter:blur(3px);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+  }
+  .wi-card:hover{transform:translateY(-4px);border-color:rgba(233,161,59,.6);box-shadow:0 10px 26px rgba(0,0,0,.35)}
+  .wi-card .wmark{font-family:var(--serif);font-size:1.5rem;color:var(--saffron);opacity:.9;line-height:1;display:block}
+  .wi-card h3{font-family:var(--serif);font-size:1.08rem;line-height:1.2;margin:8px 0 6px;color:#F4EFDF}
+  .wi-card p{font-size:.87rem;color:#C4CCD6}
+
+  /* 07 · assumption-reversal : flip cards */
+  .flips{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;perspective:1200px}
+  .flip{position:relative;height:230px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .flip-inner{position:relative;width:100%;height:100%;transition:transform .6s cubic-bezier(.4,.1,.2,1);transform-style:preserve-3d}
+  .flip.flipped .flip-inner{transform:rotateY(180deg)}
+  .flip-face{
+    position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+    border-radius:14px;padding:18px;display:flex;flex-direction:column;justify-content:center;
+  }
+  .flip-front{background:linear-gradient(160deg,var(--teal),#0B4639);color:#F0EBDD;box-shadow:0 8px 18px rgba(14,90,76,.3)}
+  .flip-front .flap-hint{position:absolute;bottom:12px;left:18px;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;opacity:.7}
+  .flip-front h3{font-family:var(--serif);font-size:1.14rem;line-height:1.25;margin:10px 0 8px}
+  .flip-front p{font-size:.85rem;color:#CFE0DA}
+  .flip-front .rev-tag{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--saffron)}
+  .flip-back{
+    background:var(--card);border:1px solid var(--saffron-deep);transform:rotateY(180deg);
+    text-align:center;align-items:center;
+  }
+  .flip-back .revstamp{
+    font-family:var(--mono);font-size:13px;letter-spacing:.26em;text-transform:uppercase;color:var(--terra);
+    border:3px double var(--terra);border-radius:8px;padding:8px 14px;transform:rotate(-8deg);
+  }
+  .flip-back p{margin-top:14px;font-size:.85rem;color:var(--ink-soft)}
+
+  /* 08 · combinational : fusion */
+  .fusions{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px}
+  .fusion-card{
+    position:relative;background:linear-gradient(135deg,var(--card) 0 50%,#EAF2EC 50% 100%);
+    border:1px solid var(--line);border-radius:14px;padding:22px 20px 20px;overflow:hidden;
+    transition:transform .16s ease;
+  }
+  .fusion-card:hover{transform:translateY(-4px)}
+  .fusion-card .plus{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:38px;height:38px;border-radius:50%;background:var(--saffron);color:var(--ink);
+    font-family:var(--serif);font-weight:700;font-size:1.5rem;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.2);z-index:2;
+  }
+  .fusion-card .parts{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);line-height:1.5}
+  .fusion-card h3{font-family:var(--serif);font-size:1.1rem;line-height:1.22;margin:10px 0 8px}
+  .fusion-card p{font-size:.88rem;color:var(--ink-soft)}
+
+  /* 09 · eliminate : crossed out */
+  .strikes{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:18px}
+  .strike-card{
+    position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px;overflow:hidden;transition:transform .16s ease;
+  }
+  .strike-card:hover{transform:translateY(-4px)}
+  .strike-card .x{
+    position:absolute;top:-14px;right:-12px;font-family:var(--serif);font-size:5.5rem;font-weight:700;
+    color:var(--terra);opacity:.14;line-height:1;
+  }
+  .strike-card h3{font-family:var(--serif);font-size:1.12rem;line-height:1.2;margin-bottom:8px}
+  .strike-card p{font-size:.9rem;color:var(--ink-soft)}
+  .strike-card .gone{display:block;margin-top:12px}
+  .strike-card .gone span{
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--terra);
+    position:relative;text-transform:uppercase;
+  }
+  .strike-card .gone span::after{
+    content:"";position:absolute;left:-2%;right:-2%;top:56%;height:2.5px;background:var(--terra);
+    border-radius:2px;transform:rotate(-1.2deg);transform-origin:left center;width:104%;
+  }
+  .strike-card.in .gone span::after{animation:slash .5s ease both}
+  @keyframes slash{from{transform:scaleX(0) rotate(-1.2deg)}to{transform:scaleX(1) rotate(-1.2deg)}}
+
+  /* 10 · wildcard-moonshot : glow cards on warm paper */
+  .moons{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px}
+  .moon-card{
+    position:relative;background:linear-gradient(160deg,var(--night),#1A2B41);
+    color:#EFE9D8;border-radius:16px;padding:20px;overflow:hidden;
+    border:1px solid rgba(233,161,59,.35);box-shadow:0 0 0 1px rgba(233,161,59,.08),0 10px 30px rgba(17,29,46,.45);
+    transition:transform .18s ease,box-shadow .18s ease;
+  }
+  .moon-card:hover{transform:translateY(-5px);box-shadow:0 0 0 1px rgba(233,161,59,.4),0 0 30px rgba(233,161,59,.28),0 14px 34px rgba(17,29,46,.5)}
+  .moon-card .moon{
+    position:absolute;top:-18px;right:-12px;opacity:.16;pointer-events:none;
+  }
+  .moon-card .spark{
+    position:absolute;width:5px;height:5px;border-radius:50%;background:var(--saffron);
+    box-shadow:0 0 10px var(--saffron);top:14px;left:14px;animation:pulse 2.6s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.3)}}
+  .moon-card .moonshot-tag{
+    font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--saffron);
+  }
+  .moon-card h3{font-family:var(--serif);font-size:1.14rem;line-height:1.22;margin:10px 0 8px}
+  .moon-card p{font-size:.87rem;color:#C3CBD6}
+
+  /* 11 · enhance-existing : upgrade cards */
+  .upgrades{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+  .upgrade-card{
+    position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 18px 20px;box-shadow:0 2px 0 rgba(20,49,43,.06);
+  }
+  .upgrade-card .mod{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:10px;
+    border-bottom:1px dashed var(--line-strong);margin-bottom:12px;
+  }
+  .upgrade-card .mod .modname{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft)}
+  .upgrade-card .mod .up{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--teal);border:1px solid var(--teal);border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .upgrade-card h3{font-family:var(--serif);font-size:1.1rem;line-height:1.2;margin-bottom:7px}
+  .upgrade-card p{font-size:.88rem;color:var(--ink-soft)}
+  .upgrade-card .bar{height:4px;border-radius:4px;background:var(--paper-2);margin-top:14px;overflow:hidden}
+  .upgrade-card .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--saffron),var(--teal));transition:width 1.1s ease .1s;border-radius:4px}
+  .upgrade-card.in .bar i{width:100%}
+  .upgrade-card .ver{margin-top:9px;font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:var(--ink-soft);opacity:.7}
+
+  /* ---------- synthesis : the climax ---------- */
+  .synthesis{
+    margin-top:80px;background:linear-gradient(180deg,var(--teal),#0A3D33);
+    color:#F0EBDC;border-radius:28px 28px 0 0;padding:66px 4vw 70px;position:relative;overflow:hidden;
+  }
+  .synthesis::before{
+    content:"";position:absolute;top:0;left:0;right:0;height:6px;
+    background:repeating-linear-gradient(90deg,var(--saffron) 0 34px,var(--card) 34px 68px,var(--terra) 68px 102px,var(--card) 102px 136px);
+  }
+  .synthesis .so{font-family:var(--mono);font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:var(--saffron)}
+  .synthesis h2{font-family:var(--serif);font-size:clamp(2rem,5vw,3.4rem);line-height:1.05;margin:12px 0 18px;max-width:24ch}
+  .synthesis .lede{max-width:72ch;font-size:1.08rem;color:#D3DCD6;margin-bottom:34px}
+  .synthesis .lede b{color:#FFF}
+  .pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .pillar{
+    background:rgba(255,255,255,.07);border:1px solid rgba(240,235,220,.18);border-radius:16px;
+    padding:22px;transition:transform .16s ease,background .16s ease;
+  }
+  .pillar:hover{transform:translateY(-4px);background:rgba(255,255,255,.11)}
+  .pillar .pnum{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--saffron);text-transform:uppercase}
+  .pillar h3{font-family:var(--serif);font-size:1.45rem;margin:8px 0 6px}
+  .pillar p{font-size:.9rem;color:#CDD6D0}
+  .roadmap{
+    margin-top:44px;background:rgba(10,61,51,.55);border:1px solid rgba(240,235,220,.18);
+    border-radius:18px;padding:26px;
+  }
+  .roadmap .rm-title{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--saffron);margin-bottom:18px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .step{display:flex;gap:14px;align-items:flex-start}
+  .step .sn{
+    flex:0 0 auto;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:var(--serif);font-weight:700;font-size:1.1rem;color:var(--ink);background:var(--saffron);
+  }
+  .step .sn.alt{background:var(--card);color:var(--teal)}
+  .step h4{font-family:var(--serif);font-size:1.05rem;line-height:1.2}
+  .step p{font-size:.85rem;color:#C7D1CB;margin-top:3px}
+  .step .conn{color:var(--saffron)}
+
+  /* ---------- footer ---------- */
+  footer{
+    background:#0A3D33;color:#9DB4AA;padding:34px 4vw 40px;text-align:center;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;line-height:1.8;
+  }
+  footer .ecgline{display:block;margin:0 auto 14px}
+  footer b{color:var(--saffron);font-weight:700}
+
+  /* ---------- reveal on scroll ---------- */
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease}
+  .reveal.in{opacity:1;transform:none}
+  .card-spark{animation:sparkglow 1.6s ease}
+  @keyframes sparkglow{
+    0%{box-shadow:0 0 0 0 rgba(233,161,59,.9)}
+    60%{box-shadow:0 0 0 18px rgba(233,161,59,0)}
+    100%{box-shadow:0 0 0 0 rgba(233,161,59,0)}
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:720px){
+    .hero{padding:40px 5vw 36px}
+    .hero .egc{display:none}
+    .flip{height:auto}
+    .flip-inner{transform:none!important}
+    .flip-face{position:relative;backface-visibility:visible}
+    .flip-back{transform:none;margin-top:10px;display:none}
+    .flip.flipped .flip-back{display:flex}
+    .flip.flipped .flip-front{display:none}
+    .synthesis{padding:56px 5vw 60px}
+  }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<!-- ================= HERO ================= -->
+<div class="awning"></div>
+<div class="scallop"></div>
+
+<header class="hero">
+  <div class="badge-row">
+    <span class="badge solid">Session keepsake</span>
+    <span class="badge">2026-08-19</span>
+    <span class="badge">Autonomous mode</span>
+    <span class="badge">Status · complete</span>
+  </div>
+
+  <h1>CareHub: <span class="strike">Premium</span> Value Upgrade</h1>
+
+  <p class="lede">
+    A <strong>healthcare OS</strong> for Nigerian pharmacies, hospitals, labs and imaging centres —
+    POS, batch inventory, purchases, debts, appointments, the <strong>CareFind</strong> marketplace and Paystack
+    wallets at <strong>₦10k–₦60k/month</strong>. This page is the field-notes of a full brainstorming session:
+    <strong>11 techniques, 110 feature sparks, one market insight.</strong>
+  </p>
+
+  <div class="stats">
+    <div class="stat"><b>11</b><span>techniques</span></div>
+    <div class="stat"><b>110</b><span>ideas sparked</span></div>
+    <div class="stat"><b>5</b><span>insights filed</span></div>
+    <div class="stat"><b>₦10–60k</b><span>price band / mo</span></div>
+  </div>
+
+  <svg class="egc" viewBox="0 0 340 90" fill="none" stroke="#0E5A4C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M2 45h34l10-20 12 42 12-52 12 48 9-18h38l10-18 12 40 12-46 12 42 9-18h38l10-16 12 34 12-40 12 36 8-14h36" opacity=".9"/>
+    <path d="M2 60h336" stroke-width="1" opacity=".35"/>
+  </svg>
+
+  <div class="barcode-band">
+    <svg width="170" height="44" viewBox="0 0 170 44" aria-hidden="true">
+      <rect x="0" y="2" width="3" height="40" fill="#14312B"/><rect x="5" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="8" y="2" width="2" height="40" fill="#14312B"/><rect x="12" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="15" y="2" width="3" height="40" fill="#14312B"/><rect x="20" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="23" y="2" width="2" height="40" fill="#14312B"/><rect x="27" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="30" y="2" width="3" height="40" fill="#14312B"/><rect x="35" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="38" y="2" width="2" height="40" fill="#14312B"/><rect x="42" y="2" width="3" height="40" fill="#14312B"/>
+      <rect x="47" y="2" width="1" height="40" fill="#14312B"/><rect x="50" y="2" width="2" height="40" fill="#14312B"/>
+      <rect x="54" y="2" width="1" height="40" fill="#14312B"/><rect x="57" y="2" width="3" height="40" fill="#14312B"/>
+      <rect x="62" y="2" width="1" height="40" fill="#14312B"/><rect x="65" y="2" width="2" height="40" fill="#14312B"/>
+      <rect x="69" y="2" width="3" height="40" fill="#14312B"/><rect x="74" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="77" y="2" width="2" height="40" fill="#14312B"/><rect x="81" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="84" y="2" width="3" height="40" fill="#14312B"/><rect x="89" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="92" y="2" width="2" height="40" fill="#14312B"/><rect x="96" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="99" y="2" width="3" height="40" fill="#14312B"/><rect x="104" y="2" width="2" height="40" fill="#14312B"/>
+      <rect x="108" y="2" width="1" height="40" fill="#14312B"/><rect x="111" y="2" width="3" height="40" fill="#14312B"/>
+      <rect x="116" y="2" width="1" height="40" fill="#14312B"/><rect x="119" y="2" width="2" height="40" fill="#14312B"/>
+      <rect x="123" y="2" width="3" height="40" fill="#14312B"/><rect x="128" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="131" y="2" width="2" height="40" fill="#14312B"/><rect x="135" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="138" y="2" width="3" height="40" fill="#14312B"/><rect x="143" y="2" width="1" height="40" fill="#14312B"/>
+      <rect x="146" y="2" width="2" height="40" fill="#14312B"/><rect x="150" y="2" width="3" height="40" fill="#14312B"/>
+      <rect x="155" y="2" width="1" height="40" fill="#14312B"/><rect x="158" y="2" width="2" height="40" fill="#14312B"/>
+      <rect x="162" y="2" width="1" height="40" fill="#14312B"/><rect x="165" y="2" width="3" height="40" fill="#14312B"/>
+    </svg>
+    <span class="rule"></span>
+    <span>CAREHUB · BRAINSTORM · 2026</span>
+  </div>
+</header>
+
+<!-- ================= FILTERS ================= -->
+<nav class="filters" aria-label="Filter by technique">
+  <button class="fbtn on" data-tech="all">All <small>110</small></button>
+  <button class="fbtn" data-tech="trait-transfer">Trait-transfer <small>10</small></button>
+  <button class="fbtn" data-tech="how-might-we">How-might-we <small>10</small></button>
+  <button class="fbtn" data-tech="scamper">Scamper <small>10</small></button>
+  <button class="fbtn" data-tech="job-to-be-done">Job-to-be-done <small>10</small></button>
+  <button class="fbtn" data-tech="reverse-brainstorming">Reverse <small>10</small></button>
+  <button class="fbtn" data-tech="what-if">What-if <small>10</small></button>
+  <button class="fbtn" data-tech="assumption-reversal">Flip it <small>10</small></button>
+  <button class="fbtn" data-tech="combinational">Combine <small>9</small></button>
+  <button class="fbtn" data-tech="eliminate">Eliminate <small>9</small></button>
+  <button class="fbtn" data-tech="wildcard-moonshot">Moonshot <small>10</small></button>
+  <button class="fbtn" data-tech="enhance-existing">Enhance <small>12</small></button>
+  <button class="fbtn surprise" id="surprise">✦ Surprise me</button>
+</nav>
+
+<!-- ================= CONTEXT ================= -->
+<section class="wrap context" id="context">
+  <div class="sec-head reveal">
+    <span class="kicker">Filed before we began · 5 insights</span>
+    <h2 class="sec-title">The lay of the land</h2>
+    <p class="sec-sub">Four filed notes set the stage: what CareHub is, what rivals already sell, what global clinics do, and what the engineering reality permits.</p>
+  </div>
+  <div class="notes">
+    <article class="note reveal" data-tab="Note 01 · The product">
+      <div class="num">01</div>
+      <h3>CareHub today</h3>
+      <p>A healthcare OS for pharmacies, hospitals, labs and imaging centres. POS, batch &amp; expiry inventory, purchases, stock &amp; warehouses, debts, clients, appointments, hospital pipeline, consultations, ADR reports, referral agent, master catalog, staff &amp; roles, reports hub, CareFind marketplace, Paystack wallets.</p>
+      <div class="taglist"><span class="tag">POS</span><span class="tag">batch/expiry</span><span class="tag">CareFind</span><span class="tag">Paystack</span></div>
+    </article>
+    <article class="note reveal" data-tab="Note 02 · The shelf">
+      <div class="num">02</div>
+      <h3>Nigeria’s pharmacy rivals (₦8k–80k/mo)</h3>
+      <p>ClinikEHR, InkeepX, Tracepos, PharmaPro, MedPoint, QuickPharm, RxManager, NigeriaPharm Pro, SmartPharmacy, PharmaSoft. The premium differentiators on that shelf: FEFO, expiry alerts, blocking expired sales, HMO/NHIS claims, NAFDAC/PCN compliance, offline + sync, barcode, units of measure, supplier ledger, stock aging, audit logs, loyalty, SMS/WhatsApp, auto reorder, mobile app.</p>
+    </article>
+    <article class="note reveal" data-tab="Note 03 · Beyond the counter">
+      <div class="num">03</div>
+      <h3>Clinic &amp; global platforms</h3>
+      <p>Zoho Health — multi-clinic scheduling, cross-dept billing, consent forms, referrals, post-visit summaries. Practo Ray — patient booking app, reminders. HMSi360/HospitalOS — inpatient/ward, lab, radiology, HMO claims. Cliniko — online booking, portal, telehealth, Stripe/Xero. Kareo/Tebra — RCM, patient portal. Althea — AI ambient SOAP charting, self check-in, e-prescriptions.</p>
+    </article>
+    <article class="note reveal" data-tab="Note 04 · Engineering reality">
+      <div class="num">04</div>
+      <h3>CareHub engineering gaps</h3>
+      <p>From the roadmap: no CI/CD, no formal migrations, no error tracking, no caching layer, no E2E tests. CareFind is discovery + social. Repository seam 16 of 24 done; design system complete.</p>
+      <div class="taglist"><span class="tag">no CI/CD</span><span class="tag">no E2E</span><span class="tag">design system done</span></div>
+    </article>
+  </div>
+</section>
+
+<!-- ================= 01 · TRAIT-TRANSFER ================= -->
+<section class="tech" id="tech-trait-transfer" data-tech="trait-transfer">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">01</div>
+      <div>
+        <div class="tech-name">Trait-transfer</div>
+        <span class="tech-tag">The borrowed shelf · 10 ideas</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">Every rival on the Nigerian shelf already sells a premium trait — <b>FEFO, HMO claims, compliance, audit</b>. Trait-transfer walks the shelf, takes the winning trait, and drops it onto CareHub’s shelf — then goes one step further.</p>
+    <div class="shelf reveal">
+      <article class="shelf-card"><span class="idx">01</span><h3>FEFO picking</h3><p>POS defaults to selling the nearest-expiry batch first — no thinking, no waste.</p><span class="chip">first-expiry-first-out</span></article>
+      <article class="shelf-card"><span class="idx">02</span><h3>Expired-sale hard block</h3><p>Block expired batches at POS; licensed-staff override, every release audit-logged.</p><span class="chip">compliance</span></article>
+      <article class="shelf-card"><span class="idx">03</span><h3>Expiry radar</h3><p>30 / 15 / 7 / 0-day horizons per warehouse, each with its expected loss value.</p><span class="chip">expiry alerts</span></article>
+      <article class="shelf-card"><span class="idx">04</span><h3>Rescue pricing</h3><p>Auto markdown &amp; promotion suggestions for expiring stock — bundle, discount, donation write-off.</p><span class="chip">auto markdown</span></article>
+      <article class="shelf-card"><span class="idx">05</span><h3>HMO / NHIS claims engine</h3><p>Capture scheme + policy at sale, submit the claim, track approval, denial and reimbursement.</p><span class="chip">claims</span></article>
+      <article class="shelf-card"><span class="idx">06</span><h3>Compliance pack</h3><p>NAFDAC / PCN: controlled-drugs register (Sched I–IV), narcotic log, audit-ready exports.</p><span class="chip">NAFDAC · PCN</span></article>
+      <article class="shelf-card"><span class="idx">07</span><h3>Units of measure</h3><p>Stock by box or pack, sell by tablet or unit, with auto-conversion at POS.</p><span class="chip">UoM</span></article>
+      <article class="shelf-card"><span class="idx">08</span><h3>Supplier ledger</h3><p>Per-supplier accounts, returns &amp; credit notes, order history, payment status.</p><span class="chip">supplier ledger</span></article>
+      <article class="shelf-card"><span class="idx">09</span><h3>Smart reorder</h3><p>Reorder suggestions from stock level + demand velocity + supplier lead time.</p><span class="chip">auto reorder</span></article>
+      <article class="shelf-card"><span class="idx">10</span><h3>Purchase-order workflow</h3><p>PO → supplier → GRN, auto-matched against the PO and invoice.</p><span class="chip">procurement</span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 · HOW-MIGHT-WE ================= -->
+<section class="tech" id="tech-how-might-we" data-tech="how-might-we">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">02</div>
+      <div>
+        <div class="tech-name">How might we…?</div>
+        <span class="tech-tag">The prescription pad · 10 ideas</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">A daily pain, written up as an open question — then answered on the line below. <b>How might we</b> turns a grumble into a problem worth solving.</p>
+    <div class="grid reveal">
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 11</span><h3>…recover debt automatically?</h3><p class="answer"><b>→</b> WhatsApp / email / SMS dunning + Paystack collection links + payment tracking.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 12</span><h3>…keep cashiers honest?</h3><p class="answer"><b>→</b> Granular permissions + full shift audit log + shift reconciliation.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 13</span><h3>…make patients return?</h3><p class="answer"><b>→</b> Loyalty points on payment, redeemable at POS, plus recall lists.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 14</span><h3>…sell more per visit?</h3><p class="answer"><b>→</b> Diagnosis-driven companion-item suggestions — a test recommends meds &amp; supplements.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 15</span><h3>…make reporting effortless?</h3><p class="answer"><b>→</b> Scheduled owner digest by email / WhatsApp, in plain language.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 16</span><h3>…win hospital customers?</h3><p class="answer"><b>→</b> Full inpatient module — admissions, beds &amp; wards, nursing tasks, discharge.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 17</span><h3>…make onboarding instant?</h3><p class="answer"><b>→</b> Guided setup wizard, import templates, a 15-minute ‘first sale’ flow.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 18</span><h3>…stay fast on 2G?</h3><p class="answer"><b>→</b> Full read/write offline PWA with smart, conflict-free sync.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 19</span><h3>…cut shrinkage?</h3><p class="answer"><b>→</b> Variance reports — theoretical vs actual stock, cashier variance, expiry losses.</p></article>
+      <article class="hmw-card"><span class="q-mark">?</span><span class="ask">HMW 20</span><h3>…own the patient journey?</h3><p class="answer"><b>→</b> A unified patient timeline across pharmacy, hospital, lab and imaging.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 · SCAMPER ================= -->
+<section class="tech" id="tech-scamper" data-tech="scamper">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">03</div>
+      <div>
+        <div class="tech-name">Scamper</div>
+        <span class="tech-tag">The riff board · 10 ideas</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">Substitute, Combine, Adapt, Modify, Put to another use, Eliminate, Reverse. Scamper <b>riffles on what already exists</b> — a stamp here, a rotation there, and a feature is born.</p>
+    <div class="scamper-board reveal">
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>E-prescription with QR</h3><p>Patient scans the QR at any CareHub pharmacy and the Rx travels with them.</p><span class="chip">Substitute</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Care bundles</h3><p>Combine consult + lab order + pharmacy dispensing into one patient-centred flow.</p><span class="chip">Combine</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Cashflow calendar</h3><p>Unify debts, expenses, purchases and sales on one timeline.</p><span class="chip">Adapt</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Partner revenue share</h3><p>Built on the existing referral-agent commission flow.</p><span class="chip">Put to use</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Barcode everywhere</h3><p>Reuse barcode scanning for staff attendance and asset tracking.</p><span class="chip">Put to use</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Richer catalog</h3><p>Enriched master catalog: therapeutic classes, generics, drug-interaction warnings.</p><span class="chip">Modify</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Drill-down reports</h3><p>Filters and rollups on every report — no more static views.</p><span class="chip">Modify</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>CareFind as lead engine</h3><p>Discovery that becomes inbound: search → book → consult → visit.</p><span class="chip">Combine</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Auto reconciliation</h3><p>Bank / cash-drawer matching removes manual cash work.</p><span class="chip">Eliminate</span></article>
+      <article class="scamper-card"><span class="stamp">Riff</span><h3>Attention dashboard</h3><p>“What needs attention today” — expiring stock, overdue debts, unpaid invoices. Not charts.</p><span class="chip">Reverse</span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 04 · JOB-TO-BE-DONE ================= -->
+<section class="tech" id="tech-job-to-be-done" data-tech="job-to-be-done">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">04</div>
+      <div>
+        <div class="tech-name">Job-to-be-done</div>
+        <span class="tech-tag">Job tickets · 10 hires</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">People don’t buy software — <b>they hire it to do a job</b>. Each ticket names the job an owner is trying to get done, and what CareHub is hired to do about it.</p>
+    <div class="tickets reveal">
+      <article class="ticket"><span class="job">Job 31</span><h3>Did I make money today?</h3><p>Daily plain-language profit &amp; loss per location.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 32</span><h3>File compliance without panic.</h3><p>One-click compliance report bundle: NAFDAC, PCN, tax, VAT.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 33</span><h3>Run several branches as one business.</h3><p>Central purchasing, cross-branch transfers, consolidated reports.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 34</span><h3>Trust my staff with the books.</h3><p>Role-based access + read-only + per-staff activity timeline.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 35</span><h3>Get paid by customers who owe.</h3><p>Debtor credit scoring + polite automated reminders with payment links.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 36</span><h3>Know where business comes from.</h3><p>Territory analytics, retention cohorts, new-customer source tracking.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 37</span><h3>Never run out of what I sell.</h3><p>Demand forecasting + safety-stock warnings before shortages.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 38</span><h3>Spot trouble before it’s a loss.</h3><p>Proactive anomaly alerts on a live activity wall — sales drop vs same hour last week.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 39</span><h3>Serve queues faster.</h3><p>Queue-aware triage, quick-dispense mode, self-checkout kiosk mode.</p><span class="hire">Hired ✓</span></article>
+      <article class="ticket"><span class="job">Job 40</span><h3>Cut the paper chase.</h3><p>Digital receipts + Paystack / bank-transfer e-wallet payments.</p><span class="hire">Hired ✓</span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 · REVERSE-BRAINSTORMING ================= -->
+<section class="tech" id="tech-reverse-brainstorming" data-tech="reverse-brainstorming">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">05</div>
+      <div>
+        <div class="tech-name">Reverse-brainstorming</div>
+        <span class="tech-tag">Disaster, inverted · 10 saves</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">First, design the <b>worst possible product</b> — data loss, downtime, angry queues, inspectors at the door. Then invert every disaster into a feature. The crossed-out horror on each card is the guarantee this feature exists.</p>
+    <div class="inverts reveal">
+      <article class="invert-card"><span class="disaster">data loss</span><span class="up">↑</span><h3>Automatic backups</h3><p>Point-in-time recovery, export-anytime.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">downtime</span><span class="up">↑</span><h3>Offline-first POS</h3><p>Never blocks a sale; smart sync when back online.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">staff lockout</span><span class="up">↑</span><h3>Passwordless OTP login</h3><p>Quick role-switching, biometric-ready.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">frustrated customer</span><span class="up">↑</span><h3>Frictionless checkout</h3><p>Scan → pay → go.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">dead stock overstock</span><span class="up">↑</span><h3>Auto markdown engine</h3><p>Plus supplier returns workflow for dead stock.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">regulatory fine</span><span class="up">↑</span><h3>Proactive compliance checklist</h3><p>NAFDAC drug-recall feed alerts.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">owner ignores tool</span><span class="up">↑</span><h3>Daily digest that matters</h3><p>Personalized, in plain words — not charts.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">slow branch launch</span><span class="up">↑</span><h3>One-click branch duplication</h3><p>Per-business-type templates.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">support drowning</span><span class="up">↑</span><h3>In-app help centre</h3><p>Contextual tips, chatbot, customer-success checklist.</p><span class="fix">Inverted ✓</span></article>
+      <article class="invert-card"><span class="disaster">price wall</span><span class="up">↑</span><h3>Lean Lite tier</h3><p>Flat low price, core POS + inventory + expiry; module add-ons.</p><span class="fix">Inverted ✓</span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 06 · WHAT-IF (NIGHT SKYLINE) ================= -->
+<section class="tech" id="tech-what-if" data-tech="what-if">
+  <div class="wrap">
+    <div class="whatif-section reveal">
+      <span class="star" style="top:26px;left:6%;width:4px;height:4px"></span>
+      <span class="star" style="top:64px;left:16%;width:3px;height:3px;animation-delay:.8s"></span>
+      <span class="star" style="top:34px;left:30%;width:5px;height:5px;animation-delay:1.6s"></span>
+      <span class="star" style="top:80px;left:44%;width:3px;height:3px;animation-delay:.4s"></span>
+      <span class="star" style="top:22px;left:58%;width:4px;height:4px;animation-delay:2.1s"></span>
+      <span class="star" style="top:70px;left:72%;width:3px;height:3px;animation-delay:1.1s"></span>
+      <span class="star" style="top:40px;left:86%;width:5px;height:5px;animation-delay:.2s"></span>
+      <span class="star" style="top:90px;left:94%;width:3px;height:3px;animation-delay:1.9s"></span>
+      <span class="star" style="top:16px;left:92%;width:3px;height:3px"></span>
+
+      <div class="tech-head">
+        <div class="tnum" style="color:var(--saffron)">06</div>
+        <div>
+          <div class="tech-name">What if…?</div>
+          <span class="tech-tag">The speculative skyline · 10 futures</span>
+        </div>
+      </div>
+      <p class="tech-desc">Suspend reality for a while and ask the question the roadmap is too shy to ask. These are <b>what-if futures</b> — written against a night sky, each one a building worth considering.</p>
+
+      <div class="wi-grid">
+        <article class="wi-card"><span class="wmark">?51</span><h3>What if we sold market intelligence?</h3><p>Anonymized pricing trends + drug demand — a premium data product.</p></article>
+        <article class="wi-card"><span class="wmark">?52</span><h3>What if patients could skip the queue?</h3><p>CareFind self-serve booking + Paystack prepay + a queue number.</p></article>
+        <article class="wi-card"><span class="wmark">?53</span><h3>What if lab results found the patient?</h3><p>Auto-pushed to their phone via WhatsApp / email — PDF + the doctor’s explanation.</p></article>
+        <article class="wi-card"><span class="wmark">?54</span><h3>What if every owner had an AI back-office?</h3><p>Cash-flow prediction, PO drafting, reconciliation, voice Q&amp;A.</p></article>
+        <article class="wi-card"><span class="wmark">?55</span><h3>What if the cold chain told us?</h3><p>Temperature-sensitive stock monitoring with smart alerts.</p></article>
+        <article class="wi-card"><span class="wmark">?56</span><h3>What if shortages warned the whole network?</h3><p>A national expiry / shortage alert network across CareHub businesses.</p></article>
+        <article class="wi-card"><span class="wmark">?57</span><h3>What if care never ended?</h3><p>Post-visit care plans, refill reminders, follow-up scheduling.</p></article>
+        <article class="wi-card"><span class="wmark">?58</span><h3>What if one click closed the loop?</h3><p>Consultation → e-prescription → doorstep delivery coordination.</p></article>
+        <article class="wi-card"><span class="wmark">?59</span><h3>What if prices were benchmarked?</h3><p>Your prices vs same-area competitors.</p></article>
+        <article class="wi-card"><span class="wmark">?60</span><h3>What if finance lived in the ledger?</h3><p>Inventory-backed micro-loans, insurance bundles, group-buying discounts.</p></article>
+      </div>
+
+      <div class="skyline" aria-hidden="true">
+        <svg viewBox="0 0 1200 118" preserveAspectRatio="none">
+          <rect x="0" y="44" width="64" height="74" fill="#0E1624"/><rect x="76" y="30" width="88" height="88" fill="#101A2B"/><rect x="176" y="62" width="52" height="56" fill="#0C1520"/>
+          <rect x="240" y="18" width="70" height="100" fill="#101A2B"/><rect x="322" y="52" width="90" height="66" fill="#0E1624"/><rect x="424" y="34" width="60" height="84" fill="#101A2B"/>
+          <rect x="496" y="66" width="70" height="52" fill="#0C1520"/><rect x="578" y="10" width="82" height="108" fill="#101A2B"/><rect x="672" y="48" width="56" height="70" fill="#0E1624"/>
+          <rect x="740" y="26" width="92" height="92" fill="#101A2B"/><rect x="844" y="58" width="64" height="60" fill="#0C1520"/><rect x="920" y="40" width="78" height="78" fill="#101A2B"/>
+          <rect x="1010" y="14" width="60" height="104" fill="#0E1624"/><rect x="1082" y="54" width="118" height="64" fill="#101A2B"/>
+          <rect x="424" y="42" width="6" height="8" fill="#E9A13B"/><rect x="440" y="58" width="6" height="8" fill="#E9A13B"/><rect x="424" y="74" width="6" height="8" fill="#E9A13B"/>
+          <rect x="578" y="20" width="6" height="8" fill="#E9A13B"/><rect x="594" y="36" width="6" height="8" fill="#E9A13B"/><rect x="610" y="20" width="6" height="8" fill="#E9A13B"/><rect x="626" y="52" width="6" height="8" fill="#E9A13B"/>
+          <rect x="740" y="36" width="6" height="8" fill="#E9A13B"/><rect x="756" y="52" width="6" height="8" fill="#E9A13B"/><rect x="772" y="36" width="6" height="8" fill="#E9A13B"/><rect x="788" y="68" width="6" height="8" fill="#E9A13B"/>
+          <rect x="1010" y="24" width="6" height="8" fill="#E9A13B"/><rect x="1026" y="40" width="6" height="8" fill="#E9A13B"/><rect x="1042" y="24" width="6" height="8" fill="#E9A13B"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 · ASSUMPTION-REVERSAL ================= -->
+<section class="tech" id="tech-assumption-reversal" data-tech="assumption-reversal">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">07</div>
+      <div>
+        <div class="tech-name">Assumption-reversal</div>
+        <span class="tech-tag">Flip the cards · 10 flips</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">Every product leans on an assumption it stopped noticing. <b>Find it, flip it, and a new product appears.</b> Tap a card to turn it over.</p>
+    <div class="flips reveal">
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Multi-country expansion</h3><p>GH, KE, ZA — with localized compliance and multi-currency.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Cloud-only is enough” → GH, KE, ZA</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Hybrid edge deployment</h3><p>Local-first for low-connectivity hospitals; cloud-sync always.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Everything must be online” → edge + sync</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Voice-to-text SOAP notes</h3><p>Local-language speech entry for staff.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Typing is the only way in” → speak</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Role-split apps</h3><p>Owner metrics app, cashier POS app, doctor clinical app.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“One app for everyone” → one per role</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Camera product recognition</h3><p>For unbarcoded items, the camera is the scan.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Items must have barcodes” → see it</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Push insights, not pull reports</h3><p>Price-change, discount, low-stock anomaly alerts.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Reports are pulled” → insights arrive</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Multi-entity holding</h3><p>One login, many companies, consolidated group P&amp;L.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“One business, one account” → hold many</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Native Android apps</h3><p>Dedicated apps for POS and owner dashboards.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Web-only is enough” → native</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Shoppable storefronts</h3><p>E-commerce storefront per business + delivery management.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“Sell at the counter only” → sell anywhere</p></div>
+      </div></article>
+      <article class="flip"><div class="flip-inner">
+        <div class="flip-face flip-front"><span class="rev-tag">↻ Reversed</span><h3>Global master catalog</h3><p>Local pricing, currencies and regulatory fields in one catalog.</p><span class="flap-hint">flip the card</span></div>
+        <div class="flip-face flip-back"><span class="revstamp">Reversed</span><p>“One country catalog” → the world</p></div>
+      </div></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 08 · COMBINATIONAL ================= -->
+<section class="tech" id="tech-combinational" data-tech="combinational">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">08</div>
+      <div>
+        <div class="tech-name">Combinational</div>
+        <span class="tech-tag">Wedding of convenience · 9 hybrids</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">Take two features that already exist, marry them at a <b>wedding of convenience</b>, and see what hybrid is born at the seam.</p>
+    <div class="fusions reveal">
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Referral bonus ✚ debtor credit</div><h3>Redeem bonus against debt</h3><p>Referral earnings settle the customer’s own debt or credit.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Appointments ✚ WhatsApp</div><h3>Book via chat</h3><p>Booking through the conversation, plus automated reminders.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">CareFind posts ✚ bookings</div><h3>Health posts with ‘book now’</h3><p>Public health posts on CareFind linking to nearby CareHub clinics.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Supplier payables ✚ purchases</div><h3>Payables aging</h3><p>Supplier payables aging + scheduled payouts from purchases.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Tax ✚ expenses</div><h3>VAT-ready books</h3><p>Auto tax classification + VAT-ready expense reports.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Clinical ✚ retail</div><h3>Drug + service packages</h3><p>Tests + meds + consult bundled at one price.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Territory analytics ✚ roles</div><h3>Regional manager view</h3><p>Scoped to assigned territories only.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">Master catalog ✚ clinics</div><h3>Per-clinic formularies</h3><p>Clinic-specific price lists derived from the master catalog.</p></article>
+      <article class="fusion-card"><span class="plus">+</span><div class="parts">CareFind ✚ compliance</div><h3>‘Care index’ badges</h3><p>Public quality / compliance scores on business profiles.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 09 · ELIMINATE ================= -->
+<section class="tech" id="tech-eliminate" data-tech="eliminate">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">09</div>
+      <div>
+        <div class="tech-name">Eliminate</div>
+        <span class="tech-tag">The strike list · 9 removals</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">What can CareHub <b>take away</b> — and which separate tool disappears with it? Every card adds a capability and strikes the piece of work (or the third-party app) it replaces.</p>
+    <div class="strikes reveal">
+      <article class="strike-card"><span class="x">✕</span><h3>Native tax invoices + e-invoice QR</h3><p>Built-in invoicing with a scannable e-invoice QR.</p><span class="gone"><span>removes · separate invoicing tool</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Barcode cycle counting + reconciliation mode</h3><p>Count stock with a scanner, reconcile in-app.</p><span class="gone"><span>removes · manual stock count</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Self-serve support + community + in-app AI</h3><p>Answers live where the user is stuck.</p><span class="gone"><span>removes · call-center tickets</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Native bookkeeping ledger</h3><p>Income, expense and asset records in-house.</p><span class="gone"><span>removes · multi-tool accounting</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Central inventory + transfer requests</h3><p>Branches sync stock automatically.</p><span class="gone"><span>removes · manual cross-branch sync</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Shift scheduling + PIN attendance</h3><p>Payroll-ready hours captured on shift.</p><span class="gone"><span>removes · staffing guesswork</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>One clear pricing page + a la carte add-ons</h3><p>Modules priced plainly, add-ons bought à la carte.</p><span class="gone"><span>removes · tier bloat</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>Guided tour + sandbox data + staff certification</h3><p>Teams learn in a safe demo environment.</p><span class="gone"><span>removes · training cost</span></span></article>
+      <article class="strike-card"><span class="x">✕</span><h3>SMS fallback / offline queue</h3><p>Transactions survive power and internet cuts.</p><span class="gone"><span>removes · power &amp; internet dependency</span></span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10 · WILDCARD-MOONSHOT ================= -->
+<section class="tech" id="tech-wildcard-moonshot" data-tech="wildcard-moonshot">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">10</div>
+      <div>
+        <div class="tech-name">Wildcard · moonshot</div>
+        <span class="tech-tag">The long shots · 10 bets</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">The bets that would <b>change the game if they landed</b>. Some need a partner, some need regulation, all of them would re-shape what CareHub means — so they glow in the dark.</p>
+    <div class="moons reveal">
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 89</span>
+        <h3>CareHub Pay</h3><p>Business working-capital account with instant POS settlement.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 90</span>
+        <h3>Drug authenticity</h3><p>Anti-counterfeit batch serialization with QR verification.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 91</span>
+        <h3>CareHub Health ID</h3><p>A patient-held portable health-record QR, portable across providers.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 92</span>
+        <h3>Clinical decision support</h3><p>Drug interactions, contraindications, dosage — at the pharmacist’s fingertips.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 93</span>
+        <h3>Trend intelligence</h3><p>Anonymized disease and demand trend reports for pharma and NGOs.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 94</span>
+        <h3>Group purchasing</h3><p>Aggregated buying power across the network for inventory discounts.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 95</span>
+        <h3>Built-in CPD</h3><p>Continuing professional education with points tracking.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 96</span>
+        <h3>Voice briefing</h3><p>“Sales up 12% · 3 items expiring · 2 debts due” — every morning, out loud.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 97</span>
+        <h3>Prescription referral network</h3><p>Inter-pharmacy Rx referrals riding the referral-agent rails.</p>
+      </article>
+      <article class="moon-card">
+        <svg class="moon" width="120" height="120" viewBox="0 0 120 120"><path d="M86 20a46 46 0 1 0 14 64 38 38 0 0 1-14-64z" fill="#E9A13B"/></svg>
+        <span class="spark"></span><span class="moonshot-tag">Moonshot 98</span>
+        <h3>Inspector-ready audit trail</h3><p>Regulatory-grade signed exports accepted by NAFDAC / PCN inspectors.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 11 · ENHANCE-EXISTING ================= -->
+<section class="tech" id="tech-enhance-existing" data-tech="enhance-existing">
+  <div class="wrap">
+    <div class="tech-head reveal">
+      <div class="tnum">11</div>
+      <div>
+        <div class="tech-name">Enhance-existing</div>
+        <span class="tech-tag">Sharpening what ships · 12 upgrades</span>
+      </div>
+    </div>
+    <p class="tech-desc reveal">Sometimes the best new feature is a <b>sharper version of one that already ships</b>. Twelve modules, twelve upgrades — nothing new added to the platform, everything added to the product.</p>
+    <div class="upgrades reveal">
+      <article class="upgrade-card"><div class="mod"><span class="modname">Purchases</span><span class="up">▲ enhanced</span></div><h3>Batch expiry at GRN + FEFO labels</h3><p>Batch-level expiry capture at goods receipt, FEFO label printing.</p><div class="bar"><i></i></div><span class="ver">Upgrade 99</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Expenses</span><span class="up">▲ enhanced</span></div><h3>Photo receipts + budgets</h3><p>Photo receipt upload and category budgets.</p><div class="bar"><i></i></div><span class="ver">Upgrade 100</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Clients</span><span class="up">▲ enhanced</span></div><h3>Consent-based health profiles</h3><p>Allergies, blood group, chronic conditions — with consent.</p><div class="bar"><i></i></div><span class="ver">Upgrade 101</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Appointments</span><span class="up">▲ enhanced</span></div><h3>Smarter scheduling</h3><p>Multi-staff scheduling, recurring visits, no-show automation.</p><div class="bar"><i></i></div><span class="ver">Upgrade 102</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Consultations</span><span class="up">▲ enhanced</span></div><h3>Structured SOAP notes</h3><p>Structured notes, uploads, printable prescriptions.</p><div class="bar"><i></i></div><span class="ver">Upgrade 103</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">ADR reports</span><span class="up">▲ enhanced</span></div><h3>National export + follow-up</h3><p>National reporting export and follow-up status tracking.</p><div class="bar"><i></i></div><span class="ver">Upgrade 104</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Reports</span><span class="up">▲ enhanced</span></div><h3>Digests + comparisons + exports</h3><p>Scheduled digests, period-over-period comparison, Excel / PDF export.</p><div class="bar"><i></i></div><span class="ver">Upgrade 105</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Staff</span><span class="up">▲ enhanced</span></div><h3>Performance metrics</h3><p>Sales per staff, attendance, shrinkage attribution.</p><div class="bar"><i></i></div><span class="ver">Upgrade 106</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Warehouses</span><span class="up">▲ enhanced</span></div><h3>Approved transfers</h3><p>Multi-warehouse transfer workflow with approval.</p><div class="bar"><i></i></div><span class="ver">Upgrade 107</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Settings</span><span class="up">▲ enhanced</span></div><h3>Security &amp; sessions</h3><p>Audit-log viewer, session management, 2FA.</p><div class="bar"><i></i></div><span class="ver">Upgrade 108</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">CareFind</span><span class="up">▲ enhanced</span></div><h3>Reviews + trust badge</h3><p>Reviews / ratings + verified ‘expiry-safe’ pharmacy badge.</p><div class="bar"><i></i></div><span class="ver">Upgrade 109</span></article>
+      <article class="upgrade-card"><div class="mod"><span class="modname">Billing</span><span class="up">▲ enhanced</span></div><h3>Split &amp; partial payments</h3><p>Split payments, partial payments, deposit + balance workflow.</p><div class="bar"><i></i></div><span class="ver">Upgrade 110</span></article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SYNTHESIS · THE CLIMAX ================= -->
+<section class="synthesis" id="synthesis">
+  <div class="wrap">
+    <span class="so reveal">Closing insight · the so-what</span>
+    <h2 class="reveal">Eleven techniques, one market. Here is what it all adds up to.</h2>
+    <p class="lede reveal">
+      Premium value is not one feature — it’s a <b>balance of four promises</b> the market is already paying for:
+    </p>
+
+    <div class="pillars reveal">
+      <article class="pillar"><span class="pnum">Promise 01</span><h3>Trust ops</h3><p>Expiry, FEFO, compliance, audit — the shelf that stops losing money and keeps inspectors happy.</p></article>
+      <article class="pillar"><span class="pnum">Promise 02</span><h3>Cash recovery</h3><p>HMO claims, debts, embedded finance — money the business is owed, collected without chasing.</p></article>
+      <article class="pillar"><span class="pnum">Promise 03</span><h3>Growth</h3><p>CareFind leads, e-commerce, market data — the counter that starts selling beyond the counter.</p></article>
+      <article class="pillar"><span class="pnum">Promise 04</span><h3>Clinical depth</h3><p>Inpatient, e-prescriptions, patient portal, AI — the toolkit that makes CareHub a partner in care, not just cash.</p></article>
+    </div>
+
+    <div class="roadmap reveal">
+      <div class="rm-title">The biggest unlock — where to spend the next three sprints</div>
+      <div class="steps">
+        <div class="step">
+          <span class="sn">1</span>
+          <div><h4>FEFO + expiry-block first</h4><p>Expiry capture already ships — finish the loop: nearest-expiry-first picking and blocking expired sales.</p></div>
+        </div>
+        <div class="step"><span class="sn alt">→</span><div></div></div>
+        <div class="step">
+          <span class="sn">2</span>
+          <div><h4>Then HMO / NHIS claims</h4><p>The cash-recovery engine the Nigerian market already treats as the premium differentiator.</p></div>
+        </div>
+        <div class="step"><span class="sn alt">→</span><div></div></div>
+        <div class="step">
+          <span class="sn">3</span>
+          <div><h4>Then the owner digest</h4><p>Plain-language daily answers to “did I make money today?” — the moment CareHub becomes indispensable.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <svg class="ecgline" width="180" height="34" viewBox="0 0 180 34" fill="none" stroke="#E9A13B" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+    <path d="M2 17h22l8-12 10 26 10-30 10 28 7-12h28l8-12 10 26 10-30 10 28 7-12h26"/>
+  </svg>
+  <b>CareHub · Premium Value Upgrade</b><br>
+  Brainstorm keepsake · 2026-08-19 · autonomous session<br>
+  Crafted from the session memlog — 11 techniques · 110 ideas · 1 insight
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var bar = document.getElementById("progress");
+  window.addEventListener("scroll", function(){
+    var h = document.documentElement;
+    var p = h.scrollTop / (h.scrollHeight - h.clientHeight);
+    bar.style.width = (p * 100) + "%";
+  }, {passive:true});
+
+  /* filter by technique */
+  var btns = document.querySelectorAll(".fbtn[data-tech]");
+  var techs = document.querySelectorAll(".tech");
+  function setFilter(name){
+    btns.forEach(function(b){
+      b.classList.toggle("on", b.getAttribute("data-tech") === name);
+    });
+    techs.forEach(function(s){
+      var show = name === "all" || s.getAttribute("data-tech") === name;
+      s.classList.toggle("hidden", !show);
+    });
+  }
+  btns.forEach(function(b){
+    b.addEventListener("click", function(){
+      setFilter(b.getAttribute("data-tech"));
+    });
+  });
+
+  /* surprise me */
+  document.getElementById("surprise").addEventListener("click", function(){
+    var visible = [];
+    techs.forEach(function(s){
+      if(!s.classList.contains("hidden")){
+        visible = visible.concat(Array.prototype.slice.call(s.querySelectorAll("article")));
+      }
+    });
+    if(!visible.length){ visible = Array.prototype.slice.call(document.querySelectorAll("article")); }
+    var card = visible[Math.floor(Math.random() * visible.length)];
+    card.scrollIntoView({behavior:"smooth", block:"center"});
+    card.classList.remove("card-spark");
+    void card.offsetWidth;
+    card.classList.add("card-spark");
+    window.setTimeout(function(){ card.classList.remove("card-spark"); }, 1700);
+  });
+
+  /* flip cards (assumption-reversal) */
+  document.querySelectorAll(".flip").forEach(function(f){
+    f.addEventListener("click", function(){
+      f.classList.toggle("flipped");
+    });
+  });
+
+  /* reveal on scroll */
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        e.target.classList.add("in");
+        io.unobserve(e.target);
+      }
+    });
+  }, {threshold:0.06});
+  document.querySelectorAll(".reveal").forEach(function(el){ io.observe(el); });
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,22 @@ if (!SB_URL || !SB_KEY) {
 // persistSession: false — that client only ever listens to a websocket.
 // This one carries the actual login session, so it needs to persist and
 // auto-refresh like a normal Supabase Auth client.
-export const authClient = createClient(SB_URL, SB_KEY)
+export const authClient = createClient(SB_URL, SB_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: window.localStorage,
+  },
+})
+
+// Log initial session state on load
+authClient.auth.getSession().then(({ data }) => {
+  if (data?.session) {
+    console.log('[AuthClient] Session active for:', data.session.user?.email)
+  } else {
+    console.warn('[AuthClient] No active session on load')
+  }
+})
 
 // provisionRealAuthAccount was removed in C2 (20260813): it existed to create
 // a Supabase Auth account alongside a plaintext-password business/staff row.

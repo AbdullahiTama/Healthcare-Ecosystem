@@ -4,6 +4,7 @@ import { messageRepository } from './repositories'
 import { staffRepository } from '../staff/repositories'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
+import { PageHeader } from '@care-ecosystem/design-system/components/layout/PageHeader'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
 
 function fmtStamp(d) {
@@ -331,15 +332,14 @@ export default function Messages({ brand }) {
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '820px' }}>
-      <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-        <div>
-          <div style={{ fontSize: '18px', fontWeight: '900', color: navy }}>Internal Correspondence</div>
-          <div style={{ fontSize: '13px', color: gray500, marginTop: '2px' }}>Official record of communication. Every message is logged with sender, recipients, attachments, and time.</div>
-        </div>
-        <TealBtn onClick={function () { setComposing(true) }}>+ New Message</TealBtn>
-      </div>
+    <>
+      <PageHeader
+        title="Internal Correspondence"
+        description="Official record of communication. Every message is logged with sender, recipients, attachments, and time."
+        primaryAction={{ label: 'New Message', onClick: function () { setComposing(true) } }}
+      />
+      <div style={{ padding: '24px', maxWidth: '820px' }}>
+        <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', borderRadius: '8px', background: bg, border: `1px solid ${border}`, marginBottom: '20px' }}>
         <span style={{ fontSize: '11px', fontWeight: '700', color: tealDeep, letterSpacing: '0.04em' }}>SECURE</span>
@@ -610,6 +610,7 @@ export default function Messages({ brand }) {
             </div>
           )}
       </Modal>
-    </div>
+      </div>
+    </>
   )
 }

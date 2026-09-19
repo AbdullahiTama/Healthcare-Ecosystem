@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../providers/AuthContext'
+import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Card, Inp, TealBtn } from '../../components/ui'
@@ -53,7 +54,16 @@ function Login() {
       if (authError) {
         setError(authError.message)
       } else {
-        navigate('/feed')
+        const { data: admin } = await supabase.rpc('get_my_admin_info')
+
+        if (admin) {
+          const token = btoa(`${admin.id}|${admin.role}|${Date.now()}`)
+          localStorage.setItem('admin_token', token)
+          localStorage.setItem('admin_user', JSON.stringify(admin))
+          navigate('/admin-panel')
+        } else {
+          navigate('/feed')
+        }
       }
     }
 
