@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { initSentry, Sentry } from './lib/sentry'
 import { authClient } from './lib/authClient'
@@ -44,6 +44,7 @@ const LoadingFallback = () => (
 
 export default function App() {
   initSentry()
+  const location = useLocation()
   const [auth, setAuth] = useState(() => {
     try {
       const saved = localStorage.getItem('carehub_auth')
@@ -135,7 +136,7 @@ let loggingOut = false
     <AuthProvider value={{ auth, setAuth, login, logout, isAdmin, agent, loginAgent, logoutAgent }}>
       <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
         <Suspense fallback={<LoadingFallback />}>
-          <Routes>
+          <Routes key={location.key}>
             <Route path='/' element={<Landing />} />
             <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
             <Route path='/register' element={<Register />} />
