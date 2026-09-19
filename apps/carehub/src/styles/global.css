@@ -333,7 +333,7 @@ body {
 
 /* ── Landing page pricing cards ───────────────────────────────────────────── */
 .pricing-card {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.5s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @media (hover: hover) {
   .pricing-card:hover {

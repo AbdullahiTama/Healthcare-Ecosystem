@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, AlertCircle, Check as CheckIcon, Wallet, WifiOff, Pill, Building2, FlaskConical, Sparkles, Leaf, Palette, Scissors } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, Check as CheckIcon, Wallet, WifiOff, Pill, Building, FlaskConical, Sparkles, Leaf, Palette, Scissors } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
@@ -11,6 +11,43 @@ import { useBreakpoint } from '../hooks/useBreakpoint'
 gsap.registerPlugin(ScrollTrigger)
 
 const { tealDeep, tealBright, deepTeal, tealMist, fontDisplay, bg, cardBg, navy, gray600, gray500, gray400, gray300, border } = theme
+
+const EASE = 'power4.out'
+const EASE_CUSTOM = 'cubic-bezier(0.32, 0.72, 0, 1)'
+
+function Eyebrow({ children, light }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '5px 14px', borderRadius: 999,
+      background: light ? 'rgba(255,255,255,0.12)' : tealMist,
+      border: light ? '1px solid rgba(255,255,255,0.18)' : `1px solid ${border}`,
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+      color: light ? 'rgba(255,255,255,0.9)' : tealDeep,
+      marginBottom: 20,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function DoubleBezel({ children, style, className }) {
+  return (
+    <div className={className} style={{
+      padding: 3, borderRadius: 'calc(2rem + 3px)',
+      background: 'rgba(0,0,0,0.03)',
+      border: '1px solid rgba(0,0,0,0.04)',
+      ...style,
+    }}>
+      <div style={{
+        borderRadius: 28, overflow: 'hidden',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.04)',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 const PLANS = [
   ['Basic', '60,000', '/year', ['Up to 2 locations', 'Up to 5 staff', 'Up to 5,000 products', 'All core features', 'Hospitals excluded'], false],
@@ -29,67 +66,67 @@ export default function Landing() {
   useEffect(() => {
     const ctx = gsap.context(() => {
       gsap.from(heroRef.current?.querySelectorAll('.hero-fade'), {
-        y: 50, opacity: 0, duration: 1, stagger: 0.18, ease: 'power3.out',
+        y: 60, opacity: 0, duration: 1.2, stagger: 0.2, ease: EASE,
       })
 
       gsap.from('.business-type-pill', {
         scrollTrigger: { trigger: '.business-types-strip', start: 'top 90%' },
-        x: -40, opacity: 0, duration: 0.6, stagger: 0.06, ease: 'power2.out',
+        x: -40, opacity: 0, duration: 0.7, stagger: 0.05, ease: EASE,
       })
 
       gsap.from('.feature-card', {
         scrollTrigger: { trigger: '#features', start: 'top 82%' },
-        y: 40, opacity: 0, duration: 0.8, stagger: 0.12, ease: 'power2.out',
+        y: 50, opacity: 0, duration: 0.9, stagger: 0.1, ease: EASE,
       })
 
       gsap.from('.visibility-section', {
         scrollTrigger: { trigger: '.visibility-section', start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.7, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.9, ease: EASE,
       })
 
-      gsap.from('.inventory-card', {
+      gsap.from('.inventory-section > div > div', {
         scrollTrigger: { trigger: '.inventory-section', start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.6, stagger: 0.08, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.8, stagger: 0.15, ease: EASE,
       })
 
       gsap.from('.ai-section', {
         scrollTrigger: { trigger: '.ai-section', start: 'top 85%' },
-        scale: 0.95, opacity: 0, duration: 0.8, ease: 'power2.out',
+        scale: 0.96, opacity: 0, duration: 1, ease: EASE,
       })
 
       gsap.from('.ecom-step', {
         scrollTrigger: { trigger: '.ecom-section', start: 'top 85%' },
-        y: 40, opacity: 0, duration: 0.6, stagger: 0.15, ease: 'power2.out',
+        y: 50, opacity: 0, duration: 0.7, stagger: 0.12, ease: EASE,
       })
 
       gsap.from('.bi-card', {
         scrollTrigger: { trigger: '.bi-section', start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.08, ease: EASE,
       })
 
       gsap.from('.ops-card', {
         scrollTrigger: { trigger: '.ops-section', start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.6, stagger: 0.12, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.1, ease: EASE,
       })
 
       gsap.from('.who-card', {
         scrollTrigger: { trigger: '.who-section', start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.6, stagger: 0.08, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.06, ease: EASE,
       })
 
       gsap.from('.why-item', {
         scrollTrigger: { trigger: '.why-section', start: 'top 85%' },
-        y: 20, opacity: 0, duration: 0.5, stagger: 0.06, ease: 'power2.out',
+        y: 24, opacity: 0, duration: 0.6, stagger: 0.05, ease: EASE,
       })
 
       gsap.from('.pricing-card', {
         scrollTrigger: { trigger: '.pricing-grid', start: 'top 82%' },
-        y: 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out',
+        y: 40, opacity: 0, duration: 0.7, stagger: 0.08, ease: EASE,
       })
 
       gsap.from('.cta-section', {
         scrollTrigger: { trigger: '.cta-section', start: 'top 85%' },
-        scale: 0.95, opacity: 0, duration: 0.8, ease: 'power2.out',
+        scale: 0.96, opacity: 0, duration: 1, ease: EASE,
       })
 
       ScrollTrigger.create({
@@ -105,36 +142,40 @@ export default function Landing() {
   return (
     <main style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: tealDeep, overflowX: 'hidden', width: '100%', maxWidth: '100%', color: '#fff' }}>
 
+      {/* Grain Overlay */}
+      <div aria-hidden style={{position:'fixed',inset:0,zIndex:50,pointerEvents:'none',opacity:0.025,backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,backgroundRepeat:'repeat'}} />
       {/* ── Glass Nav ─────────────────────────────────────────── */}
       <nav style={{
         position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
-        background: navScrolled ? '#fff' : 'rgba(255,255,255,0.05)',
-        backdropFilter: 'blur(20px)',
-        borderRadius: 64, padding: '8px 10px 8px 20px',
+        background: navScrolled ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.05)',
+        backdropFilter: 'blur(24px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
+        borderRadius: 999, padding: '8px 10px 8px 24px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         zIndex: 100, width: isMobile ? 'calc(100% - 24px)' : 720,
-        border: navScrolled ? '1px solid rgba(0,0,0,0.04)' : '1px solid rgba(255,255,255,0.08)',
-        transition: 'background 0.3s ease, border 0.3s ease, backdropFilter 0.3s ease',
+        border: navScrolled ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.08)',
+        boxShadow: navScrolled ? '0 4px 24px rgba(0,0,0,0.06)' : 'none',
+        transition: `background 0.5s ${EASE_CUSTOM}, border 0.5s ${EASE_CUSTOM}, box-shadow 0.5s ${EASE_CUSTOM}`,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Logo size={28} />
-          <span style={{ fontWeight: 900, fontSize: 16, color: navScrolled ? tealDeep : '#fff', letterSpacing: '-0.01em', transition: 'color 0.3s ease' }}>CareHub</span>
+          <span style={{ fontWeight: 900, fontSize: 16, color: navScrolled ? tealDeep : '#fff', letterSpacing: '-0.01em', transition: `color 0.5s ${EASE_CUSTOM}` }}>CareHub</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 20 }}>
           {!isMobile && (
             <>
-              <a href="#features" style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, color: navScrolled ? tealDeep : 'rgba(255,255,255,0.8)', textDecoration: 'none', transition: 'color 0.3s ease' }}>Features</a>
-              <a href="#pricing" style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, color: navScrolled ? tealDeep : 'rgba(255,255,255,0.8)', textDecoration: 'none', transition: 'color 0.3s ease' }}>Pricing</a>
+              <a href="#features" style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, color: navScrolled ? tealDeep : 'rgba(255,255,255,0.8)', textDecoration: 'none', transition: `color 0.5s ${EASE_CUSTOM}` }}>Features</a>
+              <a href="#pricing" style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, color: navScrolled ? tealDeep : 'rgba(255,255,255,0.8)', textDecoration: 'none', transition: `color 0.5s ${EASE_CUSTOM}` }}>Pricing</a>
             </>
           )}
-          <button onClick={() => navigate('/login')} style={{ padding: '7px 14px', borderRadius: 40, border: navScrolled ? `1px solid ${tealDeep}` : '1px solid rgba(255,255,255,0.25)', background: 'transparent', color: navScrolled ? tealDeep : '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'color 0.3s ease, border 0.3s ease' }}>Sign in</button>
-          <button onClick={() => navigate('/register')} style={{ padding: '7px 16px', borderRadius: 40, border: 'none', background: '#fff', color: deepTeal, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Get Started</button>
+          <button onClick={() => navigate('/login')} style={{ padding: '7px 14px', borderRadius: 40, border: navScrolled ? `1px solid ${tealDeep}` : '1px solid rgba(255,255,255,0.25)', background: 'transparent', color: navScrolled ? tealDeep : '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: `color 0.5s ${EASE_CUSTOM}, border 0.5s ${EASE_CUSTOM}` }}>Sign in</button>
+          <button onClick={() => navigate('/register')} style={{ padding: '7px 16px', borderRadius: 40, border: 'none', background: '#fff', color: deepTeal, fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: `transform 0.4s ${EASE_CUSTOM}` }} onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.96)' }} onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}>Get Started</button>
         </div>
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div ref={heroRef} style={{
-        minHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: `linear-gradient(135deg, ${deepTeal}E6 0%, ${tealDeep}D9 50%, #0D5F4DE6 100%)`,
         position: 'relative', overflow: 'hidden',         padding: isMobile ? '80px 20px 60px' : '96px 24px 80px',
       }}>
@@ -144,22 +185,49 @@ export default function Landing() {
           pointerEvents: 'none',
         }} />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 900, margin: '0 auto' }}>
+          <div className="hero-fade">
+            <Eyebrow light>Business Management Platform</Eyebrow>
+          </div>
           <h1 className="hero-fade" style={{
             fontFamily: fontDisplay, fontWeight: 700,
-            fontSize: isMobile ? 'clamp(32px, 8vw, 42px)' : 'clamp(42px, 5vw, 60px)',
-            lineHeight: 1.05, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 16px',
+            fontSize: isMobile ? 'clamp(34px, 8vw, 44px)' : 'clamp(48px, 5.5vw, 72px)',
+            lineHeight: 1.05, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 20px',
             maxWidth: 900, textWrap: 'balance',
           }}>
             Run Your Healthcare Business Smarter. Get Seen. Grow Faster.
           </h1>
-          <p className="hero-fade" style={{ fontSize: isMobile ? 14 : 16, color: 'rgba(255,255,255,0.82)', maxWidth: 600, margin: '0 auto 28px', lineHeight: 1.7, fontWeight: 500 }}>
+          <p className="hero-fade" style={{ fontSize: isMobile ? 15 : 17, color: 'rgba(255,255,255,0.78)', maxWidth: 580, margin: '0 auto 36px', lineHeight: 1.7, fontWeight: 500 }}>
             The intelligent business management platform fully designed for your healthcare, wellness, beauty and personal-care business.
           </p>
-          <div className="hero-fade" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/register')} style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: 'none', background: '#fff', color: deepTeal, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
-              Start Your 30-Day Free Trial <ArrowRight size={16} />
+          <div className="hero-fade" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/register')} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 0,
+              padding: '16px 16px 16px 32px', borderRadius: 999, border: 'none',
+              background: '#fff', color: deepTeal, fontWeight: 700, fontSize: 14,
+              cursor: 'pointer', fontFamily: theme.fontFamily,
+              transition: `transform 0.4s ${EASE_CUSTOM}`,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+            }}
+              onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+              onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+            >
+              Start Your 30-Day Free Trial
+              <span style={{ width: 32, height: 32, borderRadius: 999, background: 'rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 12, flexShrink: 0 }}>
+                <ArrowRight size={14} strokeWidth={2.5} />
+              </span>
             </button>
-            <a href="#features" style={{ padding: '14px 30px', borderRadius: theme.radius.md, border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', backdropFilter: 'blur(6px)' }}>See How CareHub Works</a>
+            <a href="#features" style={{
+              padding: '16px 32px', borderRadius: 999,
+              border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(255,255,255,0.06)',
+              color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+              backdropFilter: 'blur(6px)',
+              transition: `background 0.4s ${EASE_CUSTOM}`,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+            >See How CareHub Works</a>
           </div>
         </div>
       </div>
@@ -178,16 +246,17 @@ export default function Landing() {
       </div>
 
       {/* ── Core Positioning Bento Grid ───────────────────────── */}
-      <div id="features" style={{ padding: '60px 24px', maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 36, color: navy, margin: '0 0 12px', lineHeight: 1.2 }}>
+      <div id="features" style={{ padding: isMobile ? '80px 24px' : '120px 24px', maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 56 }}>
+          <Eyebrow>Features</Eyebrow>
+          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 28 : 40, color: navy, margin: '0 0 14px', lineHeight: 1.15, letterSpacing: '-0.02em' }}>
             Everything Your Business Needs. In One Place.
           </h2>
           <p style={{ fontSize: 14, color: gray500, maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
             CareHub brings the essential tools required to manage modern healthcare and related businesses into one connected platform.
           </p>
         </div>
-        <div style={{ display: 'grid', gridAutoFlow: 'dense', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridAutoFlow: 'dense', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 16 }}>
           {/* Featured: Inventory Management — large teal card */}
           <div className="feature-card" style={{ gridColumn: isMobile ? 'span 1' : 'span 2', gridRow: isMobile ? 'span 1' : 'span 2', background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: 32, display: 'flex', flexDirection: 'column', justifyContent: 'center', color: '#fff' }}>
             <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(255,255,255,0.15)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -238,7 +307,7 @@ export default function Landing() {
       </div>
 
       {/* ── Business Visibility ───────────────────────────────── */}
-      <div className="visibility-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="visibility-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 40 : 48 }}>
           {/* Left: text */}
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 66%' }}>
@@ -283,7 +352,7 @@ export default function Landing() {
       </div>
 
       {/* ── Inventory & Operations ──────────────────────────────── */}
-      <div className="inventory-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="inventory-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 40 : 48 }}>
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%' }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
@@ -334,7 +403,7 @@ export default function Landing() {
       </div>
 
       {/* ── Intelligent Technology ─────────────────────────────── */}
-      <div className="ai-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="ai-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <div style={{ background: `linear-gradient(135deg, ${tealDeep} 0%, ${deepTeal} 100%)`, borderRadius: theme.radius.xl, padding: isMobile ? 32 : 48, textAlign: 'center', color: 'white' }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 30, margin: '0 0 16px', lineHeight: 1.2 }}>
@@ -351,7 +420,7 @@ export default function Landing() {
       </div>
 
       {/* ── E-Commerce ─────────────────────────────────────────── */}
-      <div className="ecom-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="ecom-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
         <div style={{ maxWidth: 700, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
@@ -383,7 +452,7 @@ export default function Landing() {
       </div>
 
       {/* ── Business Intelligence ──────────────────────────────── */}
-      <div className="bi-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="bi-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
@@ -416,7 +485,7 @@ export default function Landing() {
       </div>
 
       {/* ── Staff, Locations, Offline ────────────────────────────── */}
-      <div className="ops-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="ops-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {[
             { icon: Users, title: 'Your Team. Your Business. Your Control.', desc: 'Manage staff accounts, roles, responsibilities and access from a centralized platform. CareHub helps business owners and managers maintain better operational control as their teams grow.', align: 'left' },
@@ -437,7 +506,7 @@ export default function Landing() {
       </div>
 
       {/* ── Who CareHub Is For ────────────────────────────────── */}
-      <div className="who-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div className="who-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
@@ -470,7 +539,7 @@ export default function Landing() {
       </div>
 
       {/* ── Why CareHub ──────────────────────────────────────── */}
-      <div className="why-section" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
+      <div className="why-section" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: `linear-gradient(180deg, ${bg} 0%, #fff 100%)` }}>
         <div style={{ maxWidth: 700, margin: '0 auto', textAlign: 'center' }}>
           <div style={{ marginBottom: 32 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 26 : 34, color: navy, margin: '0 0 12px' }}>
@@ -497,7 +566,7 @@ export default function Landing() {
       </div>
 
       {/* ── Pricing ───────────────────────────────────────────── */}
-      <div id="pricing" style={{ padding: '80px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
+      <div id="pricing" style={{ padding: isMobile ? '80px 24px' : '120px 24px', borderTop: `1px solid ${border}`, background: 'white' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 32, color: navy, margin: '0 0 8px' }}>
@@ -544,7 +613,7 @@ export default function Landing() {
                   background: popular ? '#fff' : 'white',
                   color: popular ? tealDeep : navy,
                   fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                  transition: 'all 0.2s ease',
+                  transition: `transform 0.4s ${EASE_CUSTOM}`,
                 }}>
                   {name === 'Enterprise' || name === 'Custom' ? 'Talk to us' : `Start with ${name}`}
                 </button>
@@ -555,17 +624,31 @@ export default function Landing() {
       </div>
 
       {/* ── Final CTA + Footer ─────────────────────────────────── */}
-      <div className="cta-section" style={{ padding: isMobile ? '48px 24px' : '64px 24px', background: `linear-gradient(135deg, ${deepTeal} 0%, ${tealDeep} 100%)`, maxWidth: 1100, margin: isMobile ? '40px 0 0' : '40px auto 0', borderRadius: isMobile ? 0 : theme.radius.xl, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
+      <div className="cta-section" style={{ padding: isMobile ? '56px 24px' : '80px 48px', background: `linear-gradient(135deg, ${deepTeal} 0%, ${tealDeep} 100%)`, maxWidth: 1100, margin: isMobile ? '40px 0 0' : '60px auto 0', borderRadius: isMobile ? 0 : 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 32 }}>
         <div style={{ maxWidth: 600 }}>
-          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 22 : 30, color: '#fff', margin: '0 0 10px', lineHeight: 1.2 }}>
+          <h2 style={{ fontFamily: fontDisplay, fontWeight: 700, fontSize: isMobile ? 24 : 34, color: '#fff', margin: '0 0 14px', lineHeight: 1.15, letterSpacing: '-0.02em' }}>
             Your Business Deserves a Smarter Way to Operate.
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, lineHeight: 1.6, maxWidth: 460 }}>
             Stop managing your business through scattered tools and disconnected processes. Bring your operations together, gain better control, increase your visibility and build for growth with technology designed around your business.
           </p>
         </div>
-        <button onClick={() => navigate('/register')} style={{ padding: '15px 32px', borderRadius: theme.radius.md, border: 'none', background: '#fff', color: tealDeep, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-          Get Started Free <ArrowRight size={16} />
+        <button onClick={() => navigate('/register')} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 0,
+          padding: '16px 16px 16px 32px', borderRadius: 999, border: 'none',
+          background: '#fff', color: tealDeep, fontWeight: 700, fontSize: 14,
+          cursor: 'pointer', flexShrink: 0, fontFamily: theme.fontFamily,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          transition: `transform 0.4s ${EASE_CUSTOM}`,
+        }}
+          onMouseDown={e => { e.currentTarget.style.transform = 'scale(0.97)' }}
+          onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+        >
+          Get Started Free
+          <span style={{ width: 32, height: 32, borderRadius: 999, background: 'rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 12, flexShrink: 0 }}>
+            <ArrowRight size={14} strokeWidth={2.5} />
+          </span>
         </button>
       </div>
       <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 600, background: `linear-gradient(135deg, ${deepTeal} 0%, ${tealDeep} 100%)`, padding: '0 24px 16px' }}>
