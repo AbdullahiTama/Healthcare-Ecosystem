@@ -817,12 +817,17 @@ export default function AdminPanel() {
   const card = { border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--panel)', marginBottom: 10 }
   const input = { width: '100%', padding: 10, fontSize: 13, border: '1px solid var(--border)', borderRadius: 10, boxSizing: 'border-box', background: 'var(--bg)', color: 'var(--fg)' }
 
+let adminLoggingOut = false
+
   async function handleSignOut() {
+    if (adminLoggingOut) return
+    adminLoggingOut = true
     await supabase.auth.signOut()
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
     localStorage.removeItem('admin_permissions')
     navigate('/login')
+    setTimeout(() => { adminLoggingOut = false }, 1000)
   }
 
   return (
