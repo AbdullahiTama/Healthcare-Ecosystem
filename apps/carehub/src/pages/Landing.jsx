@@ -1,6 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, Check as CheckIcon, Wallet, WifiOff, Pill, Building, FlaskConical, Sparkles, Leaf, Palette, Scissors } from 'lucide-react'
+import { ArrowRight, Package, ShoppingCart, Users, Heart, BarChart2, Search, MapPin, Clipboard, Clock, Eye, Check as CheckIcon, Wallet, WifiOff, Pill, Building, Building2, FlaskConical, Sparkles, Leaf, Palette, Scissors } from 'lucide-react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { theme } from '../styles/theme'
