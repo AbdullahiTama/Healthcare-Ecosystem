@@ -331,7 +331,26 @@ body {
   cursor: not-allowed;
 }
 
-/* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
+/* ── Landing page pricing cards ───────────────────────────────────────────── */
+.pricing-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+@media (hover: hover) {
+  .pricing-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--elevation-4);
+  }
+}
+.pricing-card.popular {
+  box-shadow: var(--elevation-3);
+}
+@media (hover: hover) {
+  .pricing-card.popular:hover {
+    box-shadow: var(--elevation-4);
+  }
+}
+
+/* ── Reduced motion (ACCESSIBILITY.md) ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .ch-skeleton, .ch-spinner, .ch-toast {
     animation-duration: 0.01ms !important;
