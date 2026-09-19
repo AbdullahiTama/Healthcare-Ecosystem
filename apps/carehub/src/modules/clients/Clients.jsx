@@ -98,6 +98,7 @@ export default function Clients({ brand, role, perms }) {
   const canConsult = brand?.business_type === 'skincare' || brand?.business_type === 'pharmacy'
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
+  const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({})
@@ -128,6 +129,7 @@ export default function Clients({ brand, role, perms }) {
 
   async function save() {
     if (!form.firstName || !form.lastName || !form.phone) { showToast('Please enter client first name, surname and phone number.', { type: 'warning' }); return }
+    setSaving(true)
     try {
       await createClient.mutateAsync({
         full_name: [form.firstName, form.lastName].filter(Boolean).map(s => s.trim()).join(' '),
@@ -143,6 +145,7 @@ export default function Clients({ brand, role, perms }) {
       showToast('Client added!', { type: 'success' })
       setForm({}); setShowAdd(false)
     } catch (e) { showToast(isDuplicateError(e) ? 'A client with this phone number already exists.' : 'Could not save client. Please try again.', { type: 'error' }) }
+    finally { setSaving(false) }
   }
 
   function exportCsv() {
