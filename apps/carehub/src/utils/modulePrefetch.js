@@ -1,3 +1,5 @@
+import { getPerms, getModulesForType } from '../lib/permissions'
+
 /**
  * Role-Based Module Prefetching
  * 
@@ -159,9 +161,6 @@ export function startRolePrefetching(role, businessType, customRoles = {}) {
  * Get all allowed modules for a role and business type
  */
 function getAllowedModules(role, businessType, customRoles = {}) {
-  // Import permissions functions
-  const { getPerms, getModulesForType } = require('../../lib/permissions')
-  
   const perms = getPerms(role, customRoles)
   const allModules = getModulesForType(businessType)
   

@@ -52,8 +52,9 @@ export default function ResultsMap({
   useEffect(() => {
     if (!mapRef.current?._map || !mapLoaded) return;
 
-    const L = require('leaflet');
-    const map = mapRef.current._map;
+    const updateMarkers = async () => {
+      const L = await import('leaflet');
+      const map = mapRef.current._map;
 
     // Clear existing markers
     map.eachLayer((layer) => {
@@ -116,6 +117,8 @@ export default function ResultsMap({
         .addTo(map)
         .bindPopup('Your location');
     }
+    };
+    updateMarkers();
   }, [businesses, center, mapLoaded]);
 
   // Loading state

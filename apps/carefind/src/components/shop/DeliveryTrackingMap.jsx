@@ -4,11 +4,11 @@ import { theme } from '../../styles/theme'
 // Dynamic import for Leaflet (client-side only)
 let L = null
 
-function getLeaflet() {
+async function getLeaflet() {
   if (typeof window === 'undefined') return null
   if (!L) {
-    L = require('leaflet')
-    require('leaflet/dist/leaflet.css')
+    L = await import('leaflet')
+    await import('leaflet/dist/leaflet.css')
     // Fix default marker icon paths
     delete L.Icon.Default.prototype._getIconUrl
     L.Icon.Default.mergeOptions({
@@ -36,40 +36,47 @@ export default function DeliveryTrackingMap({
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return
 
-    const Leaflet = getLeaflet()
-    if (!Leaflet) return
+    const initMap = async () => {
+      const Leaflet = await getLeaflet()
+      if (!Leaflet) return
 
-    const map = Leaflet.map(mapRef.current, {
-      center: NIGERIA_CENTER,
-      zoom: 6,
-      zoomControl: true,
-      scrollWheelZoom: false,
-      attributionControl: true
-    })
+      const map = Leaflet.map(mapRef.current, {
+        center: NIGERIA_CENTER,
+        zoom: 6,
+        zoomControl: true,
+        scrollWheelZoom: false,
+        attributionControl: true
+      })
 
-    Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 18
-    }).addTo(map)
+      Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 18
+      }).addTo(map)
 
-    mapInstanceRef.current = map
-
+      mapInstanceRef.current = map
+    }
+    initMap()
     return () => {
-      map.remove()
-      mapInstanceRef.current = null
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
     }
   }, [])
 
   useEffect(() => {
     const map = mapInstanceRef.current
-    const Leaflet = getLeaflet()
-    if (!map || !Leaflet) return
+    if (!map) return
 
-    // Clear existing markers
-    markersRef.current.forEach(m => map.removeLayer(m))
-    markersRef.current = []
+    const updateMarkers = async () => {
+      const Leaflet = await getLeaflet()
+      if (!Leaflet) return
 
-    const bounds = []
+      // Clear existing markers
+      markersRef.current.forEach(m => map.removeLayer(m))
+      markersRef.current = []
+
+      const bounds = []
 
     // Pickup station marker
     if (pickupStation?.lat && pickupStation?.lng) {
@@ -112,6 +119,8 @@ export default function DeliveryTrackingMap({
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 })
     }
+    };
+    updateMarkers();
   }, [pickupStation, deliveryAddress, currentLocation])
 
   return (
