@@ -238,3 +238,19 @@
 - source_spec: spec-carefind-admin-upgrade-phase3.md
   summary: Add filtering support to AI copilot audit log queries (by action, actor, date range).
   evidence: Current audit handler returns unfiltered entries; no way to query specific admin actions.
+
+## Deferred from: spec-auth-email-links-work split (2026-09-19)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Harden CareFind ResetPassword.jsx to perform a PKCE `?code=` exchange (mirroring CareHub's ResetPassword.jsx) so the reset link also works under PKCE flow, not only implicit hash flow.
+  evidence: Split from the auth-email-links-work spec per SCOPE STANDARD so the verify-email landing page could ship independently; reset page works today under implicit flow (project's current/assumed flow), so the PKCE path is a robustness enhancement, not a blocker.
+## Deferred from: spec-payments-end-to-end-hardening split (2026-09-19)
+
+- source_spec: _bmad-output/implementation-artifacts/spec-payments-end-to-end-hardening.md
+  summary: CareFind commerce payments - business-profile bookings and shop order Paystack flows (booking.js, verify-booking-payment, initiate/verify-shop-payment, consultation payments).
+  evidence: Split from end-to-end payments spec per SCOPE STANDARD to keep wallet lifecycle (top-up, subscriptions, withdrawals) as first shippable deliverable; commerce flows touch shop_orders/appointments but not wallet top-up keys.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-payments-end-to-end-hardening.md
+  summary: CareHub payments - plan renewals, CareHub appointment payments, and business wallet withdrawals plus shared Paystack secret/env and 20260903 payments migration.
+  evidence: Split per SCOPE STANDARD - CareHub is separate Vercel deployment and business_wallets vs CareFind wallets; can be reviewed/tested independently from CareFind wallet lifecycle.
+

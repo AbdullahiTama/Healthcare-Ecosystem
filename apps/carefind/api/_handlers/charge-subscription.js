@@ -1,11 +1,11 @@
-﻿import crypto from 'crypto'
+import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { paystackFetch } from '../_lib/paystack.js'
 
 // Initializes a Paystack transaction for a creator subscription.
 // Called when a user wants to subscribe but doesn't have enough CareCoins
-// in their wallet ΓÇö this lets them pay directly via card/transfer.
+// in their wallet G�� this lets them pay directly via card/transfer.
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,9 +24,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required fields' })
   }
 
-  const price = parseInt(priceCoins, 10)
-  if (price <= 0 || price > 100) {
-    return res.status(400).json({ error: 'Invalid price' })
+  const price = Number(priceCoins)
+  if (!Number.isInteger(price) || price <= 0 || price > 12) {
+    return res.status(400).json({ error: 'Invalid price: must be 1-12 CareCoins' })
   }
 
   const nairaAmount = price * NAIRA_PER_COIN

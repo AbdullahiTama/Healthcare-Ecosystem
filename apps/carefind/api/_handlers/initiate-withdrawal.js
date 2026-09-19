@@ -1,4 +1,4 @@
-﻿import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
@@ -19,9 +19,9 @@ export default async function handler(req, res) {
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
   const { amount, bankCode, bankName, accountNumber, accountName, pin, deviceToken } = req.body
-  const coins = parseInt(amount, 10)
+  const coins = Number(amount)
 
-  if (!coins || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
+  if (!Number.isInteger(coins) || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
     return res.status(400).json({ error: 'Missing or invalid withdrawal details' })
   }
 
@@ -89,14 +89,17 @@ export default async function handler(req, res) {
   try {
     const available = await checkBalance()
     if (available < amountKobo) {
-      return res.status(503).json({ error: 'Payment provider balance low — try again later' })
+      console.error("[initiate-withdrawal] Paystack balance insufficient", { available, amountKobo, userId: user.id })
+      res.setHeader("Retry-After", "60")
+      return res.status(503).json({ error: "Payment provider balance low - try again later" })
     }
   } catch (err) {
-    return res.status(502).json({ error: 'Could not check payment provider balance' })
+    console.error("[initiate-withdrawal] Paystack balance check failed", err)
+    return res.status(502).json({ error: "Could not check payment provider balance" })
   }
 
   // Reuse a previous attempt's reference if a pending request never got its
-  // transfer code attached (crash window) — Paystack dedupes by reference, so
+  // transfer code attached (crash window)  Paystack dedupes by reference, so
   // re-initiating the same transfer can't double-pay.
   const { data: prior } = await supabase
     .from('withdrawal_requests')
@@ -112,21 +115,33 @@ export default async function handler(req, res) {
 
   try {
     // Verify the typed account name actually belongs to the account number.
+    // If Paystack reports the bank does not support / cannot resolve the account,
+    // allow the manually-entered name (same UX as /api/resolve-account's unsupportedBank branch).
     let resolved
+    let verifiedAccountName
+    let isUnsupportedBank = false
     try {
       resolved = await resolveAccount({ bankCode, accountNumber })
     } catch (err) {
-      return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+      const msg = err.paystackMessage || err.message || ''
+      isUnsupportedBank = /not supported|does not support|unable to resolve|cannot resolve/i.test(msg)
+      if (isUnsupportedBank) {
+        verifiedAccountName = String(accountName).trim()
+      } else {
+        return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+      }
     }
-    if (!resolved || !resolved.accountName) {
-      return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+    if (!isUnsupportedBank) {
+      if (!resolved || !resolved.accountName) {
+        return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
+      }
+      const submitted = normalizeAccountName(accountName)
+      const resolvedName = normalizeAccountName(resolved.accountName)
+      if (!submitted || submitted !== resolvedName) {
+        return res.status(400).json({ error: 'Account name does not match the account number. Use the name registered with your bank.' })
+      }
+      verifiedAccountName = resolved.accountName
     }
-    const submitted = normalizeAccountName(accountName)
-    const resolvedName = normalizeAccountName(resolved.accountName)
-    if (!submitted || submitted !== resolvedName) {
-      return res.status(400).json({ error: 'Account name does not match the account number. Use the name registered with your bank.' })
-    }
-    const verifiedAccountName = resolved.accountName
 
     // Create or reuse Paystack transfer recipient
     const recipientCode = await createTransferRecipient({
@@ -158,7 +173,7 @@ export default async function handler(req, res) {
     const { transferCode } = await initiateTransfer({
       recipientCode,
       amountKobo,
-      reason: `CareFind withdrawal: ${coins} CareCoins (₦${payoutNaira.toLocaleString()})`,
+      reason: `CareFind withdrawal: ${coins} CareCoins (?${payoutNaira.toLocaleString()})`,
       reference,
     })
 
