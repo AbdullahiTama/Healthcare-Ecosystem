@@ -176,9 +176,10 @@ export default function Landing() {
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div ref={heroRef} style={{
         minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}99 50%, #0D5F4D99 100%), url('/images/hero.jpg') center / cover no-repeat`,
         position: 'relative', overflow: 'hidden', padding: isMobile ? '80px 20px 60px' : '96px 24px 80px',
       }}>
+        <img src="/images/hero.jpg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}80 50%, #0D5F4D66 100%)` }} />
         <div style={{
           position: 'absolute', inset: 0,
           background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.06) 0%, transparent 55%)',
@@ -333,7 +334,7 @@ export default function Landing() {
           </div>
           {/* Right: visual — image-led with overlay */}
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 34%', width: isMobile ? '100%' : 'auto' }}>
-            <div style={{ background: `linear-gradient(135deg, ${tealDeep}99 0%, ${deepTeal}99 100%), url('/images/visibility.jpg') center / cover no-repeat`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ background: `linear-gradient(135deg, ${tealDeep}66 0%, ${deepTeal}66 100%), url('/images/visibility.jpg') center / cover no-repeat`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
               <div style={{ fontWeight: 900, fontSize: 18 }}>CareFind</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>Health Social Platform</div>
               {/* Abstract search results */}
