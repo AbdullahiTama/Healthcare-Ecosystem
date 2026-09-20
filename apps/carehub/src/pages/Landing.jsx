@@ -381,7 +381,7 @@ export default function Landing() {
           </div>
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', width: isMobile ? '100%' : 'auto' }}>
             <div style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: 140, background: `linear-gradient(180deg, transparent 40%, rgba(11,74,62,0.65) 100%), url('https://images.unsplash.com/photo-1585435557343-3b092031d5ad?w=800&q=80&auto=format&fit=crop') center/cover`, display: 'flex', alignItems: 'flex-end', padding: 16 }}>
+              <div style={{ height: 140, background: `linear-gradient(180deg, transparent 40%, rgba(11,74,62,0.65) 100%), url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80&auto=format&fit=crop') center/cover`, display: 'flex', alignItems: 'flex-end', padding: 16 }}>
                 <span style={{ fontWeight: 800, fontSize: 12, color: '#fff', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.2)' }}>Live stock • 3 locations</span>
               </div>
               <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
