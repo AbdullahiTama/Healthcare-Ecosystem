@@ -176,7 +176,7 @@ export default function Landing() {
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div ref={heroRef} style={{
         minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}99 50%, #0D5F4D99 100%), url('https://images.unsplash.com/photo-1587370560942-ad2a04eabb6d?w=1920&q=80&auto=format&fit=crop') center/cover no-repeat`,
+        background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}99 50%, #0D5F4D99 100%), url('/images/hero.jpg') center / cover no-repeat`,
         position: 'relative', overflow: 'hidden', padding: isMobile ? '80px 20px 60px' : '96px 24px 80px',
       }}>
         <div style={{
@@ -333,7 +333,7 @@ export default function Landing() {
           </div>
           {/* Right: visual — image-led with overlay */}
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 34%', width: isMobile ? '100%' : 'auto' }}>
-            <div style={{ background: `linear-gradient(135deg, ${tealDeep}99 0%, ${deepTeal}99 100%), url('https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop') center/cover`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ background: `linear-gradient(135deg, ${tealDeep}99 0%, ${deepTeal}99 100%), url('/images/visibility.jpg') center / cover no-repeat`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
               <div style={{ fontWeight: 900, fontSize: 18 }}>CareFind</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>Health Social Platform</div>
               {/* Abstract search results */}
@@ -381,7 +381,7 @@ export default function Landing() {
           </div>
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', width: isMobile ? '100%' : 'auto' }}>
             <div style={{ background: 'white', borderRadius: theme.radius.xl, border: `1px solid ${border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: 140, background: `linear-gradient(180deg, transparent 40%, rgba(11,74,62,0.65) 100%), url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80&auto=format&fit=crop') center/cover`, display: 'flex', alignItems: 'flex-end', padding: 16 }}>
+              <div style={{ height: 140, background: `linear-gradient(180deg, transparent 40%, rgba(11,74,62,0.65) 100%), url('/images/inventory.jpg') center / cover no-repeat`, display: 'flex', alignItems: 'flex-end', padding: 16 }}>
                 <span style={{ fontWeight: 800, fontSize: 12, color: '#fff', background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(6px)', padding: '5px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.2)' }}>Live stock • 3 locations</span>
               </div>
               <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 4 }}>
