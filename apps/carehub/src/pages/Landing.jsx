@@ -176,7 +176,7 @@ export default function Landing() {
       {/* ── Hero ────────────────────────────────────────────────── */}
       <div ref={heroRef} style={{
         minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(135deg, ${deepTeal}E6 0%, ${tealDeep}D9 50%, #0D5F4DE6 100%), url('https://images.unsplash.com/photo-1587370560942-ad2a04eabb6d?w=1920&q=80&auto=format&fit=crop') center/cover no-repeat`,
+        background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}99 50%, #0D5F4D99 100%), url('https://images.unsplash.com/photo-1587370560942-ad2a04eabb6d?w=1920&q=80&auto=format&fit=crop') center/cover no-repeat`,
         position: 'relative', overflow: 'hidden', padding: isMobile ? '80px 20px 60px' : '96px 24px 80px',
       }}>
         <div style={{
@@ -333,7 +333,7 @@ export default function Landing() {
           </div>
           {/* Right: visual — image-led with overlay */}
           <div style={{ flex: isMobile ? '1 1 100%' : '1 1 34%', width: isMobile ? '100%' : 'auto' }}>
-            <div style={{ background: `linear-gradient(135deg, ${tealDeep}E6 0%, ${deepTeal}E6 100%), url('https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop') center/cover`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ background: `linear-gradient(135deg, ${tealDeep}99 0%, ${deepTeal}99 100%), url('https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80&auto=format&fit=crop') center/cover`, borderRadius: theme.radius.xl, padding: 24, color: 'white', minHeight: 260, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, position: 'relative', overflow: 'hidden' }}>
               <div style={{ fontWeight: 900, fontSize: 18 }}>CareFind</div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>Health Social Platform</div>
               {/* Abstract search results */}
