@@ -87,5 +87,35 @@ export default async function handler(req, res) {
     }
   }
 
+  // Subscription created email (templated, via outbox) — enqueue + flush.
+  try {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('name, plan, plan_expires_at, owner_name, owner_email, email')
+      .eq('id', business.id)
+      .maybeSingle()
+    const ownerEmail = biz?.owner_email || biz?.email
+    if (biz && ownerEmail) {
+      const { EmailService } = await import('@care-ecosystem/shared-email')
+      const emailService = new EmailService()
+      await emailService.enqueue({
+        templateKey: 'subscription_created',
+        toEmail: ownerEmail,
+        payload: {
+          fullName: biz.owner_name || 'Business Owner',
+          plan: biz.plan || 'Standard',
+          businessName: biz.name,
+          expiryDate: biz.plan_expires_at ? new Date(biz.plan_expires_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        },
+        subject: 'Your CareHub subscription is active',
+      })
+      emailService.processBatch().catch((err) => {
+        console.error('[verify-plan-payment] outbox flush error:', err)
+      })
+    }
+  } catch (err) {
+    console.error('[verify-plan-payment] subscription email error:', err)
+  }
+
   return res.status(200).json({ credited: true, newExpiry: row.new_expiry })
 }

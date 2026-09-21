@@ -1,4 +1,5 @@
 ﻿import { createClient } from '@supabase/supabase-js'
+import { processBatch as flushOutbox } from '../_lib/emailService.js'
 
 export default async function handler(req, res) {
   try {
@@ -778,6 +779,12 @@ async function handleRequest(req, res) {
         }) } catch {}
       }
     }
+
+    // Order status email: enqueued by DB trigger on shop_orders status change.
+    // Trigger covers the admin handler AND CareHub vendor-side RPC calls.
+    flushOutbox().catch((err) => {
+      console.error('[admin-auth] outbox flush error:', err)
+    })
     return res.status(200).json({ success: true })
   }
 

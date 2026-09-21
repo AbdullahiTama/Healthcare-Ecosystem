@@ -18,7 +18,7 @@ function routeFromUrl(req) {
   return null
 }
 
-async function resolveHandler(type) {
+async function resolveHandler(type, subpath) {
   switch (type) {
     case 'send': {
       const mod = await import('../email/send.js')
@@ -33,6 +33,10 @@ async function resolveHandler(type) {
       return mod.default
     }
     case 'cron': {
+      if (subpath && subpath.startsWith('subscription-expiry')) {
+        const mod = await import('../cron/check-subscription-expiry.js')
+        return mod.default
+      }
       const mod = await import('../cron/process-email-outbox.js')
       return mod.default
     }
@@ -49,7 +53,7 @@ export default async function handler(req, res) {
   const routed = routeFromUrl(req)
   if (!routed) return res.status(404).json({ error: 'No email handler found' })
 
-  const target = await resolveHandler(routed.type)
+  const target = await resolveHandler(routed.type, routed.subpath)
   if (!target) return res.status(404).json({ error: 'No email handler found' })
 
   // Parse query params for GET routes

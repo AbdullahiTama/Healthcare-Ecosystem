@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
   const { data: appt, error: apptErr } = await supabase
     .from('appointments')
-    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status')
+    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, client_email, client_id, service')
     .eq('payment_reference', reference)
     .eq('business_id', business.id)
     .maybeSingle()
@@ -63,6 +63,51 @@ export default async function handler(req, res) {
       link: '/dashboard/appointments',
       read_at: null,
     })
+  }
+
+  // Appointment confirmation email to the client — enqueue + flush.
+  // Only sent on a fresh settlement ('ok'); on 'already_paid' the webhook
+  // (or an earlier redirect) already sent it, so emailing again would be a
+  // duplicate — same first-settler-wins invariant as the webhook.
+  if (settleResult === 'ok') {
+    try {
+      let clientEmail = appt.client_email
+      if (!clientEmail && appt.client_id) {
+        const { data: client } = await supabase
+          .from('clients')
+          .select('email')
+          .eq('id', appt.client_id)
+          .maybeSingle()
+        clientEmail = client?.email || null
+      }
+      if (clientEmail && clientEmail.includes('@')) {
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('name')
+          .eq('id', appt.business_id)
+          .maybeSingle()
+        const { EmailService } = await import('@care-ecosystem/shared-email')
+        const emailService = new EmailService()
+        await emailService.enqueue({
+          templateKey: 'appointment_confirmed',
+          toEmail: clientEmail,
+          payload: {
+            fullName: appt.client_name,
+            businessName: biz?.name || '',
+            service: appt.service || 'Consultation',
+            date: appt.date,
+            time: appt.time,
+            staffName: '',
+          },
+          subject: 'Your appointment is confirmed',
+        })
+        emailService.processBatch().catch((err) => {
+          console.error('[verify-appointment-payment] outbox flush error:', err)
+        })
+      }
+    } catch (err) {
+      console.error('[verify-appointment-payment] appointment confirmation email error:', err)
+    }
   }
 
   return res.status(200).json({ success: true, id: appt.id, paid: true })

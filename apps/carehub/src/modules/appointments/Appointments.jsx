@@ -173,6 +173,7 @@ export default function Appointments({ brand, role, perms }) {
         booking_type: form.bookingType || 'physical',
         source: 'carehub',
         phone: form.phone || '',
+        client_email: form.clientEmail || null,
         concern: form.concern || null,
         payment_channel: ch,
         consultation_medium: brand?.consultation_medium || null,
@@ -523,9 +524,12 @@ export default function Appointments({ brand, role, perms }) {
           {form.fee && <div style={{ fontSize: 11, color: gray400, marginTop: -8, marginBottom: 4 }}>{form.paymentChannel === 'cash' ? 'Cash: will be marked paid immediately.' : form.paymentChannel === 'pos' ? 'POS: appointment stays unpaid until you tap Confirm POS after terminal approval.' : form.paymentChannel === 'transfer' ? 'Transfer: stays unpaid until you tap Confirm Transfer.' : form.paymentChannel === 'paystack' ? 'Paystack: a shareable link will be created — client pays online, you are notified when confirmed.' : ''}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Inp label='Client Phone' value={form.phone} onChange={v => f('phone', v)} placeholder='08012345678' />
-            <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
+            <Inp label='Client Email (optional)' type='email' value={form.clientEmail} onChange={v => f('clientEmail', v)} placeholder='client@example.com' />
           </div>
-          <Inp label='Fee (₦, optional)' type='number' value={form.fee || ''} onChange={v => f('fee', v)} placeholder='0' min='0' step='100' />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Inp label='Assigned Staff' value={form.staffName} onChange={v => f('staffName', v)} placeholder='Staff / therapist name' />
+            <Inp label='Fee (₦, optional)' type='number' value={form.fee || ''} onChange={v => f('fee', v)} placeholder='0' min='0' step='100' />
+          </div>
           <Textarea label='Client concern' value={form.concern} onChange={v => f('concern', v)} placeholder='What is the client coming in for?' rows={2} />
           <Textarea label='Notes' value={form.notes} onChange={v => f('notes', v)} placeholder='Any special notes or instructions...' rows={2} />
         </div>

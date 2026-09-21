@@ -282,6 +282,18 @@
   evidence: Verification-gap review: the redirectTo contract behind the spec's central AC ("minted link's redirect = client origin + /verify-email") is only exercised client-side at the request producer edge; the read-only handler's pass-through is uncommitted pre-existing code from the parallel email-overhaul effort, so no test asserts it. Vitest config already includes `api/**/*.test.{js,jsx}` and testTimeout 15000, so the harness exists; the test needs SUPABASE_URL/SERVICE_ROLE mocks.
   notes: Files are Read-only per this spec; testing them belongs with the email-overhaul/supabase-surface testing effort.
 
+### review_loop_iteration 3 (2026-09-21)
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Make AuthContext's email-send failure observable (currently `.catch(() => {})` silently swallows every /api/auth-email POST failure).
+  evidence: Blind-hunter review (feedback iteration 2): the `.catch(() => {})` predates this change (unchanged context line in the diff), so a failed verification email is invisible to ops and the user; capturing/forwarding the error belongs to a shared auth-context effort, not the page story.
+  notes: Pre-existing behavior, surfaced incidentally; do not fold into this story's loopback.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: The story's server boundary (apps/carefind/api/_handlers/auth-email.js, packages/shared-email/src/authEmail.js, and the `/api/auth-email` route in apps/carefind/api/router.js) exists only in the uncommitted working tree of the parallel email-overhaul effort; the feature is inert at HEAD until those files are committed together.
+  evidence: Verification-gap review (feedback iteration 2): `git cat-file -e HEAD:apps/carefind/api/_handlers/auth-email.js` fails and `git show HEAD:apps/carefind/api/router.js` has no auth-email route, so at HEAD `/api/auth-email` does not exist and nothing consumes the newly added `redirectTo`.
+  notes: Integration/coordination state with the parallel email-overhaul workflow, not a defect of this story's diff; verify the wiring lands together at integration time.
+
 ## Deferred from: code review of spec-business-directory-phase1 (2026-09-21)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`

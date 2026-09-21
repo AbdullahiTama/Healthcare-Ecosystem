@@ -36,15 +36,30 @@ export default async function handler(req, res) {
     pending: `CareHub — Update on ${target.name} (Action Required)`,
   }
 
+  const templateKey =
+    status === 'active'
+      ? 'business_approved'
+      : status === 'rejected'
+        ? 'business_rejected'
+        : status === 'suspended'
+          ? 'business_suspended'
+          : 'business_status_update' // pending → generic status update
+
   try {
     await emailService.enqueue({
-      templateKey: status === 'active' ? 'business_approved' : status === 'rejected' ? 'business_rejected' : 'business_suspended',
+      templateKey,
       toEmail: ownerEmail,
       payload: { businessName: target.name, ownerName: target.owner || 'there', ownerEmail, status, reason: reason || '' },
       subject: subjectMap[status],
     })
   } catch (e) {
     console.warn('[notify-business-status] enqueue failed', e)
+  }
+
+  try {
+    await emailService.processBatch()
+  } catch (e) {
+    console.warn('[notify-business-status] flush failed', e)
   }
 
   return res.status(200).json({ ok: true })

@@ -2,6 +2,7 @@
 import crypto from 'crypto'
 import { paystackFetch } from '../_lib/paystack.js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
       business_id: businessId,
       name: clientName,
       phone,
+      email: clientEmail,
       service,
       service_id: serviceId,
       date,
@@ -45,12 +47,14 @@ export default async function handler(req, res) {
     }
     const trimmedName = String(clientName).trim()
     const trimmedPhone = String(phone).trim()
+    const trimmedEmail = clientEmail ? String(clientEmail).trim() : ''
     const trimmedConcern = concern ? String(concern).trim() : ''
     if (trimmedName.length < 2 || trimmedName.length > 80) return res.status(400).json({ error: 'Name must be 2-80 characters' })
     if (!/^\+?[0-9\s\-]{7,20}$/.test(trimmedPhone) || trimmedPhone.replace(/\D/g,'').length < 7 || trimmedPhone.replace(/\D/g,'').length > 15) return res.status(400).json({ error: 'Invalid phone number' })
     if (trimmedConcern.length > 500) return res.status(400).json({ error: 'Concern must be under 500 characters' })
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) return res.status(400).json({ error: 'Invalid email address' })
     // Basic XSS sanitization: strip angle brackets
-    if (/[<>]/.test(trimmedName) || /[<>]/.test(trimmedPhone) || /[<>]/.test(trimmedConcern)) return res.status(400).json({ error: 'Invalid characters in input' })
+    if (/[<>]/.test(trimmedName) || /[<>]/.test(trimmedPhone) || /[<>]/.test(trimmedConcern) || /[<>]/.test(trimmedEmail)) return res.status(400).json({ error: 'Invalid characters in input' })
 
     // 1. Business must exist, be active, publicly listed and accept bookings.
     const { data: business, error: bizErr } = await supabase
@@ -162,6 +166,7 @@ export default async function handler(req, res) {
             consultation_medium_link: business.consultation_medium_link || null,
             staff_name: '',
             notes: 'Booked via CareFind',
+            client_email: trimmedEmail || null,
           }).eq('id', appointment.id)
         }
       } catch (rpcErr) {
@@ -213,6 +218,7 @@ export default async function handler(req, res) {
           booking_type: wantType,
           source: 'carefind',
           phone: phone.trim(),
+          client_email: trimmedEmail || null,
           concern: (concern || '').trim() || null,
           payment_status: hasFee ? 'unpaid' : null,
           fee_amount: hasFee ? feeKobo : null,
@@ -292,8 +298,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // 9. Free booking ΓÇö notify the business immediately.
-    await notifyBusiness(businessId, appointment.id, clientName, wantType, date, time)
+    // 9. Free booking — notify the business immediately.
+    await notifyBusiness(businessId, appointment.id, clientName, wantType, date, time, trimmedEmail, serviceName, business.name)
 
     return res.status(201).json({ success: true, id: appointment.id, paymentRequired: false })
   }
@@ -311,7 +317,7 @@ export default async function handler(req, res) {
 
     const { data: appt, error: apptErr } = await supabase
       .from('appointments')
-      .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, payment_reference, source')
+      .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, payment_reference, source, client_email, service')
       .eq('id', appointmentId)
       .maybeSingle()
     if (apptErr || !appt) return res.status(404).json({ error: 'Booking not found' })
@@ -343,7 +349,7 @@ export default async function handler(req, res) {
       })
     }
 
-    await notifyBusiness(appt.business_id, appt.id, appt.client_name, appt.booking_type, appt.date, appt.time)
+    await notifyBusiness(appt.business_id, appt.id, appt.client_name, appt.booking_type, appt.date, appt.time, appt.client_email || '', appt.service || '', '')
     return res.status(200).json({ success: true, id: appt.id, coins })
   }
 
@@ -352,7 +358,7 @@ export default async function handler(req, res) {
 
 // Writes a notification to the business owner's CareHub inbox. Never throws ΓÇö
 // a failed notification must not break the booking.
-async function notifyBusiness(businessId, appointmentId, clientName, bookingType, date, time) {
+async function notifyBusiness(businessId, appointmentId, clientName, bookingType, date, time, clientEmail, serviceName, businessName) {
   try {
     await supabase.from('staff_notifications').insert({
       business_id: businessId,
@@ -366,5 +372,29 @@ async function notifyBusiness(businessId, appointmentId, clientName, bookingType
     })
   } catch (e) {
     // Swallow ΓÇö the booking still went through.
+  }
+
+  // Booking confirmation email to the client (templated, via outbox) ΓÇö only
+  // when they chose to share an email at booking time.
+  if (clientEmail && clientEmail.includes('@')) {
+    try {
+      await enqueueOutbox({
+        templateKey: 'booking_confirmed',
+        toEmail: clientEmail,
+        payload: {
+          fullName: clientName,
+          businessName: businessName || '',
+          service: serviceName || 'Consultation',
+          date,
+          time,
+        },
+        subject: 'Your appointment is booked',
+      })
+      flushOutbox().catch((err) => {
+        console.error('[booking] outbox flush error:', err)
+      })
+    } catch (e) {
+      console.error('[booking] booking confirmation email error:', e)
+    }
   }
 }

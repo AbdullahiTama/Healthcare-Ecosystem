@@ -57,6 +57,7 @@ const HANDLERS = {
   'initiate-business-withdrawal': './_handlers/initiate-business-withdrawal.js',
   'initiate-appointment-payment': './_handlers/initiate-appointment-payment.js',
   'ecommerce-review':             './_handlers/ecommerce-review.js',
+  'auth-email':                   './_handlers/auth-email.js',
   'banks':                        './_handlers/banks.js',
   'email':                        './_handlers/email-handler.js',
   'cron':                         './_handlers/cron-handler.js',

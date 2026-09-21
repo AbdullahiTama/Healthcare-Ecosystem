@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { sendEmail, buildOrderConfirmationHtml } from '../_lib/email.js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -169,19 +169,32 @@ async function notifyCustomerPostPayment(orderId) {
     }).then(() => {}, () => {})
   }
 
-  // Order confirmation email
+  // Order confirmation email (templated, via outbox) — enqueue + immediate flush
   const email = fullOrder.delivery_email
   if (email && email.includes('@')) {
-    const siteUrl = process.env.SITE_URL || process.env.VITE_SITE_URL || ''
-    const html = buildOrderConfirmationHtml({
-      order: fullOrder,
-      items: items || [],
-      siteUrl,
-    })
-    await sendEmail({
-      to: email,
-      subject: `Order Confirmed — ${fullOrder.order_ref}`,
-      html,
-    }).then(() => {}, () => {})
+    try {
+      await enqueueOutbox({
+        templateKey: 'order_confirmation',
+        toEmail: email,
+        payload: {
+          fullName: fullOrder.customer_name || 'Valued Customer',
+          orderRef: fullOrder.order_ref,
+          items: (items || []).map((it) => ({
+            name: it.product_name,
+            quantity: it.quantity,
+            price: Math.round((it.unit_price_kobo || 0) / 100),
+          })),
+          totalNaira: Math.round((fullOrder.total_kobo || 0) / 100),
+          businessName: 'CareFind',
+          deliveryAddress: fullOrder.delivery_address || '',
+        },
+        subject: `Order Confirmed — ${fullOrder.order_ref}`,
+      })
+      flushOutbox().catch((err) => {
+        console.error('[verify-shop-payment] outbox flush error:', err)
+      })
+    } catch (err) {
+      console.error('[verify-shop-payment] order confirmation enqueue error:', err)
+    }
   }
 }

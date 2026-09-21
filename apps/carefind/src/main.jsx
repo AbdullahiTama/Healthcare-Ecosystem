@@ -21,6 +21,7 @@ const Search = lazy(() => import('./modules/healthcare-discovery/Search.jsx'))
 const BusinessProfile = lazy(() => import('./modules/business-profiles-reviews/BusinessProfile.jsx'))
 const Login = lazy(() => import('./modules/account/Login.jsx'))
 const ResetPassword = lazy(() => import('./modules/account/ResetPassword.jsx'))
+const VerifyEmail = lazy(() => import('./modules/account/VerifyEmail.jsx'))
 const Onboarding = lazy(() => import('./modules/account/Onboarding.jsx'))
 const Profile = lazy(() => import('./modules/account/Profile.jsx'))
 const PublicProfile = lazy(() => import('./PublicProfile.jsx'))
@@ -89,6 +90,7 @@ const RoutesWithKey = () => {
       <Route path="/business/:id" element={<SuspenseWrapper><BusinessProfile /></SuspenseWrapper>} />
       <Route path="/login" element={<SuspenseWrapper><Login /></SuspenseWrapper>} />
       <Route path="/reset-password" element={<SuspenseWrapper><ResetPassword /></SuspenseWrapper>} />
+      <Route path="/verify-email" element={<SuspenseWrapper><VerifyEmail /></SuspenseWrapper>} />
       <Route path="/u/:id" element={<SuspenseWrapper><PublicProfile /></SuspenseWrapper>} />
       <Route path="/post/:id" element={<SuspenseWrapper><PostPage /></SuspenseWrapper>} />
       <Route path="/drug/:name" element={<SuspenseWrapper><DrugProfile /></SuspenseWrapper>} />

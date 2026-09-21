@@ -36,10 +36,14 @@ export function AuthProvider({ children }) {
         actions.push('email_verification')
       }
       for (const action of actions) {
+        const payload = { action, email, fullName }
+        if (action === 'email_verification') {
+          payload.redirectTo = `${window.location.origin}/verify-email`
+        }
         fetch('/api/auth-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, email, fullName }),
+          body: JSON.stringify(payload),
         }).catch(() => {})
       }
     }

@@ -259,31 +259,40 @@ Created `@care-ecosystem/shared-email` as a local package (`file:../../packages/
 - `vercel.json` — Already has cron config.
 
 **CareFind changes:**
-- `api/_lib/email.js` — Imports `sendEmail as sharedSendEmail` from `@care-ecosystem/shared-email`. Keeps `buildOrderConfirmationHtml` and `logoHeader`/`footer`. `FROM_EMAIL` defaults to `CareFind <support@carefind.ng>`.
+- `api/_lib/email.js` — Imports `sendEmail as sharedSendEmail` from `@care-ecosystem/shared-email`. Keeps `buildOrderConfirmationHtml` and `logoHeader`/`footer`. `FROM_EMAIL` defaults to `CareFind <support@carefind.ng>` (env override: `CareFind <support@mail.carefind.app>`).
 - `api/_lib/emailService.js` — Imports `EmailService` from `@care-ecosystem/shared-email`. Keeps `renderTemplate()` (reads from `email_templates` DB table) and `sendTemplatedEmail()`. Adds `enqueue()` and `processBatch()` wrappers.
-- `api/_handlers/email.js` — New dispatcher that routes `/api/email/send`, `/api/email/outbox`, `/api/webhooks/resend`, `/api/cron/process-email-outbox` through the router's single-serverless-function pattern.
+- `api/_handlers/email.js` — New dispatcher that routes `/api/email/send`, `/api/email/outbox`, `/api/webhooks/resend`, `/api/cron/process-email-outbox`, and `/api/cron/subscription-expiry` through the router's single-serverless-function pattern. `resolveHandler(type, subpath)` routes the `subscription-expiry` subpath to `cron/check-subscription-expiry.js`.
+- `api/cron/check-subscription-expiry.js` — scans active `businesses` with `plan_expires_at` within the next 7 days, dedupes against recent `email_outbox` rows (`template_key = 'subscription_expiry'`, same `to_email`, created within 7 days), enqueues with `{fullName, plan, businessName, expiryDate, daysLeft}` payload, then flushes via `processBatch()`.
+- `api/_handlers/auth-email.js` — POST `/api/auth-email`; validates `action` + `email`, checks the account exists via `admin.getUserByEmail` (returns a generic 200 regardless to avoid account enumeration), resolves `full_name` from `profiles`, delegates to `sendAuthEmail()` with `app: 'carefind'`. Supports `password_reset`, `email_verification` (mint real action links via `admin.auth.admin.generateLink`), and `customer_registration`.
 - `api/email/send.js`, `api/email/outbox.js`, `api/webhooks/resend.js`, `api/cron/process-email-outbox.js` — Import `EmailService` from `@care-ecosystem/shared-email`.
-- `api/router.js` — Added `email` → `emailHandler` and `cron` → `emailHandler` and `webhooks` → `emailHandler` to `ROUTES` map.
+- `api/router.js` — Added `email` → `emailHandler`, `cron` → `emailHandler`, `webhooks` → `emailHandler`, and `auth-email` → `authEmailHandler` to `ROUTES` map.
 - `sql/20260914_email_outbox_carefind.sql` — Same `email_outbox` + `email_logs` migration for CareFind's Supabase project.
-- `vercel.json` — Needs `"crons"` config added (same as CareHub).
+- `vercel.json` — `"crons"` configured: `process-email-outbox` daily and `subscription-expiry` at `0 8 * * *`.
 
 **Custom domain email:**
-- Both apps use `RESEND_FROM_EMAIL` env var. CareHub defaults to `CareHub <support@carehub.ng>`, CareFind to `CareFind <support@carefind.ng>`.
+- Both apps use `RESEND_FROM_EMAIL` env var. CareHub defaults to `CareHub <support@carehub.ng>`, CareFind to `CareFind <support@carefind.ng>`. Production envs now use the verified `mail.carefind.app` domain (`CareHub <support@mail.carefind.app>` / `CareFind <support@mail.carefind.app>`).
+- `EmailService.processBatch()` passes the outbox row's stored `from_email` to Resend, so the sender stamped at enqueue time is honored regardless of which app's cron flushes the shared `email_outbox`.
 - All `skincarepro.vercel.app` references removed from both apps' templates.
-- `reply_to` header set to `FROM_EMAIL` so replies go to the support address.
+- `reply_to` header set to `From` address so replies go to the support address.
 
 **Template coverage (all features):**
-- Customer registration (both apps)
-- Subscription created/expiry (both apps)
-- E-commerce purchase confirmation (both apps)
-- Appointment confirmation (both apps)
-- Password reset (both apps)
-- Email verification (both apps)
-- Order confirmation (CareFind-specific)
-- Business registration/approval/rejection (CareHub-specific)
-- Staff welcome with magic-link (CareHub-specific)
-- Admin new registration (CareHub-specific)
-- Business status updates (CareHub-specific)
+- Customer registration (`customer_registration` — CareFind signup, welcome)
+- Order confirmation (`order_confirmation` — CareFind webhook + verify redirect)
+- Order status update (`order_status_update` — `shop_orders` DB trigger + admin status change)
+- Booking confirmed (`booking_confirmed` — CareFind bookings)
+- Appointment confirmed (`appointment_confirmed` — CareHub appointments; webhook dispatches by `source`)
+- Subscription created (`subscription_created` — CareHub plan payments + CareFind subscriptions/webhooks)
+- Subscription expiry (`subscription_expiry` — CareFind daily cron)
+- Password reset (`password_reset` — via `/api/auth-email` + `admin.generateLink`)
+- Email verification (`email_verification` — via `/api/auth-email` + `admin.generateLink`)
+- Business registration/approval/rejection/suspension/status update (`business_*` — CareHub `notify-business-status`)
+- Staff welcome with magic-link (CareHub-specific), Admin new registration (CareHub-specific)
+- `purchase_confirmed` is intentionally unused — CareHub shares `shop_orders` with CareFind, which already sends `order_confirmation`; wiring it would double-send.
+
+**Business events wired realtime (enqueue → `email_outbox` → flush on demands):**
+- `paystack-webhook.js` (`handleBooking`, `handlePlanPayment`, `handleSubscription`) and `verify-*` redirect handlers call `enqueue`/`processBatch` inline so the customer/business gets their confirmation in real time, with the daily cron as the retry fallback. First settler wins (webhook vs verify redirect) — idempotency guards prevent double-sends.
+- CareFind `auth-email.js` + CareHub `auth-email.js` accept pre-session callers (forgot-password from the login page), mint links server-side only, and return generic 200s to prevent account enumeration. Enforcing rate-limiting at the edge (Vercel KV/Bot-Frog) is recommended.
+- Replacing Supabase built-in auth emails still requires toggling "Disable email confirmations / Auth email templates" targets in the Supabase dashboards (manual step, not code).
 
 **Security notes:**
 - `@care-ecosystem/shared-email` uses `SUPABASE_SERVICE_ROLE_KEY` — never exposed to client. Client calls `/api/email/send` which validates auth before enqueueing.
@@ -298,8 +307,8 @@ Created `@care-ecosystem/shared-email` as a local package (`file:../../packages/
 - Both apps import `@care-ecosystem/shared-email` via `file:` protocol.
 
 ### Known remaining gaps
-- CareFind `vercel.json` needs `"crons"` config added.
 - Resend webhook signature verification not implemented.
-- Template functions are in `packages/shared-email` — CareHub's `api/_lib/email.js` still has standalone template functions (`buildRegistrationOwnerHtml` etc.) that duplicate the shared package's templates. Should consolidate to single source.
-- `emailAppointmentConfirmed` and `emailStaffWelcome` client stubs in CareHub's `src/lib/email.js` still return `{success:false}` for the old `emailAppointmentConfirmed`/`emailCreditReminder` functions (not yet wired to `/api/email/send`).
+- Supabase built-in auth emails still active until toggled off in both dashboards (manual step).
+- CareHub's `src/lib/email.js` still has standalone template functions that duplicate the shared package's templates; `emailAppointmentConfirmed`/`emailCreditReminder` client stubs return `{success:false}` (not wired to `/api/email/send`).
+- CareHub Vercel environment vars still need updating to the real Resend key + `support@mail.carefind.app` (`apps/carehub/.env` is already updated locally).
 - Both apps need `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` env vars configured for production.

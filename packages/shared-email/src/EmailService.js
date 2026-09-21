@@ -74,7 +74,7 @@ export class EmailService {
       try {
         const templateFn = TEMPLATE_REGISTRY[row.template_key]
         const html = templateFn ? templateFn(row.payload) : ''
-        const result = await sendEmail({ to: row.to_email, subject: row.subject, html })
+        const result = await sendEmail({ to: row.to_email, subject: row.subject, html, from: row.from_email })
         if (result.success) { await this._markSent(row.id, result.data); sent++ }
         else { await this._markFailed(row.id, result.error); failed++ }
       } catch (e) { await this._markFailed(row.id, e.message); failed++ }

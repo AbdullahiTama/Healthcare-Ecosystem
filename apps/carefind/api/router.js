@@ -44,6 +44,7 @@ import requestShopReturnHandler from './_handlers/request-shop-return.js'
 import withdrawalTrustHandler from './_handlers/withdrawal-trust.js'
 import emailTemplatesHandler from './_handlers/email-templates.js'
 import emailHandler from './_handlers/email.js'
+import authEmailHandler from './_handlers/auth-email.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -72,6 +73,7 @@ const ROUTES = {
   'withdrawal-trust': withdrawalTrustHandler,
   'email-templates': emailTemplatesHandler,
   'email': emailHandler,
+  'auth-email': authEmailHandler,
   'cron': emailHandler,
   'webhooks': emailHandler,
 }

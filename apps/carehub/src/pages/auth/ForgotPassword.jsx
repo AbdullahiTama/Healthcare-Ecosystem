@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, AlertTriangle, Mail, CheckCircle } from 'lucide-react'
-import { authClient } from '../../lib/authClient'
 import { Card, TealBtn, Logo } from '../../components/ui/index'
 import { theme } from '../../styles/theme'
 
@@ -20,12 +19,17 @@ export default function ForgotPassword() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) { setErr('Please enter a valid email address.'); return }
     setLoading(true); setErr('')
     try {
-      const { error } = await authClient.auth.resetPasswordForEmail(normalized, {
-        redirectTo: window.location.origin + '/reset-password',
+      const resp = await fetch('/api/auth-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'password_reset',
+          email: normalized,
+          redirectTo: window.location.origin + '/reset-password',
+        }),
       })
-      if (error) {
-        // Do not leak; still show generic success per spec, but log
-        console.warn('[forgot] reset error', error.message)
+      if (!resp.ok) {
+        console.warn('[forgot] auth-email error', resp.status)
       }
       setSent(true)
     } catch (e2) {

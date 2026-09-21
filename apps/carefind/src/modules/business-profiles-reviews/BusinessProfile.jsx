@@ -116,6 +116,7 @@ function BookingCard({ biz }) {
   const [apptType, setApptType] = useState(biz.booking_type === 'online' ? 'online' : 'physical')
   const [payMethod, setPayMethod] = useState(user ? 'coins' : 'card')
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [booking, setBooking] = useState(false)
   const [done, setDone] = useState(false)
@@ -294,6 +295,7 @@ function BookingCard({ biz }) {
           booking_type: apptType,
           name: name.trim(),
           phone: phone.trim(),
+          email: email.trim(),
           service_id: selectedService || null,
           service: selectedSvc ? selectedSvc.name : undefined,
         }),
@@ -452,6 +454,15 @@ function BookingCard({ biz }) {
             onChange={setPhone}
             placeholder="e.g. 08012345678"
             required
+            style={{ marginBottom: 10 }}
+          />
+
+          <Inp
+            label="Email (optional — for booking confirmation)"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            placeholder="you@example.com"
             style={{ marginBottom: 10 }}
           />
 

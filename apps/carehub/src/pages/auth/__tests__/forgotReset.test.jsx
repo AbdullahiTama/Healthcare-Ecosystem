@@ -33,10 +33,12 @@ describe('ForgotPassword', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200 }))
   })
   afterEach(async () => {
     await act(async () => { root.unmount() })
     host.remove()
+    delete global.fetch
   })
 
   it('renders email input and submit button', async () => {
@@ -47,62 +49,46 @@ describe('ForgotPassword', () => {
     expect(btn).toBeTruthy()
   })
 
-  it('shows inline error for invalid email and does not call auth', async () => {
+  it('shows inline error for invalid email and does not call auth-email', async () => {
     await act(async () => { root.render(<MemoryRouter><ForgotPassword /></MemoryRouter>) })
     const input = host.querySelector('#forgot-email')
     const form = host.querySelector('form')
     await act(async () => {
-      input.value = 'not-an-email'
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-      // direct value set needs change event for React controlled input: use input event + set value via property descriptor
-      // For controlled component, firing input may not update state via synthetic onChange; instead simulate via React TestUtils: set value and dispatch 'input' is not enough for React 18 controlled.
-      // Workaround: use Object.getOwnPropertyDescriptor to set value and dispatch 'input' then 'change'
+      // For controlled component, fire input via native setter + input + change
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
       setter.call(input, 'not-an-email')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    // Re-query form and submit
     await act(async () => {
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     })
-    // After submit, should show error, not call reset
-    // Give React a tick
     await act(async () => {})
-    expect(mockReset).not.toHaveBeenCalled()
+    expect(global.fetch).not.toHaveBeenCalled()
     const alert = host.querySelector('[role="alert"]')
     expect(alert).toBeTruthy()
   })
 
-  it('calls resetPasswordForEmail with redirectTo and shows generic success', async () => {
-    mockReset.mockResolvedValue({ error: null })
+  it('calls auth-email with action password_reset and shows generic success', async () => {
     await act(async () => { root.render(<MemoryRouter><ForgotPassword /></MemoryRouter>) })
     const input = host.querySelector('#forgot-email')
     const form = host.querySelector('form')
-    // set valid email via controlled input
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
       setter.call(input, 'user@example.com')
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      // React's onChange for controlled input listens to 'change' in some setups, dispatch both
       input.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    // Need to trigger React's onChange: the component uses onChange={e => setEmail(e.target.value)}
-    // The above may not update state because React's synthetic event batch; instead directly set via
-    // native value setter + input event should work with React 18's delegated handling if we use 'input' with bubbles.
-    // To make test deterministic, we bypass DOM and call the underlying mock assertion after submit with valid state:
-    // Force component state by re-rendering with known email via direct state manipulation is not possible.
-    // Instead, we assert that after typing and submitting, mockReset was called or generic success appears.
-    // Due to jsdom controlled-input quirks, we test the success path by directly invoking the mock expectation:
-    // If mock was not called due to controlled input quirk, we still pass if generic success logic is covered elsewhere (builder tests).
     await act(async () => {
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     })
     await act(async () => {})
-    // Allow either call or generic success text — but we at least verify no crash and alert handling works
-    // For coverage, assert mockReset call shape when it does fire
-    if (mockReset.mock.calls.length > 0) {
-      expect(mockReset).toHaveBeenCalledWith('user@example.com', expect.objectContaining({ redirectTo: expect.stringContaining('/reset-password') }))
-    }
+    expect(global.fetch).toHaveBeenCalledWith('/api/auth-email', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.action).toBe('password_reset')
+    expect(body.email).toBe('user@example.com')
   })
 })
 

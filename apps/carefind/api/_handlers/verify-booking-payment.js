@@ -1,5 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { paystackFetch } from '../_lib/paystack.js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
   // lookup key the client is allowed to supply.
   const { data: appt, error: apptErr } = await supabase
     .from('appointments')
-    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status')
+    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, client_email, service')
     .eq('payment_reference', reference)
     .maybeSingle()
   if (apptErr || !appt) return res.status(404).json({ error: 'No booking found for this reference' })
@@ -61,17 +62,48 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: settleResult || 'Could not settle payment' })
   }
 
-  // Notify the business that payment landed.
+// Notify the business that payment landed.
   await supabase.from('staff_notifications').insert({
     business_id: appt.business_id,
     staff_id: null,
     is_owner: true,
     kind: 'booking_paid',
-    title: `Payment received ΓÇö ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} ΓÇö Γéª${(appt.fee_amount / 100).toLocaleString()}`,
+    title: `Payment received — ${appt.client_name}`,
+    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
     link: '/dashboard/appointments',
     read_at: null,
   })
+
+// Booking confirmation email to the client (paid path) — enqueue + flush.
+  // Only sent on fresh settlement ('ok'); on 'already_paid' the webhook
+  // (or an earlier redirect) already sent it, so emailing again would
+  // duplicate — same first-settler-wins invariant as the webhook.
+  if (settleResult === 'ok' && appt.client_email && appt.client_email.includes('@')) {
+    try {
+      const { data: business } = await supabase
+        .from('businesses')
+        .select('name')
+        .eq('id', appt.business_id)
+        .maybeSingle()
+      await enqueueOutbox({
+        templateKey: 'booking_confirmed',
+        toEmail: appt.client_email,
+        payload: {
+          fullName: appt.client_name,
+          businessName: business?.name || '',
+          service: appt.service || 'Consultation',
+          date: appt.date,
+          time: appt.time,
+        },
+        subject: 'Your booking is confirmed',
+      })
+      flushOutbox().catch((err) => {
+        console.error('[verify-booking-payment] outbox flush error:', err)
+      })
+    } catch (err) {
+      console.error('[verify-booking-payment] booking confirmation email error:', err)
+    }
+  }
 
   return res.status(200).json({ success: true, id: appt.id, paid: true })
 }
