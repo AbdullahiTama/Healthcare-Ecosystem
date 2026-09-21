@@ -254,3 +254,54 @@
   summary: CareHub payments - plan renewals, CareHub appointment payments, and business wallet withdrawals plus shared Paystack secret/env and 20260903 payments migration.
   evidence: Split per SCOPE STANDARD - CareHub is separate Vercel deployment and business_wallets vs CareFind wallets; can be reviewed/tested independently from CareFind wallet lifecycle.
 
+
+## Deferred from: spec-auth-email-links-work review (2026-09-19)
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Add a resend-verification-email action so users with a dead/expired verify link can request a fresh one without re-registering (needs a new /api/auth-email action pattern, not client-side generateLink which the spec forbids).
+  evidence: Blind-hunter review: expired/info copy currently tells users to "sign up again to receive a fresh link"; no resend path exists, forcing account recreation.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Distinguish a transient network/server failure (exchange or getSession throws) from a genuinely stale link, instead of collapsing both into the "expired" state.
+  evidence: Edge-case review: a fresh PKCE link opened on a device without the stored code_verifier (or during an outage) reports "Link expired" - functionally true but misleading about cause; project runs PKCE-default Supabase config.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Add a loading timeout/abort so a hung exchange or getSession cannot leave the verify page stuck on "Verifying your email..." indefinitely.
+  evidence: Blind-hunter review: no timeout/abort around exchangeCodeForSession/getSession; an unresponsive network leaves the page in the loading phase forever.
+  status: PROMOTED to spec-auth-email-links-work.md review_loop_iteration 2 (bad_spec B1) - bounded settlement/timeout is now a hard requirement of that spec's Task #1 and only supersedes this entry for VerifyEmail.jsx; keep the guidance for other supabase-dependent CareFind pages.
+
+### review_loop_iteration 2 (2026-09-19)
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Add a route-table smoke test that exercises the app's real route wiring (public-ness of /verify-email outside RequireAuth, lazy import resolves) instead of hand-declared routes in the page test.
+  evidence: Verification-gap review: VerifyEmail.test.jsx declares its own `<Route>`; nothing asserts /verify-email sits beside /login in the real route table, so a future drift into RequireAuth or a broken lazy import would pass CI silently. Repo-wide harness gap (BackgroundRoutes.test.jsx deliberately avoids importing main.jsx).
+  notes: Deliberately split from auto-fix - adding this for a single route requires deciding a repo-wide route-table test convention, not a VerifyEmail-specific change.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-auth-email-links-work.md
+  summary: Add a server-boundary test asserting the client-injected `redirectTo` from AuthContext reaches `sendAuthEmail`/`generateLink` in apps/carefind/api/_handlers/auth-email.js (and thus lands in the minted verify link).
+  evidence: Verification-gap review: the redirectTo contract behind the spec's central AC ("minted link's redirect = client origin + /verify-email") is only exercised client-side at the request producer edge; the read-only handler's pass-through is uncommitted pre-existing code from the parallel email-overhaul effort, so no test asserts it. Vitest config already includes `api/**/*.test.{js,jsx}` and testTimeout 15000, so the harness exists; the test needs SUPABASE_URL/SERVICE_ROLE mocks.
+  notes: Files are Read-only per this spec; testing them belongs with the email-overhaul/supabase-surface testing effort.
+
+## Deferred from: code review of spec-business-directory-phase1 (2026-09-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: Location-based search drops text/state/LGA filters when using RPC - by design but limits functionality.
+  evidence: When latitude/longitude are provided, the code takes an early return via RPC call. Text search, state, and LGA filters are discarded. The RPC only accepts p_category_id, so text search and state/LGA filters are completely ignored in proximity mode.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: business_directory table lacks an updated_at trigger for non-location column changes.
+  evidence: The update_business_location() trigger only fires on location changes. Other column updates (name, phone, status, etc.) won't trigger updated_at.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: search_nearby_businesses RPC is granted only to authenticated, not anon - may need public access.
+  evidence: CareFind is a public-facing app. If unauthenticated users can search businesses, this RPC will fail for them. The business_directory table allows public read via RLS, but the RPC is gated behind auth.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: No index on business_directory.phone or business_directory.email for ilike searches.
+  evidence: The repository performs ilike searches on phone and address, but there's no supporting index for phone-based lookups.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: No empty state for the categories grid when categories array is empty.
+  evidence: When categories is an empty array (not loading), the grid renders nothing - no message telling the user there are no categories yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: Inline styles used for everything, including interactive states - no :hover or :focus styles on icon buttons.
+  evidence: Blind-hunter review: keyboard navigation and mouse hover visually non-responsive on icon buttons.
+- source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
+  summary: Client-side distance calculation in ResultsList.jsx inconsistent with server-computed distance_km.
+  evidence: ResultsList.jsx:53 recalculates distance client-side using Haversine when the server already returns distance_km, creating potential inconsistency between displayed distance and sort order.

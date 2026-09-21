@@ -13,6 +13,8 @@ export default function BusinessCategoriesTab({ categoriesHook, onError }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [subcategories, setSubcategories] = useState([]);
   const [showSubcategories, setShowSubcategories] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleAddCategory = () => {
     setEditingCategory(null);
@@ -36,15 +38,21 @@ export default function BusinessCategoriesTab({ categoriesHook, onError }) {
   };
 
   const handleDeleteCategory = async (category) => {
-    if (!confirm(`Are you sure you want to delete "${category.name}"?`)) {
-      return;
-    }
+    setCategoryToDelete(category);
+  };
 
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete || isDeleting) return;
+    setIsDeleting(true);
     try {
-      await businessDirectoryRepository.deleteCategory(category.id);
+      await businessDirectoryRepository.deleteCategory(categoryToDelete.id);
+      setCategoryToDelete(null);
       refresh();
     } catch (err) {
       onError(err.message);
+      setCategoryToDelete(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -157,6 +165,29 @@ export default function BusinessCategoriesTab({ categoriesHook, onError }) {
               </div>
             ))
           )}
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        title="Delete Category"
+        size="sm"
+      >
+        <div style={styles.deleteConfirmContent}>
+          <p style={styles.deleteConfirmText}>
+            Are you sure you want to delete <strong>{categoryToDelete?.name}</strong>?
+            This action cannot be undone.
+          </p>
+          <div style={styles.formActions}>
+            <Button variant="ghost" onClick={() => setCategoryToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={confirmDeleteCategory} disabled={isDeleting} style={{ background: theme.danger || '#ef4444' }}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>
@@ -486,5 +517,16 @@ const styles = {
     textAlign: 'center',
     color: theme.gray500,
     padding: '24px',
+  },
+  deleteConfirmContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  deleteConfirmText: {
+    fontSize: '14px',
+    color: theme.gray700,
+    lineHeight: '1.5',
+    margin: 0,
   },
 };

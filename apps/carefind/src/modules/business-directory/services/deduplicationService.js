@@ -46,12 +46,6 @@ export function normalizePhoneNumber(phone) {
   if (normalized.startsWith('234')) {
     normalized = '0' + normalized.slice(3);
   }
-  if (normalized.startsWith('+234')) {
-    normalized = '0' + normalized.slice(4);
-  }
-  if (normalized.startsWith('2340')) {
-    normalized = '0' + normalized.slice(4);
-  }
 
   // Ensure it starts with 0
   if (!normalized.startsWith('0') && normalized.length === 10) {

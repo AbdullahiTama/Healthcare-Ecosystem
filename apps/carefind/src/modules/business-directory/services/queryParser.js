@@ -16,7 +16,7 @@ const CATEGORY_KEYWORDS = {
   'dental clinic': ['dental', 'dentist', 'teeth', 'tooth'],
   'eye clinic/optometry': ['eye', 'optometry', 'optician', 'glasses', 'vision', 'ophthalmology'],
   physiotherapy: ['physiotherapy', 'physio', 'rehabilitation', 'rehab', 'therapy'],
-  maternity: ['maternity', 'pregnancy', 'antenatal', 'antenatal', 'birth'],
+  maternity: ['maternity', 'pregnancy', 'antenatal', 'postnatal', 'birth'],
   paediatric: ['paediatric', 'pediatric', 'children', 'child', 'kids'],
   cardiology: ['cardiology', 'heart', 'cardiac'],
   fertility: ['fertility', 'ivf', 'infertility', 'reproductive'],

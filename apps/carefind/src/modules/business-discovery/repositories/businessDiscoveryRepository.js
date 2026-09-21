@@ -47,11 +47,30 @@ export const businessDiscoveryRepository = {
     // Location-based search
     if (latitude && longitude) {
       // Use PostGIS function for distance calculation
-      queryBuilder = queryBuilder.rpc('search_nearby_businesses', {
-        lat: latitude,
-        lng: longitude,
-        radius_km: radiusKm,
-      });
+      const { data: nearbyData, error: nearbyError } = await supabase
+        .rpc('search_nearby_businesses', {
+          p_latitude: latitude,
+          p_longitude: longitude,
+          p_radius_km: radiusKm,
+          p_category_id: categoryId,
+          p_limit: limit,
+        });
+
+      if (nearbyError) throw nearbyError;
+
+      // Map flat RPC response to expected shape for ResultsMap/ResultsList
+      const mapped = (nearbyData || []).map((row) => ({
+        ...row,
+        category: row.category_name ? { name: row.category_name } : null,
+      }));
+
+      return {
+        data: mapped,
+        total: mapped.length,
+        page,
+        limit,
+        totalPages: Math.ceil(mapped.length / limit),
+      };
     }
 
     // Sorting
