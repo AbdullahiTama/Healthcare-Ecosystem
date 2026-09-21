@@ -233,15 +233,16 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     if (!file) throw new Error('File is required')
     if (file.size === 0) throw new Error('Image is empty')
     await assertApprovedByProductId(ecommerceProductId)
+    const normalizedType = contentType === 'image/jpg' ? 'image/jpeg' : contentType
     const allowed = ['image/jpeg','image/png','image/webp','image/gif']
-    if (contentType && !allowed.includes(contentType)) throw new Error('Unsupported image format')
+    if (normalizedType && !allowed.includes(normalizedType)) throw new Error('Unsupported image format')
     if (file.size && file.size > 5 * 1024 * 1024) throw new Error('Image must be ≤ 5MB')
     const existing = await getImages(ecommerceProductId)
     const nextPos = (existing?.length || 0)
     const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'jpg').replace(/[^a-z0-9]/g,'') || 'jpg'
     const safeExt = ['jpg','jpeg','png','webp','gif'].includes(ext) ? ext : 'jpg'
     const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random()*100000)}.${safeExt}`
-    const url = await up('ecommerce-images', path, file, contentType || 'image/jpeg', 'Image upload failed')
+    const url = await up('ecommerce-images', path, file, normalizedType || 'image/jpeg', 'Image upload failed')
     return request('ecommerce_product_images', {
       method: 'POST',
       body: JSON.stringify({ ecommerce_product_id: ecommerceProductId, url, position: nextPos }),
