@@ -439,7 +439,7 @@ function Wallet() {
                   label="Amount to withdraw (CareCoins)"
                   type="number"
                   value={wdAmount}
-                  onChange={setWdAmount}
+                  onChange={(v) => { setWdAmount(v); if (v && Number(v) > (wallet?.balance || 0)) { showToast(`Amount exceeds your balance of ${wallet?.balance || 0} CareCoins`, { type: 'warning' }) } }}
                   placeholder={`5–${wallet.balance}`}
                   min={5}
                   max={wallet?.balance || 0}
