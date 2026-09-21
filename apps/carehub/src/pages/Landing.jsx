@@ -179,7 +179,7 @@ export default function Landing() {
         position: 'relative', overflow: 'hidden', padding: isMobile ? '80px 20px 60px' : '96px 24px 80px',
       }}>
         <img src="/images/hero.jpg" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${deepTeal}99 0%, ${tealDeep}80 50%, #0D5F4D66 100%)` }} />
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${deepTeal}66 0%, ${tealDeep}4D 50%, #0D5F4D33 100%)` }} />
         <div style={{
           position: 'absolute', inset: 0,
           background: 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.06) 0%, transparent 55%)',
