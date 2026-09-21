@@ -4,10 +4,9 @@ import {
   ShoppingBag, DollarSign, Landmark, Building2, Users, Shield,
   Pill, ClipboardList, Target, Search, Bell, LogOut, Menu, X,
   ChevronDown, Settings, Mail, Layers, ClipboardCheck, AlertTriangle,
-  PanelLeftClose, PanelLeftOpen, Sun, Moon, Command,
+  PanelLeftClose, PanelLeftOpen, Command,
 } from 'lucide-react'
 import Logo from '../social-feed/Logo'
-import { toggleTheme } from '../../styles/theme'
 
 const NAV_GROUPS = [
   {
@@ -311,36 +310,11 @@ export default function AdminSidebar({
           ))}
         </nav>
 
-        {/* Bottom: theme toggle + user + logout */}
+        {/* Bottom: user + logout */}
         <div style={{
           padding: isCollapsed ? '10px 6px' : '10px 12px',
           borderTop: '1px solid var(--border)',
         }}>
-          {/* Theme toggle */}
-          <button
-            onClick={() => toggleTheme()}
-            title="Toggle theme"
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              justifyContent: isCollapsed ? 'center' : 'flex-start',
-              padding: isCollapsed ? '8px 0' : '8px 10px',
-              borderRadius: 8,
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: 'var(--muted)',
-              fontSize: 12,
-              fontWeight: 600,
-              marginBottom: 4,
-            }}
-          >
-            <Sun size={14} />
-            {!isCollapsed && <span>Toggle theme</span>}
-          </button>
-
           {!isCollapsed ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{

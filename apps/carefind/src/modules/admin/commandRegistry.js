@@ -17,7 +17,6 @@ export const BASE_COMMANDS = [
 
   // Actions
   { id: 'action-refresh', label: 'Refresh data', keywords: ['refresh','reload','sync'], section: 'Actions', shortcut: 'R', action: 'refresh' },
-  { id: 'action-toggle-theme', label: 'Toggle theme (light/dark)', keywords: ['theme','dark','light'], section: 'Actions', shortcut: 'T', action: 'toggleTheme' },
   { id: 'action-signout', label: 'Sign out', keywords: ['logout','sign out'], section: 'Actions', action: 'signout' },
 ]
 
