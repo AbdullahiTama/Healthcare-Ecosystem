@@ -39,6 +39,7 @@ function News() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
   const [previewing, setPreviewing] = useState(false)
+  const [composerOpen, setComposerOpen] = useState(false)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   function handleHeroSelect(e) {
@@ -124,6 +125,8 @@ function News() {
 
   const lead = articles[0]
   const rest = articles.slice(1)
+
+  const canSubmit = headline.trim() && body.trim() && contactPhone.trim() && contactEmail.trim() && !submitting
 
   const bodyContent = (
     <div style={{ fontFamily: theme.fontDisplay, maxWidth: isMobile ? 480 : 900, margin: '0 auto', paddingBottom: isMobile ? 90 : 40, background: '#fff' }}>
