@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/process-email-outbox",
-      "schedule": "0 0 * * *"
+      "schedule": "*/5 * * * *"
     },
     {
       "path": "/api/cron/subscription-expiry",
