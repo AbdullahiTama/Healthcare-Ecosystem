@@ -25,7 +25,7 @@ describe('ErrorBoundary', () => {
 
   it('shows a friendly fallback instead of unmounting the tree', () => {
     render(<ErrorBoundary><Boom /></ErrorBoundary>)
-    expect(screen.getByText(/something went wrong here/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /go to feed/i })).toBeInTheDocument()
   })
 
@@ -33,7 +33,7 @@ describe('ErrorBoundary', () => {
     let fail = true
     const Flaky = () => { if (fail) throw new Error('boom'); return <p>recovered</p> }
     const { rerender } = render(<ErrorBoundary><Flaky /></ErrorBoundary>)
-    expect(screen.getByText(/something went wrong here/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /something went wrong/i })).toBeInTheDocument()
     fail = false
     rerender(<ErrorBoundary><Flaky /></ErrorBoundary>)
     fireEvent.click(screen.getByRole('button', { name: /try again/i }))

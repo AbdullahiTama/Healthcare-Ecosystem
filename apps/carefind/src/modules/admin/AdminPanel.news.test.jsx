@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { renderWithQueryClient as render } from '../../test/renderWithQueryClient.jsx'
 import { MemoryRouter } from 'react-router-dom'
 
 // --- hoisted mocks ---
@@ -46,6 +47,12 @@ const supa = vi.hoisted(() => {
     from: vi.fn(() => ({
       upload: (...args) => ctrl._storageUpload(...args),
       getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://cdn.test/hero.jpg' } })),
+    })),
+  }
+  ctrl.auth = {
+    getSession: vi.fn(() => Promise.resolve({
+      data: { session: { user: { id: 'user-1' }, access_token: 'test-access-token' } },
+      error: null,
     })),
   }
   ctrl.rpc = vi.fn(() => Promise.resolve({ data: null, error: null }))
@@ -111,6 +118,7 @@ beforeEach(() => {
   supa._fromImpl = null
   supa.from.mockClear()
   supa.rpc.mockClear()
+  supa.auth.getSession.mockClear()
   adminApi.callAdminAuth.mockReset()
   toastShow.mockClear()
   navigateMock.mockClear()

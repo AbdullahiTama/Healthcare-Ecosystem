@@ -54,8 +54,15 @@ export function createPostRepository({ client = supabase } = {}) {
     },
 
     async deletePost(postId, userId) {
-      const { error } = await client.from('posts').delete().eq('id', postId).eq('user_id', userId)
+      const { data, error } = await client
+        .from('posts')
+        .delete()
+        .eq('id', postId)
+        .eq('user_id', userId)
+        .select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Post was not deleted. It may no longer exist or you may not have permission.')
+      return data[0]
     },
 
     async incrementViewCount(postId) {

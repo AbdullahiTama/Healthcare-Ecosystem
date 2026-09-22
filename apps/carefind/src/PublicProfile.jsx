@@ -72,6 +72,7 @@ function PublicProfile() {
 
   const userReviews = reviewsData.reviews
   const reviewers = reviewsData.reviewers
+  const postCount = postsData.length
   const subActive = subData.active
   const subInfo = subData.sub
 
@@ -695,7 +696,7 @@ function PublicProfile() {
 
         {/* Posts / Reposts grid */}
         {activeTab !== 'playlists' && activeTab !== 'reviews' && (() => {
-          const list = activeTab === 'reposts' ? posts.filter(isRepost) : posts.filter((p) => !isRepost(p))
+          const list = activeTab === 'reposts' ? postsData.filter(isRepost) : postsData.filter((p) => !isRepost(p))
           if (list.length === 0) {
             return (
               <Empty

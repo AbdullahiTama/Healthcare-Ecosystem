@@ -444,9 +444,9 @@ export default function PostCard({
           </div>
           {post.content && (
             <div style={{ margin: '10px 0 0', padding: '0 2px' }}>
-              <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+              <div style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                 {renderMarkdown(post.content)}
-              </p>
+              </div>
             </div>
           )}
         </div>

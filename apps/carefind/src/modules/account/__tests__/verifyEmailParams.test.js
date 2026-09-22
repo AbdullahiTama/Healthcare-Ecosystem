@@ -23,7 +23,7 @@ describe('parseVerifyEmailParams', () => {
       'http://localhost:3000/verify-email#error=access_denied&error_description=The%20link%20you%20used%20is%20invalid%20or%20has%20expired'
     )
     expect(p.error).toBe('access_denied')
-    expect(p.errorDescription).toBe('The link you used is invalid or has expired.')
+    expect(p.errorDescription).toBe('The link you used is invalid or has expired')
   })
 
   it('keeps search code and hash params independent', () => {

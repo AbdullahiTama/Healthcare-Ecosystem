@@ -3,18 +3,18 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import NotificationBell from '../NotificationBell'
-import { getMyNotifications, markNotificationRead } from '../../../services/supabase'
 
 // Issue #4: the bell gained category tabs and an honest mark-as-read flow.
 // These tests pin the two behaviors the field report hinged on: tapping an
 // item marks it read (badge decrements, server PATCH issued) and a FAILED
 // patch reverts the optimistic state instead of silently losing the unread.
 
-vi.mock('../../../services/supabase', () => ({
-  getMyNotifications: vi.fn(),
-  markNotificationRead: vi.fn(),
-  markAllNotificationsRead: vi.fn(),
+const notificationRepository = vi.hoisted(() => ({
+  getAll: vi.fn(),
+  markRead: vi.fn(),
+  markAllRead: vi.fn(),
 }))
+vi.mock('../../../modules/notifications/repositories', () => ({ notificationRepository }))
 vi.mock('../../../lib/realtime', () => ({ watchTable: vi.fn(() => () => {}) }))
 const navigate = vi.fn()
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }))
@@ -31,10 +31,10 @@ describe('NotificationBell', () => {
 
   beforeEach(() => {
     localStorage.setItem('carehub_auth', JSON.stringify({ staff: { id: 'staff-1' } }))
-    getMyNotifications.mockReset()
-    getMyNotifications.mockResolvedValue(ROWS.map(r => ({ ...r })))
-    markNotificationRead.mockReset()
-    markNotificationRead.mockResolvedValue({})
+    notificationRepository.getAll.mockReset()
+    notificationRepository.getAll.mockResolvedValue(ROWS.map(r => ({ ...r })))
+    notificationRepository.markRead.mockReset()
+    notificationRepository.markRead.mockResolvedValue({})
     navigate.mockReset()
     host = document.createElement('div')
     document.body.appendChild(host)
@@ -65,7 +65,7 @@ describe('NotificationBell', () => {
 
     await act(async () => { item.click() })
     await act(async () => {})
-    expect(markNotificationRead).toHaveBeenCalledWith('n1')
+    expect(notificationRepository.markRead).toHaveBeenCalledWith('n1')
     expect(navigate).toHaveBeenCalledWith('/dashboard/inventory')
     // Panel closed after tap; badge reflects one remaining unread.
     expect(bellButton().textContent).toContain('1')
@@ -73,7 +73,7 @@ describe('NotificationBell', () => {
   })
 
   it('reverts the optimistic read state when the PATCH fails', async () => {
-    markNotificationRead.mockRejectedValueOnce(new Error('network down'))
+    notificationRepository.markRead.mockRejectedValueOnce(new Error('network down'))
     await renderBell()
 
     await act(async () => { bellButton().click() })

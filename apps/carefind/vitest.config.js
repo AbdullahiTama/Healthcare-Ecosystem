@@ -4,9 +4,15 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('http://127.0.0.1:54321'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('test-anon-key'),
+  },
   resolve: {
     alias: {
       'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
+      '@supabase/supabase-js': path.resolve(__dirname, 'node_modules/@supabase/supabase-js'),
+      'resend': path.resolve(__dirname, 'node_modules/resend'),
       '@care-ecosystem/design-system/components': path.resolve(__dirname, '../../packages/design-system/src/components'),
       '@care-ecosystem/design-system': path.resolve(__dirname, '../../packages/design-system/src/theme.js'),
     },

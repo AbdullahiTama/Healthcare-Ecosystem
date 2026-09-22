@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import PublicProfile from './PublicProfile.jsx'
+import { renderWithQueryClient as render } from './test/renderWithQueryClient.jsx'
 
-// Queue-based supabase mock (the newsArticle.test.jsx pattern): each awaited
-// query resolves with the next queued result. For a logged-out visitor the
-// load flow needs exactly: [profile, posts, follows, follows, stories,
-// playlists, user_reviews].
 const h = vi.hoisted(() => {
-  const ctrl = { queue: [] }
-  ctrl.push = (...results) => { ctrl.queue.push(...results); return ctrl }
+  const ctrl = {}
   const query = () => {
     const q = {}
     q.select = vi.fn(() => q)
@@ -22,7 +18,7 @@ const h = vi.hoisted(() => {
     q.in = vi.fn(() => q)
     q.insert = vi.fn(() => q)
     q.delete = vi.fn(() => q)
-    q.then = (resolve) => resolve(ctrl.queue.shift() || { data: null, error: null })
+    q.then = (resolve) => resolve({ data: null, error: null })
     return q
   }
   ctrl.from = vi.fn(() => query())
@@ -31,6 +27,33 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('./config/supabaseClient', () => ({ supabase: h.ctrl }))
+const queryState = vi.hoisted(() => ({
+  profile: null,
+  posts: [],
+  reviews: { reviews: [], reviewers: {} },
+  stories: [],
+  playlists: [],
+}))
+vi.mock('./hooks/queries', () => ({
+  keys: {
+    consultationBooked: (viewerId, professionalId) => ['consultation', 'booked', viewerId, professionalId],
+    followerCount: (userId) => ['profile', 'followers', userId],
+    followingCount: (userId) => ['profile', 'following', userId],
+  },
+  useProfile: () => ({ data: queryState.profile, isLoading: false }),
+  useProfilePosts: () => ({ data: queryState.posts }),
+  useProfileReviews: () => ({ data: queryState.reviews }),
+  useProfileStories: () => ({ data: queryState.stories }),
+  useProfilePlaylists: () => ({ data: queryState.playlists }),
+  useFollowerCount: () => ({ data: 0 }),
+  useFollowingCount: () => ({ data: 0 }),
+  useFollowStatus: () => ({ data: false }),
+  useSubscriptionAccess: () => ({ data: { active: false, sub: null } }),
+  useConsultationOffer: () => ({ data: null }),
+  useConsultationBooked: () => ({ data: false }),
+  useToggleFollow: () => ({ mutateAsync: vi.fn() }),
+  usePostReview: () => ({ mutateAsync: vi.fn() }),
+}))
 const auth = vi.hoisted(() => ({ user: null }))
 vi.mock('./providers/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
 vi.mock('./services/notify.js', () => ({ notify: vi.fn() }))
@@ -84,9 +107,13 @@ function renderProfile() {
 }
 
 beforeEach(() => {
-  h.ctrl.queue.length = 0
   h.ctrl.from.mockClear()
   h.ctrl.rpc.mockClear()
+  queryState.profile = profile
+  queryState.posts = []
+  queryState.reviews = { reviews: [], reviewers: {} }
+  queryState.stories = []
+  queryState.playlists = []
   auth.user = null
   Element.prototype.scrollIntoView = vi.fn()
   window.scrollTo = vi.fn()
@@ -94,13 +121,7 @@ beforeEach(() => {
 
 describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no separate rail)', () => {
   it('shows a single avatar ring when stories exist, no separate rail circles, ordering is position → views → newest via viewer', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null }) // posts
-    h.ctrl.push({ count: 0, error: null }) // follows (following_id)
-    h.ctrl.push({ count: 0, error: null }) // follows (follower_id)
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null }) // playlists
-    h.ctrl.push({ data: [], error: null }) // user_reviews
+    queryState.stories = [stories[1], stories[0]]
 
     renderProfile()
 
@@ -119,14 +140,6 @@ describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no
   })
 
   it('renders no ring button when the profile has no stories', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: [], error: null }) // no stories
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
-
     renderProfile()
 
     await screen.findByRole('heading', { name: 'Dr Ada' })
@@ -135,13 +148,7 @@ describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no
   })
 
   it('tapping ring opens viewer directly without a chooser menu', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+    queryState.stories = [stories[1], stories[0]]
 
     renderProfile()
 
@@ -152,13 +159,7 @@ describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no
   })
 
   it('viewer auto-advance: stories are ordered and accessible sequentially from ring', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+    queryState.stories = [stories[1], stories[0]]
 
     renderProfile()
 

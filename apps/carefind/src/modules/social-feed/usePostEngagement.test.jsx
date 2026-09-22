@@ -34,8 +34,9 @@ const mockSupabase = vi.hoisted(() => {
     const settle = () => {
       if (mode === 'insert') return { data: inserted, error: null }
       if (mode === 'delete') {
+        const deleted = rows(table).filter((r) => matches(r, cons))
         data.tables[table] = rows(table).filter((r) => !matches(r, cons))
-        return { data: null, error: null }
+        return { data: deleted, error: null }
       }
       if (mode === 'update') {
         data.tables[table] = rows(table).map((r) => (matches(r, cons) ? { ...r, ...patch } : r))
@@ -409,6 +410,18 @@ describe('usePostEngagement handlers', () => {
     // The card has to become interactive again — a stuck `deletingId` would
     // leave the reader looking at a permanently mid-delete post.
     expect(result.current.state.deletingId).toBeNull()
+  })
+
+  it('treats an RLS-filtered zero-row delete as a failure', async () => {
+    mockSupabase.data.tables.posts = [post('p1', 'someone-else')]
+    const onPostDeleted = vi.fn()
+    const { result, toast } = setup({ onPostDeleted })
+
+    await act(async () => { await result.current.engagementProps.handleDeletePost('p1') })
+
+    expect(mockSupabase.data.tables.posts).toHaveLength(1)
+    expect(onPostDeleted).not.toHaveBeenCalled()
+    expect(toast.show).toHaveBeenCalledWith(expect.stringMatching(/could not delete/i), { type: 'error' })
   })
 
   it('routes a logged-out report to login and an already-reported post to a toast', async () => {

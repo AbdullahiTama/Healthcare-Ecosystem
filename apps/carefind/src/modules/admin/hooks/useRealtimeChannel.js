@@ -12,6 +12,7 @@ export function useRealtimeChannel({
   onError,
   pollInterval = 30000,
   pollFn,
+  pollAlways = false,
 }) {
   const channelRef = useRef(null)
   const pollRef = useRef(null)
@@ -74,9 +75,10 @@ export function useRealtimeChannel({
     })
 
     channelRef.current = channel
+    if (pollAlways) startPolling()
 
     return cleanup
-  }, [channelName, subscription?.table, onInsert, onUpdate, onDelete, onAny, onConnect, onError, startPolling, cleanup])
+  }, [channelName, subscription?.table, onInsert, onUpdate, onDelete, onAny, onConnect, onError, pollAlways, startPolling, cleanup])
 
   return { cleanup }
 }

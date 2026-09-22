@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { DollarSign, Clock, Radio, AlertTriangle, RefreshCw } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { dashboardRepository } from './repositories'
@@ -11,7 +11,7 @@ export default function HealthPulse({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
 
-  async function fetchPulse() {
+  const fetchPulse = useCallback(async () => {
     try {
       const data = await dashboardRepository.getHealthPulse()
       setPulse(data)
@@ -20,20 +20,20 @@ export default function HealthPulse({ onNavigate }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchPulse()
-  }, [])
+  }, [fetchPulse])
 
   useRealtimeChannel({
     channelName: 'health-pulse-realtime',
     subscription: { schema: 'public', table: 'transactions' },
     onUpdate: fetchPulse,
     onInsert: fetchPulse,
-    onError: () => {},
     pollInterval: PULSE_INTERVAL,
     pollFn: fetchPulse,
+    pollAlways: true,
   })
 
   if (loading && !pulse) return null
