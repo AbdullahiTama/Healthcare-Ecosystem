@@ -244,6 +244,7 @@ describe('PostPage', () => {
 
   it('confirming delete calls through and navigates to /feed', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'a1' } })
+    mockTables.posts = [{ id: 'p1', user_id: 'a1' }]
     postRepository.getPostById.mockResolvedValue(post())
     renderAt()
     await screen.findByText(/body of a permalinked post/i)

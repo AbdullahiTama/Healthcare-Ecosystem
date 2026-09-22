@@ -1007,7 +1007,8 @@ export function useAdminNews(enabled = true) {
       try {
         const { data, phones } = await callAdminAuth('list_news', { token })
         return { items: data || [], phones: phones || {} }
-      } catch {
+      } catch (error) {
+        if (/invalid|expired|unauthori[sz]ed|session/i.test(error?.message || '')) throw error
         return { items: [], phones: {} }
       }
     },

@@ -416,12 +416,9 @@ export function usePostEngagement({
   // delete that the network or the database rejected look exactly like one
   // that worked, while the post is still public.
   //
-  // Caveat worth knowing before trusting this: PostgREST reports a delete that
-  // matched no rows as a plain success, so an RLS policy that merely filters
-  // the row out arrives here as `error: null`. Detecting that needs the delete
-  // to return its rows (`.select()`) and a length check — a wider change than
-  // this fix, recorded in CODE_AUDIT.md. What is caught here is every failure
-  // that does surface an error: transport failures, and any database error.
+  // postRepository also asks PostgREST to return the deleted row. An empty
+  // result therefore rejects here instead of treating an RLS-filtered delete
+  // as success and navigating away while the post remains available.
   async function handleDeletePost(postId) {
     setDeletingId(postId)
     try {

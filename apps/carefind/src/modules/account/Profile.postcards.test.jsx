@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderWithQueryClient as render } from '../../test/renderWithQueryClient.jsx'
 import { MemoryRouter } from 'react-router-dom'
 
 // Issues #3/#4 regression suite. A profile used to render posts through

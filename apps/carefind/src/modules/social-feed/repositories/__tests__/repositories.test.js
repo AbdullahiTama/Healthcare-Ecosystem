@@ -94,10 +94,12 @@ describe('postRepository', () => {
   })
 
   it('deletePost only deletes the caller’s own post', async () => {
+    mockSupabase.queryData = [{ id: 'p1' }]
     await postRepository.deletePost('p1', 'u1')
     expect(supabase.from).toHaveBeenCalledWith('posts')
     expect(supabase.from().delete().eq).toHaveBeenCalledWith('id', 'p1')
     expect(supabase.from().delete().eq().eq).toHaveBeenCalledWith('user_id', 'u1')
+    mockSupabase.queryData = []
   })
 
   it('addReaction defaults to a like', async () => {

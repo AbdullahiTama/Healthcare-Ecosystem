@@ -1,4 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+const callAdminAuth = vi.hoisted(() => vi.fn(async (action) => {
+  if (action === 'list_news') return { data: [] }
+  return { data: [] }
+}))
+vi.mock('../modules/admin/adminApi', () => ({ callAdminAuth }))
 import { parseAdminQuery, formatQueryResult } from './adminAiQuery'
 
 // Mock supabase

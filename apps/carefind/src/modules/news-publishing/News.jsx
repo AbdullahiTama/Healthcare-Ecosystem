@@ -126,7 +126,7 @@ function News() {
   const lead = articles[0]
   const rest = articles.slice(1)
 
-  const canSubmit = headline.trim() && body.trim() && contactPhone.trim() && contactEmail.trim() && !submitting
+  const canOpenComposer = !!user?.id
 
   const bodyContent = (
     <div style={{ fontFamily: theme.fontDisplay, maxWidth: isMobile ? 480 : 900, margin: '0 auto', paddingBottom: isMobile ? 90 : 40, background: '#fff' }}>
@@ -140,7 +140,7 @@ function News() {
       </div>
 
       {/* Submit button */}
-      {canSubmit && (
+      {canOpenComposer && (
         <div style={{ padding: '12px 16px 0' }}>
           <button
             onClick={() => setComposerOpen(true)}

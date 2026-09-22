@@ -239,6 +239,7 @@ describe('PostModalRoute', () => {
   // redirect to the feed.
   it('confirming delete calls through and then closes (not a hardcoded /feed redirect)', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'a1' } })
+    mockTables.posts = [{ id: 'p1', user_id: 'a1' }]
     postRepository.getPostById.mockResolvedValue(post())
     renderAt('p1', { from: '/saved', fromLabel: 'the saved-posts screen' })
     await screen.findByRole('dialog')
@@ -401,6 +402,7 @@ describe('PostModalRoute', () => {
   // like-path test above, not the same path exercised twice.
   it('confirming delete dispatches the dirty event once the overlay closes', async () => {
     mockUseAuth.mockReturnValue({ user: { id: 'a1' } })
+    mockTables.posts = [{ id: 'p1', user_id: 'a1' }]
     postRepository.getPostById.mockResolvedValue(post())
     const onDirty = vi.fn()
     window.addEventListener(POSTS_DIRTY_EVENT, onDirty)

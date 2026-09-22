@@ -20,6 +20,8 @@ export default defineConfig({
   resolve: {
     alias: {
       'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
+      '@supabase/supabase-js': path.resolve(__dirname, 'node_modules/@supabase/supabase-js'),
+      'resend': path.resolve(__dirname, 'node_modules/resend'),
       '@care-ecosystem/design-system/components': path.resolve(__dirname, '../../packages/design-system/src/components'),
       '@care-ecosystem/design-system': path.resolve(__dirname, '../../packages/design-system/src/theme.js'),
     },

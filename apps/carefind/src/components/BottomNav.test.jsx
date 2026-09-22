@@ -52,13 +52,13 @@ describe('BottomNav (five destinations, always visible)', () => {
 
   it('keeps MedMarket highlighted inside the marketplace', () => {
     renderNav('/search?tab=shop')
-    expect(screen.getByRole('link', { name: 'MedMarket' }).style.color).toBe('rgb(14, 111, 90)')
+    expect(screen.getByRole('link', { name: 'MedMarket' }).style.color).toBe('var(--teal-deep)')
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(139, 151, 143)')
   })
 
   it('keeps Home highlighted on the plain feed', () => {
     renderNav('/feed')
-    expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('rgb(14, 111, 90)')
+    expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('var(--teal-deep)')
     expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(139, 151, 143)')
   })
 })

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../../config/supabaseClient'
 import { subscriptionRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
@@ -82,7 +83,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
       setWallet({ balance })
     }
     loadWallet()
-  }, [user])
+  }, [user?.id])
 
   async function sendGift() {
     if (!user || sending) return

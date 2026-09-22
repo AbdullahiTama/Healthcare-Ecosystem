@@ -146,7 +146,7 @@ export default function AdminPanel() {
 
   const { data: adminData } = useAdminData(!!adminUser)
   const { data: stories = [] } = useAdminStories(!!adminUser)
-  const { data: newsData } = useAdminNews(!!adminUser)
+  const { data: newsData, error: newsError } = useAdminNews(!!adminUser)
   const { data: promotions = [] } = useAdminPromotions(!!adminUser)
   const { data: searchLogs = [] } = useAdminSearchLogs(!!adminUser)
   const { data: liveShowsData } = useAdminLiveShows(!!adminUser)
@@ -161,6 +161,12 @@ export default function AdminPanel() {
   const ecomApps = shopData?.apps || []
   const ecomProductsAdmin = shopData?.products || []
   const shopOrdersAdmin = shopData?.orders || []
+
+  useEffect(() => {
+    if (newsError && /invalid|expired|unauthori[sz]ed|session/i.test(newsError.message || '')) {
+      showToast('Session expired, re-login', { type: 'error' })
+    }
+  }, [newsError, showToast])
 
   async function logAuditAction(auditAction, targetType, targetId, metadata = {}) {
     try {

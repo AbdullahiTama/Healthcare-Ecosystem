@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { screen, fireEvent, within } from '@testing-library/react'
+import { renderWithQueryClient as render } from '../test/renderWithQueryClient.jsx'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
