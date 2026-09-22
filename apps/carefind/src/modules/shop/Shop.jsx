@@ -36,6 +36,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const touchStartY = useRef(null)
+  const pullRaf = useRef(null)
 
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { setRecentIds(getRecent()) }, [])
@@ -46,21 +47,29 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     staleTime: 30 * 1000,
   })
 
-  // Pull-to-refresh handlers — defined after useQuery so refetch is initialized (TDZ guard)
+  // Pull-to-refresh — disabled when embedded (Search already owns scroll), rAF-throttled
+  // to avoid 60Hz re-renders of 80 cards that caused mouse shake + hang.
   const handleTouchStart = useCallback((e) => {
-    if (window.scrollY > 0) return
+    if (embedded || window.scrollY > 0) return
     touchStartY.current = e.touches[0].clientY
-  }, [])
+  }, [embedded])
 
   const handleTouchMove = useCallback((e) => {
-    if (touchStartY.current == null || refreshing) return
+    if (embedded || touchStartY.current == null || refreshing) return
     const delta = e.touches[0].clientY - touchStartY.current
     if (delta > 0 && window.scrollY === 0) {
-      setPullDistance(Math.min(delta * 0.5, 120))
+      const next = Math.min(delta * 0.5, 120)
+      if (pullRaf.current) return
+      pullRaf.current = requestAnimationFrame(() => {
+        setPullDistance(next)
+        pullRaf.current = null
+      })
     }
-  }, [refreshing])
+  }, [embedded, refreshing])
 
   const handleTouchEnd = useCallback(async () => {
+    if (embedded) return
+    if (pullRaf.current) { cancelAnimationFrame(pullRaf.current); pullRaf.current = null }
     if (pullDistance > 80 && !refreshing) {
       setRefreshing(true)
       setPullDistance(60)
@@ -69,7 +78,9 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     }
     setPullDistance(0)
     touchStartY.current = null
-  }, [pullDistance, refreshing, refetch])
+  }, [embedded, pullDistance, refreshing, refetch])
+
+  useEffect(() => () => { if (pullRaf.current) cancelAnimationFrame(pullRaf.current) }, [])
   const error = queryError ? 'Could not load Shop products' : ''
   useEffect(() => {
     if (products.length===0) return
@@ -157,11 +168,13 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     )
   }
 
+  const pullHandlers = embedded ? {} : { onTouchStart: handleTouchStart, onTouchMove: handleTouchMove, onTouchEnd: handleTouchEnd }
+
   return (
-    <div style={outerStyle} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+    <div style={outerStyle} {...pullHandlers}>
       <Toast msg={toastMsg} type={toastType} />
-      {/* Pull-to-refresh indicator */}
-      {(pullDistance > 0 || refreshing) && (
+      {/* Pull-to-refresh indicator — disabled when embedded */}
+      {!embedded && (pullDistance > 0 || refreshing) && (
         <div style={{ textAlign:'center', overflow:'hidden', height: refreshing ? 50 : pullDistance, transition: refreshing ? 'none' : 'height 0.2s', display:'flex', alignItems:'center', justifyContent:'center', color: theme.tealDeep, fontSize: 13, fontWeight: 700 }}>
           {refreshing ? '↻ Refreshing...' : pullDistance > 80 ? '↓ Release to refresh' : '↓ Pull to refresh'}
         </div>
@@ -259,11 +272,11 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
       )}
       {!embedded && <div style={{ fontSize:11, color: theme.textMid, marginBottom: 12 }}>{filtered.length} products {inStockOnly ? '· in stock' : ''} · {showRxOnly ? 'Rx only · ' : ''}sorted {sort}</div>}
 
-      {/* Featured horizontal row */}
+      {/* Featured horizontal row — cf-hscroll hides scrollbar track to prevent hover jitter */}
       {featured.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 8 }}>Featured</div>
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'thin' }} role="list" aria-label="Featured products">
+          <div className="cf-hscroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }} role="list" aria-label="Featured products">
             {featured.map(row => {
               const p = row.products
               const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
@@ -308,7 +321,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
       {recent.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <div style={{ fontSize:13, fontWeight:800, color:theme.navy, marginBottom:8 }}>Recently viewed</div>
-          <div style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:8 }}>
+          <div className="cf-hscroll" style={{ display:'flex', gap:12, overflowX:'auto', paddingBottom:8 }}>
             {recent.map(r=>(
               <Link key={r.id} to={`/shop/${r.id}`} style={{ textDecoration:'none', flex:'0 0 140px' }}>
                 <Card style={{ padding:8, textAlign:'center' }}>

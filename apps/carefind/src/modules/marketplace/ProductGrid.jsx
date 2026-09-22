@@ -72,14 +72,7 @@ export default function ProductGrid({
   }
 
   return (
-    <>
-      <style>{`
-        .mp-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
-        @media (min-width: 768px) { .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-        @media (min-width: 1024px) { .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-        .mp-grid > * { min-width: 0; }
-      `}</style>
-      <div role="list" aria-label="Products" className="mp-grid" style={{ alignItems: 'stretch' }}>
+    <div role="list" aria-label="Products" className="mp-grid" style={{ alignItems: 'stretch' }}>
 
       {rows.map((row) => {
         const id = row.id || row.products?.id
@@ -97,7 +90,6 @@ export default function ProductGrid({
         )
       })}
       </div>
-    </>
   )
 }
 
