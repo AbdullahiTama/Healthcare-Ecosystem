@@ -1,0 +1,49 @@
+{
+  "name": "CareFind — Connecting people to better healthcare",
+  "short_name": "CareFind",
+  "description": "Search medicines, compare pharmacies, read real reviews and connect with verified healthcare providers near you.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#F7F5EF",
+  "theme_color": "#0E6F5A",
+  "orientation": "any",
+  "categories": ["medical", "health", "lifestyle"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Search care near you",
+      "url": "/search",
+      "description": "Find medicines, pharmacies, hospitals and labs",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Feed",
+      "url": "/feed",
+      "description": "Healthcare social feed",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

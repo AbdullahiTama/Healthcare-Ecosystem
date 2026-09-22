@@ -455,9 +455,76 @@ body {
   opacity: 1;
 }
 
+/* ── Press feedback — every interactive surface should feel that it heard the tap
+    (Emil Kowalski: scale(0.97) on :active). Applied via .cf-press on buttons and
+    cards that are tappable. Respects reduced-motion. ─────────────────────────── */
+.cf-press {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.cf-press:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cf-press:hover {
+    transform: translateY(-1px);
+  }
+  .cf-press:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Subtle hover lift for cards — never intercept the press scale */
+.cf-card-press {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cf-card-press:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--elevation-2);
+  }
+  .cf-card-press:active {
+    transform: scale(0.98);
+    box-shadow: var(--elevation-1);
+  }
+}
+
+/* Market marquee — CSS only, GPU via transform, respects reduced motion */
+@keyframes cf-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.cf-marquee-track {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  will-change: transform;
+  animation: cf-marquee 30s linear infinite;
+}
+
+.cf-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-marquee-track {
+    animation: none;
+  }
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
-  .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {
+  .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter,
+  .cf-marquee-track {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
@@ -470,8 +537,17 @@ body {
   .cf-nav-row,
   .cf-create-btn,
   .cf-profile-link,
-  .cf-collapsed-tooltip {
+  .cf-collapsed-tooltip,
+  .cf-press,
+  .cf-card-press {
     transition: none;
+  }
+  .cf-press:active,
+  .cf-card-press:active,
+  .cf-press:hover,
+  .cf-card-press:hover {
+    transform: none;
+    box-shadow: none;
   }
   .cf-create-btn:hover {
     transform: none;

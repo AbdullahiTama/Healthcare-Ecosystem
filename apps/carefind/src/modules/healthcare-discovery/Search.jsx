@@ -26,8 +26,7 @@ import { useCart } from '../shop/CartProvider'
 import FilterSheet from '../../components/FilterSheet.jsx'
 import FilterFAB from '../../components/FilterFAB.jsx'
 import ProductGrid from '../marketplace/ProductGrid.jsx'
-import { useFeatured, useSearchResults, keys } from '../../hooks/queries'
-import { useQueryClient } from '@tanstack/react-query'
+import { useFeatured, useSearchResults } from '../../hooks/queries'
 import { healthcareRepository } from './repositories'
 
 const NG_STATES = [
@@ -43,7 +42,6 @@ function Search() {
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
   const { coords: userCoords } = useGeolocation()
   const { count: cartCount } = useCart()
-  const qc = useQueryClient()
 
   const distanceMeters = (p, u) => {
     const c = productCoords(p)
@@ -142,24 +140,8 @@ function Search() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showRecent])
 
-  useEffect(() => {
-    if (featured.length === 0) return
-    let raf
-    let offset = 0
-    const speed = 0.4
-    function step() {
-      const el = trackRef.current
-      if (el) {
-        offset += speed
-        const half = el.scrollWidth / 2
-        if (offset >= half) offset = 0
-        el.style.transform = `translateX(${-offset}px)`
-      }
-      raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [featured])
+  // Featured rail scroll is CSS-only (cf-marquee-track) — no JS RAF loop.
+  // Keeps the compositor on transform (GPU) and respects prefers-reduced-motion.
 
   useEffect(() => {
     const cur = searchParams.get('tab')
@@ -197,12 +179,18 @@ function Search() {
   const bodyContent = (
     <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', padding: '0 16px', paddingBottom: 'calc(100px + env(safe-area-inset-bottom))', background: theme.bg, minHeight: '100vh', overflowX: 'hidden', boxSizing: 'border-box' } : { fontFamily: theme.fontFamily }}>
       <style>{`
-        @keyframes medmarket-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .mm-track { display: flex; gap: 12px; width: max-content; will-change: transform; }
-        .mm-card { transition: transform 0.12s ease; }
+        .mm-card { transition: transform 140ms cubic-bezier(0.16,1,0.3,1); }
         .mm-card:active { transform: scale(0.96); }
         .hide-scrollbar::-webkit-scrollbar { display:none; height:0; }
         .hide-scrollbar { scrollbar-width:none; -ms-overflow-style:none; }
+        @media (prefers-reduced-motion: reduce) {
+          .mm-card { transition: none; }
+          .mm-card:active { transform: none; }
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .mm-card:hover { transform: translateY(-1px); }
+          .mm-card:active { transform: scale(0.96); }
+        }
       `}</style>
 
       {/* 1 — CareFind Header */}
@@ -398,8 +386,8 @@ function Search() {
               <Sparkles size={16} color={theme.tealDeep} aria-hidden="true" /> {featuredType === 'promo' ? 'Featured promotions' : 'Trending Now'}
             </span>
           </p>
-          <div style={{ overflow: 'hidden', width: '100%' }}>
-            <div className="mm-track hide-scrollbar" ref={trackRef}>
+          <div style={{ overflow: 'hidden', width: '100%', maskImage: 'linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%)', WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 4%, black 96%, transparent 100%)' }}>
+            <div className="cf-marquee-track" ref={trackRef} aria-hidden="true">
               {[...featured, ...featured].map((p, i) => (
                 featuredType === 'promo' ? (
                   <Link key={i} className="mm-card" to={p.link_url || '/search'} style={{ textDecoration: 'none', color: 'inherit', flexShrink: 0, width: 200 }}>

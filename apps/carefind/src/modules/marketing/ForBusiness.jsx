@@ -34,7 +34,7 @@ const PARTNERS = ['Lagos State Hospital', 'MedPlus Pharmacy', 'Reddington Hospit
 
 function FeatureCard({ icon: Icon, title, desc, color, index }) {
   return (
-    <div className="feature-card" data-index={index} style={{
+    <div className="feature-card cf-card-press" data-index={index} style={{
       background: cardBg, borderRadius: theme.radius.xl, padding: 28, border: `1px solid ${border}`,
       display: 'flex', flexDirection: 'column',
     }}>
@@ -91,40 +91,43 @@ export default function ForBusiness() {
   const [testimonialIndex, setTestimonialIndex] = useState(0)
 
   useEffect(() => {
+    const reduceMotion = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    if (reduceMotion) return
     const ctx = gsap.context(() => {
-      // Hero entrance
+      // Hero entrance — scale originates from 0.98 + opacity, never scale(0)
       gsap.from(heroRef.current?.querySelectorAll('.hero-fade'), {
-        y: 60, opacity: 0, duration: 1, stagger: 0.2, ease: 'power3.out',
+        y: 28, opacity: 0, duration: 0.7, stagger: 0.12, ease: 'power3.out',
       })
       gsap.from(heroRef.current?.querySelector('.hero-image'), {
-        scale: 1.15, opacity: 0, duration: 1.4, ease: 'power2.out',
+        scale: 1.08, opacity: 0, duration: 1.1, ease: 'power2.out',
       })
 
-      // Features scroll entrance
+      // Features scroll entrance — respects motion tokens (<300ms perceived + stagger)
       gsap.from(featuresRef.current?.querySelectorAll('.feature-card'), {
-        scrollTrigger: { trigger: featuresRef.current, start: 'top 85%' },
-        y: 50, opacity: 0, duration: 0.8, stagger: 0.15, ease: 'power3.out',
+        scrollTrigger: { trigger: featuresRef.current, start: 'top 88%' },
+        y: 24, opacity: 0, duration: 0.6, stagger: 0.08, ease: 'power3.out',
       })
 
       // Steps scroll entrance
       gsap.from(stepsRef.current?.querySelectorAll('.step-panel'), {
-        scrollTrigger: { trigger: stepsRef.current, start: 'top 80%' },
-        y: 40, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'power2.out',
+        scrollTrigger: { trigger: stepsRef.current, start: 'top 82%' },
+        y: 24, opacity: 0, duration: 0.6, stagger: 0.06, ease: 'power2.out',
       })
 
       // Testimonials
       gsap.from(testimonialsRef.current?.querySelector('.testimonial-card'), {
-        scrollTrigger: { trigger: testimonialsRef.current, start: 'top 85%' },
-        y: 30, opacity: 0, duration: 0.8, ease: 'power2.out',
+        scrollTrigger: { trigger: testimonialsRef.current, start: 'top 88%' },
+        y: 20, opacity: 0, duration: 0.6, ease: 'power2.out',
       })
 
       // CTA
       gsap.from(ctaRef.current?.querySelectorAll('.cta-fade'), {
         scrollTrigger: { trigger: ctaRef.current, start: 'top 90%' },
-        y: 40, opacity: 0, duration: 0.7, stagger: 0.15, ease: 'power3.out',
+        y: 20, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power3.out',
       })
 
-      // Nav glass to solid on scroll
+      // Nav glass to solid on scroll — easeOut, not easeIn
       ScrollTrigger.create({
         trigger: document.body, start: 'top -80',
         onToggle: ({ isActive }) => {
@@ -133,24 +136,18 @@ export default function ForBusiness() {
             background: isActive ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.08)',
             backdropFilter: isActive ? 'blur(16px)' : 'blur(0px)',
             borderBottom: isActive ? `1px solid ${border}` : '1px solid transparent',
-            duration: 0.3,
+            duration: 0.22, ease: 'power2.out',
           })
           gsap.to('.nav-link', {
             color: isActive ? navy : '#fff',
-            duration: 0.3,
+            duration: 0.22, ease: 'power2.out',
           })
           gsap.to('.nav-signin', {
             color: isActive ? navy : '#fff',
             borderColor: isActive ? border : 'rgba(255,255,255,0.3)',
-            duration: 0.3,
+            duration: 0.22, ease: 'power2.out',
           })
         },
-      })
-
-      // Image scale on scroll for step panels
-      gsap.to(stepsRef.current?.querySelectorAll('.step-panel img'), {
-        scrollTrigger: { trigger: stepsRef.current, start: 'top bottom', end: 'bottom top', scrub: 0.5 },
-        scale: 0.95, opacity: 0.6,
       })
     }, sectionRef)
 
@@ -167,42 +164,39 @@ export default function ForBusiness() {
   return (
     <main ref={sectionRef} style={{ fontFamily: theme.fontFamily, minHeight: '100vh', background: bg, color: textDark, overflowX: 'hidden', width: '100%', maxWidth: '100%' }}>
       <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+        @media (prefers-reduced-motion: reduce) {
+          .marquee-track, .cf-marquee-track { animation: none !important; }
         }
-        .marquee-track { animation: marquee 30s linear infinite; }
-        .marquee-track:hover { animation-play-state: paused; }
       `}</style>
 
       {/* ── Glass Nav ─────────────────────────────────────────── */}
-      <nav className="landing-nav" style={{
+      <nav aria-label="Primary" className="landing-nav" style={{
         position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
         background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(0px)',
         borderRadius: 60, padding: '8px 10px 8px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         zIndex: 100, width: isMobile ? 'calc(100% - 24px)' : 720,
         border: '1px solid rgba(255,255,255,0.15)',
-        transition: 'background 0.3s ease',
+        transition: 'background 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
       }}>
-        <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+        <Link to="/" aria-label="CareFind home" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
           <Logo size={24} tone={isMobile || navScrolled ? 'dark' : 'light'} />
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!isMobile && (
             <>
-              <a href="#features" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+              <a href="#features" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 140ms cubic-bezier(0.16,1,0.3,1)' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>Features</a>
-              <a href="#how-it-works" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+              <a href="#how-it-works" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 140ms cubic-bezier(0.16,1,0.3,1)' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>How it works</a>
-              <Link to="/about" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 0.2s' }}
+              <Link to="/about" className="nav-link hero-fade" style={{ padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#fff', textDecoration: 'none', opacity: 0.85, transition: 'opacity 140ms cubic-bezier(0.16,1,0.3,1)' }}
                 onMouseEnter={e => e.target.style.opacity = '1'} onMouseLeave={e => e.target.style.opacity = '0.85'}>About</Link>
             </>
           )}
-          <button onClick={() => navigate('/login')} className="nav-signin hero-fade" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+          <button type="button" onClick={() => navigate('/login')} className="nav-signin hero-fade cf-press" style={{ padding: '8px 16px', borderRadius: 40, border: '1px solid rgba(255,255,255,0.3)', background: 'transparent', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
             Sign in
           </button>
-          <button onClick={() => navigate('/search')} className="hero-fade" style={{ padding: '8px 18px', borderRadius: 40, border: 'none', background: '#fff', color: navy, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+          <button type="button" onClick={() => navigate('/search')} className="hero-fade cf-press" style={{ padding: '8px 18px', borderRadius: 40, border: 'none', background: '#fff', color: navy, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
             Get started
           </button>
         </div>
@@ -210,8 +204,8 @@ export default function ForBusiness() {
 
       {/* ── Hero ──────────────────────────────────────────────── */}
       <div ref={heroRef} style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        <div className="hero-image" style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://images.unsplash.com/photo-1551076805-e1869033e561?w=1920&q=80&auto=format&fit=crop)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(0.2) saturate(0.9) contrast(1.1)', transform: 'scale(1.05)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at center, rgba(11,74,62,0.3) 0%, rgba(11,74,62,0.75) 60%, ${navy} 100%)` }} />
+        <div className="hero-image" aria-hidden="true" style={{ position: 'absolute', inset: 0, backgroundImage: 'url(https://images.unsplash.com/photo-1551076805-e1869033e561?w=1920&q=80&auto=format&fit=crop)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(0.2) saturate(0.9) contrast(1.1)', transform: 'scale(1.05)' }} />
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse at center, rgba(11,74,62,0.3) 0%, rgba(11,74,62,0.75) 60%, ${navy} 100%)` }} />
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '120px 24px 80px', maxWidth: 900, margin: '0 auto' }}>
           <h1 className="hero-fade" style={{ fontFamily: theme.fontDisplay, fontWeight: 900, fontSize: 'clamp(2.8rem, 6vw, 5rem)', lineHeight: 1.08, letterSpacing: '-0.03em', color: '#fff', margin: '0 0 10px' }}>
             Find the care you{' '}
@@ -222,13 +216,10 @@ export default function ForBusiness() {
             Search medicines, compare pharmacies, read real reviews, and connect with healthcare providers near you, all in one place.
           </p>
           <div className="hero-fade" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <button onClick={() => navigate('/search')} style={{ padding: '16px 32px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
-              onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 12px 32px rgba(0,0,0,0.2)' }}
-              onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}>
-              Start searching <ArrowRight size={18} />
+            <button type="button" onClick={() => navigate('/search')} className="cf-press" style={{ padding: '16px 32px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              Start searching <ArrowRight size={18} aria-hidden="true" />
             </button>
-            <button onClick={() => navigate('/feed')} style={{ padding: '16px 32px', borderRadius: 60, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', transition: 'background 0.2s ease' }}
-              onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.15)'} onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.08)'}>
+            <button type="button" onClick={() => navigate('/feed')} className="cf-press" style={{ padding: '16px 32px', borderRadius: 60, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
               Browse feed
             </button>
           </div>
@@ -243,7 +234,7 @@ export default function ForBusiness() {
           </h2>
           <p style={{ fontSize: 15, color: textMid, maxWidth: 540, margin: '0 auto', lineHeight: 1.6 }}>CareFind brings together every tool you need to navigate your health journey with confidence.</p>
         </div>
-        <div className="bento-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, gridAutoFlow: 'dense' }}>
+        <div className="bento-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 16, gridAutoFlow: 'dense' }}>
           {FEATURES.map((f, i) => (
             <FeatureCard key={f.title} {...f} index={i} />
           ))}
@@ -282,10 +273,10 @@ export default function ForBusiness() {
       </div>
 
       {/* ── Infinite Marquee (Trust Partners) ─────────────────── */}
-      <div style={{ padding: '60px 0', overflow: 'hidden', background: bg }}>
+      <div aria-label="Trusted partners" style={{ padding: '60px 0', overflow: 'hidden', background: bg }}>
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: textLight, textAlign: 'center', marginBottom: 20 }}>Trusted by healthcare providers across the region</div>
         <div style={{ display: 'flex', overflow: 'hidden', maskImage: 'linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%)', WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%)' }}>
-          <div className="marquee-track" style={{ display: 'flex', gap: 48, flexShrink: 0, padding: '0 24px' }}>
+          <div className="cf-marquee-track" style={{ padding: '0 24px', gap: 48 }} aria-hidden="true">
             {[...PARTNERS, ...PARTNERS].map((name, i) => (
               <div key={i} style={{ flexShrink: 0, fontSize: 15, fontWeight: 700, color: textLight, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
                 {name}
@@ -314,11 +305,11 @@ export default function ForBusiness() {
           <div style={{ fontWeight: 800, fontSize: 14, color: textDark }}>{TESTIMONIALS[testimonialIndex].name}</div>
           <div style={{ fontSize: 12, color: textLight }}>{TESTIMONIALS[testimonialIndex].role}</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24 }}>
-            <button onClick={() => setTestimonialIndex(i => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)} aria-label="Previous testimonial" style={{ width: 44, height: 44, borderRadius: '50%', border: `1px solid ${border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMid }}>
-              <ChevronLeft size={18} />
+            <button type="button" onClick={() => setTestimonialIndex(i => (i - 1 + TESTIMONIALS.length) % TESTIMONIALS.length)} aria-label="Previous testimonial" className="cf-press" style={{ width: 44, height: 44, borderRadius: '50%', border: `1px solid ${border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: textMid }}>
+              <ChevronLeft size={18} aria-hidden="true" />
             </button>
-            <button onClick={() => setTestimonialIndex(i => (i + 1) % TESTIMONIALS.length)} aria-label="Next testimonial" style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: tealDeep, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              <ChevronRight size={18} />
+            <button type="button" onClick={() => setTestimonialIndex(i => (i + 1) % TESTIMONIALS.length)} aria-label="Next testimonial" className="cf-press" style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: tealDeep, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+              <ChevronRight size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -333,10 +324,8 @@ export default function ForBusiness() {
           <p className="cta-fade" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)', margin: '0 0 32px', lineHeight: 1.6 }}>
             Join thousands of patients using CareFind every day. Start your health journey today.
           </p>
-          <button className="cta-fade" onClick={() => navigate('/search')} style={{ padding: '16px 36px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'transform 0.2s ease, box-shadow 0.2s ease' }}
-            onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 16px 40px rgba(0,0,0,0.2)' }}
-            onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = 'none' }}>
-            Start searching <ArrowRight size={18} />
+          <button type="button" className="cta-fade cf-press" onClick={() => navigate('/search')} style={{ padding: '16px 36px', borderRadius: 60, border: 'none', background: '#fff', color: navy, fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            Start searching <ArrowRight size={18} aria-hidden="true" />
           </button>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import React from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { captureError } from '../lib/sentry'
 import { logger } from '../lib/logger'
+import { theme } from '../styles/theme'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -30,77 +32,72 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback(this.state.error, () => this.reset())
       }
 
-      // Default fallback UI
       return (
         <div style={{
-          padding: '20px',
-          margin: '20px',
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '8px',
-          color: '#c33',
+          maxWidth: 560, margin: '48px auto', padding: 32,
+          background: theme.cardBg, border: `1px solid ${theme.border}`,
+          borderRadius: theme.radius.xl, textAlign: 'center',
         }}>
-          <h2 style={{ margin: '0 0 10px 0', fontSize: '18px' }}>
-            Something went wrong here
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%', margin: '0 auto 16px',
+            background: theme.dangerBg, color: theme.danger,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AlertTriangle size={28} aria-hidden="true" />
+          </div>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 800, color: theme.navy, fontFamily: theme.fontDisplay }}>
+            Something went wrong
           </h2>
-          <p style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
-            {this.state.error?.message || 'An unexpected error occurred'}
+          <p style={{ margin: '0 0 6px 0', fontSize: 14, color: theme.textMid, lineHeight: 1.6 }}>
+            We hit an unexpected error. Your data is safe — try again or head back to the feed.
+          </p>
+          <p style={{ margin: '0 0 20px 0', fontSize: 12, color: theme.textLight }}>
+            {this.state.error?.message ? `“${this.state.error.message}”` : 'An unexpected error occurred.'}
           </p>
           {import.meta.env.DEV && this.state.error?.stack && (
-            <details style={{ marginTop: '10px' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '12px' }}>
-                Error Details (dev only)
+            <details style={{ textAlign: 'left', marginBottom: 20 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: theme.textMid }}>
+                Error details (dev only)
               </summary>
               <pre style={{
-                marginTop: '10px',
-                padding: '10px',
-                backgroundColor: '#fff',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '11px',
-                overflow: 'auto',
-                maxHeight: '300px',
+                marginTop: 8, padding: 12, background: theme.gray50,
+                border: `1px solid ${theme.border}`, borderRadius: theme.radius.md,
+                fontSize: 11, overflow: 'auto', maxHeight: 280, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
               }}>
                 {this.state.error.stack}
               </pre>
             </details>
           )}
-          <button
-            onClick={() => this.reset()}
-            style={{
-              marginTop: '10px',
-              padding: '8px 16px',
-              backgroundColor: '#c33',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            Try Again
-          </button>
-          <button
-            onClick={() => { window.location.href = '/feed' }}
-            style={{
-              marginTop: '10px',
-              marginLeft: '10px',
-              padding: '8px 16px',
-              backgroundColor: '#c33',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            Go to Feed
-          </button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => this.reset()}
+              className="cf-press"
+              style={{
+                minHeight: 44, padding: '10px 20px', background: theme.tealDeep, color: '#fff',
+                border: 'none', borderRadius: theme.radius.full, cursor: 'pointer',
+                fontSize: 14, fontWeight: 800,
+              }}
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/feed' }}
+              className="cf-press"
+              style={{
+                minHeight: 44, padding: '10px 20px', background: '#fff', color: theme.navy,
+                border: `1px solid ${theme.border}`, borderRadius: theme.radius.full, cursor: 'pointer',
+                fontSize: 14, fontWeight: 700,
+              }}
+            >
+              Go to feed
+            </button>
+          </div>
         </div>
       )
     }

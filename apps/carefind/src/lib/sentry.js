@@ -3,7 +3,7 @@ import * as Sentry from '@sentry/react'
 export function initSentry() {
   const dsn = import.meta.env.VITE_SENTRY_DSN
   if (!dsn) {
-    console.log('[Sentry] No DSN configured - error tracking disabled')
+    if (import.meta.env.DEV) console.log('[Sentry] No DSN configured - error tracking disabled')
     return
   }
 
@@ -30,7 +30,7 @@ export function initSentry() {
     },
   })
 
-  console.log('[Sentry] Initialized successfully')
+  if (import.meta.env.DEV) console.log('[Sentry] Initialized successfully')
 }
 
 export function captureError(error, context = {}) {

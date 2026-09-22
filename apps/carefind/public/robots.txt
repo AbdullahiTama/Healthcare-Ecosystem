@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://carefind.ng/sitemap.xml
+
+# Keep crawlers off private app surfaces — they require auth and carry no index value
+Disallow: /admin
+Disallow: /admin-panel
+Disallow: /business-dashboard
+Disallow: /professional-dashboard
+Disallow: /wallet
+Disallow: /notifications
+Disallow: /api/

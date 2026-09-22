@@ -1,3 +1,9 @@
+// Capture the verify-email link's auth params BEFORE the supabase client is
+// constructed: createClient() swallows the hash/PKCE code at boot, so this
+// side-effect import must evaluate ahead of every other local import
+// (including providers/AuthContext.jsx). ESM evaluates imports in source order.
+import './modules/account/verifyEmailParams'
+
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -52,6 +58,7 @@ const OrderList = lazy(() => import('./modules/shop/OrderList.jsx'))
 const Wishlist = lazy(() => import('./modules/shop/Wishlist.jsx'))
 const Addresses = lazy(() => import('./modules/account/Addresses.jsx'))
 const PublicTracking = lazy(() => import('./modules/shop/PublicTracking.jsx'))
+const NotFound = lazy(() => import('./modules/marketing/NotFound.jsx'))
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 const BusinessesHub = lazy(() => import('./modules/businesses-hub/BusinessesHub.jsx'))
@@ -67,8 +74,9 @@ const BusinessDirectoryPage = lazy(() => import('./modules/business-directory/Bu
 const BusinessDiscoveryPage = lazy(() => import('./modules/business-discovery/BusinessDiscoveryPage'))
 
 const Loading = () => (
-  <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <div className="cf-spinner" style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#0E6F5A', animation: 'cf-spin 0.7s linear infinite' }} />
+  <div role="status" aria-live="polite" aria-busy="true" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+    <div className="cf-spinner" style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #E7E4D9', borderTopColor: '#0E6F5A', animation: 'cf-spin 0.7s linear infinite' }} aria-hidden="true" />
+    <span style={{ fontSize: 13, fontWeight: 600, color: '#8B978F' }}>Loading…</span>
   </div>
 )
 
@@ -146,6 +154,8 @@ const RoutesWithKey = () => {
       <Route path="/orders/:orderId" element={<SuspenseWrapper><RequireAuth><OrderDetail /></RequireAuth></SuspenseWrapper>} />
       <Route path="/wishlist" element={<SuspenseWrapper><RequireAuth><Wishlist /></RequireAuth></SuspenseWrapper>} />
       <Route path="/account/addresses" element={<SuspenseWrapper><RequireAuth><Addresses /></RequireAuth></SuspenseWrapper>} />
+
+      <Route path="*" element={<SuspenseWrapper><NotFound /></SuspenseWrapper>} />
     </Routes>
   )
 }
