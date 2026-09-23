@@ -220,6 +220,15 @@ export default function AdminPanel() {
     pollFn: invalidateAdmin,
   })
 
+  useRealtimeChannel({
+    channelName: 'admin-news',
+    subscription: { schema: 'public', table: 'news', filter: 'status=eq.pending' },
+    onInsert: () => invalidateAdmin(),
+    onUpdate: () => invalidateAdmin(),
+    pollInterval: 30000,
+    pollFn: invalidateAdmin,
+  })
+
   useEffect(() => {
     const verifySession = async () => {
       try {

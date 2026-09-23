@@ -141,6 +141,7 @@ function Feed() {
   const [uploadingImage, setUploadingImage] = useState(false)
   const articleTextareaRef = useRef(null)
   const composerRef = useRef(null)
+  const storiesRef = useRef(null)
   const [highlightColor, setHighlightColor] = useState('#fde68a')
   const [reviewTarget, setReviewTarget] = useState(null) // { type: 'business'|'product', id, name }
   const [reviewSearch, setReviewSearch] = useState('')
@@ -928,7 +929,7 @@ function Feed() {
     { key: 'video',    Icon: Clapperboard,  label: 'Video',         run: () => startPost('video') },
     { key: 'visual',   Icon: Mic,           label: 'Voice card',    run: () => startPost('visual') },
     { key: 'article',  Icon: FileText,      label: 'Article',       run: () => startPost('article') },
-    { key: 'story',    Icon: BookOpen,      label: 'Story',         run: () => navigate('/profile') },
+    { key: 'story',    Icon: BookOpen,      label: 'Story',         run: () => storiesRef.current?.openComposer() },
     { key: 'series',   Icon: Film,          label: 'Series',        run: () => navigate('/playlist/create'), pro: true },
     { key: 'product',  Icon: ShoppingCart,  label: 'Sell a product', run: () => navigate('/profile'), pro: true },
     { key: 'live',     Icon: Radio,         label: 'Go live',       run: () => setShowGoLive(true), pro: true, danger: true },
@@ -1238,7 +1239,7 @@ function Feed() {
       </div>
 
       {/* Stories row */}
-      <Stories />
+  <Stories ref={storiesRef} />
 
       {/* News highlight strip: mobile only; on desktop this same latestNews
           data feeds RightSidebar's "Suggested articles" section instead. */}

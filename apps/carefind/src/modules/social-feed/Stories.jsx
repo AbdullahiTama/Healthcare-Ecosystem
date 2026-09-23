@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useImperativeHandle, forwardRef } from 'react'
 import { supabase } from '../../config/supabaseClient'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { useAuth } from '../../providers/AuthContext'
@@ -11,7 +11,7 @@ import { storyRepository } from './repositories/storyRepository'
 
 // CareFind Stories — platform story first, then verified users, then by views.
 // Users with a completed profile can post their own (text + image, 24h).
-function Stories() {
+function Stories(props, ref) {
   const { user } = useAuth()
   const [stories, setStories] = useState([])
   const [viewedIds, setViewedIds] = useState(() => new Set())
@@ -27,6 +27,10 @@ function Stories() {
   const [liveShow, setLiveShow] = useState(null)
   const [upcomingShow, setUpcomingShow] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+
+  useImperativeHandle(ref, () => ({
+    openComposer: () => setComposerOpen(true),
+  }))
 
   useEffect(() => {
     loadStories()
@@ -367,4 +371,4 @@ function timeAgo(dateStr) {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export default Stories
+export default forwardRef(Stories)

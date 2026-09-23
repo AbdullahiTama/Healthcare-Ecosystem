@@ -259,7 +259,9 @@ function NewsArticle() {
     )
   }
 
-  if (!article || article.status !== 'approved') {
+  // Allow article author to view their own pending/rejected submissions
+  const isAuthor = user && article && article.author_id === user.id
+  if (!article || (article.status !== 'approved' && !isAuthor)) {
     const notFoundContent = (
       <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -338,6 +340,13 @@ function NewsArticle() {
         {article.subtitle && (
           <p style={{ margin: '0 0 16px 0', fontSize: 17, color: theme.textMid, lineHeight: 1.45, fontStyle: 'italic' }}>
             {article.subtitle}
+          </p>
+        )}
+
+        {/* Status badge for author viewing own pending/rejected article */}
+        {isAuthor && article.status !== 'approved' && (
+          <p style={{ margin: '0 0 16px 0', padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800, display: 'inline-block', background: article.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: article.status === 'rejected' ? theme.danger : theme.amberText }}>
+            {article.status === 'rejected' ? 'Not approved' : 'Under review'}
           </p>
         )}
 

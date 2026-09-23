@@ -167,11 +167,13 @@ async function handleRequest(req, res) {
     const payload = verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id, userId, profession } = req.body
-    if (!id || !userId || !profession) return res.status(400).json({ error: 'id, userId and profession required' })
+    if (!id) return res.status(400).json({ error: 'id is required' })
+    if (!userId) return res.status(400).json({ error: 'userId is required' })
+    if (!profession || typeof profession !== 'string' || !profession.trim()) return res.status(400).json({ error: 'A non-empty profession string is required' })
     const { error: e1 } = await supabase.from('verification_requests').update({ status: 'approved' }).eq('id', id)
-    if (e1) return res.status(400).json({ error: e1.message })
-    const { error: e2 } = await supabase.from('profiles').update({ is_verified: true, verification_label: profession, specialty: profession }).eq('id', userId)
-    if (e2) return res.status(400).json({ error: e2.message })
+    if (e1) return res.status(400).json({ error: `Failed to update verification request: ${e1.message}` })
+    const { error: e2 } = await supabase.from('profiles').update({ is_verified: true, verification_label: profession.trim(), specialty: profession.trim() }).eq('id', userId)
+    if (e2) return res.status(400).json({ error: `Failed to update profile: ${e2.message}` })
     return res.status(200).json({ success: true })
   }
 
@@ -557,8 +559,14 @@ async function handleRequest(req, res) {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = verifyToken(token)
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
-    const { data } = await supabase.from('verification_requests').select('*').order('created_at', { ascending: false })
-    return res.status(200).json({ data: data || [] })
+    try {
+      const { data, error } = await supabase.from('verification_requests').select('*').order('created_at', { ascending: false })
+      if (error) return res.status(500).json({ error: `Failed to list verification requests: ${error.message}` })
+      return res.status(200).json({ data: data || [] })
+    } catch (err) {
+      console.error('[admin-auth] list_verification_requests:', err)
+      return res.status(500).json({ error: 'Internal server error while listing verification requests' })
+    }
   }
 
   if (action === 'list_reports') {

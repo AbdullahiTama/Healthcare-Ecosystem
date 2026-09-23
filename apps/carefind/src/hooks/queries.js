@@ -887,12 +887,12 @@ export function useAdminData(enabled = true) {
       const { contentRepository } = await import('../modules/admin/repositories/contentRepository')
       const { commerceRepository } = await import('../modules/admin/repositories/commerceRepository')
       const { callAdminAuth } = await import('../modules/admin/adminApi')
-      const token = adminToken()
+       const token = adminToken()
       const [postsData, usersData, , verifRes, claimsRes, reportsRes, txRes, tasksRes, teamsRes, bizRes, staffRes, withdrawRes, taskSubRes, consultRes, newsRes] = await Promise.all([
         contentRepository.getPosts({ limit: 50 }).catch(() => []),
         usersRepository.getUsers({ limit: 100 }).catch(() => []),
         usersRepository.getUsers({ limit: 1 }).then(() => 0).catch(() => 0),
-        callAdminAuth('list_verification_requests', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
+        callAdminAuth('list_verification_requests', { token }).then(r => ({ data: r.data })).catch((err) => { console.error('[useAdminData] list_verification_requests failed:', err); return { data: [] } }),
         callAdminAuth('list_business_claims', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
         callAdminAuth('list_reports', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
         callAdminAuth('list_transactions', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
@@ -902,7 +902,7 @@ export function useAdminData(enabled = true) {
         callAdminAuth('list_staff', { token }).then(r => ({ data: r.staff })).catch(() => ({ data: [] })),
         callAdminAuth('list_withdrawal_requests', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
         callAdminAuth('list_task_submissions', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
-        dashboardRepository.getProfessionalConsultations().then(data => ({ data })).catch(() => ({ data: [] })),
+        dashboardRepository.getProfessionalConsultations().then(data => ({ data })).catch((err) => { console.error('[useAdminData] getProfessionalConsultations failed:', err); return { data: [] } }),
         callAdminAuth('list_news', { token }).then(r => ({ data: r.data })).catch(() => ({ data: [] })),
       ])
 

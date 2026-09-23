@@ -232,17 +232,20 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
   async function addImage(ecommerceProductId, file, contentType) {
     if (!file) throw new Error('File is required')
     if (file.size === 0) throw new Error('Image is empty')
+    if (file.size > 5 * 1024 * 1024) throw new Error('Image must be ≤ 5MB')
     await assertApprovedByProductId(ecommerceProductId)
-    const normalizedType = contentType === 'image/jpg' ? 'image/jpeg' : contentType
-    const allowed = ['image/jpeg','image/png','image/webp','image/gif']
-    if (normalizedType && !allowed.includes(normalizedType)) throw new Error('Unsupported image format')
-    if (file.size && file.size > 5 * 1024 * 1024) throw new Error('Image must be ≤ 5MB')
+    // Determine MIME type reliably: use file extension as primary, file.type as fallback
+    const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'jpg').replace(/[^a-z0-9]/g, '') || 'jpg'
+    const extToMime = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' }
+    const mimeFromExt = extToMime[ext] || 'image/jpeg'
+    const normalizedType = extToMime[ext] || (contentType === 'image/jpg' ? 'image/jpeg' : contentType) || mimeFromExt
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowed.includes(normalizedType)) throw new Error('Unsupported image format')
     const existing = await getImages(ecommerceProductId)
     const nextPos = (existing?.length || 0)
-    const ext = (file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : 'jpg').replace(/[^a-z0-9]/g,'') || 'jpg'
-    const safeExt = ['jpg','jpeg','png','webp','gif'].includes(ext) ? ext : 'jpg'
-    const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random()*100000)}.${safeExt}`
-    const url = await up('ecommerce-images', path, file, normalizedType || 'image/jpeg', 'Image upload failed')
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg'
+    const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random() * 100000)}.${safeExt}`
+    const url = await up('ecommerce-images', path, file, normalizedType, 'Image upload failed')
     return request('ecommerce_product_images', {
       method: 'POST',
       body: JSON.stringify({ ecommerce_product_id: ecommerceProductId, url, position: nextPos }),
