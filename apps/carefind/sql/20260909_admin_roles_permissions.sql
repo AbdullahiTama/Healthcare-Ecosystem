@@ -43,18 +43,19 @@ CREATE TABLE IF NOT EXISTS admin_role_permissions (
 
 -- Seed default permissions for system roles.
 -- super_admin gets everything; other roles get their traditional sections.
-INSERT INTO admin_role_permissions (role_id, permissions)
-SELECT r.id, CASE r.name
-  WHEN 'super_admin' THEN '{"overview":true,"verifications":true,"claims":true,"reports":true,"users":true,"posts":true,"revenue":true,"drugs":true,"tasks":true,"teams":true,"withdrawals":true,"businesses":true,"stories":true,"news":true,"promotions":true,"searches":true,"golive":true,"notifications":true,"shop":true}'::jsonb
-  WHEN 'moderator' THEN '{"overview":true,"reports":true,"posts":true,"stories":true,"news":true,"notifications":true}'::jsonb
-  WHEN 'verification_officer' THEN '{"overview":true,"verifications":true,"notifications":true}'::jsonb
-  WHEN 'business_manager' THEN '{"overview":true,"claims":true,"businesses":true,"notifications":true}'::jsonb
-  WHEN 'support_agent' THEN '{"overview":true,"users":true,"notifications":true}'::jsonb
-  WHEN 'analytics_manager' THEN '{"overview":true,"revenue":true,"withdrawals":true,"searches":true,"businesses":true,"notifications":true}'::jsonb
-END
-FROM admin_roles r
-WHERE r.is_system = true
-ON CONFLICT (role_id) DO NOTHING;
+ INSERT INTO admin_role_permissions (role_id, permissions)
+ SELECT r.id, CASE r.name
+   WHEN 'super_admin' THEN '{"overview":true,"verifications":true,"claims":true,"reports":true,"users":true,"posts":true,"revenue":true,"drugs":true,"tasks":true,"teams":true,"withdrawals":true,"businesses":true,"stories":true,"news":true,"promotions":true,"searches":true,"golive":true,"notifications":true,"shop":true}'::jsonb
+   WHEN 'moderator' THEN '{"overview":true,"reports":true,"posts":true,"stories":true,"news":true,"notifications":true}'::jsonb
+   WHEN 'verification_officer' THEN '{"overview":true,"verifications":true,"notifications":true}'::jsonb
+   WHEN 'business_manager' THEN '{"overview":true,"claims":true,"businesses":true,"notifications":true}'::jsonb
+   WHEN 'support_agent' THEN '{"overview":true,"users":true,"notifications":true}'::jsonb
+   WHEN 'analytics_manager' THEN '{"overview":true,"revenue":true,"withdrawals":true,"searches":true,"businesses":true,"notifications":true}'::jsonb
+   ELSE '{}'::jsonb
+ END
+ FROM admin_roles r
+ WHERE r.is_system = true
+ ON CONFLICT (role_id) DO NOTHING;
 
 -- ============================================================================
 -- 3. Extend admin_users with role_id FK (nullable for backward compat)
