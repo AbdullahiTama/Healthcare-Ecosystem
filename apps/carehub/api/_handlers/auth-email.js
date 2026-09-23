@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       action,
       email,
       fullName: displayName,
-      redirectTo: redirectTo || 'https://carehub.ng',
+      redirectTo: redirectTo || process.env.APP_URL || 'https://carefindhub.com',
       app: 'carehub',
     })
     return res.status(200).json({ ok: true, sent: true })

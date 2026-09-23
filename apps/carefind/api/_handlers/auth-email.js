@@ -50,7 +50,7 @@ export default async function handler(req, res) {
       action,
       email,
       fullName: displayName,
-      redirectTo: redirectTo || 'https://carefind.app',
+      redirectTo: redirectTo || process.env.APP_URL || 'https://carefind.app',
       app: 'carefind',
     })
     return res.status(200).json({ ok: true, sent: true })

@@ -1,5 +1,5 @@
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@carehub.ng>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@mail.carefindhub.com>'
 const REPLY_TO = process.env.RESEND_REPLY_TO || FROM_EMAIL
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }

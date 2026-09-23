@@ -19,9 +19,16 @@ export function btnStyle() {
   return 'display:inline-block;background:#0E6F5A;color:#ffffff;font-weight:700;font-size:14px;text-decoration:none;border-radius:10px;padding:14px 32px;margin:8px 0;'
 }
 
+// Per-app brand identity for email headers. Logo images are served from each
+// app's public assets; PNG is used (not SVG) for maximum email-client support.
+export const APP_BRANDS = {
+  CareFind: { logoUrl: 'https://carefind.app/logo-wordmark.png' },
+  CareHub: { logoUrl: 'https://carefindhub.com/logo-wordmark.png' },
+}
+
 export function logoHeader(appName) {
-  const color = appName === 'CareFind' ? '#0E6F5A' : '#0E6F5A'
-  return `<div style="text-align:center;padding:24px 0 16px"><h1 style="margin:0;font-size:22px;font-weight:800;color:${color};letter-spacing:-0.5px">${esc(appName)}</h1></div>`
+  const brand = APP_BRANDS[appName] || APP_BRANDS.CareFind
+  return `<div style="text-align:center;padding:24px 0 16px"><img src="${brand.logoUrl}" alt="${esc(appName)} logo" width="44" height="50" style="display:block;margin:0 auto;width:44px;height:50px;object-fit:contain;border:0;outline:none;text-decoration:none"/><h1 style="margin:10px 0 0;font-size:20px;font-weight:800;color:#0E6F5A;letter-spacing:-0.5px">${esc(appName)}</h1></div>`
 }
 
 export function footer(appName, domain) {

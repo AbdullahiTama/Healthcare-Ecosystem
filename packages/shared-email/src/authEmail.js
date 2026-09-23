@@ -21,8 +21,16 @@ async function getAdminClient() {
 }
 
 const APP_BRANDING = {
-  carefind: { fromEmail: 'CareFind <support@mail.carefind.app>', defaultRedirect: 'https://carefind.app' },
-  carehub: { fromEmail: 'CareHub <support@mail.carefind.app>', defaultRedirect: 'https://carehub.ng' },
+  carefind: {
+    label: 'CareFind',
+    fromEmail: 'CareFind <support@mail.carefind.app>',
+    defaultRedirect: process.env.APP_URL || 'https://carefind.app',
+  },
+  carehub: {
+    label: 'CareHub',
+    fromEmail: 'CareHub <support@mail.carefindhub.com>',
+    defaultRedirect: process.env.APP_URL || 'https://carefindhub.com',
+  },
 }
 
 function renderDate(d) {
@@ -89,7 +97,7 @@ export async function sendAuthEmail({
       toEmail: toEmail,
       fromEmail: branding.fromEmail,
       payload: { fullName: displayName, email: toEmail },
-      subject: 'Welcome to CareFind!',
+      subject: `Welcome to ${branding.label}!`,
     })
   }
 

@@ -4,7 +4,7 @@
 
 let _createClient = null
 let _sendEmail = null
-let _TEMPLATE_REGISTRY = null
+let _templates = null
 
 async function deps() {
   if (!_createClient) {
@@ -15,11 +15,17 @@ async function deps() {
     const mod = await import('./sendEmail.js')
     _sendEmail = mod.sendEmail
   }
-  if (!_TEMPLATE_REGISTRY) {
-    const mod = await import('./templates/index.js')
-    _TEMPLATE_REGISTRY = mod.TEMPLATE_REGISTRY
+  if (!_templates) {
+    _templates = await import('./templates/index.js')
   }
-  return { createClient: _createClient, sendEmail: _sendEmail, TEMPLATE_REGISTRY: _TEMPLATE_REGISTRY }
+  return { createClient: _createClient, sendEmail: _sendEmail, getTemplate: _templates.getTemplate, TEMPLATE_REGISTRY: _templates.TEMPLATE_REGISTRY }
+}
+
+// Each app sends from its own brand identity. The outbox row's from_email
+// decides which app's template set renders it — both apps share one outbox
+// table, so the choice must be per-row, not per-process.
+export function resolveAppFromSender(fromEmail) {
+  return fromEmail && String(fromEmail).includes('CareHub') ? 'carehub' : 'carefind'
 }
 
 let _supabase = null
@@ -53,7 +59,7 @@ export class EmailService {
     const db = await this._getDb()
     const { data, error } = await db
       .from('email_outbox')
-      .insert({ to_email: toEmail, from_email: fromEmail || (process.env.RESEND_FROM_EMAIL || 'CareHub <support@carehub.ng>'), subject: subject || '', template_key: templateKey, payload: payload || {}, status: 'pending', next_retry_at: new Date().toISOString() })
+      .insert({ to_email: toEmail, from_email: fromEmail || (process.env.RESEND_FROM_EMAIL || 'CareHub <support@mail.carefindhub.com>'), subject: subject || '', template_key: templateKey, payload: payload || {}, status: 'pending', next_retry_at: new Date().toISOString() })
       .select().single()
     if (error) throw error
     await db.from('email_logs').insert({ outbox_id: data.id, event_type: 'enqueued', detail: `Queued template=${templateKey} to=${toEmail}` })
@@ -61,7 +67,7 @@ export class EmailService {
   }
 
   async processBatch() {
-    const { sendEmail, TEMPLATE_REGISTRY } = await deps()
+    const { sendEmail, getTemplate } = await deps()
     const db = await this._getDb()
     const now = new Date().toISOString()
     const { data: batch, error } = await db
@@ -72,7 +78,7 @@ export class EmailService {
     let sent = 0, failed = 0
     for (const row of batch) {
       try {
-        const templateFn = TEMPLATE_REGISTRY[row.template_key]
+        const templateFn = getTemplate(row.template_key, resolveAppFromSender(row.from_email))
         const html = templateFn ? templateFn(row.payload) : ''
         const result = await sendEmail({ to: row.to_email, subject: row.subject, html, from: row.from_email })
         if (result.success) { await this._markSent(row.id, result.data); sent++ }

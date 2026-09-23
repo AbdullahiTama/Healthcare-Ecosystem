@@ -32,16 +32,25 @@ const FIND_TEMPLATE_MAP = {
   bookingConfirmed: 'booking_confirmed',
 }
 
-// Build registry with snake_case keys, CareHub first then CareFind (Find overrides shared keys)
-export const TEMPLATE_REGISTRY = {
-  ...Object.fromEntries(Object.entries(HubTemplates).map(([name, fn]) => [HUB_TEMPLATE_MAP[name] || name, fn])),
-  ...Object.fromEntries(Object.entries(FindTemplates).map(([name, fn]) => [FIND_TEMPLATE_MAP[name] || name, fn])),
-}
+// Build per-app key tables so CareHub and CareFind each resolve their OWN
+// branded implementation for shared keys (password_reset, email_verification,
+// subscription_created, subscription_expiry, purchase_confirmed,
+// order_status_update, appointment_confirmed, ...).
+const HUB_BY_KEY = Object.fromEntries(Object.entries(HubTemplates).map(([name, fn]) => [HUB_TEMPLATE_MAP[name] || name, fn]))
+const FIND_BY_KEY = Object.fromEntries(Object.entries(FindTemplates).map(([name, fn]) => [FIND_TEMPLATE_MAP[name] || name, fn]))
+
+// Merged registry, CareFind preferred for shared keys — kept for preview /
+// listing tools where a single non-app-scoped view is needed.
+export const TEMPLATE_REGISTRY = { ...HUB_BY_KEY, ...FIND_BY_KEY }
 
 // Also export by original function names for backward compatibility
 export const CAREHUB_TEMPLATES = HubTemplates
 export const CAREFIND_TEMPLATES = FindTemplates
 
-export function getTemplate(templateKey) {
-  return TEMPLATE_REGISTRY[templateKey] || null
+// Resolve the template for a key and the app that enqueued it. An app-specific
+// implementation always wins; unknown keys fall back to the merged registry so
+// keys only one app defines still resolve.
+export function getTemplate(templateKey, app = 'carefind') {
+  const byKey = app === 'carehub' ? HUB_BY_KEY : FIND_BY_KEY
+  return byKey[templateKey] || TEMPLATE_REGISTRY[templateKey] || null
 }

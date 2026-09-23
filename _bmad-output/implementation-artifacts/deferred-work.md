@@ -317,3 +317,42 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-business-directory-phase1.md`
   summary: Client-side distance calculation in ResultsList.jsx inconsistent with server-computed distance_km.
   evidence: ResultsList.jsx:53 recalculates distance client-side using Haversine when the server already returns distance_km, creating potential inconsistency between displayed distance and sort order.
+
+## Deferred from: spec-auth-email-links-work review, iteration 4 (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Add a resend-verification-email action (or a clearer "or open the fresh link from your email" path) so users landing on the info/non-signup page with a recovery/magiclink token are not told to re-register.
+  evidence: Blind-hunter review (feedback iteration 4): non-verification link types render the info card whose copy implies the only path forward is a new signup; the refused-token UX was intentionally generic this iteration. Resend needs the server-side /api/auth-email pattern (already deferred iteration 1); copy-only polish acceptable later.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Revisit the info-state copy for delivery-failure verifications so an "open the link in your email" instruction is not shown for `send email failed` pages.
+  evidence: Blind-hunter review (feedback iteration 4): two distinct producers collapse into one info card; deferred as session-level UX, not verification-correctness.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Recorded as deeply-from-auth-js design: stripConsumedTokenFromUrl only ever strips on a genuinely `verified` outcome, because GoTrueClient strips the callback URL only after a successful exchange (`window.location.hash=''` on implicit success; `?code=` removal after PKCE success), and never on error. confirmed via GoTrueClient.js L3246-3330 during iteration-4 triage.
+  evidence: Blind-hunter findings #3 (consumed-form replay trusts a non-verified landing) and #4 (exact-string consumed-form equality is brittle to normalization differences) reviewed and accepted: the replay path is grounded in auth-js' strip-only-on-success contract and the to-string normalization matches the library's own URL writes.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Bound the StrictMode dev double-exchange of a single-use PKCE code at the side-effect level (arm an in-flight guard before the async exchange), or accept the double call as dev-only noise.
+  evidence: Blind-hunter review feedback iteration 4: the adjudication effect is not idempotent at the side-effect level; verdict replay hides the second failed exchange, but the second `exchangeCodeForSession` call still fires in dev. Prod (no StrictMode) unaffected.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Decide product behavior for "dead PKCE code + held login session": today the boot-consumed branch replays `verified` for any held session, which is a designed-but-ambiguous false-success for that exact combination.
+  evidence: Blind-hunter review feedback iteration 4: frozen I/O matrix row 3 authorizes already-verified + session -> verified; the dead-code + held-session combination cannot be disambiguated client-side; kept as designed, flagged for a product/spec decision.
+- source_spec: `_bmad-output/implementation-artifacts/spec-auth-email-links-work.md`
+  summary: Document the verify-email feature in module docs/README/CODE_AUDIT/CHANGELOG per the repo quality bar (outstanding documentation delta from this loop).
+  evidence: Blind-hunter review feedback iteration 4; must land when the loop terminates instead of shipping with the working-tree delta.
+
+## Cross-app email branding fix (2026-09-23)
+
+- summary: Fixed shared-email package so CareHub and CareFind each render their OWN branded templates (logo, footer domain, sender identity) across ALL transactional emails — not just auth flows.
+- changes:
+  - Brand-aware registry (`getTemplate(key, app)`) with per-app key tables; `EmailService.processBatch` resolves app from `from_email` (CareHub prefix → carehub, else carefind).
+  - CareHub `fromEmail` corrected from CareFind's mail domain to `CareHub <support@mail.carefindhub.com>`; defaults use `process.env.APP_URL`.
+  - Welcome subject per-app (`Welcome to CareHub!` / `Welcome to CareFind!`).
+  - Auth handlers' `redirectTo` default → `process.env.APP_URL`.
+  - Transactional email header now uses real `logo-wordmark.png` per app (icon + brand name).
+  - CareHub footer domain fixed `carehub.ng` → `carefindhub.com`; in-body `support@carehub.ng` → `support@mail.carefindhub.com`.
+  - `.env.example` files aligned to working `.env` sender/URL values; CareHub `.env` stale comment fixed.
+  - Shared-email fallback defaults updated to CareHub verified domain.
+- verification:
+  - 11 new shared-email vitest tests pass (registry brand resolution, rendered HTML brand checks, sender→app resolver).
+  - CareHub email tests 3/3 pass.
+  - CareFind full suite 97 files / 1168 tests pass.
+  - CareFind build clean.
