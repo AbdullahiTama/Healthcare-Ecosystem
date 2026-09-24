@@ -242,7 +242,7 @@ export function createEcommerceRepository({ request = sbFetch, upload = null } =
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
     if (!allowed.includes(normalizedType)) throw new Error('Unsupported image format')
     const existing = await getImages(ecommerceProductId)
-    const nextPos = (existing?.length || 0)
+    const nextPos = existing && existing.length > 0 ? Math.max(...existing.map(i => i.position ?? 0)) + 1 : 0
     const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg'
     const path = `ecommerce/${ecommerceProductId}/${Date.now()}-${Math.floor(Math.random() * 100000)}.${safeExt}`
     const url = await up('ecommerce-images', path, file, normalizedType, 'Image upload failed')

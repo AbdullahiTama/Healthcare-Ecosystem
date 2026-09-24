@@ -66,8 +66,12 @@ export async function sbFetch(path, options = {}) {
 
 // Shared by the three upload functions below — was previously triplicated
 // with the same hardcoded-anon-key header block each copy.
+function encodeStoragePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/')
+}
 export async function sbUpload(bucket, path, file, contentType, errorLabel) {
-  const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + encodeURIComponent(path), {
+  const encodedPath = encodeStoragePath(path)
+  const res = await fetch(SB_URL + '/storage/v1/object/' + bucket + '/' + encodedPath, {
     method: 'POST',
     headers: {
       'apikey': SB_KEY,
@@ -82,7 +86,7 @@ export async function sbUpload(bucket, path, file, contentType, errorLabel) {
     try { detail = JSON.parse(text).message || text } catch (e) {}
     throw new Error((errorLabel || 'Upload failed') + ' (' + res.status + '): ' + detail)
   }
-  return SB_URL + '/storage/v1/object/public/' + bucket + '/' + encodeURIComponent(path)
+  return SB_URL + '/storage/v1/object/public/' + bucket + '/' + encodedPath
 }
 
 // AUTH
