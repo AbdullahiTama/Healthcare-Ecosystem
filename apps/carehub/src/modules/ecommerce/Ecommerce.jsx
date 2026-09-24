@@ -36,6 +36,7 @@ export default function Ecommerce({ brand, role }) {
   const [ecomForm, setEcomForm] = useState({ description: '', category: '', ecommerce_price: '', prescription_required: false, warnings: '', restrictions: '', is_restricted: false })
   const [images, setImages] = useState([])
   const [savingProduct, setSavingProduct] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [activating, setActivating] = useState(false)
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
@@ -237,16 +238,20 @@ export default function Ecommerce({ brand, role }) {
 
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]
-    if (!file || !selected) return
+    if (!file || !selected) { if (e?.target) e.target.value = ''; return }
     if (app?.status !== 'Approved') { handleSetupBlocked(); e.target.value = ''; return }
+    // Immediate client feedback for common validation before network
+    if (file.size === 0) { showToast('Image is empty', { type: 'warning' }); e.target.value = ''; return }
+    if (file.size > 5 * 1024 * 1024) { showToast('Image must be ≤ 5MB', { type: 'warning' }); e.target.value = ''; return }
+    setUploadingImage(true)
     let ecom = selected.ecommerce
     if (!ecom) {
       try {
         await handleSaveProduct()
         ecom = await ecommerceRepository.getEcommerceProduct(brand.id, selected.product.id)
-        if (!ecom) { showToast('Save product info first', { type: 'warning' }); return }
+        if (!ecom) { showToast('Save product info first — fill description and category, then try again', { type: 'warning' }); e.target.value = ''; setUploadingImage(false); return }
         setSelected(prev => ({ ...prev, ecommerce: ecom }))
-      } catch (err) { showToast('Save product before uploading images', { type: 'warning' }); return }
+      } catch (err) { showToast(err.message || 'Save product before uploading images', { type: 'warning' }); e.target.value = ''; setUploadingImage(false); return }
     }
     try {
       await ecommerceRepository.addImage(ecom.id, file, file.type)
@@ -255,6 +260,7 @@ export default function Ecommerce({ brand, role }) {
       showToast('Image uploaded', { type: 'success' })
     } catch (err) { showToast(err.message || 'Upload failed', { type: 'error' }) }
     e.target.value = ''
+    setUploadingImage(false)
   }
 
   async function handleDeleteImage(id) {
@@ -665,11 +671,11 @@ export default function Ecommerce({ brand, role }) {
                     ))}
                   </div>
                 )}
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 8, border: `1px solid ${tealDeep}`, background: tealMist, color: tealDeep, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                  <Upload size={14} /> Add Image
-                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} aria-label="Upload product image" />
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 8, border: `1px solid ${tealDeep}`, background: uploadingImage ? bg : tealMist, color: tealDeep, fontWeight: 700, fontSize: 12, cursor: uploadingImage ? 'wait' : 'pointer', opacity: uploadingImage ? 0.6 : 1 }}>
+                  <Upload size={14} /> {uploadingImage ? 'Uploading…' : 'Add Image'}
+                  <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploadingImage} style={{ display: 'none' }} aria-label="Upload product image" />
                 </label>
-                <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>Supports JPEG/PNG/WebP/GIF, max 5MB, ordered set — you can reorder by drag (future) or delete and re-add.</div>
+                <div style={{ fontSize: 11, color: gray400, marginTop: 6 }}>{uploadingImage ? 'Uploading image, please wait…' : 'Supports JPEG/PNG/WebP/GIF, max 5MB, ordered set — you can reorder by drag (future) or delete and re-add.'}</div>
               </div>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
