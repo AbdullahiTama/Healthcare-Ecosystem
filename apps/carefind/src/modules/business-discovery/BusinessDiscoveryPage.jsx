@@ -5,7 +5,8 @@ import SearchBar from './components/SearchBar';
 import SearchFilters from './components/SearchFilters';
 import ResultsList from './components/ResultsList';
 import ResultsMap from './components/ResultsMap';
-import { useBusinessSearch, useLocation } from '../business-directory/hooks';
+import { useBusinessDiscovery } from './hooks';
+import { useLocation } from '../business-directory/hooks';
 
 export default function BusinessDiscoveryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,19 +28,19 @@ export default function BusinessDiscoveryPage() {
     page: searchParams.get('page') ? parseInt(searchParams.get('page')) : 1,
   }), [searchParams]);
 
-  // Search query
+  // Search query (spec 0001: radius clamps to 1..25 km, server caps at 200 rows)
   const {
     data: searchResults,
     isLoading,
     error,
-  } = useBusinessSearch({
+  } = useBusinessDiscovery({
     query: searchState.query,
     categoryId: searchState.category,
     state: searchState.state,
     lga: searchState.lga,
     latitude: searchState.latitude,
     longitude: searchState.longitude,
-    radiusKm: searchState.radius,
+    radiusKm: Math.min(Math.max(searchState.radius || 10, 1), 25),
     sortBy: searchState.sortBy,
     page: searchState.page,
     limit: 20,
@@ -152,6 +153,11 @@ export default function BusinessDiscoveryPage() {
         onLocationSearch={handleLocationSearch}
         hasLocation={hasLocation}
       />
+      <p style={styles.consentNotice}>
+        {hasLocation
+          ? 'Using your location to rank nearby results. Search never records a visit.'
+          : 'Location is optional. Your browser asks permission before sharing GPS.'}
+      </p>
 
       {/* Main Content */}
       <div style={styles.main}>
@@ -328,6 +334,11 @@ const styles = {
   resultCount: {
     fontSize: '14px',
     color: theme.gray600,
+  },
+  consentNotice: {
+    fontSize: '12px',
+    color: theme.gray500,
+    margin: '8px 0 0 0',
   },
   pagination: {
     display: 'flex',

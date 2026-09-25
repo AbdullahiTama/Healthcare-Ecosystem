@@ -41,7 +41,9 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
           *,
           category:business_categories(id, name, slug, icon, color),
           subcategory:business_subcategories(id, name, slug)
-        `, { count: 'exact' });
+        `, { count: 'exact' })
+        .eq('is_active', true)
+        .eq('is_demo', false);
 
       // Apply filters
       if (filters.search) {
@@ -151,7 +153,8 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
           category:business_categories(id, name, slug, icon, color),
           subcategory:business_subcategories(id, name, slug)
         `)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('is_demo', false);
 
       if (query) {
         searchQuery = searchQuery.or(`name.ilike.%${query}%,address.ilike.%${query}%,phone.ilike.%${query}%`);
@@ -181,16 +184,24 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
     },
 
     /**
-     * Search nearby businesses using PostGIS
+     * Search nearby businesses using PostGIS (spec 0001: meters, filters, paging).
+     * radiusM defaults to 5000 m and clamps to 25000 m server side.
      */
-    async searchNearby(latitude, longitude, radiusKm = 5, categoryId = null, limit = 20) {
+    async searchNearby(latitude, longitude, radiusM = 5000, filters = {}, pagination = { page: 1, limit: 50 }) {
+      const limit = Math.min(Math.max(pagination.limit || 50, 1), 200);
+      const page = Math.max(pagination.page || 1, 1);
       const { data, error } = await client
         .rpc('search_nearby_businesses', {
           p_latitude: latitude,
           p_longitude: longitude,
-          p_radius_km: radiusKm,
-          p_category_id: categoryId,
+          p_radius_m: Math.round(radiusM),
+          p_category_id: filters.category_id || null,
+          p_state: filters.state || null,
+          p_lga: filters.lga || null,
+          p_verification_status: filters.verification_status || null,
+          p_data_source: filters.data_source || null,
           p_limit: limit,
+          p_offset: (page - 1) * limit,
         });
 
       if (error) throw error;
@@ -209,17 +220,19 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
           subcategory:business_subcategories(id, name, slug)
         `)
         .eq('is_active', true)
+        .eq('is_demo', false)
         .eq('category_id', categoryId);
 
       if (location.latitude && location.longitude) {
-        // Use PostGIS for distance calculation
+        // Use PostGIS for distance calculation (meters, spec 0001)
         const { data, error } = await client
           .rpc('search_nearby_businesses', {
             p_latitude: location.latitude,
             p_longitude: location.longitude,
-            p_radius_km: radiusKm,
+            p_radius_m: Math.round(radiusKm * 1000),
             p_category_id: categoryId,
             p_limit: 50,
+            p_offset: 0,
           });
 
         if (error) throw error;
@@ -353,10 +366,15 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
     // =====================================================
 
     /**
-     * Verify a business
+     * Verify a business (spec 0001: admin only, audit logged).
+     * UI status vocabulary (verified/rejected/pending) maps to the
+     * verification table vocabulary (approved/rejected/pending).
      */
     async verifyBusiness(businessId, status, notes = null, evidenceUrl = null) {
       const { data: { user } } = await client.auth.getUser();
+      const rowStatus = status === 'verified' ? 'approved' : status;
+      const directoryStatus = status === 'approved' ? 'verified' : status;
+      const decided = status !== 'pending';
 
       // Create verification record
       const { data: verification, error: verificationError } = await client
@@ -364,10 +382,10 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
         .insert({
           business_id: businessId,
           verifier_id: user.id,
-          status,
+          status: rowStatus,
           notes,
           evidence_url: evidenceUrl,
-          verified_at: status !== 'pending' ? new Date().toISOString() : null,
+          verified_at: decided ? new Date().toISOString() : null,
         })
         .select()
         .single();
@@ -378,9 +396,9 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
       const { error: updateError } = await client
         .from('business_directory')
         .update({
-          verification_status: status,
-          verified_at: status !== 'pending' ? new Date().toISOString() : null,
-          verified_by: status !== 'pending' ? user.id : null,
+          verification_status: directoryStatus,
+          verified_at: decided ? new Date().toISOString() : null,
+          verified_by: decided ? user.id : null,
         })
         .eq('id', businessId);
 
@@ -390,15 +408,14 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
     },
 
     /**
-     * Get verification history for a business
+     * Get verification history for a business.
+     * Verifier identity resolves from verifier_id only: the admin
+     * roster table is service-role only and unreadable here.
      */
     async getVerificationHistory(businessId) {
       const { data, error } = await client
         .from('business_verification')
-        .select(`
-          *,
-          verifier:admin_users(id, full_name, email)
-        `)
+        .select('*')
         .eq('business_id', businessId)
         .order('created_at', { ascending: false });
 

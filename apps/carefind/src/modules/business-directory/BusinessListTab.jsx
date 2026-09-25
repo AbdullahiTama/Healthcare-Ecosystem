@@ -307,6 +307,10 @@ export default function BusinessListTab({
               setShowDetails(false);
               handleEdit(selectedBusiness);
             }}
+            onVerified={(updated) => {
+              setSelectedBusiness(updated);
+              refresh();
+            }}
             onClose={() => setShowDetails(false)}
           />
         )}

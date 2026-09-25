@@ -1,6 +1,8 @@
 -- CareFind Hub: Business Directory Tables
 -- Migration: carefind_20261001_business_directory_tables.sql
 -- Purpose: Create core business directory tables
+-- NOTE: carefind_20261002_directory_spec_gaps.sql (spec 0001) adds the
+-- is_demo flag plus state and category required constraints. Read both.
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS postgis;

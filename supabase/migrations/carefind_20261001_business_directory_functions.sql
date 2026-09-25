@@ -1,6 +1,10 @@
 -- CareFind Hub: Business Directory Functions
 -- Migration: carefind_20261001_business_directory_functions.sql
 -- Purpose: Create database functions and triggers
+-- SUPERSEDED IN PART by carefind_20261002_directory_spec_gaps.sql (spec 0001):
+-- search_nearby_businesses, get_business_stats, and find_duplicate_businesses
+-- now live in the meter based, demo excluding shape. Do not re apply the
+-- legacy kilometer shapes below; they are kept for history only.
 
 -- =====================================================
 -- Function: update_business_location()

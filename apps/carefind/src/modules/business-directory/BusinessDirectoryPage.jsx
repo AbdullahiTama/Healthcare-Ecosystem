@@ -84,7 +84,7 @@ export default function BusinessDirectoryPage() {
           <BusinessListTab
             searchHook={searchHook}
             categoriesHook={categoriesHook}
-            onEdit={() => {}}
+            onEdit={handleBusinessUpdated}
             onDelete={handleBusinessDeleted}
             onError={handleError}
           />

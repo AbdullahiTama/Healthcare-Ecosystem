@@ -30,14 +30,14 @@ export default function ResultsList({
     );
   }
 
-  // Empty state
+  // Empty state (spec 0001: honest empty, never invented)
   if (businesses.length === 0) {
     return (
       <div style={styles.emptyContainer}>
         <SearchIcon />
-        <h3 style={styles.emptyTitle}>No businesses found</h3>
+        <h3 style={styles.emptyTitle}>No verified result found</h3>
         <p style={styles.emptyText}>
-          Try adjusting your search or filters to find what you're looking for.
+          Try a larger radius, a named area, or different filters. Only verified directory rows appear here, and search never records a visit.
         </p>
       </div>
     );

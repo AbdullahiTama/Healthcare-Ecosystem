@@ -1,6 +1,10 @@
 -- CareFind Hub: Business Directory RLS Policies
 -- Migration: carefind_20261001_business_directory_rls.sql
 -- Purpose: Enable Row Level Security policies
+-- SUPERSEDED IN PART by carefind_20261002_directory_spec_gaps.sql (spec 0001):
+-- business_directory policies are now signed-in scoped read plus platform
+-- admin or CareFind admin writes, with logged-out readers denied. The
+-- public SELECT shapes below are kept for history only.
 
 -- =====================================================
 -- Business Directory RLS

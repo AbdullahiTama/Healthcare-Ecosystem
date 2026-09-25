@@ -49,8 +49,8 @@ export function useBusinessSearch() {
         const data = await businessDirectoryRepository.searchNearby(
           latitude,
           longitude,
-          radiusKm,
-          categoryId
+          Math.round(radiusKm * 1000),
+          categoryId ? { category_id: categoryId } : {}
         );
         setResults(data);
       } catch (err) {

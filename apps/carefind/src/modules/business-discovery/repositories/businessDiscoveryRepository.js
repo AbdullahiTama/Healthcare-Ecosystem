@@ -12,17 +12,23 @@ export const businessDiscoveryRepository = {
     latitude,
     longitude,
     radiusKm = 10,
+    verificationStatus = null,
+    dataSource = null,
     sortBy = 'relevance',
     page = 1,
     limit = 20,
   }) {
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+    const safePage = Math.max(page, 1);
     let queryBuilder = supabase
       .from('business_directory')
       .select(`
         *,
         category:business_categories(id, name, slug, icon),
         subcategory:business_subcategories(id, name, slug)
-      `, { count: 'exact' });
+      `, { count: 'exact' })
+      .eq('is_active', true)
+      .eq('is_demo', false);
 
     // Text search
     if (query) {
@@ -44,16 +50,21 @@ export const businessDiscoveryRepository = {
       queryBuilder = queryBuilder.eq('lga', lga);
     }
 
-    // Location-based search
+    // Location-based search (spec 0001: meters, filters, paging)
     if (latitude && longitude) {
       // Use PostGIS function for distance calculation
       const { data: nearbyData, error: nearbyError } = await supabase
         .rpc('search_nearby_businesses', {
           p_latitude: latitude,
           p_longitude: longitude,
-          p_radius_km: radiusKm,
-          p_category_id: categoryId,
-          p_limit: limit,
+          p_radius_m: Math.round(Math.min(Math.max(radiusKm, 1), 25) * 1000),
+          p_category_id: categoryId || null,
+          p_state: state || null,
+          p_lga: lga || null,
+          p_verification_status: verificationStatus,
+          p_data_source: dataSource,
+          p_limit: safeLimit,
+          p_offset: (safePage - 1) * safeLimit,
         });
 
       if (nearbyError) throw nearbyError;
@@ -62,14 +73,15 @@ export const businessDiscoveryRepository = {
       const mapped = (nearbyData || []).map((row) => ({
         ...row,
         category: row.category_name ? { name: row.category_name } : null,
+        distance_m: row.distance_m,
       }));
 
       return {
         data: mapped,
         total: mapped.length,
-        page,
-        limit,
-        totalPages: Math.ceil(mapped.length / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(mapped.length / safeLimit),
       };
     }
 
@@ -102,8 +114,8 @@ export const businessDiscoveryRepository = {
     }
 
     // Pagination
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    const from = (safePage - 1) * safeLimit;
+    const to = from + safeLimit - 1;
     queryBuilder = queryBuilder.range(from, to);
 
     const { data, error, count } = await queryBuilder;
@@ -113,9 +125,9 @@ export const businessDiscoveryRepository = {
     return {
       data: data || [],
       total: count || 0,
-      page,
-      limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil((count || 0) / safeLimit),
     };
   },
 
@@ -173,6 +185,8 @@ export const businessDiscoveryRepository = {
         *,
         category:business_categories(id, name, slug, icon)
       `)
+      .eq('is_active', true)
+      .eq('is_demo', false)
       .eq('category_id', categoryId)
       .neq('id', businessId)
       .limit(limit);

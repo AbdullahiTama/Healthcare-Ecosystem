@@ -13,9 +13,15 @@ import { geocodeAddress } from './locationService.js';
  */
 
 /**
- * Required fields for import
+ * Required fields for import (spec 0001: name plus category plus state).
+ * Other fields stay free text optional in this slice.
  */
-const REQUIRED_FIELDS = ['name', 'category'];
+const REQUIRED_FIELDS = ['name', 'category', 'state'];
+
+/**
+ * Maximum rows per import file (spec 0001: 1000 row cap, batches of 100).
+ */
+export const MAX_IMPORT_ROWS = 1000;
 
 /**
  * Valid category names (will be matched case-insensitively)
@@ -254,6 +260,24 @@ export async function validateBatch(records) {
   const allErrors = [];
   const validRecords = [];
 
+  if (records.length > MAX_IMPORT_ROWS) {
+    return {
+      valid: [],
+      errors: [
+        {
+          type: 'required',
+          field: null,
+          message: `File holds ${records.length} rows, above the ${MAX_IMPORT_ROWS} row cap. Split it and upload again.`,
+          rowNumber: null,
+        },
+      ],
+      totalRecords: records.length,
+      validCount: 0,
+      errorCount: 1,
+      overCap: true,
+    };
+  }
+
   records.forEach((record, index) => {
     const rowNumber = index + 2; // +2 because row 1 is header
     const errors = validateRecord(record, rowNumber);
@@ -271,6 +295,7 @@ export async function validateBatch(records) {
     totalRecords: records.length,
     validCount: validRecords.length,
     errorCount: allErrors.length,
+    overCap: false,
   };
 }
 

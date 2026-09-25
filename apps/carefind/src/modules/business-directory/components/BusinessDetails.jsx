@@ -1,8 +1,49 @@
+import { useState, useEffect } from 'react';
 import { theme } from '../../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import VerificationBadge from './VerificationBadge';
+import { businessDirectoryRepository } from '../repositories/businessDirectoryRepository';
 
-export default function BusinessDetails({ business, onEdit, onClose }) {
+export default function BusinessDetails({ business, onEdit, onClose, onVerified }) {
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [verifying, setVerifying] = useState(null);
+  const [verifyError, setVerifyError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHistory() {
+      if (!business?.id) return;
+      setHistoryLoading(true);
+      try {
+        const rows = await businessDirectoryRepository.getVerificationHistory(business.id);
+        if (!cancelled) setHistory(rows || []);
+      } catch {
+        if (!cancelled) setHistory([]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [business?.id]);
+
+  const handleVerify = async (status) => {
+    setVerifying(status);
+    setVerifyError(null);
+    try {
+      await businessDirectoryRepository.verifyBusiness(business.id, status);
+      const rows = await businessDirectoryRepository.getVerificationHistory(business.id);
+      setHistory(rows || []);
+      if (onVerified) onVerified({ ...business, verification_status: status });
+    } catch (err) {
+      setVerifyError(err.message);
+    } finally {
+      setVerifying(null);
+    }
+  };
   const handleCall = () => {
     if (business.phone) {
       window.open(`tel:${business.phone}`, '_self');
@@ -126,6 +167,47 @@ export default function BusinessDetails({ business, onEdit, onClose }) {
             <CalendarIcon />
             <span>Added: {new Date(business.created_at).toLocaleDateString()}</span>
           </div>
+        )}
+      </div>
+
+      {/* Verification (spec 0001: admin verify plus audit trail) */}
+      <div style={styles.section}>
+        <h3 style={styles.sectionTitle}>Verification</h3>
+        <div style={styles.verifyRow}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleVerify('verified')}
+            disabled={!!verifying || business.verification_status === 'verified'}
+            loading={verifying === 'verified'}
+          >
+            Verify
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleVerify('rejected')}
+            disabled={!!verifying || business.verification_status === 'rejected'}
+            loading={verifying === 'rejected'}
+          >
+            Reject
+          </Button>
+        </div>
+        {verifyError && <p style={styles.verifyError}>{verifyError}</p>}
+        {historyLoading ? (
+          <p style={styles.historyHint}>Loading verification history...</p>
+        ) : history.length === 0 ? (
+          <p style={styles.historyHint}>No verification history yet.</p>
+        ) : (
+          history.map((entry) => (
+            <div key={entry.id} style={styles.historyRow}>
+              <span style={styles.historyStatus}>{entry.status}</span>
+              <span style={styles.historyMeta}>
+                {entry.verified_at ? new Date(entry.verified_at).toLocaleDateString() : ''}
+                {entry.notes ? ` - ${entry.notes}` : ''}
+              </span>
+            </div>
+          ))
         )}
       </div>
 
@@ -343,5 +425,33 @@ const styles = {
     gap: '8px',
     paddingTop: '16px',
     borderTop: `1px solid ${theme.gray200}`,
+  },
+  verifyRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  verifyError: {
+    fontSize: '13px',
+    color: theme.danger || '#ef4444',
+    margin: 0,
+  },
+  historyHint: {
+    fontSize: '13px',
+    color: theme.gray500,
+    margin: 0,
+  },
+  historyRow: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'baseline',
+    fontSize: '13px',
+  },
+  historyStatus: {
+    fontWeight: '600',
+    color: theme.gray900,
+    textTransform: 'capitalize',
+  },
+  historyMeta: {
+    color: theme.gray500,
   },
 };
