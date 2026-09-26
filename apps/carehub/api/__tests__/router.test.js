@@ -25,17 +25,21 @@
 // out of the function count.
 import { describe, it, expect, beforeAll } from 'vitest'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function jsFilesIn(dir) {
   const out = []
   for (const entry of readdirSync(dir)) {
+    // Test files are excluded from the scan below. Otherwise this file would
+    // scan itself and flag the template literal in the child-process test.
+    if (entry === '__tests__') continue
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) out.push(...jsFilesIn(full))
-    else if (entry.endsWith('.js')) out.push(full)
+    else if (entry.endsWith('.js') && !entry.endsWith('.test.js')) out.push(full)
   }
   return out
 }
@@ -140,6 +144,43 @@ describe('router dispatch', () => {
         expect(res.body.error).not.toMatch(/Cannot find module/)
       }
     }
+  })
+})
+
+describe('router import safety', () => {
+  // The failure that shipped: src/lib/emailService.js imported getEmailService
+  // from @care-ecosystem/shared-email, which did not export it. Vitest's SSR
+  // transform downgraded that to a soft runtime TypeError, but real Node ESM
+  // raises a hard error at load -- and because the router imports handlers
+  // statically, every route died with FUNCTION_INVOCATION_FAILED.
+  //
+  // This must run in a child process: the suite above sets process.env, and
+  // the module cache is already warm, so an in-process import would pass even
+  // while production stays broken.
+  //
+  // Stub Supabase values are supplied because 11 handlers construct a client at
+  // module scope and createClient throws without them. That is a known
+  // fragility, not what this test guards: with a malformed or missing export the
+  // import fails regardless of env.
+  it('imports in a bare child process, with no inherited env', () => {
+    // pathToFileURL, not the raw path: on Windows a bare "C:\..." specifier is
+    // rejected with ERR_UNSUPPORTED_ESM_URL_SCHEME.
+    const routerUrl = pathToFileURL(join(API_DIR, 'router.js')).href
+    const script = `await import(${JSON.stringify(routerUrl)}); console.log('IMPORT_OK')`
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      // Only the two vars the module-scope clients need. Nothing is inherited,
+      // so a stray local .env cannot mask a broken import.
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        SUPABASE_URL: 'http://127.0.0.1:54321',
+        SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+      },
+      cwd: resolve(API_DIR, '..', '..'),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    expect(out).toContain('IMPORT_OK')
   })
 })
 

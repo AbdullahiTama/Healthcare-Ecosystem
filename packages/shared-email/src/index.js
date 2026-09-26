@@ -1,6 +1,12 @@
 import { sendEmail } from './sendEmail.js'
 export { sendEmail } from './sendEmail.js'
-export { EmailService } from './EmailService.js'
+// getEmailService is part of the public surface: apps/carehub/src/lib/emailService.js
+// imports it to build a lazy singleton. It was missing here, so that import
+// threw "does not provide an export named 'getEmailService'" at module load.
+// Because the CareHub router now imports handlers statically, a throw in any
+// transitive import takes down every route, so a missing export here is a
+// full-API outage rather than a local one.
+export { EmailService, getEmailService } from './EmailService.js'
 export { sendAuthEmail } from './authEmail.js'
 export * from './templates/index.js'
 export { renderEmailTemplate, generateSampleVariables } from './templates/Marketing/templateRenderer.js'
