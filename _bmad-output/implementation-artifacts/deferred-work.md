@@ -356,3 +356,18 @@
   - CareHub email tests 3/3 pass.
   - CareFind full suite 97 files / 1168 tests pass.
   - CareFind build clean.
+
+## Deferred from: spec-carefind-hobby-cron-compliance (2026-09-26)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-hobby-cron-compliance.md`
+  summary: Move the email outbox drain onto the Supabase Cron minute worker and remove the Vercel `crons` entries from both apps.
+  evidence: Vercel Hobby caps a deployment at two crons and allows only once-daily schedules, so this spec returned the CareFind drain from `*/5 * * * *` to `0 2 * * *`. The residual is retry latency: a row that already failed a transient provider error waits for the next daily drain. Commit 95ca162 reached for that latency by re-scheduling and broke the build instead. `docs/specs/_root/0001-reliable-email-system/0001-delivery-foundation.md` already specifies the real fix — `claim_email_batch` with `SELECT ... FOR UPDATE SKIP LOCKED` and a claim token, driven by Supabase `pg_cron` at `* * * * *` (exempt from Vercel plan limits), after which the Vercel cron entries are removed — and that spec is approved but unbuilt.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-hobby-cron-compliance.md`
+  summary: Reconcile the three documents that state the outbox and expiry cron schedules, two of which now contradict `apps/carefind/vercel.json` and each other.
+  evidence: Surfaced by the review round, not caused by this change. `docs/PAYMENTS_DEPLOYMENT_CHECKLIST.md:43` documents the outbox drain as `*/min` and the expiry scan as `08:00 daily`; `planning/CODE_AUDIT.md:215-216` records `apps/carehub/api/cron/process-email-outbox.js` as calling `processBatch()` "every minute" and `apps/carehub/vercel.json` as configured at `* * * * *`, while that file is actually `0 0 * * *`. Neither value was accurate before this change either, and `apps/carefind/DEPLOYMENT.md` is now the authoritative statement, so the drift is silent in both directions. The cron guard reads only `vercel.json`, never these documents, so it cannot observe it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-carefind-hobby-cron-compliance.md`
+  summary: Make the two cron endpoints fail closed instead of serving unauthenticated callers when `CRON_SECRET` is unset, and assert that the declared cron paths resolve to real handlers in the router.
+  evidence: Pre-existing and explicitly out of scope for this change. `apps/carefind/api/cron/process-email-outbox.js:12` and `apps/carefind/api/cron/check-subscription-expiry.js:19` both read `if (token && process.env.CRON_SECRET)`, so with the variable unset — a preview deploy, a typo'd name, a fork — the endpoints are publicly callable, and the second one enqueues real subscription-expiry email to business owners. `apps/carefind/.env.example:36` ships a literal placeholder, so a verbatim deploy publishes the secret. Separately, the cron guard checks schedule shape only: a typo'd or trailing-slash `path` would pass every assertion and 404 at runtime against the `ROUTES` map in `apps/carefind/api/router.js:48`.
+

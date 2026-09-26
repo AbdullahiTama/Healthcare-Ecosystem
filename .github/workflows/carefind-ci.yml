@@ -4,16 +4,23 @@ name: CareFind CI
 # PR merge with a failing test or build. Lint can be layered on once a lint
 # config exists; test + build is the gate that closes the real risk today.
 
+# apps/carehub/vercel.json is included because src/lib/vercel-cron-hobby-limit.test.js
+# asserts the Vercel Hobby cron contract for every vercel.json in the repo, and
+# this is the only job that runs it. Without this path a sub-daily schedule or a
+# third cron could merge into CareHub's config with the guard never executing.
+
 on:
   push:
     branches: [main]
     paths:
       - 'apps/carefind/**'
+      - 'apps/carehub/vercel.json'
       - 'packages/**'
       - '.github/workflows/carefind-ci.yml'
   pull_request:
     paths:
       - 'apps/carefind/**'
+      - 'apps/carehub/vercel.json'
       - 'packages/**'
       - '.github/workflows/carefind-ci.yml'
 
