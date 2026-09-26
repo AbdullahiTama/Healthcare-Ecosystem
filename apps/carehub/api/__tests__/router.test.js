@@ -23,11 +23,25 @@
 // function slots and pull vitest (a devDependency) into a production bundle.
 // The underscore prefix excludes the directory, matching how _handlers/ is kept
 // out of the function count.
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+// The cron handler calls EmailService.processBatch(), which queries the outbox.
+// Left real, that is a live network call: an earlier beforeAll in this file sets
+// SUPABASE_URL process-wide, so the cron test inherited a dead address and blew
+// the 5s timeout whenever the connection did not fail fast. These tests assert
+// method and auth handling, not delivery, so the service is stubbed to make them
+// deterministic and instant.
+vi.mock('@care-ecosystem/shared-email', () => ({
+  EmailService: class {
+    async processBatch() { return { processed: 0, sent: 0, failed: 0 } }
+  },
+  getEmailService: () => ({ processBatch: async () => ({ processed: 0, sent: 0, failed: 0 }) }),
+  sendEmail: async () => ({ success: true, data: { id: 'stub' } }),
+}))
 
 const API_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -157,11 +171,6 @@ describe('router import safety', () => {
   // This must run in a child process: the suite above sets process.env, and
   // the module cache is already warm, so an in-process import would pass even
   // while production stays broken.
-  //
-  // Stub Supabase values are supplied because 11 handlers construct a client at
-  // module scope and createClient throws without them. That is a known
-  // fragility, not what this test guards: with a malformed or missing export the
-  // import fails regardless of env.
   it('imports in a bare child process, with no inherited env', () => {
     // pathToFileURL, not the raw path: on Windows a bare "C:\..." specifier is
     // rejected with ERR_UNSUPPORTED_ESM_URL_SCHEME.
@@ -169,14 +178,12 @@ describe('router import safety', () => {
     const script = `await import(${JSON.stringify(routerUrl)}); console.log('IMPORT_OK')`
     const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
       encoding: 'utf8',
-      // Only the two vars the module-scope clients need. Nothing is inherited,
-      // so a stray local .env cannot mask a broken import.
-      env: {
-        PATH: process.env.PATH,
-        SystemRoot: process.env.SystemRoot,
-        SUPABASE_URL: 'http://127.0.0.1:54321',
-        SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
-      },
+      // Nothing inherited, deliberately including SUPABASE_URL and
+      // SUPABASE_SERVICE_ROLE_KEY. Importing the router must not require a
+      // configured database: handlers obtain their client from _lib/supabase.js
+      // on first use. A module-scope createClient anywhere in the tree fails
+      // this test and takes all 15 routes down with it in production.
+      env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot },
       cwd: resolve(API_DIR, '..', '..'),
       stdio: ['ignore', 'pipe', 'pipe'],
     })

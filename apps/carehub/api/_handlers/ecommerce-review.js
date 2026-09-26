@@ -1,12 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { supabase } from '../_lib/supabase.js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
-// Admin review for ecommerce applications — Approve/Reject/Suspended
+// Admin review for ecommerce applications â€” Approve/Reject/Suspended
 // Service-role only: caller must be platform admin (is_platform_admin()).
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

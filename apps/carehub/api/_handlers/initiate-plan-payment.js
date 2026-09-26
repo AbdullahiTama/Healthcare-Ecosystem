@@ -1,13 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA } from '../../src/lib/planLimits.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -17,7 +12,7 @@ export default async function handler(req, res) {
 
   const { months, callback_url } = req.body
   // Only whole-month or the landing page's "pay 10 months, get 12" annual
-  // option — anything else would need a price the client can't be trusted
+  // option â€” anything else would need a price the client can't be trusted
   // to state itself.
   if ((months !== 1 && months !== 12) || !callback_url) {
     return res.status(400).json({ error: 'Invalid request' })
@@ -26,8 +21,8 @@ export default async function handler(req, res) {
   const yearlyPrice = PLAN_YEARLY_NAIRA[business.plan]
   const monthlyPrice = PLAN_MONTHLY_NAIRA[business.plan]
   if (yearlyPrice === null || yearlyPrice === undefined) {
-    // Custom or unknown — no fixed Paystack price
-    return res.status(400).json({ error: 'Custom plan — contact support@carehub.ng for a tailored quote' })
+    // Custom or unknown â€” no fixed Paystack price
+    return res.status(400).json({ error: 'Custom plan â€” contact support@carehub.ng for a tailored quote' })
   }
   if (!monthlyPrice || !yearlyPrice) return res.status(400).json({ error: 'Unknown plan' })
 

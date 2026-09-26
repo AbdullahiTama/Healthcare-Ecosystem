@@ -1,11 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { supabase } from '../_lib/supabase.js'
 import { paystackFetch } from '../_lib/paystack.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -49,7 +44,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: settleResult || 'Could not settle payment' })
   }
 
-  // Only notify on a fresh settlement — the webhook also notifies on 'ok',
+  // Only notify on a fresh settlement â€” the webhook also notifies on 'ok',
   // so this prevents duplicate staff_notifications when the webhook settles
   // first and the redirect path runs afterward.
   if (settleResult === 'ok') {
@@ -58,17 +53,17 @@ export default async function handler(req, res) {
       staff_id: null,
       is_owner: true,
       kind: 'booking_paid',
-      title: `Payment received — ${appt.client_name}`,
-      body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
+      title: `Payment received â€” ${appt.client_name}`,
+      body: `${appt.date} at ${appt.time} â€” â‚¦${(appt.fee_amount / 100).toLocaleString()}`,
       link: '/dashboard/appointments',
       read_at: null,
     })
   }
 
-  // Appointment confirmation email to the client — enqueue + flush.
+  // Appointment confirmation email to the client â€” enqueue + flush.
   // Only sent on a fresh settlement ('ok'); on 'already_paid' the webhook
   // (or an earlier redirect) already sent it, so emailing again would be a
-  // duplicate — same first-settler-wins invariant as the webhook.
+  // duplicate â€” same first-settler-wins invariant as the webhook.
   if (settleResult === 'ok') {
     try {
       let clientEmail = appt.client_email

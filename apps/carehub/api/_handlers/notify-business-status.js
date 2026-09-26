@@ -1,7 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { emailService } from '../../src/lib/emailService.js'
-
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+import { supabase } from '../_lib/supabase.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -30,10 +28,10 @@ export default async function handler(req, res) {
   if (!ownerEmail) return res.status(200).json({ ok: true, warning: 'No owner email, skipped send' })
 
   const subjectMap = {
-    active: `🎉 Welcome to CareHub — ${target.name} is Approved!`,
-    rejected: `CareHub — Application Status for ${target.name}`,
-    suspended: `CareHub — Account Suspended: ${target.name}`,
-    pending: `CareHub — Update on ${target.name} (Action Required)`,
+    active: `ðŸŽ‰ Welcome to CareHub â€” ${target.name} is Approved!`,
+    rejected: `CareHub â€” Application Status for ${target.name}`,
+    suspended: `CareHub â€” Account Suspended: ${target.name}`,
+    pending: `CareHub â€” Update on ${target.name} (Action Required)`,
   }
 
   const templateKey =
@@ -43,7 +41,7 @@ export default async function handler(req, res) {
         ? 'business_rejected'
         : status === 'suspended'
           ? 'business_suspended'
-          : 'business_status_update' // pending → generic status update
+          : 'business_status_update' // pending â†’ generic status update
 
   try {
     await emailService.enqueue({

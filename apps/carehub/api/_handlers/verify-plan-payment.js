@@ -1,15 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { supabase } from '../_lib/supabase.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { computeCommission } from '../_lib/commissions.js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
 // Called when the business owner is redirected back from Paystack. Asks
-// Paystack directly whether the charge succeeded before extending anything —
+// Paystack directly whether the charge succeeded before extending anything â€”
 // nothing here is trusted from the client except which reference to look
 // up, same principle as CareFind's api/verify-payment.js.
 export default async function handler(req, res) {
@@ -87,7 +82,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Subscription created email (templated, via outbox) — enqueue + flush.
+  // Subscription created email (templated, via outbox) â€” enqueue + flush.
   try {
     const { data: biz } = await supabase
       .from('businesses')

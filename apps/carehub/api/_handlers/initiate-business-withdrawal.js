@@ -1,11 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from '../_lib/paystackTransfer.js'
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // Business wallet withdrawal (ADR-005). Mirrors CareFind's initiate-withdrawal
 // flow: bank details are submitted at withdrawal time, request_business_withdrawal
@@ -40,14 +35,14 @@ export default async function handler(req, res) {
   try {
     const available = await checkBalance()
     if (available < amountKobo) {
-      return res.status(503).json({ error: 'Payment provider balance low — try again later' })
+      return res.status(503).json({ error: 'Payment provider balance low â€” try again later' })
     }
   } catch (err) {
     return res.status(502).json({ error: 'Could not check payment provider balance' })
   }
 
   // Reuse a previous attempt's reference if a pending/processing request never
-  // got its transfer code attached (crash window) — Paystack dedupes by reference,
+  // got its transfer code attached (crash window) â€” Paystack dedupes by reference,
   // so re-initiating the same transfer can't double-pay.
   const { data: prior } = await supabase
     .from('business_withdrawal_requests')
@@ -92,7 +87,7 @@ export default async function handler(req, res) {
     const { transferCode } = await initiateTransfer({
       recipientCode,
       amountKobo,
-      reason: `CareHub business withdrawal: ₦${(amountKobo / 100).toLocaleString()}`,
+      reason: `CareHub business withdrawal: â‚¦${(amountKobo / 100).toLocaleString()}`,
       reference,
     })
 
