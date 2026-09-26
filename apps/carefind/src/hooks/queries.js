@@ -60,7 +60,7 @@ export function useProfile(userId) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, display_name, is_verified, verification_label, location, website, avatar_url, cover_url, subscription_price, bio, show_followers, phone, email, specialty, country')
+        .select('id, full_name, display_name, is_verified, verification_label, location, website, avatar_url, cover_url, subscription_price, bio, show_followers, phone, specialty, country')
         .eq('id', userId)
         .maybeSingle()
       if (error) throw error
