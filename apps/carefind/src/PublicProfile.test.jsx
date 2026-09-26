@@ -29,6 +29,8 @@ const h = vi.hoisted(() => {
 vi.mock('./config/supabaseClient', () => ({ supabase: h.ctrl }))
 const queryState = vi.hoisted(() => ({
   profile: null,
+  profileError: null,
+  refetchProfile: vi.fn(),
   posts: [],
   reviews: { reviews: [], reviewers: {} },
   stories: [],
@@ -40,7 +42,12 @@ vi.mock('./hooks/queries', () => ({
     followerCount: (userId) => ['profile', 'followers', userId],
     followingCount: (userId) => ['profile', 'following', userId],
   },
-  useProfile: () => ({ data: queryState.profile, isLoading: false }),
+  useProfile: () => ({
+    data: queryState.profile,
+    isLoading: false,
+    error: queryState.profileError,
+    refetch: queryState.refetchProfile,
+  }),
   useProfilePosts: () => ({ data: queryState.posts }),
   useProfileReviews: () => ({ data: queryState.reviews }),
   useProfileStories: () => ({ data: queryState.stories }),
@@ -96,8 +103,8 @@ const stories = [
   { id: 's2', title: 'Tip', body: 'Drink **water**', image_url: null, bg_color: '#155A4B', created_at: '2026-08-02T10:00:00Z', position: 1, view_count: 1 },
 ]
 
-function renderProfile() {
-  return render(
+function profileRoute() {
+  return (
     <MemoryRouter initialEntries={['/u/prof-1']}>
       <Routes>
         <Route path="/u/:id" element={<PublicProfile />} />
@@ -106,10 +113,16 @@ function renderProfile() {
   )
 }
 
+function renderProfile() {
+  return render(profileRoute())
+}
+
 beforeEach(() => {
   h.ctrl.from.mockClear()
   h.ctrl.rpc.mockClear()
   queryState.profile = profile
+  queryState.profileError = null
+  queryState.refetchProfile.mockClear()
   queryState.posts = []
   queryState.reviews = { reviews: [], reviewers: {} }
   queryState.stories = []
@@ -117,6 +130,55 @@ beforeEach(() => {
   auth.user = null
   Element.prototype.scrollIntoView = vi.fn()
   window.scrollTo = vi.fn()
+})
+
+describe('PublicProfile profile loading states', () => {
+  it('shows a retryable load error instead of claiming the profile is missing', () => {
+    queryState.profile = null
+    queryState.profileError = new Error('permission denied')
+
+    renderProfile()
+
+    expect(screen.getByRole('alert')).toHaveTextContent("We couldn't load this profile.")
+    expect(screen.queryByText('Profile not found')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(queryState.refetchProfile).toHaveBeenCalledOnce()
+  })
+
+  it('renders the profile after retry succeeds', async () => {
+    queryState.profile = null
+    queryState.profileError = new Error('network unavailable')
+    queryState.refetchProfile.mockImplementation(async () => {
+      queryState.profile = profile
+      queryState.profileError = null
+      return { data: profile, error: null }
+    })
+    const rendered = renderProfile()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    rendered.rerender(profileRoute())
+
+    expect(await screen.findByRole('heading', { name: 'Dr Ada' })).toBeInTheDocument()
+  })
+
+  it('shows not found only when the profile query succeeds without a row', () => {
+    queryState.profile = null
+    queryState.profileError = null
+
+    renderProfile()
+
+    expect(screen.getByText('Profile not found')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps cached profile content visible if a background refresh fails', async () => {
+    queryState.profileError = new Error('network unavailable')
+
+    renderProfile()
+
+    expect(await screen.findByRole('heading', { name: 'Dr Ada' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
 
 describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no separate rail)', () => {

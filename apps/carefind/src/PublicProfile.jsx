@@ -22,7 +22,7 @@ import {
 } from './modules/subscriptions-monetization/consultations.js'
 import FollowersSheet from './modules/social-feed/FollowersSheet.jsx'
 import { fetchViewedStoryIds, markStoriesViewed } from './modules/social-feed/storyViews.js'
-import { Card, CardSkeleton, ConfirmDialog, Empty, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
+import { Card, CardSkeleton, ConfirmDialog, Empty, ErrorState, GhostBtn, Modal, StarPicker, Stars, TealBtn, Toast, useToast } from './components/ui'
 import VerifiedBadge from './components/VerifiedBadge.jsx'
 import ProfileHeader from './components/ProfileHeader.jsx'
 import { PostTileGrid, isRepost } from './modules/social-feed/postDisplay.jsx'
@@ -55,7 +55,7 @@ function PublicProfile() {
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
   // React Query hooks
-  const { data: profile, isLoading: loading } = useProfile(id)
+  const { data: profile, isLoading: loading, error: profileError, refetch: refetchProfile } = useProfile(id)
   const { data: postsData = [] } = useProfilePosts(id)
   const { data: reviewsData = { reviews: [], reviewers: {} } } = useProfileReviews(id)
   const { data: userStories = [] } = useProfileStories(id)
@@ -261,6 +261,31 @@ function PublicProfile() {
     return (
       <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
+      </AppShell>
+    )
+  }
+
+  if (!profile && profileError) {
+    const errorContent = (
+      <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
+        {isMobile && (
+          <div style={{ background: theme.navy, padding: '22px 20px 26px 20px', borderRadius: '0 0 28px 28px', color: '#fff' }}>
+            {backLink}
+          </div>
+        )}
+        <ErrorState
+          message="We couldn't load this profile. Check your connection and try again."
+          onRetry={() => refetchProfile()}
+        />
+        {isMobile && <BottomNav />}
+      </div>
+    )
+
+    if (isMobile) return errorContent
+
+    return (
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
+        {errorContent}
       </AppShell>
     )
   }
