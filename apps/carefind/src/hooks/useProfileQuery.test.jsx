@@ -63,7 +63,15 @@ vi.mock('../config/supabaseClient', () => ({
                     },
                   }
                 }
-                return { data: h.row, error: null }
+                // Project the row down to the requested columns, the way
+                // PostgREST does, so a column that is merely absent from a
+                // fixture cannot masquerade as one that was withheld.
+                if (!h.row) return { data: null, error: null }
+                const out = {}
+                for (const c of columns.split(',').map((c) => c.trim()).filter(Boolean)) {
+                  out[c] = h.row[c] ?? null
+                }
+                return { data: out, error: null }
               },
             }),
           }
@@ -76,22 +84,23 @@ vi.mock('../config/supabaseClient', () => ({
 
 import { useProfile } from './queries'
 
+// The underlying row still carries `phone`. Public reads must not surface it.
 const PROFILE_ROW = {
   id: 'u1',
-  full_name: 'Ada Lovelace',
-  display_name: 'ada',
+  full_name: 'Maryam Abdulazeez',
+  display_name: 'abeedarh',
   is_verified: true,
-  verification_label: 'Verified Doctor',
-  location: 'Lagos',
+  verification_label: 'Verified pharmacist',
+  location: 'Lagos, Nigeria',
   website: null,
   avatar_url: null,
   cover_url: null,
-  subscription_price: 1000,
-  bio: 'Cardiologist',
+  subscription_price: 0,
+  bio: null,
   show_followers: true,
-  phone: '08000000000',
-  specialty: 'Cardiology',
-  country: 'NG',
+  phone: '07000000000',
+  specialty: 'Verified pharmacist',
+  country: null,
 }
 
 function renderUseProfile(userId) {
@@ -117,7 +126,7 @@ describe('useProfile', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.error).toBeNull()
-    expect(result.current.data).toEqual(PROFILE_ROW)
+    expect(result.current.data.id).toBe('u1')
   })
 
   it('requests only columns that exist on the live profiles table', () => {
@@ -132,5 +141,27 @@ describe('useProfile', () => {
     // Regression guard: `email` was requested here and does not exist, so every
     // profile view 400'd. Public profiles must never request a contact address.
     expect(unknown).toEqual([])
+  })
+
+  it('never requests profiles.phone, which is contact PII', () => {
+    renderUseProfile('u1')
+
+    // The public directory is readable by design (RLS policy "Anyone can read
+    // profiles"), which made every column public. Ten real phone numbers were
+    // retrievable with the publishable anon key. The column stays on the table
+    // for the signed-in user's own completeness gate and the admin screen, both
+    // of which read it as `authenticated`; it just must not be selected here.
+    const requested = h.requested[0].split(',').map((c) => c.trim())
+    expect(requested).not.toContain('phone')
+  })
+
+  it('returns a profile without any contact fields', async () => {
+    const { result } = renderUseProfile('u1')
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).not.toHaveProperty('phone')
+    expect(result.current.data).not.toHaveProperty('email')
+    expect(result.current.data.display_name).toBe('abeedarh')
   })
 })
