@@ -1,0 +1,72 @@
+-- ============================================================================
+-- Fail-loud dispensing — dispense_ref idempotency guard (Unit 1, repository-seam plan)
+--
+-- PROBLEM
+-- -------
+-- PharmacyForm dispenses medication through saleRepository.create with
+-- `{ queueOffline: false }` (fail-loud): an unsent dispense is thrown, never
+-- parked on the till's offline queue. But fail-loud has an edge: a network
+-- drop MID-REQUEST is ambiguous — the sale may or may not have landed
+-- server-side. If the pharmacist retries blind and the first attempt actually
+-- committed, the medication is dispensed twice and the AFTER INSERT stock
+-- trigger decrements stock twice. Fail-loud refuses to paper over the
+-- ambiguity; idempotency resolves it.
+--
+-- FIX
+-- ----
+-- A nullable `dispense_ref` column (only dispensing writes it — POS sales stay
+-- NULL) and a partial UNIQUE index mirroring the established idempotency
+-- pattern in this schema (business_wallet_tx_credit_ref_uniq,
+-- clients_phone_unique_per_business):
+--
+--     UNIQUE (business_id, dispense_ref) WHERE dispense_ref IS NOT NULL
+--
+--   * PER BUSINESS: the same reference used by two different businesses never
+--     collides.
+--   * NULL excluded by the WHERE clause: every existing row and every till
+--     sale is NULL, so the index is empty until the first dispense — zero
+--     backfill, zero risk to historical data.
+--   * The client generates the reference (genId('DISP')) and reuses it when a
+--     write is retried after an ambiguous failure. A retry that hits the
+--     unique index gets 23505 / 409, which the repository recognises as
+--     "already dispensed" and answers with the EXISTING sale — the pharmacist
+--     sees success-with-existing, never a fresh error, and stock is never
+--     double-decremented.
+--   * CONSTRAINT vs INDEX: a partial (WHERE) predicate is only expressible as
+--     an index; PostgREST reports its violations as 409 code 23505 either way.
+--
+-- CLIENT BEHAVIOUR (shipped with this migration)
+-- ----------------------------------------------
+--   * saleRepository.create(..., { queueOffline: false }) throws on offline /
+--     network / 5xx — never parks on the offline queue.
+--   * On a 409 duplicate where the row carries dispense_ref, it fetches and
+--     returns the existing sale (`{ replayed: true }`) instead of erroring.
+--   * PharmacyForm surfaces the real error message to the pharmacist.
+--
+-- OUT OF SCOPE (documented, not changed)
+-- --------------------------------------
+--   * POS till sales do not set dispense_ref and keep the offline queue —
+--     that behaviour is correct for a till and unchanged.
+--   * The offline queue itself is untouched; fail-loud callers simply never
+--     reach it.
+--
+-- VERIFY AFTER APPLYING
+-- ---------------------
+--   As an authenticated member of a test business (set_config JWT + SET LOCAL
+--   ROLE authenticated, wrapped in a transaction and rolled back):
+--       * INSERT a sale with a NEW dispense_ref  -> success.
+--       * INSERT a second sale with the SAME dispense_ref (same business)
+--             -> expect 23505 / 409 duplicate-key rejection.
+--       * INSERT a sale with the same dispense_ref for a DIFFERENT business
+--             -> expect success (per-business uniqueness).
+--       * INSERT a sale with dispense_ref NULL  -> success (till path,
+--             excluded from the index).
+--   Re-run security advisors: identical to the pre-change baseline (a plain
+--   index + nullable column adds no policy/function surface).
+-- ============================================================================
+
+ALTER TABLE public.sales ADD COLUMN IF NOT EXISTS dispense_ref text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS sales_dispense_ref_uniq
+  ON public.sales (business_id, dispense_ref)
+  WHERE dispense_ref IS NOT NULL;

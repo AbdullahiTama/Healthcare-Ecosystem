@@ -180,14 +180,41 @@ Grouped for brevity; each now confirmed at the component level during the full c
 - **Business Logic:** None — a thin, correctly-scoped wrapper.
 - **Weaknesses:** Severely underused given how many polling/manual-refresh screens (all six hospital stations, Orders' approval queue) would benefit from exactly this pattern.
 
-### 3.2 `lib/email.js` (Email Service)
-- **Purpose:** HTML email templating and sending.
-- **Responsibilities:** `emailStaffWelcome`, `emailBusinessApproved`, `emailBusinessRejected`, `emailAdminNewRegistration`.
-- **Consumers:** `Staff.jsx`, `AdminDashboard.jsx`, `Register.jsx`.
-- **Database Access:** None — takes plain JS objects, presumably relays through a third-party email API/SMTP not visible in the reviewed portion.
-- **Authentication:** Not applicable in the Supabase sense; whatever email-provider credential this needs wasn't visible in the reviewed code.
-- **Business Logic:** Template composition only.
-- **Weaknesses:** `emailStaffWelcome` embeds the new hire's plaintext password directly in the email body; hardcoded `skincarepro.vercel.app` branding/links throughout, a leftover from the product's prior identity.
+### 3.2 `lib/email.js` (Email Templates — Client)
+- **Purpose:** Pure HTML email template builders for the client; no direct sending.
+- **Responsibilities:** `buildRegistrationOwnerHtml`, `buildAdminNewRegistrationHtml`, `buildBusinessApprovedHtml`, `buildBusinessRejectedHtml`, `buildBusinessStatusHtml`, `emailAppointmentConfirmed`, `emailStaffWelcome` (client-side stub).
+- **Consumers:** `api/notify-registration.js`, `api/notify-business-status.js`, `Staff.jsx` (via `/api/email/send`).
+- **Database Access:** None — pure HTML string builders.
+- **Authentication:** N/A — templates are pure functions.
+- **Business Logic:** Template composition only. All `skincarepro.vercel.app` references replaced with `${APP_URL}` env variable. Plaintext password no longer emailed — `emailStaffWelcome` sends a magic-link setup token instead.
+- **Weaknesses:** Template strings are large inline HTML; could migrate to `react-email` components for type safety and previewability.
+
+### 3.2b `emailService.js` (Email Queue Service)
+- **Purpose:** Reliable email delivery via `email_outbox` queue table.
+- **Responsibilities:** `enqueue(templateKey, toEmail, payload, subject)` inserts a pending row; `processBatch()` polls `email_outbox` for due rows, renders templates via `Resend` honoring the row's stored `from_email`, updates status with exponential backoff; dead-letter after `max_attempts`.
+- **Consumers:** `api/notify-registration.js`, `api/notify-business-status.js`, `api/email/send.js`, `api/cron/process-email-outbox.js`, `/api/webhooks/resend.js`, `verify-plan-payment.js`, `paystack-webhook.js`, `verify-*` redirect handlers, `auth-email.js` (both apps), `/api/cron/subscription-expiry` (CareFind).
+- **Database Access:** `email_outbox`, `email_logs` tables (Supabase service-role client).
+- **Authentication:** Service-role only — `SUPABASE_SERVICE_ROLE_KEY` never exposed to client.
+- **Business Logic:** Retry with exponential backoff (`baseDelayMs * 2^attempts`), dead-letter after 5 attempts, bounce/complaint handling via Resend webhooks. First-settler-wins for payments (webhook vs verify redirect) so confirmation emails are never duplicated.
+- **Weaknesses:** Template functions are duplicated inline in `emailService.js` rather than imported from `api/_lib/email.js` — should consolidate to a single template source.
+
+### 3.2c `sendAuthEmail` (Auth-Flow Email Service, shared)
+- **Purpose:** Deliver `password_reset`, `email_verification`, and `customer_registration` emails through the templated outbox, replacing Supabase's built-in auth emails.
+- **Responsibilities:** Maps `action` → template key, branding (`CareFind <support@mail.carefind.app>` / `CareHub <support@mail.carefind.app>`), mints real action links server-side via `admin.auth.admin.generateLink` (never from the browser), enqueues then fire-and-forget flushes the outbox.
+- **Consumers:** `apps/carefind/api/_handlers/auth-email.js`, `apps/carehub/api/_handlers/auth-email.js` (`POST /api/auth-email`, auth-gated generic-200 to prevent account enumeration).
+- **Database Access:** `email_outbox` / `email_logs` (via `EmailService`); `profiles` for display names.
+- **Authentication:** Service-role only; endpoint intentionally supports pre-session callers (reset from login page) and returns generic 200s regardless of account existence.
+- **Business Logic:** Link tokens expire per Supabase policy; edge rate limiting recommended; dashboard auth templates must still be toggled off manually.
+- **Weaknesses:** None tracked.
+
+### 3.2d `/api/cron/subscription-expiry` (CareFind)
+- **Purpose:** Daily scan for businesses whose plan expires within 7 days → `subscription_expiry` email.
+- **Responsibilities:** Selects active `businesses` with `plan_expires_at` inside the 7-day window, dedupes against recent `email_outbox` rows for the same `template_key`/`to_email`, enqueues `{fullName, plan, businessName, expiryDate, daysLeft}`, flushes.
+- **Consumers:** Vercel cron `0 8 * * *` → `apps/carefind/api/cron/check-subscription-expiry.js` (dispatched via `api/_handlers/email.js` subpath routing).
+- **Database Access:** `businesses`, `email_outbox` (service-role).
+- **Authentication:** Bearer `CRON_SECRET` (optional when empty env).
+- **Business Logic:** 7-day lookahead with per-recipient dedupe window.
+- **Weaknesses:** Runs only from the CareFind deployment (shared `businesses` table), so expiry warnings are emitted for both ecosystems; both apps' outbox crons can flush the resulting rows.
 
 ### 3.3 `lib/permissions.js` (Authorization / Navigation Logic Service)
 - **Purpose:** Role → capability matrix and nav-item filtering by role and business type.

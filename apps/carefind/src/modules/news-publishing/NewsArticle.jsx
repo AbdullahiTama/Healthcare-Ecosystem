@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { newsRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
 import { ArrowLeft, Bookmark, Eye, Gift, Heart, MessageCircle, Newspaper, Repeat2, Share2, X } from 'lucide-react'
@@ -35,6 +36,7 @@ function NewsArticle() {
   const [comments, setComments] = useState([])
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentDraft, setCommentDraft] = useState('')
+  const [postingComment, setPostingComment] = useState(false)
   const [gifting, setGifting] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
   const [error, setError] = useState(false)
@@ -46,26 +48,14 @@ function NewsArticle() {
       setLoading(true)
       setError(false)
       try {
-        const { data, error: readErr } = await supabase
-          .from('news')
-          .select('id, headline, subtitle, body, hero_image_url, published_at, created_at, status, author_id, view_count, profiles!news_author_id_fkey(full_name, display_name, verification_label, is_verified)')
-          .eq('id', id)
-          .maybeSingle()
+        const data = await newsRepository.getArticleById(id)
         if (cancelled) return
-        if (readErr) throw readErr
         setArticle(data || null)
         // Fire-and-forget view counter — never let it block or blank the page.
         if (data) supabase.rpc('increment_news_view', { news_id: data.id }).then(() => {}).catch(() => {})
 
         // A few more approved stories to show at the bottom
-        const { data: moreData, error: moreErr } = await supabase
-          .from('news')
-          .select('id, headline, hero_image_url, published_at, created_at')
-          .eq('status', 'approved')
-          .neq('id', id)
-          .order('published_at', { ascending: false })
-          .limit(4)
-        if (moreErr) throw moreErr
+        const moreData = await newsRepository.getMoreApprovedNews(id)
         if (!cancelled) setMore(moreData || [])
         setLoading(false)
         window.scrollTo(0, 0)
@@ -83,15 +73,15 @@ function NewsArticle() {
 
   async function loadEngagement() {
     const [likeRes, commentRes, repostRes] = await Promise.all([
-      supabase.from('news_reactions').select('id, user_id').eq('news_id', id),
-      supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true }),
-      supabase.from('news_reposts').select('id, user_id').eq('news_id', id),
+      newsRepository.getReactionsByNewsId(id),
+      newsRepository.getCommentsByNewsId(id),
+      newsRepository.getRepostsByNewsId(id),
     ])
-    setLikes(likeRes.data || [])
-    setComments(commentRes.data || [])
-    setReposts(repostRes.data || [])
+    setLikes(likeRes || [])
+    setComments(commentRes || [])
+    setReposts(repostRes || [])
     if (user) {
-      const { data: sv } = await supabase.from('saved_news').select('id').eq('news_id', id).eq('user_id', user.id).maybeSingle()
+      const sv = await newsRepository.getSavedNewsForUser(id, user.id)
       setSaved(!!sv)
     }
   }
@@ -120,12 +110,24 @@ function NewsArticle() {
   async function toggleLike() {
     if (!user) { window.location.href = '/login'; return }
     if (userLiked) {
+      const prev = likes
       setLikes(prev => prev.filter(l => l.user_id !== user.id))
-      await supabase.from('news_reactions').delete().eq('news_id', id).eq('user_id', user.id)
+      try {
+        await newsRepository.removeReaction(id, user.id)
+      } catch (err) {
+        setLikes(prev)
+        toast.show(err.message || 'Could not update like.', { type: 'error' })
+      }
     } else {
-      setLikes(prev => [...prev, { id: `t${Date.now()}`, user_id: user.id }])
-      await supabase.from('news_reactions').insert({ news_id: id, user_id: user.id })
-      // Tell the author someone liked their article (never fires for self-likes).
+      const temp = { id: `t${Date.now()}`, user_id: user.id }
+      setLikes(prev => [...prev, temp])
+      try {
+        await newsRepository.addReaction(id, user.id)
+      } catch (err) {
+        setLikes(prev => prev.filter(l => l.id !== temp.id))
+        toast.show(err.message || 'Could not like.', { type: 'error' })
+        return
+      }
       notify({ recipientId: article.author_id, actorId: user.id, type: 'news_like', message: 'liked your article', link: `/news/${article.id}`, postId: article.id })
     }
   }
@@ -134,10 +136,20 @@ function NewsArticle() {
     if (!user) { window.location.href = '/login'; return }
     if (saved) {
       setSaved(false)
-      await supabase.from('saved_news').delete().eq('news_id', id).eq('user_id', user.id)
+      try {
+        await newsRepository.removeSavedNews(id, user.id)
+      } catch (err) {
+        setSaved(true)
+        toast.show(err.message || 'Could not unsave.', { type: 'error' })
+      }
     } else {
       setSaved(true)
-      await supabase.from('saved_news').insert({ news_id: id, user_id: user.id })
+      try {
+        await newsRepository.addSavedNews(id, user.id)
+      } catch (err) {
+        setSaved(false)
+        toast.show(err.message || 'Could not save.', { type: 'error' })
+      }
     }
   }
 
@@ -152,8 +164,9 @@ function NewsArticle() {
     const existing = reposts.find(r => r.user_id === user.id)
     if (existing) {
       setReposts(prev => prev.filter(r => r.user_id !== user.id))
-      const { error } = await supabase.from('news_reposts').delete().eq('id', existing.id)
-      if (error) {
+      try {
+        await newsRepository.removeRepost(existing.id)
+      } catch (err) {
         setReposts(prev => [...prev, existing])
         toast.show('Could not undo repost right now.', { type: 'error' })
         return
@@ -162,33 +175,45 @@ function NewsArticle() {
     } else {
       const temp = { id: `temp_${Date.now()}`, user_id: user.id }
       setReposts(prev => [...prev, temp])
-      const { data, error } = await supabase.from('news_reposts').insert({ news_id: id, user_id: user.id }).select().maybeSingle()
-      if (error || !data) {
+      try {
+        const data = await newsRepository.addRepost(id, user.id)
+        setReposts(prev => prev.map(r => (r.id === temp.id ? data : r)))
+        toast.show('Reposted', { type: 'success' })
+      } catch (err) {
         setReposts(prev => prev.filter(r => r.id !== temp.id))
         toast.show('Could not repost right now.', { type: 'error' })
-        return
       }
-      setReposts(prev => prev.map(r => (r.id === temp.id ? data : r)))
-      toast.show('Reposted', { type: 'success' })
     }
   }
 
   async function addComment() {
     const text = commentDraft.trim()
-    if (!text || !user) { if (!user) window.location.href = '/login'; return }
-    const { error } = await supabase.from('news_comments').insert({ news_id: id, user_id: user.id, content: text })
-    if (!error) {
-      setCommentDraft('')
-      const { data } = await supabase.from('news_comments').select('id, content, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)').eq('news_id', id).order('created_at', { ascending: true })
+    if (!text) return
+    if (!user) { window.location.href = '/login'; return }
+    if (postingComment) return
+    setPostingComment(true)
+    try {
+      await newsRepository.addComment(id, user.id, text)
+      const data = await newsRepository.getCommentsByNewsId(id)
       setComments(data || [])
-      // Tell the author someone commented on their article (never self-notifies).
-      notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
+      setCommentDraft('')
+    } catch (err) {
+      toast.show(err.message || 'Could not post comment.', { type: 'error' })
+    } finally {
+      setPostingComment(false)
     }
+    notify({ recipientId: article.author_id, actorId: user.id, type: 'news_comment', message: 'commented on your article', link: `/news/${article.id}`, postId: article.id })
   }
 
   async function deleteComment(cid) {
-    await supabase.from('news_comments').delete().eq('id', cid).eq('user_id', user.id)
+    const prev = comments
     setComments(prev => prev.filter(c => c.id !== cid))
+    try {
+      await newsRepository.deleteComment(cid, user.id)
+    } catch (err) {
+      setComments(prev)
+      toast.show(err.message || 'Could not delete comment.', { type: 'error' })
+    }
   }
 
   function timeAgoShort(dateStr) {
@@ -228,13 +253,15 @@ function NewsArticle() {
     )
     if (isMobile) return errContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {errContent}
       </AppShell>
     )
   }
 
-  if (!article || article.status !== 'approved') {
+  // Allow article author to view their own pending/rejected submissions
+  const isAuthor = user && article && article.author_id === user.id
+  if (!article || (article.status !== 'approved' && !isAuthor)) {
     const notFoundContent = (
       <div style={isMobile ? { fontFamily: theme.fontFamily, maxWidth: 480, margin: '0 auto', paddingBottom: 'calc(90px + env(safe-area-inset-bottom))' } : { fontFamily: theme.fontFamily }}>
         <div style={{ padding: '40px 20px', textAlign: 'center' }}>
@@ -250,7 +277,7 @@ function NewsArticle() {
     if (isMobile) return notFoundContent
 
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -313,6 +340,13 @@ function NewsArticle() {
         {article.subtitle && (
           <p style={{ margin: '0 0 16px 0', fontSize: 17, color: theme.textMid, lineHeight: 1.45, fontStyle: 'italic' }}>
             {article.subtitle}
+          </p>
+        )}
+
+        {/* Status badge for author viewing own pending/rejected article */}
+        {isAuthor && article.status !== 'approved' && (
+          <p style={{ margin: '0 0 16px 0', padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 800, display: 'inline-block', background: article.status === 'rejected' ? theme.dangerBg : theme.amberBg, color: article.status === 'rejected' ? theme.danger : theme.amberText }}>
+            {article.status === 'rejected' ? 'Not approved' : 'Under review'}
           </p>
         )}
 
@@ -443,9 +477,15 @@ function NewsArticle() {
       {commentsOpen && (
         <div style={{ padding: '4px 18px 8px', fontFamily: theme.fontFamily }}>
           <p style={{ margin: '0 0 12px 0', fontSize: 13, fontWeight: 800, color: theme.navy }}>Comments ({comments.length})</p>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder={user ? 'Add a comment…' : 'Log in to comment'} disabled={!user} style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
-            <button onClick={addComment} style={{ padding: '0 16px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13 }}>Post</button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
+            {!user ? (
+              <Link to="/login" style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box', textAlign: 'center', background: theme.bg, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'block' }}>Log in to comment</Link>
+            ) : (
+              <>
+                <input value={commentDraft} onChange={(e) => setCommentDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addComment() }} placeholder="Add a comment…" style={{ flex: 1, padding: 10, fontSize: 13, border: `1px solid ${theme.border}`, borderRadius: 20, boxSizing: 'border-box' }} />
+                <button onClick={addComment} disabled={postingComment || !commentDraft.trim()} style={{ padding: '0 16px', background: postingComment || !commentDraft.trim() ? theme.gray300 : theme.tealDeep, color: '#fff', border: 'none', borderRadius: 20, fontWeight: 800, fontSize: 13, opacity: postingComment ? 0.7 : 1, cursor: postingComment ? 'not-allowed' : 'pointer', minHeight: 38 }}>{postingComment ? 'Posting…' : 'Post'}</button>
+              </>
+            )}
           </div>
           {comments.length === 0 && <p style={{ fontSize: 12.5, color: theme.textLight }}>Be the first to comment.</p>}
           {comments.map((c) => (
@@ -506,7 +546,6 @@ function NewsArticle() {
       myUsername={myUsername}
       myAvatar={myAvatar}
       unreadNotifs={unreadNotifs}
-      onCompose={() => navigate('/feed')}
       rightSidebar={sidebarContent}
     >
       {bodyContent}

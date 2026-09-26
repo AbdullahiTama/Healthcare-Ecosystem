@@ -92,7 +92,7 @@ Result: 163 `alert()` → typed toasts (success/error/warning/info, chosen from 
 
 | # | Item | Effort | Risk |
 |---|---|---|---|
-| L1 | Stale `skincarepro.vercel.app` branding in staff welcome emails | **XS** | **Low, visible to every new hire** |
+| L1 | ~~Stale `skincarepro.vercel.app` branding in staff welcome emails~~ | ~~XS~~ | ~~Resolved 2026-09-14: all `skincarepro.vercel.app` references in `api/_lib/email.js`, `src/lib/email.js`, and `api/_lib/email.js` templates replaced with `${APP_URL}` env variable. `FROM_EMAIL` default changed from `'CareHub <onboarding@resend.dev>'` to `'CareHub <support@carehub.ng>'`.~~ | **Resolved** | `apps/carehub/api/_lib/email.js`, `apps/carehub/src/lib/email.js` |
 | L2 | Stray accidentally-created directory in `apps/carefind/carefind-main/src/lib/` | **XS** | **Low** |
 | L3 | Dead code: CareFind `App.jsx`, `searchClients`, `getLabResults`, `OfflineBanner` (would crash if wired in), and — newly confirmed via import grep — `AdminStaff.jsx`/`AdminTeams.jsx` (never imported by any route or component; not part of the shipped bundle) | **XS each** | **Low, except OfflineBanner is a landmine** |
 | L4 | `VisualCard.jsx` reinvents `Logo.jsx`'s mark instead of importing it | **XS** | **Low** |

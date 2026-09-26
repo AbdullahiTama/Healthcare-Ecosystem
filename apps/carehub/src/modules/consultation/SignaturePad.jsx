@@ -76,7 +76,7 @@ const SignaturePad = forwardRef(function SignaturePad({ label = 'Signature', hei
   return (
     <div>
       <div style={{ fontSize: '12px', fontWeight: '700', color: theme.gray600, marginBottom: '6px' }}>{label}</div>
-      <div style={{ border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, overflow: 'hidden', position: 'relative', background: '#fff' }}>
+      <div style={{ border: `1px solid ${theme.border}`, borderRadius: theme.radius.md, overflow: 'hidden', position: 'relative', background: theme.cardBg }}>
         <canvas
           ref={canvasRef}
           width={560}
@@ -92,7 +92,7 @@ const SignaturePad = forwardRef(function SignaturePad({ label = 'Signature', hei
       <button
         type="button"
         onClick={clear}
-        style={{ marginTop: 6, padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: '#fff', color: theme.gray600, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
+        style={{ marginTop: 6, padding: '6px 12px', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}`, background: theme.cardBg, color: theme.gray600, fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}
       >
         Clear
       </button>

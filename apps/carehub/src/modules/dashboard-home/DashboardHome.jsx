@@ -7,13 +7,14 @@ import {
 // The dashboard owns no table of its own — it is a projection over two
 // aggregates other modules own, so it composes their repositories rather than
 // keeping a second copy of either query. Same shape as Reports.
-import { saleRepository } from '../pos/repositories'
-import { appointmentRepository } from '../appointments/repositories'
+import { notificationRepository } from '../notifications/repositories'
+import { classifySalesVelocity } from '../../lib/velocity'
 import { fmt, businessName } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, Avatar, Empty, Loading, StatCard } from '../../components/ui'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useTodaySales, useAllSales, useAppointments } from '../../hooks/queries'
 
 const { tealDeep, tealMist, navy, gray500, gray400, border, danger, dangerBg, warning, warningBg, success, bg } = theme
 
@@ -45,28 +46,17 @@ export default function DashboardHome({ brand, products, role, perms }) {
   const navigate = useNavigate()
   const online = useOnlineStatus()
   const { isMobile } = useBreakpoint()
-  const [todaySales, setTodaySales] = useState([])
-  const [allSales, setAllSales] = useState([])
-  const [appts, setAppts] = useState([])
   const [showAllLow, setShowAllLow] = useState(false)
   const [showAllOut, setShowAllOut] = useState(false)
-  const [loading, setLoading] = useState(true)
   const bType = brand?.business_type || brand?.type || 'skincare'
   const isHospital = bType === 'hospital'
   const canSeeAppts = !perms?.nav || perms.nav.includes('appointments')
 
-  useEffect(() => {
-    if (brand?.id) {
-      setLoading(true)
-      Promise.all([
-        saleRepository.getToday(brand.id).then(s => setTodaySales(s || [])).catch(() => {}),
-        saleRepository.getAll(brand.id).then(s => setAllSales(s || [])).catch(() => {}),
-        canSeeAppts ? appointmentRepository.getAll(brand.id).then(a => setAppts(a || [])).catch(() => {}) : Promise.resolve(),
-      ]).finally(() => setLoading(false))
-    } else {
-      setLoading(false)
-    }
-  }, [brand?.id])
+  const { data: todaySales = [], isLoading: loadingToday } = useTodaySales(brand?.id)
+  const { data: allSales = [], isLoading: loadingAll } = useAllSales(brand?.id)
+  const { data: appts = [], isLoading: loadingAppts } = useAppointments(brand?.id, canSeeAppts)
+
+  const loading = loadingToday || loadingAll || (canSeeAppts && loadingAppts)
 
   const todayTotal = todaySales.reduce((s, x) => s + (x.total || 0), 0)
   const heldSales = allSales.filter(s => s.is_on_hold)
@@ -84,6 +74,82 @@ export default function DashboardHome({ brand, products, role, perms }) {
     .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
   const nextAppt = upcomingAppts[0]
   const showApptItem = canSeeAppts && upcomingAppts.length > 0
+
+  // ── Proactive owner alerts (issue #4) ────────────────────────────────────────
+  // The dashboard is where the owner already looks, so it raises the stock and
+  // expiry conditions it can see into the notification center — once per kind,
+  // per business, per day (localStorage dedupe). Owner-only: staff dashboards
+  // must not write owner notifications as a side effect of being viewed.
+  const daysToExpiry = (p) => {
+    if (!p.expiry_date) return null
+    const d = new Date(p.expiry_date)
+    if (Number.isNaN(d.getTime())) return null
+    return Math.ceil((d - new Date()) / 86400000)
+  }
+  const expiringSoon = products.filter(p => { const t = daysToExpiry(p); return t !== null && t >= 0 && t <= 60 })
+  const expiredProducts = products.filter(p => { const t = daysToExpiry(p); return t !== null && t < 0 })
+
+  useEffect(() => {
+    if (role !== 'Owner' || !brand?.id || loading) return
+    const dayKey = new Date().toISOString().split('T')[0]
+    const keyFor = (kind) => 'carehub_notified_' + kind + '_' + brand.id
+    const sentToday = (kind) => { try { return localStorage.getItem(keyFor(kind)) === dayKey } catch (e) { return false } }
+    const markSent = (kind) => { try { localStorage.setItem(keyFor(kind), dayKey) } catch (e) {} }
+    // notify() itself never throws; marking after the await keeps the dedupe
+    // honest for the failures it CAN report.
+    const names = (arr) => arr.slice(0, 5).map(p => p.name).join(', ') + (arr.length > 5 ? ' +' + (arr.length - 5) + ' more' : '')
+
+    async function raiseAlerts() {
+      try {
+        if (outStock.length > 0 && !sentToday('out_of_stock')) {
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'out_of_stock',
+            outStock.length + ' product' + (outStock.length === 1 ? '' : 's') + ' out of stock',
+            names(outStock), '/dashboard/inventory?stock=out')
+          markSent('out_of_stock')
+        }
+        if (lowStock.length > 0 && !sentToday('low_stock')) {
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'low_stock',
+            lowStock.length + ' product' + (lowStock.length === 1 ? '' : 's') + ' running low',
+            names(lowStock), '/dashboard/inventory?stock=low')
+          markSent('low_stock')
+        }
+        if (expiringSoon.length > 0 && !sentToday('product_expiring_soon')) {
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expiring_soon',
+            expiringSoon.length + ' product' + (expiringSoon.length === 1 ? '' : 's') + ' expire within 60 days',
+            names(expiringSoon), '/dashboard/inventory?expiry=expiring')
+          markSent('product_expiring_soon')
+        }
+        if (expiredProducts.length > 0 && !sentToday('product_expired')) {
+          await notificationRepository.notify(brand.id, [{ staffId: null }], 'product_expired',
+            expiredProducts.length + ' product' + (expiredProducts.length === 1 ? '' : 's') + ' have expired',
+            names(expiredProducts), '/dashboard/inventory?expiry=expired')
+          markSent('product_expired')
+        }
+        // Velocity digest — only when something actually sold in the window;
+        // "everything is slow" on an empty book is noise, not insight.
+        const windowStart = Date.now() - 30 * 86400000
+        const recentSales = allSales.filter(s => new Date(s.created_at || 0).getTime() >= windowStart)
+        if (recentSales.length > 0 && !sentToday('sales_velocity')) {
+          const v = classifySalesVelocity(products, recentSales, { days: 30 })
+          const parts = []
+          if (v.fast.length > 0) parts.push(v.fast.length + ' fast mover' + (v.fast.length === 1 ? '' : 's'))
+          if (v.medium.length > 0) parts.push(v.medium.length + ' steady seller' + (v.medium.length === 1 ? '' : 's'))
+          if (v.slow.length > 0) parts.push(v.slow.length + ' not moving')
+          if (parts.length > 0) {
+            await notificationRepository.notify(brand.id, [{ staffId: null }], 'sales_velocity',
+              '30-day sales velocity: ' + parts.join(', '),
+              v.fast.length > 0 ? 'Top mover: ' + v.fast[0].name : null,
+              '/dashboard/reports')
+            markSent('sales_velocity')
+          }
+        }
+      } catch (e) {
+        console.error('Proactive alert check failed:', e)
+      }
+    }
+    raiseAlerts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, brand?.id, loading, products, allSales])
 
   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)
   const worklistEmpty = attentionCount === 0

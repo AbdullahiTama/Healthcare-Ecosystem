@@ -3,8 +3,14 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/cron/process-email-outbox",
+      "schedule": "0 0 * * *"
+    }
+  ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/(.*)", "destination": "/api/router" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

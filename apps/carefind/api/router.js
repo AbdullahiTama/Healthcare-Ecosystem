@@ -13,11 +13,12 @@
 //   - paystack-webhook gets the UNTOUCHED raw body stream: it signs the exact
 //     bytes Paystack sent (bodyParser: false, same as its old config export),
 //     so it must never be pre-consumed or re-serialized.
-//   - GET routes (banks, admin-setup) get req.query parsed from the URL.
+//   - GET routes (banks) get req.query parsed from the URL.
 export const config = { api: { bodyParser: false } }
 
+import { isCrawlerUserAgent } from '../src/lib/openGraph.js'
+import ogHandler from './_handlers/og.js'
 import adminAuthHandler from './_handlers/admin-auth.js'
-import adminSetupHandler from './_handlers/admin-setup.js'
 import banksHandler from './_handlers/banks.js'
 import bookingHandler from './_handlers/booking.js'
 import chargeConsultationHandler from './_handlers/charge-consultation.js'
@@ -31,12 +32,24 @@ import verifyConsultationPaymentHandler from './_handlers/verify-consultation-pa
 import verifyPaymentHandler from './_handlers/verify-payment.js'
 import verifySubscriptionPaymentHandler from './_handlers/verify-subscription-payment.js'
 import withdrawalPinHandler from './_handlers/withdrawal-pin.js'
+import resolveAccountHandler from './_handlers/resolve-account.js'
+import lookupAppointmentHandler from './_handlers/lookup-appointment.js'
+import cancelAppointmentHandler from './_handlers/cancel-appointment.js'
+import walletTransactionsHandler from './_handlers/wallet-transactions.js'
+import initiateShopPaymentHandler from './_handlers/initiate-shop-payment.js'
+import verifyShopPaymentHandler from './_handlers/verify-shop-payment.js'
+import bookingInterestHandler from './_handlers/booking-interest.js'
+import requestShopReturnHandler from './_handlers/request-shop-return.js'
+import withdrawalTrustHandler from './_handlers/withdrawal-trust.js'
+import emailTemplatesHandler from './_handlers/email-templates.js'
+import emailHandler from './_handlers/email.js'
+import authEmailHandler from './_handlers/auth-email.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
-  'admin-setup': adminSetupHandler,
   'banks': banksHandler,
   'booking': bookingHandler,
+  'booking-interest': bookingInterestHandler,
   'charge-consultation': chargeConsultationHandler,
   'charge-subscription': chargeSubscriptionHandler,
   'create-subaccount': createSubaccountHandler,
@@ -48,6 +61,19 @@ const ROUTES = {
   'verify-payment': verifyPaymentHandler,
   'verify-subscription-payment': verifySubscriptionPaymentHandler,
   'withdrawal-pin': withdrawalPinHandler,
+  'resolve-account': resolveAccountHandler,
+  'lookup-appointment': lookupAppointmentHandler,
+  'cancel-appointment': cancelAppointmentHandler,
+  'wallet-transactions': walletTransactionsHandler,
+  'initiate-shop-payment': initiateShopPaymentHandler,
+  'verify-shop-payment': verifyShopPaymentHandler,
+  'request-shop-return': requestShopReturnHandler,
+  'withdrawal-trust': withdrawalTrustHandler,
+  'email-templates': emailTemplatesHandler,
+  'email': emailHandler,
+  'auth-email': authEmailHandler,
+  'cron': emailHandler,
+  'webhooks': emailHandler,
 }
 
 // This route must receive the untouched request stream so it can hash the raw
@@ -102,6 +128,25 @@ export default async function handler(req, res) {
   const target = ROUTES[route]
 
   if (!target) {
+    // Issue #1: vercel.json rewrites link-preview crawlers from an app route
+    // (e.g. /post/<id>, or a legacy /feed?post=<id> link still in the wild)
+    // to this function. Vercel preserves the original path in req.url, so
+    // such a request has no matching API route — it lands here. Serve
+    // per-item Open Graph tags instead of a 404.
+    //
+    // Two guards, both required:
+    //  - the path must NOT be an /api/* path. A genuine typo'd API call must
+    //    still get its 404 JSON, not a cacheable 200 HTML page, whatever
+    //    User-Agent it happens to carry.
+    //  - the User-Agent is re-checked rather than trusted from the rewrite
+    //    alone: this is the only thing standing between a normal visitor and
+    //    a page that is not the app.
+    const isApiPath = /^\/api(\/|$)/.test((req.url || '').split('?')[0])
+    if (!isApiPath
+      && (req.method === 'GET' || req.method === 'HEAD')
+      && isCrawlerUserAgent(req.headers['user-agent'])) {
+      return ogHandler(req, res)
+    }
     return res.status(404).json({ error: `No handler for /api/${route}` })
   }
 
@@ -117,5 +162,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: err.message })
   }
 
-  return target(req, res)
+  try {
+    return await target(req, res)
+  } catch (err) {
+    console.error(`[router] ${route} crashed:`, err)
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err.message || 'Internal server error' })
+    }
+  }
 }

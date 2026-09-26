@@ -4,7 +4,7 @@ import {
   BarChart2, AlertTriangle, Package, Users, Calendar,
   Plus, ShoppingCart, UserPlus, Clock, ArrowRight, MapPin,
 } from 'lucide-react'
-import { getAllLocations } from '../../services/supabase'
+import { locationsRepository } from '../locations/repositories'
 import { saleRepository } from '../pos/repositories'
 import { appointmentRepository } from '../appointments/repositories'
 import { staffRepository } from '../staff/repositories'
@@ -27,7 +27,7 @@ export default function Overview({ brand, role, perms }) {
   useEffect(() => {
     if (role !== 'Owner' || !brand?.id) { setLoading(false); return }
     let live = true
-    getAllLocations(brand.id).then(async (list) => {
+    locationsRepository.getAll(brand.id).then(async (list) => {
       if (!live) return
       const all = list || [brand]
       setBranches(all)

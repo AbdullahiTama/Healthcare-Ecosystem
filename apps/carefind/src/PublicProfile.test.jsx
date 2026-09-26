@@ -1,15 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import PublicProfile from './PublicProfile.jsx'
+import { renderWithQueryClient as render } from './test/renderWithQueryClient.jsx'
 
-// Queue-based supabase mock (the newsArticle.test.jsx pattern): each awaited
-// query resolves with the next queued result. For a logged-out visitor the
-// load flow needs exactly: [profile, posts, follows, follows, stories,
-// playlists, user_reviews].
 const h = vi.hoisted(() => {
-  const ctrl = { queue: [] }
-  ctrl.push = (...results) => { ctrl.queue.push(...results); return ctrl }
+  const ctrl = {}
   const query = () => {
     const q = {}
     q.select = vi.fn(() => q)
@@ -22,7 +18,7 @@ const h = vi.hoisted(() => {
     q.in = vi.fn(() => q)
     q.insert = vi.fn(() => q)
     q.delete = vi.fn(() => q)
-    q.then = (resolve) => resolve(ctrl.queue.shift() || { data: null, error: null })
+    q.then = (resolve) => resolve({ data: null, error: null })
     return q
   }
   ctrl.from = vi.fn(() => query())
@@ -31,6 +27,40 @@ const h = vi.hoisted(() => {
 })
 
 vi.mock('./config/supabaseClient', () => ({ supabase: h.ctrl }))
+const queryState = vi.hoisted(() => ({
+  profile: null,
+  profileError: null,
+  refetchProfile: vi.fn(),
+  posts: [],
+  reviews: { reviews: [], reviewers: {} },
+  stories: [],
+  playlists: [],
+}))
+vi.mock('./hooks/queries', () => ({
+  keys: {
+    consultationBooked: (viewerId, professionalId) => ['consultation', 'booked', viewerId, professionalId],
+    followerCount: (userId) => ['profile', 'followers', userId],
+    followingCount: (userId) => ['profile', 'following', userId],
+  },
+  useProfile: () => ({
+    data: queryState.profile,
+    isLoading: false,
+    error: queryState.profileError,
+    refetch: queryState.refetchProfile,
+  }),
+  useProfilePosts: () => ({ data: queryState.posts }),
+  useProfileReviews: () => ({ data: queryState.reviews }),
+  useProfileStories: () => ({ data: queryState.stories }),
+  useProfilePlaylists: () => ({ data: queryState.playlists }),
+  useFollowerCount: () => ({ data: 0 }),
+  useFollowingCount: () => ({ data: 0 }),
+  useFollowStatus: () => ({ data: false }),
+  useSubscriptionAccess: () => ({ data: { active: false, sub: null } }),
+  useConsultationOffer: () => ({ data: null }),
+  useConsultationBooked: () => ({ data: false }),
+  useToggleFollow: () => ({ mutateAsync: vi.fn() }),
+  usePostReview: () => ({ mutateAsync: vi.fn() }),
+}))
 const auth = vi.hoisted(() => ({ user: null }))
 vi.mock('./providers/AuthContext', () => ({ useAuth: () => ({ user: auth.user }) }))
 vi.mock('./services/notify.js', () => ({ notify: vi.fn() }))
@@ -73,8 +103,8 @@ const stories = [
   { id: 's2', title: 'Tip', body: 'Drink **water**', image_url: null, bg_color: '#155A4B', created_at: '2026-08-02T10:00:00Z', position: 1, view_count: 1 },
 ]
 
-function renderProfile() {
-  return render(
+function profileRoute() {
+  return (
     <MemoryRouter initialEntries={['/u/prof-1']}>
       <Routes>
         <Route path="/u/:id" element={<PublicProfile />} />
@@ -83,114 +113,125 @@ function renderProfile() {
   )
 }
 
+function renderProfile() {
+  return render(profileRoute())
+}
+
 beforeEach(() => {
-  h.ctrl.queue.length = 0
   h.ctrl.from.mockClear()
   h.ctrl.rpc.mockClear()
+  queryState.profile = profile
+  queryState.profileError = null
+  queryState.refetchProfile.mockClear()
+  queryState.posts = []
+  queryState.reviews = { reviews: [], reviewers: {} }
+  queryState.stories = []
+  queryState.playlists = []
   auth.user = null
   Element.prototype.scrollIntoView = vi.fn()
   window.scrollTo = vi.fn()
 })
 
-describe('PublicProfile story rail (Feature 4)', () => {
-  it('renders one circle per story, ordered position → views → newest', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null }) // posts
-    h.ctrl.push({ count: 0, error: null }) // follows (following_id)
-    h.ctrl.push({ count: 0, error: null }) // follows (follower_id)
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null }) // playlists
-    h.ctrl.push({ data: [], error: null }) // user_reviews
+describe('PublicProfile profile loading states', () => {
+  it('shows a retryable load error instead of claiming the profile is missing', () => {
+    queryState.profile = null
+    queryState.profileError = new Error('permission denied')
 
     renderProfile()
 
-    const railButtons = await screen.findAllByRole('button', { name: /^View story/ })
-    expect(railButtons.map((b) => b.getAttribute('aria-label'))).toEqual([
-      'View story: Tip',
-      'View story: Morning',
-    ])
+    expect(screen.getByRole('alert')).toHaveTextContent("We couldn't load this profile.")
+    expect(screen.queryByText('Profile not found')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(queryState.refetchProfile).toHaveBeenCalledOnce()
   })
 
-  it('renders no rail (and no ring button) when the profile has no stories', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: [], error: null }) // no stories
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+  it('renders the profile after retry succeeds', async () => {
+    queryState.profile = null
+    queryState.profileError = new Error('network unavailable')
+    queryState.refetchProfile.mockImplementation(async () => {
+      queryState.profile = profile
+      queryState.profileError = null
+      return { data: profile, error: null }
+    })
+    const rendered = renderProfile()
 
-    renderProfile()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    rendered.rerender(profileRoute())
 
-    await screen.findByRole('heading', { name: 'Dr Ada' })
-    expect(screen.queryByRole('button', { name: /^View story/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: "View Dr Ada's story" })).toBeNull()
+    expect(await screen.findByRole('heading', { name: 'Dr Ada' })).toBeInTheDocument()
   })
 
-  it('tapping a rail circle opens the viewer at that story index', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+  it('shows not found only when the profile query succeeds without a row', () => {
+    queryState.profile = null
+    queryState.profileError = null
 
     renderProfile()
 
-    fireEvent.click((await screen.findAllByRole('button', { name: /^View story/ }))[1])
-    expect(screen.getByRole('heading', { name: 'Morning' })).toBeInTheDocument()
+    expect(screen.getByText('Profile not found')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps cached profile content visible if a background refresh fails', async () => {
+    queryState.profileError = new Error('network unavailable')
+
+    renderProfile()
+
+    expect(await screen.findByRole('heading', { name: 'Dr Ada' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
 
-describe('PublicProfile story chooser (Feature 4 / 5)', () => {
-  it('opens a chooser on ring tap offering View Stories and View Profile', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+describe('PublicProfile story ring — WhatsApp Status style (ring on avatar, no separate rail)', () => {
+  it('shows a single avatar ring when stories exist, no separate rail circles, ordering is position → views → newest via viewer', async () => {
+    queryState.stories = [stories[1], stories[0]]
 
     renderProfile()
 
-    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    expect(screen.getByRole('menuitem', { name: 'View Stories' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'View Profile' })).toBeInTheDocument()
+    // Single avatar ring, not per-story rail buttons
+    const ring = await screen.findByRole('button', { name: "View Dr Ada's story" })
+    expect(ring).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^View story:/ })).toBeNull()
+
+    // Tapping ring opens viewer at first story in sorted order (Tip has position 1, so first)
+    fireEvent.click(ring)
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+
+    // Next navigates sequentially to second story (Morning)
+    fireEvent.click(screen.getByRole('button', { name: 'Next story' }))
+    expect(await screen.findByRole('heading', { name: 'Morning' })).toBeInTheDocument()
   })
 
-  it('View Stories starts the viewer from the first story', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
-
+  it('renders no ring button when the profile has no stories', async () => {
     renderProfile()
 
-    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'View Stories' }))
-    expect(screen.getByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Dr Ada' })
+    expect(screen.queryByRole('button', { name: /^View story:/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: "View Dr Ada's story" })).toBeNull()
   })
 
-  it('View Profile dismisses the chooser without opening the viewer', async () => {
-    h.ctrl.push({ data: profile, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ count: 0, error: null })
-    h.ctrl.push({ data: stories, error: null })
-    h.ctrl.push({ data: [], error: null })
-    h.ctrl.push({ data: [], error: null })
+  it('tapping ring opens viewer directly without a chooser menu', async () => {
+    queryState.stories = [stories[1], stories[0]]
 
     renderProfile()
 
     fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'View Profile' }))
+    // No chooser — viewer appears immediately, no menuitems
     expect(screen.queryByRole('menuitem')).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Tip' })).toBeNull()
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+  })
+
+  it('viewer auto-advance: stories are ordered and accessible sequentially from ring', async () => {
+    queryState.stories = [stories[1], stories[0]]
+
+    renderProfile()
+
+    fireEvent.click(await screen.findByRole('button', { name: "View Dr Ada's story" }))
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
+    // Previous goes back with out-of-range handling — first story Previous closes or stays
+    // Next then Previous sequence works
+    fireEvent.click(screen.getByRole('button', { name: 'Next story' }))
+    expect(await screen.findByRole('heading', { name: 'Morning' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous story' }))
+    expect(await screen.findByRole('heading', { name: 'Tip' })).toBeInTheDocument()
   })
 })

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── USE TOAST HOOK ────────────────────────────────────────────────────────────
 // Moved out of components/ui/index.jsx — pure state/behavior, no JSX, belongs
@@ -15,13 +15,17 @@ export function useToast() {
   const [toast, setToast] = useState(null) // { msg, type, actionLabel, onAction } | null
   const timerRef = useRef(null)
 
-  const show = (message, options = {}) => {
+  const show = useCallback((message, options = {}) => {
     const opts = typeof options === 'number' ? { duration: options } : options
     const { type = 'info', duration = 4000, actionLabel, onAction } = opts
     if (timerRef.current) clearTimeout(timerRef.current)
     setToast({ msg: message, type, actionLabel, onAction })
     timerRef.current = setTimeout(() => setToast(null), duration)
-  }
+  }, [])
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
 
   // `msg` stays a plain string so existing `<Toast msg={msg} />` call sites
   // that haven't been touched by this sweep keep rendering correctly.

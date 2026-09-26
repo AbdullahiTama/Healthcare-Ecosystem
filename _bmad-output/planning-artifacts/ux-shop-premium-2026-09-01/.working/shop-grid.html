@@ -1,0 +1,28 @@
+<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+:root{--teal:#0E6F5A;--ink:#182722;--muted:#8B978F;--border:#ECEAE0;--card:#FBFAF6;--bg:#F7F5EF}
+body{margin:0;font-family:Geist,system-ui;padding:16px;background:var(--bg);color:var(--ink)}
+.hero{height:90px;background:linear-gradient(135deg,#0E6F5A,#0B4A3E);border-radius:20px;padding:16px;color:#fff;margin-bottom:16px}
+.pill{padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:#fff;font-weight:700;font-size:12px}
+.pill.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+.row{display:flex;gap:12px;overflow:auto;padding-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.thumb{height:120px;border-radius:10px;background:#E3EEE8;display:grid;place-items:center;color:var(--teal)}
+.price{color:var(--teal);font-weight:800}
+</style>
+<div class="hero"><b>MedMarket</b> — Your health marketplace<br><input placeholder="Search medication, facility, doctor…" style="margin-top:10px;padding:10px;border-radius:10px;border:0;width:60%"> <button style="padding:10px 16px;border-radius:10px;border:0">Go</button></div>
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <span class="pill">Products</span><span class="pill">Health Facilities</span><span class="pill">Professionals</span><span class="pill on">Shop</span>
+</div>
+<div style="display:flex;gap:6px;margin-bottom:12px">
+  <span class="pill on">All</span><span class="pill">Retail</span><span class="pill">Wholesale</span><span class="pill">Distributor</span>
+</div>
+<div style="font-weight:800;margin-bottom:8px">Featured</div>
+<div class="row"><div class="card" style="flex:0 0 160px"><div class="thumb">Img</div><b>Paracetamol</b><span class="price">₦1,000</span></div><div class="card" style="flex:0 0 160px"><div class="thumb">Img</div><b>Vitamin C</b><span class="price">₦2,500</span></div><div class="card" style="flex:0 0 160px"><div class="thumb">Img</div><b>Bandage</b><span class="price">₦500</span></div></div>
+<div class="grid" style="margin-top:16px">
+  <div class="card"><div class="thumb">120h</div><b>Amoxil 500mg</b><i style="color:var(--muted);font-size:11px">Amoxicillin</i><span class="price">₦3,500</span></div>
+  <div class="card"><div class="thumb">120h</div><b>Panadol Extra</b><i style="color:var(--muted);font-size:11px">Paracetamol</i><span class="price">₦1,200</span></div>
+  <div class="card"><div class="thumb">120h</div><b>Coartem</b><span class="price">₦4,200</span></div>
+  <div class="card"><div class="thumb">120h</div><b>Ventolin</b><span class="price">₦6,000</span></div>
+</div>
+<p style="color:var(--muted);font-size:11px;margin-top:12px">Grid: repeat(auto-fill,minmax(160px,1fr)) — 2/row at 375, 4 at 768. Thumb is primary ecommerce_image (fallback inventory image_url).</p>
