@@ -50,6 +50,12 @@ import { ModerationProvider } from './stores/moderationStore'
 
 const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
 
+function clearAdminCache() {
+  localStorage.removeItem('admin_user')
+  localStorage.removeItem('admin_permissions')
+  localStorage.removeItem('admin_token')
+}
+
 export default function AdminPanel() {
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -234,43 +240,30 @@ export default function AdminPanel() {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error || !session) {
-          localStorage.removeItem('admin_token')
-          localStorage.removeItem('admin_user')
-          localStorage.removeItem('admin_permissions')
+          clearAdminCache()
           navigate('/login')
           return
         }
 
-        const token = localStorage.getItem('admin_token')
-        const userData = localStorage.getItem('admin_user')
-        const permsData = localStorage.getItem('admin_permissions')
-        if (!token || !userData) {
-          navigate('/login')
-          return
-        }
-
-        let parsedAdmin
-        try {
-          parsedAdmin = JSON.parse(userData)
-        } catch {
-          localStorage.removeItem('admin_user')
-          navigate('/login')
-          return
-        }
+        const verified = await callAdminAuth('verify')
+        const parsedAdmin = verified.admin
+        if (!parsedAdmin?.id) throw new Error('Could not verify admin access.')
+        localStorage.setItem('admin_user', JSON.stringify(parsedAdmin))
+        localStorage.setItem('admin_permissions', JSON.stringify(verified.permissions || {}))
 
         setAdminUser(parsedAdmin)
-        if (permsData) {
-          try {
-            setAdminPermissions(JSON.parse(permsData))
-          } catch {
-            localStorage.removeItem('admin_permissions')
-          }
-        }
+        setAdminPermissions(verified.permissions || {})
         setLoading(false)
       } catch {
-        localStorage.removeItem('admin_token')
-        localStorage.removeItem('admin_user')
-        localStorage.removeItem('admin_permissions')
+        try {
+          await supabase.auth.signOut()
+        } catch {
+          // Access is denied even if local sign-out fails.
+        }
+        clearAdminCache()
+        setAdminUser(null)
+        setAdminPermissions({})
+        setLoading(false)
         navigate('/login')
       }
     }
@@ -837,12 +830,13 @@ let adminLoggingOut = false
   async function handleSignOut() {
     if (adminLoggingOut) return
     adminLoggingOut = true
-    await supabase.auth.signOut()
-    localStorage.removeItem('admin_token')
-    localStorage.removeItem('admin_user')
-    localStorage.removeItem('admin_permissions')
-    navigate('/login')
-    setTimeout(() => { adminLoggingOut = false }, 1000)
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      clearAdminCache()
+      navigate('/login')
+      setTimeout(() => { adminLoggingOut = false }, 1000)
+    }
   }
 
   return (

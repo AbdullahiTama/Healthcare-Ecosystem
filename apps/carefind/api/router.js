@@ -13,13 +13,12 @@
 //   - paystack-webhook gets the UNTOUCHED raw body stream: it signs the exact
 //     bytes Paystack sent (bodyParser: false, same as its old config export),
 //     so it must never be pre-consumed or re-serialized.
-//   - GET routes (banks, admin-setup) get req.query parsed from the URL.
+//   - GET routes (banks) get req.query parsed from the URL.
 export const config = { api: { bodyParser: false } }
 
 import { isCrawlerUserAgent } from '../src/lib/openGraph.js'
 import ogHandler from './_handlers/og.js'
 import adminAuthHandler from './_handlers/admin-auth.js'
-import adminSetupHandler from './_handlers/admin-setup.js'
 import banksHandler from './_handlers/banks.js'
 import bookingHandler from './_handlers/booking.js'
 import chargeConsultationHandler from './_handlers/charge-consultation.js'
@@ -48,7 +47,6 @@ import authEmailHandler from './_handlers/auth-email.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
-  'admin-setup': adminSetupHandler,
   'banks': banksHandler,
   'booking': bookingHandler,
   'booking-interest': bookingInterestHandler,

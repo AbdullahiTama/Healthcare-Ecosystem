@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { requireAdmin as requireVerifiedAdmin } from '../_lib/requireAdmin.js'
 
 let _shared = null
 async function shared() {
@@ -24,30 +25,12 @@ export default async function handler(req, res) {
 
   const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-  function verifyToken(token) {
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf8')
-      const parts = decoded.split('|')
-      if (parts.length !== 3) return null
-      const [adminId, role, timestamp] = parts
-      if (Date.now() - parseInt(timestamp) > 86400000) return null
-      return { adminId, role }
-    } catch { return null }
-  }
-
   async function requireAdmin() {
-    const { token } = req.body
-    if (!token) return { error: res.status(401).json({ error: 'Unauthorized' }) }
-    const payload = verifyToken(token)
-    if (!payload) return { error: res.status(401).json({ error: 'Invalid or expired token' }) }
-    const { data: admin } = await sb
-      .from('admin_users')
-      .select('id, role, is_active')
-      .eq('id', payload.adminId)
-      .eq('is_active', true)
-      .maybeSingle()
-    if (!admin) return { error: res.status(401).json({ error: 'Admin not found or inactive' }) }
-    return { adminId: admin.id }
+    const result = await requireVerifiedAdmin(req, sb)
+    if (result.status) {
+      return { error: res.status(result.status).json({ error: result.error }) }
+    }
+    return { adminId: result.admin.id }
   }
 
   const { action } = req.body

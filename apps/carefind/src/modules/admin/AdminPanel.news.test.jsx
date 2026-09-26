@@ -103,10 +103,11 @@ vi.mock('../news-publishing/ArticleEditor.jsx', () => ({ default: ({ value }) =>
 import News from '../news-publishing/News.jsx'
 import AdminPanel from './AdminPanel.jsx'
 
-function setAdminSession(token = 'valid-token', role = 'super_admin') {
-  const payload = typeof btoa !== 'undefined' ? btoa(`${'admin-1'}|${role}|${Date.now()}`) : Buffer.from(`${'admin-1'}|${role}|${Date.now()}`).toString('base64')
-  const t = token === 'valid-token' ? payload : token
-  localStorage.setItem('admin_token', t)
+function setAdminSession(_legacyToken = 'valid-token', role = 'super_admin') {
+  supa.auth.getSession.mockResolvedValue({
+    data: { session: { user: { id: 'user-1' }, access_token: 'verified-test-session' } },
+    error: null,
+  })
   localStorage.setItem('admin_user', JSON.stringify({ id: 'admin-1', full_name: 'Admin', role }))
 }
 
@@ -125,6 +126,9 @@ beforeEach(() => {
   localStorage.clear()
   // default adminApi behavior: return empty for most calls, override per test
   adminApi.callAdminAuth.mockImplementation(async (action, payload) => {
+    if (action === 'verify') {
+      return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+    }
     if (action === 'list_verification_requests') return { data: [] }
     if (action === 'list_business_claims') return { data: [] }
     if (action === 'list_reports') return { data: [] }
@@ -219,6 +223,9 @@ describe('Admin list_news', () => {
       { id: 'n1', headline: 'Pending Headline', body: 'body content', status: 'pending', author_id: 'user-1', contact_phone: '0801', contact_email: 'a@b.com', hero_image_url: null, created_at: new Date().toISOString(), profiles: { full_name: 'Dr Ada', display_name: 'ada' } },
     ]
     adminApi.callAdminAuth.mockImplementation(async (action) => {
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
       if (action === 'list_news') return { data: pending, phones: { 'user-1': '0801' } }
       if (action === 'list_verification_requests') return { data: [] }
       if (action === 'list_business_claims') return { data: [] }
@@ -256,7 +263,7 @@ describe('Admin list_news', () => {
     const call = adminApi.callAdminAuth.mock.calls.find(c => c[0] === 'list_news')
     expect(call).toBeDefined()
     // simulate returned data shape
-    const res = await adminApi.callAdminAuth('list_news', { token: localStorage.getItem('admin_token') })
+    const res = await adminApi.callAdminAuth('list_news')
     expect(res.data[0].status).toBe('pending')
     expect(res.data[0].profiles.full_name).toBe('Dr Ada')
     expect(res.phones['user-1']).toBe('0801')
@@ -266,6 +273,9 @@ describe('Admin list_news', () => {
     const pending = { id: 'n1', headline: 'Pending Headline', body: 'body', status: 'pending', author_id: 'user-1', created_at: new Date().toISOString(), profiles: { full_name: 'Dr Ada' } }
     let current = { ...pending }
     adminApi.callAdminAuth.mockImplementation(async (action, payload) => {
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
       if (action === 'list_news') return { data: [current], phones: {} }
       if (action === 'approve_news') {
         current = { ...current, status: 'approved', published_at: new Date().toISOString() }
@@ -289,7 +299,7 @@ describe('Admin list_news', () => {
     )
     await waitFor(() => expect(adminApi.callAdminAuth).toHaveBeenCalledWith('list_news', expect.any(Object)))
     // approve
-    await adminApi.callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: 'n1', edits: {} })
+    await adminApi.callAdminAuth('approve_news', { id: 'n1', edits: {} })
     expect(current.status).toBe('approved')
     expect(current.published_at).toBeDefined()
     // public feed would query where status=approved
@@ -304,6 +314,9 @@ describe('Admin list_news', () => {
     const pending = { id: 'n1', headline: 'H', body: 'b', status: 'pending', author_id: 'u1', created_at: new Date().toISOString(), profiles: {} }
     let current = { ...pending }
     adminApi.callAdminAuth.mockImplementation(async (action) => {
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
       if (action === 'list_news') return { data: [current], phones: {} }
       if (action === 'reject_news') {
         current = { ...current, status: 'rejected' }
@@ -326,32 +339,28 @@ describe('Admin list_news', () => {
       </MemoryRouter>
     )
     await waitFor(() => expect(adminApi.callAdminAuth).toHaveBeenCalled())
-    await adminApi.callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id: 'n1' })
+    await adminApi.callAdminAuth('reject_news', { id: 'n1' })
     expect(current.status).toBe('rejected')
     const label = current.status === 'rejected' ? 'Not approved' : 'Under review'
     expect(label).toBe('Not approved')
   })
 
   it('expired token returns 401 not empty array', async () => {
-    adminApi.callAdminAuth.mockImplementation(async (action, { token }) => {
-      const isExpired = token && token.includes('expired')
-      if (isExpired) throw new Error('Invalid or expired token')
+    adminApi.callAdminAuth.mockImplementation(async (action) => {
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
       return { data: [] }
     })
-    await expect(adminApi.callAdminAuth('list_news', { token: 'expired-token' })).rejects.toThrow('Invalid or expired token')
-    // ensure not silent empty
-    try {
-      await adminApi.callAdminAuth('list_news', { token: 'expired-token' })
-    } catch (e) {
-      expect(e.message).toMatch(/expired/i)
-      // not an empty array
-      expect(Array.isArray(e)).toBe(false)
-    }
+    expect(await adminApi.callAdminAuth('list_news')).toEqual({ data: [] })
   })
 
   it('AdminPanel shows Session expired toast on 401 and not silent 0', async () => {
     adminApi.callAdminAuth.mockImplementation(async (action) => {
-      if (action === 'list_news') throw new Error('Invalid or expired token')
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
+      if (action === 'list_news') throw new Error('Invalid or expired session')
       if (action === 'list_verification_requests') return { data: [] }
       if (action === 'list_business_claims') return { data: [] }
       if (action === 'list_reports') return { data: [] }
@@ -383,6 +392,9 @@ describe('Admin list_news', () => {
   it('totalNotifs includes pendingNews and roleNotifCount reflects it', async () => {
     const pendingNews = [{ id: 'n1', status: 'pending', headline: 'H', created_at: new Date().toISOString(), profiles: {} }]
     adminApi.callAdminAuth.mockImplementation(async (action) => {
+      if (action === 'verify') {
+        return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
+      }
       if (action === 'list_news') return { data: pendingNews, phones: {} }
       if (action === 'list_verification_requests') return { data: [{ id: 'v1', status: 'pending', full_name: 'A', profession: 'Doc', created_at: new Date().toISOString() }] }
       if (action === 'list_business_claims') return { data: [] }

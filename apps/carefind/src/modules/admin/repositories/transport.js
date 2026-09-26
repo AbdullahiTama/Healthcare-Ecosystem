@@ -1,16 +1,10 @@
 import { callAdminAuth } from '../adminApi.js'
 import { supabase } from '../../../config/supabaseClient.js'
 
-function getToken() {
-  const token = localStorage.getItem('admin_token')
-  if (!token) throw new Error('Admin session expired. Please log in again.')
-  return token
-}
-
 export function createAdminTransport() {
   return {
     async api(action, payload = {}) {
-      const { data, ...rest } = await callAdminAuth(action, { token: getToken(), ...payload })
+      const { data, ...rest } = await callAdminAuth(action, payload)
       return { data, ...rest }
     },
 

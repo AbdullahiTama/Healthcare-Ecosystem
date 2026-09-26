@@ -5,6 +5,12 @@ import { callAdminAuth } from './adminApi'
 import { theme } from '../../styles/theme'
 import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
+function clearAdminCache() {
+  localStorage.removeItem('admin_user')
+  localStorage.removeItem('admin_permissions')
+  localStorage.removeItem('admin_token')
+}
+
 export default function AdminLogin() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -30,48 +36,29 @@ export default function AdminLogin() {
       })
 
       if (authErr || !data?.session) {
+        try {
+          await supabase.auth.signOut()
+        } catch {
+          // The failed login remains denied even if local sign-out fails.
+        }
+        clearAdminCache()
         setError('Incorrect email or password. Please try again.')
-        setLoading(false)
         return
       }
 
-      const { data: admin, error: lookupErr } = await supabase
-        .from('admin_users')
-        .select('id, email, full_name, role, is_active')
-        .eq('email', email.toLowerCase())
-        .eq('is_active', true)
-        .maybeSingle()
-
-      if (lookupErr) {
-        setError('Database error: ' + lookupErr.message)
-        setLoading(false)
-        return
-      }
-
-      if (!admin) {
-        setError('No admin account matches this email.')
-        setLoading(false)
-        return
-      }
-
-      let token = btoa(`${admin.id}|${admin.role}|${Date.now()}`)
-      try {
-        const r = await callAdminAuth('login', { email })
-        if (r.token) token = r.token
-      } catch {}
-
-      localStorage.setItem('admin_token', token)
-      localStorage.setItem('admin_user', JSON.stringify(admin))
-
-      let perms = {}
-      try {
-        const r = await callAdminAuth('get_admin_permissions', { token })
-        perms = r.permissions || {}
-      } catch {}
-      localStorage.setItem('admin_permissions', JSON.stringify(perms))
+      const r = await callAdminAuth('verify')
+      if (!r?.admin?.id) throw new Error('Could not verify admin access. Please sign in again.')
+      localStorage.setItem('admin_user', JSON.stringify(r.admin))
+      localStorage.setItem('admin_permissions', JSON.stringify(r.permissions || {}))
 
       navigate('/admin-panel')
     } catch (err) {
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        // The local admin cache is still cleared below.
+      }
+      clearAdminCache()
       setError(err.message || 'Connection error. Check your internet and try again.')
     } finally {
       setLoading(false)

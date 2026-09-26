@@ -58,7 +58,7 @@ CREATE POLICY directory_admin_write ON public.business_directory
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -71,7 +71,7 @@ CREATE POLICY directory_admin_update ON public.business_directory
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -84,7 +84,7 @@ CREATE POLICY directory_admin_delete ON public.business_directory
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -105,7 +105,7 @@ CREATE POLICY categories_admin_insert ON public.business_categories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -118,7 +118,7 @@ CREATE POLICY categories_admin_update ON public.business_categories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -131,7 +131,7 @@ CREATE POLICY categories_admin_delete ON public.business_categories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -148,7 +148,7 @@ CREATE POLICY subcategories_admin_insert ON public.business_subcategories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -161,7 +161,7 @@ CREATE POLICY subcategories_admin_update ON public.business_subcategories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )
@@ -174,7 +174,7 @@ CREATE POLICY subcategories_admin_delete ON public.business_subcategories
     public.is_platform_admin()
     OR EXISTS (
       SELECT 1 FROM public.admin_users
-      WHERE admin_users.id = auth.uid()
+      WHERE admin_users.auth_user_id = auth.uid()
         AND admin_users.is_active = true
         AND admin_users.role IN ('admin', 'super_admin')
     )

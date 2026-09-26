@@ -7,6 +7,7 @@ import {
   ToggleLeft, ToggleRight, Check, AlertCircle,
 } from 'lucide-react'
 import { ConfirmDialog } from '../../../components/ui'
+import { getAdminAuthorizationHeader } from '../adminApi'
 
 const CATEGORIES = [
   { value: 'general', label: 'General' },
@@ -32,8 +33,11 @@ const EMPTY_FORM = {
 async function callEmailTemplates(action, payload = {}) {
   const res = await fetch('/api/email-templates', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, token: localStorage.getItem('admin_token'), ...payload }),
+    headers: {
+      'Content-Type': 'application/json',
+      ...await getAdminAuthorizationHeader(),
+    },
+    body: JSON.stringify({ action, ...payload }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || 'Request failed')

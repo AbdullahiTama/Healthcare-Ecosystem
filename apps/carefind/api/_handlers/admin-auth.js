@@ -1,5 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { processBatch as flushOutbox } from '../_lib/emailService.js'
+import { requireAdmin } from '../_lib/requireAdmin.js'
 
 export default async function handler(req, res) {
   try {
@@ -22,48 +23,14 @@ async function handleRequest(req, res) {
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 
-  function hashPassword(password) {
-    return `cf_hashed_${password}`
-  }
-
-  function generateToken(adminId, role) {
-    const payload = `${adminId}|${role}|${Date.now()}`
-    return Buffer.from(payload).toString('base64')
-  }
-
-  function verifyToken(token) {
-    try {
-      const decoded = Buffer.from(token, 'base64').toString('utf8')
-      const parts = decoded.split('|')
-      if (parts.length !== 3) return null
-      const [adminId, role, timestamp] = parts
-      if (Date.now() - parseInt(timestamp) > 86400000) return null
-      return { adminId, role }
-    } catch { return null }
-  }
-
-  const { action, email, password, token } = req.body
-
-  if (action === 'login') {
-    try {
-      if (!email) return res.status(400).json({ error: 'Email required' })
-      const { data: admin, error: queryErr } = await supabase
-        .from('admin_users')
-        .select('id, email, full_name, role, is_active')
-        .eq('email', email.toLowerCase())
-        .eq('is_active', true)
-        .maybeSingle()
-      if (queryErr) return res.status(500).json({ error: 'Database error: ' + queryErr.message })
-      if (!admin) return res.status(401).json({ error: 'No active admin account for this email' })
-      await supabase.from('admin_users').update({ last_login: new Date().toISOString() }).eq('id', admin.id)
-      const sessionToken = generateToken(admin.id, admin.role)
-      let perms = {}
-      try { const r = await supabase.rpc('get_admin_permissions', { p_admin_id: admin.id }); perms = r.data || {} } catch {}
-      return res.status(200).json({ token: sessionToken, admin: { id: admin.id, email: admin.email, full_name: admin.full_name, role: admin.role }, permissions: perms })
-    } catch (err) {
-      return res.status(500).json({ error: 'Login failed: ' + (err.message || 'Unknown error') })
-    }
-  }
+  const { action } = req.body
+  const token = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.slice(7).trim()
+    : ''
+  const { admin, status, error: authError } = await requireAdmin(req, supabase)
+  if (status) return res.status(status).json({ error: authError })
+  const payload = { adminId: admin.id, role: admin.role }
+  const verifyToken = () => payload
 
   if (action === 'verify') {
     try {
@@ -82,15 +49,44 @@ async function handleRequest(req, res) {
   }
 
   if (action === 'create_staff') {
-    if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = verifyToken(token)
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can create staff' })
     const { newEmail, newPassword, newName, newRole, teamId, roleId } = req.body
     if (!newEmail || !newPassword || !newName || !newRole) return res.status(400).json({ error: 'All fields required' })
-    const insertData = { email: newEmail.toLowerCase(), password_hash: hashPassword(newPassword), full_name: newName, role: newRole, team_id: teamId || null, created_by: payload.adminId }
+    const normalizedEmail = newEmail.trim().toLowerCase()
+    const { data: createdUser, error: authCreateError } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password: newPassword,
+      email_confirm: true,
+    })
+    if (authCreateError || !createdUser?.user) {
+      return res.status(400).json({ error: authCreateError?.message || 'Could not create staff Auth identity' })
+    }
+    const insertData = {
+      auth_user_id: createdUser.user.id,
+      email: normalizedEmail,
+      full_name: newName,
+      role: newRole,
+      team_id: teamId || null,
+      created_by: payload.adminId,
+    }
     if (roleId) insertData.role_id = roleId
     const { error } = await supabase.from('admin_users').insert(insertData)
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) {
+      let cleanupError
+      try {
+        const cleanup = await supabase.auth.admin.deleteUser(createdUser.user.id)
+        cleanupError = cleanup?.error
+      } catch {
+        cleanupError = new Error('Auth cleanup failed')
+      }
+      if (cleanupError) {
+        return res.status(500).json({
+          error: 'Could not save the admin record or clean up its Auth identity. Contact an operator.',
+        })
+      }
+      return res.status(400).json({ error: error.message })
+    }
     return res.status(200).json({ success: true })
   }
 

@@ -1,21 +1,21 @@
--- Migrate admin_users to Supabase Auth
--- Run this in Supabase SQL Editor, then login with the temp password
+-- Legacy admin identity migration. Review the resulting identity links and
+-- require password recovery before admins sign in; no shared password is used.
 
 -- 1. Create the migration function
 CREATE OR REPLACE FUNCTION public.migrate_admin_auth_users()
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth, extensions, pg_temp
 AS $func$
 DECLARE
   admin_rec RECORD;
   auth_user_id UUID;
   result jsonb := '[]'::jsonb;
-  temp_pw text := 'Admin@CareFind2026!';
 BEGIN
   FOR admin_rec IN
     SELECT id, email, full_name
-    FROM admin_users
+    FROM public.admin_users
     WHERE is_active = true
   LOOP
     SELECT id INTO auth_user_id
@@ -44,7 +44,8 @@ BEGIN
     ) VALUES (
       '00000000-0000-0000-0000-000000000000',
       auth_user_id, 'authenticated', 'authenticated',
-      lower(admin_rec.email), crypt(temp_pw, gen_salt('bf')),
+      lower(admin_rec.email),
+      crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf')),
       now(), now(), now(),
       encode(gen_random_bytes(32), 'hex'),
       encode(gen_random_bytes(32), 'hex'),
@@ -82,6 +83,8 @@ BEGIN
 END;
 $func$;
 
+REVOKE ALL ON FUNCTION public.migrate_admin_auth_users() FROM PUBLIC, anon, authenticated;
+
 -- 2. Run it
 SELECT * FROM public.migrate_admin_auth_users();
 
@@ -89,7 +92,7 @@ SELECT * FROM public.migrate_admin_auth_users();
 SELECT
   au.email, au.full_name, au.role,
   CASE WHEN auth_u.id IS NOT NULL THEN 'YES' ELSE 'NO' END as has_auth
-FROM admin_users au
+FROM public.admin_users au
 LEFT JOIN auth.users auth_u ON lower(auth_u.email) = lower(au.email)
 WHERE au.is_active = true;
 
