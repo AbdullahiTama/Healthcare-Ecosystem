@@ -7,10 +7,6 @@ let _sendEmail = null
 let _templates = null
 
 async function deps() {
-  if (!_createClient) {
-    const mod = await import('@supabase/supabase-js')
-    _createClient = mod.createClient
-  }
   if (!_sendEmail) {
     const mod = await import('./sendEmail.js')
     _sendEmail = mod.sendEmail
@@ -18,7 +14,22 @@ async function deps() {
   if (!_templates) {
     _templates = await import('./templates/index.js')
   }
-  return { createClient: _createClient, sendEmail: _sendEmail, getTemplate: _templates.getTemplate, TEMPLATE_REGISTRY: _templates.TEMPLATE_REGISTRY }
+  return { sendEmail: _sendEmail, getTemplate: _templates.getTemplate, TEMPLATE_REGISTRY: _templates.TEMPLATE_REGISTRY }
+}
+
+// supabase-js is loaded here and not from deps() because deps() is called on
+// every processBatch(), including when the caller injected its own client via
+// `new EmailService({ supabase })`. A bare '@supabase/supabase-js' specifier
+// only resolves by walking up from this file, and on Vercel the workspace
+// package is deployed without its own node_modules, so the lookup misses and
+// the cron dies with "Cannot find package '@supabase/supabase-js'". Keeping
+// it out of deps() means a service with an injected client never needs it.
+async function loadCreateClient() {
+  if (!_createClient) {
+    const mod = await import('@supabase/supabase-js')
+    _createClient = mod.createClient
+  }
+  return _createClient
 }
 
 // Each app sends from its own brand identity. The outbox row's from_email
@@ -34,7 +45,7 @@ async function getSupabase() {
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set')
     }
-    const { createClient } = await deps()
+    const createClient = await loadCreateClient()
     _supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
   }
   return _supabase
@@ -106,7 +117,10 @@ export class EmailService {
 }
 
 let _emailService = null
-export function getEmailService() {
-  if (!_emailService) _emailService = new EmailService()
+// options.supabase lets the caller supply a client it already built, which
+// skips loadCreateClient() entirely. The first caller's options win, so the
+// singleton stays stable.
+export function getEmailService(options = {}) {
+  if (!_emailService) _emailService = new EmailService(options)
   return _emailService
 }
