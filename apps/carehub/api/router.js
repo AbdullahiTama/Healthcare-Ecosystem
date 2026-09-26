@@ -3,7 +3,30 @@
 // Vercel's Hobby plan caps a deployment at 12 serverless functions. All
 // handlers live in api/_handlers/ (underscore prefix = excluded from
 // Vercel's function count). vercel.json rewrites every /api/* to this
-// router, which dispatches via dynamic imports.
+// router, which dispatches to a statically imported handler.
+//
+// The imports below must stay static. An earlier revision mapped each route
+// to a path string and called `await import(path)`. Vercel builds this
+// function with @vercel/nft, which follows literal import specifiers only;
+// a variable specifier is untraceable, so no _handlers/* file was bundled and
+// every route failed at runtime with
+// "Cannot find module '/var/task/apps/carehub/api/_handlers/<x>.js'".
+// Keep these as top-level named imports so nft includes them in the bundle.
+import authEmailHandler from './_handlers/auth-email.js'
+import banksHandler from './_handlers/banks.js'
+import cronHandler from './_handlers/cron-handler.js'
+import ecommerceReviewHandler from './_handlers/ecommerce-review.js'
+import emailHandler from './_handlers/email-handler.js'
+import initiateAppointmentPaymentHandler from './_handlers/initiate-appointment-payment.js'
+import initiateBusinessWithdrawalHandler from './_handlers/initiate-business-withdrawal.js'
+import initiatePlanPaymentHandler from './_handlers/initiate-plan-payment.js'
+import notifyBusinessStatusHandler from './_handlers/notify-business-status.js'
+import notifyRegistrationHandler from './_handlers/notify-registration.js'
+import resolveAccountHandler from './_handlers/resolve-account.js'
+import verifyAppointmentPaymentHandler from './_handlers/verify-appointment-payment.js'
+import verifyPlanPaymentHandler from './_handlers/verify-plan-payment.js'
+import webhooksHandler from './_handlers/webhooks-handler.js'
+
 export const config = { api: { bodyParser: false } }
 
 function routeFromUrl(req) {
@@ -47,28 +70,30 @@ function parseQuery(req) {
   req.query = query
 }
 
+// Route table maps the first path segment after /api/ to an already-imported
+// handler. Values are functions, never path strings -- see the note above.
 const HANDLERS = {
-  'verify-plan-payment':          './_handlers/verify-plan-payment.js',
-  'verify-appointment-payment':   './_handlers/verify-appointment-payment.js',
-  'resolve-account':              './_handlers/resolve-account.js',
-  'notify-registration':          './_handlers/notify-registration.js',
-  'notify-business-status':       './_handlers/notify-business-status.js',
-  'initiate-plan-payment':        './_handlers/initiate-plan-payment.js',
-  'initiate-business-withdrawal': './_handlers/initiate-business-withdrawal.js',
-  'initiate-appointment-payment': './_handlers/initiate-appointment-payment.js',
-  'ecommerce-review':             './_handlers/ecommerce-review.js',
-  'auth-email':                   './_handlers/auth-email.js',
-  'banks':                        './_handlers/banks.js',
-  'email':                        './_handlers/email-handler.js',
-  'cron':                         './_handlers/cron-handler.js',
-  'webhooks':                     './_handlers/webhooks-handler.js',
+  'verify-plan-payment':          verifyPlanPaymentHandler,
+  'verify-appointment-payment':   verifyAppointmentPaymentHandler,
+  'resolve-account':              resolveAccountHandler,
+  'notify-registration':          notifyRegistrationHandler,
+  'notify-business-status':       notifyBusinessStatusHandler,
+  'initiate-plan-payment':        initiatePlanPaymentHandler,
+  'initiate-business-withdrawal': initiateBusinessWithdrawalHandler,
+  'initiate-appointment-payment': initiateAppointmentPaymentHandler,
+  'ecommerce-review':             ecommerceReviewHandler,
+  'auth-email':                   authEmailHandler,
+  'banks':                        banksHandler,
+  'email':                        emailHandler,
+  'cron':                         cronHandler,
+  'webhooks':                     webhooksHandler,
 }
 
 export default async function handler(req, res) {
   const route = routeFromUrl(req)
-  const path = HANDLERS[route]
+  const target = HANDLERS[route]
 
-  if (!path) return res.status(404).json({ error: `No handler for /api/${route}` })
+  if (!target) return res.status(404).json({ error: `No handler for /api/${route}` })
 
   parseQuery(req)
   try { await rehydrateBody(req) } catch (err) {
@@ -76,8 +101,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const mod = await import(path)
-    return await mod.default(req, res)
+    return await target(req, res)
   } catch (err) {
     console.error(`[router] ${route} crashed:`, err)
     if (!res.headersSent) return res.status(500).json({ error: err.message || 'Internal server error' })

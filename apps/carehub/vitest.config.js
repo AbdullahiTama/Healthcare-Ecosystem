@@ -10,7 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx}', 'api/**/*.test.js'],
     globals: true,
   },
   // Mirrors vite.config.js so tests resolve the shared design-system package
