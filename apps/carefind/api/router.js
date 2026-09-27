@@ -44,6 +44,8 @@ import withdrawalTrustHandler from './_handlers/withdrawal-trust.js'
 import emailTemplatesHandler from './_handlers/email-templates.js'
 import emailHandler from './_handlers/email.js'
 import authEmailHandler from './_handlers/auth-email.js'
+import excelExportHandler from './_handlers/excel-export.js'
+import excelImportHandler from './_handlers/excel-import.js'
 
 const ROUTES = {
   'admin-auth': adminAuthHandler,
@@ -72,6 +74,8 @@ const ROUTES = {
   'email-templates': emailTemplatesHandler,
   'email': emailHandler,
   'auth-email': authEmailHandler,
+  'excel-export': excelExportHandler,
+  'excel-import': excelImportHandler,
   'cron': emailHandler,
   'webhooks': emailHandler,
 }

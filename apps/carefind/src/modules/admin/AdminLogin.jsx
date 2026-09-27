@@ -8,7 +8,6 @@ import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react'
 function clearAdminCache() {
   localStorage.removeItem('admin_user')
   localStorage.removeItem('admin_permissions')
-  localStorage.removeItem('admin_token')
 }
 
 export default function AdminLogin() {

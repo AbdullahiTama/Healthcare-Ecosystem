@@ -249,4 +249,163 @@ describe('admin-auth handler', () => {
     expect(res.body.error).toMatch(/could not save.*clean up/i)
     expect(res.body.error).not.toContain('fresh-password')
   })
+
+  it('rejects a forged token that is not a valid JWT', async () => {
+    const mock = makeHarness({
+      authError: new Error('Invalid JWT'),
+    })
+    const res = await invoke({
+      token: 'forged-token-that-is-not-a-jwt',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body.error).toBe('Invalid or expired session')
+    expect(mock.fromCalls).toHaveLength(0)
+  })
+
+  it('rejects an expired token', async () => {
+    const mock = makeHarness({
+      authError: new Error('Token expired'),
+    })
+    const res = await invoke({
+      token: 'expired-jwt-token',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body.error).toBe('Invalid or expired session')
+    expect(mock.fromCalls).toHaveLength(0)
+  })
+
+  it('rejects a token with a valid JWT but no admin record', async () => {
+    const mock = makeHarness({
+      admin: null,
+    })
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body.error).toBe('Active admin access required')
+  })
+
+  it('rejects a token with a valid JWT but inactive admin', async () => {
+    const mock = makeHarness({
+      admin: { id: 'admin-1', email: 'admin@example.com', role: 'super_admin', is_active: false },
+    })
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body.error).toBe('Active admin access required')
+  })
+
+  it('allows a valid admin to verify their session', async () => {
+    const mock = makeHarness()
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.admin).toEqual({
+      id: 'admin-1',
+      email: 'admin@example.com',
+      role: 'super_admin',
+      is_active: true,
+    })
+  })
+
+  it('allows a valid admin to access admin endpoints', async () => {
+    const mock = makeHarness()
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'list_teams' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.teams).toEqual([{ id: 'staff-1' }])
+  })
+
+  it('denies a non-admin user from accessing admin endpoints', async () => {
+    const mock = makeHarness({
+      admin: null,
+    })
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'list_teams' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body.error).toBe('Active admin access required')
+  })
+
+  it('denies a moderator from super-admin-only actions', async () => {
+    const mock = makeHarness({
+      admin: { id: 'admin-2', email: 'admin@example.com', role: 'moderator', is_active: true },
+    })
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'create_staff' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(res.body.error).toBe('Only super admin can create staff')
+  })
+
+  it('handles logout action', async () => {
+    const mock = makeHarness()
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'logout' },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.ok).toBe(true)
+  })
+
+  it('rejects logout without a valid token', async () => {
+    const mock = makeHarness({
+      authError: new Error('Invalid JWT'),
+    })
+    const res = await invoke({
+      token: 'invalid-token',
+      body: { action: 'logout' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body.error).toBe('Invalid or expired session')
+  })
+
+  it('rejects a token that was manipulated after issuance', async () => {
+    const mock = makeHarness({
+      authError: new Error('Token signature mismatch'),
+    })
+    const res = await invoke({
+      token: 'manipulated-token',
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body.error).toBe('Invalid or expired session')
+    expect(mock.fromCalls).toHaveLength(0)
+  })
+
+  it('does not leak token details in error messages', async () => {
+    const mock = makeHarness({
+      authError: new Error('Invalid JWT'),
+    })
+    const sensitiveToken = 'super-secret-token-value'
+    const res = await invoke({
+      token: sensitiveToken,
+      body: { action: 'verify' },
+    })
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body.error).not.toContain(sensitiveToken)
+  })
 })

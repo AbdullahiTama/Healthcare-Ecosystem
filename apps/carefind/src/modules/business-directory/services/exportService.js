@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { formatDistance, calculateDistance } from './locationService.js';
@@ -6,6 +5,9 @@ import { formatDistance, calculateDistance } from './locationService.js';
 /**
  * Export Service
  * Handles exporting business data to CSV, Excel, PDF, and JSON
+ *
+ * Excel export is handled server-side via /api/excel-export to avoid
+ * bundling the xlsx library in the browser.
  */
 
 /**
@@ -120,31 +122,30 @@ export function toCSV(businesses, options = {}) {
 }
 
 /**
- * Export to Excel
+ * Export to Excel (server-side via /api/excel-export)
  */
-export function toExcel(businesses, options = {}) {
+export async function toExcel(businesses, options = {}) {
   const { fields = DEFAULT_FIELDS, referenceLocation = null, filename = 'businesses' } = options;
 
-  const transformed = transformForExport(businesses, fields, referenceLocation);
+  const { supabase } = await import('../../../config/supabaseClient.js');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(transformed);
-
-  // Auto-width columns
-  const colWidths = Object.keys(transformed[0] || {}).map((key) => ({
-    wch: Math.max(key.length, ...transformed.map((row) => String(row[key] || '').length)) + 2,
-  }));
-  ws['!cols'] = colWidths;
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Businesses');
-
-  // Generate buffer
-  const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([excelBuffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  const res = await fetch('/api/excel-export', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ businesses, fields, filename }),
   });
 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Excel export failed');
+  }
+
+  const blob = await res.blob();
   downloadBlob(blob, `${filename}.xlsx`);
 
   return { success: true, count: businesses.length };

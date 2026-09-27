@@ -53,7 +53,6 @@ const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
 function clearAdminCache() {
   localStorage.removeItem('admin_user')
   localStorage.removeItem('admin_permissions')
-  localStorage.removeItem('admin_token')
 }
 
 export default function AdminPanel() {
@@ -177,7 +176,6 @@ export default function AdminPanel() {
   async function logAuditAction(auditAction, targetType, targetId, metadata = {}) {
     try {
       await callAdminAuth('log_audit_action', {
-        token: localStorage.getItem('admin_token'),
         auditAction,
         targetType,
         targetId,
@@ -279,13 +277,13 @@ export default function AdminPanel() {
 
   async function updateEcomApp(id, status) {
     try {
-      await callAdminAuth('update_ecommerce_application', { token: localStorage.getItem('admin_token'), id, status })
+      await callAdminAuth('update_ecommerce_application', {  id, status })
       showToast(`Application ${status}`, { type: 'success' }); invalidateAdmin()
     } catch (e) { showToast(e.message, { type: 'error' }) }
   }
   async function moderateProduct(id, patch) {
     try {
-      await callAdminAuth('moderate_ecommerce_product', { token: localStorage.getItem('admin_token'), id, ...patch })
+      await callAdminAuth('moderate_ecommerce_product', {  id, ...patch })
       showToast('Product updated', { type: 'success' }); invalidateAdmin()
     } catch (e) { showToast(e.message, { type: 'error' }) }
   }
@@ -306,8 +304,7 @@ export default function AdminPanel() {
     }
     try {
       await callAdminAuth('schedule_show', {
-        token: localStorage.getItem('admin_token'),
-        title: liveTitle.trim(),
+         title: liveTitle.trim(),
         scheduledAt,
         trailerUrl,
         guestIds: liveGuests.map(g => g.id),
@@ -325,7 +322,7 @@ export default function AdminPanel() {
 
   async function startScheduledShow(showId) {
     try {
-      await callAdminAuth('start_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
+      await callAdminAuth('start_scheduled_show', {  showId })
       invalidateAdmin()
       showToast('You are now LIVE!', { type: 'success' })
     } catch (err) {
@@ -343,7 +340,7 @@ export default function AdminPanel() {
   }
   async function reallyCancelScheduledShow(showId) {
     try {
-      await callAdminAuth('cancel_scheduled_show', { token: localStorage.getItem('admin_token'), showId })
+      await callAdminAuth('cancel_scheduled_show', {  showId })
       invalidateAdmin()
       showToast('Scheduled show cancelled', { type: 'success' })
     } catch (err) {
@@ -361,8 +358,7 @@ export default function AdminPanel() {
     // Admin login isn't a profile row, so host_id stays null and we mark it a platform show.
     try {
       await callAdminAuth('start_live_show', {
-        token: localStorage.getItem('admin_token'),
-        title: liveTitle.trim(),
+         title: liveTitle.trim(),
         guestIds: liveGuests.map(g => g.id),
       })
     } catch (err) {
@@ -386,7 +382,7 @@ export default function AdminPanel() {
   }
   async function reallyEndLiveShow(showId) {
     try {
-      await callAdminAuth('end_live_show', { token: localStorage.getItem('admin_token'), showId })
+      await callAdminAuth('end_live_show', {  showId })
       invalidateAdmin()
       showToast('Live show ended', { type: 'success' })
     } catch (err) {
@@ -425,7 +421,7 @@ export default function AdminPanel() {
 
   async function hideLiveComment(cid, showId) {
     try {
-      await callAdminAuth('hide_live_comment', { token: localStorage.getItem('admin_token'), id: cid })
+      await callAdminAuth('hide_live_comment', {  id: cid })
       loadLiveControl(showId)
     } catch (err) {
       showToast(`Couldn't hide the comment: ${err.message}`, { type: 'error' })
@@ -433,17 +429,17 @@ export default function AdminPanel() {
   }
 
   async function postLiveVoice(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'voice', content: url }).catch(err => showToast(`Couldn't post the voice note: ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', {  showId, kind: 'voice', content: url }).catch(err => showToast(`Couldn't post the voice note: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveSlide(showId, url, num, total) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => showToast(`Couldn't post the slide: ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', {  showId, kind: 'slide', content: `${url}|||${num}|||${total}` }).catch(err => showToast(`Couldn't post the slide: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
   async function postLiveVideo(showId, url) {
-    await callAdminAuth('post_live_item', { token: localStorage.getItem('admin_token'), showId, kind: 'video', content: url }).catch(err => showToast(`Couldn't post the video: ${err.message}`, { type: 'error' }))
+    await callAdminAuth('post_live_item', {  showId, kind: 'video', content: url }).catch(err => showToast(`Couldn't post the video: ${err.message}`, { type: 'error' }))
     loadLiveControl(showId)
   }
 
@@ -462,8 +458,7 @@ export default function AdminPanel() {
     }
     try {
       await callAdminAuth('create_promotion', {
-        token: localStorage.getItem('admin_token'),
-        title: promoTitle.trim(),
+         title: promoTitle.trim(),
         linkUrl: promoLink.trim() || null,
         imageUrl,
         days: promoDays,
@@ -487,7 +482,7 @@ export default function AdminPanel() {
   }
   async function reallyDeletePromotion(id) {
     try {
-      await callAdminAuth('delete_promotion', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('delete_promotion', {  id })
       invalidateAdmin()
       showToast('Promotion deleted', { type: 'success' })
     } catch (err) {
@@ -507,7 +502,7 @@ export default function AdminPanel() {
       ? { headline: editingNews.headline, subtitle: editingNews.subtitle, body: editingNews.body }
       : {}
     try {
-      await callAdminAuth('approve_news', { token: localStorage.getItem('admin_token'), id: item.id, edits })
+      await callAdminAuth('approve_news', {  id: item.id, edits })
       logAuditAction('approve', 'news', item.id, { headline: item.headline })
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() }])
       showToast('News item approved', { type: 'success' })
@@ -524,7 +519,7 @@ export default function AdminPanel() {
 
   async function rejectNews(id) {
     try {
-      await callAdminAuth('reject_news', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('reject_news', {  id })
       logAuditAction('reject', 'news', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'news', id, timestamp: new Date().toISOString() }])
       showToast('News item rejected', { type: 'success' })
@@ -547,7 +542,7 @@ export default function AdminPanel() {
   }
   async function reallyDeleteNews(id) {
     try {
-      await callAdminAuth('delete_news', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('delete_news', {  id })
       logAuditAction('delete', 'news', id, {})
       qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).filter(n => n.id !== id) }))
       showToast('News item deleted', { type: 'success' })
@@ -573,8 +568,7 @@ export default function AdminPanel() {
     }
     try {
       await callAdminAuth('create_story', {
-        token: localStorage.getItem('admin_token'),
-        title: storyTitle.trim() || null,
+         title: storyTitle.trim() || null,
         body: storyBody.trim() || null,
         imageUrl,
         bgColor: storyBg,
@@ -598,7 +592,7 @@ export default function AdminPanel() {
   }
   async function reallyDeleteStory(id) {
     try {
-      await callAdminAuth('delete_story', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('delete_story', {  id })
       invalidateAdmin()
       showToast('Story deleted', { type: 'success' })
     } catch (err) {
@@ -617,7 +611,7 @@ export default function AdminPanel() {
 
   async function suspendUser(userId, days) {
     try {
-      await callAdminAuth('suspend_user', { token: localStorage.getItem('admin_token'), userId, days })
+      await callAdminAuth('suspend_user', {  userId, days })
       logAuditAction('suspend', 'user', userId, { days })
       setSelectedUser(null)
       invalidateAdmin()
@@ -639,7 +633,7 @@ export default function AdminPanel() {
   async function reallyDeleteUser(userId) {
     setDeletingUser(true)
     try {
-      await callAdminAuth('delete_user', { token: localStorage.getItem('admin_token'), userId })
+      await callAdminAuth('delete_user', {  userId })
       logAuditAction('delete', 'user', userId, { name: selectedUser?.full_name || selectedUser?.display_name })
       showToast('User deleted', { type: 'success' })
     } catch (err) {
@@ -662,7 +656,7 @@ export default function AdminPanel() {
     // would look like the button doing nothing at all.
     const tab = window.open('', '_blank', 'noopener,noreferrer')
     try {
-      const { url } = await callAdminAuth('credential_url', { token: localStorage.getItem('admin_token'), requestId })
+      const { url } = await callAdminAuth('credential_url', {  requestId })
       if (tab) {
         tab.location = url
       } else {
@@ -680,7 +674,7 @@ export default function AdminPanel() {
 
   async function approveVerif(id, userId, profession) {
     try {
-      await callAdminAuth('approve_verification', { token: localStorage.getItem('admin_token'), id, userId, profession })
+      await callAdminAuth('approve_verification', {  id, userId, profession })
       logAuditAction('approve', 'verification', id, { userId, profession })
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -692,7 +686,7 @@ export default function AdminPanel() {
 
   async function rejectVerif(id) {
     try {
-      await callAdminAuth('reject_verification', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('reject_verification', {  id })
       logAuditAction('reject', 'verification', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -704,7 +698,7 @@ export default function AdminPanel() {
 
   async function approveClaim(id, businessId) {
     try {
-      await callAdminAuth('approve_claim', { token: localStorage.getItem('admin_token'), claimId: id, businessId })
+      await callAdminAuth('approve_claim', {  claimId: id, businessId })
       logAuditAction('approve', 'claim', id, { businessId })
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -716,7 +710,7 @@ export default function AdminPanel() {
 
   async function rejectClaim(id) {
     try {
-      await callAdminAuth('reject_claim', { token: localStorage.getItem('admin_token'), claimId: id })
+      await callAdminAuth('reject_claim', {  claimId: id })
       logAuditAction('reject', 'claim', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -736,7 +730,7 @@ export default function AdminPanel() {
   }
   async function reallyDeletePost(id) {
     try {
-      await callAdminAuth('delete_post', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('delete_post', {  id })
       logAuditAction('delete', 'post', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'post', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -748,7 +742,7 @@ export default function AdminPanel() {
 
   async function resolveReport(id) {
     try {
-      await callAdminAuth('resolve_report', { token: localStorage.getItem('admin_token'), id })
+      await callAdminAuth('resolve_report', {  id })
       logAuditAction('resolve', 'report', id, {})
       setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'report', id, timestamp: new Date().toISOString() }])
       invalidateAdmin()
@@ -761,7 +755,7 @@ export default function AdminPanel() {
   async function manualVerify(userId, specialty) {
     if (!specialty) return
     try {
-      await callAdminAuth('manual_verify', { token: localStorage.getItem('admin_token'), userId, specialty })
+      await callAdminAuth('manual_verify', {  userId, specialty })
       setVerifyingUser(null)
       setVerifySpecialty('')
       invalidateAdmin()
@@ -784,7 +778,7 @@ export default function AdminPanel() {
     if (!taskTitle || !taskDesc || !taskComp) return
     setSavingTask(true)
     try {
-      await callAdminAuth('create_task', { token: localStorage.getItem('admin_token'), title: taskTitle, description: taskDesc, compensation: taskComp, specialty: taskSpec || null })
+      await callAdminAuth('create_task', {  title: taskTitle, description: taskDesc, compensation: taskComp, specialty: taskSpec || null })
       setTaskTitle(''); setTaskDesc(''); setTaskComp(''); setTaskSpec('')
       showToast('Task created', { type: 'success' })
     } catch (err) {
@@ -797,8 +791,7 @@ export default function AdminPanel() {
     e.preventDefault(); setSavingStaff(true); setStaffMsg('')
     try {
       await callAdminAuth('create_staff', {
-        token: localStorage.getItem('admin_token'),
-        newEmail: staffEmail.toLowerCase(), newPassword: staffPass,
+         newEmail: staffEmail.toLowerCase(), newPassword: staffPass,
         newName: staffName, newRole: staffRole, teamId: staffTeam || null,
       })
       setStaffMsg('Staff account created!')
@@ -813,7 +806,7 @@ export default function AdminPanel() {
   async function createTeam(e) {
     e.preventDefault()
     try {
-      await callAdminAuth('create_team', { token: localStorage.getItem('admin_token'), name: teamName })
+      await callAdminAuth('create_team', {  name: teamName })
       setTeamName(''); invalidateAdmin()
     } catch (err) {
       setStaffMsg('Error: ' + err.message)
@@ -831,12 +824,12 @@ let adminLoggingOut = false
     if (adminLoggingOut) return
     adminLoggingOut = true
     try {
-      await supabase.auth.signOut()
-    } finally {
-      clearAdminCache()
-      navigate('/login')
-      setTimeout(() => { adminLoggingOut = false }, 1000)
-    }
+      await callAdminAuth('logout')
+    } catch { /* best-effort server logout */ }
+    try { await supabase.auth.signOut() } catch {}
+    clearAdminCache()
+    navigate('/login')
+    setTimeout(() => { adminLoggingOut = false }, 1000)
   }
 
   return (
@@ -867,7 +860,7 @@ let adminLoggingOut = false
         {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
         {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
-        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onApprove={async (id) => { try { await callAdminAuth('approve_withdrawal', { token: localStorage.getItem('admin_token'), id }); invalidateAdmin(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal: ${err.message}`, { type: 'error' }) } }} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', { token: localStorage.getItem('admin_token'), id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
+        {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onApprove={async (id) => { try { await callAdminAuth('approve_withdrawal', {  id }); invalidateAdmin(); showToast('Withdrawal approved', { type: 'success' }) } catch (err) { showToast(`Couldn't approve the withdrawal: ${err.message}`, { type: 'error' }) } }} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', {  id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
         {tab === 'businesses' && <BusinessesTab businesses={businesses} bizSearch={bizSearch} setBizSearch={setBizSearch} bizTypeFilter={bizTypeFilter} setBizTypeFilter={setBizTypeFilter} bizStateFilter={bizStateFilter} setBizStateFilter={setBizStateFilter} bizStatusFilter={bizStatusFilter} setBizStatusFilter={setBizStatusFilter} selectedBiz={selectedBiz} setSelectedBiz={setSelectedBiz} bizReviews={bizReviews} setBizReviews={setBizReviews} bizProducts={bizProducts} setBizProducts={setBizProducts} supabase={supabase} />}
         {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
         {tab === 'news' && <NewsTab newsItems={newsItems} editingNews={editingNews} setEditingNews={setEditingNews} newsPhones={newsPhones} savingNews={savingNews} approveNews={approveNews} rejectNews={rejectNews} deleteNews={deleteNews} />}

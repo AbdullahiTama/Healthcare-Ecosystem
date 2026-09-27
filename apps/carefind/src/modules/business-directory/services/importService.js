@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { businessDirectoryRepository } from '../repositories/businessDirectoryRepository.js';
 import {
   normalizeBusinessName,
@@ -10,6 +9,9 @@ import { geocodeAddress } from './locationService.js';
 /**
  * Import Service
  * Handles CSV/Excel import with validation and deduplication
+ *
+ * Excel parsing is handled server-side via /api/excel-import to avoid
+ * bundling the xlsx library in the browser.
  */
 
 /**
@@ -115,54 +117,29 @@ export async function parseCSV(file) {
 }
 
 /**
- * Parse Excel file
+ * Parse Excel file (server-side via /api/excel-import)
  */
 export async function parseExcel(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+  const { supabase } = await import('../../../config/supabaseClient.js');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
 
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+  const formData = new FormData();
+  formData.append('file', file);
 
-        // Get first sheet
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-
-        // Convert to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        if (jsonData.length < 2) {
-          reject(new Error('Excel file is empty or has no data rows'));
-          return;
-        }
-
-        // Parse header
-        const headers = jsonData[0].map((h) => String(h).trim().toLowerCase());
-
-        // Parse rows
-        const records = [];
-        for (let i = 1; i < jsonData.length; i++) {
-          const row = jsonData[i];
-          const record = {};
-
-          headers.forEach((header, index) => {
-            record[header] = row[index] ? String(row[index]).trim() : '';
-          });
-
-          records.push(record);
-        }
-
-        resolve({ headers, records, totalRows: records.length });
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    reader.onerror = () => reject(new Error('Failed to read Excel file'));
-    reader.readAsArrayBuffer(file);
+  const res = await fetch('/api/excel-import', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+    body: formData,
   });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to parse Excel file');
+  }
+
+  const data = await res.json();
+  return { headers: data.headers, records: data.records, totalRows: data.totalRows };
 }
 
 /**

@@ -22,6 +22,13 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.js'],
     include: ['src/**/*.test.{js,jsx}', 'api/**/*.test.{js,jsx}'],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{js,jsx}', 'api/**/*.{js,jsx}'],
+      exclude: ['**/*.test.{js,jsx}', '**/node_modules/**', '**/dist/**'],
+    },
     // Above the 5000ms `asyncUtilTimeout` configured in src/test/setup.js (see
     // the reasoning there): when a findBy* runs out of time it must fail with
     // RTL's own message, which names the element it could not find, rather

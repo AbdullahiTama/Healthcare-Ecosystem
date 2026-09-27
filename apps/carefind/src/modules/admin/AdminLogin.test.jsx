@@ -61,13 +61,11 @@ describe('AdminLogin', () => {
     })
     expect(callAdminAuth).toHaveBeenCalledWith('verify')
     expect(localStorage.getItem('admin_user')).toContain('"role":"moderator"')
-    expect(localStorage.getItem('admin_token')).toBeNull()
   })
 
   it('signs out and clears cached admin state when server verification denies access', async () => {
     localStorage.setItem('admin_user', JSON.stringify({ id: 'forged-admin', role: 'super_admin' }))
     localStorage.setItem('admin_permissions', JSON.stringify({ all: true }))
-    localStorage.setItem('admin_token', 'forged-base64-token')
     callAdminAuth.mockRejectedValue(new Error('Active admin access required'))
 
     renderLogin()
@@ -83,7 +81,6 @@ describe('AdminLogin', () => {
     expect(supabase.auth.signOut).toHaveBeenCalled()
     expect(localStorage.getItem('admin_user')).toBeNull()
     expect(localStorage.getItem('admin_permissions')).toBeNull()
-    expect(localStorage.getItem('admin_token')).toBeNull()
     expect(navigate).not.toHaveBeenCalled()
   })
 
