@@ -33,13 +33,49 @@ const APP_BRANDING = {
     label: 'CareFind',
     fromEmail: 'CareFind <support@mail.carefind.app>',
     defaultRedirect: process.env.APP_URL || 'https://carefind.app',
+    redirectPaths: {
+      password_reset: '/reset-password',
+      email_verification: '/verify-email',
+    },
   },
   carehub: {
     app: 'carehub',
     label: 'CareHub',
     fromEmail: 'CareHub <support@mail.carefindhub.com>',
     defaultRedirect: process.env.APP_URL || 'https://carefindhub.com',
+    redirectPaths: {
+      password_reset: '/reset-password',
+      // CareHub ships no /verify-email route (see App.jsx) and its catch-all
+      // silently rewrites unknown paths to '/', so pointing here would drop the
+      // user on the landing page. Unverified users go to sign-in instead.
+      email_verification: '/login',
+    },
   },
+}
+
+// The redirect target of a recovery/verification link is decided here and
+// nowhere else — never taken from the request. generateLink mints a real
+// recovery token into whatever redirect_to it is handed, so a caller-supplied
+// host would receive that token in the URL fragment. Both /api/auth-email
+// handlers used to forward req.body.redirectTo verbatim and leaned on the
+// Supabase allowlist to reject hostile hosts, which makes account takeover a
+// dashboard wildcard away. Deriving it from APP_URL plus a per-app path means
+// the safe value is the default, not the exception.
+export function resolveAuthRedirect(app, action, requested) {
+  const branding = APP_BRANDING[app] || APP_BRANDING.carefind
+  const path = branding.redirectPaths?.[action]
+  if (!path) throw new Error(`No redirect path configured for ${branding.app}:${action}`)
+
+  const base = String(branding.defaultRedirect || '').replace(/\/+$/, '')
+  if (!base) throw new Error(`No origin configured for ${branding.app} (set APP_URL)`)
+
+  const derived = `${base}${path}`
+  if (requested && String(requested).replace(/\/+$/, '') !== derived) {
+    // Logged, never honoured. A mismatch means either a stale client build or
+    // someone probing the endpoint.
+    console.warn(`[authEmail] ignoring client-supplied redirectTo for ${branding.app}:${action}`)
+  }
+  return derived
 }
 
 function renderDate(d) {
@@ -78,12 +114,13 @@ export async function sendAuthEmail({
   const emailService = new EmailService({ supabase })
 
   const toEmail = email.trim().toLowerCase()
-  const baseRedirect = redirectTo || branding.defaultRedirect
 
   // For reset / verify we must mint a real action link via the admin API;
   // the client-facing app only swaps in the template. Plaintext links are
   // never passed from browser → server.
   if (action === 'password_reset' || action === 'email_verification') {
+    // Resolved inside the branch: customer_registration has no link to send.
+    const baseRedirect = resolveAuthRedirect(app, action, redirectTo)
     const admin = await getAdminClient(supabase)
     const type = action === 'password_reset' ? 'recovery' : 'signup'
     // generateLink both resolves the account and mints the link, so it is also

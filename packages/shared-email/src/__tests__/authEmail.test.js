@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { EmailService } from '../EmailService.js'
-import { sendAuthEmail } from '../authEmail.js'
+import { sendAuthEmail, resolveAuthRedirect } from '../authEmail.js'
 
 // The production failure was a hard 500 — `supabase.auth.admin.getUserByEmail`
 // is not a function — because supabase-js has no by-email admin lookup. The
@@ -50,7 +50,6 @@ describe('sendAuthEmail password reset', () => {
     const result = await sendAuthEmail({
       action: 'password_reset',
       email: 'Someone@Example.com',
-      redirectTo: 'https://carefindhub.com/reset-password',
       app: 'carehub',
     })
 
@@ -69,6 +68,34 @@ describe('sendAuthEmail password reset', () => {
     // wrong brand for a CareHub user.
     expect(row.fromEmail).toBe('CareHub <support@mail.carefindhub.com>')
     expect(row.payload.resetLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+  })
+
+  it('mints the recovery link into the derived path, never a caller-supplied host', async () => {
+    // generateLink embeds redirect_to in the emailed link and the recovery
+    // token rides in its URL fragment, so a caller-chosen host is an account
+    // takeover primitive. Every one of these must be discarded.
+    const hostile = [
+      'https://evil.example/steal',
+      'https://carefindhub.com.evil.example/',
+      '//evil.example',
+      'https://carefindhub.com@evil.example',
+      'https://carefindhub.com/../../evil',
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+    ]
+    for (const redirectTo of hostile) {
+      generateLink.mockClear()
+      enqueue.mockClear()
+      generateLink.mockResolvedValue(linkResponse)
+
+      await sendAuthEmail({ action: 'password_reset', email: 'user@example.com', redirectTo, app: 'carehub' })
+
+      expect(
+        generateLink.mock.calls[0][0].options.redirectTo,
+        `redirectTo was honoured for ${redirectTo}`
+      ).toBe('https://carefindhub.com/reset-password')
+      expect(enqueue.mock.calls[0][0].payload.resetLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+    }
   })
 
   it('never throws for an unknown address, and enqueues nothing', async () => {
@@ -155,5 +182,42 @@ describe('sendAuthEmail password reset', () => {
     const adminCalls = [...source.matchAll(/admin\.(\w+)\(/g)].map((m) => m[1])
     expect(adminCalls.length).toBeGreaterThan(0)
     expect([...new Set(adminCalls)]).toEqual(['generateLink'])
+  })
+})
+
+describe('resolveAuthRedirect', () => {
+  it('maps each app and action to a route that actually exists', () => {
+    expect(resolveAuthRedirect('carehub', 'password_reset')).toBe('https://carefindhub.com/reset-password')
+    expect(resolveAuthRedirect('carefind', 'password_reset')).toBe('https://carefind.app/reset-password')
+    expect(resolveAuthRedirect('carefind', 'email_verification')).toBe('https://carefind.app/verify-email')
+    // CareHub has no /verify-email route and its catch-all rewrites unknown
+    // paths to '/', so it must not claim one.
+    expect(resolveAuthRedirect('carehub', 'email_verification')).toBe('https://carefindhub.com/login')
+  })
+
+  it('returns a same-origin URL whatever the caller asked for', () => {
+    for (const requested of [
+      undefined, null, '',
+      'https://evil.example', 'https://carefind.app.evil.example',
+      '//evil.example', 'https://carefind.app@evil.example',
+      'https://carefind.app/evil', 'javascript:alert(1)', '/reset-password',
+    ]) {
+      const out = resolveAuthRedirect('carefind', 'password_reset', requested)
+      expect(out).toBe('https://carefind.app/reset-password')
+      expect(() => new URL(out).origin).not.toThrow()
+    }
+  })
+
+  it('refuses to build a link target for an action it has no route for', () => {
+    // Throwing is correct here: both callers swallow exceptions into a generic
+    // 200, so an unconfigured action must not silently mint a link to '/'.
+    expect(() => resolveAuthRedirect('carefind', 'customer_registration')).toThrow(/redirect path/)
+    expect(() => resolveAuthRedirect('carehub', 'customer_registration')).toThrow(/carehub:customer_registration/)
+  })
+
+  it('falls back to CareFind branding for an unrecognised app', () => {
+    // Matches sendAuthEmail's own APP_BRANDING fallback. Harmless because `app`
+    // is hardcoded per handler and never read from the request body.
+    expect(resolveAuthRedirect('nope', 'password_reset')).toBe('https://carefind.app/reset-password')
   })
 })

@@ -53,7 +53,10 @@ describe('/api/auth-email (carefind)', () => {
     expect(sendAuthEmail.mock.calls[0][0].supabase).toBe(supabase)
   })
 
-  it('brands as carefind and defaults the redirect to carefind.app', async () => {
+  it('brands as carefind and leaves the redirect to shared-email', async () => {
+    // The handler no longer decides where a recovery link lands. shared-email
+    // derives it from APP_URL plus a fixed path, so the token can never be
+    // steered at a caller-chosen host.
     const res = await post({ action: 'password_reset', email: 'user@example.com' })
 
     expect(res.statusCode).toBe(200)
@@ -62,13 +65,26 @@ describe('/api/auth-email (carefind)', () => {
       action: 'password_reset',
       email: 'user@example.com',
       app: 'carefind',
-      redirectTo: 'https://carefind.app',
     })
+    expect(sendAuthEmail.mock.calls[0][0]).not.toHaveProperty('redirectTo')
   })
 
-  it('honours an explicit redirectTo from the request', async () => {
-    await post({ action: 'password_reset', email: 'user@example.com', redirectTo: 'https://carefind.app/reset' })
-    expect(sendAuthEmail.mock.calls[0][0].redirectTo).toBe('https://carefind.app/reset')
+  it('ignores a caller-supplied redirectTo', async () => {
+    // generateLink mints the recovery token into redirect_to. Forwarding this
+    // field is the open-redirect/account-takeover path, so none of these may
+    // reach the link generator.
+    const hostile = [
+      'https://evil.example/steal',
+      'https://carefind.app.evil.example/',
+      '//evil.example',
+      'https://carefind.app@evil.example',
+      'javascript:alert(1)',
+    ]
+    for (const redirectTo of hostile) {
+      sendAuthEmail.mockClear()
+      await post({ action: 'password_reset', email: 'user@example.com', redirectTo })
+      expect(sendAuthEmail.mock.calls[0][0]).not.toHaveProperty('redirectTo')
+    }
   })
 
   it('still forwards customer_registration, which this app allows', async () => {

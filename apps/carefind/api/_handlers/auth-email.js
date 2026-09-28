@@ -18,7 +18,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' })
   }
 
-  const { action, email, fullName, redirectTo } = req.body || {}
+  // redirectTo is deliberately not read from the body: the recovery token is
+  // minted into whatever target we hand generateLink, so trusting the caller
+  // here would let anyone steer a password-reset link to their own host.
+  // sendAuthEmail derives the target from APP_URL plus a fixed per-app path.
+  const { action, email, fullName } = req.body || {}
   if (!action || !email) return res.status(400).json({ error: 'action and email are required' })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email' })
 
@@ -47,7 +51,6 @@ export default async function handler(req, res) {
       action,
       email,
       fullName,
-      redirectTo: redirectTo || process.env.APP_URL || 'https://carefind.app',
       app: 'carefind',
       supabase,
       resolveDisplayName,

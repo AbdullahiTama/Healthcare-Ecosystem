@@ -62,6 +62,33 @@ describe('/api/auth-email', () => {
     expect(arg.app).toBe('carehub')
   })
 
+  it('never forwards a caller-supplied redirectTo', async () => {
+    // generateLink mints the recovery token into whatever redirect_to it is
+    // given, so this field must not reach it. CareHub is where the reported
+    // "carefindhub.com/reset-password landed on carefind.app" bug surfaced.
+    const hostile = [
+      'https://evil.example/steal',
+      'https://carefindhub.com.evil.example/',
+      '//evil.example',
+      'https://carefindhub.com@evil.example',
+      'javascript:alert(1)',
+    ]
+    for (const redirectTo of hostile) {
+      sendAuthEmail.mockClear()
+      await post({ action: 'password_reset', email: 'user@example.com', redirectTo })
+      expect(sendAuthEmail.mock.calls[0][0]).not.toHaveProperty('redirectTo')
+    }
+  })
+
+  it('leaves the redirect to shared-email rather than guessing from APP_URL', async () => {
+    // The old fallback was the bare origin, so a reset link with no
+    // redirectTo dropped the user on the landing page instead of the form.
+    process.env.APP_URL = 'https://carefindhub.com'
+    await post({ action: 'password_reset', email: 'user@example.com' })
+    expect(sendAuthEmail.mock.calls[0][0]).not.toHaveProperty('redirectTo')
+    delete process.env.APP_URL
+  })
+
   it('injects its service-role client into shared-email', () => {
     // Shared-email cannot resolve '@supabase/supabase-js' from its own
     // directory on Vercel, so a handler that forgets to pass the client
