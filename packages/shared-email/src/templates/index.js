@@ -47,10 +47,14 @@ export const TEMPLATE_REGISTRY = { ...HUB_BY_KEY, ...FIND_BY_KEY }
 export const CAREHUB_TEMPLATES = HubTemplates
 export const CAREFIND_TEMPLATES = FindTemplates
 
-// Resolve the template for a key and the app that enqueued it. An app-specific
-// implementation always wins; unknown keys fall back to the merged registry so
-// keys only one app defines still resolve.
+// Resolve the template for a key and the app that enqueued it.
+//
+// Fails closed. This deliberately does NOT fall back to the merged registry:
+// TEMPLATE_REGISTRY prefers CareFind, so a CareHub event whose CareHub
+// template is missing used to resolve to the CareFind renderer and quietly
+// mail the wrong brand. A missing template must surface as a failed row, not
+// as a mislabelled email. Callers treat null as a hard error.
 export function getTemplate(templateKey, app = 'carefind') {
   const byKey = app === 'carehub' ? HUB_BY_KEY : FIND_BY_KEY
-  return byKey[templateKey] || TEMPLATE_REGISTRY[templateKey] || null
+  return byKey[templateKey] || null
 }

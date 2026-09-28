@@ -26,9 +26,15 @@ Audit performed against project `szdybxmgmhndoytqanfb` on 2026-09-28.
    cron produces is silently undeliverable. This is the only raw outbox writer outside the service.
 4. The same file defaults `from_email` to `support@mail.carefind.app`, which is not a verified
    Resend sender.
-5. `apps/carehub/api/_handlers/notify-business-status.js` lines 31 to 34 contain mojibake subjects.
-   Customers would receive the literal text `ðŸŽ‰ Welcome to CareHub â€”` instead of
-   `🎉 Welcome to CareHub —`.
+5. Encoding corruption is confined to three files. `apps/carefind/api/_handlers/paystack-webhook.js`
+   holds 15 U+FFFD replacement characters, `charge-subscription.js` holds 2 and
+   `verify-subscription-payment.js` holds 2, where emoji and arrows were destroyed by a bad decode.
+   One of these is in a subject string (`paystack-webhook.js:80`) and several are in in-app
+   notification bodies, so customers see the garbage directly. Verified by scanning every `.js`
+   and `.jsx` under `apps/` and `packages/` for U+FFFD.
+   `notify-registration.js` and `notify-business-status.js` were initially suspected but contain no
+   U+FFFD; the odd characters there are correctly encoded em-dashes that a terminal misrendered.
+   The scan is now pinned by `deliveryContracts.test.js`.
 6. The same handler's `allowed` list omits `revoked`, so `business_revoked` and
    `business_reactivated` are unreachable. Both also lack a template in
    `packages/shared-email/src/templates/`.
@@ -41,6 +47,9 @@ Audit performed against project `szdybxmgmhndoytqanfb` on 2026-09-28.
    schedule and the dispatch cadence cannot both be honoured.
 10. Three email service implementations exist: `packages/shared-email/src/EmailService.js`,
     `apps/carehub/src/lib/emailService.js` and `apps/carefind/api/_lib/emailService.js`.
+    The `enqueueOutbox` identifier used by 8 CareFind call sites is only an import alias of the same
+    `enqueue` function, not a fourth implementation, so the duplication is 3 copies rather than
+    4 entry points.
 11. `packages/shared-email/src/templates/index.js` line 55 falls back to the merged registry when an
     app-specific template is missing, and the merged registry prefers CareFind. A CareHub event with
     no CareHub template would render CareFind branding without erroring.
@@ -53,6 +62,21 @@ Audit performed against project `szdybxmgmhndoytqanfb` on 2026-09-28.
     subscription expiring, agent approved, agent rejected, credit reminder, and CareFind password
     reset (the endpoint works but no request UI exists).
 15. One account is registered as `gmail,com` (comma) and is permanently undeliverable.
+16. The catalog's brand check requires a subject to begin `CareHub:` or `CareFind:`, but all 9
+    producers supply their own subject at the call site and not one of them complies. Real subjects
+    are `Your appointment is confirmed`, `Order Confirmed - <ref>`, `You're subscribed to ...`. So
+    the brand constraint is currently 0% enforced in production, and the catalog's
+    `subject_template` is dead metadata. Pinned by `deliveryContracts.test.js`.
+17. `enqueue_business_email_event` returned `null` with no error and no record when an event was
+    disabled or paused and was not `required_for_business`. A producer on the catalog would have
+    read that as success, so a customer would silently receive nothing. Fixed in batch 1: a
+    `suppressed` row is now written to `email_logs` and the return contract is unchanged.
+18. `email_logs.event_type` is CHECK constrained to a fixed list with no value meaning "deliberately
+    not queued". `'failed'` was rejected as a substitute because it already means "send attempted
+    and did not succeed". `'suppressed'` was added to the constraint.
+19. The canary `is_canary` stamp is verified by unit test and by reading the applied function, but
+    has not been exercised end to end against the database. Doing so requires enabling an event,
+    which the dark rollout forbids. Deferred to batch 5, deliberately.
 
 ## Requirements
 
@@ -178,13 +202,26 @@ The change is landed in five independently shippable batches. Each one is deploy
 reversible on its own, and no batch leaves the system without a working off switch.
 
 1. **Off switch and safety.** `rollout_mode`, `is_canary`, `canary_recipient`, enforced
-   `dispatch_paused`, fail closed template resolution, and the two static guard tests. Nothing
-   user visible changes. This batch is the prerequisite for trusting any later batch.
+   `dispatch_paused`, fail closed template resolution, the `suppressed` audit record, and the
+   three static guard tests. Nothing user visible changes. This batch is the prerequisite for
+   trusting any later batch.
+   **Landed 2026-09-28.** `dispatch_paused` is now read once per batch and short circuits before
+   any claim, so a pause is loud (`{ paused: true }`) and the queue is left intact for resume. A
+   canary row with no `canary_recipient` fails closed rather than falling through to its real
+   recipient. `redactPayload` strips `link|token|otp|secret|password` keys at any depth for canary
+   renders while leaving the stored payload intact. `getTemplate` returns `null` instead of
+   borrowing from the other app, and the worker marks such a row `no_template:<app>:<key>` rather
+   than sending an empty body. All 25 events remain `enabled = false`, so the batch changed no
+   user visible behaviour.
 2. **Single service and worker correctness.** Shims, dead code removal, atomic claiming, per row
    `max_attempts`, and the one minute Supabase Cron cadence.
 3. **Producers onto the catalog.** The 10 existing direct enqueue call sites, plus
    `check-subscription-expiry`, which stops writing raw SQL. This batch removes evidence items 3, 4,
-   5, 6 and 7 because subjects come from the catalog and the review path is no longer hand written.
+   5, 6, 7 and 16 because subjects come from the catalog and the review path is no longer hand
+   written. **A producer must treat a `null` return from `enqueue_business_email_event` as a hard
+   failure**, not as success: `null` means the event is dark, and the matching `suppressed` row in
+   `email_logs` is the only trace. A producer that ignores the return is the silent non-delivery
+   this design exists to prevent.
 4. **New producers.** The 10 silent operations, each landing in `canary`, transactional first.
 5. **Enablement.** Per event promotion from `canary` to `live`, beginning with non token bearing
    transactional events.

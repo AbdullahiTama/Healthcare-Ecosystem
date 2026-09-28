@@ -65,9 +65,26 @@ describe('brand-aware template registry', () => {
     expect(TEMPLATE_REGISTRY['customer_registration']).toBe(FindTemplates.customerRegistration)
   })
 
-  it('falls back to the merged registry when a key is unknown', () => {
+  it('returns null for an unknown key rather than borrowing another key', () => {
     expect(getTemplate('does_not_exist', 'carehub')).toBeNull()
     expect(getTemplate('does_not_exist', 'carefind')).toBeNull()
+  })
+
+  // The merged registry prefers CareFind, so the old cross-app fallback meant a
+  // CareHub event whose CareHub template was missing resolved to the CareFind
+  // renderer and quietly mailed the wrong brand. getTemplate must fail closed.
+  it('does not let a CareHub row borrow the CareFind template', () => {
+    expect(getTemplate('booking_confirmed', 'carehub')).toBeNull()
+    expect(getTemplate('customer_registration', 'carehub')).toBeNull()
+    // The mirrored direction still resolves, proving this is a fail-closed
+    // change and not a broken lookup.
+    expect(getTemplate('booking_confirmed', 'carefind')).toBe(FindTemplates.bookingConfirmed)
+  })
+
+  it('keeps the merged registry available for preview tooling', () => {
+    // TEMPLATE_REGISTRY is still exported for listings; it is simply no longer
+    // used to resolve a send, which is what made misbranding possible.
+    expect(TEMPLATE_REGISTRY['registration_owner']).toBe(HubTemplates.customerRegistration)
   })
 })
 

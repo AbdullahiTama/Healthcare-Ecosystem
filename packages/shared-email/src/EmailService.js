@@ -39,6 +39,26 @@ export function resolveAppFromSender(fromEmail) {
   return fromEmail && String(fromEmail).includes('CareHub') ? 'carehub' : 'carefind'
 }
 
+// Payload keys that can carry a usable credential. A canary render replaces
+// these so the canary inbox proves subject, branding and layout without ever
+// holding a live password reset or verification link.
+const SENSITIVE_PAYLOAD_KEY = /(link|token|otp|secret|password)/i
+const REDACTED = '[redacted]'
+
+// Recurses into plain objects but not arrays, so an items[] line never gets
+// mangled while a nested links.reset still cannot leak.
+export function redactPayload(value) {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = SENSITIVE_PAYLOAD_KEY.test(k) ? REDACTED : redactPayload(v)
+    }
+    return out
+  }
+  return value
+}
+
 let _supabase = null
 async function getSupabase() {
   if (!_supabase) {
@@ -96,9 +116,36 @@ export class EmailService {
     return data
   }
 
+  async _getSetting(key) {
+    const db = await this._getDb()
+    const { data, error } = await db
+      .from('email_system_settings')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle()
+    if (error) throw error
+    return data?.value ?? null
+  }
+
+  async _isDispatchPaused() {
+    return (await this._getSetting('dispatch_paused')) === true
+  }
+
   async processBatch() {
     const { sendEmail, getTemplate } = await deps()
     const db = await this._getDb()
+
+    // dispatch_paused is the documented rollback lever and it existed in the
+    // schema with no code reading it. Honouring it here means business writes
+    // keep enqueueing while nothing is claimed, so the queue drains intact the
+    // moment the switch is turned back off.
+    if (await this._isDispatchPaused()) {
+      return { processed: 0, sent: 0, failed: 0, paused: true }
+    }
+
+    // Read once per batch. canary_recipient is deliberately unset by default:
+    // an unset value is the fail-closed state, not a fallback to real delivery.
+    const canaryRecipient = await this._getSetting('canary_recipient')
     const now = new Date().toISOString()
     const { data: batch, error } = await db
       .from('email_outbox').select('*').in('status', ['pending', 'failed']).lte('next_retry_at', now).lte('attempts', this.maxRetries).order('next_retry_at', { ascending: true }).limit(this.batchSize)
@@ -108,9 +155,35 @@ export class EmailService {
     let sent = 0, failed = 0
     for (const row of batch) {
       try {
-        const templateFn = getTemplate(row.template_key, resolveAppFromSender(row.from_email))
-        const html = templateFn ? templateFn(row.payload) : ''
-        const result = await sendEmail({ to: row.to_email, subject: row.subject, html, from: row.from_email })
+        const app = resolveAppFromSender(row.from_email)
+        const templateFn = getTemplate(row.template_key, app)
+        // Fail closed. The old branch rendered '' and mailed an empty body, so
+        // a missing renderer reached customers as a blank email with no error.
+        if (!templateFn) {
+          await this._markFailed(row.id, `no_template:${app}:${row.template_key}`)
+          failed++
+          continue
+        }
+
+        let to = row.to_email
+        let payload = row.payload
+        if (row.is_canary) {
+          // Fail closed: a canary row must never reach its real recipient. If
+          // there is no canary address the row fails and retries later rather
+          // than being delivered to to_email.
+          if (!canaryRecipient) {
+            await this._markFailed(row.id, 'canary_recipient_unset')
+            failed++
+            continue
+          }
+          to = canaryRecipient
+          // Strip tokens so a canary inbox never receives a usable action
+          // link. The stored payload is left untouched for audit.
+          payload = redactPayload(row.payload)
+        }
+
+        const html = templateFn(payload)
+        const result = await sendEmail({ to, subject: row.subject, html, from: row.from_email })
         if (result.success) { await this._markSent(row.id, result.data); sent++ }
         else { await this._markFailed(row.id, result.error); failed++ }
       } catch (e) { await this._markFailed(row.id, e.message); failed++ }
