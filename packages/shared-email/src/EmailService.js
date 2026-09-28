@@ -65,12 +65,31 @@ export class EmailService {
     return this._db
   }
 
-  async enqueue({ templateKey, toEmail, payload, fromEmail, subject }) {
+  async enqueue({ templateKey, toEmail, payload, fromEmail, subject, app, eventKey }) {
     if (!templateKey || !toEmail) throw new Error('templateKey and toEmail are required')
     const db = await this._getDb()
+    const from = fromEmail || (process.env.RESEND_FROM_EMAIL || 'CareHub <support@mail.carefindhub.com>')
+    // app and event_key must always be populated. guard_email_outbox_quarantine()
+    // is a BEFORE INSERT trigger that parks any row missing either of them:
+    // it sets quarantine_reason='legacy_mapping_unproven' and
+    // next_retry_at='infinity', so processBatch's `next_retry_at <= now` filter
+    // never matches and the email is silently undeliverable. That is why every
+    // legacy enqueue call site appeared to succeed while sending nothing.
+    // The mapping is now explicit: the sender decides the app (same rule the
+    // renderer uses) and the template key is the catalog event key.
     const { data, error } = await db
       .from('email_outbox')
-      .insert({ to_email: toEmail, from_email: fromEmail || (process.env.RESEND_FROM_EMAIL || 'CareHub <support@mail.carefindhub.com>'), subject: subject || '', template_key: templateKey, payload: payload || {}, status: 'pending', next_retry_at: new Date().toISOString() })
+      .insert({
+        to_email: toEmail,
+        from_email: from,
+        subject: subject || '',
+        template_key: templateKey,
+        app: app || resolveAppFromSender(from),
+        event_key: eventKey || templateKey,
+        payload: payload || {},
+        status: 'pending',
+        next_retry_at: new Date().toISOString(),
+      })
       .select().single()
     if (error) throw error
     await db.from('email_logs').insert({ outbox_id: data.id, event_type: 'enqueued', detail: `Queued template=${templateKey} to=${toEmail}` })

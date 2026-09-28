@@ -24,36 +24,35 @@ export default async function handler(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-  // Guard: only mint links / send for real accounts, but respond generically
-  // either way to avoid account enumeration. Actual dispatch is delegated so
-  // link-generation errors (e.g. user missing) still return a generic 200.
-  const authUser = (await supabase.auth.admin.getUserByEmail(email)).data?.user
-  const userExists = !!authUser
-  if (!userExists && action !== 'customer_registration') {
-    return res.status(200).json({ ok: true, sent: false })
-  }
-
-  let displayName = fullName || ''
-  if (authUser) {
+  // The account lookup itself lives in shared-email: generateLink resolves the
+  // user and returns an error when the address has no account, which is how
+  // "unknown address" is detected without ever querying auth by email. This
+  // callback only personalises the copy.
+  // supabase-js query builders are thenables, not Promises, so they have no
+  // .catch(). They also never throw for a query error — they resolve to
+  // { data: null, error }, which the optional chaining below already absorbs.
+  const resolveDisplayName = async (authUser) => {
+    if (!authUser?.id) return ''
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
       .eq('id', authUser.id)
       .maybeSingle()
-      .catch(() => ({ data: null }))
-    displayName = profile?.full_name || displayName
+    return profile?.full_name || ''
   }
 
   try {
     const { sendAuthEmail } = await import('@care-ecosystem/shared-email')
-    await sendAuthEmail({
+    const result = await sendAuthEmail({
       action,
       email,
-      fullName: displayName,
+      fullName,
       redirectTo: redirectTo || process.env.APP_URL || 'https://carefind.app',
       app: 'carefind',
+      supabase,
+      resolveDisplayName,
     })
-    return res.status(200).json({ ok: true, sent: true })
+    return res.status(200).json({ ok: true, sent: !!result?.sent })
   } catch (err) {
     console.error('[auth-email] dispatch failed:', err)
     // Generic success — never leak whether the account exists.

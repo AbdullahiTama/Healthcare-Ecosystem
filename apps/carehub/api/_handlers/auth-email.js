@@ -27,41 +27,40 @@ export default async function handler(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-  const authUser = (await supabase.auth.admin.getUserByEmail(email)).data?.user
-  const userExists = !!authUser
-  if (!userExists) return res.status(200).json({ ok: true, sent: false })
-
-  let displayName = fullName || ''
-  if (authUser) {
+  // The account lookup itself lives in shared-email: generateLink resolves the
+  // user and returns an error when the address has no account. This callback
+  // only personalises the copy, keeping app-specific schema out of shared-email.
+  // Note that supabase-js query builders are thenables, not Promises, so they
+  // have no .catch(); they report failure as { data: null, error }, which the
+  // optional chaining below already absorbs.
+  const resolveDisplayName = async (authUser) => {
+    if (!authUser?.id) return ''
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
       .eq('id', authUser.id)
       .maybeSingle()
-      .catch(() => ({ data: null }))
-    if (profile?.full_name) {
-      displayName = profile.full_name
-    } else {
-      const { data: biz } = await supabase
-        .from('businesses')
-        .select('owner_name')
-        .ilike('owner_email', email)
-        .maybeSingle()
-        .catch(() => ({ data: null }))
-      if (biz?.owner_name) displayName = biz.owner_name
-    }
+    if (profile?.full_name) return profile.full_name
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('owner_name')
+      .ilike('owner_email', email.trim().toLowerCase())
+      .maybeSingle()
+    return biz?.owner_name || ''
   }
 
   try {
     const { sendAuthEmail } = await import('@care-ecosystem/shared-email')
-    await sendAuthEmail({
+    const result = await sendAuthEmail({
       action,
       email,
-      fullName: displayName,
+      fullName,
       redirectTo: redirectTo || process.env.APP_URL || 'https://carefindhub.com',
       app: 'carehub',
+      supabase,
+      resolveDisplayName,
     })
-    return res.status(200).json({ ok: true, sent: true })
+    return res.status(200).json({ ok: true, sent: !!result?.sent })
   } catch (err) {
     console.error('[auth-email] dispatch failed:', err)
     return res.status(200).json({ ok: true, sent: false })

@@ -16,6 +16,72 @@ function emptyOutboxDb() {
   return { from: () => table }
 }
 
+describe('EmailService.enqueue quarantine contract', () => {
+  // guard_email_outbox_quarantine() is a BEFORE INSERT trigger that sets
+  // next_retry_at='infinity' whenever app or event_key is null, so the row never
+  // matches processBatch's `next_retry_at <= now` filter. Every legacy call site
+  // omitted both columns, so the whole outbox was silently undeliverable.
+  const insertCapture = () => {
+    const state = { row: null, logs: [] }
+    const logTable = { insert: async (r) => { state.logs.push(r); return { data: null, error: null } } }
+    const rowTable = {
+      insert: (r) => { state.row = r; return { select: () => ({ single: async () => ({ data: { id: 'outbox-1' }, error: null }) }) } },
+    }
+    state.db = { from: (t) => (t === 'email_outbox' ? rowTable : logTable) }
+    return state
+  }
+
+  it('stamps app and event_key so the quarantine trigger cannot park the row', async () => {
+    const state = insertCapture()
+    await new EmailService({ supabase: state.db }).enqueue({
+      templateKey: 'password_reset',
+      toEmail: 'user@example.com',
+      fromEmail: 'CareHub <support@mail.carefindhub.com>',
+    })
+
+    expect(state.row.app).toBe('carehub')
+    expect(state.row.event_key).toBe('password_reset')
+    // The eligibility window the worker actually filters on.
+    expect(new Date(state.row.next_retry_at).getTime()).toBeLessThanOrEqual(Date.now())
+    expect(state.row.status).toBe('pending')
+  })
+
+  it('derives carefind from the CareFind sender when no app is given', async () => {
+    const state = insertCapture()
+    await new EmailService({ supabase: state.db }).enqueue({
+      templateKey: 'appointment_reminder',
+      toEmail: 'user@example.com',
+      fromEmail: 'CareFind <support@mail.carefind.app>',
+    })
+    expect(state.row.app).toBe('carefind')
+    expect(state.row.event_key).toBe('appointment_reminder')
+  })
+
+  it('honours an explicit app and event key over the derived values', async () => {
+    const state = insertCapture()
+    await new EmailService({ supabase: state.db }).enqueue({
+      templateKey: 'password_reset',
+      toEmail: 'user@example.com',
+      fromEmail: 'CareHub <support@mail.carefindhub.com>',
+      app: 'carefind',
+      eventKey: 'legacy_alias',
+    })
+    expect(state.row.app).toBe('carefind')
+    expect(state.row.event_key).toBe('legacy_alias')
+  })
+
+  it('never leaves app or event_key null, whatever the caller passes', async () => {
+    const state = insertCapture()
+    await new EmailService({ supabase: state.db }).enqueue({
+      templateKey: 'custom_thing',
+      toEmail: 'user@example.com',
+      fromEmail: 'something-else@example.com',
+    })
+    expect(state.row.app).toBeTruthy()
+    expect(state.row.event_key).toBeTruthy()
+  })
+})
+
 describe('EmailService dependency loading', () => {
   it('processBatch works with an injected client and never loads supabase-js', async () => {
     const service = new EmailService({ supabase: emptyOutboxDb() })
