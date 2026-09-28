@@ -1,4 +1,4 @@
-import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { requirePlatformAdmin } from '../_lib/authorization.js'
 import { supabase } from '../_lib/supabase.js'
 
 // Admin review for ecommerce applications â€” Approve/Reject/Suspended
@@ -6,22 +6,8 @@ import { supabase } from '../_lib/supabase.js'
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { business, error: authError } = await verifyBusiness(supabase, req)
-  if (authError) return res.status(401).json({ error: authError })
-
-  // Verify platform admin via is_platform_admin RPC or businesses row check
-  // verifyBusiness already ensures businesses row, but we need platform flag
-  const { data: bizRow } = await supabase.from('businesses').select('is_platform_admin').eq('id', business.id).maybeSingle()
-  const isAdmin = bizRow?.is_platform_admin === true
-  // Fallback: check via RPC if exists
-  if (!isAdmin) {
-    try {
-      const { data: isPlat } = await supabase.rpc('is_platform_admin')
-      if (!isPlat) return res.status(403).json({ error: 'Admin access required' })
-    } catch (e) {
-      return res.status(403).json({ error: 'Admin access required' })
-    }
-  }
+  const { business, error: authError } = await requirePlatformAdmin(req)
+  if (authError) return res.status(403).json({ error: authError })
 
   const { business_id: targetBusinessId, status, rejection_reason } = req.body || {}
   const allowed = ['Approved','Rejected','Suspended','Under Review']

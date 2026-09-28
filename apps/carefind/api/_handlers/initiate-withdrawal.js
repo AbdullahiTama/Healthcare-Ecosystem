@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { verifyUser } from '../_lib/verifyUser.js'
+import { requireUser } from '../_lib/authorization.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible } from '../_lib/trustLevels.js'
@@ -15,7 +15,7 @@ const COIN_VALUE_NAIRA = 200
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const user = await verifyUser(supabase, req)
+  const { user } = await requireUser(req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
   const { amount, bankCode, bankName, accountNumber, accountName, pin, deviceToken } = req.body

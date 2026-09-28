@@ -1,6 +1,6 @@
 # Authentication — Care Ecosystem
 
-Four separate, mutually inconsistent authentication systems exist across the two products. One meets baseline standards. The other three are broken in ways ranging from "weak" to "full bypass."
+Four authentication surfaces exist across the two products. CareFind consumer and admin access now use Supabase Auth; CareHub's business/staff path remains the documented legacy exception below.
 
 ---
 
@@ -25,24 +25,17 @@ Login is a raw PostgREST equality filter: `staff?email=eq.X&password=eq.Y`. Cons
 
 **Operational note:** this strategy depends on the Supabase project's "Confirm email" setting — if enabled, a silently-created account can't complete `signInWithPassword` until someone clicks a confirmation link nobody was shown, so the account would safely (harmlessly) keep falling back to the legacy path forever rather than actually migrating. Needs to be disabled (or a passwordless confirmation flow added) for the migration to actually complete for existing accounts, not just degrade safely.
 
-## 2. CareFind admin login — fully forgeable
+## 2. CareFind admin login — Supabase Auth session with server-side RBAC
 
-**Where:** `api/admin-auth.js` (Vercel function).
+**Where:** `src/config/supabaseClient.js`, `src/modules/admin/AdminLogin.jsx`, `src/modules/admin/adminApi.js`, `api/_handlers/admin-auth.js`, and `api/_handlers/email-templates.js`.
 
-- `hashPassword()` is `` `cf_hashed_${password}` `` — string concatenation, not a cryptographic hash. Trivially reversible.
-- `generateToken()` is `base64(adminId|role|timestamp)` — **not signed** (no HMAC, no JWT). `verifyToken()` only checks the base64 decodes into three parts and the timestamp is under 24 hours old — it performs no authenticity check at all.
-- **This is a complete authentication bypass.** Any client can construct a valid "session" for any admin ID and any role — including `super_admin` — by base64-encoding a string themselves, with no need to ever know a real password.
-- **Verified this same weakness on the consuming side too:** `AdminPanel.jsx` (the screen this token is meant to protect) re-validates the token entirely client-side — decoding it and checking its shape/age in a `useEffect`, with no round trip to the server. A forged token that satisfies `admin-auth.js`'s (nonexistent) verification also satisfies this page's own gate, since both are checking the same unsigned string the same way.
-- **CareFind's admin surface has a real, more developed RBAC model than a first pass of this review credited it with:** six roles are used to filter admin notifications in `AdminPanel.jsx` — `super_admin`, `verification_officer`, `business_manager`, `moderator`/`content_manager`, `analytics_manager`. This is genuine role granularity, not just a binary admin flag. It inherits the same forgeability as everything else here, though, since the role value is read from the same client-trusted, server-unverified `localStorage['admin_user']` object.
+The admin login uses Supabase Auth's persistent, refreshable session. Every privileged request sends only the current signed access token in the `Authorization` header. Both the admin gateway and email-template API call `auth.getUser` and resolve an active `admin_users` row through its unique `auth_user_id` foreign key using a service-role client. Email is profile data, not the authorization key. The database row is the sole source of the admin id and role; client storage is only a cache for display/bootstrap and cannot grant access. Missing, expired, forged, non-admin, or inactive sessions fail closed. Staff provisioning stores the newly-created Auth user's id on its admin row and removes the Auth user if the row cannot be created.
 
-## 3. CareFind admin bootstrap — a live, deployed skeleton-key endpoint
+The source migration `apps/carefind/sql/20260926_admin_users_auth_only.sql` links existing admin rows to exactly one matching Supabase Auth identity, verifies that every admin has a unique link, adds a unique index and foreign key, and only then clears legacy custom password hashes and permits rows without them. It aborts without clearing credentials if identity matching is missing or ambiguous. Create and verify Supabase Auth identities for every existing admin before applying it; then verify the links and schema before deploying the updated admin gateway, email-template API, or staff provisioning. The QA seed requires this migration and creates a Supabase Auth identity for its test admin. The legacy SQL helper in `apps/carefind/sql/20260917_migrate_admin_auth.sql` is restricted to database operators and assigns unguessable temporary credentials; if an older version of that helper was run, rotate its shared temporary password before rollout.
 
-**Where:** `api/admin-setup.js` (Vercel function).
+## 3. CareFind admin bootstrap — removed
 
-- A deployed endpoint that creates or resets the super-admin account, gated only by a query-string key checked against `process.env.ADMIN_SECRET_SALT`, which **falls back to the hardcoded literal `'carefind_admin_2024_secure'`** if the env var was never set.
-- Returns the plaintext admin password (`CareFind@Admin2024!`) in its JSON response.
-- **Uses a different, correctly-implemented hash** (real SHA-256 + salt via `crypto.subtle.digest`) than `admin-auth.js`'s login handler (`cf_hashed_` fake scheme) — meaning an account created via this endpoint will almost certainly fail to authenticate through the normal login path. This is direct evidence the admin auth path has never been exercised end-to-end.
-- If this endpoint is still deployed and the environment variable was never overridden in production, **anyone who finds the URL can create or reset super-admin access to CareFind.**
+The public setup handler and router mapping were deleted. Admin accounts must be provisioned through an operator-controlled Supabase Auth workflow; no bootstrap key or reusable credential is exposed. Any credentials previously exposed by the former endpoint require operator-led rotation before deployment.
 
 ## 4. CareFind consumer auth — the one system built correctly
 
@@ -65,10 +58,10 @@ Not authentication, but adjacent and worth noting here: once a user is authentic
 | System | Mechanism | Status |
 |---|---|---|
 | CareHub business/staff | Plaintext DB match, `localStorage` cache | **Broken** — no hashing, no session, hardcoded super-admin |
-| CareFind admin | Fake hash + unsigned token | **Critically broken** — full bypass possible |
-| CareFind admin bootstrap | Query-string key with hardcoded fallback | **Critically broken** — live skeleton key, plaintext password in response |
+| CareFind admin | Supabase Auth bearer session + server-resolved active admin role | **Hardened in source 2026-09-26** — deployment and credential rotation still require operator verification |
+| CareFind admin bootstrap | No public bootstrap route | **Removed in source 2026-09-26** — provision admins through an operator-controlled Supabase Auth workflow |
 | CareFind consumer | Real Supabase Auth | **Correct** |
 
-Three of four authentication systems in this ecosystem are broken as of this review — two of them (CareFind's) to the point of a complete bypass. The one correct implementation (CareFind consumer auth) proves the team building CareFind knows how to do this properly; the fact that CareFind's *own* admin surface doesn't use the same mechanism is the clearest evidence in the whole ecosystem that these were built by different people, at different times, without a shared authentication standard — exactly the kind of gap `Missing-Documentation.md`'s call for a documented auth/security model would have caught.
+CareHub's business/staff login remains the known authentication weakness; see §1 and the CareHub security-risk documentation. CareFind admin API sessions are checked against Supabase Auth and an active database admin row on every request. These source changes do not establish which environment variables, Supabase Auth users, or deployment version are live; operators must rotate any previously exposed admin credentials and verify production configuration before rollout.
 
-**No RLS (Row-Level Security) policy can be confirmed to exist for any table in either product from source code alone** — every finding above compounds with that unknown. See `Security-Risks.md`.
+Production RLS state must still be verified behaviorally against the live project; this source review does not alter or certify deployed database policies.

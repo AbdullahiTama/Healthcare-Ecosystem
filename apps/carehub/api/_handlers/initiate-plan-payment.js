@@ -1,13 +1,13 @@
 import crypto from 'crypto'
 import { supabase } from '../_lib/supabase.js'
-import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { requireBusiness } from '../_lib/authorization.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { PLAN_MONTHLY_NAIRA, PLAN_YEARLY_NAIRA } from '../../src/lib/planLimits.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { business, error: authError } = await verifyBusiness(supabase, req)
+  const { business, error: authError } = await requireBusiness(req)
   if (authError) return res.status(401).json({ error: authError })
 
   const { months, callback_url } = req.body

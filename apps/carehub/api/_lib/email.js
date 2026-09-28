@@ -4,9 +4,9 @@
 
 import { sendEmail as sharedSendEmail } from '@care-ecosystem/shared-email'
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@carehub.ng>'
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carehub.ng'
-const APP_URL = process.env.APP_URL || 'https://carehub.ng'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareHub <support@carefindhub.com>'
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carefindhub.com'
+const APP_URL = process.env.APP_URL || 'https://carefindhub.com'
 
 export async function sendEmail({ to, subject, html, from }) {
   return sharedSendEmail({ to, subject, html, from: from || FROM_EMAIL })
@@ -59,7 +59,7 @@ function footer() {
   return `
     <div style="text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid #f0f0f0; color: #aaa; font-size: 12px;">
       <p>CareHub — One Platform for Every Healthcare Business in Nigeria</p>
-      <p style="margin-top: 4px;">support@carehub.ng | carehub.ng</p>
+      <p style="margin-top: 4px;">support@carefindhub.com | carefindhub.com</p>
     </div>
   `
 }

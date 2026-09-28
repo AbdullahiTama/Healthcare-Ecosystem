@@ -1,6 +1,6 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { processBatch as flushOutbox } from '../_lib/emailService.js'
-import { requireAdmin } from '../_lib/requireAdmin.js'
+import { requireAdmin, requirePermission, requireRole } from '../_lib/authorization.js'
 
 export default async function handler(req, res) {
   try {
@@ -27,7 +27,7 @@ async function handleRequest(req, res) {
   const token = req.headers.authorization?.startsWith('Bearer ')
     ? req.headers.authorization.slice(7).trim()
     : ''
-  const { admin, status: adminStatus, error: authError } = await requireAdmin(req, supabase)
+  const { admin, status: adminStatus, error: authError } = await requireAdmin(req)
   if (adminStatus) return res.status(adminStatus).json({ error: authError })
 
   /**
@@ -70,7 +70,7 @@ async function handleRequest(req, res) {
   if (action === 'verify') {
     try {
       if (!token) return res.status(401).json({ error: 'No token' })
-      const payload = await verifyToken(token)
+      const payload = await requirePermission(req, 'manage_content')
       if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
       const { data: admin, error: queryErr } = await supabase.from('admin_users').select('id, email, full_name, role, is_active, role_id').eq('id', payload.adminId).eq('is_active', true).maybeSingle()
       if (queryErr) return res.status(500).json({ error: 'Database error: ' + queryErr.message })
@@ -93,7 +93,7 @@ async function handleRequest(req, res) {
   }
 
   if (action === 'create_staff') {
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can create staff' })
     const { newEmail, newPassword, newName, newRole, teamId, roleId } = req.body
     if (!newEmail || !newPassword || !newName || !newRole) return res.status(400).json({ error: 'All fields required' })
@@ -136,7 +136,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_staff') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can view staff' })
     const { data } = await supabase.from('admin_users').select('id, email, full_name, role, is_active, last_login, created_at').order('created_at')
     return res.status(200).json({ staff: data || [] })
@@ -144,7 +144,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_teams') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('admin_teams').select('*').order('created_at')
     return res.status(200).json({ teams: data || [] })
@@ -152,7 +152,7 @@ async function handleRequest(req, res) {
 
   if (action === 'create_team') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can create teams' })
     const { name } = req.body
     if (!name) return res.status(400).json({ error: 'Team name required' })
@@ -163,7 +163,7 @@ async function handleRequest(req, res) {
 
   if (action === 'toggle_staff') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Unauthorized' })
     const { staffId, isActive } = req.body
     await supabase.from('admin_users').update({ is_active: isActive }).eq('id', staffId)
@@ -172,7 +172,7 @@ async function handleRequest(req, res) {
 
   if (action === 'approve_claim') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { claimId, businessId } = req.body
     if (!claimId || !businessId) return res.status(400).json({ error: 'claimId and businessId required' })
@@ -185,7 +185,7 @@ async function handleRequest(req, res) {
 
   if (action === 'reject_claim') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { claimId } = req.body
     if (!claimId) return res.status(400).json({ error: 'claimId required' })
@@ -204,7 +204,7 @@ async function handleRequest(req, res) {
 
   if (action === 'approve_verification') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id, userId, profession } = req.body
     if (!id) return res.status(400).json({ error: 'id is required' })
@@ -219,7 +219,7 @@ async function handleRequest(req, res) {
 
   if (action === 'reject_verification') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -230,7 +230,7 @@ async function handleRequest(req, res) {
 
   if (action === 'manual_verify') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { userId, specialty } = req.body
     if (!userId || !specialty) return res.status(400).json({ error: 'userId and specialty required' })
@@ -241,7 +241,7 @@ async function handleRequest(req, res) {
 
   if (action === 'suspend_user') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { userId, days } = req.body
     if (!userId || !days) return res.status(400).json({ error: 'userId and days required' })
@@ -253,7 +253,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_user') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { userId } = req.body
     if (!userId) return res.status(400).json({ error: 'userId required' })
@@ -270,7 +270,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_post') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -281,7 +281,7 @@ async function handleRequest(req, res) {
 
   if (action === 'resolve_report') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -292,7 +292,7 @@ async function handleRequest(req, res) {
 
   if (action === 'create_task') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { title, description, compensation, specialty } = req.body
     if (!title || !description || !compensation) return res.status(400).json({ error: 'title, description and compensation required' })
@@ -303,7 +303,7 @@ async function handleRequest(req, res) {
 
   if (action === 'approve_withdrawal') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -320,7 +320,7 @@ async function handleRequest(req, res) {
 
   if (action === 'reject_withdrawal') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -352,7 +352,7 @@ async function handleRequest(req, res) {
 
   if (action === 'schedule_show') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { title, scheduledAt, trailerUrl, guestIds } = req.body
     if (!title || !scheduledAt) return res.status(400).json({ error: 'title and scheduledAt required' })
@@ -367,7 +367,7 @@ async function handleRequest(req, res) {
 
   if (action === 'start_live_show') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { title, guestIds } = req.body
     if (!title) return res.status(400).json({ error: 'title required' })
@@ -381,7 +381,7 @@ async function handleRequest(req, res) {
 
   if (action === 'start_scheduled_show') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { showId } = req.body
     if (!showId) return res.status(400).json({ error: 'showId required' })
@@ -392,7 +392,7 @@ async function handleRequest(req, res) {
 
   if (action === 'cancel_scheduled_show') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { showId } = req.body
     if (!showId) return res.status(400).json({ error: 'showId required' })
@@ -403,7 +403,7 @@ async function handleRequest(req, res) {
 
   if (action === 'end_live_show') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { showId } = req.body
     if (!showId) return res.status(400).json({ error: 'showId required' })
@@ -414,7 +414,7 @@ async function handleRequest(req, res) {
 
   if (action === 'post_live_item') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { showId, kind, content } = req.body
     if (!showId || !kind || !content) return res.status(400).json({ error: 'showId, kind and content required' })
@@ -425,7 +425,7 @@ async function handleRequest(req, res) {
 
   if (action === 'hide_live_comment') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -438,7 +438,7 @@ async function handleRequest(req, res) {
 
   if (action === 'create_promotion') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { title, linkUrl, imageUrl, days } = req.body
     if (!title) return res.status(400).json({ error: 'title required' })
@@ -450,7 +450,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_promotion') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -463,22 +463,25 @@ async function handleRequest(req, res) {
 
   if (action === 'approve_news') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id, edits } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
-    const { error } = await supabase.from('news').update({
-      ...(edits || {}),
-      status: 'approved',
-      published_at: new Date().toISOString(),
-    }).eq('id', id)
+    const allowedFields = ['title', 'body', 'category', 'tags', 'image_url']
+    const patch = { status: 'approved', published_at: new Date().toISOString() }
+    if (edits && typeof edits === 'object') {
+      for (const key of allowedFields) {
+        if (edits[key] !== undefined) patch[key] = edits[key]
+      }
+    }
+    const { error } = await supabase.from('news').update(patch).eq('id', id)
     if (error) return res.status(400).json({ error: error.message })
     return res.status(200).json({ success: true })
   }
 
   if (action === 'reject_news') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -489,7 +492,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_news') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -502,7 +505,7 @@ async function handleRequest(req, res) {
 
   if (action === 'create_story') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { title, body, imageUrl, bgColor } = req.body
     if (!title && !body && !imageUrl) return res.status(400).json({ error: 'title, body or imageUrl required' })
@@ -526,7 +529,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_posts') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { search, type, dateFrom, dateTo, limit: lim, offset } = req.body
     let query = supabase
@@ -546,7 +549,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_user_profiles') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { search, verified, specialty, limit: lim, offset } = req.body
     let query = supabase
@@ -566,7 +569,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_user_profile') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { userId } = req.body
     if (!userId) return res.status(400).json({ error: 'Missing userId' })
@@ -581,7 +584,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_user_posts') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { userId, limit: lim } = req.body
     if (!userId) return res.status(400).json({ error: 'Missing userId' })
@@ -597,7 +600,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_verification_requests') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     try {
       const { data, error } = await supabase.from('verification_requests').select('*').order('created_at', { ascending: false })
@@ -611,7 +614,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_reports') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('reports').select('*, posts(content)').order('created_at', { ascending: false }).limit(30)
     return res.status(200).json({ data: data || [] })
@@ -619,7 +622,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_transactions') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50)
     return res.status(200).json({ data: data || [] })
@@ -627,7 +630,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_withdrawal_requests') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('withdrawal_requests').select('*, profiles(full_name, display_name)').order('created_at', { ascending: false })
     return res.status(200).json({ data: data || [] })
@@ -635,7 +638,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_task_submissions') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('task_submissions').select('*, tasks(title), profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(20)
     return res.status(200).json({ data: data || [] })
@@ -643,7 +646,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_business_claims') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('business_claims').select('*, businesses(name)').order('created_at', { ascending: false })
     return res.status(200).json({ data: data || [] })
@@ -651,7 +654,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_news') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('news').select('*, profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(60)
     const authorIds = [...new Set((data || []).map(n => n.author_id).filter(Boolean))]
@@ -665,7 +668,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_search_logs') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('search_logs').select('id, query, category, results_count, found, user_id, created_at, profiles(full_name, display_name)').order('created_at', { ascending: false }).limit(300)
     return res.status(200).json({ data: data || [] })
@@ -673,7 +676,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_story') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -696,7 +699,7 @@ async function handleRequest(req, res) {
   // --------------------------------------------------------------------
   if (action === 'credential_url') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
 
     const { requestId } = req.body
@@ -736,14 +739,14 @@ async function handleRequest(req, res) {
   // --------------------------------------------------------------------
   if (action === 'list_ecommerce_applications') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('ecommerce_applications').select('*, businesses(name, business_type, city, state)').order('created_at', { ascending: false }).limit(100)
     return res.status(200).json({ data: data || [] })
   }
   if (action === 'update_ecommerce_application') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id, status, rejection_reason } = req.body
     if (!id || !status) return res.status(400).json({ error: 'id and status required' })
@@ -757,14 +760,14 @@ async function handleRequest(req, res) {
   }
   if (action === 'list_ecommerce_products_admin') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('ecommerce_products').select('id,status,category,prescription_required,is_restricted,active_at,business_id,product_id, businesses(name), products(name,price,stock)').order('created_at', { ascending: false }).limit(100)
     return res.status(200).json({ data: data || [] })
   }
   if (action === 'moderate_ecommerce_product') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id, is_restricted, status } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
@@ -778,14 +781,14 @@ async function handleRequest(req, res) {
   }
   if (action === 'list_shop_orders_admin') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('shop_orders').select('*, shop_order_items(*)').order('created_at', { ascending: false }).limit(50)
     return res.status(200).json({ data: data || [] })
   }
   if (action === 'admin_update_shop_order_status') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { orderId, status, note } = req.body
     if (!orderId || !status) return res.status(400).json({ error: 'orderId and status required' })
@@ -840,7 +843,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_shop_order_detail') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { orderId } = req.body
     if (!orderId) return res.status(400).json({ error: 'orderId required' })
@@ -860,7 +863,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_shop_orders_filtered') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { status, vendorId, customerId, dateFrom, dateTo, search, limit: lim } = req.body
     let query = supabase.from('shop_orders').select('*, shop_order_items(*), businesses!shop_orders_vendor_business_id_fkey(id, name, business_type, city), profiles!shop_orders_customer_id_fkey(id, full_name, display_name)', { count: 'exact' }).order('created_at', { ascending: false }).limit(lim || 100)
@@ -877,7 +880,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_admin_shop_overview') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data, error } = await supabase.rpc('get_admin_shop_overview')
     if (error) return res.status(400).json({ error: error.message })
@@ -888,7 +891,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_customer_purchase_history') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { customerId } = req.body
     if (!customerId) return res.status(400).json({ error: 'customerId required' })
@@ -907,7 +910,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_shop_customers') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { search } = req.body
     let query = supabase.rpc('get_admin_shop_overview').then(() => null)
@@ -939,7 +942,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_vendor_order_summary') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { vendorId } = req.body
     if (!vendorId) return res.status(400).json({ error: 'vendorId required' })
@@ -958,7 +961,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_pickup_stations_admin') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('shop_pickup_stations').select('*').order('name')
     return res.status(200).json({ data: data || [] })
@@ -966,7 +969,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_fulfilment_orders') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { status: filterStatus } = req.body
     const activeStatuses = ['paid', 'accepted', 'processing', 'packed', 'at_pickup_station', 'ready_for_pickup', 'in_transit']
@@ -980,7 +983,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_shop_reports') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { dateFrom, dateTo } = req.body
     let dateFilter = ''
@@ -1038,7 +1041,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_shop_product_views') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase
       .from('shop_product_views')
@@ -1061,7 +1064,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_admin_roles') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data } = await supabase.from('admin_roles').select('*').order('created_at')
     return res.status(200).json({ data: data || [] })
@@ -1069,7 +1072,7 @@ async function handleRequest(req, res) {
 
   if (action === 'create_admin_role') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can create roles' })
     const { name, description, carefindTabs } = req.body
     if (!name) return res.status(400).json({ error: 'Role name required' })
@@ -1086,7 +1089,7 @@ async function handleRequest(req, res) {
 
   if (action === 'update_admin_role') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can update roles' })
     const { roleId, description, carefindTabs } = req.body
     if (!roleId) return res.status(400).json({ error: 'roleId required' })
@@ -1100,7 +1103,7 @@ async function handleRequest(req, res) {
 
   if (action === 'delete_admin_role') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can delete roles' })
     const { roleId } = req.body
     if (!roleId) return res.status(400).json({ error: 'roleId required' })
@@ -1113,7 +1116,7 @@ async function handleRequest(req, res) {
 
   if (action === 'assign_admin_role') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload || payload.role !== 'super_admin') return res.status(403).json({ error: 'Only super admin can assign roles' })
     const { staffId, roleId } = req.body
     if (!staffId || !roleId) return res.status(400).json({ error: 'staffId and roleId required' })
@@ -1127,7 +1130,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_admin_permissions') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { data, error } = await supabase.rpc('get_admin_permissions', { p_admin_id: payload.adminId })
     if (error) return res.status(400).json({ error: error.message })
@@ -1140,7 +1143,7 @@ async function handleRequest(req, res) {
 
   if (action === 'log_audit_action') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { auditAction, targetType, targetId, metadata } = req.body
     if (!auditAction || !targetType || !targetId) return res.status(400).json({ error: 'auditAction, targetType and targetId required' })
@@ -1157,7 +1160,7 @@ async function handleRequest(req, res) {
 
   if (action === 'list_audit_logs') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { limit: lim, action: filterAction, target_type: filterTarget, dateFrom, dateTo } = req.body
     let query = supabase.from('admin_audit_log').select('id, actor_admin_id, action, target_table, target_id, after, created_at').order('created_at', { ascending: false }).limit(lim || 100)
@@ -1185,7 +1188,7 @@ async function handleRequest(req, res) {
 
   if (action === 'bulk_action') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { bulkAction, items } = req.body
     if (!bulkAction || !items?.length) return res.status(400).json({ error: 'bulkAction and items required' })
@@ -1249,7 +1252,7 @@ async function handleRequest(req, res) {
 
   if (action === 'analyze_sentiment') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { text } = req.body
     if (!text) return res.status(400).json({ error: 'text required' })
@@ -1266,7 +1269,7 @@ async function handleRequest(req, res) {
 
   if (action === 'get_recommendations') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { currentTab, recentActions } = req.body
     const recommendations = generateRecommendations(currentTab, recentActions || [])
@@ -1275,7 +1278,7 @@ async function handleRequest(req, res) {
 
   if (action === 'log_copilot_feedback') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const payload = await verifyToken(token)
+    const payload = await requirePermission(req, 'manage_content')
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { suggestionId, accepted, reasoning } = req.body
     if (suggestionId === undefined || accepted === undefined) return res.status(400).json({ error: 'suggestionId and accepted required' })
