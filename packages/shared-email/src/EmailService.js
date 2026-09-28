@@ -14,7 +14,7 @@ async function deps() {
   if (!_templates) {
     _templates = await import('./templates/index.js')
   }
-  return { sendEmail: _sendEmail, getTemplate: _templates.getTemplate, TEMPLATE_REGISTRY: _templates.TEMPLATE_REGISTRY }
+  return { sendEmail: _sendEmail, getTemplate: _templates.getTemplate, getSubject: _templates.getSubject, sanitizeSubjectPart: _templates.sanitizeSubjectPart, TEMPLATE_REGISTRY: _templates.TEMPLATE_REGISTRY }
 }
 
 // supabase-js is loaded here and not from deps() because deps() is called on
@@ -178,7 +178,7 @@ export class EmailService {
   }
 
   async processBatch() {
-    const { sendEmail, getTemplate } = await deps()
+    const { sendEmail, getTemplate, getSubject, sanitizeSubjectPart } = await deps()
     const db = await this._getDb()
 
     // dispatch_paused is the documented rollback lever and it existed in the
@@ -254,7 +254,23 @@ export class EmailService {
         }
 
         const html = templateFn(payload)
-        const result = await sendEmail({ to, subject: row.subject, html, from: row.from_email })
+
+        // Subject resolution. The subject is part of the template contract, so
+        // the canonical per-app subject for this key is the source of truth and
+        // is used whenever the row did not arrive with one. Producers that
+        // deliberately set a subject keep it (the [TEST] marker, the auth-path
+        // subjects), but a producer that used to pass a request-body subject
+        // through /api/email/send no longer can. Both paths are sanitized, so
+        // even a hostile stored subject cannot inject headers. Empty subject
+        // fails closed rather than mailing a subject-less email.
+        const subject = sanitizeSubjectPart(row.subject) || getSubject(row.template_key, app, payload)
+        if (!subject) {
+          await this._markFailed(row, `no_subject:${app}:${row.template_key}`)
+          failed++
+          continue
+        }
+
+        const result = await sendEmail({ to, subject, html, from: row.from_email })
         if (result.success) { await this._markSent(row, result.data); sent++ }
         else { await this._markFailed(row, result.error); failed++ }
       } catch (e) { await this._markFailed(row, e.message); failed++ }

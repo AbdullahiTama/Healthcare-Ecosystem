@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getTemplate, getSubject } from '../templates/index.js'
 
 // Static contracts, not behavioural tests. Each guards a defect that actually
 // shipped. A behavioural test only fails in the one place a bug is reproduced;
@@ -76,10 +77,14 @@ const KNOWN_SUBJECT_OFFENDERS = {
   // dangerous ones: an authenticated caller supplies the subject. Two were
   // additionally hidden in SUBJECT_EXEMPT, which made the guard report full
   // coverage while checking neither of them.
-  'apps/carehub/api/_handlers/email-send.js': 'batch 3: move onto the catalog; subject is caller controlled',
-  'apps/carehub/api/_handlers/email-test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
-  'apps/carefind/api/email/send.js': 'batch 3: move onto the catalog; subject is caller controlled',
-  'apps/carefind/api/email/test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
+  // apps/carehub/api/_handlers/email-send.js and apps/carefind/api/email/send.js
+  // were removed from this list: both used to forward req.body.subject straight
+  // into enqueue, letting any authenticated caller set the subject line of a
+  // branded email. They no longer read a subject at all, and the worker resolves
+  // it from the key's canonical subject. The two operator preview tools stay:
+  // their subject is the [TEST] marker, not caller text.
+  'apps/carehub/api/_handlers/email-test-send.js': 'operator preview tool; subject is the [TEST] marker, not caller text',
+  'apps/carefind/api/email/test-send.js': 'operator preview tool; subject is the [TEST] marker, not caller text',
 }
 
 // The services themselves and the auth path. authEmail.js is exempt because
@@ -113,7 +118,12 @@ describe('outbox write contract', () => {
     // check-subscription-expiry.js is the known offender. It omits app and
     // event_key, so every row it produced was parked as legacy_mapping_unproven
     // and silently never delivered. Batch 3 rewrites it onto the catalog.
-    expect(offenders).toEqual(['apps/carefind/api/cron/check-subscription-expiry.js'])
+    // check-subscription-expiry.js used to be the only raw writer. It omitted
+    // app and event_key, so guard_email_outbox_quarantine() parked every row it
+    // produced as legacy_mapping_unproven with next_retry_at='infinity': the
+    // cron reported enqueued counts and delivered nothing. It now goes through
+    // the shared service, so no file may write email_outbox directly again.
+    expect(offenders).toEqual([])
   })
 
   it('still stamps app and event_key on every row the service writes', () => {
@@ -142,10 +152,13 @@ describe('subject authority contract', () => {
     expect(offenders.sort()).toEqual(Object.keys(KNOWN_SUBJECT_OFFENDERS).sort())
   })
 
-  it('gives every offender a recorded reason naming the batch that removes it', () => {
+  it('gives every offender a recorded reason', () => {
+    // The reasons no longer all name a batch: the two operator preview tools are
+    // not going away in batch 3, they need a subject the catalog cannot supply.
+    // The ratchet that matters is the test above, which fails if the offender
+    // list ever grows.
     for (const [path, reason] of Object.entries(KNOWN_SUBJECT_OFFENDERS)) {
       expect(reason, `${path} needs a reason`).toBeTruthy()
-      expect(reason, `${path} must name the batch that removes it`).toMatch(/batch \d/)
     }
   })
 
@@ -177,5 +190,52 @@ describe('encoding integrity contract', () => {
       'apps/carefind/api/_handlers/paystack-webhook.js (15)',
       'apps/carefind/api/_handlers/verify-subscription-payment.js (2)',
     ])
+  })
+})
+
+describe('send endpoint allowlist contract', () => {
+  // The referral panel's only two live email calls returned 400 because
+  // agent_approved and agent_rejected were missing from the CareHub allowlist.
+  // Nothing failed loudly: the panel swallowed the error and the agent was never
+  // told. A key that no renderer can satisfy fails the same silent way, so both
+  // halves of the pair are asserted against the real registry.
+  const HANDLERS = [
+    { path: 'apps/carehub/api/_handlers/email-send.js', app: 'carehub' },
+    { path: 'apps/carefind/api/email/send.js', app: 'carefind' },
+  ]
+
+  const allowlistOf = (src) => {
+    const m = src.match(/const allowedTemplates = \[([\s\S]*?)\]/)
+    if (!m) return null
+    return [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])
+  }
+
+  for (const { path, app } of HANDLERS) {
+    it(`${app}: every allowlisted key resolves to a real renderer`, () => {
+      const list = allowlistOf(read(join(REPO, path)))
+      expect(list, `${path} must declare an allowlist`).toBeTruthy()
+      for (const key of list) {
+        expect(getTemplate(key, app), `${path} allowlists ${key} but ${app} has no renderer`).toBeTypeOf('function')
+        expect(getSubject(key, app, {}), `${path} allowlists ${key} but ${app} has no subject`).not.toBe('')
+      }
+    })
+  }
+
+  it('carehub allowlists the two keys the referral panel calls', () => {
+    const list = allowlistOf(read(join(REPO, 'apps/carehub/api/_handlers/email-send.js')))
+    expect(list).toContain('agent_approved')
+    expect(list).toContain('agent_rejected')
+  })
+
+  it('no send endpoint reads a subject out of the request body', () => {
+    // The subject is resolved by the worker from the template registry. Forwarding
+    // req.body.subject let any authenticated caller set the subject line of a
+    // branded email.
+    for (const { path } of HANDLERS) {
+      const src = read(join(REPO, path))
+      const destructure = src.match(/const \{([^}]*)\} = req\.body/)
+      expect(destructure, `${path} must destructure req.body`).toBeTruthy()
+      expect(destructure[1], `${path} must not destructure subject`).not.toMatch(/\bsubject\b/)
+    }
   })
 })

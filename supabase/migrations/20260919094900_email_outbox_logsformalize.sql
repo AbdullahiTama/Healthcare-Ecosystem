@@ -27,7 +27,7 @@ create table if not exists email_outbox (
 create table if not exists email_logs (
   id uuid primary key default gen_random_uuid(),
   outbox_id uuid references email_outbox(id) on delete cascade,
-  event_type text not null check (event_type in ('enqueued','sent','delivered','opened','bounced','complained','failed','dead')),
+  event_type text not null check (event_type in ('enqueued','sent','delivered','opened','bounced','complained','failed','dead','suppressed')),
   detail text,
   metadata jsonb default '{}',
   created_at timestamptz not null default now()
@@ -59,7 +59,9 @@ end $$;
 --    This ensures only the API handlers (which use service-role) can touch these tables.
 
 -- 6. Updated_at trigger
-create or replace function update_email_outbox_updated_at() returns trigger language plpgsql set search_path=public as $$
+-- search_path pinned empty rather than 'public' to match the enqueue function
+-- hardening. now() still resolves: pg_catalog is always searched implicitly.
+create or replace function update_email_outbox_updated_at() returns trigger language plpgsql set search_path='' as $$
 begin new.updated_at = now(); return new; end $$;
 
 drop trigger if exists trg_email_outbox_updated_at on email_outbox;

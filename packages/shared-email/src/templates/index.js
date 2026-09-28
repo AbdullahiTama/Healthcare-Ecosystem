@@ -17,6 +17,10 @@ const HUB_TEMPLATE_MAP = {
   appointmentConfirmed: 'appointment_confirmed',
   passwordReset: 'password_reset',
   emailVerification: 'email_verification',
+  agentApproved: 'agent_approved',
+  agentRejected: 'agent_rejected',
+  businessReactivated: 'business_reactivated',
+  businessRevoked: 'business_revoked',
 }
 
 const FIND_TEMPLATE_MAP = {
@@ -43,6 +47,14 @@ const FIND_BY_KEY = Object.fromEntries(Object.entries(FindTemplates).map(([name,
 // listing tools where a single non-app-scoped view is needed.
 export const TEMPLATE_REGISTRY = { ...HUB_BY_KEY, ...FIND_BY_KEY }
 
+// Per-app key lists, so tooling (the delivery-contract guard, the
+// subject-completeness ratchet) can enumerate what actually resolves without
+// reaching into the maps.
+export const TEMPLATE_KEYS = {
+  carehub: Object.keys(HUB_BY_KEY),
+  carefind: Object.keys(FIND_BY_KEY),
+}
+
 // Also export by original function names for backward compatibility
 export const CAREHUB_TEMPLATES = HubTemplates
 export const CAREFIND_TEMPLATES = FindTemplates
@@ -57,4 +69,71 @@ export const CAREFIND_TEMPLATES = FindTemplates
 export function getTemplate(templateKey, app = 'carefind') {
   const byKey = app === 'carehub' ? HUB_BY_KEY : FIND_BY_KEY
   return byKey[templateKey] || null
+}
+
+// Canonical subject per key, per app. Subjects are part of the contract: they
+// carry the brand and the action, and they used to arrive from the request body
+// of whichever endpoint happened to enqueue the row. Producers that omit a
+// subject (the referral helpers did) produced rows with subject = '', which went
+// out as a subject-less email. The subject now lives beside the renderer, so
+// the endpoint cannot inject or drop it.
+const HUB_SUBJECTS = {
+  registration_owner: 'Welcome to CareHub, {{fullName}}',
+  admin_new_registration: 'New {{businessType}} registration from {{businessName}}',
+  business_approved: '{{businessName}} has been approved',
+  business_rejected: 'Update on your {{businessName}} application',
+  business_suspended: '{{businessName}} account suspended',
+  business_reactivated: '{{businessName}} is active again',
+  business_revoked: 'Access revoked for {{businessName}}',
+  business_status_update: 'Update on your {{businessName}} application',
+  staff_welcome: "You're invited to join {{businessName}}",
+  agent_approved: 'You are approved, {{agentName}}',
+  agent_rejected: 'Referral application update',
+  subscription_created: 'Your {{plan}} plan for {{businessName}} is active',
+  subscription_expiry: 'Your {{plan}} plan for {{businessName}} expires soon',
+  purchase_confirmed: 'Purchase confirmed',
+  order_status_update: 'Order {{orderRef}} is {{status}}',
+  appointment_confirmed: 'Your appointment at {{businessName}} is confirmed',
+  password_reset: 'Reset your password',
+  email_verification: 'Verify your email',
+}
+
+const FIND_SUBJECTS = {
+  customer_registration: 'Welcome to CareFind, {{fullName}}',
+  order_confirmation: 'Order confirmed - {{orderRef}}',
+  subscription_created: 'Your {{plan}} plan is active',
+  subscription_expiry: 'Your {{plan}} plan expires soon',
+  purchase_confirmed: 'Purchase confirmed',
+  password_reset: 'Reset your password',
+  email_verification: 'Verify your email',
+  appointment_confirmed: 'Your appointment is confirmed',
+  order_status_update: 'Order {{orderRef}} is {{status}}',
+  booking_confirmed: 'Your booking is confirmed',
+}
+
+// Strip anything that could break a single-line subject. Payload values are
+// business-supplied, and a newline in a subject is a header-injection risk
+// against the provider API, not just a cosmetic bug.
+export function sanitizeSubjectPart(value) {
+  return String(value ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+}
+
+function renderSubject(template, payload = {}) {
+  return String(template)
+    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => sanitizeSubjectPart(payload?.[key]))
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+// Returns '' when the key has no canonical subject. Callers treat that as a
+// hard failure rather than mailing an empty subject line.
+export function getSubject(templateKey, app = 'carefind', payload = {}) {
+  const byKey = app === 'carehub' ? HUB_SUBJECTS : FIND_SUBJECTS
+  const template = byKey[templateKey]
+  if (!template) return ''
+  return renderSubject(template, payload)
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { EmailService, getEmailService, redactPayload } from '../EmailService.js'
+import { getTemplate, getSubject, TEMPLATE_KEYS } from '../templates/index.js'
 
 // The provider call is the only thing we must never make in these tests.
 // Hoisted so it is in place before EmailService's module-level cache resolves.
@@ -303,12 +304,15 @@ describe('canary addressing', () => {
 
 describe('templates fail closed', () => {
   it('marks the row failed instead of mailing an empty body', async () => {
-    const db = rolloutDb({ settings: {}, rows: [row({ template_key: 'business_revoked' })] })
+    // Deliberately fictional. This used to use business_revoked, which stopped
+    // being a valid example the moment that key gained a renderer. A key no one
+    // will ever implement keeps asserting the fail-closed path.
+    const db = rolloutDb({ settings: {}, rows: [row({ template_key: 'no_such_template' })] })
     const result = await new EmailService({ supabase: db }).processBatch()
 
     expect(sendEmailMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 })
-    expect(db.__state.rows[0].last_error).toBe('no_template:carehub:business_revoked')
+    expect(db.__state.rows[0].last_error).toBe('no_template:carehub:no_such_template')
   })
 
   it('does not borrow the other app template when one app lacks the key', async () => {
@@ -442,5 +446,79 @@ describe('redactPayload', () => {
   it('leaves order line items and plain values intact', () => {
     const payload = { items: [{ name: 'Lifeline', quantity: 2, price: 500 }], total: 1000 }
     expect(redactPayload(payload)).toEqual(payload)
+  })
+})
+
+describe('subject resolution', () => {
+  it('falls back to the canonical subject when the row carries none', async () => {
+    // The referral helpers enqueued with no subject at all, so these rows used to
+    // go out with an empty subject line.
+    const db = rolloutDb({ settings: {}, rows: [row({ subject: '', template_key: 'password_reset' })] })
+    await new EmailService({ supabase: db }).processBatch()
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe('Reset your password')
+  })
+
+  it('interpolates payload values into the canonical subject', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ subject: '', template_key: 'business_approved', payload: { businessName: 'Acme Clinic' } })],
+    })
+    await new EmailService({ supabase: db }).processBatch()
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe('Acme Clinic has been approved')
+  })
+
+  it('keeps a subject the producer set deliberately', async () => {
+    // The operator test-send endpoint prefixes [TEST] and depends on it landing.
+    const db = rolloutDb({ settings: {}, rows: [row({ subject: '[TEST] agent_approved' })] })
+    await new EmailService({ supabase: db }).processBatch()
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe('[TEST] agent_approved')
+  })
+
+  it('strips line breaks out of a stored subject', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ subject: 'Hello\r\nBcc: attacker@evil.test' })] })
+    await new EmailService({ supabase: db }).processBatch()
+    const { subject } = sendEmailMock.mock.calls[0][0]
+    expect(subject).toBe('Hello Bcc: attacker@evil.test')
+    expect(subject).not.toMatch(/[\r\n]/)
+  })
+
+  it('strips line breaks out of interpolated payload values', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({
+        subject: '',
+        template_key: 'business_approved',
+        payload: { businessName: 'Acme\r\nClinic' },
+      })],
+    })
+    await new EmailService({ supabase: db }).processBatch()
+    const { subject } = sendEmailMock.mock.calls[0][0]
+    expect(subject).not.toMatch(/[\r\n]/)
+    expect(subject).toBe('Acme Clinic has been approved')
+  })
+
+  it('fails closed when neither a stored nor a canonical subject exists', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ subject: '', template_key: 'no_such_template' })] })
+    const result = await new EmailService({ supabase: db }).processBatch()
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ sent: 0, failed: 1 })
+    expect(db.__state.rows[0].last_error).toBe('no_template:carehub:no_such_template')
+  })
+
+  it('gives every registered template a canonical subject for its own app', () => {
+    // Ratchet: adding a renderer without a subject would reintroduce the
+    // subject-less email this whole path exists to prevent.
+    for (const app of ['carehub', 'carefind']) {
+      for (const key of TEMPLATE_KEYS[app]) {
+        expect(getSubject(key, app, { fullName: 'X', businessName: 'X', plan: 'X', orderRef: 'X', status: 'X', agentName: 'X' }), `${app}:${key}`).not.toBe('')
+      }
+    }
+  })
+
+  it('renders the referral and business lifecycle keys that were missing', () => {
+    for (const key of ['agent_approved', 'agent_rejected', 'business_reactivated', 'business_revoked']) {
+      expect(getTemplate(key, 'carehub'), key).toBeTypeOf('function')
+      expect(getSubject(key, 'carehub', { agentName: 'Ada', businessName: 'Acme' }), key).not.toBe('')
+    }
   })
 })

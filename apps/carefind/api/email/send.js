@@ -16,7 +16,10 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
 
-  const { templateKey, toEmail, payload, subject } = req.body || {}
+  // subject is deliberately not read from the request. It used to be, which let
+  // any authenticated user set the subject line of a CareFind-branded email to
+  // arbitrary text. The worker resolves it from the key's canonical subject.
+  const { templateKey, toEmail, payload } = req.body || {}
   if (!templateKey || !toEmail) return res.status(400).json({ error: 'templateKey and toEmail are required' })
 
   const allowedTemplates = ['customer_registration', 'order_confirmation', 'purchase_confirmed', 'subscription_created', 'subscription_expiry', 'password_reset', 'email_verification', 'appointment_confirmed']
@@ -25,7 +28,14 @@ export default async function handler(req, res) {
   try {
     const { EmailService } = await import('@care-ecosystem/shared-email')
     const emailService = new EmailService()
-    const row = await emailService.enqueue({ templateKey, toEmail, payload, subject })
+    const row = await emailService.enqueue({ templateKey, toEmail, payload })
+    if (!row) {
+      console.error('[email/send] enqueue returned no row', { templateKey })
+      return res.status(500).json({ error: 'Enqueue failed' })
+    }
+    // Kept for the same reason as the CareHub handler: the minute cron is not
+    // verified working (Vault secrets unset) and claims make this safe to run
+    // concurrently with it.
     emailService.processBatch().catch(e => console.error('[email/send] immediate process failed', e))
     return res.status(202).json({ ok: true, outboxId: row.id })
   } catch (e) {

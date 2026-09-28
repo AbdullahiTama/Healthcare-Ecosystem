@@ -1,6 +1,8 @@
 import { logoHeader, footer, baseStyle, cardStyle, btnStyle, esc } from './BaseTemplate.js'
 const APP_URL = typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carefindhub.com'
 
+export * from './ReferralAdmin.js'
+
 export function customerRegistration({ fullName, businessName, email, password }) {
   return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">👋</div><h2 style="color:#0f172a;margin:0 0 8px">Welcome to CareHub, ${esc(fullName)}!</h2><p style="color:#888;margin:0">Your business <strong>${esc(businessName)}</strong> is now on CareHub.</p></div><div style="background:#FDFBF7;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#555;font-size:13px;line-height:1.7">Your account is <strong>under review</strong> by the CareHub admin team. You will receive an email within <strong>24 hours</strong> once approved.</p></div><div style="background:#f9fafb;border-radius:12px;padding:16px;margin-bottom:20px"><p style="margin:0;color:#888;font-size:12px;line-height:1.6">Email: ${esc(email)}</p></div><a href="${APP_URL}/login" style="${btnStyle()}">Go to Sign In →</a></div>${footer('CareHub','carefindhub.com')}</div>`
 }

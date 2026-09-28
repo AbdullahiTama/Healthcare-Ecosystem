@@ -60,22 +60,39 @@ export default async function handler(req, res) {
         .maybeSingle()
       if (existing) { skipped++; continue }
 
-      const { error: enqErr } = await supabase.from('email_outbox').insert({
-        to_email: ownerEmail,
-        from_email: process.env.RESEND_FROM_EMAIL || 'CareFind <support@mail.carefind.app>',
-        subject: `Your ${biz.plan || 'CareHub'} subscription expires soon`,
-        template_key: 'subscription_expiry',
-        payload: {
-          fullName: biz.owner_name || 'Business Owner',
-          plan: biz.plan || 'Standard',
-          businessName: biz.name,
-          expiryDate: expiry.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-          daysLeft,
-        },
-        status: 'pending',
-        next_retry_at: new Date().toISOString(),
-      })
-      if (enqErr) { skipped++; continue }
+      // Routed through the shared service instead of a raw insert. The raw
+      // insert omitted app and event_key, so guard_email_outbox_quarantine()
+      // parked every one of these rows with quarantine_reason=
+      // 'legacy_mapping_unproven' and next_retry_at='infinity'. The enqueue
+      // appeared to succeed and the email was silently undeliverable, which is
+      // why this cron reported enqueued counts while nothing was ever sent.
+      //
+      // app is passed explicitly rather than inferred from the sender: enqueue
+      // defaults from_email to the CareHub address, and a mis-resolved app
+      // would fail closed with no_template:carehub:subscription_expiry because
+      // the CareHub renderer set has no such key.
+      let row = null
+      try {
+        row = await emailService.enqueue({
+          templateKey: 'subscription_expiry',
+          toEmail: ownerEmail,
+          fromEmail: process.env.RESEND_FROM_EMAIL || 'CareFind <support@mail.carefind.app>',
+          app: 'carefind',
+          eventKey: 'subscription_expiry',
+          payload: {
+            fullName: biz.owner_name || 'Business Owner',
+            plan: biz.plan || 'Standard',
+            businessName: biz.name,
+            expiryDate: expiry.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            daysLeft,
+          },
+        })
+      } catch (enqErr) {
+        console.error('[cron/check-subscription-expiry] enqueue failed', enqErr)
+        skipped++
+        continue
+      }
+      if (!row) { skipped++; continue }
       enqueued++
     }
 
