@@ -218,7 +218,8 @@ reversible on its own, and no batch leaves the system without a working off swit
 3. **Producers onto the catalog.** The 10 existing direct enqueue call sites, plus
    `check-subscription-expiry`, which stops writing raw SQL. This batch removes evidence items 3, 4,
    5, 6, 7 and 16 because subjects come from the catalog and the review path is no longer hand
-   written. **A producer must treat a `null` return from `enqueue_business_email_event` as a hard
+   written. Follows the enable before rewiring order under Rollout, one event at a time.
+   **A producer must treat a `null` return from `enqueue_business_email_event` as a hard
    failure**, not as success: `null` means the event is dark, and the matching `suppressed` row in
    `email_logs` is the only trace. A producer that ignores the return is the silent non-delivery
    this design exists to prevent.
@@ -239,6 +240,28 @@ canary baseline.
 4. Non token bearing events move to `live` per event, in batches, with the canary as the comparison
    baseline.
 5. Token bearing auth mail is enabled last, after the redirect allowlist is corrected.
+
+### Enable before rewiring
+
+The 9 existing producers currently deliver email by bypassing the catalog, and all 25 catalog
+events are `enabled = false`. A producer that is rewired onto the catalog therefore stops sending
+the moment the rewrite lands, because the function gates on `enabled` and suppresses anything
+dark. Left unordered, that puts 9 events across 2 apps into a silent delivery gap that spans batches
+3 and 5.
+
+The order is fixed, per event, and the flip is a no-op until a producer arrives:
+
+1. Set `enabled = true` and `rollout_mode = 'live'` for that one event. No catalog producer calls
+   it yet, so nothing changes.
+2. Rewire that one producer onto `enqueue_business_email_event`.
+3. Verify in `email_logs` that the event logged `enqueued` rather than `suppressed`.
+
+Doing this event by event keeps the exposure at one commit instead of two batches. Reversing steps
+1 and 2 for a single event is the rollback: the old bypass is restored and the catalog row is set
+back to `enabled = false`.
+
+This applies only to the 9 events that already work. Events that send nothing today have no
+delivery to protect and start in `canary`.
 
 ## Rollback
 
