@@ -71,20 +71,27 @@ const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carefind/api/_handlers/verify-shop-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/verify-subscription-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/paystack-webhook.js': 'batch 3: move onto the catalog',
+  // Added in batch 2. The original detection required a `subject:` literal, which
+  // missed every producer that forwards a variable, and these four are the
+  // dangerous ones: an authenticated caller supplies the subject. Two were
+  // additionally hidden in SUBJECT_EXEMPT, which made the guard report full
+  // coverage while checking neither of them.
+  'apps/carehub/api/_handlers/email-send.js': 'batch 3: move onto the catalog; subject is caller controlled',
+  'apps/carehub/api/_handlers/email-test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
+  'apps/carefind/api/email/send.js': 'batch 3: move onto the catalog; subject is caller controlled',
+  'apps/carefind/api/email/test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
 }
 
-// The services themselves, the auth path, and the operator preview tools.
-// authEmail.js is exempt because enqueue_business_email_event rejects the auth
-// category outright, so the auth templates can never take a catalog subject.
+// The services themselves and the auth path. authEmail.js is exempt because
+// enqueue_business_email_event rejects the auth category outright, so the auth
+// templates can never take a catalog subject. The four files that used to be
+// exempted here are now tracked offenders, because exempting them is what let
+// the audit conclude 9 producers when there are 13.
 const SUBJECT_EXEMPT = new Set([
   'packages/shared-email/src/EmailService.js',
   'apps/carehub/src/lib/emailService.js',
   'apps/carefind/api/_lib/emailService.js',
   'packages/shared-email/src/authEmail.js',
-  'apps/carehub/api/_handlers/email-send.js',
-  'apps/carehub/api/_handlers/email-test-send.js',
-  'apps/carefind/api/email/send.js',
-  'apps/carefind/api/email/test-send.js',
 ])
 
 describe('outbox write contract', () => {
@@ -119,8 +126,15 @@ describe('outbox write contract', () => {
 })
 
 describe('subject authority contract', () => {
+  // A producer offends if it calls enqueue and supplies a subject at all, whether
+  // as `subject: value` or as the `subject` shorthand. The original pattern
+  // matched only the first form, so the four producers that forward a variable
+  // were invisible to the guard: exactly the ones where the subject comes from
+  // the request body.
+  const SUBJECT_AT_CALL_SITE = /\bsubject\s*[:,}]/
   const offenders = SOURCE
-    .filter((f) => /(?:enqueue|enqueueOutbox)\s*\(/.test(read(f)) && /subject\s*:/.test(read(f)))
+    .filter((f) => /(?:enqueue|enqueueOutbox)\s*\(/.test(read(f)))
+    .filter((f) => SUBJECT_AT_CALL_SITE.test(read(f)))
     .map(rel)
     .filter((p) => !SUBJECT_EXEMPT.has(p))
 
@@ -133,6 +147,15 @@ describe('subject authority contract', () => {
       expect(reason, `${path} needs a reason`).toBeTruthy()
       expect(reason, `${path} must name the batch that removes it`).toMatch(/batch \d/)
     }
+  })
+
+  it('detects a producer that forwards a subject variable, not just a literal', () => {
+    // Guards the guard: if this pattern ever stops matching, the four caller
+    // controlled producers above drop out of the offender set and the ratchet
+    // silently reports full coverage again.
+    expect(SUBJECT_AT_CALL_SITE.test("await emailService.enqueue({ a, subject })")).toBe(true)
+    expect(SUBJECT_AT_CALL_SITE.test("await emailService.enqueue({ subject: x })")).toBe(true)
+    expect(SUBJECT_AT_CALL_SITE.test("await emailService.enqueue({ toEmail })")).toBe(false)
   })
 })
 

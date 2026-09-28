@@ -59,6 +59,19 @@ export function redactPayload(value) {
   return value
 }
 
+// crypto.randomUUID needs a secure context. Every current runtime has it, but
+// a claim that silently reused one constant would let two workers both believe
+// they own the same row, which is the exact bug this token exists to prevent.
+function newClaimToken() {
+  const c = globalThis.crypto
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
 let _supabase = null
 async function getSupabase() {
   if (!_supabase) {
@@ -78,6 +91,10 @@ export class EmailService {
     this.maxRetries = options.maxRetries ?? 5
     this.baseDelayMs = options.baseDelayMs ?? 60000
     this.batchSize = options.batchSize ?? 20
+    // How long a worker owns a claimed row. Long enough to cover one send, short
+    // enough that a worker killed mid batch does not strand the row until the
+    // next deploy. An expired claim is reclaimable by any worker.
+    this.claimTtlMs = options.claimTtlMs ?? 120000
   }
 
   async _getDb() {
@@ -131,6 +148,35 @@ export class EmailService {
     return (await this._getSetting('dispatch_paused')) === true
   }
 
+  // Take exclusive ownership of a row before sending it.
+  //
+  // The previous implementation selected pending rows and sent them, with no
+  // write marking ownership. Two workers configured against the one outbox
+  // table therefore both read the same row and both sent it, so a customer got
+  // the same email twice. The claim is a conditional UPDATE: it only lands when
+  // the row is still unowned or the previous owner's lease has expired, and
+  // returning no row means somebody else won. toISOString() is used deliberately,
+  // because a 'Z' suffix keeps the value safe inside a PostgREST or() filter,
+  // where a '+' offset would be read as a space.
+  async _claimRow(row, nowIso) {
+    const db = await this._getDb()
+    const token = newClaimToken()
+    const { data, error } = await db
+      .from('email_outbox')
+      .update({
+        claim_token: token,
+        claimed_at: nowIso,
+        claim_expires_at: new Date(Date.now() + this.claimTtlMs).toISOString(),
+      })
+      .eq('id', row.id)
+      .in('status', ['pending', 'failed'])
+      .or(`claim_token.is.null,claim_expires_at.lt.${nowIso}`)
+      .select()
+      .maybeSingle()
+    if (error) throw error
+    return data ? { ...data, claim_token: token } : null
+  }
+
   async processBatch() {
     const { sendEmail, getTemplate } = await deps()
     const db = await this._getDb()
@@ -147,20 +193,45 @@ export class EmailService {
     // an unset value is the fail-closed state, not a fallback to real delivery.
     const canaryRecipient = await this._getSetting('canary_recipient')
     const now = new Date().toISOString()
-    const { data: batch, error } = await db
-      .from('email_outbox').select('*').in('status', ['pending', 'failed']).lte('next_retry_at', now).lte('attempts', this.maxRetries).order('next_retry_at', { ascending: true }).limit(this.batchSize)
-    if (error) throw error
-    if (!batch || batch.length === 0) return { processed: 0, sent: 0, failed: 0 }
 
-    let sent = 0, failed = 0
-    for (const row of batch) {
+    // The attempt ceiling is deliberately not part of this query. max_attempts
+    // lives on the row, and PostgREST cannot compare one column against another,
+    // so it is applied per row below. Filtering here on the service wide
+    // maxRetries instead meant a row that was legitimately retried more times
+    // than the service default could be picked up or dropped on the wrong side.
+    const { data: candidates, error } = await db
+      .from('email_outbox').select('*').in('status', ['pending', 'failed']).lte('next_retry_at', now).order('next_retry_at', { ascending: true }).limit(this.batchSize)
+    if (error) throw error
+    if (!candidates || candidates.length === 0) return { processed: 0, sent: 0, failed: 0 }
+
+    let sent = 0, failed = 0, exhausted = 0, contended = 0
+    for (const candidate of candidates) {
+      // Exhausted rows are retired, not retried forever. This is also the
+      // backstop for a row whose claim was released by a worker crash after it
+      // had already burned every attempt.
+      if ((candidate.attempts || 0) >= (candidate.max_attempts ?? this.maxRetries)) {
+        exhausted++
+        continue
+      }
+
+      let row
+      try {
+        row = await this._claimRow(candidate, now)
+      } catch (e) {
+        // A claim failure is not a send failure. Do not mark the row, because it
+        // may still be owned by a healthy worker.
+        contended++
+        continue
+      }
+      if (!row) { contended++; continue }
+
       try {
         const app = resolveAppFromSender(row.from_email)
         const templateFn = getTemplate(row.template_key, app)
         // Fail closed. The old branch rendered '' and mailed an empty body, so
         // a missing renderer reached customers as a blank email with no error.
         if (!templateFn) {
-          await this._markFailed(row.id, `no_template:${app}:${row.template_key}`)
+          await this._markFailed(row, `no_template:${app}:${row.template_key}`)
           failed++
           continue
         }
@@ -172,7 +243,7 @@ export class EmailService {
           // there is no canary address the row fails and retries later rather
           // than being delivered to to_email.
           if (!canaryRecipient) {
-            await this._markFailed(row.id, 'canary_recipient_unset')
+            await this._markFailed(row, 'canary_recipient_unset')
             failed++
             continue
           }
@@ -184,27 +255,37 @@ export class EmailService {
 
         const html = templateFn(payload)
         const result = await sendEmail({ to, subject: row.subject, html, from: row.from_email })
-        if (result.success) { await this._markSent(row.id, result.data); sent++ }
-        else { await this._markFailed(row.id, result.error); failed++ }
-      } catch (e) { await this._markFailed(row.id, e.message); failed++ }
+        if (result.success) { await this._markSent(row, result.data); sent++ }
+        else { await this._markFailed(row, result.error); failed++ }
+      } catch (e) { await this._markFailed(row, e.message); failed++ }
     }
-    return { processed: batch.length, sent, failed }
+    return { processed: candidates.length, sent, failed, exhausted, contended }
   }
 
-  async _markSent(id, providerId) {
+  // Both terminal writes are scoped to the claim token and clear it. Scoping is
+  // what makes a slow worker harmless: if its lease expired and another worker
+  // already took the row, the write matches nothing instead of overwriting a
+  // newer attempt's status or double incrementing attempts.
+  async _markSent(row, providerId) {
     const db = await this._getDb()
-    await db.from('email_outbox').update({ status: 'sent', provider_id: providerId, sent_at: new Date().toISOString() }).eq('id', id)
-    await db.from('email_logs').insert({ outbox_id: id, event_type: 'sent', detail: 'Delivered via Resend', metadata: { provider_id: providerId } })
+    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
+    await db.from('email_outbox')
+      .update({ status: 'sent', provider_id: providerId, sent_at: new Date().toISOString(), ...release })
+      .eq('id', row.id).eq('claim_token', row.claim_token)
+    await db.from('email_logs').insert({ outbox_id: row.id, event_type: 'sent', detail: 'Delivered via Resend', metadata: { provider_id: providerId } })
   }
 
-  async _markFailed(id, error) {
+  async _markFailed(row, error) {
     const db = await this._getDb()
-    const { data: row } = await db.from('email_outbox').select('attempts').eq('id', id).single()
-    const newAttempts = (row?.attempts || 0) + 1
+    const limit = row.max_attempts ?? this.maxRetries
+    const newAttempts = (row.attempts || 0) + 1
     const nextRetry = new Date(Date.now() + this.baseDelayMs * Math.pow(2, newAttempts - 1)).toISOString()
-    const status = newAttempts >= this.maxRetries ? 'dead' : 'failed'
-    await db.from('email_outbox').update({ status, attempts: newAttempts, last_error: error, next_retry_at: nextRetry }).eq('id', id)
-    await db.from('email_logs').insert({ outbox_id: id, event_type: 'failed', detail: error, metadata: { attempts: newAttempts, next_retry_at: nextRetry } })
+    const status = newAttempts >= limit ? 'dead' : 'failed'
+    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
+    await db.from('email_outbox')
+      .update({ status, attempts: newAttempts, last_error: error, next_retry_at: nextRetry, ...release })
+      .eq('id', row.id).eq('claim_token', row.claim_token)
+    await db.from('email_logs').insert({ outbox_id: row.id, event_type: 'failed', detail: error, metadata: { attempts: newAttempts, next_retry_at: nextRetry } })
   }
 }
 

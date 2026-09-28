@@ -1,26 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
-import { sendEmail } from './email.js'
-import { renderEmailTemplate } from '@care-ecosystem/shared-email'
-
-function getSupabase() {
-  return createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-}
-
-export async function renderTemplate(slug, variables) {
-  const supabase = getSupabase()
-  const { data: template } = await supabase
-    .from('email_templates').select('id, html_body, variables, subject').eq('slug', slug).eq('is_active', true).maybeSingle()
-  if (!template) return null
-  const html = renderEmailTemplate(template.html_body, variables)
-  return { html, subject: template.subject, variables: template.variables }
-}
-
-export async function sendTemplatedEmail({ to, slug, variables, subject: overrideSubject }) {
-  const rendered = await renderTemplate(slug, variables)
-  if (rendered) return sendEmail({ to, subject: overrideSubject || rendered.subject, html: rendered.html })
-  return { success: false, error: `No template found for slug: ${slug}` }
-}
-
+// Thin wrapper over the shared EmailService. Both apps route every send through
+// packages/shared-email/src/EmailService.js, so this file exists only to give
+// the handlers a stable import path.
+//
+// renderTemplate and sendTemplatedEmail used to live here. They read templates
+// from the email_templates table, which holds 0 rows, and nothing outside this
+// file ever called them, so they could only ever return {success:false, error:
+// 'No template found'} while looking like a working send path. Removing them
+// also removes the overrideSubject parameter, which was a third way for a caller
+// to choose a subject instead of the catalog.
 export async function enqueue({ templateKey, toEmail, payload, subject }) {
   const { EmailService } = await import('@care-ecosystem/shared-email')
   const emailService = new EmailService()

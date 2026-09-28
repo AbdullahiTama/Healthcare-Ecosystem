@@ -45,32 +45,53 @@ Audit performed against project `szdybxmgmhndoytqanfb` on 2026-09-28.
    `claimed_at` and `claim_expires_at` are never written, so a row can be sent twice.
 9. Both outbox crons run once daily while the retry backoff begins at 60 seconds. The retry
    schedule and the dispatch cadence cannot both be honoured.
-10. Three email service implementations exist: `packages/shared-email/src/EmailService.js`,
-    `apps/carehub/src/lib/emailService.js` and `apps/carefind/api/_lib/emailService.js`.
-    The `enqueueOutbox` identifier used by 8 CareFind call sites is only an import alias of the same
-    `enqueue` function, not a fourth implementation, so the duplication is 3 copies rather than
-    4 entry points.
+10. There are 3 email service modules but only **one** implementation. `packages/shared-email/src/EmailService.js`
+     holds every line of `enqueue`/`processBatch`; `apps/carehub/src/lib/emailService.js` is a 24 line Proxy
+     that forwards to it and `apps/carefind/api/_lib/emailService.js` imported it directly. So there is no
+     divergent copy to reconcile. The `enqueueOutbox` identifier used by 8 CareFind call sites is only an
+     import alias of the same `enqueue` function, not a fourth implementation. Corrected during batch 2: an
+     earlier revision of this item described 3 competing implementations, which would have sent batch 2
+     looking for a divergence that does not exist.
 11. `packages/shared-email/src/templates/index.js` line 55 falls back to the merged registry when an
     app-specific template is missing, and the merged registry prefers CareFind. A CareHub event with
     no CareHub template would render CareFind branding without erroring.
 12. `email_templates` is empty and unused. Templates exist only in code.
-13. `apps/carehub/src/lib/email.js` and `apps/carefind/src/lib/emailSequences.js` are not imported
-    anywhere. The former emits `credit_reminder`, `agent_approved` and `agent_rejected`, none of
-    which exist in the template registry or the catalog.
+13. `apps/carefind/src/lib/emailSequences.js` is imported by nothing. **This claim was wrong about
+     `apps/carehub/src/lib/email.js`, which is live**: `apps/carehub/src/pages/admin/referral/AdminReferralPanels.jsx`
+     imports `emailAgentApproved` and `emailAgentRejected` from it and POSTs to `/api/email/send`. It was
+     deleted from this spec's dead-code list during batch 2 rather than removed, because deleting it would
+     have broken the referral panel. Its `emailSequences.test.js` was tautological
+     (`expect('onboarding').toBe('onboarding')`) and never imported the module, so it proved nothing either way.
 14. 10 user operations complete with no email and no error: shop return requested, withdrawal
     initiated, booking interest submitted, appointment cancelled, CareHub staff invited, CareHub
     subscription expiring, agent approved, agent rejected, credit reminder, and CareFind password
     reset (the endpoint works but no request UI exists).
 15. One account is registered as `gmail,com` (comma) and is permanently undeliverable.
-16. The catalog's brand check requires a subject to begin `CareHub:` or `CareFind:`, but all 9
-    producers supply their own subject at the call site and not one of them complies. Real subjects
-    are `Your appointment is confirmed`, `Order Confirmed - <ref>`, `You're subscribed to ...`. So
-    the brand constraint is currently 0% enforced in production, and the catalog's
-    `subject_template` is dead metadata. Pinned by `deliveryContracts.test.js`.
+16. The catalog's brand check requires a subject to begin `CareHub:` or `CareFind:`, but every producer
+    supplies its own subject at the call site and not one complies. Real subjects are
+    `Your appointment is confirmed`, `Order Confirmed - <ref>`, `You're subscribed to ...`. So the brand
+    constraint is currently 0% enforced in production, and the catalog's `subject_template` is dead
+    metadata. Pinned by `deliveryContracts.test.js`. Corrected during batch 2: the guard allowlists **9**
+    files because it matched a `subject:` literal, which misses any producer that forwards a variable.
+    There are **13** direct `enqueue` call sites, and the 4 it missed are the worst case, see item 18.
 17. `enqueue_business_email_event` returned `null` with no error and no record when an event was
     disabled or paused and was not `required_for_business`. A producer on the catalog would have
     read that as success, so a customer would silently receive nothing. Fixed in batch 1: a
     `suppressed` row is now written to `email_logs` and the return contract is unchanged.
+18. Four producers were missed by the item 16 audit because they pass a `subject` **variable** rather
+    than a `subject:` literal, and all four are more dangerous than the nine because the subject is
+    caller supplied:
+      - `apps/carehub/api/_handlers/email-send.js:25` forwards `req.body.subject` from any logged in user.
+      - `apps/carefind/api/email/send.js:28` does the same.
+      - `apps/carehub/api/_handlers/email-test-send.js:18` and `apps/carefind/api/email/test-send.js:21`
+        synthesise `[TEST] <templateKey>`.
+    An authenticated user can therefore set an arbitrary subject line on a real email. All four must move
+    to the catalog in batch 3 and the guard must stop being allowlist based so a 10th cannot appear.
+19. `apps/carehub/api/_handlers/email-send.js` is additionally broken today: its `allowedTemplates` list
+    omits `agent_approved` and `agent_rejected`, so the referral panel's two live calls both return HTTP
+    400. `emailAgentApproved`/`emailAgentRejected` convert that to `{success:false}`, which the panel
+    ignores, so **referral agents receive no approval or rejection email at all**. This is a live
+    customer visible defect independent of the rollout.
 18. `email_logs.event_type` is CHECK constrained to a fixed list with no value meaning "deliberately
     not queued". `'failed'` was rejected as a substitute because it already means "send attempted
     and did not succeed". `'suppressed'` was added to the constraint.
@@ -153,8 +174,16 @@ delivery fix.
 
 1. `processBatch` returns immediately when `dispatch_paused` is true, without claiming.
 2. Claiming sets `claim_token`, `claimed_at` and `claim_expires_at`. A claim that has expired may be
-   taken by another worker. Only the claim holder may send.
-3. Retry uses the row's `max_attempts` rather than a service constant.
+   taken by another worker. Only the claim holder may send. Implemented in batch 2 as a conditional
+   `UPDATE ... WHERE id = ? AND status IN ('pending','failed') AND (claim_token IS NULL OR
+   claim_expires_at < now()) RETURNING *`; the row is sent only if that UPDATE returned a row, so
+   losing the race is a skip rather than a duplicate. The lease is 120s by default (`claimTtlMs`).
+   Both terminal writes are scoped by `claim_token` and clear it, so a worker that stalled past its
+   lease cannot overwrite a newer attempt's status or double increment `attempts`.
+3. Retry uses the row's `max_attempts` rather than a service constant. Implemented in batch 2. The
+   ceiling could not stay in the `SELECT`, because PostgREST cannot compare one column against another,
+   so the column comparison moved to the per row loop. A row already at its ceiling is counted as
+   `exhausted` and never claimed, rather than being claimed and immediately failed.
 4. For a canary row, `to_email` is replaced with `canary_recipient` immediately before the provider
    call. If `canary_recipient` is unset or invalid, the row is marked failed with
    `canary_recipient_unset`. It is never delivered to the real recipient.
@@ -174,17 +203,32 @@ delivery fix.
 
 ### Single Service
 
-1. `apps/carehub/src/lib/emailService.js` and `apps/carefind/api/_lib/emailService.js` become thin
-   re-export shims over `packages/shared-email`. The CareHub shim keeps its lazy client proxy so the
-   module scope import safety test continues to pass.
-2. `apps/carehub/src/lib/email.js` and `apps/carefind/src/lib/emailSequences.js` are deleted as
-   unreferenced. Git retains them.
+1. Satisfied already, before batch 2 touched it. Both app modules were thin shims over
+   `packages/shared-email` (evidence item 10). What was **not** already true: the shims still exported
+   more than they delegated to. `apps/carefind/api/_lib/emailService.js` carried `renderTemplate` and
+   `sendTemplatedEmail`, which read the empty `email_templates` table, had no caller outside the file,
+   and so could only ever return `{success:false}`. Both are removed, which also removes the
+   `overrideSubject` parameter, a third route for choosing a subject instead of the catalog.
+2. `apps/carefind/src/lib/emailSequences.js` and its tautological test are deleted as unreferenced. Git
+   retains them. `apps/carehub/src/lib/email.js` is **kept**: the referral panel imports from it
+   (evidence item 13).
+3. `apps/carefind/api/cron/process-email-outbox.js` had the pre-fix auth guard
+   `if (token && process.env.CRON_SECRET)`, which let a request with no Authorization header drain the
+   outbox unauthenticated. Now fails closed, matching the CareHub handler. This was fixed in batch 2
+   rather than batch 3 because raising the cadence to every minute would have turned a daily
+   unauthenticated trigger into a standing one.
 
 ### Scheduler
 
 1. The worker runs on Supabase Cron at one minute cadence, which the catalog already assumes and
-   which the sixty second backoff requires.
-2. The Vercel daily crons are retained as a retry fallback during the transition and removed only
+   which the sixty second backoff requires. Both deployments are scheduled, so one being down does not
+   stop the queue; they drain the same table and the per row claim makes racing safe.
+2. Implemented as `public.dispatch_email_outbox_cron(target)` over `pg_net`, with the URLs and the
+   bearer token read from Supabase Vault at call time. The migration therefore contains no credential,
+   and it raises a named error when Vault is unconfigured rather than dispatching nothing silently.
+   Three Vault secrets are required and are deliberately **not** committed:
+   `email_outbox_cron_carehub_url`, `email_outbox_cron_carefind_url`, `email_outbox_cron_secret`.
+3. The Vercel daily crons are retained as a retry fallback during the transition and removed only
    after the new cadence is proven.
 
 ### Silent Operations

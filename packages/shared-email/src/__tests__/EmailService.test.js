@@ -31,11 +31,70 @@ function emptyOutboxDb() {
   return { from: (t) => (t === 'email_system_settings' ? settingsTable : table) }
 }
 
+// In-memory stand-in for the email_outbox table, faithful enough to test
+// claiming. The previous stub answered every update with {data:null} and every
+// query with a fixed row list, so it applied no filters at all: it could not
+// express ownership, and a test of the claim written against it would have
+// passed no matter what the worker did. This one actually filters, mutates and
+// returns rows, which is the only reason the concurrency tests mean anything.
+function outboxTable(state) {
+  const matchesOr = (r, clause) =>
+    // PostgREST sends .or() as one comma separated string. The worker only
+    // ever emits these two shapes, for the claim, so the fake understands
+    // exactly those rather than pretending to parse the whole grammar.
+    clause.split(',').some((c) => {
+      const parts = c.split('.')
+      const col = parts[0], op = parts[1], raw = parts.slice(2).join('.')
+      if (op === 'is') return raw === 'null' ? r[col] == null : r[col] === raw
+      if (op === 'lt') return r[col] != null && new Date(r[col]) < new Date(raw)
+      return false
+    })
+
+  const builder = (patch) => {
+    const filters = []
+    let orderCol = null, orderAsc = true, limitN = null
+
+    const run = () => {
+      const out = state.rows.filter((r) =>
+        filters.every((f) => (f.op === 'or' ? matchesOr(r, f.clause) : (
+          f.op === 'eq' ? r[f.col] === f.val :
+          f.op === 'in' ? f.vals.includes(r[f.col]) :
+          f.op === 'lte' ? new Date(r[f.col]) <= new Date(f.val) : true
+        )))
+      )
+      if (patch) for (const r of out) Object.assign(r, patch)
+      if (orderCol) {
+        out.sort((a, b) => {
+          const av = new Date(a[orderCol]).getTime(), bv = new Date(b[orderCol]).getTime()
+          return orderAsc ? av - bv : bv - av
+        })
+      }
+      return limitN == null ? out : out.slice(0, limitN)
+    }
+
+    const b = {
+      select: () => b,
+      eq(col, val) { filters.push({ op: 'eq', col, val }); return b },
+      in(col, vals) { filters.push({ op: 'in', col, vals }); return b },
+      lte(col, val) { filters.push({ op: 'lte', col, val }); return b },
+      or(clause) { filters.push({ op: 'or', clause }); return b },
+      order(col, opts = {}) { orderCol = col; orderAsc = opts.ascending !== false; return b },
+      limit(n) { limitN = n; return b },
+      update(p) { state.updates.push(p); return builder(p) },
+      async single() { return { data: run()[0] ?? null, error: null } },
+      async maybeSingle() { return { data: run()[0] ?? null, error: null } },
+      then(res, rej) { return Promise.resolve({ data: run(), error: null }).then(res, rej) },
+    }
+    return b
+  }
+
+  return { ...builder(null), update: (p) => { state.updates.push(p); return builder(p) } }
+}
+
 // Harness for the rollout controls. `settings` answers email_system_settings
-// lookups and `rows` answers the worker's pending query, so each control can be
-// exercised without a database or a provider call.
+// lookups and `rows` seeds the outbox the worker will claim from.
 function rolloutDb({ settings = {}, rows = [] } = {}) {
-  const state = { sent: [], updates: [], logs: [] }
+  const state = { rows: rows.map((r) => ({ ...r })), updates: [], logs: [] }
 
   const settingsTable = {
     _key: null,
@@ -46,32 +105,17 @@ function rolloutDb({ settings = {}, rows = [] } = {}) {
     },
   }
 
-  const outboxTable = {
-    _eq: null,
-    select() { return this },
-    in() { return this },
-    lte() { return this },
-    order() { return this },
-    limit: async () => ({ data: rows, error: null }),
-    eq(_col, val) { this._eq = val; return this },
-    async single() {
-      return { data: rows.find((r) => r.id === this._eq) || { attempts: 0 }, error: null }
-    },
-    update(patch) {
-      state.updates.push(patch)
-      return { eq: async () => ({ data: null, error: null }) }
-    },
-  }
-
   const logTable = { insert: async (r) => { state.logs.push(r); return { data: null, error: null } } }
 
   const db = {
-    from: (t) => (t === 'email_system_settings' ? settingsTable : t === 'email_outbox' ? outboxTable : logTable),
+    from: (t) => (t === 'email_system_settings' ? settingsTable : t === 'email_outbox' ? outboxTable(state) : logTable),
     __state: state,
   }
   return db
 }
 
+// A row the worker's own query would actually return: due now, unclaimed, and
+// below its attempt ceiling.
 function row(overrides = {}) {
   return {
     id: 'outbox-1',
@@ -82,6 +126,12 @@ function row(overrides = {}) {
     payload: { fullName: 'Real Customer', resetLink: 'https://supabase.example/auth/v1/verify?token=SECRETTOKEN' },
     status: 'pending',
     is_canary: false,
+    attempts: 0,
+    max_attempts: 5,
+    next_retry_at: new Date(Date.now() - 1000).toISOString(),
+    claim_token: null,
+    claimed_at: null,
+    claim_expires_at: null,
     ...overrides,
   }
 }
@@ -199,7 +249,7 @@ describe('dispatch_paused is enforced', () => {
     const db = rolloutDb({ settings: { dispatch_paused: false }, rows: [row()] })
     const result = await new EmailService({ supabase: db }).processBatch()
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 })
+    expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0 })
     expect(sendEmailMock).toHaveBeenCalledTimes(1)
   })
 
@@ -232,8 +282,10 @@ describe('canary addressing', () => {
     const result = await new EmailService({ supabase: db }).processBatch()
 
     expect(sendEmailMock).not.toHaveBeenCalled()
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 })
-    expect(db.__state.updates[0].last_error).toBe('canary_recipient_unset')
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 })
+    expect(db.__state.rows[0].last_error).toBe('canary_recipient_unset')
+    // The claim is released, so the retry is not blocked behind a lease.
+    expect(db.__state.rows[0].claim_token).toBeNull()
   })
 
   it('leaves a live row completely untouched', async () => {
@@ -255,8 +307,8 @@ describe('templates fail closed', () => {
     const result = await new EmailService({ supabase: db }).processBatch()
 
     expect(sendEmailMock).not.toHaveBeenCalled()
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 })
-    expect(db.__state.updates[0].last_error).toBe('no_template:carehub:business_revoked')
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 })
+    expect(db.__state.rows[0].last_error).toBe('no_template:carehub:business_revoked')
   })
 
   it('does not borrow the other app template when one app lacks the key', async () => {
@@ -268,6 +320,114 @@ describe('templates fail closed', () => {
     })
     await new EmailService({ supabase: db }).processBatch()
     expect(sendEmailMock).not.toHaveBeenCalled()
+  })
+})
+
+// Two workers against one outbox is not a hypothetical: vercel.json scheduled
+// /api/cron/process-email-outbox in both apps, and batch 4 adds a third caller.
+// The old worker selected pending rows and sent them with no write marking
+// ownership, so both workers read the same row and both sent it. These are the
+// cases that bug would have produced.
+describe('exclusive row claiming', () => {
+  it('sends a row exactly once when two workers run at the same time', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    const a = new EmailService({ supabase: db })
+    const b = new EmailService({ supabase: db })
+
+    await Promise.all([a.processBatch(), b.processBatch()])
+
+    // The actual customer visible symptom: the same email arriving twice.
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(db.__state.rows[0].status).toBe('sent')
+  })
+
+  it('leaves a row another worker still holds alone', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({
+        claim_token: 'someone-elses-uuid',
+        claim_expires_at: new Date(Date.now() + 60000).toISOString(),
+      })],
+    })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ processed: 1, sent: 0, contended: 1 })
+    // The live owner's claim is not stolen or overwritten.
+    expect(db.__state.rows[0].claim_token).toBe('someone-elses-uuid')
+  })
+
+  it('reclaims a row whose owner died, rather than stranding it forever', async () => {
+    // A worker killed mid batch leaves a lease with no process behind it. Without
+    // expiry the row would never be picked up again and the email is simply lost.
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({
+        claim_token: 'abandoned-uuid',
+        claim_expires_at: new Date(Date.now() - 1000).toISOString(),
+      })],
+    })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ sent: 1, contended: 0 })
+    expect(db.__state.rows[0].status).toBe('sent')
+  })
+
+  it('ignores a row whose retry is not due yet', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ next_retry_at: new Date(Date.now() + 3600000).toISOString() })],
+    })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ processed: 0, sent: 0 })
+  })
+
+  it('releases the claim when the row is sent', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    await new EmailService({ supabase: db }).processBatch()
+
+    const sent = db.__state.rows[0]
+    expect(sent.status).toBe('sent')
+    expect(sent.claim_token).toBeNull()
+    expect(sent.claim_expires_at).toBeNull()
+  })
+})
+
+describe('per row attempt limit', () => {
+  it('honours the row\'s own ceiling instead of the service default', async () => {
+    // max_attempts is NOT NULL DEFAULT 5 on the column, so a row can legitimately
+    // carry a different budget. Comparing against the service wide maxRetries
+    // ignored that, so a 2 attempt row kept retrying to 5. A failing send makes
+    // the difference observable: this row must die on its second attempt, where
+    // the old comparison would have left it waiting for a fifth.
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'provider rejected' })
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 1, max_attempts: 2 })] })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(result).toMatchObject({ sent: 0, failed: 1, exhausted: 0 })
+    expect(db.__state.rows[0].status).toBe('dead')
+    expect(db.__state.rows[0].attempts).toBe(2)
+  })
+
+  it('retires a row that has already used every attempt, without claiming or sending it', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 5, max_attempts: 5 })] })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ processed: 1, sent: 0, exhausted: 1 })
+    // Never claimed, so no lease is left behind on a row nobody will process.
+    expect(db.__state.updates).toEqual([])
+  })
+
+  it('still retries a row that is below its ceiling', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 2, max_attempts: 5 })] })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ sent: 1, exhausted: 0 })
   })
 })
 
