@@ -12,6 +12,12 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{js,jsx}', 'api/**/*.test.js'],
     globals: true,
+    // Vitest's 5s/10s defaults are wall-clock, so on a loaded machine they
+    // fail tests that pass in isolation — several suites here mount full React
+    // trees, and jsdom does none of the work a browser would offload. These are
+    // generous enough for a busy CI box while still catching a genuine hang.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
