@@ -4,8 +4,8 @@ import { supabase } from '../../config/supabaseClient'
 import Shop from '../shop/Shop'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  BadgeCheck, Building2, ChevronRight, MapPin, MessageCircle, Phone, Pill as PillIcon,
-  Search as SearchIcon, SearchX, ShoppingBag, Sparkles, Star, Stethoscope,
+  BadgeCheck, ChevronRight, MapPin, Search as SearchIcon, SearchX, ShoppingBag,
+  Sparkles, Star, Stethoscope,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -13,19 +13,20 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Card, Pill, Avatar, Empty, Toast, useToast } from '../../components/ui'
+import { Avatar, Empty, Toast, useToast } from '../../components/ui'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 import { markStoriesViewed } from '../social-feed/storyViews.js'
-import { canShowPrice, distanceLabel, formatDistance, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, whatsappLink, telLink } from '../utils/marketplace.js'
+import { canShowPrice, SALE_TYPE_LABELS, productCoords, businessCoords, haversineMeters, formatDistance, distanceLabel } from '../utils/marketplace.js'
 import { recordContactLead } from '../utils/contactLeads.js'
-import { sellerName, sellerContact, sellerPhone } from '../utils/sellerLookup.js'
 import MarketplaceTabs from '../marketplace/MarketplaceTabs.jsx'
 import Logo from '../social-feed/Logo.jsx'
 import { useCart } from '../shop/CartProvider'
 import FilterSheet from '../../components/FilterSheet.jsx'
 import FilterFAB from '../../components/FilterFAB.jsx'
 import ProductGrid from '../marketplace/ProductGrid.jsx'
+import ProductResultCard from './components/ProductResultCard.jsx'
+import FacilityCard from './components/FacilityCard.jsx'
 import { useFeatured, useSearchResults } from '../../hooks/queries'
 import { healthcareRepository } from './repositories'
 
@@ -51,8 +52,14 @@ function Search() {
   }
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [query, setQuery] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
+  // Seed both the input and the executed query from ?q= so a search is
+  // linkable and bookmarkable — the marketing landing page's category tiles
+  // deep-link here (/search?tab=businesses&q=pharmacy), and a shared URL now
+  // reproduces the same result set instead of an empty page. `q` is a text
+  // match: healthcareRepository.searchBusinesses already ilike-matches it
+  // against name, business_type, city and state.
+  const [query, setQuery] = useState(() => searchParams.get('q') || '')
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '')
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab')
     if (t && ['shop','products','businesses','professionals'].includes(t)) return t
@@ -100,6 +107,36 @@ function Search() {
         return da - db
       })
     : businesses
+
+  // Distance label for a facility row, resolved from the user's geolocation
+  // when both coordinates exist. Passed to <FacilityCard> so the card itself
+  // stays free of geolocation concerns.
+  const facilityDistance = useCallback((b) => {
+    const bc = businessCoords(b)
+    if (!bc || !userCoords) return null
+    return formatDistance(haversineMeters(bc.lat, bc.lng, userCoords.lat, userCoords.lng))
+  }, [userCoords])
+
+  // Booking from a result row: bookable facilities jump to the booking card on
+  // their profile; the rest register booking interest once per session so the
+  // business is told someone tried to book.
+  const handleBook = useCallback((b) => {
+    if (b.booking_enabled) {
+      navigate(`/business/${b.id}#booking`)
+      return
+    }
+    toast.show('This healthcare facility is not accepting appointments at the moment.')
+    try {
+      const key = `booking_interest_${b.id}`
+      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1')
+      fetch('/api/booking-interest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: b.id }),
+      }).catch(() => {})
+    } catch (e) { /* storage unavailable — interest signal is best-effort */ }
+  }, [navigate, toast])
 
   // Recent searches
   const RECENT_KEY = 'carefind_recent_searches'
@@ -164,6 +201,13 @@ function Search() {
     const q = query.trim()
     if (q) addRecentSearch(q)
     setSearchQuery(q)
+    // Keep ?q= in the URL so the result set is shareable and survives a reload.
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (q) next.set('q', q)
+      else next.delete('q')
+      return next
+    }, { replace: true })
   }
 
   const activeFilterCount = [
@@ -261,7 +305,10 @@ function Search() {
                 boxSizing: 'border-box',
                 fontFamily: theme.fontFamily,
                 background: '#fff',
-                outline: 'none',
+                // No `outline: 'none'` here: an inline style outranks the
+                // stylesheet, so it would suppress the global 2px teal
+                // :focus-visible ring (styles/global.css:137) and leave this
+                // input with no focus indicator at all. ACCESSIBILITY.md:16.
                 WebkitTextSizeAdjust: '100%',
               }}
             />
@@ -448,96 +495,15 @@ function Search() {
         )}
         {!loading && tab === 'products' && sortedProducts.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {sortedProducts.map((p, idx) => {
-              const waLink = whatsappLink(sellerContact(p), `Hi, I'm interested in "${p.name}" on CareFind.`)
-              const callLink = telLink(sellerPhone(p))
-              return (
-                <Card key={p.id} className="mm-card" style={{ animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, padding: 12 }}>
-                  <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    {p.image_url
-                      ? <div style={{ width: 46, height: 46, borderRadius: 10, background: `url(${p.image_url}) center/cover`, flexShrink: 0 }} />
-                      : <div style={{
-                          width: 46, height: 46, borderRadius: 10, flexShrink: 0,
-                          background: theme.tealMist, color: theme.tealDeep,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}><PillIcon size={22} aria-hidden="true" /></div>}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Link to={`/drug/${encodeURIComponent(p.name)}`} style={{ textDecoration: 'none' }}>
-                        <p style={{ margin: '0 0 2px 0', fontSize: 14, fontWeight: 800, color: theme.navy }}>{p.name}{p.category && <Pill label={p.category} type="teal" style={{ fontSize: 9, padding: '1px 6px', marginLeft: 6 }} />}</p>
-                        {p.generic_name && <p style={{ margin: '0 0 2px 0', fontSize: 11.5, color: theme.textMid, fontStyle: 'italic' }}>{p.generic_name}</p>}
-                        <p style={{ margin: '0 0 3px 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.tealDeep, fontWeight: 700 }}>
-                          <Star size={11} aria-hidden="true" /> See reviews <ChevronRight size={11} aria-hidden="true" />
-                        </p>
-                      </Link>
-                      {p.business_id ? (
-                        <Link to={`/business/${p.business_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          {sellerName(p)}
-                          {(() => {
-                            const loc = p.seller_location || p.businesses?.state || p.businesses?.city
-                            return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
-                          })()}
-                          <ChevronRight size={12} aria-hidden="true" />
-                        </Link>
-                      ) : p.owner_id ? (
-                        <Link to={`/u/${p.owner_id}`} style={{ margin: 0, fontSize: 12, color: theme.tealDeep, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          {sellerName(p)}
-                          {(() => {
-                            const loc = p.seller_location
-                            return loc ? <span style={{ color: theme.gray400, fontWeight: 400 }}> · {loc}</span> : null
-                          })()}
-                          <ChevronRight size={12} aria-hidden="true" />
-                        </Link>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>
-                          {(() => {
-                            const loc = p.seller_location
-                            return loc ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} aria-hidden="true" /> {loc}</span> : null
-                          })()}
-                        </p>
-                      )}
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      {(() => {
-                        const dist = distanceLabel(p, userCoords)
-                        return dist ? (
-                          <p style={{ margin: '0 0 4px 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: theme.textMid, fontWeight: 600 }}>
-                            <MapPin size={11} aria-hidden="true" /> {dist}
-                          </p>
-                        ) : null
-                      })()}
-                      {canShowPrice(p) ? (
-                        <>
-                          <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: theme.tealDeep }}>₦{Number(p.price).toLocaleString()}</p>
-                          {p.price_unit && <p style={{ margin: 0, fontSize: 9.5, color: theme.textMid }}>per {p.price_unit}</p>}
-                        </>
-                      ) : (
-                        <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: theme.textMid }}>Ask for price</p>
-                      )}
-                    </div>
-                  </div>
-                  {(p.sale_type || p.min_purchase) && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      {p.sale_type && <Pill label={SALE_TYPE_LABELS[p.sale_type] || p.sale_type} type={p.sale_type === 'retail' ? 'teal' : 'purple'} style={{ fontSize: 9.5, textTransform: 'uppercase' }} />}
-                      {p.min_purchase && <Pill label={`Min ${p.min_purchase} ${p.price_unit || ''}${p.min_purchase > 1 ? 's' : ''}`} type="gray" style={{ fontSize: 9.5 }} />}
-                    </div>
-                  )}
-                  {(waLink || callLink) && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                      {waLink && (
-                        <a href={waLink} target="_blank" rel="noreferrer" onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'whatsapp' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#25D366', color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
-                          <MessageCircle size={16} aria-hidden="true" /> WhatsApp
-                        </a>
-                      )}
-                      {callLink && (
-                        <a href={callLink} onClick={() => recordContactLead({ businessId: p.business_id, productId: p.id, productName: p.name, channel: 'call' })} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: theme.tealDeep, color: '#fff', borderRadius: 10, fontWeight: 800, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>
-                          <Phone size={16} aria-hidden="true" /> Call
-                        </a>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              )
-            })}
+            {sortedProducts.map((p, idx) => (
+              <ProductResultCard
+                key={p.id}
+                product={p}
+                index={idx}
+                distance={distanceLabel(p, userCoords)}
+                onContact={recordContactLead}
+              />
+            ))}
           </div>
         )}
 
@@ -547,48 +513,14 @@ function Search() {
         )}
         {!loading && tab === 'businesses' && sortedBusinesses.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {sortedBusinesses.map((b) => {
-              const isBookable = !!b.booking_enabled
-              const handleBook = () => {
-                if (isBookable) {
-                  navigate(`/business/${b.id}#booking`)
-                } else {
-                  toast.show('This healthcare facility is not accepting appointments at the moment.')
-                  try {
-                    const key = `booking_interest_${b.id}`
-                    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key)) return
-                    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1')
-                    fetch('/api/booking-interest', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ business_id: b.id }),
-                    }).catch(() => {})
-                  } catch (e) {}
-                }
-              }
-              return (
-                <div key={b.id} style={{ padding: 16, border: `1px solid ${theme.border}`, borderRadius: 14, background: '#fff' }}>
-                  <Link to={`/business/${b.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 12 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: 12, background: b.cover_url ? `url(${b.cover_url})` : theme.navy, backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, flexShrink: 0 }}>
-                      {!b.cover_url && (b.name?.[0]?.toUpperCase() || <Building2 size={20} aria-hidden="true" />)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 2px 0', fontSize: 15, fontWeight: 800, color: theme.navy }}>{b.name}</p>
-                      <p style={{ margin: 0, fontSize: 13, color: theme.textMid, textTransform: 'capitalize' }}>{b.business_type} · {b.city}{b.state ? `, ${b.state}` : ''}</p>
-                      {(() => {
-                        const bc = businessCoords(b)
-                        const dist = (bc && userCoords) ? formatDistance(haversineMeters(bc.lat, bc.lng, userCoords.lat, userCoords.lng)) : null
-                        return dist ? <p style={{ margin: '3px 0 0 0', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: theme.tealDeep, fontWeight: 600 }}><MapPin size={11} aria-hidden="true" /> {dist}</p> : null
-                      })()}
-                    </div>
-                  </Link>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                    <Link to={`/business/${b.id}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: '#fff', color: theme.tealDeep, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 13, textDecoration: 'none', boxSizing: 'border-box' }}>View Profile</Link>
-                    <button onClick={handleBook} aria-label={isBookable ? 'Book Appointment' : 'Book Appointment unavailable'} aria-disabled={!isBookable} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, padding: '9px 12px', background: isBookable ? theme.tealDeep : '#e2e8f0', color: isBookable ? '#fff' : theme.textMid, border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: isBookable ? 1 : 0.9, boxSizing: 'border-box' }}>Book Appointment</button>
-                  </div>
-                </div>
-              )
-            })}
+            {sortedBusinesses.map((b) => (
+              <FacilityCard
+                key={b.id}
+                business={b}
+                distance={facilityDistance(b)}
+                onBook={() => handleBook(b)}
+              />
+            ))}
           </div>
         )}
 

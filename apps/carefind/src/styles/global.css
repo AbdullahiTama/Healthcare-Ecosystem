@@ -562,4 +562,22 @@ body {
   * {
     scroll-behavior: auto !important;
   }
+
+  /* The rules above reach transitions declared through the .cf-* classes.
+     Surfaces that declare `transition` as an inline style — which is most of
+     this app, and all of the marketing pages — cannot be reached by a class
+     selector, so they opt in by attribute instead. `[data-section]` covers the
+     landing sections; `[data-surface]` covers the discovery surfaces.
+     `transition: none` matches how .cf-press is already handled above.
+     Only transition and animation are touched: a blanket `transform: none`
+     would also flatten elements that use a transform for centring.
+     docs/design/MOTION.md:49 makes this a requirement, not polish. */
+  [data-section] *,
+  [data-surface] * {
+    transition: none !important;
+  }
+  [data-surface] [style*="animation"],
+  [data-surface] [style*="animation-name"] {
+    animation: none !important;
+  }
 }
