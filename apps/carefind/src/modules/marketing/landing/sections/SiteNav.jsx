@@ -6,22 +6,28 @@ import { useBreakpoint } from '../../../../hooks/useBreakpoint'
 import Logo from '../../../social-feed/Logo.jsx'
 import { NAV_LINKS, ROUTES } from '../data/landingContent.js'
 
-// The landing nav. Deliberately not the old floating glass pill: the page is
-// light from top to bottom now, so the nav is a plain sticky bar that gains a
-// bottom hairline once the page scrolls. Sticky rather than fixed, so it never
-// overlays content and never has to invert its own colours.
+// The landing header: logo left; Sign in, Get started and the menu button
+// right. It sits over the hero photograph (transparent — the hero's scrim does
+// the contrast work), so the wordmark is the white tone and every control is a
+// white outline or a white pill.
 //
-// Mobile collapses to a single menu button opening a full-width panel — one
-// primary action stays visible at all times, and every link keeps a visible
-// focus ring (ACCESSIBILITY.md:16), which the previous version's borderless
-// buttons did not have.
+// It is absolutely positioned rather than sticky: the wrapper's overflowX
+// guard makes it a scroll container, which silently breaks position:sticky —
+// and the page is short (hero + three sections + footer), so the navigation
+// lives at the top where the visitor decides, with the footer carrying the
+// durable links below.
+//
+// Secondary navigation lives in the menu panel at every breakpoint — the
+// header itself never grows an inline link row. The panel closes on Escape,
+// returns focus to the button, and locks the page behind it while open.
 
 const BAR_HEIGHT = 64
 
 function scrollToAnchor(id) {
   const el = document.getElementById(id)
   if (!el) return
-  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
 }
 
 function NavLink({ link, onNavigate, style }) {
@@ -33,7 +39,11 @@ function NavLink({ link, onNavigate, style }) {
     )
   }
   return (
-    <a href={`#${link.anchor}`} onClick={(e) => { e.preventDefault(); onNavigate?.(); scrollToAnchor(link.anchor) }} style={style}>
+    <a
+      href={`#${link.anchor}`}
+      onClick={(e) => { e.preventDefault(); onNavigate?.(); scrollToAnchor(link.anchor) }}
+      style={style}
+    >
       {link.label}
     </a>
   )
@@ -41,26 +51,15 @@ function NavLink({ link, onNavigate, style }) {
 
 export default function SiteNav() {
   const navigate = useNavigate()
-  const { isMobile, isMobileOrTablet } = useBreakpoint()
-  // Three tiers rather than two. At 768–1023px all five links plus both
-  // buttons do not fit inside the 728px of usable width, so the link row
-  // collapses to the menu button while the two primary actions stay visible.
-  // Below 768px everything collapses.
-  const showLinks = !isMobileOrTablet
-  const showActions = !isMobile
-  const [scrolled, setScrolled] = useState(false)
+  const { isMobile } = useBreakpoint()
+  // "Sign in" only joins the header when both buttons still fit beside the
+  // logo; below 768px it lives in the menu panel instead of squeezing the bar.
+  const showSignIn = !isMobile
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  // Close the mobile panel on Escape, and hand focus back to the button that
-  // opened it so keyboard users are not stranded at the top of the document.
+  // Close the panel on Escape, and hand focus back to the button that opened
+  // it so keyboard users are not stranded at the top of the document.
   const closeMenu = () => {
     setMenuOpen(false)
     menuRef.current?.focus()
@@ -73,7 +72,7 @@ export default function SiteNav() {
     return () => document.removeEventListener('keydown', onKey)
   }, [menuOpen])
 
-  // Stop the page behind the mobile panel from scrolling while it is open.
+  // Stop the page behind the panel from scrolling while it is open.
   useEffect(() => {
     if (!menuOpen) return
     const previous = document.body.style.overflow
@@ -81,30 +80,29 @@ export default function SiteNav() {
     return () => { document.body.style.overflow = previous }
   }, [menuOpen])
 
-  const linkStyle = {
-    fontSize: 14,
-    fontWeight: 600,
-    color: theme.textMid,
-    textDecoration: 'none',
-    padding: '10px 4px',
+  const outlineButton = {
+    minWidth: 44,
     minHeight: 44,
-    display: 'inline-flex',
-    alignItems: 'center',
-    borderRadius: theme.radius.sm,
-    transition: `color ${theme.motion.fast} ${theme.motion.easeOut}`,
+    padding: '0 18px',
+    borderRadius: theme.radius.full,
+    border: '1px solid rgba(255,255,255,0.45)',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#fff',
+    fontWeight: 700,
+    fontSize: 14,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
   }
 
   return (
     <header
       style={{
-        position: 'sticky',
+        position: 'absolute',
         top: 0,
+        left: 0,
+        right: 0,
         zIndex: 60,
-        background: scrolled ? 'rgba(247,245,239,0.94)' : theme.bg,
-        backdropFilter: scrolled ? 'blur(12px)' : 'none',
-        WebkitBackdropFilter: scrolled ? 'blur(12px)' : 'none',
-        borderBottom: `1px solid ${scrolled ? theme.border : 'transparent'}`,
-        transition: `background ${theme.motion.base} ${theme.motion.easeOut}, border-color ${theme.motion.base} ${theme.motion.easeOut}`,
+        background: 'transparent',
       }}
     >
       <nav
@@ -112,7 +110,7 @@ export default function SiteNav() {
         style={{
           maxWidth: 1180,
           margin: '0 auto',
-          padding: '0 20px',
+          padding: '10px 20px',
           minHeight: BAR_HEIGHT,
           display: 'flex',
           alignItems: 'center',
@@ -120,99 +118,76 @@ export default function SiteNav() {
           gap: 16,
         }}
       >
-        <Link to={ROUTES.home} aria-label="CareFind home" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', minHeight: 44 }}>
-          <Logo size={26} tone="dark" />
+        <Link
+          to={ROUTES.home}
+          aria-label="CareFind home"
+          style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', minHeight: 44 }}
+        >
+          <Logo size={26} tone="light" />
         </Link>
 
-        {showLinks && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
-            {NAV_LINKS.map((link) => (
-              <NavLink key={link.label} link={link} style={linkStyle} />
-            ))}
-          </div>
-        )}
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {showActions && (
-            <>
-              <button
-                type="button"
-                onClick={() => navigate(ROUTES.login)}
-                style={{
-                  // 44x44 floor on both axes (ACCESSIBILITY.md:32) — at 18px of
-                  // horizontal padding "Sign in" measured 42px wide, so the
-                  // height alone was not enough.
-                  minWidth: 44,
-                  minHeight: 44,
-                  padding: '0 18px',
-                  borderRadius: theme.radius.full,
-                  border: `1px solid ${theme.border}`,
-                  background: '#fff',
-                  color: theme.textDark,
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(ROUTES.search)}
-                style={{
-                  minHeight: 44,
-                  padding: '0 20px',
-                  borderRadius: theme.radius.full,
-                  border: 'none',
-                  background: theme.tealDeep,
-                  color: '#fff',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Get started
-              </button>
-            </>
-          )}
-
-          {!showLinks && (
-            <button
-              type="button"
-              ref={menuRef}
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-expanded={menuOpen}
-              aria-controls="landing-mobile-menu"
-              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: theme.radius.md,
-                border: `1px solid ${theme.border}`,
-                background: '#fff',
-                color: theme.textDark,
-                display: 'grid',
-                placeItems: 'center',
-                cursor: 'pointer',
-              }}
-            >
-              {menuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          {showSignIn && (
+            <button type="button" onClick={() => navigate(ROUTES.login)} style={outlineButton}>
+              Sign in
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.search)}
+            style={{
+              minHeight: 44,
+              padding: '0 20px',
+              borderRadius: theme.radius.full,
+              border: 'none',
+              background: '#fff',
+              color: theme.tealDeep,
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            Get started
+          </button>
+          <button
+            type="button"
+            ref={menuRef}
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-controls="landing-menu"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            style={{
+              ...outlineButton,
+              width: 44,
+              padding: 0,
+              borderRadius: theme.radius.md,
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            {menuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          </button>
         </div>
       </nav>
 
-      {!showLinks && menuOpen && (
+      {menuOpen && (
         <div
-          id="landing-mobile-menu"
+          id="landing-menu"
           style={{
-            borderTop: `1px solid ${theme.hairline}`,
-            background: theme.bg,
-            padding: '12px 20px 20px',
-            maxHeight: `calc(100vh - ${BAR_HEIGHT}px)`,
+            position: 'absolute',
+            top: '100%',
+            right: 20,
+            width: 'min(340px, calc(100vw - 40px))',
+            maxHeight: 'calc(100vh - 96px)',
             overflowY: 'auto',
+            padding: '10px 16px 16px',
+            borderRadius: theme.radius.xl,
+            background: 'rgba(6,32,26,0.97)',
+            border: '1px solid rgba(255,255,255,0.16)',
+            boxShadow: '0 24px 60px rgba(4, 20, 16, 0.5)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -222,40 +197,31 @@ export default function SiteNav() {
                 link={link}
                 onNavigate={closeMenu}
                 style={{
-                  ...linkStyle,
                   fontSize: 15,
-                  borderBottom: `1px solid ${theme.hairline}`,
-                  borderRadius: 0,
+                  fontWeight: 600,
+                  color: '#fff',
+                  textDecoration: 'none',
+                  padding: '13px 4px',
+                  minHeight: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)',
                 }}
               />
             ))}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+
+          {!showSignIn && (
             <button
               type="button"
               onClick={() => { closeMenu(); navigate(ROUTES.login) }}
               style={{
+                width: '100%',
                 minHeight: 44,
+                marginTop: 14,
                 borderRadius: theme.radius.md,
-                border: `1px solid ${theme.border}`,
-                background: '#fff',
-                color: theme.textDark,
-                fontWeight: 600,
-                fontSize: 15,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => { closeMenu(); navigate(ROUTES.search) }}
-              style={{
-                minHeight: 44,
-                borderRadius: theme.radius.md,
-                border: 'none',
-                background: theme.tealDeep,
+                border: '1px solid rgba(255,255,255,0.45)',
+                background: 'transparent',
                 color: '#fff',
                 fontWeight: 700,
                 fontSize: 15,
@@ -263,9 +229,9 @@ export default function SiteNav() {
                 fontFamily: 'inherit',
               }}
             >
-              Get started
+              Sign in
             </button>
-          </div>
+          )}
         </div>
       )}
     </header>

@@ -12,17 +12,19 @@
 //      `profiles.is_verified` is real for professionals; the business
 //      "Verified on CareHub" chip in BusinessProfile.jsx is hard-coded and is
 //      NOT restated here. The claim businesses can actually make is a
-//      successful `business_claims` approval — so that is what we say.
+//      successful `business_claims` approval — so "claimed" is what we say.
 //   3. No "verified visit" review claim. `createReview` is a plain INSERT from
 //      any signed-in user; there is no booking or purchase gate. What is true,
 //      and what we say, is that the reviewer's name and verification status are
 //      shown alongside every review.
 //   4. No "open now" claim. `businesses.hours` is a free-text string with no
 //      open/closed computation anywhere in the codebase.
-//   5. Everything under FIXTURES is illustrative example data for the product
-//      previews — not real listings, not real businesses, not real ratings.
-//      The sections that render it are eyebrowed "Product preview" so a visitor
-//      is never misled about what they are looking at.
+//   5. No usage statistics of any kind. The trust strip carries mechanisms,
+//      not numbers — no counts, no ratings of CareFind itself.
+//   6. Everything under PREVIEW and FIXTURES is illustrative example data for
+//      the hero preview cards — not real listings, not real businesses, not
+//      real ratings, not real posts. The card group renders PREVIEW.disclaimer
+//      beneath it so a visitor is never misled about what they are looking at.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── ROUTES (main.jsx is the source of truth; nothing here may 404) ──────────
@@ -40,180 +42,148 @@ export const ROUTES = {
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────────────────────
-// `anchor` links scroll within the landing page; `to` routes through the router.
+// Secondary navigation lives in the menu panel (the header itself carries only
+// Sign in / Get started / Menu). `anchor` links scroll within the landing page;
+// `to` routes through the router. Every `to` exists in main.jsx.
 export const NAV_LINKS = [
-  { label: 'Discover', anchor: 'discover' },
-  { label: 'Categories', anchor: 'categories' },
-  { label: 'How it works', anchor: 'how-it-works' },
-  { label: 'For providers', to: ROUTES.claimBusiness },
-  { label: 'About', to: ROUTES.about },
+  { label: 'About CareFind', to: ROUTES.about },
+  { label: 'How CareFind works', anchor: 'how-it-works' },
+  { label: 'Features', anchor: 'what-you-can-do' },
+  { label: 'For healthcare professionals', to: ROUTES.searchProfessionals },
+  { label: 'For healthcare businesses', to: ROUTES.claimBusiness },
 ]
 
 // ── HERO ─────────────────────────────────────────────────────────────────────
 export const HERO = {
-  eyebrow: 'Healthcare discovery',
-  title: 'Find trusted healthcare near you.',
-  // Medicines, providers, locations, reviews, direct contact — all real.
+  eyebrow: 'Healthcare discovery and community',
+  title: 'Find the care you need, right where you are.',
+  // The phrase rendered in the accent tint inside the headline — including the
+  // trailing period, so the headline stays a text-node + span pair with no
+  // trailing text node after the span (accessibility-tree name computation
+  // inserts a space between an element and the text that follows it, which
+  // would make the accessible name read "you are ."). Must be a substring of
+  // `title`; Hero.jsx falls back to plain text if it is not.
+  accent: 'right where you are.',
+  // Medicines, facilities, reviews, direct contact — all real capabilities.
   body:
     'Search medicines, pharmacies, hospitals, clinics and laboratories near you. '
-    + 'Compare what each one offers, read what patients actually wrote, then reach '
-    + 'the provider directly on WhatsApp or by phone.',
-  primary: { label: 'Find care', to: ROUTES.search },
-  secondary: { label: 'Explore providers', to: ROUTES.discovery },
-  preview: {
-    query: 'Paracetamol 500mg',
-    location: 'Lagos',
-    // Labels the UI so a visitor knows this is an illustration of the product,
-    // not a claim about CareFind's own inventory or usage.
-    disclaimer: 'Illustrative example of the CareFind search experience.',
+    + 'Compare what each one offers, read real reviews, and connect directly on '
+    + 'WhatsApp or by phone.',
+  // The one primary action of the page: into the product itself.
+  primary: { label: 'Enter CareFind', to: ROUTES.feed },
+  secondary: { label: 'See how it works', anchor: 'how-it-works' },
+  photo: {
+    // Served from public/; the small file is the srcset candidate for phones.
+    desktop: '/images/hero-carefind.jpg',
+    mobile: '/images/hero-carefind-sm.jpg',
+    alt: 'A pharmacist hands a customer a box of medicine across the counter.',
   },
 }
 
-// ── SEARCH SHOWCASE ───────────────────────────────────────────────────────────
-export const SEARCH_SHOWCASE = {
-  eyebrow: 'Product preview',
-  title: 'One search. Every answer you need.',
-  body:
-    'Type a medicine name and CareFind returns the listings that matter: who is '
-    + 'selling it, how far away they are, what they charge, and how to reach them. '
-    + 'No phone tag, no guessing which pharmacy is open.',
-  // The three things a user actually decides on, in decision order.
-  points: [
+// ── HERO PREVIEW CARDS ───────────────────────────────────────────────────────
+// The "floating ecosystem" cards. They are decorative: rendered aria-hidden
+// and non-interactive so they can never take focus or block the headline, and
+// labelled with a visible disclaimer so nothing here reads as live data.
+//
+// Names are deliberately generic sample names. Ratings, distances and prices
+// restate the FIXTURES below, which are themselves illustrative.
+export const PREVIEW = {
+  disclaimer:
+    'Illustrative sample of CareFind content — not live data.',
+  cards: [
     {
-      title: 'Who has it',
-      body: 'Sellers matched by name and generic name, across pharmacies and businesses listing on CareFind.',
+      id: 'discussion',
+      kind: 'discussion',
+      badge: 'Sample post',
+      avatar: 'KO',
+      name: 'Dr. K. Okafor',
+      role: 'Physician',
+      body: 'What are the key things to consider when managing hypertension?',
+      meta: [
+        { icon: 'Heart', label: '124 likes' },
+        { icon: 'MessageCircle', label: '28 comments' },
+      ],
     },
     {
-      title: 'How far away',
-      body: 'Distance from your location, so a result you cannot travel to never outranks one you can.',
+      id: 'provider',
+      kind: 'provider',
+      badge: 'Claimed profile',
+      icon: 'Building2',
+      name: 'Alake Community Pharmacy',
+      meta: 'Pharmacy · 1.2km away',
+      rating: { avg: 4.6, count: 128 },
     },
     {
-      title: 'How to reach them',
-      body: 'A WhatsApp message or a phone call opens straight from the result. No extra app, no phone tag.',
+      id: 'medicine',
+      kind: 'medicine',
+      badge: 'Sample listing',
+      icon: 'Pill',
+      name: 'Paracetamol 500mg',
+      price: '₦1,200 / pack',
+      meta: 'Alake Community Pharmacy · Lagos',
+    },
+    {
+      id: 'booking',
+      kind: 'booking',
+      badge: 'Sample slot',
+      icon: 'Calendar',
+      name: 'Blood pressure check',
+      meta: '15 min · ₦1,500',
+      venue: 'Alake Community Pharmacy',
     },
   ],
 }
 
-// ── DISCOVERY FEATURES (bento) ───────────────────────────────────────────────
-// Capability claims only. Each maps to code that exists today.
-export const FEATURES = [
+// ── FEATURE STRIP (inside the hero) ──────────────────────────────────────────
+// Five compact capabilities. Titles are fixed by the page brief; every body
+// restates a capability the codebase already has.
+export const FEATURE_STRIP = [
   {
-    id: 'medicines',
-    icon: 'Pill',
-    title: 'Find medicines',
-    body:
-      'Search by brand or generic name. Sellers, stock, price or "ask for price" '
-      + 'when a pharmacy hides its pricing — your choice, not ours.',
-    to: ROUTES.searchProducts,
+    icon: 'MessageCircle',
+    title: 'Ask questions',
+    body: 'Health questions, answered by the CareFind community.',
   },
   {
-    id: 'professionals',
+    icon: 'Users',
+    title: 'Connect with professionals',
+    body: 'Verified professionals you can message or call.',
+  },
+  {
+    icon: 'Store',
+    title: 'Find pharmacies',
+    body: 'Facilities near you, with distance and reviews.',
+  },
+  {
+    icon: 'Pill',
+    title: 'Search medicines',
+    body: 'Sellers, prices and contact from one search.',
+  },
+  {
+    icon: 'Calendar',
+    title: 'Book appointments',
+    body: 'Real slots from providers who accept bookings.',
+  },
+]
+
+// ── TRUST / CAPABILITY STRIP (inside the hero) ───────────────────────────────
+// Mechanisms, not statistics. No numbers appear in this strip — deliberately.
+export const TRUST_STRIP = [
+  {
+    icon: 'Users',
+    title: 'A healthcare community',
+    body: 'Questions, answers and reviews from real accounts.',
+  },
+  {
     icon: 'BadgeCheck',
     title: 'Verified professionals',
-    body:
-      'Doctors, pharmacists, laboratory scientists and other professionals carry a '
-      + 'real verification badge, along with the specialty or role they were verified for.',
-    to: ROUTES.searchProfessionals,
+    body: 'A real badge, issued to a real profile.',
   },
   {
-    id: 'businesses',
-    icon: 'Building2',
-    title: 'Claimed businesses',
-    body:
-      'Healthcare businesses can claim their CareFind listing and have it reviewed. '
-      + 'A successful claim is how you know who is behind the profile.',
-    to: ROUTES.claimBusiness,
-  },
-  {
-    id: 'reviews',
     icon: 'Star',
     title: 'Reviews you can trace',
-    body:
-      'Ratings come with a full breakdown, and every review shows the reviewer\'s name '
-      + 'and verification status — so you can see who is speaking, not just what they said.',
-    to: ROUTES.searchFacilities,
-  },
-  {
-    id: 'contact',
-    icon: 'MessageCircle',
-    title: 'Message or call directly',
-    body:
-      'Contact buttons sit on the search result itself. Send a WhatsApp message with '
-      + 'the item pre-filled, or call the provider straight away.',
-    to: ROUTES.search,
-  },
-  {
-    id: 'appointments',
-    icon: 'Calendar',
-    title: 'Book and pay',
-    body:
-      'Providers who accept appointments publish real bookable slots. Pay by card or '
-      + 'with CareCoin balance, and look the booking up later with your phone number.',
-    to: ROUTES.discovery,
+    body: 'Every review names its reviewer.',
   },
 ]
-
-// ── ECOSYSTEM CATEGORIES ─────────────────────────────────────────────────────
-// Every entry is a real category: the 28-row `business_categories` table
-// (verified live 2026-09-29) plus the medicine/product search surface.
-//
-// Where each tile points, and why:
-//   * Facility tiles go to /search?tab=businesses&q=<business_type>.
-//     `businesses` is the populated table (28 rows, 23 visible on CareFind) and
-//     `healthcareRepository.searchBusinesses` already ilike-matches `q` against
-//     name, business_type, city and state — so this is a real filtered result
-//     set, not a decorative link.
-//   * Medicines goes to /search?tab=products, which searches the `products`
-//     table directly.
-//
-// They deliberately do NOT point at /business-discovery?category=<uuid>.
-// That route exists and reads ?category=, but it queries `business_directory`,
-// which is EMPTY (0 rows, verified live 2026-09-29) — so a category-filtered
-// link there would always render "0 businesses found". A link that reliably
-// returns nothing is worse than a link to an unfiltered but populated list.
-export const CATEGORIES = [
-  { id: 'pharmacy', label: 'Pharmacies', icon: 'Pill', search: `${ROUTES.searchFacilities}&q=pharmacy` },
-  { id: 'hospital', label: 'Hospitals', icon: 'Hospital', search: `${ROUTES.searchFacilities}&q=hospital` },
-  { id: 'clinic', label: 'Clinics', icon: 'Stethoscope', search: `${ROUTES.searchFacilities}&q=clinic` },
-  { id: 'laboratory', label: 'Laboratories', icon: 'FlaskConical', search: `${ROUTES.searchFacilities}&q=laboratory` },
-  { id: 'imaging', label: 'Imaging & Radiology', icon: 'Scan', search: `${ROUTES.searchFacilities}&q=imaging` },
-  { id: 'dental', label: 'Dental', icon: 'Smile', search: `${ROUTES.searchFacilities}&q=dental` },
-  { id: 'optical', label: 'Eye & Optometry', icon: 'Eye', search: `${ROUTES.searchFacilities}&q=optometry` },
-  { id: 'physiotherapy', label: 'Physiotherapy', icon: 'Activity', search: `${ROUTES.searchFacilities}&q=physiotherapy` },
-  { id: 'medicines', label: 'Medicines', icon: 'ShoppingBag', search: ROUTES.searchProducts },
-]
-
-// ── PROVIDER PROFILE SHOWCASE ────────────────────────────────────────────────
-// Field-for-field the real BusinessProfile.jsx surface. Values are illustrative.
-export const PROVIDER_SHOWCASE = {
-  eyebrow: 'Product preview',
-  title: 'Everything about a provider, on one page.',
-  body:
-    'A CareFind profile puts the decision in front of you before you travel: what it '
-    + 'is, where it is, how patients rated it, what it treats or sells, and how to '
-    + 'reach it. Booking opens on the same page when the provider accepts appointments.',
-  profile: {
-    name: 'Alake Community Pharmacy',
-    businessType: 'pharmacy',
-    typeLabel: 'Pharmacy',
-    city: 'Lagos',
-    state: 'Lagos',
-    distance: '1.2km away',
-    hours: 'Mon–Sat, 8:00am – 8:00pm',
-    rating: { avg: 4.6, count: 128 },
-    about:
-      'Neighbourhood pharmacy dispensing prescription and over-the-counter medicines, '
-      + 'with home delivery within the surrounding areas.',
-    services: [
-      { name: 'Prescription dispensing', duration: null, price: null },
-      { name: 'Blood pressure check', duration: 15, price: 1500 },
-      { name: 'Home delivery', duration: null, price: null },
-    ],
-    bookingEnabled: true,
-    whatsapp: '+2348012345678',
-    phone: '+2348012345678',
-  },
-}
 
 // ── HOW IT WORKS ─────────────────────────────────────────────────────────────
 export const STEPS = [
@@ -240,51 +210,53 @@ export const STEPS = [
   },
 ]
 
-// ── TRUST ────────────────────────────────────────────────────────────────────
-// Five capabilities, each stated as a mechanism a user can verify themselves.
-// No partner names, no counts, no ratings of CareFind itself.
-export const TRUST = {
-  eyebrow: 'Why CareFind',
-  title: 'Trust you can check, not trust you are asked for.',
+// ── WHAT YOU CAN DO ──────────────────────────────────────────────────────────
+// Four capabilities, each pointing at the real surface that performs it.
+export const CAPABILITIES = {
+  eyebrow: 'What you can do',
+  title: 'Ask, discover, connect, book.',
   body:
-    'None of this is a badge we print on ourselves. Each item below is something you '
-    + 'can see and check on any listing before you commit.',
+    'Four things CareFind does today. Each card opens the screen that does the '
+    + 'work — no waitlist, no demo.',
   items: [
     {
-      icon: 'BadgeCheck',
-      title: 'Professionals carry a real verification badge',
-      body: 'A verified professional shows their badge and the role they were verified for. Unverified accounts show no badge at all.',
+      id: 'ask',
+      icon: 'MessageCircle',
+      title: 'Ask',
+      body: 'Post a health question and get answers from the CareFind community.',
+      to: ROUTES.feed,
     },
     {
-      icon: 'Store',
-      title: 'Businesses claim the profile they own',
-      body: 'A pharmacy, clinic or lab that manages its own CareFind listing has been through a business claim review.',
+      id: 'discover',
+      icon: 'Pill',
+      title: 'Discover',
+      body: 'Search medicines, pharmacies, hospitals, clinics and laboratories near you.',
+      to: ROUTES.search,
     },
     {
-      icon: 'Star',
-      title: 'Reviews name the reviewer',
-      body: 'Every review shows who wrote it and whether that account is verified, alongside a full rating breakdown.',
+      id: 'connect',
+      icon: 'Phone',
+      title: 'Connect',
+      body: 'Message on WhatsApp or call a provider directly from their listing.',
+      to: ROUTES.searchFacilities,
     },
     {
-      icon: 'MapPin',
-      title: 'Discovery is location-aware',
-      body: 'Radius search across states and local government areas sorts what is genuinely reachable ahead of what is merely listed.',
-    },
-    {
-      icon: 'Lock',
-      title: 'Transactions are handled, not improvised',
-      body: 'Card payments run through a verified payment callback, and CareCoin balance is checked before it is spent.',
+      id: 'book',
+      icon: 'Calendar',
+      title: 'Book',
+      body: 'Find providers who accept appointments and book a real slot.',
+      to: ROUTES.searchFacilities,
     },
   ],
 }
 
 // ── FINAL CTA ────────────────────────────────────────────────────────────────
 export const FINAL_CTA = {
-  title: 'Your next healthcare decision starts here.',
+  title: 'Ready to find the care you need?',
   body:
-    'Search for a medicine, find a provider near you, or put your business in front '
-    + 'of the people already looking for it.',
-  primary: { label: 'Find care', to: ROUTES.search },
+    'Enter CareFind and search for a medicine, discover a provider near you, or '
+    + 'join the conversation.',
+  primary: { label: 'Enter CareFind', to: ROUTES.feed },
   // Auth-gated: RequireAuth redirects to /login, which is the correct behaviour
   // — a claim has to be tied to a signed-in account.
   secondary: { label: 'List your healthcare business', to: ROUTES.claimBusiness },
@@ -334,9 +306,8 @@ export const FOOTER = {
 
 // ── FIXTURES ─────────────────────────────────────────────────────────────────
 // ILLUSTRATIVE EXAMPLE DATA — not real listings, businesses, prices or ratings.
-// Used only inside sections eyebrowed "Product preview" to show what the real
-// CareFind components render. Names are deliberately generic so they are not
-// mistaken for real businesses.
+// The values here back the PREVIEW cards above; names are deliberately generic
+// so they cannot be mistaken for real businesses.
 
 export const FIXTURES = {
   facilities: [
@@ -381,10 +352,6 @@ export const FIXTURES = {
       price_unit: 'pack',
       business_id: 'preview-facility-1',
       show_price: true,
-      // sellerContact() reads product.whatsapp then businesses.whatsapp;
-      // sellerPhone() reads businesses.phone. Without these the real
-      // ProductResultCard renders no contact row at all, which would hide the
-      // single most important thing a medicine search result offers.
       whatsapp: '+2348012345678',
       businesses: {
         name: 'Alake Community Pharmacy',

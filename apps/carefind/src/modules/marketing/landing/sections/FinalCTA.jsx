@@ -26,7 +26,7 @@ export default function FinalCTA() {
       }}
     >
       <div style={{ maxWidth: 660, margin: '0 auto', textAlign: 'center' }}>
-        <div data-hero>
+        <div data-reveal>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <Eyebrow tone="dark">Get started</Eyebrow>
           </div>
@@ -58,7 +58,7 @@ export default function FinalCTA() {
         </div>
 
         <div
-          data-hero
+          data-reveal
           style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginTop: 30 }}
         >
           <Link

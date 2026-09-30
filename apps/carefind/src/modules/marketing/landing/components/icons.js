@@ -4,9 +4,9 @@
 // to a neutral mark rather than crashing the page.
 
 import {
-  Activity, BadgeCheck, Building2, Calendar, Eye, FlaskConical, Hospital,
+  Activity, BadgeCheck, Building2, Calendar, Eye, FlaskConical, Heart, Hospital,
   Leaf, Lock, MapPin, MessageCircle, Phone, Pill, Scan, ShieldCheck, ShoppingBag,
-  Smile, Star, Store, Stethoscope, Wallet,
+  Smile, Star, Store, Stethoscope, Users, Wallet,
 } from 'lucide-react'
 
 const ICONS = {
@@ -16,6 +16,7 @@ const ICONS = {
   Calendar,
   Eye,
   FlaskConical,
+  Heart,
   Hospital,
   Leaf,
   Lock,
@@ -30,6 +31,7 @@ const ICONS = {
   Star,
   Stethoscope,
   Store,
+  Users,
   Wallet,
 }
 

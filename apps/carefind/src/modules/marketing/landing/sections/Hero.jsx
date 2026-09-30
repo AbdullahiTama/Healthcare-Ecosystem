@@ -1,150 +1,262 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, MapPin, Star } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { theme } from '../../../../styles/theme'
 import { useBreakpoint } from '../../../../hooks/useBreakpoint'
-import { Eyebrow } from '../components/LandingSection.jsx'
-import ProductPreview from '../components/ProductPreview.jsx'
-import { HERO } from '../data/landingContent.js'
+import FloatingPreviews from './FloatingPreviews.jsx'
+import FeatureStrip from './FeatureStrip.jsx'
+import TrustStrip from './TrustStrip.jsx'
+import { HERO, PREVIEW } from '../data/landingContent.js'
 
-// The hero. The product is the subject — the headline and copy sit in their own
-// column and the real CareFind search UI sits beside them, not behind a
-// full-bleed stock photograph. No image, no gradient, no invented statistic.
+// The photographic hero.
 //
-// Lays out stacked on mobile/tablet and as two columns from laptop up, where the
-// copy column narrows and the product column takes the larger share — the
-// product is the wider half because it is the point of the page.
+// The brief for this page asked for an image-led hero: a real pharmacy scene
+// under a dark teal scrim, the headline and the one primary action on the left
+// (bottom-stacked on phones), the floating ecosystem cards on the right, and
+// the feature + capability strips closing the first viewport. The photo is the
+// only stock image on the page and it is a licensed Pexels photograph of an
+// actual pharmacy counter, not a staged "doctor smiling" shot
+// (docs/design/BRAND_GUIDELINES.md — photography must read as real).
+//
+// Structure:
+//   * <picture> fills the section; a brand-teal gradient sits underneath as the
+//     fallback surface if the photo ever fails to load.
+//   * Two gradient scrims guarantee white-text contrast: a vertical one
+//     everywhere (heaviest at the bottom, where the strips live) and — from
+//     laptop up — a horizontal one that darkens the text column while leaving
+//     the people on the right of the photo clear.
+//   * Copy column left, cards column bottom-right. The cards are bottom-aligned
+//     on desktop so they float over the subject's body rather than their face.
 
-function HeroCopy() {
+const ACCENT = '#5FD8B5'
+
+function Headline() {
+  const { title, accent } = HERO
+  const at = accent ? title.indexOf(accent) : -1
+  if (at === -1) return <>{title}</>
   return (
-    <div style={{ minWidth: 0 }}>
-      <div data-hero>
-        <Eyebrow>{HERO.eyebrow}</Eyebrow>
-        <h1
-          style={{
-            fontFamily: theme.fontDisplay,
-            fontWeight: 900,
-            fontSize: 'clamp(2.2rem, 5vw, 3.6rem)',
-            lineHeight: 1.08,
-            letterSpacing: '-0.03em',
-            color: theme.textDark,
-            margin: 0,
-            textWrap: 'balance',
-          }}
-        >
-          {HERO.title}
-        </h1>
-        <p
-          style={{
-            fontSize: 16,
-            lineHeight: 1.7,
-            color: theme.textMid,
-            margin: '18px 0 0',
-            maxWidth: 460,
-          }}
-        >
-          {HERO.body}
-        </p>
-      </div>
+    <>
+      {title.slice(0, at)}
+      <span style={{ color: ACCENT }}>{accent}</span>
+      {title.slice(at + accent.length)}
+    </>
+  )
+}
 
-      <div data-hero style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 28 }}>
-        <Link
-          to={HERO.primary.to}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            minHeight: 48,
-            padding: '0 26px',
-            borderRadius: theme.radius.full,
-            background: theme.tealDeep,
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: 15,
-            textDecoration: 'none',
-          }}
-        >
-          {HERO.primary.label}
-          <ArrowRight size={17} aria-hidden="true" />
-        </Link>
-        <Link
-          to={HERO.secondary.to}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            minHeight: 48,
-            padding: '0 26px',
-            borderRadius: theme.radius.full,
-            background: '#fff',
-            border: `1px solid ${theme.border}`,
-            color: theme.textDark,
-            fontWeight: 700,
-            fontSize: 15,
-            textDecoration: 'none',
-          }}
-        >
-          {HERO.secondary.label}
-        </Link>
-      </div>
+function scrollToSection(id) {
+  const el = document.getElementById(id)
+  if (!el) return
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+  el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+}
 
-      {/* Three capability chips, no numbers. They restate what the page below
-          demonstrates rather than adding a new claim. */}
-      <ul
-        data-hero
+function HeroActions() {
+  const onSecondary = (event) => {
+    event.preventDefault()
+    scrollToSection(HERO.secondary.anchor)
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 26 }}>
+      <Link
+        to={HERO.primary.to}
         style={{
-          listStyle: 'none',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '8px 20px',
-          margin: '32px 0 0',
-          padding: 0,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          minHeight: 50,
+          padding: '0 26px',
+          borderRadius: theme.radius.full,
+          background: '#fff',
+          color: theme.tealDeep,
+          fontWeight: 800,
+          fontSize: 15,
+          textDecoration: 'none',
+          boxShadow: '0 10px 26px rgba(7, 32, 26, 0.35)',
         }}
       >
-        {[
-          { icon: MapPin, label: 'Distance-aware results' },
-          { icon: Star, label: 'Reviews with named reviewers' },
-        ].map(({ icon: Icon, label }) => (
-          <li key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, color: theme.textMid, fontWeight: 600 }}>
-            <Icon size={15} color={theme.tealDeep} aria-hidden="true" />
-            {label}
-          </li>
-        ))}
-      </ul>
+        {HERO.primary.label}
+        <ArrowRight size={17} aria-hidden="true" />
+      </Link>
+      <a
+        href={`#${HERO.secondary.anchor}`}
+        onClick={onSecondary}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          minHeight: 50,
+          padding: '0 24px',
+          borderRadius: theme.radius.full,
+          background: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255,255,255,0.45)',
+          color: '#fff',
+          fontWeight: 700,
+          fontSize: 15,
+          textDecoration: 'none',
+        }}
+      >
+        {HERO.secondary.label}
+      </a>
+    </div>
+  )
+}
+
+function PreviewGroup({ variant, limit }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <FloatingPreviews variant={variant} limit={limit} />
+      <p
+        style={{
+          margin: '8px 0 0',
+          fontSize: 11.5,
+          lineHeight: 1.4,
+          color: 'rgba(255,255,255,0.72)',
+          textAlign: variant === 'stack' ? 'right' : 'left',
+        }}
+      >
+        {PREVIEW.disclaimer}
+      </p>
     </div>
   )
 }
 
 export default function Hero() {
   const { isMobileOrTablet } = useBreakpoint()
+  const { photo } = HERO
+
+  const scrim = isMobileOrTablet
+    ? 'linear-gradient(180deg, rgba(6,32,26,0.74) 0%, rgba(6,32,26,0.64) 30%, rgba(6,32,26,0.88) 62%, rgba(6,32,26,0.97) 100%)'
+    : [
+        'linear-gradient(90deg, rgba(6,32,26,0.93) 0%, rgba(6,32,26,0.78) 42%, rgba(6,32,26,0.34) 70%, rgba(6,32,26,0.55) 100%)',
+        'linear-gradient(180deg, rgba(6,32,26,0.45) 0%, rgba(6,32,26,0.10) 34%, rgba(6,32,26,0.55) 74%, rgba(6,32,26,0.96) 100%)',
+      ].join(', ')
 
   return (
     <section
       data-section="hero"
       style={{
-        background: theme.bg,
-        padding: '48px 20px 72px',
+        position: 'relative',
+        minHeight: '100svh',
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
+        // Fallback surface behind the photo: if the image 404s or is still
+        // loading, the hero still reads as a branded dark panel.
+        background: `linear-gradient(155deg, ${theme.tealDeep} 0%, ${theme.navy} 70%)`,
+        color: '#fff',
       }}
     >
+      <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <source media="(max-width: 767px)" srcSet={photo.mobile} />
+        <img
+          src={photo.desktop}
+          alt={photo.alt}
+          width={1600}
+          height={1066}
+          loading="eager"
+          decoding="async"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            // Desktop crops 60px vertically — push the crop down so the two
+            // faces sit as high as possible, above the bottom-aligned cards.
+            objectPosition: isMobileOrTablet ? '66% center' : 'center bottom',
+          }}
+        />
+      </picture>
+
+      <div
+        aria-hidden="true"
+        style={{ position: 'absolute', inset: 0, backgroundImage: scrim }}
+      />
+
       <div
         style={{
+          position: 'relative',
+          zIndex: 1,
+          flex: '1 1 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
           maxWidth: 1180,
           margin: '0 auto',
-          display: 'grid',
-          gridTemplateColumns: isMobileOrTablet ? '1fr' : 'minmax(0, 0.88fr) minmax(0, 1.12fr)',
-          gap: isMobileOrTablet ? 36 : 56,
-          alignItems: 'center',
+          boxSizing: 'border-box',
+          padding: isMobileOrTablet ? '96px 20px 26px' : '104px 20px 26px',
         }}
       >
-        <HeroCopy />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isMobileOrTablet ? 'minmax(0, 1fr)' : 'minmax(0, 1.04fr) minmax(0, 0.96fr)',
+            gap: isMobileOrTablet ? 24 : 48,
+            alignItems: 'center',
+            flex: '1 1 auto',
+            minHeight: 0,
+          }}
+        >
+          <div style={{ minWidth: 0, maxWidth: 560, alignSelf: 'center' }}>
+            <div data-hero>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.85)',
+                  marginBottom: 14,
+                }}
+              >
+                {HERO.eyebrow}
+              </div>
+              <h1
+                style={{
+                  fontFamily: theme.fontDisplay,
+                  fontWeight: 900,
+                  fontSize: 'clamp(2.3rem, 5.2vw, 3.8rem)',
+                  lineHeight: 1.07,
+                  letterSpacing: '-0.03em',
+                  color: '#fff',
+                  margin: 0,
+                  textWrap: 'balance',
+                }}
+              >
+                <Headline />
+              </h1>
+              <p
+                style={{
+                  fontSize: 16,
+                  lineHeight: 1.7,
+                  color: 'rgba(255,255,255,0.86)',
+                  margin: '18px 0 0',
+                  maxWidth: 480,
+                }}
+              >
+                {HERO.body}
+              </p>
+            </div>
 
-        <div data-hero style={{ minWidth: 0 }}>
-          <ProductPreview
-            query={HERO.preview.query}
-            location={HERO.preview.location}
-            disclaimer={HERO.preview.disclaimer}
-          />
+            <div data-hero>
+              <HeroActions />
+            </div>
+          </div>
+
+          {!isMobileOrTablet && (
+            <div style={{ minWidth: 0, alignSelf: 'end' }}>
+              <PreviewGroup variant="stack" limit={3} />
+            </div>
+          )}
         </div>
+
+        {isMobileOrTablet && (
+          <div style={{ marginTop: 20 }}>
+            <PreviewGroup variant="row" />
+          </div>
+        )}
+
+        <FeatureStrip />
+        <TrustStrip />
       </div>
     </section>
   )

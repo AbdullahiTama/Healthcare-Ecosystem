@@ -48,8 +48,25 @@ export default function useLandingMotion(scopeRef) {
         })
       })
 
-      // Grouped children (bento cells, category tiles, trust rows) get a small
-      // cascade within their own group rather than one page-wide stagger.
+      // Grouped hero content — the floating preview cards, the feature strip
+      // and the capability strip — appears in a small cascade on load. It is
+      // content appearing, not a staged intro: 0.05s between children, 0.3s
+      // each, nothing left waiting.
+      gsap.utils.toArray('[data-hero-group]').forEach((group) => {
+        const items = group.children
+        if (!items?.length) return
+        gsap.from(items, {
+          y: RISE,
+          opacity: 0,
+          duration: DURATION,
+          ease: 'power2.out',
+          stagger: STAGGER,
+        })
+      })
+
+      // Grouped children in the below-fold sections (capability cards, how it
+      // works stages) get a small cascade within their own group rather than
+      // one page-wide stagger.
       gsap.utils.toArray('[data-reveal-group]').forEach((group) => {
         const items = group.children
         if (!items?.length) return
@@ -60,17 +77,6 @@ export default function useLandingMotion(scopeRef) {
           ease: 'power2.out',
           stagger: STAGGER,
           scrollTrigger: { trigger: group, start: 'top 90%' },
-        })
-      })
-
-      // Product preview reveal — the product arriving after the headline.
-      gsap.utils.toArray('[data-reveal-product]').forEach((el) => {
-        gsap.from(el, {
-          y: 20,
-          opacity: 0,
-          duration: DURATION,
-          ease: 'power2.out',
-          scrollTrigger: { trigger: el, start: 'top 88%' },
         })
       })
     }, scopeRef)

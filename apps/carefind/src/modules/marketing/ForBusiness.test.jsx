@@ -1,15 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import ForBusiness from './ForBusiness.jsx'
 import * as content from './landing/data/landingContent.js'
 
-// This file is the regression net for the landing redesign's honesty rules.
-// The page it replaced named six real Nigerian healthcare brands as "trusted
-// partners", showed three invented patients with stock photographs, and claimed
-// "thousands of patients" — none of which existed anywhere in the repository.
-// Those are the kind of regressions that pass every other gate, so they get
-// their own assertions.
+// This file is the regression net for the landing page's honesty rules and
+// structure. The page this one replaced named six real Nigerian healthcare
+// brands as "trusted partners", showed three invented patients with stock
+// photographs, and claimed "thousands of patients" — none of which existed
+// anywhere in the repository. Those are the kind of regressions that pass every
+// other gate, so they get their own assertions.
 //
 // The honesty assertions read the *exported content values*, not the file
 // source. A source scan would also match the code comments that document these
@@ -31,21 +31,25 @@ function renderLanding() {
   )
 }
 
+function cardText(card) {
+  return [
+    card.name, card.body, card.role, card.price, card.venue, card.badge,
+    ...(Array.isArray(card.meta) ? card.meta.map((m) => m.label) : [card.meta]),
+  ].filter(Boolean)
+}
+
 // Every string a visitor can actually read on the page. Walks the exported
 // content objects and collects their human-facing text.
 const USER_FACING = [
   content.HERO.eyebrow, content.HERO.title, content.HERO.body,
-  content.HERO.primary.label, content.HERO.secondary.label, content.HERO.preview.disclaimer,
-  content.SEARCH_SHOWCASE.eyebrow, content.SEARCH_SHOWCASE.title, content.SEARCH_SHOWCASE.body,
-  ...content.SEARCH_SHOWCASE.points.flatMap((p) => [p.title, p.body]),
-  ...content.FEATURES.flatMap((f) => [f.title, f.body]),
-  ...content.CATEGORIES.map((c) => c.label),
-  content.PROVIDER_SHOWCASE.eyebrow, content.PROVIDER_SHOWCASE.title, content.PROVIDER_SHOWCASE.body,
-  content.PROVIDER_SHOWCASE.profile.name, content.PROVIDER_SHOWCASE.profile.about,
-  ...content.PROVIDER_SHOWCASE.profile.services.map((s) => s.name),
+  content.HERO.primary.label, content.HERO.secondary.label, content.HERO.photo.alt,
+  content.PREVIEW.disclaimer,
+  ...content.PREVIEW.cards.flatMap(cardText),
+  ...content.FEATURE_STRIP.flatMap((f) => [f.title, f.body]),
+  ...content.TRUST_STRIP.flatMap((t) => [t.title, t.body]),
   ...content.STEPS.flatMap((s) => [s.title, s.body]),
-  content.TRUST.eyebrow, content.TRUST.title, content.TRUST.body,
-  ...content.TRUST.items.flatMap((i) => [i.title, i.body]),
+  content.CAPABILITIES.eyebrow, content.CAPABILITIES.title, content.CAPABILITIES.body,
+  ...content.CAPABILITIES.items.flatMap((i) => [i.title, i.body]),
   content.FINAL_CTA.title, content.FINAL_CTA.body,
   content.FINAL_CTA.primary.label, content.FINAL_CTA.secondary.label,
   content.FOOTER.legal,
@@ -54,81 +58,156 @@ const USER_FACING = [
 ].join(' \n ')
 
 // Every route the landing page is allowed to link to. Anything else would
-// dead-end on NotFound. The `?q=` variants are the category deep links, which
-// /search now seeds its query from (healthcareRepository.searchBusinesses
-// ilike-matches q against name, business_type, city and state).
+// dead-end on NotFound.
 const REAL_ROUTES = new Set([
   '/', '/about', '/feed', '/login', '/search',
   '/search?tab=products', '/search?tab=businesses', '/search?tab=professionals',
   '/business-discovery', '/claim-business',
-  '/search?tab=businesses&q=pharmacy',
-  '/search?tab=businesses&q=hospital',
-  '/search?tab=businesses&q=clinic',
-  '/search?tab=businesses&q=laboratory',
-  '/search?tab=businesses&q=imaging',
-  '/search?tab=businesses&q=dental',
-  '/search?tab=businesses&q=optometry',
-  '/search?tab=businesses&q=physiotherapy',
 ])
+
+const FEATURE_TITLES = [
+  'Ask questions', 'Connect with professionals', 'Find pharmacies',
+  'Search medicines', 'Book appointments',
+]
 
 describe('ForBusiness — the public landing page at /', () => {
   describe('structure', () => {
-    it('renders the hero headline and both calls to action', () => {
+    it('renders the hero headline, the primary action into the product, and the anchor action', () => {
       const { container } = renderLanding()
       const hero = within(container.querySelector('[data-section="hero"]'))
+
       expect(hero.getByRole('heading', { level: 1, name: content.HERO.title })).toBeInTheDocument()
-      expect(hero.getByRole('link', { name: content.HERO.primary.label })).toBeInTheDocument()
-      expect(hero.getByRole('link', { name: content.HERO.secondary.label })).toBeInTheDocument()
+
+      const primary = hero.getByRole('link', { name: /enter carefind/i })
+      expect(primary).toHaveAttribute('href', content.HERO.primary.to)
+      expect(content.HERO.primary.to).toBe('/feed')
+
+      const secondary = hero.getByRole('link', { name: /see how it works/i })
+      expect(secondary).toHaveAttribute('href', `#${content.HERO.secondary.anchor}`)
     })
 
-    it('renders all eight sections, each exactly once', () => {
+    it('renders exactly the four short-page sections, in order', () => {
       const { container } = renderLanding()
       const main = container.querySelector('main')
-      expect(main.querySelectorAll(':scope > section')).toHaveLength(8)
+      expect(main.querySelectorAll(':scope > section')).toHaveLength(4)
       expect(
         Array.from(main.querySelectorAll(':scope > section')).map((s) => s.dataset.section),
-      ).toEqual([
-        'hero', 'search-showcase', 'features', 'ecosystem',
-        'provider', 'how-it-works', 'trust', 'final-cta',
-      ])
+      ).toEqual(['hero', 'how-it-works', 'capabilities', 'final-cta'])
     })
 
-    it('renders a primary nav with every link the content file declares', () => {
+    it('renders a licensed hero photograph with real alt text and a phone-sized source', () => {
+      const { container } = renderLanding()
+      const hero = container.querySelector('[data-section="hero"]')
+      const img = hero.querySelector('img')
+      expect(img).toHaveAttribute('src', content.HERO.photo.desktop)
+      expect(img.getAttribute('alt')).toBeTruthy()
+      expect(img.getAttribute('alt').length).toBeGreaterThan(20)
+      const source = hero.querySelector('source')
+      expect(source).toHaveAttribute('srcset', content.HERO.photo.mobile)
+    })
+
+    it('lists the five feature-strip capabilities by their exact titles', () => {
+      const { container } = renderLanding()
+      const hero = within(container.querySelector('[data-section="hero"]'))
+      for (const title of FEATURE_TITLES) {
+        expect(hero.getByText(title)).toBeInTheDocument()
+      }
+      expect(content.FEATURE_STRIP.map((f) => f.title)).toEqual(FEATURE_TITLES)
+    })
+
+    it('renders the three-item capability strip with no numbers anywhere in it', () => {
+      const { container } = renderLanding()
+      const hero = within(container.querySelector('[data-section="hero"]'))
+      expect(content.TRUST_STRIP).toHaveLength(3)
+      for (const item of content.TRUST_STRIP) {
+        expect(hero.getByText(item.title)).toBeInTheDocument()
+        expect(hero.getByText(item.body)).toBeInTheDocument()
+        // No invented statistics: a digit would be a number a visitor could
+        // read as a claim about CareFind's scale or ratings.
+        expect(`${item.title}${item.body}`).not.toMatch(/\d/)
+      }
+    })
+
+    it('renders the floating preview cards as a decorative, non-focusable group', () => {
       setViewportWidth(1440)
-      renderLanding()
-      const nav = screen.getByRole('navigation', { name: 'Primary' })
-      for (const link of content.NAV_LINKS) {
-        expect(within(nav).getByText(link.label)).toBeInTheDocument()
+      const { container } = renderLanding()
+      const hero = within(container.querySelector('[data-section="hero"]'))
+      const cards = container.querySelectorAll('[data-section="hero"] article')
+      expect(cards.length).toBeGreaterThanOrEqual(3)
+      for (const card of cards) {
+        const group = card.closest('[aria-hidden="true"]')
+        expect(group, 'preview cards must sit inside an aria-hidden group').toBeTruthy()
       }
+      // The visible disclaimer that stops the samples reading as live data.
+      expect(hero.getByText(content.PREVIEW.disclaimer)).toBeInTheDocument()
     })
 
-    // The 768–1023px band is where a naive two-tier nav overflows: five links
-    // plus two buttons need ~850px but only 728px are usable. The links collapse
-    // to the menu button while the two primary actions stay visible.
-    it('collapses the nav link row to a menu button below 1024px', () => {
-      setViewportWidth(1023)
+    it('shows three cards on desktop and the full four on phones', () => {
+      setViewportWidth(1440)
+      const wide = renderLanding()
+      const wideHero = wide.container.querySelector('[data-section="hero"]')
+      expect(wideHero.querySelectorAll('article')).toHaveLength(3)
+      wide.unmount()
+
+      setViewportWidth(375)
+      const narrow = renderLanding()
+      const narrowHero = narrow.container.querySelector('[data-section="hero"]')
+      expect(narrowHero.querySelectorAll('article')).toHaveLength(4)
+      expect(within(narrowHero).getByText('Blood pressure check')).toBeInTheDocument()
+      narrow.unmount()
+
+      setViewportWidth(1440)
+    })
+
+    it('renders a primary nav with the logo, Get started and the menu button at every width', () => {
+      for (const width of [375, 768, 1440]) {
+        setViewportWidth(width)
+        const { container, unmount } = renderLanding()
+        const nav = within(container.querySelector('nav[aria-label="Primary"]'))
+        expect(nav.getByRole('link', { name: 'CareFind home' })).toBeInTheDocument()
+        expect(nav.getByRole('button', { name: 'Get started' })).toBeInTheDocument()
+        expect(nav.getByRole('button', { name: 'Open menu' })).toBeInTheDocument()
+        unmount()
+      }
+      setViewportWidth(1440)
+    })
+
+    it('keeps Sign in in the header only where both actions fit, and always in the menu', () => {
+      setViewportWidth(1440)
+      const wide = renderLanding()
+      const wideNav = within(wide.container.querySelector('nav[aria-label="Primary"]'))
+      expect(wideNav.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+      wide.unmount()
+
+      setViewportWidth(375)
+      const narrow = renderLanding()
+      const narrowHeader = within(narrow.container.querySelector('header'))
+      const narrowNav = within(narrow.container.querySelector('nav[aria-label="Primary"]'))
+      expect(narrowNav.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
+
+      fireEvent.click(narrowNav.getByRole('button', { name: 'Open menu' }))
+      // The panel is a sibling of the <nav>, not a child of it.
+      expect(narrowHeader.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+      narrow.unmount()
+
+      setViewportWidth(1440)
+    })
+
+    it('opens the menu with every link the content file declares, and closes on Escape', () => {
+      setViewportWidth(1440)
       const { container } = renderLanding()
       const nav = within(container.querySelector('nav[aria-label="Primary"]'))
 
-      // Actions survive at tablet.
-      expect(nav.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
-      expect(nav.getByRole('button', { name: 'Get started' })).toBeInTheDocument()
-      // The inline link row does not.
+      fireEvent.click(nav.getByRole('button', { name: 'Open menu' }))
+      const panel = container.querySelector('#landing-menu')
+      expect(panel).toBeTruthy()
       for (const link of content.NAV_LINKS) {
-        expect(nav.queryByText(link.label)).not.toBeInTheDocument()
+        expect(within(panel).getByText(link.label)).toBeInTheDocument()
       }
-      // And the menu button is there to reach them.
+
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(container.querySelector('#landing-menu')).toBeNull()
       expect(nav.getByRole('button', { name: 'Open menu' })).toBeInTheDocument()
-    })
-
-    it('shows the full link row from 1024px up', () => {
-      setViewportWidth(1280)
-      const { container } = renderLanding()
-      const nav = within(container.querySelector('nav[aria-label="Primary"]'))
-      for (const link of content.NAV_LINKS) {
-        expect(nav.getByText(link.label)).toBeInTheDocument()
-      }
-      expect(nav.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument()
     })
 
     it('renders the three how-it-works stages', () => {
@@ -141,78 +220,29 @@ describe('ForBusiness — the public landing page at /', () => {
       }
     })
 
-    it('renders every healthcare category as a link', () => {
+    it('renders all four capability cards as links to real surfaces', () => {
       const { container } = renderLanding()
-      const section = within(container.querySelector('[data-section="ecosystem"]'))
-      for (const category of content.CATEGORIES) {
-        const link = section.getByRole('link', { name: new RegExp(category.label, 'i') })
-        expect(link).toHaveAttribute('href', category.search)
+      const section = within(container.querySelector('[data-section="capabilities"]'))
+      expect(content.CAPABILITIES.items).toHaveLength(4)
+      for (const item of content.CAPABILITIES.items) {
+        const link = section.getByRole('link', { name: new RegExp(item.title, 'i') })
+        expect(link).toHaveAttribute('href', item.to)
+        expect(section.getByText(item.body)).toBeInTheDocument()
       }
     })
 
-    // A category tile that lands on an unfiltered tab is a broken promise: the
-    // visitor asked for pharmacies and gets everything. Every facility tile
-    // must carry the filter term.
-    it('deep-links each facility category to a filtered result set', () => {
-      for (const category of content.CATEGORIES) {
-        if (category.id === 'medicines') {
-          expect(category.search).toBe('/search?tab=products')
-          continue
-        }
-        expect(category.search, `${category.id} carries no filter`).toMatch(/^[^?]+\?.*q=/)
-      }
-    })
-  })
-
-  describe('reuses the real product components', () => {
-    it('shows the real CareFind search tabs inside the hero preview', () => {
+    it('sends the closing call to action into the product', () => {
       const { container } = renderLanding()
-      const hero = within(container.querySelector('[data-section="hero"]'))
-      const tablist = hero.getByRole('tablist', { name: /marketplace categories/i })
-      expect(within(tablist).getAllByRole('tab').map((t) => t.textContent.trim()))
-        .toEqual(['Shop', 'Products', 'Facilities', 'Professionals'])
-    })
-
-    it('shows real facility rows with distance and the booking action', () => {
-      const { container } = renderLanding()
-      const hero = within(container.querySelector('[data-section="hero"]'))
-      for (const facility of content.FIXTURES.facilities) {
-        expect(hero.getByText(facility.name)).toBeInTheDocument()
-      }
-      expect(hero.getByText(content.FIXTURES.facilityDistances['preview-facility-1'])).toBeInTheDocument()
-      // FacilityCard's real primary actions.
-      expect(hero.getAllByRole('link', { name: 'View Profile' })).toHaveLength(3)
-      expect(hero.getAllByRole('button', { name: /book appointment/i })).toHaveLength(3)
-    })
-
-    it('shows a real medicine row with price, seller, distance and contact actions', () => {
-      const { container } = renderLanding()
-      const section = within(container.querySelector('[data-section="search-showcase"]'))
-      expect(section.getByText('₦1,200')).toBeInTheDocument()
-      expect(section.getByText(content.FIXTURES.productDistance)).toBeInTheDocument()
-      // ProductResultCard's real contact row.
-      expect(section.getByRole('link', { name: /whatsapp/i })).toBeInTheDocument()
-      expect(section.getByRole('link', { name: /call/i })).toBeInTheDocument()
-    })
-
-    it('mirrors the real provider profile fields', () => {
-      const { container } = renderLanding()
-      const section = within(container.querySelector('[data-section="provider"]'))
-      const p = content.PROVIDER_SHOWCASE.profile
-      expect(section.getByRole('heading', { level: 3, name: p.name })).toBeInTheDocument()
-      expect(section.getByText(p.distance)).toBeInTheDocument()
-      expect(section.getByText(p.hours)).toBeInTheDocument()
-      expect(section.getByText(`${p.rating.count} reviews`)).toBeInTheDocument()
-      // A real rating must be exposed to assistive tech as text, never by shape.
-      expect(section.getByRole('img', { name: `${p.rating.avg} out of 5` })).toBeInTheDocument()
-      expect(section.getByRole('link', { name: 'Directions' })).toBeInTheDocument()
-      expect(section.getByRole('link', { name: /book appointment/i })).toBeInTheDocument()
+      const cta = within(container.querySelector('[data-section="final-cta"]'))
+      expect(cta.getByRole('link', { name: /enter carefind/i }))
+        .toHaveAttribute('href', '/feed')
     })
 
     it('marks every illustrative preview as an example', () => {
-      // The previews must never read as live inventory or real ratings.
+      // The previews must never read as live posts, inventory or ratings.
       renderLanding()
-      expect(screen.getAllByText(/illustrative/i).length).toBeGreaterThanOrEqual(3)
+      expect(screen.getAllByText(/illustrative/i).length).toBeGreaterThanOrEqual(1)
+      expect(content.PREVIEW.disclaimer).toMatch(/illustrative/i)
     })
   })
 
@@ -220,14 +250,13 @@ describe('ForBusiness — the public landing page at /', () => {
     it('links only to routes that exist in main.jsx', () => {
       const routes = [
         ...content.NAV_LINKS,
-        content.HERO.primary, content.HERO.secondary,
-        ...content.FEATURES,
-        ...content.CATEGORIES,
+        content.HERO.primary,
+        ...content.CAPABILITIES.items,
         content.FINAL_CTA.primary, content.FINAL_CTA.secondary,
         ...content.FOOTER.columns.flatMap((c) => c.links),
       ].map((l) => l.to).filter(Boolean)
 
-      expect(routes.length).toBeGreaterThan(10)
+      expect(routes.length).toBeGreaterThanOrEqual(10)
       for (const route of routes) {
         expect(REAL_ROUTES.has(route), `"${route}" is not a real CareFind route`).toBe(true)
       }
@@ -244,9 +273,13 @@ describe('ForBusiness — the public landing page at /', () => {
 
     it('gives every anchor navigation link a target that exists on the page', () => {
       renderLanding()
-      for (const link of content.NAV_LINKS) {
-        if (!link.anchor) continue
-        expect(document.getElementById(link.anchor), `#${link.anchor} has no target`).toBeTruthy()
+      const anchors = [
+        ...content.NAV_LINKS.filter((l) => l.anchor).map((l) => l.anchor),
+        content.HERO.secondary.anchor,
+      ]
+      expect(anchors.length).toBeGreaterThanOrEqual(2)
+      for (const anchor of anchors) {
+        expect(document.getElementById(anchor), `#${anchor} has no target`).toBeTruthy()
       }
     })
   })
@@ -265,6 +298,8 @@ describe('ForBusiness — the public landing page at /', () => {
       for (const quote of ['Sarah K.', 'James M.', 'Amara O.', 'What patients are saying']) {
         expect(USER_FACING).not.toContain(quote)
       }
+      // The preview post is a labelled sample, not a testimonial.
+      expect(content.PREVIEW.cards[0].badge).toMatch(/sample/i)
     })
 
     it('claims no user, provider or transaction counts', () => {
@@ -277,10 +312,10 @@ describe('ForBusiness — the public landing page at /', () => {
       // chip in BusinessProfile.jsx is hard-coded with no column behind it, so
       // the landing page must not restate it for a business.
       expect(USER_FACING).not.toMatch(/verified on carehub/i)
-      const titles = content.FEATURES.map((f) => f.title)
-      expect(titles).toContain('Verified professionals')
-      expect(titles).toContain('Claimed businesses')
-      expect(titles).not.toContain('Verified providers')
+      const trustTitles = content.TRUST_STRIP.map((t) => t.title)
+      expect(trustTitles).toContain('Verified professionals')
+      expect(trustTitles).not.toContain('Verified providers')
+      expect(USER_FACING).not.toContain('Verified businesses')
     })
 
     it('does not claim reviews require a verified visit', () => {
@@ -290,18 +325,25 @@ describe('ForBusiness — the public landing page at /', () => {
 
     it('does not claim live open/closed status', () => {
       // businesses.hours is a free-text string; no open-now computation exists.
-      // Matching on the assertions a claim would be phrased with, rather than
-      // any mention of the word — "no guessing which pharmacy is open" is a
-      // negation, not a claim.
       expect(USER_FACING).not.toMatch(/\bopen now\b|\bcurrently open\b|\bopen for (business|appointments)\b/i)
     })
 
     it('advertises only capabilities the codebase supports', () => {
-      // Every feature cell must resolve to a real, routed destination.
-      for (const feature of content.FEATURES) {
-        expect(REAL_ROUTES.has(feature.to), `${feature.id} → ${feature.to}`).toBe(true)
+      // Every capability card must resolve to a real, routed destination.
+      for (const item of content.CAPABILITIES.items) {
+        expect(REAL_ROUTES.has(item.to), `${item.id} → ${item.to}`).toBe(true)
       }
-      expect(content.FEATURES).toHaveLength(6)
+      expect(content.CAPABILITIES.items.map((i) => i.title))
+        .toEqual(['Ask', 'Discover', 'Connect', 'Book'])
+    })
+
+    it('keeps the sample preview data explicitly labelled', () => {
+      // Ratings, prices and engagement counts exist only inside PREVIEW, and
+      // every card carries a badge saying so.
+      for (const card of content.PREVIEW.cards) {
+        expect(card.badge).toMatch(/sample|claimed/i)
+      }
+      expect(content.PREVIEW.disclaimer).toMatch(/not live data/i)
     })
   })
 
