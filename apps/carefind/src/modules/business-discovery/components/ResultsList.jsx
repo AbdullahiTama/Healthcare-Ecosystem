@@ -1,179 +1,93 @@
-import { useState, useEffect } from 'react';
-import { theme } from '../../../styles/theme';
+import { useBreakpoint } from '../../../hooks/useBreakpoint';
+import { CardSkeleton, Empty, ErrorState } from '../../../components/ui';
+import { formatDistance, haversineMeters, businessCoords } from '../../utils/marketplace.js';
+import BusinessCard from '../../business-directory/components/BusinessCard';
+
+// The list half of the radius-discovery view (the map half is ResultsMap).
+//
+// Loading, empty and error all go through the shared design-system components
+// rather than hand-rolled markup, so this surface has the same three states as
+// every other list in the app (docs/design/DESIGN_PRINCIPLES.md:115).
+//
+// The loading state is a skeleton rather than the previous hand-rolled spinner:
+// MOTION.md:40 requires skeletons for known-shape layouts, and a row of cards is
+// a known shape. The skeleton pulses rather than sweeps, and
+// prefers-reduced-motion is handled globally in styles/global.css.
 
 export default function ResultsList({
   businesses,
   isLoading,
   error,
-  onBusinessClick,
+  onClearFilters,
   showDistance,
   referenceLocation,
 }) {
-  // Loading state
+  const { isMobile } = useBreakpoint();
+
   if (isLoading) {
     return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner} />
-        <p style={styles.loadingText}>Searching businesses...</p>
+      <div
+        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        role="status"
+        aria-live="polite"
+        aria-label="Searching businesses"
+      >
+        {[0, 1, 2].map((i) => (
+          <CardSkeleton key={i} />
+        ))}
       </div>
     );
   }
 
-  // Error state
   if (error) {
     return (
-      <div style={styles.errorContainer}>
-        <ErrorIcon />
-        <p style={styles.errorText}>Failed to search businesses</p>
-        <p style={styles.errorHint}>{error.message}</p>
-      </div>
+      <ErrorState
+        variant="network"
+        message={error?.message || 'We could not load healthcare businesses. Check your connection and try again.'}
+      />
     );
   }
 
-  // Empty state (spec 0001: honest empty, never invented)
-  if (businesses.length === 0) {
+  if (!businesses || businesses.length === 0) {
     return (
-      <div style={styles.emptyContainer}>
-        <SearchIcon />
-        <h3 style={styles.emptyTitle}>No verified result found</h3>
-        <p style={styles.emptyText}>
-          Try a larger radius, a named area, or different filters. Only verified directory rows appear here, and search never records a visit.
-        </p>
-      </div>
+      <Empty
+        cause="filtered"
+        message="No businesses match these filters"
+        action="Clear filters"
+        onAction={onClearFilters}
+      />
     );
   }
 
-  // Results
   return (
-    <div style={styles.list}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {businesses.map((business) => {
-        // Calculate distance if reference location provided
+        // Prefer the PostGIS distance the search_nearby_businesses RPC already
+        // computed; fall back to computing it here for the non-geo query path.
         let distance = null;
-        if (showDistance && referenceLocation && business.latitude && business.longitude) {
-          distance = calculateDistance(
-            referenceLocation.latitude,
-            referenceLocation.longitude,
-            business.latitude,
-            business.longitude
-          );
+        if (showDistance) {
+          if (typeof business.distance_m === 'number' && Number.isFinite(business.distance_m)) {
+            distance = formatDistance(business.distance_m);
+          } else {
+            const bc = businessCoords(business);
+            if (bc && referenceLocation) {
+              distance = formatDistance(
+                haversineMeters(referenceLocation.latitude, referenceLocation.longitude, bc.lat, bc.lng),
+              );
+            }
+          }
         }
 
         return (
           <BusinessCard
             key={business.id}
             business={business}
-            onClick={onBusinessClick}
             showDistance={showDistance}
-            distance={distance ? `${distance.toFixed(1)} km` : null}
+            distance={distance}
+            compact={isMobile}
           />
         );
       })}
     </div>
   );
 }
-
-// Helper function to calculate distance (Haversine formula)
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's radius in km
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function toRad(deg) {
-  return deg * (Math.PI / 180);
-}
-
-// Icon Components
-function ErrorIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={theme.danger || '#ef4444'} strokeWidth="2">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="15" y1="9" x2="9" y2="15" />
-      <line x1="9" y1="9" x2="15" y2="15" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={theme.gray300} strokeWidth="2">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-
-const styles = {
-  list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  loadingContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '48px',
-    gap: '16px',
-  },
-  spinner: {
-    width: '32px',
-    height: '32px',
-    border: `3px solid ${theme.gray200}`,
-    borderTopColor: theme.tealDeep,
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-  },
-  loadingText: {
-    fontSize: '14px',
-    color: theme.gray600,
-    margin: 0,
-  },
-  errorContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '48px',
-    gap: '12px',
-  },
-  errorText: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: theme.gray900,
-    margin: 0,
-  },
-  errorHint: {
-    fontSize: '14px',
-    color: theme.gray600,
-    margin: 0,
-    textAlign: 'center',
-  },
-  emptyContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '48px',
-    gap: '12px',
-  },
-  emptyTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: theme.gray900,
-    margin: 0,
-  },
-  emptyText: {
-    fontSize: '14px',
-    color: theme.gray600,
-    margin: 0,
-    textAlign: 'center',
-  },
-};

@@ -255,12 +255,15 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
+    // 44px touch floor on the collapsible section headers
+    // (ACCESSIBILITY.md:32); padding alone rendered them 40px tall.
+    minHeight: 44,
     padding: '12px 0',
     background: 'none',
     border: 'none',
     fontSize: '13px',
     fontWeight: '600',
-    color: theme.gray700,
+    color: theme.gray600,
     cursor: 'pointer',
   },
   sectionContent: {
@@ -271,21 +274,24 @@ const styles = {
   },
   select: {
     width: '100%',
+    // 44px touch floor (ACCESSIBILITY.md:32); padding alone gave 35px.
+    minHeight: 44,
     padding: '8px 12px',
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.sm,
     fontSize: '13px',
-    color: theme.gray700,
+    color: theme.gray600,
     background: 'white',
     cursor: 'pointer',
   },
   input: {
     width: '100%',
+    minHeight: 44,
     padding: '8px 12px',
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.sm,
     fontSize: '13px',
-    color: theme.gray700,
+    color: theme.gray600,
   },
   radiusOptions: {
     display: 'grid',
@@ -293,6 +299,7 @@ const styles = {
     gap: '6px',
   },
   radiusButton: {
+    minHeight: 44,
     padding: '6px',
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.sm,
@@ -300,7 +307,7 @@ const styles = {
     fontSize: '12px',
     color: theme.gray600,
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: `all ${theme.motion.fast} ${theme.motion.easeOut}`,
   },
   radiusButtonActive: {
     borderColor: theme.tealDeep,

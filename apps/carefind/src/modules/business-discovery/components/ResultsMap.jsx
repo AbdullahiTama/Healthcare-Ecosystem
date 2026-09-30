@@ -1,5 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { theme } from '../../../styles/theme';
+import { businessCoords } from '../../utils/marketplace.js';
+
+// Escape a value before interpolating it into the HTML string Leaflet's
+// bindPopup takes. Business names, categories and addresses are admin/import
+// sourced, so an unescaped `<img src=x onerror=...>` in any of them would
+// execute in the visitor's session. The previous version interpolated them raw.
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export default function ResultsMap({
   businesses,
@@ -66,28 +81,31 @@ export default function ResultsMap({
     // Add markers for each business
     const markers = [];
     businesses.forEach((business) => {
-      if (business.latitude && business.longitude) {
-        const marker = L.marker([business.latitude, business.longitude])
+      const coords = businessCoords(business);
+      if (coords) {
+        const marker = L.marker([coords.lat, coords.lng])
           .addTo(map)
           .bindPopup(`
             <div style="min-width: 200px;">
-              <h4 style="margin: 0 0 4px 0; font-size: 14px;">${business.name}</h4>
-              ${business.category ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">${business.category.name}</p>` : ''}
-              ${business.address ? `<p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${business.address}</p>` : ''}
-              <button
-                onclick="window.location.href='/business/${business.id}'"
+              <h4 style="margin: 0 0 4px 0; font-size: 14px;">${escapeHtml(business.name)}</h4>
+              ${business.category?.name ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">${escapeHtml(business.category.name)}</p>` : ''}
+              ${business.address ? `<p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">${escapeHtml(business.address)}</p>` : ''}
+              <a
+                href="/business/${encodeURIComponent(business.id)}"
                 style="
-                  padding: 4px 8px;
-                  background: #0d9488;
+                  display: inline-block;
+                  padding: 8px 12px;
+                  background: #0E6F5A;
                   color: white;
-                  border: none;
-                  border-radius: 4px;
+                  text-decoration: none;
+                  border-radius: 6px;
                   font-size: 12px;
-                  cursor: pointer;
+                  min-height: 44px;
+                  line-height: 28px;
                 "
               >
                 View Details
-              </button>
+              </a>
             </div>
           `);
 
@@ -158,19 +176,19 @@ export default function ResultsMap({
               Ã—
             </button>
           </div>
-          {selectedBusiness.category && (
+          {selectedBusiness.category?.name && (
             <p style={styles.cardCategory}>{selectedBusiness.category.name}</p>
           )}
           {selectedBusiness.address && (
             <p style={styles.cardAddress}>{selectedBusiness.address}</p>
           )}
           <div style={styles.cardActions}>
-            <button
-              onClick={() => onBusinessClick(selectedBusiness)}
+            <Link
+              to={`/business/${selectedBusiness.id}`}
               style={styles.viewButton}
             >
               View Details
-            </button>
+            </Link>
             {selectedBusiness.phone && (
               <a
                 href={`tel:${selectedBusiness.phone}`}

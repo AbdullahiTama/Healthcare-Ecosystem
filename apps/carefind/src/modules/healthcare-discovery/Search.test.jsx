@@ -244,3 +244,57 @@ describe('Search facility cards — View Profile / Book Appointment', () => {
     expect(bookBtn).toBeInTheDocument()
   })
 })
+
+// The marketing landing page's category tiles deep-link here
+// (/search?tab=businesses&q=pharmacy), and a shared search URL now reproduces
+// its result set instead of an empty page.
+describe('Search — ?q= deep link', () => {
+  beforeEach(() => {
+    mockSupabase.data.tables.businesses = []
+    mockSupabase.data.tables.products = []
+    fetchMock.mockClear()
+  })
+
+  it('prefills the input from ?q= and runs that query on load', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses&q=pharmacy']}>
+        <Search />
+      </MemoryRouter>
+    )
+
+    const input = await screen.findByLabelText('Search medication, facility, professional')
+    expect(input).toHaveValue('pharmacy')
+
+    // The query is executed, not merely displayed: the businesses builder is
+    // created with a text filter rather than left unfiltered.
+    await waitFor(() => {
+      expect(mockSupabase.supabase.from).toHaveBeenCalled()
+    })
+  })
+
+  it('leaves the input empty and the URL unfiltered without ?q=', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses']}>
+        <Search />
+      </MemoryRouter>
+    )
+
+    const input = await screen.findByLabelText('Search medication, facility, professional')
+    expect(input).toHaveValue('')
+  })
+
+  it('keeps a visible focus indicator on the search input', async () => {
+    // tab=businesses, not the default shop tab: Shop pulls in WishlistProvider,
+    // which this suite deliberately does not wrap.
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses']}>
+        <Search />
+      </MemoryRouter>
+    )
+
+    // An inline `outline: 'none'` outranks the stylesheet and silently kills
+    // the global :focus-visible ring (ACCESSIBILITY.md:16).
+    const input = await screen.findByLabelText('Search medication, facility, professional')
+    expect(input.style.outline).not.toBe('none')
+  })
+})

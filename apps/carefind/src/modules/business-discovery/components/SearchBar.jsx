@@ -98,6 +98,8 @@ const styles = {
   },
   input: {
     width: '100%',
+    // 44px touch floor (ACCESSIBILITY.md:32); padding alone gave 42px.
+    minHeight: 44,
     padding: '12px 16px 12px 44px',
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.md,
@@ -108,22 +110,29 @@ const styles = {
   },
   clearButton: {
     position: 'absolute',
-    right: '12px',
+    right: '0px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '24px',
-    height: '24px',
+    // The clear affordance is a 16px glyph, so the 44px floor is carried by the
+    // hit area (ACCESSIBILITY.md:32-33). The box stays transparent and the
+    // glyph is the only visible element, so the larger target does not read as
+    // a 44px grey disc.
+    width: '44px',
+    height: '44px',
     border: 'none',
     borderRadius: '50%',
-    background: theme.gray100,
+    background: 'transparent',
+    color: theme.gray500,
     cursor: 'pointer',
+    touchAction: 'manipulation',
   },
   actions: {
     display: 'flex',
     gap: '8px',
   },
   locationButton: {
+    minHeight: 44,
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -131,11 +140,11 @@ const styles = {
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.md,
     background: 'white',
-    color: theme.gray700,
+    color: theme.gray600,
     fontSize: '14px',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: `all ${theme.motion.fast} ${theme.motion.easeOut}`,
   },
   locationButtonActive: {
     borderColor: theme.tealDeep,
@@ -143,6 +152,7 @@ const styles = {
     background: theme.tealMist || '#f0fdfa',
   },
   searchButton: {
+    minHeight: 44,
     padding: '12px 24px',
     border: 'none',
     borderRadius: theme.radius.md,

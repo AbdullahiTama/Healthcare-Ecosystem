@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { theme } from '../../styles/theme';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 import SearchBar from './components/SearchBar';
 import SearchFilters from './components/SearchFilters';
 import ResultsList from './components/ResultsList';
@@ -10,7 +11,9 @@ import { useLocation } from '../business-directory/hooks';
 
 export default function BusinessDiscoveryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { getCurrentLocation } = useLocation();
+  const { isMobileOrTablet } = useBreakpoint();
 
   // View state
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
@@ -94,6 +97,11 @@ export default function BusinessDiscoveryPage() {
     updateSearchParams({ lat: null, lng: null, sort: 'relevance' });
   }, [updateSearchParams]);
 
+  // Handle clearing every filter from the results empty state.
+  const handleClearFilters = useCallback(() => {
+    setSearchParams(new URLSearchParams());
+  }, [setSearchParams]);
+
   // Handle pagination
   const handlePageChange = useCallback((page) => {
     updateSearchParams({ page });
@@ -101,19 +109,28 @@ export default function BusinessDiscoveryPage() {
   }, [updateSearchParams]);
 
   // Handle business click
+  // The list row and the map card are both router links now, so this is only
+  // used by the map's marker-click selection, not for navigation.
   const handleBusinessClick = useCallback((business) => {
-    // Navigate to business detail page
-    window.location.href = `/business/${business.id}`;
-  }, []);
+    navigate(`/business/${business.id}`);
+  }, [navigate]);
 
   const businesses = searchResults?.data || [];
   const totalCount = searchResults?.total || 0;
   const hasLocation = searchState.latitude && searchState.longitude;
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} data-surface="discovery">
       {/* Search Header */}
-      <div style={styles.header}>
+      <div
+        style={{
+          ...styles.header,
+          // Title and view toggle compete for the same row below laptop; the
+          // toggle drops below the copy rather than squeezing it.
+          flexDirection: isMobileOrTablet ? 'column' : 'row',
+          gap: isMobileOrTablet ? 16 : 24,
+        }}
+      >
         <div style={styles.headerContent}>
           <h1 style={styles.title}>Find Healthcare Businesses</h1>
           <p style={styles.subtitle}>
@@ -160,9 +177,18 @@ export default function BusinessDiscoveryPage() {
       </p>
 
       {/* Main Content */}
-      <div style={styles.main}>
+      <div
+        style={{
+          ...styles.main,
+          // The fixed 280px filter rail forced a 474px document at 375px wide
+          // (verified in a real browser). Below laptop the filters stack above
+          // the results instead of sitting beside them.
+          gridTemplateColumns: isMobileOrTablet ? 'minmax(0, 1fr)' : '280px minmax(0, 1fr)',
+          gap: isMobileOrTablet ? 20 : 24,
+        }}
+      >
         {/* Filters Sidebar */}
-        <aside style={styles.sidebar}>
+        <aside style={{ ...styles.sidebar, position: isMobileOrTablet ? 'static' : 'sticky' }}>
           <SearchFilters
             filters={searchState}
             onFilterChange={handleFilterChange}
@@ -194,6 +220,7 @@ export default function BusinessDiscoveryPage() {
               isLoading={isLoading}
               error={error}
               onBusinessClick={handleBusinessClick}
+              onClearFilters={handleClearFilters}
               showDistance={hasLocation}
               referenceLocation={hasLocation ? { latitude: searchState.latitude, longitude: searchState.longitude } : null}
             />
@@ -295,7 +322,10 @@ const styles = {
   viewButton: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '6px',
+    // 44px touch floor (ACCESSIBILITY.md:32); padding alone rendered 32px.
+    minHeight: 44,
     padding: '8px 12px',
     border: 'none',
     borderRadius: theme.radius.sm,
@@ -304,7 +334,7 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: `all ${theme.motion.fast} ${theme.motion.easeOut}`,
   },
   viewButtonActive: {
     background: 'white',
@@ -352,10 +382,15 @@ const styles = {
     border: `1px solid ${theme.gray200}`,
     borderRadius: theme.radius.md,
     background: 'white',
-    color: theme.gray700,
+    // theme.gray700 does not exist in the token set (gray50/100/200/300/400/
+    // 500/600/900), so this resolved to undefined and the text inherited.
+    color: theme.gray600,
     fontSize: '14px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
+    transition: `all ${theme.motion.fast} ${theme.motion.easeOut}`,
+    // 44px minimum touch target (ACCESSIBILITY.md:32); the padding above
+    // alone rendered this at ~35px tall.
+    minHeight: 44,
   },
   pageInfo: {
     fontSize: '14px',
