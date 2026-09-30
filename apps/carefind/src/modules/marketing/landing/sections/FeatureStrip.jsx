@@ -23,9 +23,9 @@ export default function FeatureStrip() {
         listStyle: 'none',
         display: 'grid',
         gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))',
-        gap: isMobile ? '16px 18px' : '18px',
+        gap: isMobile ? '20px 18px' : '24px',
         margin: 0,
-        padding: '22px 0 0',
+        padding: '32px 0 0',
         borderTop: '1px solid rgba(255,255,255,0.18)',
       }}
     >

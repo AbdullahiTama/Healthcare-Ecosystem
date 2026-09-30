@@ -87,7 +87,7 @@ export function LandingSection({
       style={{
         background,
         color: onDark ? '#fff' : theme.textDark,
-        padding: `72px ${GUTTER} 80px`,
+        padding: `96px ${GUTTER} 104px`,
         borderTop: onDark ? 'none' : `1px solid ${theme.hairline}`,
       }}
     >
@@ -96,7 +96,7 @@ export function LandingSection({
           <>
             <div
               data-reveal
-              style={align === 'center' ? { textAlign: 'center', marginBottom: 36 } : { marginBottom: 32 }}
+              style={align === 'center' ? { textAlign: 'center', marginBottom: 56 } : { marginBottom: 48 }}
             >
               {align === 'center' ? (
                 <div style={{ display: 'inline-block', textAlign: 'left' }}>{heading}</div>

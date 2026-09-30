@@ -183,7 +183,7 @@ export default function Hero() {
           maxWidth: 1180,
           margin: '0 auto',
           boxSizing: 'border-box',
-          padding: isMobileOrTablet ? '96px 20px 26px' : '104px 20px 26px',
+          padding: isMobileOrTablet ? '96px 20px 36px' : '104px 20px 36px',
         }}
       >
         <div
@@ -250,7 +250,7 @@ export default function Hero() {
         </div>
 
         {isMobileOrTablet && (
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: 28 }}>
             <PreviewGroup variant="row" />
           </div>
         )}

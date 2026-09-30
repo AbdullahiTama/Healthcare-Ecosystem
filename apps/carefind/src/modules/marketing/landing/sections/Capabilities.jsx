@@ -35,7 +35,7 @@ export default function Capabilities() {
         style={{
           display: 'grid',
           gridTemplateColumns: columns,
-          gap: 14,
+          gap: 24,
           textAlign: 'left',
         }}
       >

@@ -99,12 +99,12 @@ export default function HowItWorks() {
       data-section="how-it-works"
       style={{
         background: theme.cardBg,
-        padding: '72px 20px 80px',
+        padding: '96px 20px 104px',
         borderTop: `1px solid ${theme.hairline}`,
       }}
     >
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-        <div data-reveal style={{ textAlign: 'center', marginBottom: 36 }}>
+        <div data-reveal style={{ textAlign: 'center', marginBottom: 56 }}>
           <h2
             style={{
               fontFamily: theme.fontDisplay,
@@ -133,7 +133,7 @@ export default function HowItWorks() {
             // cards and every one stays expanded.
             display: 'flex',
             flexDirection: isMobileOrTablet ? 'column' : 'row',
-            gap: 14,
+            gap: 24,
           }}
         >
           {STEPS.map((step, i) => (

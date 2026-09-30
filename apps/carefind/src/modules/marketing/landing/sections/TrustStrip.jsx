@@ -20,9 +20,9 @@ export default function TrustStrip() {
         listStyle: 'none',
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))',
-        gap: isMobile ? 12 : 18,
+        gap: isMobile ? 16 : 24,
         margin: 0,
-        padding: '16px 0 0',
+        padding: '24px 0 0',
         borderTop: '1px solid rgba(255,255,255,0.14)',
       }}
     >

@@ -22,7 +22,7 @@ export default function FinalCTA() {
       data-section="final-cta"
       style={{
         background: theme.navy,
-        padding: '72px 20px 76px',
+        padding: '96px 20px 104px',
       }}
     >
       <div style={{ maxWidth: 660, margin: '0 auto', textAlign: 'center' }}>
@@ -49,7 +49,7 @@ export default function FinalCTA() {
               fontSize: 15.5,
               lineHeight: 1.7,
               color: 'rgba(255,255,255,0.76)',
-              margin: '16px auto 0',
+              margin: '20px auto 0',
               maxWidth: 520,
             }}
           >
@@ -59,7 +59,7 @@ export default function FinalCTA() {
 
         <div
           data-reveal
-          style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginTop: 30 }}
+          style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginTop: 40 }}
         >
           <Link
             to={FINAL_CTA.primary.to}
