@@ -25,6 +25,7 @@ export default function TopBar({ title, brand, role }) {
   return (
     <PageHeader
       compact
+      landmark="none"
       title={title}
       rightSlot={
         <>

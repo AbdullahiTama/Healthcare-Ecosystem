@@ -3,6 +3,10 @@ import { theme } from '../../styles/theme'
 import { Button, Input, Select } from '@care-ecosystem/design-system/components/ui'
 export { useToast } from '../../hooks/useToast'
 export { Button, Card, Pill, Badge, StatusBadge, Avatar, Loading, Skeleton, CardSkeleton, Empty, ErrorState, Input, Select, Textarea, Toggle, Label, HelperText, ErrorMessage, Modal, ConfirmDialog, Toast, DataTable, StatCard } from '@care-ecosystem/design-system/components/ui'
+// Dashboard primitives (docs/design/DASHBOARD_FOUNDATION.md) — shared shell,
+// metric grid, section/chart cards, charts, activity list, filters and account
+// menu used by Business Dashboard and Admin Dashboard alike.
+export { DashboardShell, PageHeader, MetricGrid, SectionCard, ChartCard, Sparkline, BarList, ActivityList, SearchBar, FilterBar, QuickAction, UserMenu } from '@care-ecosystem/design-system/components/ui'
 
 // ── LOGO ─────────────────────────────────────────────────────────────────────
 // The one CareHub brand mark — connected nodes symbol representing

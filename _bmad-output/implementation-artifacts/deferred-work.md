@@ -371,3 +371,33 @@
   summary: Make the two cron endpoints fail closed instead of serving unauthenticated callers when `CRON_SECRET` is unset, and assert that the declared cron paths resolve to real handlers in the router.
   evidence: Pre-existing and explicitly out of scope for this change. `apps/carefind/api/cron/process-email-outbox.js:12` and `apps/carefind/api/cron/check-subscription-expiry.js:19` both read `if (token && process.env.CRON_SECRET)`, so with the variable unset — a preview deploy, a typo'd name, a fork — the endpoints are publicly callable, and the second one enqueues real subscription-expiry email to business owners. `apps/carefind/.env.example:36` ships a literal placeholder, so a verbatim deploy publishes the secret. Separately, the cron guard checks schedule shape only: a typo'd or trailing-slash `path` would pass every assertion and 404 at runtime against the `ROUTES` map in `apps/carefind/api/router.js:48`.
 
+
+## Deferred from: spec-d1-business-dashboard-foundation (2026-09-30)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Migrate DashboardHome's remaining inline spacing literals (gap 18/10/8/6, padding '7px 14px', '10px 16px') onto the documented theme.space set (8/12/16/20/24/32/40/48).
+  evidence: Rule 4 of DASHBOARD_FOUNDATION §7 says spacing comes from that set only, but D1's behavior-preserving constraint froze visual deltas — moving literals shifts rhythm on a live screen. Deferred so the change lands as an explicit, reviewed visual pass (D2/D3 will adopt the set natively instead).
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Guard ChartCard's loading skeleton against degenerate floors: `Skeleton height={floor - 40}` is negative/zero when `minHeight` <= 40.
+  evidence: ChartCard.jsx:36 computes the skeleton height as `floor - 40` with no lower bound; a caller passing a small `minHeight` (or a future theme change to chartMinHeight) yields a nonsensical skeleton height. Pre-existing foundation code surfaced during D1 review.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Associate SectionCard's heading with its region (`aria-labelledby` pointing at the `id-title` heading it already renders).
+  evidence: SectionCard.jsx:42 gives the heading an id only when the caller passes `id`, and never wires `aria-labelledby` on the container — screen readers get an unlabelled region/group. Affects every consumer across all three dashboards, so it belongs in the foundation, not a D1 drive-by.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Replace PageHeader's literal search input id with React `useId` so two search-capable headers can coexist without duplicate DOM ids.
+  evidence: PageHeader.jsx hardcodes `id="page-header-search"` (and its label's htmlFor) — two PageHeaders with `search` on one page produce duplicate ids and a broken label association. Surfaced during D1 review; no current screen renders two, so it is latent.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Close UserMenu on Tab focus-out (today only Escape and outside click close it).
+  evidence: UserMenu.jsx wires Escape (document keydown) and outside click; tabbing out of the open menu leaves it rendered while focus moves elsewhere, which reads as a stuck menu to keyboard users. Pre-existing foundation behaviour, a11y surface found in D1 review.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Add a BusinessDashboard test asserting the Suspense fallback renders the shared `Loading` (the `ModuleLoading` -> `Loading` migration is currently untested).
+  evidence: BusinessDashboard.test.jsx covers landmarks, home route, and offline strip only; the `fallback={<Loading text='Loading module...' />}` path (BusinessDashboard.jsx:210) has no assertion, so a regression to an ad-hoc spinner would pass.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Guard the aggregate error surface's Retry against in-flight double-clicks (no disabled/pending state).
+  evidence: ErrorState.jsx:88 renders a plain Button with no disabled logic, and DashboardHome's aggregate Retry fires every failed query's refetch immediately — repeated clicks queue duplicate network requests. Behavior preserved from the old dashboard; low risk, worth hardening with the query layer.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Set `IS_REACT_ACT_ENVIRONMENT` (or move to React.act) for carehub's shared test files, and fix the deprecated ReactDOMTestUtils.act warnings.
+  evidence: Running sharedDashboard.test.jsx logs "The current testing environment is not configured to support act(...)" (UserMenu tests) and the React 18 deprecation warning on every file; DashboardHome.test.jsx sets the global but the shared files do not. Test hygiene, no product impact.
+- source_spec: `_bmad-output/implementation-artifacts/spec-d1-business-dashboard-foundation.md`
+  summary: Process rule for D2/D3: layout-dependent ACs must ship with a committed real-browser probe (like apps/carehub/scripts/verify-dashboard-grid.mjs), never a jsdom string assertion alone.
+  evidence: Verification-gap review of D1: the 4/4/3/2 wrap AC was initially pinned to `gridTemplateColumns contains 'auto-fit'/'160px'`, which cannot observe layout — a gap change from 16 to 48 silently breaks the sequence with tests still green. D1 now carries the probe; the rule needs to live in the foundation doc/spec template so D2/D3 inherit it.

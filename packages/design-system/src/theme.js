@@ -112,13 +112,20 @@ export const theme = {
     bodySm: { size: 12, weight: 600, lineHeight: 1.4, letterSpacing: '0' },           // Secondary info, metadata
     caption: { size: 11, weight: 700, lineHeight: 1.4, letterSpacing: '0.02em' },     // Labels, pill text, timestamps
     micro: { size: 10.5, weight: 700, lineHeight: 1.3, letterSpacing: '0.04em' },     // Dense tables, footnotes
+    // Dashboard-only roles (DASHBOARD_FOUNDATION.md). Metric values are dominant
+    // but deliberately not oversized — they sit between h2 and display so a row
+    // of four reads as data, not as four headlines.
+    metric: { size: 28, weight: 800, lineHeight: 1.1, letterSpacing: '-0.02em' },     // Metric value
+    metricLabel: { size: 12, weight: 600, lineHeight: 1.4, letterSpacing: '0.01em' }, // Metric label
   },
 
   // ──────────────────────────────────────────────────────────────────────────────
   // SPACING (4px base scale)
+  // Dashboards compose from 8/12/16/20/24/32/40/48 — space[4]/[6]/[8]/[10]/
+  // [11]/[12]/[13]/[14]. Anything outside this set needs a documented reason.
   // ──────────────────────────────────────────────────────────────────────────────
   space: {
-    1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 24, 12: 32,
+    1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 24, 12: 32, 13: 40, 14: 48,
   },
 
   // ──────────────────────────────────────────────────────────────────────────────
@@ -190,5 +197,23 @@ export const theme = {
   },
   card: {
     padding: { dense: 8, default: 12, comfortable: 16 },
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // DASHBOARD LAYOUT GEOMETRY (DASHBOARD_FOUNDATION.md)
+  // Lengths only — color, spacing, radius, type and elevation stay in their own
+  // scales so a dashboard can never drift from the rest of the system.
+  // Products may override per-instance (navWidth, contentMaxWidth) rather than
+  // fork the tokens: CareHub's rail and CareFind's control-center rail differ,
+  // the canvas/surface language they sit on does not.
+  // ──────────────────────────────────────────────────────────────────────────────
+  dashboard: {
+    navWidth: 232,           // Expanded left navigation rail
+    navCollapsedWidth: 72,   // Icon-only rail (tablet, or user-collapsed)
+    topbarHeight: 56,        // Utility bar: title/search/actions
+    contentMaxWidth: 1240,   // Central content stops growing here (wide monitors)
+    asideWidth: 300,         // Optional right-side context panel (>=1024px only)
+    metricMin: 168,          // MetricGrid: narrowest tile before the row wraps
+    chartMinHeight: 180,     // ChartCard plot area floor — never a squashed chart
   },
 };

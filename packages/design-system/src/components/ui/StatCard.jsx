@@ -14,9 +14,9 @@ export function StatCard({ icon, label, value, sub, alert, tone, onClick }) {
     <Card onClick={onClick} style={{ padding: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: theme.gray500, marginBottom: 10 }}>
         <span style={{ display: 'flex' }}>{iconNode}</span>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: theme.type.metricLabel.size, fontWeight: theme.type.metricLabel.weight, lineHeight: theme.type.metricLabel.lineHeight, letterSpacing: theme.type.metricLabel.letterSpacing }}>{label}</span>
       </div>
-      <div style={{ fontSize: 25, fontWeight: 900, color: valueColor, lineHeight: 1.1, letterSpacing: '-0.01em' }}>{value}</div>
+      <div style={{ fontSize: theme.type.metric.size, fontWeight: theme.type.metric.weight, lineHeight: theme.type.metric.lineHeight, letterSpacing: theme.type.metric.letterSpacing, color: valueColor }}>{value}</div>
       {sub && <div style={{ fontSize: 11.5, color: theme.gray400, marginTop: 5 }}>{sub}</div>}
     </Card>
   )

@@ -42,4 +42,16 @@ describe('design-system StatCard', () => {
     await act(async () => { host.querySelector('[role="button"], div').dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(clicks).toBe(1)
   })
+
+  it('reads the KPI value and label typography from the shared metric tokens', async () => {
+    const { theme } = await import('@care-ecosystem/design-system')
+    await act(async () => { root.render(<StatCard icon={<CheckCircle />} label="Sales today" value="42" />) })
+    const valueEl = [...host.querySelectorAll('div')].find((d) => d.textContent === '42')
+    expect(valueEl.style.fontSize).toBe(`${theme.type.metric.size}px`)
+    expect(valueEl.style.fontWeight).toBe(String(theme.type.metric.weight))
+    const labelEl = [...host.querySelectorAll('span')].find((s) => s.textContent === 'Sales today')
+    expect(labelEl.style.fontSize).toBe(`${theme.type.metricLabel.size}px`)
+    expect(labelEl.style.fontWeight).toBe(String(theme.type.metricLabel.weight))
+    expect(labelEl.style.letterSpacing).toBe(theme.type.metricLabel.letterSpacing)
+  })
 })

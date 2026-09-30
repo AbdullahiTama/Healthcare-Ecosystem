@@ -100,4 +100,18 @@ describe('design-system PageHeader', () => {
     expect(btn.textContent).toContain('New Sale')
     expect(btn.style.background).toBe(rgb(theme.tealDeep))
   })
+
+  it('claims role=banner by default in both modes', async () => {
+    await act(async () => { root.render(<PageHeader compact title='Inventory' />) })
+    expect(host.querySelector('header').getAttribute('role')).toBe('banner')
+    await act(async () => { root.render(<PageHeader title='Reports' />) })
+    expect(host.querySelector('header').getAttribute('role')).toBe('banner')
+  })
+
+  it('drops the banner landmark when composed inside main', async () => {
+    await act(async () => { root.render(<PageHeader landmark="none" title='Reports' />) })
+    expect(host.querySelector('header').getAttribute('role')).toBeNull()
+    await act(async () => { root.render(<PageHeader compact landmark="none" title='Inventory' />) })
+    expect(host.querySelector('header').getAttribute('role')).toBeNull()
+  })
 })

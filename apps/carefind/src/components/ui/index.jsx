@@ -3,6 +3,10 @@ import { theme } from '../../styles/theme'
 import { Button, Input, Select } from '@care-ecosystem/design-system/components/ui'
 export { useToast } from '../../hooks/useToast'
 export { Button, Card, Pill, Badge, Avatar, Loading, Skeleton, CardSkeleton, Empty, ErrorState, Input, Select, Textarea, Toggle, Label, HelperText, ErrorMessage, Modal, ConfirmDialog, Toast, DataTable, StatCard } from '@care-ecosystem/design-system/components/ui'
+// Dashboard primitives (docs/design/DASHBOARD_FOUNDATION.md) — shared shell,
+// metric grid, section/chart cards, charts, activity list, filters and account
+// menu used by the admin control center (and available to any CareFind surface).
+export { DashboardShell, PageHeader, MetricGrid, SectionCard, ChartCard, Sparkline, BarList, ActivityList, SearchBar, FilterBar, QuickAction, UserMenu } from '@care-ecosystem/design-system/components/ui'
 
 // Shared component library for CareFind, built on the tokens in
 // ../../styles/theme.js. Mirrors the shape and naming of CareHub's

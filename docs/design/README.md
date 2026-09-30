@@ -45,6 +45,7 @@ How screens are put together and how they behave.
 | [`UX_PATTERNS.md`](UX_PATTERNS.md) | Standards for search, filtering, forms, validation, bulk actions, undo, and more |
 | [`ACCESSIBILITY.md`](ACCESSIBILITY.md) | The accessibility bar every screen must clear |
 | [`RESPONSIVENESS.md`](RESPONSIVENESS.md) | How each breakpoint is *designed*, not just scaled |
+| [`DASHBOARD_FOUNDATION.md`](DASHBOARD_FOUNDATION.md) | **The shared dashboard foundation.** The tokens, primitives, and rules the CareHub and CareFind dashboards are built from. Start here when building a dashboard. |
 
 ### 4. The blueprint
 | Document | Covers |
