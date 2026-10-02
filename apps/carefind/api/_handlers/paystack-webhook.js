@@ -425,15 +425,17 @@ export default async function handler(req, res) {
 
   const event = JSON.parse(rawBody.toString('utf8'))
 
-  // Return 200 immediately to prevent Paystack timeout retries.
-  // Process the event async — all handlers are idempotent so duplicate
-  // webhook deliveries are safe.
-  res.status(200).json({ received: true })
-
-  // Fire-and-forget async processing
-  processWebhookEvent(event).catch((err) => {
-    console.error('[paystack-webhook] async processing error:', err)
-  })
+  // Settle BEFORE acknowledging. Vercel can freeze a serverless function as soon as the
+  // response is sent, so work done after res.json() may never run - and Paystack, having
+  // been told 200, would never redeliver. Every handler is idempotent (claim-first RPCs,
+  // unique references), so a failure answers 500 and Paystack retries the event.
+  try {
+    await processWebhookEvent(event)
+  } catch (err) {
+    console.error('[paystack-webhook] processing error:', err)
+    return res.status(500).json({ error: 'Processing failed' })
+  }
+  return res.status(200).json({ received: true })
 }
 
 async function processWebhookEvent(event) {
