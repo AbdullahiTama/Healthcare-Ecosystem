@@ -117,4 +117,20 @@ describe('initiate-withdrawal recovery after the wallet is debited', () => {
     expect(refunds()).toHaveLength(0)
     expect(r.statusCode).toBe(200)
   })
+
+  // Financial audit M-2: trust is recorded when a transfer settles (webhook / sweep), never here.
+  const trustUpdates = () => h.rpcCalls.filter(([n]) => n === 'update_withdrawal_trust_after_withdrawal')
+
+  it('an accepted transfer does not count as a completed withdrawal yet', async () => {
+    h.initiateTransfer.mockResolvedValue({ transferCode: 'TRF_1' })
+    await handler(req, res())
+    expect(trustUpdates()).toHaveLength(0)
+  })
+
+  it('a transfer that never started does not touch trust either', async () => {
+    h.initiateTransfer.mockRejectedValue(Object.assign(new Error('rejected'), { paystackRejected: true }))
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    await handler(req, res())
+    expect(trustUpdates()).toHaveLength(0)
+  })
 })

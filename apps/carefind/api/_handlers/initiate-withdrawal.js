@@ -197,12 +197,10 @@ export default async function handler(req, res) {
       .eq('user_id', user.id)
       .eq('paystack_reference', reference)
 
-    const { data: newTrustLevel } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', {
-      p_user_id: user.id,
-      p_amount: coins,
-      p_status: 'completed',
-    })
-
+    // Trust is recorded when the transfer SETTLES (the transfer.success / transfer.failed webhook,
+    // or the reconcile-withdrawals sweep), not here. Paystack has only accepted the request at
+    // this point; counting it as a completed withdrawal let transfers that later failed or were
+    // reversed build a streak toward the higher-trust, lower-friction tiers.
     const { data: updatedTrust } = await supabase.rpc('get_withdrawal_trust', { p_user_id: user.id })
     const trustData = Array.isArray(updatedTrust) ? updatedTrust[0] : updatedTrust
 
@@ -225,16 +223,13 @@ export default async function handler(req, res) {
       reference,
       coins,
       payoutNaira,
-      trustLevel: newTrustLevel || trustLevel,
-      instantEligible: isInstantEligible(newTrustLevel || trustLevel, coins),
+      trustLevel,
+      instantEligible: isInstantEligible(trustLevel, coins),
       nextThreshold: trustData?.instant_threshold || 0,
     })
   } catch (err) {
-    await supabase.rpc('update_withdrawal_trust_after_withdrawal', {
-      p_user_id: user.id,
-      p_amount: coins,
-      p_status: 'failed',
-    }).catch(() => {})
+    // No trust update here: a transfer that never started is a provider or system failure, not
+    // withdrawal behaviour, and every call to the trust RPC counts as a withdrawal.
 
     // The wallet was debited but no transfer started: give the coins back, but only when
     // Paystack confirms nothing was created (see withdrawalRecovery.js). An explicit

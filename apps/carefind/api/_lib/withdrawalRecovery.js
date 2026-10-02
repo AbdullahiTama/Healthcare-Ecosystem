@@ -23,7 +23,15 @@ export async function reconcileWithdrawal(supabase, row, opts = {}) {
   }
 
   if (decision.action === 'complete') {
-    await supabase.from('withdrawal_requests').update({ status: 'completed' }).eq('id', row.id).eq('status', 'pending')
+    const { data: flipped } = await supabase
+      .from('withdrawal_requests')
+      .update({ status: 'completed' })
+      .eq('id', row.id)
+      .eq('status', 'pending')
+      .select('id')
+    // Nothing flipped: the webhook (or an admin) settled it first, so the caller must not
+    // act on it a second time (e.g. record trust twice).
+    if (!flipped || flipped.length === 0) return { outcome: 'waiting', detail: 'already settled' }
     return { outcome: 'completed' }
   }
 

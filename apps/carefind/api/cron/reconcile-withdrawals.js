@@ -46,8 +46,18 @@ export default async function handler(req, res) {
       const result = await reconcileWithdrawal(supabase, row)
       summary[result.outcome]++
       if (result.outcome === 'refunded') {
+        // Refunded because the transfer was never created or failed: no trust update - a transfer
+        // that never happened is not withdrawal behaviour.
         console.warn('[reconcile-withdrawals] refunded unsettled withdrawal', { id: row.id, reference: row.paystack_reference })
         await notifyRefunded(supabase, row)
+      }
+      if (result.outcome === 'completed') {
+        // reconcileWithdrawal only reports 'completed' when THIS call flipped the row, so the
+        // webhook cannot also have recorded it.
+        const { error: trustError } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', {
+          p_user_id: row.user_id, p_amount: row.amount, p_status: 'completed',
+        })
+        if (trustError) console.error('[reconcile-withdrawals] trust update failed', { id: row.id, message: trustError.message })
       }
     } catch (err) {
       summary.errors++

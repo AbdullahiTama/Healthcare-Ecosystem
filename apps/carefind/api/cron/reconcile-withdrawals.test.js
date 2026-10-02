@@ -2,6 +2,7 @@ const h = vi.hoisted(() => ({
   rows: [],
   reconcile: vi.fn(),
   queryError: null,
+  rpcCalls: [],
 }))
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -12,6 +13,7 @@ vi.mock('@supabase/supabase-js', () => ({
     }
     return {
       from: () => b,
+      rpc: async (name, args) => { h.rpcCalls.push([name, args]); return { data: 'new', error: null } },
       auth: { admin: { getUserById: async () => ({ data: { user: { email: 'u@example.com' } } }) } },
     }
   },
@@ -31,6 +33,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = 'cron-secret'
   h.rows = []
   h.queryError = null
+  h.rpcCalls.length = 0
   h.reconcile.mockReset()
 })
 
@@ -64,6 +67,20 @@ describe('reconcile-withdrawals cron', () => {
     const r = await call({ authorization: 'Bearer cron-secret' })
     expect(r.statusCode).toBe(200)
     expect(r.body).toEqual({ checked: 4, refunded: 1, completed: 1, waiting: 1, errors: 1 })
+  })
+
+  it('records trust only for a withdrawal this run completed - never for a refunded or waiting one', async () => {
+    h.rows = [
+      { id: 'w1', user_id: 'u1', amount: 10, paystack_reference: 'r1' },
+      { id: 'w2', user_id: 'u2', amount: 20, paystack_reference: 'r2' },
+      { id: 'w3', user_id: 'u3', amount: 30, paystack_reference: 'r3' },
+    ]
+    h.reconcile
+      .mockResolvedValueOnce({ outcome: 'refunded' })
+      .mockResolvedValueOnce({ outcome: 'completed' })
+      .mockResolvedValueOnce({ outcome: 'waiting', detail: 'already settled' })
+    await call({ authorization: 'Bearer cron-secret' })
+    expect(h.rpcCalls).toEqual([['update_withdrawal_trust_after_withdrawal', { p_user_id: 'u2', p_amount: 20, p_status: 'completed' }]])
   })
 
   it('a query failure is a 500, not a silent success', async () => {

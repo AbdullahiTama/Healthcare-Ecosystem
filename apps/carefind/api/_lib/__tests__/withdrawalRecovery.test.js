@@ -6,9 +6,15 @@ const NOW = Date.parse('2026-10-02T12:00:00Z')
 const old = new Date(NOW - IN_FLIGHT_GRACE_MS - 60_000).toISOString()
 const row = (extra = {}) => ({ id: 'w1', status: 'pending', paystack_reference: 'cf_wd_1', paystack_transfer_code: null, created_at: old, ...extra })
 
-function client(rpcResult = { data: 'ok', error: null }) {
+// `flipped` is what the guarded UPDATE ... .select('id') returns: one row when this call changed the
+// status, none when another path (webhook, admin) had already settled it.
+function client(rpcResult = { data: 'ok', error: null }, flipped = [{ id: 'w1' }]) {
   const updates = []
-  const b = { update: (v) => { updates.push(v); return b }, eq: () => b, then: (r) => r({ error: null }) }
+  const b = {
+    update: (v) => { updates.push(v); return b },
+    eq: () => b,
+    select: async () => ({ data: flipped, error: null }),
+  }
   return { client: { rpc: vi.fn(async () => rpcResult), from: () => b }, updates }
 }
 const opts = (status) => ({ getStatus: async () => status, now: NOW })
@@ -32,6 +38,11 @@ describe('reconcileWithdrawal', () => {
     expect((await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts('success'))).outcome).toBe('completed')
     expect(updates).toEqual([{ status: 'completed' }])
     expect(c.rpc).not.toHaveBeenCalled()
+  })
+
+  it('succeeded but the webhook already completed it: waits, so the caller cannot record it twice', async () => {
+    const { client: c } = client(undefined, [])
+    expect(await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts('success'))).toEqual({ outcome: 'waiting', detail: 'already settled' })
   })
 
   it('transfer still in flight: waits, no refund, no completion', async () => {

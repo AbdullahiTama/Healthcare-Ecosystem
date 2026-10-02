@@ -79,6 +79,44 @@ describe('shop order fallback settlement', () => {
   })
 })
 
+// Financial audit M-2: withdrawal trust (tiers and streaks) is recorded when a transfer SETTLES, once per
+// settlement, never when Paystack merely accepted the request.
+describe('withdrawal trust is recorded at settlement', () => {
+  const trust = () => h.rpcCalls.filter(([n]) => n === 'update_withdrawal_trust_after_withdrawal').map(([, a]) => a)
+  const settledRow = { id: 'w1', user_id: 'u1', amount: 10, bank_name: 'GTB', account_number: '0123456789' }
+
+  beforeEach(() => {
+    h.maybeSingle = { withdrawal_requests: settledRow }
+    h.rpcImpl = async (name) => (name === 'reject_withdrawal_request' ? { data: h.rejectResult ?? 'ok', error: null } : { data: null, error: null })
+    h.rejectResult = undefined
+  })
+
+  it('transfer.success that completes the row records one completed withdrawal', async () => {
+    h.updateRows = [settledRow]
+    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1' } })
+    expect(trust()).toEqual([{ p_user_id: 'u1', p_amount: 10, p_status: 'completed' }])
+  })
+
+  it('a redelivery that finds nothing left to complete records nothing', async () => {
+    h.updateRows = []
+    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1' } })
+    expect(trust()).toHaveLength(0)
+  })
+
+  it('transfer.failed that this delivery refunded records a failed withdrawal', async () => {
+    h.updateRows = [settledRow]
+    await post({ event: 'transfer.failed', data: { reference: 'cf_wd_1' } })
+    expect(trust()).toEqual([{ p_user_id: 'u1', p_amount: 10, p_status: 'failed' }])
+  })
+
+  it('transfer.failed already settled by another path records nothing', async () => {
+    h.updateRows = [settledRow]
+    h.rejectResult = 'already_rejected'
+    await post({ event: 'transfer.failed', data: { reference: 'cf_wd_1' } })
+    expect(trust()).toHaveLength(0)
+  })
+})
+
 describe('plan and subscription amounts are stored in naira (Paystack reports kobo)', () => {
   it('CareHub plan renewal: 500000 kobo is recorded as 5000 naira', async () => {
     const res = await post({ event: 'charge.success', data: { reference: 'ch_1', amount: 500000, metadata: { business_id: 'biz-1', months: '1' } } })

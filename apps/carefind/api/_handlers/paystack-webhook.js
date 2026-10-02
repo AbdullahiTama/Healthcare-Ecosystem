@@ -96,13 +96,20 @@ async function handleSubscription(metadata, reference, amount) {
 // Transfer handler (automated withdrawal payouts)
 async function handleTransferSuccess(reference) {
   // CareFind user withdrawals
-  await supabase
+  const { data: completedUserRows } = await supabase
     .from('withdrawal_requests')
     .update({ status: 'completed' })
     .eq('paystack_reference', reference)
     // 'approved' rows (approved by an admin while the transfer was in flight) must
     // still settle, or they sit there forever although the money has moved.
     .in('status', ['pending', 'approved'])
+    .select('id, user_id, amount')
+
+  // Trust is recorded here, when the transfer settles - not when it was merely accepted. Only the
+  // delivery that actually flipped the row to completed gets here, so a redelivery cannot count twice.
+  if (completedUserRows && completedUserRows[0]) {
+    await recordWithdrawalTrust(completedUserRows[0].user_id, completedUserRows[0].amount, 'completed')
+  }
 
   // CareHub business withdrawals
   await supabase
@@ -114,17 +121,30 @@ async function handleTransferSuccess(reference) {
   return { received: true }
 }
 
+// Withdrawal trust (tiers, streaks) must reflect what actually settled. Best effort: a failure here must
+// never undo or block the settlement that triggered it.
+async function recordWithdrawalTrust(userId, amount, status) {
+  try {
+    const { error } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', { p_user_id: userId, p_amount: amount, p_status: status })
+    if (error) console.error('[paystack-webhook] trust update failed:', error.message)
+  } catch (err) {
+    console.error('[paystack-webhook] trust update error:', err)
+  }
+}
+
 async function handleTransferFailed(reference) {
   // CareFind user withdrawals
   const { data: requests } = await supabase
     .from('withdrawal_requests')
-    .select('id')
+    .select('id, user_id, amount')
     .eq('paystack_reference', reference)
     .eq('status', 'pending')
     .limit(1)
 
   if (requests && requests.length > 0) {
-    await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
+    const { data: rejected } = await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
+    // 'ok' means THIS delivery refunded it; any other result was settled by another path already.
+    if (rejected === 'ok') await recordWithdrawalTrust(requests[0].user_id, requests[0].amount, 'failed')
   }
 
   // CareHub business withdrawals
