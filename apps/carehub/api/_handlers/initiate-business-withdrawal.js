@@ -1,6 +1,7 @@
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from '../_lib/paystackTransfer.js'
+import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'
 
 // Business wallet withdrawal (ADR-005). Mirrors CareFind's initiate-withdrawal
 // flow: bank details are submitted at withdrawal time, request_business_withdrawal
@@ -56,6 +57,11 @@ export default async function handler(req, res) {
 
   const reference = prior?.paystack_reference || transferReference(businessId)
 
+  // Tracks how far this request got, so a failure can be recovered correctly: once the
+  // balance is reserved and the transfer did not start, the money must come back.
+  let reserved = false
+  let transferStarted = false
+
   try {
     // Create or reuse the Paystack transfer recipient for this business.
     const recipientCode = await createTransferRecipient({
@@ -83,6 +89,8 @@ export default async function handler(req, res) {
       })
     }
 
+    reserved = true
+
     // Initiate the Paystack transfer (idempotent by reference).
     const { transferCode } = await initiateTransfer({
       recipientCode,
@@ -90,6 +98,8 @@ export default async function handler(req, res) {
       reason: `CareHub business withdrawal: â‚¦${(amountKobo / 100).toLocaleString()}`,
       reference,
     })
+
+    transferStarted = true
 
     // Attach transfer details by reference (unique), not "latest pending".
     await supabase
@@ -109,6 +119,34 @@ export default async function handler(req, res) {
       amount: amountKobo,
     })
   } catch (err) {
+    // The balance was reserved but no transfer started: give it back, but only when Paystack
+    // confirms nothing was created (see withdrawalRecovery.js). An explicit Paystack rejection
+    // is checked immediately; an ambiguous failure (timeout, dropped connection) is left
+    // pending for the reconcile-payments cron, which waits out the grace period before
+    // believing "not found".
+    if (reserved && !transferStarted) {
+      try {
+        const { data: row } = await supabase
+          .from('business_withdrawal_requests')
+          .select('id, status, paystack_reference, paystack_transfer_code, created_at')
+          .eq('business_id', businessId)
+          .eq('paystack_reference', reference)
+          .maybeSingle()
+        if (row && ['pending', 'processing'].includes(row.status)) {
+          const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+          if (recovery.outcome === 'refunded') {
+            return res.status(502).json({ error: `${err.message || 'Payment provider error'}. The amount has been returned to your wallet.`, refunded: true })
+          }
+          console.error('[initiate-business-withdrawal] transfer failed; left pending for reconciliation', { reference, detail: recovery.detail })
+        }
+      } catch (recoveryErr) {
+        console.error('[initiate-business-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })
+      }
+      return res.status(502).json({
+        error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+        pending: true,
+      })
+    }
     return res.status(502).json({ error: err.message || 'Payment provider error' })
   }
 }
