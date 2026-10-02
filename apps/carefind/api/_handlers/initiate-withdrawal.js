@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible } from '../_lib/trustLevels.js'
+import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -113,6 +115,11 @@ export default async function handler(req, res) {
 
   const reference = prior?.paystack_reference || transferReference(user.id)
 
+  // Tracks how far this request got, so a failure can be recovered correctly: once the
+  // wallet is debited and the transfer did not start, the coins must come back.
+  let debited = false
+  let transferStarted = false
+
   try {
     // Verify the typed account name actually belongs to the account number.
     // If Paystack reports the bank does not support / cannot resolve the account,
@@ -169,6 +176,8 @@ export default async function handler(req, res) {
       })
     }
 
+    debited = true
+
     // Initiate the Paystack transfer (idempotent by reference)
     const { transferCode } = await initiateTransfer({
       recipientCode,
@@ -176,6 +185,7 @@ export default async function handler(req, res) {
       reason: `CareFind withdrawal: ${coins} CareCoins (?${payoutNaira.toLocaleString()})`,
       reference,
     })
+    transferStarted = true
 
     // Attach transfer details by reference (unique), not "latest pending"
     await supabase
@@ -196,6 +206,19 @@ export default async function handler(req, res) {
     const { data: updatedTrust } = await supabase.rpc('get_withdrawal_trust', { p_user_id: user.id })
     const trustData = Array.isArray(updatedTrust) ? updatedTrust[0] : updatedTrust
 
+    try {
+      if (user.email) {
+        await enqueueOutbox({
+          templateKey: 'withdrawal_requested',
+          toEmail: user.email,
+          payload: { fullName: user.user_metadata?.full_name || user.email, amount: 'Requested withdrawal', reference, bankName, accountNumber },
+          subject: 'CareFind: withdrawal requested',
+          idempotencyKey: 'withdrawal-requested:' + reference,
+        })
+        flushOutbox().catch((e) => console.error('[initiate-withdrawal] outbox flush error:', e))
+      }
+    } catch (e) { console.error('[initiate-withdrawal] email enqueue error:', e) }
+
     return res.status(200).json({
       success: true,
       transferCode,
@@ -212,6 +235,35 @@ export default async function handler(req, res) {
       p_amount: coins,
       p_status: 'failed',
     }).catch(() => {})
+
+    // The wallet was debited but no transfer started: give the coins back, but only when
+    // Paystack confirms nothing was created (see withdrawalRecovery.js). An explicit
+    // Paystack rejection is checked immediately; an ambiguous failure (timeout, dropped
+    // connection) is left pending for the reconcile-withdrawals sweep, which waits out the
+    // grace period before believing "not found".
+    if (debited && !transferStarted) {
+      try {
+        const { data: row } = await supabase
+          .from('withdrawal_requests')
+          .select('id, status, paystack_reference, paystack_transfer_code, created_at')
+          .eq('user_id', user.id)
+          .eq('paystack_reference', reference)
+          .maybeSingle()
+        if (row && row.status === 'pending') {
+          const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+          if (recovery.outcome === 'refunded') {
+            return res.status(502).json({ error: `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.`, refunded: true })
+          }
+          console.error('[initiate-withdrawal] transfer failed; left pending for reconciliation', { reference, detail: recovery.detail })
+        }
+      } catch (recoveryErr) {
+        console.error('[initiate-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })
+      }
+      return res.status(502).json({
+        error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+        pending: true,
+      })
+    }
     return res.status(502).json({ error: err.message || 'Payment provider error' })
   }
 }

@@ -40,12 +40,12 @@ export function decideAdminApprove(row) {
 }
 
 // -> { action: 'refund' | 'complete' | 'block', message? }
-export async function decideAdminReject(row, { getStatus = getTransferStatus, now = Date.now() } = {}) {
+export async function decideAdminReject(row, { getStatus = getTransferStatus, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS } = {}) {
   if (!row?.paystack_reference) return { action: 'refund' }
 
   const ageMs = now - new Date(row.created_at).getTime()
   const hasCode = Boolean(row.paystack_transfer_code)
-  if (!hasCode && !(ageMs >= IN_FLIGHT_GRACE_MS)) {
+  if (!hasCode && !(ageMs >= graceMs)) {
     return {
       action: 'block',
       message: 'This withdrawal was filed moments ago and its transfer may still be sending. Try again in a few minutes.',

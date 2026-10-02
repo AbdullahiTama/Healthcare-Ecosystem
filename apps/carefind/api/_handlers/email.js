@@ -37,6 +37,10 @@ async function resolveHandler(type, subpath) {
         const mod = await import('../cron/check-subscription-expiry.js')
         return mod.default
       }
+      if (subpath && subpath.startsWith('reconcile-withdrawals')) {
+        const mod = await import('../cron/reconcile-withdrawals.js')
+        return mod.default
+      }
       const mod = await import('../cron/process-email-outbox.js')
       return mod.default
     }
