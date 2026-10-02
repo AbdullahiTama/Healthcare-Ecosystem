@@ -50,7 +50,8 @@ export default async function handler(req, res) {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
-    p_naira_amount: paystackData.data.amount,
+    // Paystack reports kobo; transactions.naira_amount is NAIRA everywhere else (top-ups, consultations, bookings).
+    p_naira_amount: Math.round(paystackData.data.amount / 100),
     p_reference: reference,
   })
 
