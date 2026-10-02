@@ -54,18 +54,10 @@ export default async function handler(req, res) {
       },
     }
 
-    // If the professional has a Paystack subaccount, split the payment
-    const { data: proProfile } = await supabase
-      .from('profiles')
-      .select('paystack_subaccount_code')
-      .eq('id', professionalId)
-      .maybeSingle()
-
-    if (proProfile?.paystack_subaccount_code) {
-      body.subaccount = proProfile.paystack_subaccount_code
-      body.transaction_charge = Math.floor(nairaAmount * 100 * 0.15) // 15% platform fee
-    }
-
+    // Deliberately NO Paystack subaccount split. The whole charge settles to the
+    // platform account and settle_consultation_payment() credits the professional's
+    // CareCoin wallet, which is how they are paid. Splitting at Paystack as well
+    // pays the professional twice (once to their bank, once to the wallet).
     const data = await paystackFetch('/transaction/initialize', {
       method: 'POST',
       body: JSON.stringify(body),
