@@ -57,6 +57,17 @@ describe('paystack webhook acknowledgement', () => {
     expect(res.statusCode).toBe(500)
   })
 
+  it('rejects a wrong signature of the correct length, and one of the wrong length, without throwing', async () => {
+    const right = crypto.createHmac('sha512', 'sk_test_secret').update(Buffer.from(JSON.stringify(topup))).digest('hex')
+    const sameLengthWrong = right.replace(/^./, right[0] === 'a' ? 'b' : 'a')
+    for (const signature of [sameLengthWrong, right.slice(0, -2), '']) {
+      const res = response()
+      await handler(request(topup, { signature }), res)
+      expect(res.statusCode).toBe(401)
+    }
+    expect(h.creditTopup).not.toHaveBeenCalled()
+  })
+
   it('rejects an invalid signature without processing anything', async () => {
     const res = response()
     await handler(request(topup, { sign: false }), res)

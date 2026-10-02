@@ -421,7 +421,10 @@ export default async function handler(req, res) {
     .update(rawBody)
     .digest('hex')
 
-  if (hash !== req.headers['x-paystack-signature']) {
+  // Constant-time comparison: a plain !== leaks, byte by byte, how much of a guessed signature matched.
+  const received = Buffer.from(String(req.headers['x-paystack-signature'] || ''))
+  const expected = Buffer.from(hash)
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
     return res.status(401).json({ error: 'Invalid signature' })
   }
 
