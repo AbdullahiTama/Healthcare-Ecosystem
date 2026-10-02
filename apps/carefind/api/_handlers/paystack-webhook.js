@@ -99,7 +99,9 @@ async function handleTransferSuccess(reference) {
     .from('withdrawal_requests')
     .update({ status: 'completed' })
     .eq('paystack_reference', reference)
-    .eq('status', 'pending')
+    // 'approved' rows (approved by an admin while the transfer was in flight) must
+    // still settle, or they sit there forever although the money has moved.
+    .in('status', ['pending', 'approved'])
 
   // CareHub business withdrawals
   await supabase
