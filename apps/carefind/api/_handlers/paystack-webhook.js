@@ -365,7 +365,9 @@ async function handlePlanPayment(metadata, reference, amount) {
   const { data, error } = await supabase.rpc('renew_business_plan', {
     p_business_id: metadata.business_id,
     p_months: months,
-    p_naira_amount: amount,
+    // Paystack reports kobo; plan_payments.naira_amount is NAIRA (it used to store kobo, which
+    // overstated revenue 100x in every report that read it as naira).
+    p_naira_amount: Math.round(amount / 100),
     p_reference: reference,
   })
   if (error) return null
