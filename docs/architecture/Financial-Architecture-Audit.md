@@ -144,3 +144,21 @@ File: `apps/carefind/sql/20261002_financial_phase0_lockdown.sql`. Dry-run on syn
 - The CareFind sweeper (`/api/cron/reconcile-withdrawals`) is routed but NOT scheduled: the project looks like Vercel Hobby (2 cron cap) and CareFind already uses both. Options: chain it into an existing cron, or schedule it with Supabase Cron like the email outbox.
 - `CRON_SECRET` must be set in both deployments (both sweepers fail closed).
 - Uncommitted email work contains `(global as any)` (TypeScript) in `apps/carehub/api/_handlers/cron-process-email-outbox.js:30`. It is invalid JavaScript and breaks the CareHub router import (the `router.test.js` import-safety test fails); not part of these commits.
+
+### 2026-10-02 - Medium findings worked (each re-verified against live data / current code first)
+| ID | Outcome |
+|---|---|
+| M-1 | **Fixed.** CareHub plan payments (earlier) and now CareFind creator subscriptions: `p_naira_amount` receives naira at both call sites of each. No subscription transactions existed, nothing to migrate. |
+| M-2 | **Fixed.** Withdrawal trust is recorded when a transfer settles (webhook `transfer.success` for the delivery that flipped the row, `transfer.failed` only when that delivery refunded, or the reconcile sweep when it flipped the row). A transfer that never started records nothing. Found while fixing: `update_withdrawal_trust_after_withdrawal` counts every call as a withdrawal, so the old "failed" call at the catch block also inflated `total_withdrawals`. |
+| M-3 | **Open - needs a product decision** (see below). |
+| M-4 | **Re-scoped, fix written, not applied.** The verify handlers look the booking up by `payment_reference` (unique), so they cannot settle another booking, and `pay_booking_with_credits` uses the booking's own reference; the real gap was `settle_card_booking` trusting any reference. Fix: refuse a mismatch (`reference_mismatch`). In `apps/carefind/sql/20261002_financial_medium_hardening.sql`; dry-run on synthetic rows passed. |
+| M-5 | **Fix written, not applied.** Live check: no CHECK constraints on `wallets`/`business_wallets`, no negative balances (0/0), so adding `balance >= 0`, `held_balance >= 0`, `available_balance >= 0` is safe. Same migration; dry-run passed (negative rejected 23514, debit to exactly 0 allowed). |
+| M-6 | **Fixed in Phase 0** (`cleanup_pending_shop_orders` service-role only). |
+| M-7 | **Fixed.** The shop fallback UPDATE now selects the updated row and treats "matched nothing" as already settled (webhook and `verify-shop-payment`). Red/green test through the real handler. |
+| M-8 | **Closed.** `checkBalance()` is a sanity check only; the real backstop is Paystack, and a rejected transfer now refunds (H-1/H-2). |
+| M-9 | **Fixed in Phase 0** (promo usage is validated and incremented under a row lock inside `apply_promo_code_to_order`). |
+| M-10 | **Fixed.** The two "NOT YET APPLIED" headers were wrong (everything they define is live); updated with the live-catalog evidence. Committed together with the migration above. |
+| M-11 | **Downgraded to Low, no change.** `shop_orders_order_ref_key` is a unique index and `create_shop_order` already retries with a random reference on a collision, so the `count(*)+1` race cannot corrupt anything (it only leaks order volume). |
+| M-12 | **Fixed.** Settle-before-acknowledge (earlier) plus a constant-time signature comparison. |
+
+**M-3 (open):** `TRUST_LEVELS.*.requiredAuth` is computed but never enforced - a bare PIN satisfies every tier, so the documented "veteran needs biometric + device" model is cosmetic - and no server-side maximum withdrawal exists at any tier (a new account with the right PIN can withdraw its whole balance). Either is a product call: enforce the tier rules, cap withdrawals per tier/day, or accept PIN-only and stop implying tiers.
