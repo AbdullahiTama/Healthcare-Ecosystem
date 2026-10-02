@@ -85,12 +85,17 @@ export default async function handler(req, res) {
       else if (v === 'already_paid') alreadyPaid = true
     } else {
       // Fallback direct update (idempotent)
-      const { error: updErr } = await supabase
+      const { data: updRows, error: updErr } = await supabase
         .from('shop_orders')
         .update({ payment_status: 'paid', status: 'paid', paystack_reference: paystackRef })
         .eq('id', order.id)
         .eq('status', 'pending_payment')
-      if (!updErr) {
+        .select('id')
+      if (!updErr && (!updRows || updRows.length === 0)) {
+        // The guarded UPDATE matched nothing: the webhook (or an earlier redirect) settled the order
+        // first. Report it as already paid instead of repeating its history, payment row and emails.
+        alreadyPaid = true
+      } else if (!updErr) {
         await supabase.from('shop_order_status_history').insert({
           order_id: order.id,
           from_status: 'pending_payment',

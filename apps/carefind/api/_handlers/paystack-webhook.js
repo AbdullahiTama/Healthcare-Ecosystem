@@ -263,12 +263,16 @@ async function handleShopOrder(metadata, reference, amount) {
   if (rpcRes.error) {
     // Fallback: direct idempotent update if order still pending_payment
     if (order.status === 'pending_payment' || order.payment_status === 'pending') {
-      const { error: updErr } = await supabase
+      const { data: updRows, error: updErr } = await supabase
         .from('shop_orders')
         .update({ payment_status: 'paid', status: 'paid', paystack_reference: reference })
         .eq('id', order.id)
         .eq('status', 'pending_payment')
+        .select('id')
       if (updErr) return null
+      // The guarded UPDATE matched nothing: another path settled the order first. Stop here so the
+      // history row, payment row and notifications are not written a second time.
+      if (!updRows || updRows.length === 0) return { alreadyProcessed: true }
       await supabase.from('shop_order_status_history').insert({
         order_id: order.id, from_status: 'pending_payment', to_status: 'paid',
         note: `Paystack ${reference}`,
