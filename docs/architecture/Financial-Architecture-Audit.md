@@ -125,3 +125,22 @@ File: `apps/carefind/sql/20261002_financial_phase0_lockdown.sql`. Dry-run on syn
 - **C-6:** `charge-consultation.js` / `charge-subscription.js` no longer send `subaccount`/`transaction_charge`; the wallet credit from `settle_*` is the only payout. `create-subaccount.js` returns 410. Live exposure at fix time was zero (0 subaccounts, 0 related transactions).
 - **Tests:** 22 decision-table tests (`withdrawalAdmin.test.js`), 3 handler tests (`charge-noSubaccount.test.js`); existing `admin-auth.test.js` (24) still passes.
 - **Open, found while fixing:** one live `withdrawal_requests` row is `pending` with a reference and no transfer code (user debited, transfer outcome unconfirmed - the H-1 shape). Not touched; needs a decision. Also not done: a DB-level guard in `approve_withdrawal_request` (the admin handler is its only non-service caller).
+
+### 2026-10-02 - H-6, H-1, H-2 and H-3 worked (re-scoped after checking the code)
+**H-6 fixed** (`computeCommission` `isFirst` -> `isFirstPayment`, 5 regression tests). Production had 0 referred plan payments and 0 commissions, so no backfill was needed.
+
+**H-1 fixed for both apps.** CareFind (`initiate-withdrawal.js`) and CareHub (`initiate-business-withdrawal.js`) now return the reserved money when the transfer does not start, but only once Paystack confirms the transfer was never created (an explicit rejection is verified immediately; an ambiguous failure is left pending, because a timeout can mean the transfer exists). Sweepers settle the rest: `api/cron/reconcile-withdrawals.js` (CareFind) and `/api/cron/reconcile-payments` (CareHub, scheduled daily in `vercel.json`).
+
+**H-3 as written was wrong.** CareHub has no webhook of its own, but Paystack allows one webhook URL per account and CareFind's `paystack-webhook.js` already dispatches CareHub plan payments (`handlePlanPayment`), CareHub appointments (`handleBooking`, `source: carehub`) and the transfer events for business withdrawals (`reject_business_withdrawal` on failed/reversed). **External dependency, unverifiable from the repo:** the Paystack dashboard webhook URL must point at the CareFind deployment. Real residual gaps, now fixed:
+- **M-12 confirmed and fixed:** the webhook answered 200 and then processed ("fire and forget"). Vercel can freeze a function once the response is sent, so work after it may never run and Paystack never redelivers. It now settles first and answers 500 on failure so Paystack retries (all handlers are idempotent).
+- **Missed commissions:** commission was only computed by CareHub's redirect handler, so a webhook-settled plan payment never earned its agent anything. The daily reconcile cron now runs `computeCommission` for referred plan payments with neither a commission nor a review flag (idempotent via `UNIQUE(payment_id)`).
+
+**H-2 as written was largely wrong.** The shared webhook already completes or refunds business withdrawals on transfer events. The real gap was the failure-after-reservation case (fixed under H-1) and a missed webhook (the sweeper).
+
+**M-1 fixed** for the CareHub plan path (`renew_business_plan` now receives naira at both call sites). **Still open, same pattern:** `settle_subscription_payment` receives kobo in `p_naira_amount` from `paystack-webhook.js` and `verify-subscription-payment.js` (CareFind creator subscriptions).
+
+**Open items / decisions**
+- Two production rows are stuck in the H-1 shape (one CareFind `withdrawal_requests`, one CareHub `business_withdrawal_requests`: pending, reference but no transfer code, user/business debited). Not touched; the sweepers resolve them by asking Paystack once deployed.
+- The CareFind sweeper (`/api/cron/reconcile-withdrawals`) is routed but NOT scheduled: the project looks like Vercel Hobby (2 cron cap) and CareFind already uses both. Options: chain it into an existing cron, or schedule it with Supabase Cron like the email outbox.
+- `CRON_SECRET` must be set in both deployments (both sweepers fail closed).
+- Uncommitted email work contains `(global as any)` (TypeScript) in `apps/carehub/api/_handlers/cron-process-email-outbox.js:30`. It is invalid JavaScript and breaks the CareHub router import (the `router.test.js` import-safety test fails); not part of these commits.
