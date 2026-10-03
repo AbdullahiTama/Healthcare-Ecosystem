@@ -3,7 +3,7 @@ import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
-import { getRequiredAuth, isInstantEligible } from '../_lib/trustLevels.js'
+import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
 
 const supabase = createClient(
@@ -168,7 +168,17 @@ export default async function handler(req, res) {
       p_account_number: accountNumber,
       p_account_name: verifiedAccountName,
       p_reference: reference,
+      // Rolling 24h ceiling for this trust tier, checked inside the same locked transaction as the debit.
+      p_daily_cap_coins: getDailyCap(trustLevel),
     })
+
+    if (requestResult === 'daily_limit') {
+      return res.status(429).json({
+        error: 'daily_limit',
+        message: `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
+        dailyCapCoins: getDailyCap(trustLevel),
+      })
+    }
 
     if (requestError || requestResult !== 'ok') {
       return res.status(400).json({

@@ -4,7 +4,24 @@ import {
   getRequiredAuth,
   isInstantEligible,
   getTrustDescription,
+  getDailyCap,
 } from '../trustLevels.js'
+
+// Financial audit M-3: a bounded amount per rolling 24h, by trust tier (enforced in request_withdrawal).
+describe('getDailyCap', () => {
+  it('gives every tier a positive cap that grows with trust', () => {
+    expect(getDailyCap('new')).toBe(50)
+    expect(getDailyCap('trusted')).toBe(200)
+    expect(getDailyCap('veteran')).toBe(1000)
+    expect(getDailyCap('new')).toBeLessThan(getDailyCap('trusted'))
+    expect(getDailyCap('trusted')).toBeLessThan(getDailyCap('veteran'))
+  })
+  it('an unknown or missing level gets the strictest cap, never an unlimited one', () => {
+    expect(getDailyCap('mystery')).toBe(getDailyCap('new'))
+    expect(getDailyCap(undefined)).toBe(getDailyCap('new'))
+    expect(Number.isFinite(getDailyCap(null))).toBe(true)
+  })
+})
 
 describe('TRUST_LEVELS shape', () => {
   it('has new, trusted, and veteran keys', () => {

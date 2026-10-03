@@ -32,6 +32,7 @@ const h = vi.hoisted(() => {
     reject_withdrawal_request: { data: 'ok' },
     update_withdrawal_trust_after_withdrawal: { data: 'new' },
   }
+  s.routes = routes
   s.client = {
     from: (t) => builderFor(t),
     rpc: async (name, args) => { s.rpcCalls.push([name, args]); return routes[name] || { data: null } },
@@ -43,7 +44,7 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => h.client }))
 vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'user-12345678', email: 'u@example.com' }) }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 vi.mock('../_lib/pinCrypto.js', () => ({ hashPin: () => 'h', verifyPin: () => true, isValidPin: () => true }))
-vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false }))
+vi.mock('../_lib/trustLevels.js', () => ({ getRequiredAuth: () => ['pin'], isInstantEligible: () => false, getDailyCap: () => 50 }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
 vi.mock('../_lib/paystackTransfer.js', () => ({
   createTransferRecipient: async () => 'RCP_1',
@@ -62,6 +63,7 @@ const refunds = () => h.rpcCalls.filter(([n]) => n === 'reject_withdrawal_reques
 const row = (ageMs) => ({ id: 'wd-1', status: 'pending', paystack_reference: 'cf_wd_ref1', paystack_transfer_code: null, created_at: new Date(Date.now() - ageMs).toISOString() })
 
 beforeEach(() => {
+  h.routes.request_withdrawal = { data: 'ok' }
   h.rpcCalls.length = 0
   h.wdReads = 0
   h.rows.prior = null
@@ -116,6 +118,31 @@ describe('initiate-withdrawal recovery after the wallet is debited', () => {
     await handler(req, r)
     expect(refunds()).toHaveLength(0)
     expect(r.statusCode).toBe(200)
+  })
+
+  // Financial audit M-3: the tier's rolling-24h ceiling is enforced inside request_withdrawal.
+  it('passes the server-chosen daily cap for the user\'s tier to request_withdrawal', async () => {
+    h.initiateTransfer.mockResolvedValue({ transferCode: 'TRF_1' })
+    await handler(req, res())
+    const call = h.rpcCalls.find(([n]) => n === 'request_withdrawal')
+    expect(call[1].p_daily_cap_coins).toBe(50) // trust level 'new'
+  })
+
+  it('a client cannot choose its own cap', async () => {
+    h.initiateTransfer.mockResolvedValue({ transferCode: 'TRF_1' })
+    await handler({ ...req, body: { ...req.body, dailyCapCoins: 999999, p_daily_cap_coins: 999999 } }, res())
+    expect(h.rpcCalls.find(([n]) => n === 'request_withdrawal')[1].p_daily_cap_coins).toBe(50)
+  })
+
+  it('over the daily limit: 429, and Paystack is never called and nothing is reserved', async () => {
+    h.routes.request_withdrawal = { data: 'daily_limit' }
+    const r = res()
+    await handler(req, r)
+    expect(r.statusCode).toBe(429)
+    expect(r.body.error).toBe('daily_limit')
+    expect(r.body.dailyCapCoins).toBe(50)
+    expect(h.initiateTransfer).not.toHaveBeenCalled()
+    expect(refunds()).toHaveLength(0)
   })
 
   // Financial audit M-2: trust is recorded when a transfer settles (webhook / sweep), never here.
