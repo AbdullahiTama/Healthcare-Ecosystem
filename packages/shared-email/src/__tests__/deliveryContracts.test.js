@@ -66,6 +66,9 @@ const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carehub/api/_handlers/notify-business-status.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/verify-plan-payment.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/verify-appointment-payment.js': 'batch 3: move onto the catalog',
+  // Added 2026-10-04: introduced by the withdrawal-recovery work while this contract could not load (EmailService.js
+  // did not parse). Passes a literal subject, same as the webhook's identical withdrawal-failed email.
+  'apps/carefind/api/_lib/withdrawalRecovery.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/booking.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/verify-booking-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/verify-shop-payment.js': 'batch 3: move onto the catalog',
