@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { userOwnsBusiness } from '../_lib/businessOwnership.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -20,27 +21,10 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Unauthorized' })
 
-  // Ownership mirrors CareHub's identity model (businesses.email is the owner's login email;
-  // branches share their parent's email, so the parent's owner may read a branch wallet).
-  // An unknown business and a business the caller does not own answer identically so ids
-  // cannot be probed.
-  const { data: biz } = await supabase
-    .from('businesses')
-    .select('id, email, parent_business_id')
-    .eq('id', businessId)
-    .maybeSingle()
-
-  const callerEmail = String(user.email || '').trim().toLowerCase()
-  let owns = Boolean(callerEmail && biz && String(biz.email || '').trim().toLowerCase() === callerEmail)
-  if (!owns && callerEmail && biz?.parent_business_id) {
-    const { data: parent } = await supabase
-      .from('businesses')
-      .select('email')
-      .eq('id', biz.parent_business_id)
-      .maybeSingle()
-    owns = String(parent?.email || '').trim().toLowerCase() === callerEmail
+  // An unknown business and one the caller does not own answer identically so ids cannot be probed.
+  if (!(await userOwnsBusiness(supabase, user, businessId))) {
+    return res.status(404).json({ error: 'Business not found' })
   }
-  if (!owns) return res.status(404).json({ error: 'Business not found' })
 
   // Fetch wallet and transactions
   const [{ data: wallet }, { data: transactions }] = await Promise.all([

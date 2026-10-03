@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { verifyUser } from '../_lib/verifyUser.js'
+import { userOwnsBusiness } from '../_lib/businessOwnership.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -38,6 +40,18 @@ export default async function handler(req, res) {
   // Only pending or confirmed appointments can be cancelled
   if (!['pending', 'confirmed'].includes(appt.status)) {
     return res.status(400).json({ error: `Cannot cancel appointment with status "${appt.status}"` })
+  }
+
+  // The owner role skips the patient's cancellation window, so it must be earned with a verified
+  // owner session. It used to be taken from the request body (financial audit F-25). The patient
+  // role stays capability-based: bookings can be anonymous, and the unguessable appointment id is
+  // the patient's only credential.
+  if (cancelledBy === 'owner') {
+    const user = await verifyUser(supabase, req)
+    if (!user) return res.status(401).json({ error: 'Sign in as the business owner to cancel as the business' })
+    if (!(await userOwnsBusiness(supabase, user, appt.business_id))) {
+      return res.status(403).json({ error: 'You do not own this business' })
+    }
   }
 
   // If patient is cancelling, check if it's within the allowed window (24 hours before)
