@@ -76,6 +76,17 @@ it('accepts missing subscriber (derived from auth.uid()) without touching supaba
     expect(await subscribe('u1', 'c1', 5)).toEqual({ insufficient: true })
   })
 
+  it.each([
+    ['price_mismatch', /price has changed/],
+    ['not_for_sale', /not offering subscriptions/],
+    ['self_subscription', /yourself/],
+  ])('explains a server refusal (%s) instead of a generic failure', async (code, message) => {
+    mockSupabase.data = code
+    const out = await subscribe('u1', 'c1', 5)
+    expect(out.ok).toBeUndefined()
+    expect(out.error).toMatch(message)
+  })
+
   it('surfaces an RPC error', async () => {
     mockSupabase.error = new Error('permission denied')
     const result = await subscribe('u1', 'c1', 5)

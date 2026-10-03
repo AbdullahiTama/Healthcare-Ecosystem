@@ -55,6 +55,10 @@ export async function subscribe(subscriberId, creatorId, priceCoins) {
   if (data === 'insufficient') return { insufficient: true }
   if (data === 'ok') return { ok: true }
   if (data === 'not_signed_in') return { error: 'Please log in again' }
+  // The price is the creator's listed price, decided by the server (financial audit F-04).
+  if (data === 'price_mismatch') return { error: "This creator's price has changed. Please reload and review it before subscribing." }
+  if (data === 'not_for_sale') return { error: 'This creator is not offering subscriptions right now.' }
+  if (data === 'self_subscription') return { error: 'You cannot subscribe to yourself.' }
   return { error: 'Could not complete subscription' }
 }
 
