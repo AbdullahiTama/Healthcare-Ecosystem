@@ -9,21 +9,12 @@
 --   * transactions, gifts   append-only. The foreign keys to auth.users (cascade / set null) still work:
 --                referential actions run as nested triggers (pg_trigger_depth() > 1) and are let through,
 --                a direct UPDATE/DELETE is refused.
---   * withdrawal_requests   at most ONE active request per provider reference (partial unique index): the
---                database, not just the handler, now refuses two live requests under one reference.
 -- coin_ledger itself has been append-only since migration 1/3.
 
 do $$
 begin
   if to_regprocedure('public._post_coin_entry(uuid,integer,text,text,uuid,jsonb)') is null then
     raise exception 'apply carefind_20261005_coin_ledger first';
-  end if;
-  if exists (
-    select 1 from public.withdrawal_requests
-     where paystack_reference is not null and status in ('pending', 'processing')
-     group by paystack_reference having count(*) > 1
-  ) then
-    raise exception 'duplicate active withdrawal references exist; resolve them before applying this migration';
   end if;
 end $$;
 
@@ -86,13 +77,6 @@ create trigger gifts_append_only
 create trigger gifts_no_truncate
   before truncate on public.gifts
   for each statement execute function public.financial_no_truncate();
-
--- ---------------------------------------------------------------------------------------------
--- One live withdrawal request per provider reference
--- ---------------------------------------------------------------------------------------------
-create unique index if not exists withdrawal_requests_active_reference_uniq
-  on public.withdrawal_requests (paystack_reference)
-  where paystack_reference is not null and status in ('pending', 'processing');
 
 -- ---------------------------------------------------------------------------------------------
 -- Access + assertions

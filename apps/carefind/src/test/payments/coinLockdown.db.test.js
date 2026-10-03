@@ -151,20 +151,20 @@ describe('transactions and gifts are append-only', () => {
   })
 })
 
-describe('withdrawal_requests: one live request per reference', () => {
+describe('withdrawal_requests: a reference is never reused (production index, which this phase relies on)', () => {
   const req = (u, ref, status = 'pending') => db.query(`insert into withdrawal_requests (user_id, amount, bank_name, account_number, account_name, status, paystack_reference) values ($1,5,'GTB','0123456789','x',$3,$2)`, [u, ref, status])
 
-  it('refuses a second pending/processing request under the same reference, from anyone', async () => {
+  it('refuses any second request under the same reference, from anyone, in any state', async () => {
     const a = await user(), b = await user()
     await req(a, 'uniq-ref-1')
-    await expect(req(a, 'uniq-ref-1')).rejects.toThrow(/duplicate key|withdrawal_requests_active_reference_uniq/)
-    await expect(req(b, 'uniq-ref-1', 'processing')).rejects.toThrow(/duplicate key|withdrawal_requests_active_reference_uniq/)
+    await expect(req(a, 'uniq-ref-1')).rejects.toThrow(/duplicate key|paystack_reference_uniq/)
+    await expect(req(b, 'uniq-ref-1', 'processing')).rejects.toThrow(/duplicate key|paystack_reference_uniq/)
+    await req(a, 'uniq-ref-2', 'rejected')
+    await expect(req(a, 'uniq-ref-2', 'pending')).rejects.toThrow(/duplicate key|paystack_reference_uniq/)
   })
 
-  it('allows the reference again once the earlier request is finished, and many rows without a reference', async () => {
+  it('allows any number of requests without a reference', async () => {
     const a = await user()
-    await req(a, 'uniq-ref-2', 'rejected')
-    await expect(req(a, 'uniq-ref-2', 'pending')).resolves.toBeDefined()
     await req(a, null); await req(a, null)
   })
 })

@@ -158,3 +158,6 @@ create table public.withdrawal_requests (
   paystack_recipient_code text,
   created_at timestamptz default now()
 );
+-- Production already has this (read live 2026-10-03): a reference can never be used twice, even after the
+-- earlier request was rejected or completed.
+create unique index withdrawal_requests_paystack_reference_uniq on public.withdrawal_requests (paystack_reference) where paystack_reference is not null;
