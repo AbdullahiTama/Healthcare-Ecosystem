@@ -2,13 +2,15 @@ import { Link } from 'react-router-dom'
 import { X, ShoppingBag, ArrowRight } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useCart } from './CartProvider'
+import { useDialog } from '../../hooks/useDialog'
 export default function MiniCart({ open, onClose }) {
   const { items, total, removeItem, updateQuantity } = useCart()
+  const panelRef = useDialog({ open, onClose })
   if (!open) return null
   return (
     <div style={{ position:'fixed', inset:0, zIndex:80 }}>
-      <div onClick={onClose} style={{ position:'absolute', inset:0, background: theme.overlay }} />
-      <div style={{ position:'absolute', right:0, top:0, bottom:0, width:'min(360px, 90vw)', background: theme.cardBg, borderLeft:`1px solid ${theme.border}`, display:'flex', flexDirection:'column', boxShadow: theme.elevation[3] }}>
+      <div onClick={onClose} aria-hidden="true" style={{ position:'absolute', inset:0, background: theme.overlay }} />
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Shopping cart" tabIndex={-1} style={{ position:'absolute', right:0, top:0, bottom:0, width:'min(360px, 90vw)', background: theme.cardBg, borderLeft:`1px solid ${theme.border}`, display:'flex', flexDirection:'column', boxShadow: theme.elevation[3] }}>
         <div style={{ padding:16, borderBottom:`1px solid ${theme.border}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <b style={{ color: theme.navy }}>Cart · {items.length} {items.length === 1 ? 'item' : 'items'}</b><button onClick={onClose} aria-label="Close" style={{ background:'none', border:`1px solid ${theme.border}`, borderRadius:8, padding:'4px 8px' }}><X size={16}/></button>
         </div>
@@ -28,7 +30,7 @@ export default function MiniCart({ open, onClose }) {
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontWeight:700, fontSize:13, color:theme.navy, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{i.product_name}</div>
                 <div style={{ fontSize:12, color:theme.textLight }}>₦{(i.unit_price_kobo/100).toLocaleString()} × {i.quantity}</div>
-                <div style={{ display:'flex', gap:6, marginTop:6 }}><button onClick={()=>updateQuantity(i.ecommerce_product_id, Math.max(0,i.quantity-1))} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>−</button><span style={{ fontSize:12, fontWeight:700, minWidth:16, textAlign:'center' }}>{i.quantity}</span><button onClick={()=>updateQuantity(i.ecommerce_product_id, i.quantity+1)} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>+</button><button onClick={()=>removeItem(i.ecommerce_product_id)} style={{ marginLeft:8, fontSize:11, color:theme.danger, background:'none', border:`1px solid ${theme.danger}20`, borderRadius:6, padding:'2px 8px' }}>Remove</button></div>
+                <div style={{ display:'flex', gap:6, marginTop:6 }}><button onClick={()=>updateQuantity(i.ecommerce_product_id, Math.max(0,i.quantity-1))} aria-label={`Decrease quantity of ${i.product_name}`} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>−</button><span style={{ fontSize:12, fontWeight:700, minWidth:16, textAlign:'center' }}>{i.quantity}</span><button onClick={()=>updateQuantity(i.ecommerce_product_id, i.quantity+1)} aria-label={`Increase quantity of ${i.product_name}`} style={{ width:24, height:24, border:`1px solid ${theme.border}`, borderRadius:6, background:'#fff' }}>+</button><button onClick={()=>removeItem(i.ecommerce_product_id)} aria-label={`Remove ${i.product_name} from cart`} style={{ marginLeft:8, fontSize:11, color:theme.danger, background:'none', border:`1px solid ${theme.danger}20`, borderRadius:6, padding:'2px 8px' }}>Remove</button></div>
               </div>
               <div style={{ fontWeight:800, color:theme.tealDeep, fontSize:12 }}>₦{(i.unit_price_kobo*i.quantity/100).toLocaleString()}</div>
             </div>
