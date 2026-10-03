@@ -26,6 +26,7 @@ export default function OrderDetail() {
 
   const [order, setOrder] = useState(null)
   const [messages, setMessages] = useState([])
+  const [messagesError, setMessagesError] = useState('')
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -269,6 +270,17 @@ export default function OrderDetail() {
     return () => { cancelled = true }
   }, [orderId])
 
+  // The chat is secondary: a failure here is shown in the chat panel and never replaces the order page.
+  async function loadMessages() {
+    try {
+      setMessages(await orderRepository.getMessages(orderId))
+      setMessagesError('')
+    } catch (err) {
+      console.error('[OrderDetail] could not load messages:', err)
+      setMessagesError('Could not load messages.')
+    }
+  }
+
   async function loadOrder() {
     setLoading(true)
     setError('')
@@ -276,8 +288,7 @@ export default function OrderDetail() {
       const data = await orderRepository.getById(orderId)
       if (!data) throw new Error('Order not found')
       setOrder(data)
-      const msgs = await orderRepository.getMessages(orderId)
-      setMessages(msgs)
+      await loadMessages()
       if (data.pickup_station_id) {
         try {
           const st = await shopRepository.getPickupStationById(data.pickup_station_id)
@@ -367,13 +378,12 @@ export default function OrderDetail() {
     try {
       await orderRepository.addMessage(orderId, user.id, newMessage)
       setNewMessage('')
-      // Reload messages
-      const msgs = await orderRepository.getMessages(orderId)
-      setMessages(msgs)
     } catch (err) {
       console.error('Failed to send message:', err)
-      setError(err.message || 'Failed to send message')
+      setMessagesError('Could not send your message. Please try again.')
+      return
     }
+    await loadMessages()
   }
 
   async function handleGenerateTrackingLink() {
@@ -948,7 +958,13 @@ export default function OrderDetail() {
           
           {/* Messages */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16, maxHeight: 400, overflowY: 'auto' }}>
-            {messages.length === 0 ? (
+            {messagesError && (
+              <div role="alert" style={{ padding: 12, borderRadius: 8, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span>{messagesError}</span>
+                <button type="button" onClick={loadMessages} style={{ background: '#fff', border: `1px solid ${theme.danger}`, color: theme.danger, borderRadius: 8, padding: '6px 12px', fontWeight: 700, cursor: 'pointer' }}>Retry</button>
+              </div>
+            )}
+            {messages.length === 0 && !messagesError ? (
               <p style={{ fontSize: 14, color: theme.textMid, textAlign: 'center', padding: 24 }}>
                 No messages yet
               </p>
@@ -980,8 +996,8 @@ export default function OrderDetail() {
               placeholder="Type a message..."
               style={{ flex: 1 }}
             />
-            <Button type="submit" disabled={!newMessage.trim()}>
-              <Send size={16} />
+            <Button type="submit" disabled={!newMessage.trim()} aria-label="Send message">
+              <Send size={16} aria-hidden="true" />
             </Button>
           </form>
         </Card>
