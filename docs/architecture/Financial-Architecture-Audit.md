@@ -153,6 +153,12 @@ Note: the live migration list already contained `financial_phase0_lockdown`, `fi
 
 **F-26 — LOW/MEDIUM (suspected, found in Phase 03) — withdrawal balance pre-check may never block.** `paystackTransfer.checkBalance()` (both apps) sums `b.available_balance` over every currency. I believe Paystack's `GET /balance` returns the figure as `balance`; if so the sum is `NaN` and `available < amountKobo` is always false, so the "provider balance low" guard never fires. Unverified against a live account — check one real `/balance` response. The new `PaystackProvider.getBalance` reads `balance ?? available_balance` for the requested currency only.
 
+**F-27 — LOW — client-supplied `callback_url`** on top-up/subscription/consultation initiation: Paystack redirects the payer there after paying. Self-affecting, but an allow-list of our own origins is cheap hardening. Not fixed.
+
+**F-28 — INFO — `claim_payment_event` executable by `authenticated`** (shop payment events): any signed-in user can pre-mark an order's payment event processed/duplicate. Settlement still proceeds (the webhook re-checks the order), but audit rows can be polluted. Phase 14.
+
+**F-29 — FIXED (Phase 04) — concurrent subscription renewals lost paid months** in the new engine; found by the real-concurrency suite before the engine reached production.
+
 ### Verified OK (so they are not re-opened)
 
 * All financial RPCs inspected: `search_path=public`; `EXECUTE` is `service_role` (and `postgres`) except the intended user RPCs (`send_gift`, `pay_creator_subscription`, `pay_professional_consultation`, `book_appointment_slot`, `confirm_pos_payment`, `confirm_transfer_payment`, `mark_payout_paid`, `claim_payment_event`, `get_withdrawal_trust`). `credit_wallet_topup` is **not** callable by `anon`/`authenticated` (C17 is closed). No sibling overloads except F-16.

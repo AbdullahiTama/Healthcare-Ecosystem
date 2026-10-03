@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 03 — PAYMENT PROVIDER ABSTRACTION**
+Current phase: **PHASE 04 — CAREFIND PAYMENT FLOWS**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -8,8 +8,8 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 00 Baseline and audit | COMPLETED |
 | 01 Financial architecture | COMPLETED |
 | 02 Payment intents | COMPLETED |
-| 03 Provider abstraction | READY_FOR_REVIEW |
-| 04 CareFind payment flows | NOT_STARTED |
+| 03 Provider abstraction | COMPLETED |
+| 04 CareFind payment flows | READY_FOR_REVIEW |
 | 05 CareFind CareCoin wallet | NOT_STARTED |
 | 06 CareHub payment flows | NOT_STARTED |
 | 07 Commission engine | NOT_STARTED |
@@ -92,3 +92,14 @@ Next phase: PHASE 04 — CAREFIND PAYMENT FLOWS.
 | 2026-10-03 | Webhook endpoint | Recommended: one provider-events endpoint per deployment routing by the stored intent's `application`. | RECOMMENDED |
 
 Impact on Phase 04: the 20% fee needs `financial_config` keys (`subscription_platform_rate`, `consultation_platform_rate` = 0.20) added by migration, and settlement must credit creators/professionals 80% in CareCoin with the 20% booked to platform revenue — to be designed with the CareCoin rounding rule (F-20) in Phase 04/05.
+
+## Phase 04 — CareFind payment flows
+
+Decisions applied: 20% platform fee on card subscriptions/consultations (creator/professional share rounded DOWN to whole coins, remainder to platform); CareCoin-paid paths unchanged (Q1 open); card bookings settled from the ACTUAL kobo amount.
+Completed work: `settle_payment_intent` (one atomic, idempotent engine: identity/provider/currency/amount checks, handlers for top-up, subscription, consultation, booking, unapplicable payments -> needs_refund); intents created before Paystack in all four CareFind initiators with server-decided amounts; redirect handlers and the webhook converge on `settleByReference`; webhook persists provider events (replay-safe, retryable); post-settlement emails/notices run once; F-04 fixed on both paths (card: creator's listed price; coins: `pay_creator_subscription` validates price); F-06 fixed (`settle_card_booking` + engine use the actual amount); consultation card payment never touches CareCoin wallets.
+Files (new/changed): migrations `carefind_20261004_{settle_payment_intent, pay_creator_subscription_authoritative_price, settle_card_booking_actual_amount}.sql` (+ copies in `apps/carefind/sql/`); `packages/shared-payments/src/{intents,settlement,events}.js`; CareFind `api/_lib/{payments,financialConfig,intentSettlement,settlementEffects}.js`, handlers `initiate-payment, verify-payment, charge-subscription, verify-subscription-payment, charge-consultation, verify-consultation-payment, booking, verify-booking-payment, paystack-webhook`; client `subscriptions.js`; tests (below); `docs/architecture/CareFind-Payment-Flows.md`.
+Migrations: 3, **NOT applied to production** — must be applied in the order in the doc §5 BEFORE deploying the code.
+Tests: PGlite engine 41 + subscription-price 9 + booking-amount 7; handlers topup 21, subscription 23, consultation 21, booking 17, webhook 17; shared-payments 133; legacy webhook tests adapted (21); real-concurrency suite 8 (needs PG_CONCURRENCY_URL; passed on PostgreSQL 18.4 and found + fixed a lost-update race). Mutation-checked. Payments suite 281/281, CareFind api 167/167; full CareFind suite (143 files): 1479/1480 passed; the 1 failure (`VerifyEmail` PKCE, a 10 s timeout under load) is unrelated and passes alone (5.7 s). The new node-environment suites initially failed to load under the default config (`setup.js` used `window`) and under load (PGlite start-up > 10 s hook timeout) — both fixed.
+Removed: `chargeSubscriptionCap.test.js`, `verifySubscriptionCap.test.js` (asserted client-supplied prices), `charge-noSubaccount.test.js` (covered by the flow tests).
+Unresolved: apply migrations + post-apply catalog check; Q1 (20% on CareCoin paths); legacy webhook branches remain until drained (Phase 10); needs_refund payments have no refund path yet (Phase 09); F-27 callback_url; F-28 claim_payment_event; CareHub/Shop not migrated.
+Next phase: PHASE 05 — CAREFIND CARECOIN WALLET.
