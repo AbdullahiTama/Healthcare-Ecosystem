@@ -5,7 +5,7 @@ import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
-// Single Paystack webhook for all apps — register this URL in the Paystack
+// Single Paystack webhook for all apps ï¿½ register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
 // and CareHub plan payments all route through here.
 const supabase = createClient(
@@ -53,7 +53,7 @@ async function handleSubscription(metadata, reference, amount) {
   const row = Array.isArray(data) ? data[0] : data
   if (row?.already_processed) return { alreadyProcessed: true }
 
-  // Subscription created email to the subscriber — enqueue + flush.
+  // Subscription created email to the subscriber ï¿½ enqueue + flush.
   try {
     const { data: creator } = await supabase
       .from('profiles')
@@ -80,7 +80,7 @@ async function handleSubscription(metadata, reference, amount) {
             businessName: creator?.display_name || creator?.full_name || 'Creator',
             expiryDate: expiresAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           },
-          subject: `You're subscribed — ${creator?.display_name || 'your subscription'} is active`,
+          subject: `You're subscribed ï¿½ ${creator?.display_name || 'your subscription'} is active`,
         })
         flushOutbox().catch((err) => {
           console.error('[paystack-webhook] subscription flush error:', err)
@@ -265,16 +265,16 @@ async function handleBooking(metadata, reference, amount) {
     staff_id: null,
     is_owner: true,
     kind: 'booking_paid',
-    title: `Payment received — ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} — ?${(appt.fee_amount / 100).toLocaleString()}`,
+    title: `Payment received ï¿½ ${appt.client_name}`,
+    body: `${appt.date} at ${appt.time} ï¿½ ?${(appt.fee_amount / 100).toLocaleString()}`,
     link: '/dashboard/appointments',
     read_at: null,
   })
 
-  // Booking confirmation email to the client — enqueue + flush. CareHub
+  // Booking confirmation email to the client ï¿½ enqueue + flush. CareHub
   // appointments use the carehub appointment template; CareFind bookings use
   // booking_confirmed. Only the first settler (webhook vs verify redirect)
-  // sends — the other sees 'already_paid' and returns above.
+  // sends ï¿½ the other sees 'already_paid' and returns above.
   if (appt.client_email && appt.client_email.includes('@')) {
     try {
       const { data: business } = await supabase
@@ -322,17 +322,24 @@ async function handleShopOrder(metadata, reference, amount) {
     .maybeSingle()
   if (!order) return null
 
-  // Cross-check Paystack amount against server total_kobo
-  if (order.total_kobo == null || amount !== order.total_kobo) return null
+  // Cross-check Paystack amount against server total_kobo. A mismatch can never be fixed by a retry, so it
+  // is logged and acknowledged (a 500 would make Paystack redeliver it forever).
+  if (order.total_kobo == null || amount !== order.total_kobo) {
+    console.error('[paystack-webhook] shop order amount mismatch', { orderId: order.id, reference, paid: amount, expected: order.total_kobo })
+    return { rejected: true }
+  }
 
-  // Deduplicate via shop_payment_events
+  // Deduplicate via shop_payment_events. The claim is recorded BEFORE settlement, so "already claimed" only
+  // means this delivery is a duplicate if the order really is paid; otherwise an earlier delivery claimed it
+  // and then failed, and this redelivery must settle it (every settle path below is idempotent).
   const { data: claimed } = await supabase.rpc('claim_payment_event', {
     p_order_id: order.id,
     p_payment_reference: reference,
     p_event_type: 'charge.success',
     p_amount_kobo: amount,
   })
-  if (claimed === 'already_processed') return { alreadyProcessed: true }
+  const alreadyPaid = order.payment_status === 'paid' || order.status === 'paid'
+  if (claimed === 'already_processed' && alreadyPaid) return { alreadyProcessed: true }
 
   // Try canonical shop RPCs
   let rpcRes = await supabase.rpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
@@ -348,7 +355,7 @@ async function handleShopOrder(metadata, reference, amount) {
         .eq('id', order.id)
         .eq('status', 'pending_payment')
         .select('id')
-      if (updErr) return null
+      if (updErr) throw new Error(`shop order ${order.id} settlement failed: ${updErr.message}`)
       // The guarded UPDATE matched nothing: another path settled the order first. Stop here so the
       // history row, payment row and notifications are not written a second time.
       if (!updRows || updRows.length === 0) return { alreadyProcessed: true }
@@ -361,25 +368,26 @@ async function handleShopOrder(metadata, reference, amount) {
         status: 'success', gateway: 'paystack',
       }, { onConflict: 'payment_reference' })
     } else {
-      return null
+      throw new Error(`shop order ${order.id} could not be settled: ${rpcRes.error.message}`)
     }
   } else {
     const result = rpcRes.data
     if (result === 'already_paid' || result === 'already_processed') return { alreadyProcessed: true }
     if (result && typeof result === 'object' && result.already_processed) return { alreadyProcessed: true }
-    if (result !== 'ok' && result !== 'success' && result !== true) return null
+    // Anything else means the order was not settled; throw so the handler answers 500 and Paystack redelivers.
+    if (result !== 'ok' && result !== 'success' && result !== true) throw new Error(`shop order ${order.id} settle returned "${result}"`)
   }
 
   // Notify vendor business owner
   await supabase.from('staff_notifications').insert({
     business_id: order.vendor_business_id, staff_id: null, is_owner: true,
     kind: 'shop_order_paid',
-    title: `Shop order paid — ${order.order_ref}`,
-    body: `Order ${order.order_ref} — ?${(amount / 100).toLocaleString()} via Paystack`,
+    title: `Shop order paid ï¿½ ${order.order_ref}`,
+    body: `Order ${order.order_ref} ï¿½ ?${(amount / 100).toLocaleString()} via Paystack`,
     link: '/dashboard/ecommerce', read_at: null,
   })
 
-  // Notify customer (email + in-app) — fire-and-forget
+  // Notify customer (email + in-app) ï¿½ fire-and-forget
   notifyCustomerPostPayment(order.id).catch(err => {
     console.error('[paystack-webhook] customer notification error:', err)
   })
@@ -405,12 +413,12 @@ async function notifyCustomerPostPayment(orderId) {
     await supabase.from('notifications').insert({
       recipient_id: fullOrder.customer_id,
       type: 'shop_order_paid',
-      message: `Payment confirmed for order ${fullOrder.order_ref} — ?${(fullOrder.total_kobo / 100).toLocaleString()}`,
+      message: `Payment confirmed for order ${fullOrder.order_ref} ï¿½ ?${(fullOrder.total_kobo / 100).toLocaleString()}`,
       link: `/orders/${orderId}`,
     }).then(() => {}, () => {})
   }
 
-  // Order confirmation email (templated, via outbox) — enqueue + immediate flush
+  // Order confirmation email (templated, via outbox) ï¿½ enqueue + immediate flush
   const email = fullOrder.delivery_email
   if (email && email.includes('@')) {
     try {
@@ -430,7 +438,7 @@ async function notifyCustomerPostPayment(orderId) {
           businessName: 'CareFind',
           deliveryAddress: fullOrder.delivery_address || '',
         },
-        subject: `Order Confirmed — ${fullOrder.order_ref}`,
+        subject: `Order Confirmed ï¿½ ${fullOrder.order_ref}`,
       })
       flushOutbox().catch((err) => {
         console.error('[paystack-webhook] outbox flush error:', err)
@@ -460,7 +468,7 @@ async function handlePlanPayment(metadata, reference, amount) {
   if (!row) return null
   if (row.already_processed) return { alreadyProcessed: true }
 
-  // Subscription created email to the business owner — enqueue + flush.
+  // Subscription created email to the business owner ï¿½ enqueue + flush.
   try {
     const { data: biz } = await supabase
       .from('businesses')
