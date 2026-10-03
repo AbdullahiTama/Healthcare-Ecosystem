@@ -513,7 +513,7 @@ async _markSent(row, providerData) {
       status: 'failed',
       provider_message_id: row.provider_message_id || null,
       latency_ms: new Date().getTime() - new Date(row.createdAt).getTime(),
-      error_category,
+      error_category: errorCategory,
       retry_count: newAttempts,
       created_timestamp: row.createdAt,
       sent_timestamp: null,
