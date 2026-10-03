@@ -109,15 +109,6 @@ const DISCLAIMER_STYLE = {
   textAlign: 'left',
 }
 
-function PreviewGroup({ variant, limit }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <FloatingPreviews variant={variant} limit={limit} />
-      <p style={DISCLAIMER_STYLE}>{PREVIEW.disclaimer}</p>
-    </div>
-  )
-}
-
 // Pinned to the right edge at chin level, beside the subject. Scaled from its
 // bottom-right corner and tilted in perspective so it reads as floating. The
 // top offsets approximate where the photo's chin lands (phone: image is
@@ -142,7 +133,7 @@ function FloatingStack({ phone }) {
             transform: `perspective(900px) rotateY(-9deg) scale(${scale})`,
           }}
         >
-          <FloatingPreviews variant="tilt" limit={3} />
+          <FloatingPreviews limit={3} />
         </div>
       </div>
     </div>
@@ -150,16 +141,14 @@ function FloatingStack({ phone }) {
 }
 
 export default function Hero() {
-  const { isMobile, isMobileOrTablet } = useBreakpoint()
+  const { isMobile } = useBreakpoint()
   const { photo } = HERO
 
   // Phones: the whole portrait sits above the copy (120vw tall) and fades into
   // the dark surface, the headline overlaps her torso, the cards float beside
-  // her. Tablet keeps the full-bleed photo with a scroll strip of cards.
+  // her. Tablet and desktop dock the photo on the right instead.
   const scrim = isMobile
     ? 'linear-gradient(180deg, rgba(6,32,26,0.20) 0%, rgba(6,32,26,0.10) 30vw, rgba(6,32,26,0.78) 74vw, rgba(6,32,26,0.96) 112vw, rgba(6,32,26,0.98) 100%)'
-    : isMobileOrTablet
-    ? 'linear-gradient(180deg, rgba(6,32,26,0.74) 0%, rgba(6,32,26,0.64) 30%, rgba(6,32,26,0.88) 62%, rgba(6,32,26,0.97) 100%)'
     : [
         'linear-gradient(90deg, rgba(6,32,26,0.93) 0%, rgba(6,32,26,0.78) 42%, rgba(6,32,26,0.22) 70%, rgba(6,32,26,0.30) 100%)',
         'linear-gradient(180deg, rgba(6,32,26,0.30) 0%, rgba(6,32,26,0.05) 34%, rgba(6,32,26,0.55) 74%, rgba(6,32,26,0.96) 100%)',
@@ -192,8 +181,6 @@ export default function Hero() {
                 WebkitMaskImage: 'linear-gradient(180deg, #000 70%, transparent 100%)',
                 maskImage: 'linear-gradient(180deg, #000 70%, transparent 100%)',
               }
-            : isMobileOrTablet
-            ? { position: 'absolute', inset: 0, width: '100%', height: '100%' }
             : {
                 position: 'absolute',
                 top: 0,
@@ -223,7 +210,7 @@ export default function Hero() {
             objectFit: 'cover',
             // Keep her face in frame: the portrait is cropped to the section's
             // aspect ratio, and the subject's head sits in the top third.
-            objectPosition: isMobile ? '50% 0%' : isMobileOrTablet ? '50% 18%' : '50% 12%',
+            objectPosition: isMobile ? '50% 0%' : '50% 12%',
           }}
         />
       </picture>
@@ -233,7 +220,7 @@ export default function Hero() {
         style={{ position: 'absolute', inset: 0, backgroundImage: scrim }}
       />
 
-      {(isMobile || !isMobileOrTablet) && <FloatingStack phone={isMobile} />}
+      <FloatingStack phone={isMobile} />
 
       <div
         style={{
@@ -246,19 +233,19 @@ export default function Hero() {
           maxWidth: 1180,
           margin: '0 auto',
           boxSizing: 'border-box',
-          padding: isMobile ? '54vw 20px 36px' : isMobileOrTablet ? '96px 20px 36px' : '104px 20px 36px',
+          padding: isMobile ? '54vw 20px 36px' : '104px 20px 36px',
         }}
       >
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr)',
-            gap: isMobileOrTablet ? 24 : 48,
+            gap: isMobile ? 24 : 48,
             alignItems: 'center',
             flex: '1 1 auto',
             // Desktop: keep the strips below the floating cards, which end
             // ~660px down the hero whatever the viewport height.
-            minHeight: isMobileOrTablet ? 0 : 540,
+            minHeight: isMobile ? 0 : 540,
           }}
         >
           <div style={{ minWidth: 0, maxWidth: 560, alignSelf: 'center' }}>
@@ -312,16 +299,9 @@ export default function Hero() {
 
         </div>
 
-        {/* Tablet keeps the scroll strip; phones and desktop float a small
-            stack beside the subject (FloatingStack) with the disclaimer in
-            flow underneath. */}
-        {isMobileOrTablet && !isMobile ? (
-          <div style={{ marginTop: 28 }}>
-            <PreviewGroup variant="row" />
-          </div>
-        ) : (
-          <p style={{ ...DISCLAIMER_STYLE, marginTop: 16 }}>{PREVIEW.disclaimer}</p>
-        )}
+        {/* The cards float beside the subject (FloatingStack); the disclaimer
+            stays in flow underneath the copy. */}
+        <p style={{ ...DISCLAIMER_STYLE, marginTop: 16 }}>{PREVIEW.disclaimer}</p>
 
         <FeatureStrip />
         <TrustStrip />

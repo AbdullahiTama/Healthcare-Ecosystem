@@ -10,17 +10,9 @@ import { PREVIEW } from '../data/landingContent.js'
 // stays out of the accessibility tree). The visible disclaimer under the group
 // is what tells a sighted visitor these are samples.
 //
-// Four layouts:
-//   * `tilt` — desktop and phones. A tight, equal-width column; Hero.jsx pins it
-//     to the right edge below the subject's chin and scales and tilts it so it
-//     reads as floating beside her rather than over her face.
-//   * `inline` — cards side by side in an equal-width row.
-//   * `stack` — a right-hand column, each card nudged a little further right
-//     than the last so the group reads as layered.
-//   * `row`  — mobile. A single horizontal scroll strip so the cards never
-//     push the headline or the feature strip out of the hero.
-
-const STACK_OFFSETS = [0, 30, 12, 42]
+// A tight, equal-width column. Hero.jsx pins it to the right edge below the
+// subject's chin and scales and tilts it so it reads as floating beside her
+// rather than over her face.
 
 function Rating({ avg, count }) {
   const StarIcon = resolveIcon('Star')
@@ -39,15 +31,12 @@ function Rating({ avg, count }) {
   )
 }
 
-function PreviewCard({ card, offset, wrapName }) {
+function PreviewCard({ card }) {
   const Icon = card.icon ? resolveIcon(card.icon) : null
-  const nudged = typeof offset === 'number'
 
   return (
     <article
       style={{
-        width: nudged ? `calc(100% - ${offset}px)` : undefined,
-        marginLeft: nudged ? offset : undefined,
         flex: '0 0 auto',
         background: '#fff',
         borderRadius: theme.radius.xl,
@@ -96,7 +85,7 @@ function PreviewCard({ card, offset, wrapName }) {
 
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: wrapName ? 'normal' : 'nowrap', lineHeight: wrapName ? 1.25 : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'normal', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {card.name}
             </span>
           </div>
@@ -169,44 +158,20 @@ function PreviewCard({ card, offset, wrapName }) {
   )
 }
 
-export default function FloatingPreviews({ variant = 'stack', limit }) {
-  const stack = variant === 'stack'
-  const inline = variant === 'inline'
-  const tilt = variant === 'tilt'
-  // The desktop stack deliberately shows fewer cards than the mobile row: it
-  // is bottom-aligned under the photo's faces, and a fourth card would grow the
-  // stack upward into them.
+export default function FloatingPreviews({ limit }) {
+  // The stack shows fewer cards than the content file holds: it is pinned
+  // beside the subject, and more would grow it down into the feature strips.
   const cards = limit ? PREVIEW.cards.slice(0, limit) : PREVIEW.cards
 
   return (
     <div
       data-hero-group
       aria-hidden="true"
-      style={
-        tilt
-          ? { display: 'flex', flexDirection: 'column', gap: 10, width: 300 }
-          : inline
-          ? { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minWidth: 0 }
-          : stack
-          ? { display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }
-          : {
-              display: 'flex',
-              gap: 12,
-              overflowX: 'auto',
-              overscrollBehaviorX: 'contain',
-              scrollSnapType: 'x mandatory',
-              padding: '4px 4px 8px',
-              margin: '4px -4px 0',
-              minWidth: 0,
-            }
-      }
+      style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 300 }}
     >
-      {cards.map((card, index) => (
-        <div
-          key={card.id}
-          style={stack || inline || tilt ? { minWidth: 0 } : { scrollSnapAlign: 'start', flex: '0 0 auto', width: 232 }}
-        >
-          <PreviewCard card={card} offset={stack ? STACK_OFFSETS[index] : undefined} wrapName={inline} />
+      {cards.map((card) => (
+        <div key={card.id} style={{ minWidth: 0 }}>
+          <PreviewCard card={card} />
         </div>
       ))}
     </div>
