@@ -96,3 +96,19 @@ describe('shop order settlement via the webhook is retryable', () => {
     expect(settleCalled()).toBe(false)
   })
 })
+
+// The webhook path writes the vendor and customer notification text. A file saved in the wrong encoding once
+// turned the em dash into U+FFFD and the naira sign into "?", which shoppers and vendors then read.
+describe('shop payment notification text', () => {
+  it('shows the naira sign and no replacement characters when the webhook settles an order', async () => {
+    await post(event)
+
+    const texts = h.touched
+      .filter(([op, t]) => op === 'insert' && (t === 'staff_notifications' || t === 'notifications'))
+      .flatMap(([, , row]) => [row.title, row.body, row.message].filter(Boolean))
+
+    expect(texts.length).toBeGreaterThan(0)
+    expect(texts.join(' ')).toContain('₦1,000')
+    expect(texts.join(' ')).not.toMatch(/�|\?1,000/)
+  })
+})

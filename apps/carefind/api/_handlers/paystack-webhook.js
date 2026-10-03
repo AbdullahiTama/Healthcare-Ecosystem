@@ -5,7 +5,7 @@ import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
-// Single Paystack webhook for all apps � register this URL in the Paystack
+// Single Paystack webhook for all apps — register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
 // and CareHub plan payments all route through here.
 const supabase = createClient(
@@ -53,7 +53,7 @@ async function handleSubscription(metadata, reference, amount) {
   const row = Array.isArray(data) ? data[0] : data
   if (row?.already_processed) return { alreadyProcessed: true }
 
-  // Subscription created email to the subscriber � enqueue + flush.
+  // Subscription created email to the subscriber — enqueue + flush.
   try {
     const { data: creator } = await supabase
       .from('profiles')
@@ -80,7 +80,7 @@ async function handleSubscription(metadata, reference, amount) {
             businessName: creator?.display_name || creator?.full_name || 'Creator',
             expiryDate: expiresAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
           },
-          subject: `You're subscribed � ${creator?.display_name || 'your subscription'} is active`,
+          subject: `You're subscribed — ${creator?.display_name || 'your subscription'} is active`,
         })
         flushOutbox().catch((err) => {
           console.error('[paystack-webhook] subscription flush error:', err)
@@ -265,16 +265,16 @@ async function handleBooking(metadata, reference, amount) {
     staff_id: null,
     is_owner: true,
     kind: 'booking_paid',
-    title: `Payment received � ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} � ?${(appt.fee_amount / 100).toLocaleString()}`,
+    title: `Payment received — ${appt.client_name}`,
+    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
     link: '/dashboard/appointments',
     read_at: null,
   })
 
-  // Booking confirmation email to the client � enqueue + flush. CareHub
+  // Booking confirmation email to the client — enqueue + flush. CareHub
   // appointments use the carehub appointment template; CareFind bookings use
   // booking_confirmed. Only the first settler (webhook vs verify redirect)
-  // sends � the other sees 'already_paid' and returns above.
+  // sends — the other sees 'already_paid' and returns above.
   if (appt.client_email && appt.client_email.includes('@')) {
     try {
       const { data: business } = await supabase
@@ -382,12 +382,12 @@ async function handleShopOrder(metadata, reference, amount) {
   await supabase.from('staff_notifications').insert({
     business_id: order.vendor_business_id, staff_id: null, is_owner: true,
     kind: 'shop_order_paid',
-    title: `Shop order paid � ${order.order_ref}`,
-    body: `Order ${order.order_ref} � ?${(amount / 100).toLocaleString()} via Paystack`,
+    title: `Shop order paid — ${order.order_ref}`,
+    body: `Order ${order.order_ref} — ₦${(amount / 100).toLocaleString()} via Paystack`,
     link: '/dashboard/ecommerce', read_at: null,
   })
 
-  // Notify customer (email + in-app) � fire-and-forget
+  // Notify customer (email + in-app) — fire-and-forget
   notifyCustomerPostPayment(order.id).catch(err => {
     console.error('[paystack-webhook] customer notification error:', err)
   })
@@ -413,12 +413,12 @@ async function notifyCustomerPostPayment(orderId) {
     await supabase.from('notifications').insert({
       recipient_id: fullOrder.customer_id,
       type: 'shop_order_paid',
-      message: `Payment confirmed for order ${fullOrder.order_ref} � ?${(fullOrder.total_kobo / 100).toLocaleString()}`,
+      message: `Payment confirmed for order ${fullOrder.order_ref} — ₦${(fullOrder.total_kobo / 100).toLocaleString()}`,
       link: `/orders/${orderId}`,
     }).then(() => {}, () => {})
   }
 
-  // Order confirmation email (templated, via outbox) � enqueue + immediate flush
+  // Order confirmation email (templated, via outbox) — enqueue + immediate flush
   const email = fullOrder.delivery_email
   if (email && email.includes('@')) {
     try {
@@ -438,7 +438,7 @@ async function notifyCustomerPostPayment(orderId) {
           businessName: 'CareFind',
           deliveryAddress: fullOrder.delivery_address || '',
         },
-        subject: `Order Confirmed � ${fullOrder.order_ref}`,
+        subject: `Order Confirmed — ${fullOrder.order_ref}`,
       })
       flushOutbox().catch((err) => {
         console.error('[paystack-webhook] outbox flush error:', err)
@@ -468,7 +468,7 @@ async function handlePlanPayment(metadata, reference, amount) {
   if (!row) return null
   if (row.already_processed) return { alreadyProcessed: true }
 
-  // Subscription created email to the business owner � enqueue + flush.
+  // Subscription created email to the business owner — enqueue + flush.
   try {
     const { data: biz } = await supabase
       .from('businesses')
