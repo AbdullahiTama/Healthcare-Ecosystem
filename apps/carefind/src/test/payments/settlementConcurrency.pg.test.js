@@ -8,7 +8,7 @@
 // (any local Postgres 15+, a Docker container, or the embedded-postgres package). A throw-away
 // database is created per run and dropped afterwards. Without the variable the suite is skipped.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
-import pg from 'pg'
+import { createTestDatabase } from './fixtures/realPostgres.js'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -24,30 +24,12 @@ const SQL = [
 ]
 
 const COIN = 20000
-let admin, pool, dbName, n = 0
+let pool, drop, n = 0
 const uid = () => `00000000-0000-4000-8000-${(++n + 20000).toString(16).padStart(12, '0')}`
 const ref = (p) => `${p}_${++n}_${Math.random().toString(36).slice(2, 9)}`
 
 async function newDatabase() {
-  admin = new pg.Client({ connectionString: URL_ENV })
-  await admin.connect()
-  dbName = `settle_conc_${Date.now().toString(36)}`
-  await admin.query(`create database ${dbName}`)
-  const u = new URL(URL_ENV)
-  u.pathname = `/${dbName}`
-  pool = new pg.Pool({ connectionString: u.toString(), max: 40 })
-  pool.on('error', () => {}) // a client torn down at database drop must not fail the run
-  const c = await pool.connect()
-  try {
-    for (const role of ['anon', 'authenticated']) {
-      await c.query(`do $$ begin if not exists (select 1 from pg_roles where rolname = '${role}') then create role ${role} nologin; end if; end $$`)
-    }
-    await c.query(`do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if; end $$`)
-    await c.query(`grant usage on schema public to anon, authenticated, service_role; alter default privileges in schema public grant all on tables to anon, authenticated, service_role; alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;`)
-    for (const sql of SQL) await c.query(sql)
-  } finally {
-    c.release()
-  }
+  ;({ pool, drop } = await createTestDatabase(SQL))
 }
 
 async function intent(over = {}) {
@@ -70,8 +52,7 @@ const bal = async (u) => Number((await one('select balance from wallets where us
 describe.skipIf(!URL_ENV)('settlement engine under real concurrency', () => {
   beforeAll(newDatabase, 600000)
   afterAll(async () => {
-    await pool?.end()
-    if (admin) { await admin.query(`drop database if exists ${dbName} with (force)`); await admin.end() }
+    await drop?.()
   })
 
   it('the same intent settled by 25 callers at once (webhook + redirect + retries): exactly one settles, the rest see already_settled', async () => {
