@@ -1,5 +1,11 @@
 import { supabase } from '../../config/supabaseClient'
 
+// Postgres/PostgREST codes meaning the table does not exist yet. Only these make a catalogue read an empty result:
+// matching on the table name in the message also matched "permission denied for table ...", which hid a signed-out
+// visitor's 401 behind an empty list.
+const MISSING_TABLE_CODES = ['PGRST205', '42P01']
+const isMissingTable = (error) => MISSING_TABLE_CODES.includes(String(error.code))
+
 // Public Shop repository — reads Active ecommerce_products + products + ordered images
 // Uses anon supabase client (RLS public read: status=Active + approved vendor + in-stock + not restricted)
 export function createShopRepository(client = supabase) {
@@ -13,9 +19,7 @@ export function createShopRepository(client = supabase) {
         .order('active_at', { ascending: false })
         .limit(limit)
       if (error) {
-        // Only a table that does not exist yet is an empty catalogue. Matching on the table name in the message
-        // also matched "permission denied for table ecommerce_products", which hid a signed-out visitor's 401.
-        if (['PGRST205', '42P01'].includes(String(error.code))) return []
+        if (isMissingTable(error)) return []
         throw error
       }
       let rows = data || []
@@ -102,7 +106,7 @@ export function createShopRepository(client = supabase) {
         .eq('ecommerce_product_id', ecommerceProductId)
         .order('position', { ascending: true })
       if (error) {
-        if (String(error.message).includes('ecommerce_product_images')) return []
+        if (isMissingTable(error)) return []
         throw error
       }
       return data || []
