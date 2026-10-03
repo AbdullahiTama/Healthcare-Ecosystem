@@ -15,6 +15,7 @@ import { usePostEngagement } from './usePostEngagement.js'
 import { REPORT_REASONS } from './postSelectors.js'
 import { POSTS_DIRTY_EVENT } from './postSync.js'
 import { CREATE_PARAM, logCreateSelectorRendered } from './createSelector.js'
+import { dropUrlParam } from '../../utils/urlParams.js'
 import { resolveExperiment, applyExperimentConfig, logExperimentEvent } from './distributionExperiments'
 import {
   MEDICAL_BUSINESS_TYPES, DEFAULT_RANKING_CONFIG, DEFAULT_POOLS, normalizeRegion,
@@ -88,24 +89,6 @@ const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, th
 // enforces the same dedup with a unique index, so even a missed client guard
 // can't double-count.
 const recordFeedView = createViewRecorder(supabase)
-
-// Drops one query param from the address bar WITHOUT a router navigation.
-//
-// main.jsx keys <Routes> on location.key, so ANY router navigation — a
-// `replace` included — remounts the page and throws away its state. Landing
-// params (?create=1, ?tab=video) are consumed into state on mount, so removing
-// them through setSearchParams remounted the feed straight after and lost what
-// they had just set. history.replaceState alone changes only the URL; passing
-// the current history.state through keeps react-router's own entry (key / idx /
-// usr) intact, which `{}` used to wipe. Reads window.location, not the router's
-// searchParams, so it also drops the param from a URL the router has not yet
-// caught up with.
-function dropUrlParam(name) {
-  const next = new URLSearchParams(window.location.search)
-  next.delete(name)
-  const qs = next.toString()
-  window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
-}
 
 function Feed() {
   const { user } = useAuth()
@@ -387,7 +370,7 @@ function Feed() {
   // Issue #2: honour ?create=1 from another screen's create button. Runs on
   // every change of the param (not just mount) so a second tap from the same
   // page re-opens the selector, and drops the flag once it has been consumed
-  // (see dropUrlParam for why this must not go through the router).
+  // (see utils/urlParams.js for why this must not go through the router).
   useEffect(() => {
     if (createParam !== '1') return
     setCreateOpen(true)

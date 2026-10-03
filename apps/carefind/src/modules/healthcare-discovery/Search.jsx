@@ -29,6 +29,7 @@ import ProductResultCard from './components/ProductResultCard.jsx'
 import FacilityCard from './components/FacilityCard.jsx'
 import { useFeatured, useSearchResults } from '../../hooks/queries'
 import { healthcareRepository } from './repositories'
+import { replaceUrlParams } from '../../utils/urlParams.js'
 
 const NG_STATES = [
   'Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta',
@@ -51,7 +52,7 @@ function Search() {
     return d == null ? Infinity : d
   }
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   // Seed both the input and the executed query from ?q= so a search is
   // linkable and bookmarkable — the marketing landing page's category tiles
   // deep-link here (/search?tab=businesses&q=pharmacy), and a shared URL now
@@ -180,14 +181,18 @@ function Search() {
   // Featured rail scroll is CSS-only (cf-marquee-track) — no JS RAF loop.
   // Keeps the compositor on transform (GPU) and respects prefers-reduced-motion.
 
+  // Mirror the active tab into ?tab= so a tab is linkable and survives a reload.
+  // A missing ?tab= means the default tab ('shop'), so only write when the URL
+  // genuinely disagrees. Through replaceUrlParams, never setSearchParams — see
+  // utils/urlParams.js: on bare /search the router version looped forever
+  // (default tab, no ?tab=, "differs" every time, each replace remounted the
+  // page) and wiped the typed query on every tab switch.
   useEffect(() => {
-    const cur = searchParams.get('tab')
-    if (cur !== tab) {
-      const next = new URLSearchParams(searchParams)
-      if (tab === 'shop') next.delete('tab')
-      else next.set('tab', tab)
-      setSearchParams(next, { replace: true })
-    }
+    if ((new URLSearchParams(window.location.search).get('tab') || 'shop') === tab) return
+    replaceUrlParams((params) => {
+      if (tab === 'shop') params.delete('tab')
+      else params.set('tab', tab)
+    })
   }, [tab])
 
   useEffect(() => {
@@ -202,12 +207,10 @@ function Search() {
     if (q) addRecentSearch(q)
     setSearchQuery(q)
     // Keep ?q= in the URL so the result set is shareable and survives a reload.
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (q) next.set('q', q)
-      else next.delete('q')
-      return next
-    }, { replace: true })
+    replaceUrlParams((params) => {
+      if (q) params.set('q', q)
+      else params.delete('q')
+    })
   }
 
   const activeFilterCount = [

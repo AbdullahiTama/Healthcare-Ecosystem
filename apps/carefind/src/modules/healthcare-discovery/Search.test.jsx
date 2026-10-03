@@ -1,7 +1,8 @@
+import { useEffect } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithQueryClient as render } from '../../test/renderWithQueryClient.jsx'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 
 const navigateMock = vi.fn()
 const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true }) }))
@@ -81,6 +82,8 @@ vi.mock('../utils/sellerLookup.js', () => ({
 vi.mock('../../components/BottomNav.jsx', () => ({ default: () => null }))
 vi.mock('../social-feed/Logo.jsx', () => ({ default: () => null }))
 vi.mock('../../components/layout/AppShell.jsx', () => ({ default: ({ children }) => children }))
+// The default 'shop' tab renders the whole storefront, which needs its own providers.
+vi.mock('../shop/Shop', () => ({ default: () => <div>shop storefront</div> }))
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -296,5 +299,68 @@ describe('Search — ?q= deep link', () => {
     // the global :focus-visible ring (ACCESSIBILITY.md:16).
     const input = await screen.findByLabelText('Search medication, facility, professional')
     expect(input.style.outline).not.toBe('none')
+  })
+})
+
+// main.jsx keys <Routes> on location.key, so ANY router navigation — a
+// `replace` included — remounts the page. Search mirrors its tab into ?tab= and
+// used to do that with setSearchParams, so: on bare /search (default tab
+// "shop", no ?tab=) it saw "URL differs from tab", replaced the URL, remounted,
+// saw the same thing and looped forever; and every tab switch remounted the
+// page, wiping what had been typed. These mirror main.jsx's keyed Routes; a
+// bare <Search /> cannot reproduce a remount.
+describe('Search tab <-> URL sync under keyed Routes', () => {
+  let mounts
+  function Probe() {
+    useEffect(() => { mounts += 1 }, [])
+    return <Search />
+  }
+  function KeyedRoutes() {
+    const location = useLocation()
+    return (
+      <Routes key={location.key}>
+        <Route path="/search" element={<Probe />} />
+      </Routes>
+    )
+  }
+  function renderKeyed(path) {
+    mounts = 0
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <KeyedRoutes />
+      </MemoryRouter>
+    )
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSupabase.data.tables.businesses = []
+    mockSupabase.data.tables.products = []
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear()
+    global.fetch = fetchMock
+  })
+
+  it('mounts once on bare /search instead of remounting in a loop', async () => {
+    renderKeyed('/search')
+    await screen.findByRole('tablist', { name: 'Marketplace categories' })
+
+    // A remount loop would keep incrementing this while we wait.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(mounts).toBe(1)
+  })
+
+  it('keeps what was typed when the tab is switched', async () => {
+    renderKeyed('/search?tab=shop')
+    const input = await screen.findByPlaceholderText('Search medication, facility, professional...')
+    fireEvent.change(input, { target: { value: 'amoxicillin' } })
+    expect(input).toHaveValue('amoxicillin')
+
+    fireEvent.click(screen.getByRole('tab', { name: /Facilities/ }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /Facilities/ })).toHaveAttribute('aria-selected', 'true'))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(mounts).toBe(1)
+    expect(screen.getByPlaceholderText('Search medication, facility, professional...')).toHaveValue('amoxicillin')
   })
 })
