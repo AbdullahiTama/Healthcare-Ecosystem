@@ -883,7 +883,15 @@ async function handleRequest(req, res) {
     const { data: tracking } = await supabase.from('shop_order_tracking_events').select('*').eq('order_id', orderId).order('created_at')
     let notifications = []
     try { const r = await supabase.rpc('get_order_notification_history', { p_order_id: orderId }); notifications = r.data || [] } catch {}
-    const { data: messages } = await supabase.from('shop_order_messages').select('*, profiles(full_name, display_name)').eq('order_id', orderId).order('created_at')
+    // shop_order_messages.sender_id references auth.users, not profiles, so profiles cannot be embedded in this select
+    // (it failed with "Could not find a relationship ...", the error was ignored, and every order showed no messages).
+    // Names are looked up separately and supplied as sender_name, the field the admin screen reads.
+    const { data: rawMessages, error: messagesError } = await supabase.from('shop_order_messages').select('*').eq('order_id', orderId).order('created_at')
+    if (messagesError) return res.status(400).json({ error: messagesError.message })
+    const senderIds = [...new Set((rawMessages || []).map(m => m.sender_id).filter(Boolean))]
+    const { data: senders } = senderIds.length ? await supabase.from('profiles').select('id, full_name, display_name').in('id', senderIds) : { data: [] }
+    const senderById = new Map((senders || []).map(p => [p.id, p]))
+    const messages = (rawMessages || []).map(m => { const p = senderById.get(m.sender_id); return { ...m, sender_name: p?.full_name || p?.display_name || null } })
     return res.status(200).json({ data: { ...order, tracking_events: tracking || [], notifications: notifications || [], messages: messages || [] } })
   }
 
