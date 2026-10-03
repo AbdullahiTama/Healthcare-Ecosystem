@@ -90,7 +90,6 @@ declare
   v_coin_kobo numeric := public._fin_cfg('coin_value_kobo');
   v_creator_coins integer;
   v_platform_coins integer;
-  v_current timestamptz;
 begin
   begin
     v_coins := (i.metadata ->> 'coins')::integer;
@@ -134,12 +133,13 @@ begin
     values (null, 'platform_fee_subscription', v_platform_coins, null, i.reference, 'success');
   end if;
 
-  select expires_at into v_current from public.creator_subscriptions
-   where subscriber_id = i.customer_id and creator_id = i.entity_id;
+  -- Extend from the row's CURRENT expiry as seen under the row lock (ON CONFLICT re-reads the locked
+  -- row). Reading it beforehand lost concurrent renewals: six simultaneous payments granted one month
+  -- (found by settlementConcurrency.pg.test.js).
   insert into public.creator_subscriptions (subscriber_id, creator_id, price, expires_at, auto_renew)
   values (i.customer_id, i.entity_id, v_coins, now() + interval '30 days', true)
   on conflict (subscriber_id, creator_id) do update
-    set expires_at = greatest(coalesce(v_current, now()), now()) + interval '30 days',
+    set expires_at = greatest(public.creator_subscriptions.expires_at, now()) + interval '30 days',
         price = v_coins,
         auto_renew = true;
 
