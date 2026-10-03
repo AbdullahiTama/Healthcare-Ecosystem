@@ -408,7 +408,9 @@ describe('per row attempt limit', () => {
     const result = await new EmailService({ supabase: db }).processBatch()
 
     expect(result).toMatchObject({ sent: 0, failed: 1, exhausted: 0 })
-    expect(db.__state.rows[0].status).toBe('dead')
+    // Terminal is `failed`. `dead` was written by the old backoff path and is no
+    // longer produced, so an operator has one status to look for.
+    expect(db.__state.rows[0].status).toBe('failed')
     expect(db.__state.rows[0].attempts).toBe(2)
   })
 
@@ -419,7 +421,11 @@ describe('per row attempt limit', () => {
     expect(sendEmailMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({ processed: 1, sent: 0, exhausted: 1 })
     // Never claimed, so no lease is left behind on a row nobody will process.
-    expect(db.__state.updates).toEqual([])
+    // The single write is the terminal status, which is what stops the row from
+    // being re-selected on every future tick.
+    expect(db.__state.updates).toHaveLength(1)
+    expect(db.__state.updates[0]).toEqual({ status: 'failed', last_error: 'max attempts reached' })
+    expect(db.__state.rows[0].claim_token).toBeNull()
   })
 
   it('still retries a row that is below its ceiling', async () => {
@@ -442,5 +448,323 @@ describe('redactPayload', () => {
   it('leaves order line items and plain values intact', () => {
     const payload = { items: [{ name: 'Lifeline', quantity: 2, price: 500 }], total: 1000 }
     expect(redactPayload(payload)).toEqual(payload)
+  })
+})
+
+describe('enqueue idempotency', () => {
+  it('returns the existing row (deduplicated) when the idempotency key already exists', async () => {
+    const existing = { id: 'e1', event_key: 'booking_confirmed', idempotency_key: 'booking-confirmed:app1', app: 'carefind' }
+    const db = {
+      from(t) {
+        if (t === 'email_logs') return { insert: async () => ({ error: null }) }
+        return {
+          insert: () => ({ select: () => ({ single: async () => ({ data: null, error: { code: '23505', message: 'duplicate key' } }) }) }),
+          select: () => ({ eq: () => ({ eq: () => ({ limit: () => ({ maybeSingle: async () => ({ data: existing, error: null }) }) }) }) }),
+        }
+      },
+    }
+    const result = await new EmailService({ supabase: db }).enqueue({
+      templateKey: 'booking_confirmed',
+      toEmail: 'patient@example.com',
+      payload: {},
+      fromEmail: 'CareFind <support@mail.carefind.app>',
+      idempotencyKey: 'booking-confirmed:app1',
+    })
+    expect(result.deduplicated).toBe(true)
+    expect(result.id).toBe('e1')
+  })
+})
+
+// The processor is the only thing standing between a queued business event and
+// a customer, so its state machine is pinned here: pending -> processing ->
+// sent | retrying | failed, with a bounded number of attempts and no way for a
+// row to be picked up twice.
+describe('outbox processor state machine', () => {
+  const service = (db, options = {}) => new EmailService({ supabase: db, ...options })
+
+  it('moves a due row to sent and stores the provider message id and sent_at', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-abc' } })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ processed: 1, sent: 1, failed: 0, retrying: 0 })
+    const sent = db.__state.rows[0]
+    expect(sent.status).toBe('sent')
+    // Resend returns { id }. Storing the object itself wrote "[object Object]"
+    // into a text column and broke every later correlation by provider id.
+    expect(sent.provider_message_id).toBe('resend-abc')
+    expect(sent.provider_id).toBe('resend-abc')
+    expect(sent.sent_at).toBeTruthy()
+    expect(sent.claim_token).toBeNull()
+  })
+
+  it('still accepts a bare provider id from an injected sender', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: 'legacy-id' })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    await service(db).processBatch()
+    expect(db.__state.rows[0].provider_message_id).toBe('legacy-id')
+  })
+
+  it('claims through processing before the provider call, not after', async () => {
+    let statusDuringSend = null
+    sendEmailMock.mockImplementationOnce(async () => {
+      statusDuringSend = db.__state.rows[0].status
+      return { success: true, data: { id: 'x' } }
+    })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    await service(db).processBatch()
+
+    // A worker that only marked ownership after the send would still be
+    // 'pending' here, which is exactly the window a second worker steals.
+    expect(statusDuringSend).toBe('processing')
+  })
+
+  it('moves a retryable failure to retrying, counts the attempt and schedules the next run', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'temporary outage', retryable: true, statusCode: 503 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1, retrying: 1 })
+    const r = db.__state.rows[0]
+    expect(r.status).toBe('retrying')
+    expect(r.attempts).toBe(1)
+    expect(r.last_error).toBe('temporary outage')
+    expect(r.claim_token).toBeNull()
+    // First rung is one minute out, not "now", or the row would be retried in a
+    // tight loop and the provider outage would be amplified.
+    const delay = new Date(r.next_retry_at) - Date.now()
+    expect(delay).toBeGreaterThan(30_000)
+    expect(delay).toBeLessThan(90_000)
+    expect(r.scheduled_at).toBe(r.next_retry_at)
+  })
+
+  it('walks the 1m / 5m / 15m / 1h / 6h / 24h ladder and then stops growing', async () => {
+    const expected = [60_000, 300_000, 900_000, 3_600_000, 21_600_000, 86_400_000, 86_400_000]
+    for (let i = 0; i < expected.length; i++) {
+      sendEmailMock.mockResolvedValueOnce({ success: false, error: 'boom', retryable: true, statusCode: 500 })
+      // max_attempts is raised so the ladder itself is what is under test; the
+      // attempt ceiling has its own case above.
+      const db = rolloutDb({ settings: {}, rows: [row({ attempts: i, max_attempts: 10 })] })
+      await service(db).processBatch()
+      const r = db.__state.rows[0]
+      expect(r.status).toBe('retrying')
+      const delay = new Date(r.next_retry_at).getTime() - Date.now()
+      // A second of slack for the clock between the run and the assertion.
+      expect(Math.abs(delay - expected[i])).toBeLessThan(2_000)
+    }
+  })
+
+  it('honours a 429 Retry-After that is longer than the scheduled backoff', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'rate limited', retryable: true, statusCode: 429, retryAfterMs: 120_000 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    await service(db).processBatch()
+
+    const delay = new Date(db.__state.rows[0].next_retry_at) - Date.now()
+    expect(delay).toBeGreaterThan(110_000)
+  })
+
+  it('does not let a 429 Retry-After park a row beyond the last rung', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'rate limited', retryable: true, statusCode: 429, retryAfterMs: 7 * 86_400_000 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    await service(db).processBatch()
+
+    const delay = new Date(db.__state.rows[0].next_retry_at) - Date.now()
+    expect(delay).toBeLessThan(86_400_000 + 5_000)
+  })
+
+  it('treats a 5xx as retryable', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'Resend 500', retryable: true, statusCode: 500 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ retrying: 1, sent: 0 })
+    expect(db.__state.rows[0].status).toBe('retrying')
+  })
+
+  it('retries a timeout, because a slow provider is not a rejected address', async () => {
+    sendEmailMock.mockRejectedValueOnce(Object.assign(new Error('socket hang up'), { name: 'TimeoutError' }))
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ retrying: 1 })
+    expect(db.__state.rows[0].status).toBe('retrying')
+    expect(db.__state.rows[0].attempts).toBe(1)
+  })
+
+  it('moves a permanent rejection to failed and never selects it again', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'Resend 422 invalid address', retryable: false, statusCode: 422 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    const first = await service(db).processBatch()
+    expect(first).toMatchObject({ failed: 1, retrying: 0 })
+    expect(db.__state.rows[0].status).toBe('failed')
+    expect(db.__state.rows[0].failed_at).toBeTruthy()
+
+    // A terminal row is not retry-eligible. Retrying a 422 forever is how a
+    // queue turns into an infinite loop.
+    const second = await service(db).processBatch()
+    expect(second).toMatchObject({ processed: 0, sent: 0 })
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retires a row that used its last attempt instead of retrying forever', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'Resend 500', retryable: true, statusCode: 500 })
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 4, max_attempts: 5 })] })
+
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ sent: 0, failed: 1, retrying: 0 })
+    const r = db.__state.rows[0]
+    expect(r.status).toBe('failed')
+    expect(r.attempts).toBe(5)
+  })
+
+  it('fails closed on a row that is already past its ceiling, without claiming it', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 5, max_attempts: 5 })] })
+    const result = await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ processed: 1, exhausted: 1 })
+    expect(db.__state.rows[0].status).toBe('failed')
+  })
+
+  it('never selects a terminal row, so a second tick cannot resend it', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ status: 'failed', attempts: 2 })] })
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ processed: 0, sent: 0 })
+    expect(sendEmailMock).not.toHaveBeenCalled()
+  })
+
+  it('picks up a retrying row once it is due', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'ok' } })
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ status: 'retrying', attempts: 1, next_retry_at: new Date(Date.now() - 1000).toISOString() })],
+    })
+    const result = await service(db).processBatch()
+
+    expect(result).toMatchObject({ processed: 1, sent: 1 })
+    expect(db.__state.rows[0].status).toBe('sent')
+  })
+})
+
+// A crashed worker leaves a row in 'processing' with a lease nobody owns. It is
+// only safe to resend after that lease expires, and only then.
+describe('processing lease recovery', () => {
+  it('skips a processing row whose lease is still live', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ status: 'processing', claim_token: 'live-uuid', claim_expires_at: new Date(Date.now() + 60000).toISOString() })],
+    })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ contended: 1 })
+    expect(db.__state.rows[0].claim_token).toBe('live-uuid')
+  })
+
+  it('reclaims a processing row whose lease expired', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'ok' } })
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ status: 'processing', claim_token: 'dead-uuid', claim_expires_at: new Date(Date.now() - 1000).toISOString() })],
+    })
+    const result = await new EmailService({ supabase: db }).processBatch()
+
+    expect(result).toMatchObject({ sent: 1, contended: 0 })
+    expect(db.__state.rows[0].status).toBe('sent')
+  })
+
+  it('does not resend a row that is already sent', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ status: 'sent', sent_at: new Date().toISOString() })] })
+    await new EmailService({ supabase: db }).processBatch()
+    expect(sendEmailMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('batch bounds', () => {
+  it('never claims more rows than the configured batch size', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, data: { id: 'ok' } })
+    const rows = Array.from({ length: 12 }, (_, i) => row({ id: `outbox-${i}` }))
+    const db = rolloutDb({ settings: {}, rows })
+
+    await new EmailService({ supabase: db, batchSize: 5 }).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(5)
+    expect(db.__state.rows.filter((r) => r.status === 'sent')).toHaveLength(5)
+  })
+
+  it('reads the batch size from the environment and clamps nonsense to a usable value', async () => {
+    const original = process.env.EMAIL_OUTBOX_BATCH_SIZE
+    try {
+      process.env.EMAIL_OUTBOX_BATCH_SIZE = '7'
+      expect(new EmailService().batchSize).toBe(7)
+      // A zero batch would silently process nothing; a huge one would time the
+      // serverless function out mid send.
+      process.env.EMAIL_OUTBOX_BATCH_SIZE = '0'
+      expect(new EmailService().batchSize).toBe(1)
+      process.env.EMAIL_OUTBOX_BATCH_SIZE = '100000'
+      expect(new EmailService().batchSize).toBe(100)
+      process.env.EMAIL_OUTBOX_BATCH_SIZE = 'not-a-number'
+      expect(new EmailService().batchSize).toBe(20)
+    } finally {
+      if (original === undefined) delete process.env.EMAIL_OUTBOX_BATCH_SIZE
+      else process.env.EMAIL_OUTBOX_BATCH_SIZE = original
+    }
+  })
+
+  it('drains several bounded batches and then stops', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, data: { id: 'ok' } })
+    const rows = Array.from({ length: 5 }, (_, i) => row({ id: `outbox-${i}` }))
+    const db = rolloutDb({ settings: {}, rows })
+
+    const totals = await new EmailService({ supabase: db, batchSize: 2 }).drain({ maxBatches: 10 })
+
+    expect(totals.sent).toBe(5)
+    expect(totals.batches).toBe(3)
+    expect(sendEmailMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('stops draining at maxBatches so one cron tick stays bounded', async () => {
+    sendEmailMock.mockResolvedValue({ success: true, data: { id: 'ok' } })
+    const rows = Array.from({ length: 10 }, (_, i) => row({ id: `outbox-${i}` }))
+    const db = rolloutDb({ settings: {}, rows })
+
+    const totals = await new EmailService({ supabase: db, batchSize: 1 }).drain({ maxBatches: 3 })
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(3)
+    expect(totals.processed).toBe(3)
+  })
+
+  it('drains nothing at all while dispatch is paused', async () => {
+    const db = rolloutDb({ settings: { dispatch_paused: true }, rows: [row()] })
+    const totals = await new EmailService({ supabase: db }).drain()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(totals).toMatchObject({ paused: true, sent: 0 })
+  })
+})
+
+describe('processor logging', () => {
+  it('logs structured events without the recipient address or the payload', async () => {
+    const lines = []
+    const spy = vi.spyOn(console, 'log').mockImplementation((l) => { lines.push(String(l)) })
+    try {
+      sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'ok' } })
+      const db = rolloutDb({ settings: {}, rows: [row()] })
+      await new EmailService({ supabase: db }).processBatch()
+
+      const joined = lines.join('\n')
+      expect(joined).toContain('"event":"batch_complete"')
+      expect(joined).toContain('"event":"send_ok"')
+      // The row id is the correlation key; the address and the rendered content
+      // are not, and a log line is the wrong place for a reset link.
+      expect(joined).not.toContain('real.customer@gmail.com')
+      expect(joined).not.toContain('SECRETTOKEN')
+      for (const line of lines) expect(() => JSON.parse(line)).not.toThrow()
+    } finally { spy.mockRestore() }
   })
 })

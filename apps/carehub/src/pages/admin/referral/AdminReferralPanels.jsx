@@ -82,10 +82,11 @@ export function ApplicationsPanel() {
         referral_code: generateReferralCode(),
       })
       const code = created?.referral_code || 'PENDING'
+      let emailRes = null
       try {
-        await emailAgentApproved({ agentName: selected.applicant_name, agentEmail: selected.contact_email, city: selected.requested_city, area: selected.requested_area, referralCode: code })
+        emailRes = await emailAgentApproved({ agentName: selected.applicant_name, agentEmail: selected.contact_email, city: selected.requested_city, area: selected.requested_area, referralCode: code })
       } catch (e) {}
-      showToast('Approved — agent created, pending onboarding.', { type: 'success' })
+      showToast(emailRes && !emailRes.success ? 'Approved — agent created, but the decision email could not be sent.' : 'Approved — agent created, pending onboarding.', { type: emailRes && !emailRes.success ? 'warning' : 'success' })
       setSelected(null); setNotes(''); apps.reload(); allAgents.reload()
     } catch (e) {
       showToast('Approval failed: ' + e.message, { type: 'error' })
@@ -97,10 +98,11 @@ export function ApplicationsPanel() {
     setBusy(true)
     try {
       await reviewAgentApplication(a.id, { status: 'rejected', review_notes: notes || null, reviewed_at: new Date().toISOString() })
+      let emailRes2 = null
       try {
-        await emailAgentRejected({ agentName: a.applicant_name, agentEmail: a.contact_email, city: a.requested_city, area: a.requested_area, reason: notes || '' })
+        emailRes2 = await emailAgentRejected({ agentName: a.applicant_name, agentEmail: a.contact_email, city: a.requested_city, area: a.requested_area, reason: notes || '' })
       } catch (e) {}
-      showToast('Application rejected.', { type: 'success' })
+      showToast(emailRes2 && !emailRes2.success ? 'Application rejected, but the decision email could not be sent.' : 'Application rejected.', { type: emailRes2 && !emailRes2.success ? 'warning' : 'success' })
       setSelected(null); setNotes(''); apps.reload()
     } catch (e) {
       showToast('Rejection failed: ' + e.message, { type: 'error' })

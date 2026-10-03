@@ -1,4 +1,5 @@
 import { emailService } from '../../src/lib/emailService.js'
+import crypto from 'crypto'
 
 // Vercel Cron Jobs invoke the configured path with GET, not POST. The previous
 // revision rejected anything but POST, so the schedule could never have run
@@ -23,8 +24,18 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
+  // Generate a request ID for this cron invocation and store it in the module
+  // so EmailService can pick it up via its package-scoped variable.
+  const requestId = crypto.randomUUID?.() || 'cron-' + Date.now()
+  ;(global as any)._cronRequestId = requestId
+
   try {
-    const result = await emailService.processBatch()
+    // drain(), not processBatch(): this endpoint is the minute worker behind
+    // Supabase Cron (see supabase/migrations/carefind_20260928_email_outbox_cron.sql),
+    // and a single batch per tick cannot clear a backlog. It is bounded by
+    // EMAIL_OUTBOX_BATCH_SIZE x EMAIL_OUTBOX_MAX_BATCHES so one tick still
+    // finishes inside the function timeout.
+    const result = await emailService.drain()
     return res.status(200).json({ ok: true, ...result })
   } catch (err) {
     console.error('[cron/process-email-outbox] failed', err)

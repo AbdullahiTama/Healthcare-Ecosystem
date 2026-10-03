@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       action,
       email,
       fullName,
-      redirectTo: redirectTo || process.env.APP_URL || 'https://carefind.app',
+      redirectTo: redirectTo || process.env.CAREFIND_APP_URL || process.env.APP_URL || '',
       app: 'carefind',
       supabase,
       resolveDisplayName,

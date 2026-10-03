@@ -62,7 +62,7 @@ export default async function handler(req, res) {
 
       const { error: enqErr } = await supabase.from('email_outbox').insert({
         to_email: ownerEmail,
-        from_email: process.env.RESEND_FROM_EMAIL || 'CareFind <support@mail.carefind.app>',
+        from_email: process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || '',
         subject: `Your ${biz.plan || 'CareHub'} subscription expires soon`,
         template_key: 'subscription_expiry',
         payload: {

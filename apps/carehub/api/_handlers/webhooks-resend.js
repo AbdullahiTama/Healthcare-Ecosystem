@@ -8,8 +8,8 @@ function verifyWebhookSignature(req) {
 
   const secret = process.env.RESEND_WEBHOOK_SECRET
   if (!secret) {
-    console.warn('[webhooks/resend] RESEND_WEBHOOK_SECRET not set, skipping verification')
-    return true // Allow in dev if secret not configured
+    console.error('[webhooks/resend] RESEND_WEBHOOK_SECRET is required - rejecting request')
+    return res.status(401).json({ error: 'Webhook secret not configured' })
   }
 
   const body = JSON.stringify(req.body)

@@ -13,3 +13,7 @@ export { renderEmailTemplate, generateSampleVariables } from './templates/Market
 export { SAMPLES, TEMPLATE_META } from './templates/samples.js'
 export { fmtNaira, fmtKobo, fmtDate, fmtPhone } from './utils/formatters.js'
 export { escapeHtml } from './utils/escapeHtml.js'
+export { createEmailProvider } from './provider.js'
+export { validateMessage, validateFrom, validateRecipients, validateSubject, validateHtml, validateReplyTo, isValidEmail, isValidFrom } from './validation.js'
+export { EMAIL_EVENTS, isKnownEvent } from './events.js'
+export { getTemplate as resolveTemplate } from './templates.js'

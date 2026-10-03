@@ -43,6 +43,41 @@ const linkResponse = {
   error: null,
 }
 
+describe('sendAuthEmail staff_setup', () => {
+  it('mints a recovery link and enqueues staff_welcome with no credential fields', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({
+      action: 'staff_setup',
+      email: 'new.staff@carehub.ng',
+      fullName: 'New Staff',
+      businessName: 'HealthPlus',
+      role: 'Pharmacist',
+      redirectTo: 'https://carefindhub.com/reset-password',
+      app: 'carehub',
+    })
+
+    expect(result).toEqual({ ok: true, sent: true })
+    expect(generateLink).toHaveBeenCalledWith({
+      type: 'recovery',
+      email: 'new.staff@carehub.ng',
+      options: { redirectTo: 'https://carefindhub.com/reset-password' },
+    })
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    const row = enqueue.mock.calls[0][0]
+    expect(row.templateKey).toBe('staff_welcome')
+    expect(row.payload.setupLink).toBe('https://stub.supabase.co/auth/v1/verify?token=abc')
+    expect(row.payload.businessName).toBe('HealthPlus')
+    expect(row.payload.role).toBe('Pharmacist')
+    // The whole point of the flow: no credential material in the payload.
+    const keys = Object.keys(row.payload).map((k) => k.toLowerCase())
+    for (const bad of ['password', 'passwd', 'pwd', 'token', 'secret', 'otp', 'session', 'credential']) {
+      expect(keys.some((k) => k.includes(bad))).toBe(false)
+    }
+    expect(JSON.stringify(row.payload)).not.toContain('placeholder')
+  })
+})
+
 describe('sendAuthEmail password reset', () => {
   it('mints a recovery link server-side and enqueues it with the branded sender', async () => {
     generateLink.mockResolvedValue(linkResponse)

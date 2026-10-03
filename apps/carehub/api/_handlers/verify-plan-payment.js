@@ -105,6 +105,7 @@ export default async function handler(req, res) {
           expiryDate: biz.plan_expires_at ? new Date(biz.plan_expires_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         },
         subject: 'Your CareHub subscription is active',
+        idempotencyKey: `subscription-started:${reference}`,
       })
       emailService.processBatch().catch((err) => {
         console.error('[verify-plan-payment] outbox flush error:', err)

@@ -2,6 +2,7 @@ import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, transferReference } from '../_lib/paystackTransfer.js'
 import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'
+import { emailService } from '../../src/lib/emailService.js'
 
 // Business wallet withdrawal (ADR-005). Mirrors CareFind's initiate-withdrawal
 // flow: bank details are submitted at withdrawal time, request_business_withdrawal
@@ -111,6 +112,19 @@ export default async function handler(req, res) {
       })
       .eq('business_id', businessId)
       .eq('paystack_reference', reference)
+
+    try {
+      await emailService.enqueue({
+        templateKey: 'withdrawal_requested',
+        toEmail: business.email,
+        payload: { businessName: '', amount: 'Your withdrawal request is being processed', reference, bankName, accountNumber },
+        subject: 'CareHub: withdrawal requested',
+        idempotencyKey: `withdrawal-requested:${reference}`,
+      })
+      emailService.processBatch().catch(() => {})
+    } catch (err) {
+      console.warn('[initiate-business-withdrawal] email enqueue failed:', err.message)
+    }
 
     return res.status(200).json({
       success: true,

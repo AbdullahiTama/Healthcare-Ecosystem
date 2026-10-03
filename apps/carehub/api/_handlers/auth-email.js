@@ -18,10 +18,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured: missing Supabase env vars' })
   }
 
-  const { action, email, fullName, redirectTo } = req.body || {}
+  const { action, email, fullName, redirectTo, businessName, role } = req.body || {}
   if (!action || !email) return res.status(400).json({ error: 'action and email are required' })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email' })
-  if (action !== 'password_reset' && action !== 'email_verification') {
+  if (action !== 'password_reset' && action !== 'email_verification' && action !== 'staff_setup') {
     return res.status(400).json({ error: `Unsupported action ${action}` })
   }
 
@@ -55,10 +55,12 @@ export default async function handler(req, res) {
       action,
       email,
       fullName,
-      redirectTo: redirectTo || process.env.APP_URL || 'https://carefindhub.com',
+      redirectTo: redirectTo || process.env.CAREHUB_APP_URL || process.env.APP_URL || '',
       app: 'carehub',
       supabase,
       resolveDisplayName,
+      businessName,
+      role,
     })
     return res.status(200).json({ ok: true, sent: !!result?.sent })
   } catch (err) {

@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
   if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
 
-  const { biz } = await supabase.from('businesses').select('id,is_platform_admin,email').eq('email', user.email.toLowerCase()).maybeSingle()
+  const { data: biz } = await supabase.from('businesses').select('id,is_platform_admin,email').eq('email', user.email.toLowerCase()).maybeSingle()
   const isAdmin = !!(biz && biz.is_platform_admin)
   if (!isAdmin) return res.status(403).json({ error: 'Not authorized' })
 
@@ -49,6 +49,7 @@ export default async function handler(req, res) {
       toEmail: ownerEmail,
       payload: { businessName: target.name, ownerName: target.owner || 'there', ownerEmail, status, reason: reason || '' },
       subject: subjectMap[status],
+      idempotencyKey: `${templateKey}:${businessId}`,
     })
   } catch (e) {
     console.warn('[notify-business-status] enqueue failed', e)

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
   // Fetch the appointment
   const { data: appt, error: apptErr } = await supabase
     .from('appointments')
-    .select('id, business_id, client_name, service, date, time, status, payment_status, fee_amount, timeslot_id, payment_reference')
+    .select('id, business_id, client_name, client_email, service, date, time, status, payment_status, fee_amount, timeslot_id, payment_reference')
     .eq('id', appointmentId)
     .maybeSingle()
 
@@ -131,6 +132,23 @@ export default async function handler(req, res) {
     link: '/dashboard/appointments',
     read_at: null,
   }).catch(() => {})
+
+  // Client notification email (fire-and-forget; never blocks a cancellation)
+  if (appt.client_email && appt.client_email.includes('@')) {
+    try {
+      await enqueueOutbox({
+        templateKey: 'booking_cancelled',
+        toEmail: appt.client_email,
+        payload: { fullName: appt.client_name, service: appt.service, date: appt.date, time: appt.time },
+        subject: 'Your booking has been cancelled',
+        sourceId: appt.id,
+        idempotencyKey: `booking-cancelled:${appt.id}`,
+      })
+      flushOutbox().catch((err) => console.error('[cancel-appointment] outbox flush error:', err))
+    } catch (err) {
+      console.error('[cancel-appointment] email enqueue error:', err)
+    }
+  }
 
   return res.status(200).json({
     success: true,

@@ -1,8 +1,8 @@
 import { logoHeader, footer, baseStyle, cardStyle, btnStyle, esc } from '../BaseTemplate.js'
 import { fmtNaira, fmtDate } from '../../../utils/formatters.js'
-const APP_URL = (typeof process !== 'undefined' && process.env?.APP_URL) || 'https://carefind.app'
+const APP_URL = (typeof process !== 'undefined' && (process.env?.CAREFIND_APP_URL || process.env?.APP_URL)) || 'https://carefind.app'
 
-export function customerRegistration({ fullName, email, password }) {
+export function customerRegistration({ fullName, email }) {
   return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">👋</div><h2 style="color:#0f172a;margin:0 0 8px">Welcome to CareFind, ${esc(fullName)}!</h2><p style="color:#888;margin:0">Your account is now active.</p></div><div style="background:#FDFBF7;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#555;font-size:13px;line-height:1.7">Explore healthcare products, book consultations, and manage orders.</p></div><a href="${APP_URL}/dashboard" style="${btnStyle()}">Go to Dashboard →</a></div>${footer('CareFind','carefind.ng')}</div>`
 }
 
@@ -42,4 +42,48 @@ export function orderStatusUpdate({ fullName, orderRef, status, businessName }) 
 
 export function bookingConfirmed({ fullName, businessName, service, date, time }) {
   return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">🩺</div><h2 style="color:#0f172a;margin:0 0 8px">Booking Confirmed!</h2><p style="color:#888;margin:0">Hi ${esc(fullName)}, your booking with ${esc(businessName)} is confirmed.</p></div><div style="background:#FDFBF7;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px"><table style="width:100%;border-collapse:collapse">${[['Facility',businessName],['Service',service||'Consultation'],['Date',date],['Time',time]].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px;font-weight:600">${esc(v||'—')}</td></tr>`).join('')}</table></div></div>${footer('CareFind','carefind.ng')}</div>`
+}
+
+export function bookingCancelled({ fullName, businessName, service, date, time }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Booking Cancelled</h2><p style="color:#888;margin:0 0 16px">Hi ${esc(fullName || 'there')}, your booking has been cancelled.</p><table style="width:100%;border-collapse:collapse">${[['Facility',businessName],['Service',service||'Consultation'],['Date',date],['Time',time]].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px">${esc(v||'—')}</td></tr>`).join('')}</table></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function consultationBooked({ fullName, professionalName, scheduledAt, service }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Consultation Booked</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your consultation is booked.</p><p style="color:#52525b;font-size:14px">Professional: <strong>${esc(professionalName || '—')}</strong><br/>Service: ${esc(service || 'Consultation')}<br/>When: ${esc(scheduledAt || '—')}</p></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function consultationConfirmed({ fullName, professionalName, scheduledAt, service }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Consultation Confirmed</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your consultation payment is confirmed and your session is booked.</p><p style="color:#52525b;font-size:14px">Professional: <strong>${esc(professionalName || '—')}</strong><br/>Service: ${esc(service || 'Consultation')}<br/>When: ${esc(scheduledAt || '—')}</p></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function consultationCancelled({ fullName, professionalName, scheduledAt }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Consultation Cancelled</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your consultation has been cancelled.</p><p style="color:#52525b;font-size:14px">Professional: ${esc(professionalName || '—')}<br/>When: ${esc(scheduledAt || '—')}</p></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function paymentSuccess({ fullName, amount, reference, purpose }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Payment Successful</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, we received your payment.</p><table style="width:100%;border-collapse:collapse">${[['Amount',amount],['Reference',reference],['Purpose',purpose||'Wallet top-up']].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px">${esc(v||'—')}</td></tr>`).join('')}</table></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function paymentFailed({ fullName, amount, reference, purpose }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Payment Failed</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, we could not confirm your payment.</p><table style="width:100%;border-collapse:collapse">${[['Amount',amount],['Reference',reference],['Purpose',purpose||'Wallet top-up']].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px">${esc(v||'—')}</td></tr>`).join('')}</table></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function withdrawalRequested({ fullName, amount, reference, bankName, accountNumber }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Withdrawal Requested</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your withdrawal request is being processed.</p><table style="width:100%;border-collapse:collapse">${[['Amount',amount],['Reference',reference],['Bank',bankName],['Account',accountNumber]].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px">${esc(v||'—')}</td></tr>`).join('')}</table></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function withdrawalCompleted({ fullName, amount, reference, bankName, accountNumber }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Withdrawal Settled</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your withdrawal has been sent to your account.</p><table style="width:100%;border-collapse:collapse">${[['Amount',amount],['Reference',reference],['Bank',bankName],['Account',accountNumber]].map(([l,v])=>`<tr><td style="padding:8px 0;color:#888;font-weight:600;font-size:13px;width:40%">${l}</td><td style="padding:8px 0;color:#0f172a;font-size:13px">${esc(v||'—')}</td></tr>`).join('')}</table></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function withdrawalFailed({ fullName, amount, reference }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Withdrawal Failed</h2><p style="color:#52525b;font-size:14px">Hi ${esc(fullName || 'there')}, your withdrawal could not be completed. The amount has been returned to your wallet if applicable.</p><p style="color:#52525b;font-size:14px">Reference: <strong>${esc(reference || '—')}</strong><br/>Amount: ${esc(amount || '—')}</p></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function referralAgentApproved({ agentName, agentEmail, referralCode }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Agent Application Approved</h2><p style="color:#52525b;font-size:14px">Hi ${esc(agentName || 'there')}, your referral agent application has been approved.</p><p style="color:#52525b;font-size:14px">Code: <strong>${esc(referralCode || '—')}</strong><br/>Email: ${esc(agentEmail || '—')}</p></div>${footer('CareFind','carefind.app')}</div>`
+}
+
+export function referralAgentRejected({ agentName, reason }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareFind')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Application Update</h2><p style="color:#52525b;font-size:14px">Hi ${esc(agentName || 'there')}, we could not approve your referral agent application at this time.</p>${reason ? `<p style="color:#52525b;font-size:14px">Reason: ${esc(reason)}</p>` : ''}</div>${footer('CareFind','carefind.app')}</div>`
 }

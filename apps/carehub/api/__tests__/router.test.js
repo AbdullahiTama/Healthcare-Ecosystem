@@ -29,7 +29,7 @@ import { execFileSync } from 'node:child_process'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-// The cron handler calls EmailService.processBatch(), which queries the outbox.
+// The cron handler calls EmailService.drain(), which queries the outbox.
 // Left real, that is a live network call: an earlier beforeAll in this file sets
 // SUPABASE_URL process-wide, so the cron test inherited a dead address and blew
 // the 5s timeout whenever the connection did not fail fast. These tests assert
@@ -37,9 +37,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 // deterministic and instant.
 vi.mock('@care-ecosystem/shared-email', () => ({
   EmailService: class {
-    async processBatch() { return { processed: 0, sent: 0, failed: 0 } }
+    async drain() { return { processed: 0, sent: 0, failed: 0 } }
   },
-  getEmailService: () => ({ processBatch: async () => ({ processed: 0, sent: 0, failed: 0 }) }),
+  getEmailService: () => ({ drain: async () => ({ processed: 0, sent: 0, failed: 0 }) }),
   sendEmail: async () => ({ success: true, data: { id: 'stub' } }),
 }))
 

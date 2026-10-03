@@ -95,6 +95,7 @@ export default async function handler(req, res) {
             staffName: '',
           },
           subject: 'Your appointment is confirmed',
+          idempotencyKey: `appointment-confirmed:${appt.id}`,
         })
         emailService.processBatch().catch((err) => {
           console.error('[verify-appointment-payment] outbox flush error:', err)

@@ -52,7 +52,7 @@ function renderDate(d) {
 // not an error, so it must not throw: callers answer every pre-session
 // request with a generic 200 to avoid leaking which addresses are registered.
 //
-// action: 'password_reset' | 'email_verification' | 'customer_registration'
+// action: 'password_reset' | 'email_verification' | 'customer_registration' | 'staff_setup'
 // supabase: optional pre-built service-role client. Callers should pass one —
 //   see getAdminClient for why resolving supabase-js from here is unsafe.
 // resolveDisplayName: optional async (authUser) => string. Called with the user
@@ -66,10 +66,12 @@ export async function sendAuthEmail({
   app = 'carefind',
   supabase,
   resolveDisplayName,
+  businessName,
+  role,
 }) {
   if (!email) throw new Error('email is required')
 
-  const allowed = ['password_reset', 'email_verification', 'customer_registration']
+  const allowed = ['password_reset', 'email_verification', 'customer_registration', 'staff_setup']
   if (!allowed.includes(action)) throw new Error(`Unsupported auth action: ${action}`)
 
   const branding = APP_BRANDING[app] || APP_BRANDING.carefind
@@ -83,9 +85,13 @@ export async function sendAuthEmail({
   // For reset / verify we must mint a real action link via the admin API;
   // the client-facing app only swaps in the template. Plaintext links are
   // never passed from browser → server.
-  if (action === 'password_reset' || action === 'email_verification') {
+  if (action === 'password_reset' || action === 'email_verification' || action === 'staff_setup') {
     const admin = await getAdminClient(supabase)
-    const type = action === 'password_reset' ? 'recovery' : 'signup'
+    // staff_setup uses the same recovery-type action link Supabase already
+    // honors: the account owner (the Auth user being set up) lands on the
+    // same /reset-password page and picks their own password there. No
+    // custom or separate reset mechanism is introduced.
+    const type = action === 'email_verification' ? 'signup' : 'recovery'
     // generateLink both resolves the account and mints the link, so it is also
     // the existence check — the admin API has no getUserByEmail to call.
     const { data, error } = await admin.auth.admin.generateLink({
@@ -101,10 +107,12 @@ export async function sendAuthEmail({
     const resolved = resolveDisplayName ? await resolveDisplayName(data.user) : ''
     const displayName = (resolved || '').trim() || fullName.trim() || toEmail.split('@')[0]
 
-    const templateKey = action === 'password_reset' ? 'password_reset' : 'email_verification'
+    const templateKey = action === 'password_reset' ? 'password_reset' : action === 'staff_setup' ? 'staff_welcome' : 'email_verification'
     const payload = action === 'password_reset'
       ? { fullName: displayName, resetLink: actionLink }
-      : { fullName: displayName, verifyLink: actionLink }
+      : action === 'staff_setup'
+        ? { fullName: displayName, businessName: businessName || '', role, setupLink: actionLink }
+        : { fullName: displayName, verifyLink: actionLink }
 
     await emailService.enqueue({
       templateKey,
@@ -115,7 +123,9 @@ export async function sendAuthEmail({
       payload,
       subject: action === 'password_reset'
         ? 'Reset your password'
-        : 'Verify your email address',
+        : action === 'staff_setup'
+          ? 'CareHub: you have been invited'
+          : 'Verify your email address',
     })
   } else {
     // Welcome email — no link required, and no auth record to resolve a

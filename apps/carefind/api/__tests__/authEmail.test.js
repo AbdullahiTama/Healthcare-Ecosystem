@@ -53,17 +53,24 @@ describe('/api/auth-email (carefind)', () => {
     expect(sendAuthEmail.mock.calls[0][0].supabase).toBe(supabase)
   })
 
-  it('brands as carefind and defaults the redirect to carefind.app', async () => {
-    const res = await post({ action: 'password_reset', email: 'user@example.com' })
+  it('brands as carefind and defaults the redirect from CAREFIND_APP_URL', async () => {
+    const prev = process.env.CAREFIND_APP_URL
+    process.env.CAREFIND_APP_URL = 'https://carefind.app'
+    try {
+      const res = await post({ action: 'password_reset', email: 'user@example.com' })
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ ok: true, sent: true })
-    expect(sendAuthEmail.mock.calls[0][0]).toMatchObject({
-      action: 'password_reset',
-      email: 'user@example.com',
-      app: 'carefind',
-      redirectTo: 'https://carefind.app',
-    })
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toEqual({ ok: true, sent: true })
+      expect(sendAuthEmail.mock.calls[0][0]).toMatchObject({
+        action: 'password_reset',
+        email: 'user@example.com',
+        app: 'carefind',
+        redirectTo: 'https://carefind.app',
+      })
+    } finally {
+      if (prev === undefined) delete process.env.CAREFIND_APP_URL
+      else process.env.CAREFIND_APP_URL = prev
+    }
   })
 
   it('honours an explicit redirectTo from the request', async () => {

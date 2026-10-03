@@ -84,6 +84,7 @@ export default async function handler(req, res) {
         expiryDate: expiresAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       },
       subject: `You're subscribed — ${creator?.display_name || 'your subscription'} is active`,
+      idempotencyKey: `subscription-started:${reference}`,
     })
     flushOutbox().catch((err) => {
       console.error('[verify-subscription-payment] outbox flush error:', err)

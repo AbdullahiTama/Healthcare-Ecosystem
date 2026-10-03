@@ -180,6 +180,7 @@ async function notifyCustomerPostPayment(orderId) {
     try {
       await enqueueOutbox({
         templateKey: 'order_confirmation',
+        idempotencyKey: `order-confirmation:${fullOrder.id}`,
         toEmail: email,
         payload: {
           fullName: fullOrder.customer_name || 'Valued Customer',

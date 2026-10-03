@@ -80,6 +80,13 @@ const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carehub/api/_handlers/email-test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
   'apps/carefind/api/email/send.js': 'batch 3: move onto the catalog; subject is caller controlled',
   'apps/carefind/api/email/test-send.js': 'batch 3: operator preview tool, needs an explicit non catalog subject',
+  // Step 09/10 event wiring reused the same caller-subject pattern as the rest
+  // of the rollout. Batch 3 centralizes subjects through the catalog instead.
+  'apps/carefind/api/_handlers/cancel-appointment.js': 'batch 3: move onto the catalog',
+  'apps/carefind/api/_handlers/initiate-withdrawal.js': 'batch 3: move onto the catalog',
+  'apps/carefind/api/_handlers/verify-consultation-payment.js': 'batch 3: move onto the catalog',
+  'apps/carefind/api/_handlers/verify-payment.js': 'batch 3: move onto the catalog',
+  'apps/carehub/api/_handlers/initiate-business-withdrawal.js': 'batch 3: move onto the catalog',
 }
 
 // The services themselves and the auth path. authEmail.js is exempt because

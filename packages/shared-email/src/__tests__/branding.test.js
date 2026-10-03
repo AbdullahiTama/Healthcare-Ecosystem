@@ -3,6 +3,7 @@ import { getTemplate, TEMPLATE_REGISTRY } from '../templates/index.js'
 import { resolveAppFromSender } from '../EmailService.js'
 import * as HubTemplates from '../templates/Transactional/index.js'
 import * as FindTemplates from '../templates/Transactional/CareFind/index.js'
+import * as CareHubTemplates from '../templates/CareHub/index.js'
 
 const SHARED_KEYS = [
   'password_reset',
@@ -48,12 +49,12 @@ describe('brand-aware template registry', () => {
 
   it('keeps exclusive CareHub keys resolving to CareHub templates in both views', () => {
     const html = getTemplate('registration_owner', 'carehub')({
-      fullName: 'Adebayo Johnson',
+      ownerName: 'Adebayo Johnson',
       businessName: 'Lifeline Pharmacy',
       email: 'a@l.ng',
     })
     expect(html).toContain('CareHub')
-    expect(TEMPLATE_REGISTRY['registration_owner']).toBe(HubTemplates.customerRegistration)
+    expect(TEMPLATE_REGISTRY['registration_owner']).toBe(CareHubTemplates.registrationOwner)
   })
 
   it('keeps exclusive CareFind keys resolving to CareFind templates', () => {
@@ -84,7 +85,7 @@ describe('brand-aware template registry', () => {
   it('keeps the merged registry available for preview tooling', () => {
     // TEMPLATE_REGISTRY is still exported for listings; it is simply no longer
     // used to resolve a send, which is what made misbranding possible.
-    expect(TEMPLATE_REGISTRY['registration_owner']).toBe(HubTemplates.customerRegistration)
+    expect(TEMPLATE_REGISTRY['registration_owner']).toBe(CareHubTemplates.registrationOwner)
   })
 })
 

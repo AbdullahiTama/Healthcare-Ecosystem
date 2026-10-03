@@ -73,6 +73,7 @@ async function handleSubscription(metadata, reference, amount) {
         await enqueueOutbox({
           templateKey: 'subscription_created',
           toEmail: subscriberEmail,
+          idempotencyKey: `subscription-started:${reference}`,
           payload: {
             fullName: subscriber?.full_name || 'There',
             plan: `${parseInt(metadata.coins)} CareCoins`,
@@ -103,12 +104,29 @@ async function handleTransferSuccess(reference) {
     // 'approved' rows (approved by an admin while the transfer was in flight) must
     // still settle, or they sit there forever although the money has moved.
     .in('status', ['pending', 'approved'])
-    .select('id, user_id, amount')
+    .select('id, user_id, amount, bank_name, account_number')
 
-  // Trust is recorded here, when the transfer settles - not when it was merely accepted. Only the
-  // delivery that actually flipped the row to completed gets here, so a redelivery cannot count twice.
   if (completedUserRows && completedUserRows[0]) {
+    // Trust is recorded here, when the transfer settles - not when it was merely accepted. Only the
+    // delivery that actually flipped the row to completed gets here, so a redelivery cannot count twice.
     await recordWithdrawalTrust(completedUserRows[0].user_id, completedUserRows[0].amount, 'completed')
+    try {
+      const { data: authData } = await supabase.auth.admin.getUserById(completedUserRows[0].user_id)
+      const email = authData?.user?.email
+      if (email) {
+        await enqueueOutbox({
+          templateKey: 'withdrawal_completed',
+          toEmail: email,
+          payload: { fullName: email, amount: completedUserRows[0].amount, reference, bankName: completedUserRows[0].bank_name, accountNumber: completedUserRows[0].account_number },
+          subject: 'CareFind: withdrawal settled',
+          sourceId: completedUserRows[0].id,
+          idempotencyKey: `withdrawal-completed:${reference}`,
+        })
+        flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal flush error:', err))
+      }
+    } catch (err) {
+      console.error('[paystack-webhook] withdrawal email error:', err)
+    }
   }
 
   // CareHub business withdrawals
@@ -136,15 +154,35 @@ async function handleTransferFailed(reference) {
   // CareFind user withdrawals
   const { data: requests } = await supabase
     .from('withdrawal_requests')
-    .select('id, user_id, amount')
+    .select('id')
     .eq('paystack_reference', reference)
     .eq('status', 'pending')
     .limit(1)
 
   if (requests && requests.length > 0) {
     const { data: rejected } = await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
-    // 'ok' means THIS delivery refunded it; any other result was settled by another path already.
-    if (rejected === 'ok') await recordWithdrawalTrust(requests[0].user_id, requests[0].amount, 'failed')
+    try {
+      const { data: failedRow } = await supabase.from('withdrawal_requests').select('id, user_id, amount').eq('id', requests[0].id).maybeSingle()
+      if (failedRow) {
+        // 'ok' means THIS delivery refunded it; any other result was settled by another path already.
+        if (rejected === 'ok') await recordWithdrawalTrust(failedRow.user_id, failedRow.amount, 'failed')
+        const { data: authData } = await supabase.auth.admin.getUserById(failedRow.user_id)
+        const email = authData?.user?.email
+        if (email) {
+          await enqueueOutbox({
+            templateKey: 'withdrawal_failed',
+            toEmail: email,
+            payload: { fullName: email, amount: failedRow.amount, reference },
+            subject: 'CareFind: withdrawal failed',
+            sourceId: failedRow.id,
+            idempotencyKey: `withdrawal-failed:${reference}`,
+          })
+          flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal-failed flush error:', err))
+        }
+      }
+    } catch (err) {
+      console.error('[paystack-webhook] withdrawal-failed email error:', err)
+    }
   }
 
   // CareHub business withdrawals
@@ -168,12 +206,31 @@ async function handleTransferFailed(reference) {
 async function handleConsultation(metadata, reference, amount) {
   if (metadata?.purpose !== 'consultation') return null
 
-  return settleConsultationPayment(supabase, {
+  const result = await settleConsultationPayment(supabase, {
     patientId: metadata.user_id,
     professionalId: metadata.professional_id,
     nairaAmount: Math.round(amount / 100),
     reference,
-  }).then((result) => ({ settled: true, ...result }))
+  })
+
+  try {
+    const { data: authData } = await supabase.auth.admin.getUserById(metadata.user_id)
+    const email = authData?.user?.email
+    if (email) {
+      await enqueueOutbox({
+        templateKey: 'consultation_confirmed',
+        toEmail: email,
+        payload: { fullName: authData.user.user_metadata?.full_name || email, service: 'Consultation' },
+        subject: 'Your CareFind consultation is confirmed',
+        idempotencyKey: `consultation-confirmed:${reference}`,
+      })
+      flushOutbox().catch((err) => console.error('[paystack-webhook] consultation flush error:', err))
+    }
+  } catch (err) {
+    console.error('[paystack-webhook] consultation email error:', err)
+  }
+
+  return { settled: true, ...result }
 }
 
 // Booking handler (CareFind business-profile appointment, card paid)
@@ -229,6 +286,8 @@ async function handleBooking(metadata, reference, amount) {
       await enqueueOutbox({
         templateKey: isCareHub ? 'appointment_confirmed' : 'booking_confirmed',
         toEmail: appt.client_email,
+        sourceId: appt.id,
+        idempotencyKey: `${isCareHub ? 'appointment-confirmed' : 'booking-confirmed'}:${appt.id}`,
         payload: {
           fullName: appt.client_name,
           businessName: business?.name || '',
@@ -358,6 +417,7 @@ async function notifyCustomerPostPayment(orderId) {
       await enqueueOutbox({
         templateKey: 'order_confirmation',
         toEmail: email,
+        idempotencyKey: `order-confirmation:${fullOrder.id}`,
         payload: {
           fullName: fullOrder.customer_name || 'Valued Customer',
           orderRef: fullOrder.order_ref,
@@ -412,6 +472,7 @@ async function handlePlanPayment(metadata, reference, amount) {
       await enqueueOutbox({
         templateKey: 'subscription_created',
         toEmail: ownerEmail,
+        idempotencyKey: `subscription-started:${reference}`,
         payload: {
           fullName: biz.owner_name || 'Business Owner',
           plan: biz.plan || 'Standard',
