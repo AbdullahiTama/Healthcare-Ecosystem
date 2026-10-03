@@ -1,13 +1,13 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 01 — FINANCIAL ARCHITECTURE**
-Overall status: Phase 00 COMPLETED. Phase 01 READY_FOR_REVIEW. Next: Phase 02 after the owner decisions below.
+Current phase: **PHASE 02 — PAYMENT INTENTS**
+Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 READY_FOR_REVIEW (migration written + tested, NOT yet applied to production).
 
 | Phase | Status |
 |---|---|
 | 00 Baseline and audit | COMPLETED |
-| 01 Financial architecture | READY_FOR_REVIEW |
-| 02 Payment intents | NOT_STARTED |
+| 01 Financial architecture | COMPLETED |
+| 02 Payment intents | READY_FOR_REVIEW |
 | 03 Provider abstraction | NOT_STARTED |
 | 04 CareFind payment flows | NOT_STARTED |
 | 05 CareFind CareCoin wallet | NOT_STARTED |
@@ -56,3 +56,17 @@ New findings: `claim_payment_event` executable by `authenticated` (low; Phase 14
 Decisions awaiting owner (doc §10-11): D1 settlement in Postgres; D2 wallets stay projections; D3 two currencies one ledger; D4 guest bookings via intent with null customer; D6 shop vendor payout model; consultation/subscription platform fee; card-booking refund policy; webhook endpoint per app.
 Unresolved: indexes and migration drift not yet checked; `agent_earnings` is written by SQL function `calculate_agent_earnings` (carefindhub foundation; renamed by `20261002_financial_phase0_lockdown.sql`) — a SECOND commission system parallel to `commissions`, to be reconciled in Phase 07; `planning/ROADMAP.md`, `planning/CODE_AUDIT.md`, `docs/PROJECT_OVERVIEW.md` still absent.
 Next phase: PHASE 02 — PAYMENT INTENTS.
+
+## Phase 02 — Payment intents
+
+Decisions accepted for this phase: D1 settlement in Postgres, D2 wallets stay projections, D3 one ledger/two currencies, D4 guest bookings via intents with null customer, D5 incremental rollout. Business questions (shop vendor payout, subscription/consultation platform fee, card-booking refund policy, webhook endpoint) remain open and are carried to Phases 04/06/09/11.
+
+Completed work: `payment_intents`, `payment_provider_events`, `financial_config` — integer-only money, unique reference, immutable identity (trigger), enforced state machine incl. late-success paths, append-only events with unique (provider,event_id), no client access (RLS on, zero policies, explicit revokes, delete/truncate blocked even for service_role), config seeded with the CURRENT hard-coded rules (no commercial value changed).
+Files changed:
+* `supabase/migrations/carefind_20261003_payment_intents_foundation.sql` (new; copy in `apps/carefind/sql/20261003_payment_intents_foundation.sql`)
+* `apps/carefind/src/test/payments/paymentIntents.db.test.js` (new, 44 tests, real Postgres via PGlite)
+* `apps/carefind/package.json`, `package-lock.json` (devDependency `@electric-sql/pglite`)
+Migrations: the file above — WRITTEN, TESTED LOCALLY, NOT APPLIED to production (awaiting approval).
+Tests: 44/44 pass (`npx vitest run --config vitest.payments.config.js src/test/payments/paymentIntents.db.test.js`). Not run: full CareFind suite.
+Unresolved: apply to production + post-apply catalog check; `customer_id`/`business_id` intentionally have no FK (money records must outlive accounts) — revisit if reconciliation needs it; `financial_config` has no change history yet (Phase 11 audit log); no flow uses the tables yet by design.
+Next phase: PHASE 03 — PAYMENT PROVIDER ABSTRACTION.
