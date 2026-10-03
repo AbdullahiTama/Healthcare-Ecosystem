@@ -48,8 +48,14 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, id: order.id, alreadyPaid: true })
   }
 
-  const paystackRef = reference || order.payment_reference || order.paystack_reference
+  // Only the order's own reference may settle it. A client-supplied reference is never trusted: matching
+  // on amount alone would let any successful payment of the same total (a wallet top-up, a booking, another
+  // customer's order) settle this order.
+  const paystackRef = order.payment_reference
   if (!paystackRef) return res.status(400).json({ error: 'No payment reference' })
+  if (reference && reference !== paystackRef) {
+    return res.status(400).json({ error: 'Payment reference does not belong to this order' })
+  }
 
   let paystackData
   try {
@@ -59,6 +65,10 @@ export default async function handler(req, res) {
   }
   if (!paystackData.status || paystackData.data?.status !== 'success') {
     return res.status(400).json({ error: 'Payment not confirmed by Paystack' })
+  }
+  // Defence in depth: initiate-shop-payment stamps metadata.order_id on every transaction it creates.
+  if (paystackData.data?.metadata?.order_id !== order.id) {
+    return res.status(400).json({ error: 'Payment was not made for this order' })
   }
 
   const verifiedAmount = paystackData.data.amount
