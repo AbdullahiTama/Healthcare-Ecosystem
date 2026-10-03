@@ -403,7 +403,9 @@ export default function Checkout() {
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: theme.navy }}>
         Checkout
       </h1>
-      <p style={{ fontSize: 12, color: theme.textLight, marginBottom: 16 }}>Segment: <b style={{ textTransform:'capitalize' }}>{segment}</b> · Commission {segment==='retail'?'10%':segment==='wholesale'?'5%':'2.5%'} is deducted from vendor payout, not charged to you.</p>
+      {segment !== 'retail' && (
+        <p style={{ fontSize: 12, color: theme.textLight, marginBottom: 16 }}>Order type: <b style={{ textTransform:'capitalize' }}>{segment}</b></p>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -434,12 +436,12 @@ export default function Checkout() {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Input label="Customer Name *" value={formData.customer_name} onChange={(v) => setFormData({ ...formData, customer_name: v })} placeholder="Full name" required />
-                <Input label="Phone *" value={formData.customer_phone} onChange={(v) => setFormData({ ...formData, customer_phone: v })} placeholder="080..." required />
+                <Input label="Customer Name" value={formData.customer_name} onChange={(v) => setFormData({ ...formData, customer_name: v })} placeholder="Full name" required />
+                <Input label="Phone" value={formData.customer_phone} onChange={(v) => setFormData({ ...formData, customer_phone: v })} placeholder="080..." required />
               </div>
-              <Input label="Email *" value={formData.customer_email} onChange={(v) => setFormData({ ...formData, customer_email: v })} placeholder="you@example.com" required />
+              <Input label="Email" value={formData.customer_email} onChange={(v) => setFormData({ ...formData, customer_email: v })} placeholder="you@example.com" required />
               <Input
-                label="Street Address *"
+                label="Street Address"
                 value={formData.street}
                 onChange={(v) => setFormData({ ...formData, street: v })}
                 placeholder="123 Main Street"
@@ -447,14 +449,14 @@ export default function Checkout() {
               />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Input
-                  label="City *"
+                  label="City"
                   value={formData.city}
                   onChange={(v) => setFormData({ ...formData, city: v })}
                   placeholder="Lagos"
                   required
                 />
                 <Input
-                  label="State *"
+                  label="State"
                   value={formData.state}
                   onChange={(v) => setFormData({ ...formData, state: v })}
                   placeholder="Lagos State"
@@ -477,7 +479,6 @@ export default function Checkout() {
                   <span>Your delivery location is outside our standard automatic service zone. Our Customer Care team will contact you within 24 hours with a delivery quote. You can proceed to pay for your products now. Delivery charges will be confirmed via WhatsApp/Email.</span>
                 </div>
               )}
-              <p style={{ fontSize: 11, color: theme.textLight }}>Google Maps validation + GPS distance will replace manual city/state in Phase 2 (B27 Step 2).</p>
             </div>
           </Card>
 
@@ -538,7 +539,7 @@ export default function Checkout() {
               {formData.delivery_preference === 'home' && approved && (
                 <div style={{ marginTop: 12 }}>
                   <Input
-                    label="Distance from vendor (km) — Phase 2 will auto-calc via Maps"
+                    label="Distance from vendor (km)"
                     type="number"
                     value={distanceKm}
                     onChange={(v) => setDistanceKm(Number(v))}
