@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import { Heart, ShoppingCart, Package, Star, Phone, MessageCircle } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -5,7 +6,7 @@ import { Pill } from '../../components/ui'
 import { whatsappLink, telLink } from '../utils/marketplace.js'
 import { sellerContact, sellerPhone, sellerName } from '../utils/sellerLookup.js'
 
-export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished, rating, variant = 'shop' }) {
+function ProductCard({ row, onAddToCart, onToggleWishlist, wished, rating, variant = 'shop' }) {
   const p = row.products || row
   const rowId = row.id || p.id
   const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
@@ -210,3 +211,6 @@ export default function ProductCard({ row, onAddToCart, onToggleWishlist, wished
     </div>
   )
 }
+
+// Memoized: a cart or wishlist change on one card must not re-render every card in the grid.
+export default memo(ProductCard)

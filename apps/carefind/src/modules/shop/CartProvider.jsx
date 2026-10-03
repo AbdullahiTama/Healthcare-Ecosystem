@@ -1,7 +1,7 @@
 // Cart Provider - React context for cart state management
 // Provides cart state and actions to all components
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { cartRepository } from './cartRepository'
 
 const CartContext = createContext(null)
@@ -19,39 +19,24 @@ export function CartProvider({ children }) {
     setTotal(cartRepository.getTotal())
   }, [])
 
-  // Add item to cart
-  function addItem(item) {
-    const updated = cartRepository.add(item)
+  // Actions are stable (they only touch the repository singleton and state setters) so memoized consumers,
+  // such as the product cards, are not re-rendered by an unrelated cart change.
+  const refresh = useCallback((updated) => {
     setItems(updated)
     setCount(cartRepository.getCount())
     setTotal(cartRepository.getTotal())
-  }
+  }, [])
 
-  // Remove item from cart
-  function removeItem(ecommerce_product_id) {
-    const updated = cartRepository.remove(ecommerce_product_id)
-    setItems(updated)
-    setCount(cartRepository.getCount())
-    setTotal(cartRepository.getTotal())
-  }
-
-  // Update item quantity
-  function updateQuantity(ecommerce_product_id, quantity) {
-    const updated = cartRepository.updateQuantity(ecommerce_product_id, quantity)
-    setItems(updated)
-    setCount(cartRepository.getCount())
-    setTotal(cartRepository.getTotal())
-  }
-
-  // Clear cart
-  function clearCart() {
-    const updated = cartRepository.clear()
-    setItems(updated)
+  const addItem = useCallback((item) => refresh(cartRepository.add(item)), [refresh])
+  const removeItem = useCallback((ecommerce_product_id) => refresh(cartRepository.remove(ecommerce_product_id)), [refresh])
+  const updateQuantity = useCallback((ecommerce_product_id, quantity) => refresh(cartRepository.updateQuantity(ecommerce_product_id, quantity)), [refresh])
+  const clearCart = useCallback(() => {
+    setItems(cartRepository.clear())
     setCount(0)
     setTotal(0)
-  }
+  }, [])
 
-  const value = {
+  const value = useMemo(() => ({
     items,
     count,
     total,
@@ -60,7 +45,7 @@ export function CartProvider({ children }) {
     updateQuantity,
     clearCart,
     isEmpty: items.length === 0
-  }
+  }), [items, count, total, addItem, removeItem, updateQuantity, clearCart])
 
   return (
     <CartContext.Provider value={value}>

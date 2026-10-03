@@ -38,6 +38,11 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const touchStartY = useRef(null)
   const pullRaf = useRef(null)
 
+  const handleAddToCart = useCallback((item) => {
+    addItem(item)
+    showToast('Added to cart!', { type: 'success', duration: 2000 })
+  }, [addItem, showToast])
+
   useEffect(() => { setSegment(initialSegment) }, [initialSegment])
   useEffect(() => { setRecentIds(getRecent()) }, [])
 
@@ -308,7 +313,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
         rows={grid}
         loading={false}
         error=""
-        onAddToCart={(item) => { addItem(item); showToast('Added to cart!', { type: 'success', duration: 2000 }) }}
+        onAddToCart={handleAddToCart}
         onToggleWishlist={toggleWishlist}
         hasWishlist={hasWishlist}
         ratings={ratings}
