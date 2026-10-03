@@ -1,49 +1,52 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
-import { buildRegistrationOwnerHtml, buildAdminNewRegistrationHtml, buildBusinessApprovedHtml, buildBusinessRejectedHtml } from '../email.js'
 
-describe('email builders', () => {
-  it('registration owner html contains business and owner names and under review', () => {
-    const html = buildRegistrationOwnerHtml({ businessName: 'HealthPlus', ownerName: 'Chidi' })
-    expect(html).toContain('HealthPlus')
-    expect(html).toContain('Chidi')
-    expect(html).toContain('under review')
-    expect(html).toContain('24 hours')
+const getSession = vi.hoisted(() => vi.fn())
+vi.mock('../authClient.js', () => ({ authClient: { auth: { getSession } } }))
+
+import { emailAgentApproved, emailAgentRejected } from '../email.js'
+
+describe('client email events', () => {
+  beforeEach(() => {
+    getSession.mockReset()
+    vi.restoreAllMocks()
   })
 
-  it('admin new registration html contains table rows', () => {
-    const html = buildAdminNewRegistrationHtml({ businessName: 'MediCare', ownerName: 'Ada', businessType: 'pharmacy', state: 'Lagos', email: 'ada@example.com' })
-    expect(html).toContain('MediCare')
-    expect(html).toContain('Ada')
-    expect(html).toContain('pharmacy')
-    expect(html).toContain('Lagos')
-    expect(html).toContain('ada@example.com')
-    expect(html).toContain('New Business Registration')
+  it('fails honestly when there is no session', async () => {
+    getSession.mockResolvedValue({ data: { session: null } })
+    const res = await emailAgentApproved({ agentEmail: 'a@b.com', agentName: 'X' })
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/signed in/i)
   })
 
-  it('business approved html contains welcome and login details', () => {
-    const html = buildBusinessApprovedHtml({ businessName: 'Wellness Spa', ownerName: 'Emeka', ownerEmail: 'emeka@example.com' })
-    expect(html).toContain('Wellness Spa')
-    expect(html).toContain('Emeka')
-    expect(html).toContain('emeka@example.com')
-    expect(html).toContain('Approved')
+  it('posts agent_approved with an Authorization header', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'tok' } } })
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) })
+    const res = await emailAgentApproved({ agentEmail: 'a@b.com', agentName: 'X', referralCode: 'R1' })
+    expect(res.success).toBe(true)
+    const [url, opts] = spy.mock.calls[0]
+    expect(url).toBe('/api/email/send')
+    expect(opts.headers.Authorization).toBe('Bearer tok')
+    expect(JSON.parse(opts.body).templateKey).toBe('agent_approved')
   })
 
-  it('business rejected html contains reason when provided', () => {
-    const html = buildBusinessRejectedHtml({ businessName: 'X Pharmacy', ownerName: 'Bola', reason: 'Missing documents' })
-    expect(html).toContain('X Pharmacy')
-    expect(html).toContain('Missing documents')
+  it('posts agent_rejected and surfaces server errors', async () => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'tok' } } })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, json: async () => ({ error: 'Invalid templateKey' }) })
+    const res = await emailAgentRejected({ agentEmail: 'a@b.com', agentName: 'X' })
+    expect(res.success).toBe(false)
+    expect(res.error).toBe('Invalid templateKey')
   })
 
-  it('business rejected html omits reason block when no reason', () => {
-    const html = buildBusinessRejectedHtml({ businessName: 'X', ownerName: 'Y', reason: '' })
-    expect(html).not.toContain('Reason:')
+  it('requires an agentEmail', async () => {
+    expect((await emailAgentApproved({})).success).toBe(false)
+    expect((await emailAgentRejected({})).success).toBe(false)
   })
 
-  it('client email.js does not leak resend key', () => {
+  it('client email.js never references Resend directly', () => {
     const file = fs.readFileSync(path.resolve('src/lib/email.js'), 'utf-8')
-    const key = ['RESEND','API','KEY'].join('_')
+    const key = ['RESEND', 'API', 'KEY'].join('_')
     expect(file).not.toContain(key)
     expect(file).not.toContain('api.resend.com')
   })

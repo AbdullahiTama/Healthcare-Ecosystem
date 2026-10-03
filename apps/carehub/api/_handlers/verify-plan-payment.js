@@ -39,7 +39,9 @@ export default async function handler(req, res) {
   const { data, error } = await supabase.rpc('renew_business_plan', {
     p_business_id: business.id,
     p_months: months,
-    p_naira_amount: amount,
+    // Paystack reports kobo; plan_payments.naira_amount is NAIRA (it used to store kobo, which
+    // overstated revenue 100x in every report that read it as naira).
+    p_naira_amount: Math.round(amount / 100),
     p_reference: reference,
   })
   if (error) return res.status(500).json({ error: error.message })
@@ -103,6 +105,7 @@ export default async function handler(req, res) {
           expiryDate: biz.plan_expires_at ? new Date(biz.plan_expires_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         },
         subject: 'Your CareHub subscription is active',
+        idempotencyKey: `subscription-started:${reference}`,
       })
       emailService.processBatch().catch((err) => {
         console.error('[verify-plan-payment] outbox flush error:', err)

@@ -96,6 +96,8 @@ export default async function handler(req, res) {
           time: appt.time,
         },
         subject: 'Your booking is confirmed',
+        sourceId: appt.id,
+        idempotencyKey: `booking-confirmed:${appt.id}`,
       })
       flushOutbox().catch((err) => {
         console.error('[verify-booking-payment] outbox flush error:', err)

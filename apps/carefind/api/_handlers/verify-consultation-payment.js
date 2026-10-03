@@ -2,6 +2,7 @@
 import { verifyUser } from '../_lib/verifyUser.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
+import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
 // Called when the user is redirected back from Paystack after booking a
 // consultation by card. Verifies the payment with Paystack, then settles the
@@ -48,6 +49,27 @@ export default async function handler(req, res) {
       nairaAmount: Math.round(paystackData.data.amount / 100),
       reference,
     })
+
+    // Email must not gate or fail the verified settlement. The shared
+    // outbox provider handles retries asynchronously.
+    try {
+      if (user.email) {
+        await enqueueOutbox({
+          templateKey: 'consultation_confirmed',
+          toEmail: user.email,
+          payload: {
+            fullName: user.user_metadata?.full_name || user.email,
+            service: 'Consultation',
+          },
+          subject: 'Your CareFind consultation is confirmed',
+          idempotencyKey: `consultation-confirmed:${reference}`,
+        })
+        flushOutbox().catch((err) => console.error('[verify-consultation-payment] outbox flush error:', err))
+      }
+    } catch (err) {
+      console.error('[verify-consultation-payment] email enqueue error:', err)
+    }
+
     return res.status(200).json({ success: true, ...result })
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Could not settle payment' })

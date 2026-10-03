@@ -2,9 +2,10 @@
 // Reads RESEND_API_KEY from process.env (server env), not Vite.
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'CareFind <support@carefind.ng>'
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carefind.ng'
-const APP_URL = process.env.APP_URL || 'https://carefind.app'
+const FROM_EMAIL = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || ''
+const ADMIN_EMAIL = process.env.CAREFIND_ADMIN_EMAIL || process.env.ADMIN_EMAIL || ''
+const APP_URL = process.env.CAREFIND_APP_URL || process.env.APP_URL || ''
+const SUPPORT_EMAIL = process.env.EMAIL_REPLY_TO || process.env.RESEND_REPLY_TO || ''
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
 
@@ -17,7 +18,7 @@ export async function sendEmail({ to, subject, html, from }) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: from || FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject, html }),
+      body: JSON.stringify({ from: from || FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject, html, reply_to: process.env.EMAIL_REPLY_TO || process.env.RESEND_REPLY_TO || undefined }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) return { success: false, error: data?.message || `Resend ${res.status}`, data }
@@ -33,7 +34,7 @@ function logoHeader() {
 }
 
 function footer() {
-  return `<div style="text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid #f0f0f0;color:#aaa;font-size:12px"><p>CareFind — Healthcare Marketplace</p><p style="margin-top:4px">support@carefind.ng | carefind.ng</p></div>`
+  return `<div style="text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid #f0f0f0;color:#aaa;font-size:12px"><p>CareFind — Healthcare Marketplace</p><p style="margin-top:4px">${SUPPORT_EMAIL} | ${APP_URL}</p></div>`
 }
 
 function fmtKobo(kobo) { return '\u20A6' + (Number(kobo) / 100).toLocaleString('en-NG', { minimumFractionDigits: 0 }) }

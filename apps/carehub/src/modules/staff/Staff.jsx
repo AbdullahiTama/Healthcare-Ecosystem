@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, Check, X, User, CheckCircle, Pause, Shield, Plus, Sparkles } from 'lucide-react'
 import { staffRepository } from './repositories'
 import { provisionStaffAuth } from '../../services/supabase'
+import { authClient } from '../../lib/authClient'
 import { rolesForType, getModulesForType } from '../../lib/permissions'
 import { planLimitsFor, PLAN_LABELS } from '../../lib/planLimits'
 import { getTemplatesForBusinessType, applyTemplate } from '../../lib/roleTemplates'
@@ -9,21 +10,6 @@ import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, GhostBtn, TealBtn, RedBtn, Avatar, Loading, Empty, useToast, Toast } from '../../components/ui'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
-
-const sendWelcomeEmail = async ({ staffName, staffEmail, businessName, setupToken }) => {
-  try {
-    await fetch('/api/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        templateKey: 'staff_welcome',
-        toEmail: staffEmail,
-        payload: { fullName: staffName, businessName, setupToken },
-        subject: `Welcome to ${businessName} — Set Your Password`,
-      }),
-    })
-  } catch (e) { console.warn('[Staff] welcome email failed', e) }
-}
 
 export default function Staff({ brand, role, perms }) {
   const [staff, setStaff] = useState([])
@@ -177,8 +163,7 @@ export default function Staff({ brand, role, perms }) {
   }
 
   async function save() {
-    if (!form.fullName || !form.email || !form.password || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
-    if (form.password.length < 6) { showToast('Password must be at least 6 characters.', { type: 'warning' }); return }
+    if (!form.fullName || !form.email || !form.role) { showToast('Please fill in all required fields.', { type: 'warning' }); return }
     const limit = planLimitsFor(brand?.plan).maxStaff
     if (staff.length >= limit) {
       showToast(`Your ${PLAN_LABELS[brand?.plan] || 'current'} plan allows up to ${limit} staff. Upgrade your plan in Settings to add more.`, { type: 'warning' })
@@ -202,17 +187,36 @@ export default function Staff({ brand, role, perms }) {
       // verifies this caller owns the business). If provisioning fails, the row
       // would have no way to sign in, so it is rolled back rather than left
       // behind as a member who can never log in.
-      await provisionStaffAuth(brand.id, form.email.toLowerCase(), form.password)
-       // Send welcome email to staff (magic-link setup, no plaintext password)
-       try {
-         await sendWelcomeEmail({
-           staffName: form.fullName,
-           staffEmail: form.email,
-           businessName: brand.name,
-           setupToken: '',
-         })
-       } catch (e) {}
-      showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
+      // Provision with a random, single-use placeholder password generated
+      // locally and never persisted, logged, or emailed. The staff member's
+      // real password is set by themselves through the expiring recovery link
+      // in the setup email below — the owner never sees or chooses it.
+      const placeholderPassword = crypto.getRandomValues(new Uint8Array(24)).reduce((s, b) => s + b.toString(36), '').slice(0, 24) + 'A1!'
+      await provisionStaffAuth(brand.id, form.email.toLowerCase(), placeholderPassword)
+      // Send the setup email: "Your CareHub account has been created" with a
+      // secure, expiring Set Password link (Supabase recovery action link).
+      let emailResult = null
+      try {
+        const { data: { session } } = await authClient.auth.getSession()
+        const res = await fetch('/api/auth-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'staff_setup',
+            email: form.email.toLowerCase(),
+            fullName: form.fullName,
+            businessName: brand.name,
+            role: form.role,
+            redirectTo: window.location.origin + '/reset-password',
+          }),
+        })
+        emailResult = { success: res.ok, error: res.ok ? null : 'Setup email request failed' }
+      } catch (e) {}
+      if (emailResult && !emailResult.success) {
+        showToast('Staff member added, but the welcome email could not be sent.', { type: 'warning' })
+      } else {
+        showToast('Staff member added and signed in! Welcome email sent.', { type: 'success' })
+      }
       setForm({}); setShowAdd(false); load()
     } catch (e) {
       // Undo the just-created staff row if the auth provisioning failed, so we
@@ -402,8 +406,10 @@ export default function Staff({ brand, role, perms }) {
             </div>
           )}
 
-          <Inp label='Password *' value={form.password} onChange={v => f('password', v)} type='password' placeholder='Set a password for them' required />
-
+          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
+            We create their account and email them a secure, expiring link to set their own password. You never see or share their credentials. They will only see pages their role allows.
+            <br /><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> <strong>Only Owner role</strong> can edit stock prices and delete records.</span>
+          </div>
           <div style={{ padding: '12px', borderRadius: theme.radius.md, border: `1px solid ${border}` }}>
             <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
               <input type='checkbox' checked={form.showOnCareFind || false} onChange={e => f('showOnCareFind', e.target.checked)} style={{ marginTop: '2px', accentColor: tealDeep }} />
@@ -419,10 +425,6 @@ export default function Staff({ brand, role, perms }) {
             )}
           </div>
 
-          <div style={{ padding: '12px', borderRadius: theme.radius.md, background: tealMist, fontSize: '12px', color: tealDeep, lineHeight: '1.7' }}>
-            Staff log in with their email and this password. They will only see pages their role allows.
-            <br /><span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12} /> <strong>Only Owner role</strong> can edit stock prices and delete records.</span>
-          </div>
         </div>
       </Modal>
 

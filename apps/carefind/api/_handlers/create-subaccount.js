@@ -13,6 +13,13 @@ const supabase = createClient(
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
+  // Disabled: charges are no longer split at Paystack (see charge-consultation.js /
+  // charge-subscription.js). Professionals and creators are paid through the CareCoin
+  // wallet, and a subaccount would only create a second, bank-direct payout path.
+  // Financial audit C-6. Remove the rest of this file once nothing references it.
+  return res.status(410).json({ error: 'Subaccounts are no longer used' })
+
+  // eslint-disable-next-line no-unreachable
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 

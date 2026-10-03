@@ -1,6 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { processBatch as flushOutbox } from '../_lib/emailService.js'
 import { requireAdmin } from '../_lib/requireAdmin.js'
+import { decideAdminApprove, decideAdminReject } from '../_lib/withdrawalAdmin.js'
 
 export default async function handler(req, res) {
   try {
@@ -307,6 +308,16 @@ async function handleRequest(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
+    const { data: wdRow } = await supabase
+      .from('withdrawal_requests')
+      .select('id, status, paystack_reference, paystack_transfer_code, created_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })
+    // Automated (Paystack) withdrawals are already being paid; approving would only
+    // park the row where the completion webhook cannot settle it.
+    const approveDecision = decideAdminApprove(wdRow)
+    if (approveDecision.action === 'block') return res.status(409).json({ error: approveDecision.message })
     // request_withdrawal() already deducted the coins when the request was
     // filed, so approval is just a status change. Routed through a
     // SECURITY DEFINER RPC (row-locks the request) instead of a JS
@@ -325,7 +336,25 @@ async function handleRequest(req, res) {
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
 
-    // Coins were deducted when the request was filed ΓÇö a rejection has to
+    const { data: wdRow } = await supabase
+      .from('withdrawal_requests')
+      .select('id, status, paystack_reference, paystack_transfer_code, created_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })
+
+    // For an automated withdrawal the transfer may already be paying the user's bank.
+    // Refunding the coins while it pays is a double payout, so ask Paystack first.
+    const rejectDecision = wdRow.status === 'pending'
+      ? await decideAdminReject(wdRow)
+      : { action: 'refund' } // non-pending: the RPC below reports "already ..."
+    if (rejectDecision.action === 'block') return res.status(409).json({ error: rejectDecision.message })
+    if (rejectDecision.action === 'complete') {
+      await supabase.from('withdrawal_requests').update({ status: 'completed' }).eq('id', id).eq('status', 'pending')
+      return res.status(409).json({ error: rejectDecision.message })
+    }
+
+    // Coins were deducted when the request was filed — a rejection has to
     // give them back, or they'd just vanish. reject_withdrawal_request()
     // does the pending-status check, the refund, and the status change as
     // one atomic unit (row-locked), replacing a JS read-balance/

@@ -389,6 +389,11 @@ async function notifyBusiness(businessId, appointmentId, clientName, bookingType
           time,
         },
         subject: 'Your appointment is booked',
+        // `appointment` does not exist in this function's scope (it is a handler-local variable);
+        // this was a ReferenceError on every call, silently swallowed by the catch below, so the
+        // booking-confirmation email never sent for any free or CareCoin-paid booking.
+        sourceId: appointmentId,
+        idempotencyKey: `booking-confirmed:${appointmentId}`,
       })
       flushOutbox().catch((err) => {
         console.error('[booking] outbox flush error:', err)

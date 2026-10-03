@@ -47,7 +47,11 @@ export async function initiateTransfer({ recipientCode, amountKobo, reason, refe
   })
 
   if (!data.status) {
-    throw new Error(data.message || 'Could not initiate transfer')
+    // Paystack answered and said no. Anything else that can go wrong here (timeout,
+    // dropped connection, bad JSON) is ambiguous: the transfer may exist anyway.
+    const err = new Error(data.message || 'Could not initiate transfer')
+    err.paystackRejected = true
+    throw err
   }
 
   return { transferCode: data.data.transfer_code, reference: data.data.reference }

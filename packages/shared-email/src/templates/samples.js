@@ -1,5 +1,5 @@
 export const SAMPLES = {
-  registration_owner: { fullName: 'Adebayo Johnson', businessName: 'Lifeline Pharmacy', email: 'adebayo@lifeline.ng', password: 'TempPass123!' },
+  registration_owner: { fullName: 'Adebayo Johnson', businessName: 'Lifeline Pharmacy', email: 'adebayo@lifeline.ng' },
   admin_new_registration: { businessName: 'Lifeline Pharmacy', ownerName: 'Adebayo Johnson', businessType: 'Pharmacy', state: 'Lagos', email: 'adebayo@lifeline.ng' },
   business_approved: { businessName: 'Lifeline Pharmacy', ownerName: 'Adebayo Johnson', ownerEmail: 'adebayo@lifeline.ng' },
   business_rejected: { businessName: 'Lifeline Pharmacy', ownerName: 'Adebayo Johnson', reason: 'Incomplete CAC documentation. Please re-upload a valid certificate.' },

@@ -50,7 +50,8 @@ export default async function handler(req, res) {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
-    p_naira_amount: paystackData.data.amount,
+    // Paystack reports kobo; transactions.naira_amount is NAIRA everywhere else (top-ups, consultations, bookings).
+    p_naira_amount: Math.round(paystackData.data.amount / 100),
     p_reference: reference,
   })
 
@@ -83,6 +84,7 @@ export default async function handler(req, res) {
         expiryDate: expiresAt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       },
       subject: `You're subscribed — ${creator?.display_name || 'your subscription'} is active`,
+      idempotencyKey: `subscription-started:${reference}`,
     })
     flushOutbox().catch((err) => {
       console.error('[verify-subscription-payment] outbox flush error:', err)

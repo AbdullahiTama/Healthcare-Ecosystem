@@ -45,7 +45,8 @@ async function handleSubscription(metadata, reference, amount) {
     p_subscriber: metadata.user_id,
     p_creator: metadata.creator_id,
     p_price: parseInt(metadata.coins),
-    p_naira_amount: amount,
+    // Paystack reports kobo; transactions.naira_amount is NAIRA everywhere else (top-ups, consultations, bookings).
+    p_naira_amount: Math.round(amount / 100),
     p_reference: reference,
   })
   if (error) return null
@@ -72,6 +73,7 @@ async function handleSubscription(metadata, reference, amount) {
         await enqueueOutbox({
           templateKey: 'subscription_created',
           toEmail: subscriberEmail,
+          idempotencyKey: `subscription-started:${reference}`,
           payload: {
             fullName: subscriber?.full_name || 'There',
             plan: `${parseInt(metadata.coins)} CareCoins`,
@@ -95,11 +97,37 @@ async function handleSubscription(metadata, reference, amount) {
 // Transfer handler (automated withdrawal payouts)
 async function handleTransferSuccess(reference) {
   // CareFind user withdrawals
-  await supabase
+  const { data: completedUserRows } = await supabase
     .from('withdrawal_requests')
     .update({ status: 'completed' })
     .eq('paystack_reference', reference)
-    .eq('status', 'pending')
+    // 'approved' rows (approved by an admin while the transfer was in flight) must
+    // still settle, or they sit there forever although the money has moved.
+    .in('status', ['pending', 'approved'])
+    .select('id, user_id, amount, bank_name, account_number')
+
+  if (completedUserRows && completedUserRows[0]) {
+    // Trust is recorded here, when the transfer settles - not when it was merely accepted. Only the
+    // delivery that actually flipped the row to completed gets here, so a redelivery cannot count twice.
+    await recordWithdrawalTrust(completedUserRows[0].user_id, completedUserRows[0].amount, 'completed')
+    try {
+      const { data: authData } = await supabase.auth.admin.getUserById(completedUserRows[0].user_id)
+      const email = authData?.user?.email
+      if (email) {
+        await enqueueOutbox({
+          templateKey: 'withdrawal_completed',
+          toEmail: email,
+          payload: { fullName: email, amount: completedUserRows[0].amount, reference, bankName: completedUserRows[0].bank_name, accountNumber: completedUserRows[0].account_number },
+          subject: 'CareFind: withdrawal settled',
+          sourceId: completedUserRows[0].id,
+          idempotencyKey: `withdrawal-completed:${reference}`,
+        })
+        flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal flush error:', err))
+      }
+    } catch (err) {
+      console.error('[paystack-webhook] withdrawal email error:', err)
+    }
+  }
 
   // CareHub business withdrawals
   await supabase
@@ -109,6 +137,17 @@ async function handleTransferSuccess(reference) {
     .in('status', ['pending', 'processing'])
 
   return { received: true }
+}
+
+// Withdrawal trust (tiers, streaks) must reflect what actually settled. Best effort: a failure here must
+// never undo or block the settlement that triggered it.
+async function recordWithdrawalTrust(userId, amount, status) {
+  try {
+    const { error } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', { p_user_id: userId, p_amount: amount, p_status: status })
+    if (error) console.error('[paystack-webhook] trust update failed:', error.message)
+  } catch (err) {
+    console.error('[paystack-webhook] trust update error:', err)
+  }
 }
 
 async function handleTransferFailed(reference) {
@@ -121,7 +160,29 @@ async function handleTransferFailed(reference) {
     .limit(1)
 
   if (requests && requests.length > 0) {
-    await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
+    const { data: rejected } = await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
+    try {
+      const { data: failedRow } = await supabase.from('withdrawal_requests').select('id, user_id, amount').eq('id', requests[0].id).maybeSingle()
+      if (failedRow) {
+        // 'ok' means THIS delivery refunded it; any other result was settled by another path already.
+        if (rejected === 'ok') await recordWithdrawalTrust(failedRow.user_id, failedRow.amount, 'failed')
+        const { data: authData } = await supabase.auth.admin.getUserById(failedRow.user_id)
+        const email = authData?.user?.email
+        if (email) {
+          await enqueueOutbox({
+            templateKey: 'withdrawal_failed',
+            toEmail: email,
+            payload: { fullName: email, amount: failedRow.amount, reference },
+            subject: 'CareFind: withdrawal failed',
+            sourceId: failedRow.id,
+            idempotencyKey: `withdrawal-failed:${reference}`,
+          })
+          flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal-failed flush error:', err))
+        }
+      }
+    } catch (err) {
+      console.error('[paystack-webhook] withdrawal-failed email error:', err)
+    }
   }
 
   // CareHub business withdrawals
@@ -145,12 +206,31 @@ async function handleTransferFailed(reference) {
 async function handleConsultation(metadata, reference, amount) {
   if (metadata?.purpose !== 'consultation') return null
 
-  return settleConsultationPayment(supabase, {
+  const result = await settleConsultationPayment(supabase, {
     patientId: metadata.user_id,
     professionalId: metadata.professional_id,
     nairaAmount: Math.round(amount / 100),
     reference,
-  }).then((result) => ({ settled: true, ...result }))
+  })
+
+  try {
+    const { data: authData } = await supabase.auth.admin.getUserById(metadata.user_id)
+    const email = authData?.user?.email
+    if (email) {
+      await enqueueOutbox({
+        templateKey: 'consultation_confirmed',
+        toEmail: email,
+        payload: { fullName: authData.user.user_metadata?.full_name || email, service: 'Consultation' },
+        subject: 'Your CareFind consultation is confirmed',
+        idempotencyKey: `consultation-confirmed:${reference}`,
+      })
+      flushOutbox().catch((err) => console.error('[paystack-webhook] consultation flush error:', err))
+    }
+  } catch (err) {
+    console.error('[paystack-webhook] consultation email error:', err)
+  }
+
+  return { settled: true, ...result }
 }
 
 // Booking handler (CareFind business-profile appointment, card paid)
@@ -206,6 +286,8 @@ async function handleBooking(metadata, reference, amount) {
       await enqueueOutbox({
         templateKey: isCareHub ? 'appointment_confirmed' : 'booking_confirmed',
         toEmail: appt.client_email,
+        sourceId: appt.id,
+        idempotencyKey: `${isCareHub ? 'appointment-confirmed' : 'booking-confirmed'}:${appt.id}`,
         payload: {
           fullName: appt.client_name,
           businessName: business?.name || '',
@@ -260,12 +342,16 @@ async function handleShopOrder(metadata, reference, amount) {
   if (rpcRes.error) {
     // Fallback: direct idempotent update if order still pending_payment
     if (order.status === 'pending_payment' || order.payment_status === 'pending') {
-      const { error: updErr } = await supabase
+      const { data: updRows, error: updErr } = await supabase
         .from('shop_orders')
         .update({ payment_status: 'paid', status: 'paid', paystack_reference: reference })
         .eq('id', order.id)
         .eq('status', 'pending_payment')
+        .select('id')
       if (updErr) return null
+      // The guarded UPDATE matched nothing: another path settled the order first. Stop here so the
+      // history row, payment row and notifications are not written a second time.
+      if (!updRows || updRows.length === 0) return { alreadyProcessed: true }
       await supabase.from('shop_order_status_history').insert({
         order_id: order.id, from_status: 'pending_payment', to_status: 'paid',
         note: `Paystack ${reference}`,
@@ -331,6 +417,7 @@ async function notifyCustomerPostPayment(orderId) {
       await enqueueOutbox({
         templateKey: 'order_confirmation',
         toEmail: email,
+        idempotencyKey: `order-confirmation:${fullOrder.id}`,
         payload: {
           fullName: fullOrder.customer_name || 'Valued Customer',
           orderRef: fullOrder.order_ref,
@@ -363,7 +450,9 @@ async function handlePlanPayment(metadata, reference, amount) {
   const { data, error } = await supabase.rpc('renew_business_plan', {
     p_business_id: metadata.business_id,
     p_months: months,
-    p_naira_amount: amount,
+    // Paystack reports kobo; plan_payments.naira_amount is NAIRA (it used to store kobo, which
+    // overstated revenue 100x in every report that read it as naira).
+    p_naira_amount: Math.round(amount / 100),
     p_reference: reference,
   })
   if (error) return null
@@ -383,6 +472,7 @@ async function handlePlanPayment(metadata, reference, amount) {
       await enqueueOutbox({
         templateKey: 'subscription_created',
         toEmail: ownerEmail,
+        idempotencyKey: `subscription-started:${reference}`,
         payload: {
           fullName: biz.owner_name || 'Business Owner',
           plan: biz.plan || 'Standard',
@@ -417,21 +507,26 @@ export default async function handler(req, res) {
     .update(rawBody)
     .digest('hex')
 
-  if (hash !== req.headers['x-paystack-signature']) {
+  // Constant-time comparison: a plain !== leaks, byte by byte, how much of a guessed signature matched.
+  const received = Buffer.from(String(req.headers['x-paystack-signature'] || ''))
+  const expected = Buffer.from(hash)
+  if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
     return res.status(401).json({ error: 'Invalid signature' })
   }
 
   const event = JSON.parse(rawBody.toString('utf8'))
 
-  // Return 200 immediately to prevent Paystack timeout retries.
-  // Process the event async — all handlers are idempotent so duplicate
-  // webhook deliveries are safe.
-  res.status(200).json({ received: true })
-
-  // Fire-and-forget async processing
-  processWebhookEvent(event).catch((err) => {
-    console.error('[paystack-webhook] async processing error:', err)
-  })
+  // Settle BEFORE acknowledging. Vercel can freeze a serverless function as soon as the
+  // response is sent, so work done after res.json() may never run - and Paystack, having
+  // been told 200, would never redeliver. Every handler is idempotent (claim-first RPCs,
+  // unique references), so a failure answers 500 and Paystack retries the event.
+  try {
+    await processWebhookEvent(event)
+  } catch (err) {
+    console.error('[paystack-webhook] processing error:', err)
+    return res.status(500).json({ error: 'Processing failed' })
+  }
+  return res.status(200).json({ received: true })
 }
 
 async function processWebhookEvent(event) {

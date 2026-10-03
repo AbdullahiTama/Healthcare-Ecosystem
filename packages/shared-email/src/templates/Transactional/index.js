@@ -1,7 +1,7 @@
 import { logoHeader, footer, baseStyle, cardStyle, btnStyle, esc } from './BaseTemplate.js'
-const APP_URL = typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carefindhub.com'
+const APP_URL = typeof process !== 'undefined' && process.env?.CAREHUB_APP_URL ? process.env.CAREHUB_APP_URL : (typeof process !== 'undefined' && process.env?.APP_URL ? process.env.APP_URL : 'https://carefindhub.com')
 
-export function customerRegistration({ fullName, businessName, email, password }) {
+export function customerRegistration({ fullName, businessName, email }) {
   return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">👋</div><h2 style="color:#0f172a;margin:0 0 8px">Welcome to CareHub, ${esc(fullName)}!</h2><p style="color:#888;margin:0">Your business <strong>${esc(businessName)}</strong> is now on CareHub.</p></div><div style="background:#FDFBF7;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:#555;font-size:13px;line-height:1.7">Your account is <strong>under review</strong> by the CareHub admin team. You will receive an email within <strong>24 hours</strong> once approved.</p></div><div style="background:#f9fafb;border-radius:12px;padding:16px;margin-bottom:20px"><p style="margin:0;color:#888;font-size:12px;line-height:1.6">Email: ${esc(email)}</p></div><a href="${APP_URL}/login" style="${btnStyle()}">Go to Sign In →</a></div>${footer('CareHub','carefindhub.com')}</div>`
 }
 
@@ -61,4 +61,16 @@ export function orderStatusUpdate({ fullName, orderRef, status, businessName }) 
   const statusConfig = { shipped: { icon: '🚚', title: 'Your Order Has Shipped!', color: '#0E6F5A', bg: '#FDFBF7', border: '#e5e7eb' }, delivered: { icon: '📦', title: 'Order Delivered!', color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' }, cancelled: { icon: '❌', title: 'Order Cancelled', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' }, processing: { icon: '⏳', title: 'Order Processing', color: '#92400e', bg: '#fffbeb', border: '#fcd34d' } }
   const cfg = statusConfig[status] || statusConfig.processing
   return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><div style="text-align:center;margin-bottom:24px"><div style="font-size:48px;margin-bottom:12px">${cfg.icon}</div><h2 style="color:#0f172a;margin:0 0 8px">${cfg.title}</h2><p style="color:#888;margin:0">Order <strong>${esc(orderRef)}</strong> from ${esc(businessName)}</p></div><div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:12px;padding:20px;margin-bottom:20px"><p style="margin:0;color:${cfg.color};font-size:13px;font-weight:600">Status: ${esc(status.charAt(0).toUpperCase()+status.slice(1))}</p></div><a href="${APP_URL}/orders/${esc(orderRef)}" style="${btnStyle()}">View Order →</a></div>${footer('CareHub','carefindhub.com')}</div>`
+}
+
+export function creditReminder({ clientName, businessName, amount, dueDate }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Payment Reminder</h2><p style="color:#888;margin:0 0 16px">Hi ${esc(clientName || 'there')},</p><p style="color:#555;font-size:14px;line-height:1.7">This is a friendly reminder that you have an outstanding balance of <strong>${esc(amount ?? '')}</strong>${businessName ? ` at <strong>${esc(businessName)}</strong>` : ''}${dueDate ? `, due ${esc(dueDate)}` : ''}. Please contact the business to settle your account.</p></div>${footer('CareHub','carefindhub.com')}</div>`
+}
+
+export function agentApproved({ agentName, agentEmail, referralCode, city, area }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Application Approved!</h2><p style="color:#555;font-size:14px;line-height:1.7">Hi ${esc(agentName || 'there')}, your referral agent application has been approved.</p>${referralCode ? `<p style="color:#555;font-size:14px">Your referral code: <strong>${esc(referralCode)}</strong></p>` : ''}${city || area ? `<p style="color:#888;font-size:13px">Coverage: ${esc([city, area].filter(Boolean).join(', '))}</p>` : ''}<p style="color:#888;font-size:13px">Questions? Reply to this email and we will help.</p></div>${footer('CareHub','carefindhub.com')}</div>`
+}
+
+export function agentRejected({ agentName, reason }) {
+  return `<div style="${baseStyle()}">${logoHeader('CareHub')}<div style="${cardStyle()}"><h2 style="color:#0f172a;margin:0 0 8px">Application Update</h2><p style="color:#555;font-size:14px;line-height:1.7">Hi ${esc(agentName || 'there')}, thank you for your interest in the CareHub referral program. After review, we are unable to approve your application at this time.</p>${reason ? `<p style="color:#555;font-size:14px"><strong>Reason:</strong> ${esc(reason)}</p>` : ''}</div>${footer('CareHub','carefindhub.com')}</div>`
 }

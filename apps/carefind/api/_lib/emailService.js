@@ -8,11 +8,17 @@
 // 'No template found'} while looking like a working send path. Removing them
 // also removes the overrideSubject parameter, which was a third way for a caller
 // to choose a subject instead of the catalog.
-export async function enqueue({ templateKey, toEmail, payload, subject }) {
+export async function enqueue({ templateKey, toEmail, payload, subject, eventKey, app = 'carefind', fromEmail, sourceId, idempotencyKey }) {
   const { EmailService } = await import('@care-ecosystem/shared-email')
   const emailService = new EmailService()
-  return emailService.enqueue({ templateKey, toEmail, payload, subject })
+  return emailService.enqueue({ templateKey, toEmail, payload, subject, app, eventKey, fromEmail, sourceId, idempotencyKey })
 }
+
+// Deterministic event keys are the only thing that stops a refresh, webhook
+// replay, or retried verification from enqueueing the same email twice. The
+// shared-email worker maps eventKey onto the outbox event_key column and
+// (app, event_key, source_id?) uniqueness enforces the rest.
+export function bookingEventKey(id) { return `booking-confirmed:${id}` }
 
 export async function processBatch() {
   const { EmailService } = await import('@care-ecosystem/shared-email')
