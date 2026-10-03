@@ -35,7 +35,7 @@ beforeAll(async () => {
   await db.exec(FIXTURE)
   await db.exec(M_INTENTS)
   await db.exec(M_ENGINE)
-})
+}, 120_000) // PGlite start-up + migrations is slow when many suites run at once
 
 // ---- helpers ------------------------------------------------------------------------------
 async function intent(over = {}) {

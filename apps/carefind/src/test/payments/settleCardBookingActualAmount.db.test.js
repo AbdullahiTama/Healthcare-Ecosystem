@@ -29,7 +29,7 @@ beforeAll(async () => {
   `)
   await db.exec(read('../../../../../supabase/migrations/carefind_20261004_settle_payment_intent.sql'))
   await db.exec(read('../../../../../supabase/migrations/carefind_20261004_settle_card_booking_actual_amount.sql'))
-})
+}, 120_000) // PGlite start-up + migrations is slow when many suites run at once
 
 async function appt({ fee, ref = null, status = 'unpaid', business = uid() } = {}) {
   const a = (await db.query(`insert into appointments (business_id, client_name, source, fee_amount, payment_status, payment_reference) values ($1,'Ada','carefind',$2,$3,$4) returning id`, [business, fee, status, ref])).rows[0]

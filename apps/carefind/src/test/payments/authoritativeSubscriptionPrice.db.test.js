@@ -28,7 +28,7 @@ beforeAll(async () => {
     grant execute on function public.pay_creator_subscription(uuid, integer) to authenticated, service_role;
   `)
   await db.exec(read('../../../../../supabase/migrations/carefind_20261004_pay_creator_subscription_authoritative_price.sql'))
-})
+}, 120_000) // PGlite start-up + migrations is slow when many suites run at once
 
 async function setup({ listed = 12, balance = 50 } = {}) {
   const creator = uid()

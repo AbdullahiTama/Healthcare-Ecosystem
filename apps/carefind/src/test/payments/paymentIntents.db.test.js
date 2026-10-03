@@ -62,7 +62,7 @@ beforeAll(async () => {
     alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
   `)
   await db.exec(readFileSync(MIGRATION, 'utf8'))
-})
+}, 120_000) // PGlite start-up + migrations is slow when many suites run at once
 
 describe('payment_intents: shape and integer money', () => {
   it('inserts a fresh intent as "created" with server defaults', async () => {
