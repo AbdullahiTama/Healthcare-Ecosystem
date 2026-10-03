@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown, Lock } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Toast } from '../../components/ui'
 import { useToast } from '../../components/ui'
@@ -18,6 +18,7 @@ const shopRepository = createShopRepository()
 
 export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false }) {
   const { count, addItem } = useCart()
+  const location = useLocation()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
   const { has: hasWishlist, toggle: toggleWishlist } = useWishlist()
   const [segment, setSegment] = useState(initialSegment)
@@ -159,6 +160,21 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
           </div>
         )}
         <ProductGrid rows={[]} loading={true} />
+      </div>
+    )
+  }
+
+  // Postgres 42501 / HTTP 401: the catalogue is not readable without a session.
+  const needsSignIn = queryError && (String(queryError.code) === '42501' || queryError.status === 401)
+  if (needsSignIn) {
+    return (
+      <div style={outerStyle}>
+        <div role="status" style={{ padding: '40px 16px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <Lock size={32} color={theme.tealDeep} aria-hidden="true" />
+          <div style={{ fontSize: 16, fontWeight: 800, color: theme.navy }}>Sign in to browse the shop</div>
+          <div style={{ fontSize: 13, color: theme.textMid, maxWidth: 320 }}>Sign in or create a free account to see products from trusted sellers and place an order.</div>
+          <Link to="/login" state={{ from: location.pathname + location.search }} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: 44, padding: '0 24px', borderRadius: 10, background: theme.tealDeep, color: '#fff', fontWeight: 700, fontSize: 14, textDecoration: 'none' }}>Sign in</Link>
+        </div>
       </div>
     )
   }

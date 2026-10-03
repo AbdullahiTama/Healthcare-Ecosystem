@@ -13,7 +13,9 @@ export function createShopRepository(client = supabase) {
         .order('active_at', { ascending: false })
         .limit(limit)
       if (error) {
-        if (String(error.message).includes('ecommerce_products') || String(error.code) === 'PGRST205') return []
+        // Only a table that does not exist yet is an empty catalogue. Matching on the table name in the message
+        // also matched "permission denied for table ecommerce_products", which hid a signed-out visitor's 401.
+        if (['PGRST205', '42P01'].includes(String(error.code))) return []
         throw error
       }
       let rows = data || []
