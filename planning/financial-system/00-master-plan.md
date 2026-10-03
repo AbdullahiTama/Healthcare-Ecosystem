@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 02 — PAYMENT INTENTS**
+Current phase: **PHASE 03 — PAYMENT PROVIDER ABSTRACTION**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -8,7 +8,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 00 Baseline and audit | COMPLETED |
 | 01 Financial architecture | COMPLETED |
 | 02 Payment intents | COMPLETED |
-| 03 Provider abstraction | NOT_STARTED |
+| 03 Provider abstraction | READY_FOR_REVIEW |
 | 04 CareFind payment flows | NOT_STARTED |
 | 05 CareFind CareCoin wallet | NOT_STARTED |
 | 06 CareHub payment flows | NOT_STARTED |
@@ -70,3 +70,14 @@ Migrations: the file above — APPLIED to production as `carefind_20261003_payme
 Tests: 44/44 pass (`npx vitest run --config vitest.payments.config.js src/test/payments/paymentIntents.db.test.js`). Not run: full CareFind suite.
 Unresolved: `customer_id`/`business_id` intentionally have no FK (money records must outlive accounts) — revisit if reconciliation needs it; `financial_config` has no change history yet (Phase 11 audit log); no flow uses the tables yet by design.
 Next phase: PHASE 03 — PAYMENT PROVIDER ABSTRACTION.
+
+## Phase 03 — Payment provider abstraction
+
+Completed work: new package `packages/shared-payments` — provider contract (8 methods), `PaystackProvider`, provider-neutral HTTP client with per-attempt timeout, safe retry policy (reads retried; writes NEVER retried after timeout/network/5xx and flagged `ambiguous`; 429 retried honouring capped Retry-After; total time budget), structured `ProviderError`s, correlation ids, structured logs without headers/query strings, secret redaction, private-field key storage, local validation (integer kobo, NGN, reference/NUBAN formats), strict response checks (reference echo, integer amount, unknown status refused).
+Files changed (all new): `packages/shared-payments/{package.json,package-lock.json,vitest.config.js,README.md}`, `src/{index,errors,redact,http,PaymentProvider}.js`, `src/paystack/PaystackProvider.js`, `src/__tests__/{http,paystack}.test.js`; `docs/architecture/Financial-Architecture-Audit.md` (F-26).
+Migrations: none. Production logic: untouched; the package is NOT imported by either app yet.
+Tests: 105/105 pass (`cd packages/shared-payments && npm test`). Mutation-checked: disabling the no-retry-for-writes rule and the secret redaction each fail 11 tests.
+Not done by design: webhook signature verification (Phase 11), replacing existing Paystack calls (Phases 04/06/08), wiring the package into the apps' package.json (Phase 04 — first consumer).
+New finding: F-26 `checkBalance` may be a no-op (unverified; needs one real /balance response).
+Unresolved: confirm Paystack /balance field name; transfer reference format rule (16-50 lowercase) is enforced in the adapter — existing `cf_wd_<8>_<12hex>` references comply, `ch_wd_<8>_<12hex>` too.
+Next phase: PHASE 04 — CAREFIND PAYMENT FLOWS.
