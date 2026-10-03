@@ -1,5 +1,6 @@
 import { emailService } from '../../src/lib/emailService.js'
 import { supabase } from '../_lib/supabase.js'
+import { requirePlatformAdmin } from '../_lib/requirePlatformAdmin.js'
 import { isValidEmail } from '@care-ecosystem/shared-email'
 
 // Every template the handler will accept, with its required payload fields.
@@ -47,14 +48,12 @@ function containsCredentialField(value) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const authHeader = req.headers.authorization || ''
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-  if (!token) return res.status(401).json({ error: 'Missing authorization' })
+  // Mails any address from the trusted sender with a caller-chosen subject and payload values. The only browser caller
+  // is the admin referral panel, so this requires a platform admin (it used to accept any signed-in user).
+  const { status: authStatus, error: authError } = await requirePlatformAdmin(req, supabase)
+  if (authStatus) return res.status(authStatus).json({ error: authError })
 
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
-  if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
-
-const { templateKey, toEmail, payload, subject } = req.body || {}
+  const { templateKey, toEmail, payload, subject } = req.body || {}
   if (!templateKey || !toEmail) {
     return res.status(400).json({ error: 'templateKey and toEmail are required' })
   }
