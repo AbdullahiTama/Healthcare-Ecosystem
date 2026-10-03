@@ -42,22 +42,54 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Order status ${order.status} cannot be paid` })
   }
 
-  let reference = order.payment_reference
-  if (!reference) {
-    reference = `CF-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
-    await supabase.from('shop_orders').update({ payment_reference: reference }).eq('id', order.id)
+  // Every attempt gets its own Paystack reference, recorded in shop_payments. Before starting another one, the
+  // previous attempt is checked with Paystack: if it was actually paid (the customer lost the callback) the
+  // client is told to verify it instead of paying twice; otherwise it is closed as failed. A late payment on a
+  // closed attempt is still accepted by verify/webhook because the ledger remembers it.
+  const { data: pending } = await supabase
+    .from('shop_payments')
+    .select('id, payment_reference')
+    .eq('order_id', order.id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  // An order started before attempts were recorded has its reference only on the order.
+  const previousRef = pending?.payment_reference || order.payment_reference
+  if (previousRef) {
+    let check
+    try {
+      check = await paystackFetch(`/transaction/verify/${encodeURIComponent(previousRef)}`)
+    } catch (err) {
+      // Cannot tell whether the earlier attempt was paid: starting another could make the customer pay twice.
+      return res.status(502).json({ error: 'Could not check your earlier payment. Please try again in a moment.' })
+    }
+    if (check?.status && check.data?.status === 'success') {
+      return res.status(200).json({ alreadyPaid: true, reference: previousRef })
+    }
+    const closed = pending
+      ? await supabase.from('shop_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', pending.id)
+      : await supabase.from('shop_payments').insert({ order_id: order.id, payment_reference: previousRef, amount_kobo: order.total_kobo, status: 'failed', gateway: 'paystack' })
+    if (closed.error) return res.status(500).json({ error: 'Could not start payment' })
   }
 
-  // Ensure shop_payments row exists (idempotency)
-  try {
-    await supabase.from('shop_payments').upsert({
-      order_id: order.id,
-      payment_reference: reference,
-      amount_kobo: order.total_kobo,
-      status: 'pending',
-      gateway: 'paystack',
-    }, { onConflict: 'payment_reference' })
-  } catch (_) {}
+  const reference = `CF-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
+  const { error: attemptErr } = await supabase.from('shop_payments').insert({
+    order_id: order.id,
+    payment_reference: reference,
+    amount_kobo: order.total_kobo,
+    status: 'pending',
+    gateway: 'paystack',
+  })
+  if (attemptErr) {
+    console.error('[initiate-shop-payment] could not record payment attempt:', attemptErr.message)
+    return res.status(500).json({ error: 'Could not start payment' })
+  }
+  const { error: refErr } = await supabase.from('shop_orders').update({ payment_reference: reference }).eq('id', order.id)
+  if (refErr) {
+    console.error('[initiate-shop-payment] could not save payment reference:', refErr.message)
+    return res.status(500).json({ error: 'Could not start payment' })
+  }
 
   const host = req.headers['x-forwarded-host'] || req.headers.host || ''
   const proto = req.headers['x-forwarded-proto'] || 'https'
