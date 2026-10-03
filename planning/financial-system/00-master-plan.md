@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 04 — CAREFIND PAYMENT FLOWS**
+Current phase: **PHASE 05 — CAREFIND CARECOIN WALLET**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -9,8 +9,8 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 01 Financial architecture | COMPLETED |
 | 02 Payment intents | COMPLETED |
 | 03 Provider abstraction | COMPLETED |
-| 04 CareFind payment flows | READY_FOR_REVIEW |
-| 05 CareFind CareCoin wallet | NOT_STARTED |
+| 04 CareFind payment flows | COMPLETED (migrations applied; app code not yet deployed) |
+| 05 CareFind CareCoin wallet | READY_FOR_REVIEW |
 | 06 CareHub payment flows | NOT_STARTED |
 | 07 Commission engine | NOT_STARTED |
 | 08 Withdrawal engine | NOT_STARTED |
@@ -103,3 +103,14 @@ Tests: PGlite engine 41 + subscription-price 9 + booking-amount 7; handlers topu
 Removed: `chargeSubscriptionCap.test.js`, `verifySubscriptionCap.test.js` (asserted client-supplied prices), `charge-noSubaccount.test.js` (covered by the flow tests).
 Unresolved: deploy the application code; Q1 (20% on CareCoin paths); legacy webhook branches remain until drained (Phase 10); needs_refund payments have no refund path yet (Phase 09); F-27 callback_url; F-28 claim_payment_event; CareHub/Shop not migrated.
 Next phase: PHASE 05 — CAREFIND CARECOIN WALLET.
+
+## Phase 05 — CareFind CareCoin wallet
+
+Completed work: append-only integer `coin_ledger` + a single posting primitive (`_post_coin_entry`, `_post_coin_transfer`); opening-balance cutover; `wallets.balance` integer; all 13 CareCoin writers moved onto the ledger with unchanged contracts; hand-written balance changes refused by trigger; `transactions` and `gifts` append-only; reconciliation + chain verification; F-13 (gift validation) and the database side of F-01 (withdrawal replay must match user/amount/account) closed; self-purchases refused; withdrawal minimum from `financial_config`; readable gift-refusal messages in the client.
+Files: migrations `carefind_20261005_{coin_ledger, coin_writers_use_ledger, lock_wallets_to_ledger}.sql` (+ copies in `apps/carefind/sql/`); tests `coinLedger.db` 26, `coinWriters.db` 34, `coinLockdown.db` 14, `coinConcurrency.pg` 9 (real Postgres); fixtures `liveSchemaSubset.sql` (extended), `legacyFunctions.js`, `realPostgres.js`; client `GiftPanel.jsx` (+test); `docs/architecture/CareCoin-Wallet.md`.
+Migrations: 3 — **NOT applied to production**; apply in the order 1 -> 2 -> 3 (see `CareCoin-Wallet.md` §6). Pre-flight read from production: no duplicate active withdrawal references; no view/rule/trigger/FK depends on `wallets.balance` (one policy does and is handled); the only hand-writers of balances are the 13 replaced functions; production already has a unique index on `paystack_reference`.
+Tests: PGlite 74 + real-Postgres 9 + settlement concurrency 8 (all pass on PostgreSQL 18.4); payments folder under the default config 356 passed / 17 skipped (the skipped are the two real-concurrency suites, which need `PG_CONCURRENCY_URL`); GiftPanel 8. Not run: full CareFind suite after this phase.
+Found by tests: a real race in `request_withdrawal` (identical retries returned raw unique-violation errors; money was never double-debited) — fixed with an advisory lock on the reference; the wallets policy that blocks `ALTER COLUMN TYPE` — fixed in the migration.
+Unresolved: apply the migrations + post-apply catalog and reconciliation check; Q1 (20% fee on CareCoin-paid paths); refund gaps in `refund_appointment_payment` (Phase 09); business wallets not yet on a ledger (Phase 06/08); account deletion with coins now refused (F-31, needs an admin settle procedure); application code from Phase 04 still not deployed.
+**Docs location incident:** the `docs/` tree was moved to `apps/docs/` outside this session; the audit findings F-17/F-30/F-31 (see `CareCoin-Wallet.md` §5/§8) are NOT yet written into `Financial-Architecture-Audit.md`, and commit `27a9d2f` accidentally recorded that file's deletion from `docs/architecture/`. Waiting for the owner to say which location is canonical.
+Next phase: PHASE 06 — CAREHUB PAYMENT FLOWS.
