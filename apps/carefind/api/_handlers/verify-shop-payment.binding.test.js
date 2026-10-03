@@ -1,7 +1,7 @@
 // Payment binding for the shop redirect-verify: a successful Paystack transaction may settle a shop order
 // only if it is THAT order's own payment. Amount equality alone is not binding - a wallet top-up, booking
 // or another customer's payment of the same amount would otherwise settle any order of that total.
-const h = vi.hoisted(() => ({ orders: [], rpcCalls: [], touched: [], paystack: null, user: null, paystackCalls: [] }))
+const h = vi.hoisted(() => ({ orders: [], attempts: [], rpcCalls: [], touched: [], paystack: null, user: null, paystackCalls: [] }))
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
@@ -11,9 +11,10 @@ vi.mock('@supabase/supabase-js', () => ({
       const b = {
         select: () => b,
         eq: (col, val) => { filters[col] = val; return b },
-        maybeSingle: async () => ({
-          data: table === 'shop_orders' ? h.orders.find((o) => Object.entries(filters).every(([k, v]) => o[k] === v)) ?? null : null,
-        }),
+        maybeSingle: async () => {
+          const rows = table === 'shop_orders' ? h.orders : table === 'shop_payments' ? h.attempts : []
+          return { data: rows.find((o) => Object.entries(filters).every(([k, v]) => o[k] === v)) ?? null }
+        },
         insert: async (row) => { h.touched.push(['insert', table, row]); return { error: null } },
         upsert: async (row) => { h.touched.push(['upsert', table, row]); return { error: null } },
         update: (row) => { h.touched.push(['update', table, row]); return b },
@@ -48,6 +49,7 @@ const orderWritten = () => h.touched.some(([op, t]) => op === 'update' && t === 
 
 beforeEach(() => {
   h.orders = [{ ...ORDER }]
+  h.attempts = []
   h.rpcCalls.length = 0
   h.touched.length = 0
   h.paystackCalls.length = 0
@@ -92,5 +94,25 @@ describe('verify-shop-payment binds the Paystack transaction to the order', () =
     expect(res.body).toMatchObject({ success: true, id: 'order-B' })
     const args = h.rpcCalls.find(([n]) => n === 'verify_shop_payment')?.[1]
     expect(args).toEqual({ p_order_id: 'order-B', p_paystack_reference: 'CF-ORDER-B' })
+  })
+
+  it('an earlier attempt recorded in the ledger can settle the order (customer paid on an older payment tab)', async () => {
+    h.attempts = [{ id: 'a1', order_id: 'order-B', payment_reference: 'CF-OLD-ATTEMPT', status: 'failed' }]
+    h.paystack = () => paystackOk({ reference: 'CF-OLD-ATTEMPT', metadata: { order_id: 'order-B', type: 'shop_order' } })
+
+    const res = await call({ order_id: 'order-B', reference: 'CF-OLD-ATTEMPT' })
+
+    expect(res.statusCode).toBe(200)
+    expect(h.rpcCalls.find(([n]) => n === 'verify_shop_payment')?.[1]).toEqual({ p_order_id: 'order-B', p_paystack_reference: 'CF-OLD-ATTEMPT' })
+  })
+
+  it('an attempt belonging to a different order is not accepted', async () => {
+    h.attempts = [{ id: 'a9', order_id: 'order-A', payment_reference: 'CF-ORDER-A', status: 'pending' }]
+    h.paystack = () => paystackOk({ reference: 'CF-ORDER-A', metadata: { order_id: 'order-B', type: 'shop_order' } })
+
+    const res = await call({ order_id: 'order-B', reference: 'CF-ORDER-A' })
+
+    expect(res.statusCode).toBe(400)
+    expect(settled()).toBe(false)
   })
 })

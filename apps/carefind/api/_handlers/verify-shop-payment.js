@@ -30,6 +30,14 @@ export default async function handler(req, res) {
       .maybeSingle()
     if (data) order = data
   }
+  if (!order && reference) {
+    // An earlier attempt of a retried payment is only recorded in the ledger, not on the order.
+    const { data: attempt } = await supabase.from('shop_payments').select('order_id').eq('payment_reference', reference).maybeSingle()
+    if (attempt?.order_id) {
+      const { data } = await supabase.from('shop_orders').select('id, customer_id, vendor_business_id, total_kobo, payment_reference, paystack_reference, status, payment_status, order_ref').eq('id', attempt.order_id).maybeSingle()
+      if (data) order = data
+    }
+  }
   if (!order && orderId) {
     const { data } = await supabase.from('shop_orders').select('id, customer_id, vendor_business_id, total_kobo, payment_reference, paystack_reference, status, payment_status, order_ref').eq('id', orderId).maybeSingle()
     if (data) order = data
@@ -48,14 +56,22 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, id: order.id, alreadyPaid: true })
   }
 
-  // Only the order's own reference may settle it. A client-supplied reference is never trusted: matching
-  // on amount alone would let any successful payment of the same total (a wallet top-up, a booking, another
-  // customer's order) settle this order.
-  const paystackRef = order.payment_reference
-  if (!paystackRef) return res.status(400).json({ error: 'No payment reference' })
+  // Only one of this order's own payment attempts may settle it. A client-supplied reference is never trusted
+  // on its own: matching on amount alone would let any successful payment of the same total (a wallet
+  // top-up, a booking, another customer's order) settle this order. The latest attempt is the order's
+  // payment_reference; earlier attempts (a retried payment) are recorded in shop_payments.
+  let paystackRef = order.payment_reference
   if (reference && reference !== paystackRef) {
-    return res.status(400).json({ error: 'Payment reference does not belong to this order' })
+    const { data: attempt } = await supabase
+      .from('shop_payments')
+      .select('id')
+      .eq('order_id', order.id)
+      .eq('payment_reference', reference)
+      .maybeSingle()
+    if (!attempt) return res.status(400).json({ error: 'Payment reference does not belong to this order' })
+    paystackRef = reference
   }
+  if (!paystackRef) return res.status(400).json({ error: 'No payment reference' })
 
   let paystackData
   try {
