@@ -113,7 +113,7 @@ function redactSensitiveFields(fields) {
     if (value === null || value === undefined) return value
     if (Array.isArray(value)) return value.map(redact)
     if (typeof value === 'object') {
-      const out: Record<string, unknown> = {}
+      const out = {}
       for (const [k, v] of Object.entries(value)) {
         out[k] = redact(v)
       }
@@ -129,7 +129,7 @@ function redactSensitiveFields(fields) {
   }
   if (Array.isArray(fields)) return fields.map(redactSensitiveFields)
   if (typeof fields === 'object' && fields !== null) {
-    const out: Record<string, unknown> = {}
+    const out = {}
     for (const [k, v] of Object.entries(fields)) {
       out[k] = redactSensitiveFields(v)
     }
@@ -184,9 +184,8 @@ export class EmailService {
     // Per-row state: attempts, status, provider message id, timestamps
     this.rowState = new Map() // id -> { attempts, status, providerMessageId, createdAt, sentAt, deliveredAt }
     // Request ID from the invoking cron/handler (overrides module-level default)
-    this.requestId = options.requestId || (global as any)._cronRequestId || crypto?.randomUUID?.() || 'worker-' + Date.now()
+    this.requestId = options.requestId || globalThis._cronRequestId || crypto?.randomUUID?.() || 'worker-' + Date.now()
   }
-}
 
   async _getDb() {
     if (!this._db) this._db = await getSupabase()
