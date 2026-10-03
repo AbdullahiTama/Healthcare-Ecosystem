@@ -14,20 +14,38 @@ export default function Wishlist() {
   const { addItem } = useCart()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
-      if (ids.length===0) { setProducts([]); setLoading(false); return }
+      if (ids.length===0) { setProducts([]); setError(false); setLoading(false); return }
       setLoading(true)
-      const all = await shopRepository.getActiveProducts({ limit: 80 })
-      const map = new Map(all.map(r=>[r.id,r]))
-      setProducts(ids.map(id=>map.get(id)).filter(Boolean))
-      setLoading(false)
+      setError(false)
+      try {
+        const all = await shopRepository.getActiveProducts({ limit: 80 })
+        if (cancelled) return
+        const map = new Map(all.map(r=>[r.id,r]))
+        setProducts(ids.map(id=>map.get(id)).filter(Boolean))
+      } catch (err) {
+        console.error('[Wishlist] could not load products:', err)
+        if (!cancelled) setError(true)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
     load()
-  }, [ids])
+    return () => { cancelled = true }
+  }, [ids, attempt])
 
   if (loading) return <div style={{ padding:20, textAlign:'center', color:theme.textLight }}>Loading wishlist...</div>
+  if (error) return (
+    <div role="alert" style={{ maxWidth:800, margin:'0 auto', padding:'24px 16px', textAlign:'center', color:theme.danger, fontSize:13 }}>
+      Could not load your wishlist.{' '}
+      <button type="button" onClick={() => setAttempt(n => n + 1)} style={{ marginLeft:8, background:'#fff', border:`1px solid ${theme.danger}`, color:theme.danger, borderRadius:8, padding:'6px 12px', fontWeight:700, cursor:'pointer' }}>Retry</button>
+    </div>
+  )
   if (ids.length===0) return <div style={{ maxWidth:800, margin:'0 auto', padding:'24px 16px' }}><Empty icon={<Heart size={40} />} title="Wishlist empty" description="Tap the heart on any product to save it" action="Browse Shop" onAction={()=> window.location.href='/search?tab=shop'} /></div>
   if (products.length===0) return <div style={{ maxWidth:800, margin:'0 auto', padding:16, color:theme.textLight, fontSize:13 }}>Saved items are no longer available.</div>
 
