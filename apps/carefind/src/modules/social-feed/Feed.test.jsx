@@ -229,28 +229,33 @@ describe('postSync: Feed reloads on POSTS_DIRTY_EVENT', () => {
   })
 })
 
-// A create tap on any other screen lands here as /feed?create=1. main.jsx keys
-// <Routes> on location.key, so ANY router navigation — a `replace` included —
-// remounts the page. Feed used to strip the flag with setSearchParams, which
-// remounted it straight after opening the selector, so the selector never
-// stayed on screen. This mirrors main.jsx's keyed Routes to pin that down;
-// a bare <Feed /> (as in renderFeed) cannot reproduce a remount.
-describe('?create=1 opens the create selector (issue #2)', () => {
-  function KeyedRoutes() {
-    const location = useLocation()
-    return (
-      <Routes key={location.key}>
-        <Route path="/feed" element={<Feed />} />
-      </Routes>
-    )
-  }
+// main.jsx keys <Routes> on location.key, so ANY router navigation — a
+// `replace` included — remounts the page. Feed's landing params (?create=1,
+// ?tab=video) used to be stripped with setSearchParams, which remounted it
+// straight after it had consumed them and threw the result away. A bare
+// <Feed /> (as in renderFeed) cannot reproduce a remount, so these mirror
+// main.jsx's keyed Routes.
+function KeyedRoutes() {
+  const location = useLocation()
+  return (
+    <Routes key={location.key}>
+      <Route path="/feed" element={<Feed />} />
+      <Route path="/post/:id" element={<div>permalink page</div>} />
+    </Routes>
+  )
+}
 
+function renderKeyed(initialPath) {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <KeyedRoutes />
+    </MemoryRouter>
+  )
+}
+
+describe('?create=1 opens the create selector (issue #2)', () => {
   it('opens the selector and keeps it open once the flag is consumed', async () => {
-    render(
-      <MemoryRouter initialEntries={['/feed?create=1']}>
-        <KeyedRoutes />
-      </MemoryRouter>
-    )
+    renderKeyed('/feed?create=1')
 
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('Create')
@@ -260,5 +265,34 @@ describe('?create=1 opens the create selector (issue #2)', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(window.location.search).not.toContain('create=1')
+  })
+})
+
+describe('?tab= landing param (bottom-nav Videos entry)', () => {
+  it('lands on the requested tab and stays there once the param is consumed', async () => {
+    renderKeyed('/feed?tab=video')
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true'))
+
+    // Survives past the effect that strips ?tab= from the URL — a remount
+    // would put it back on "For you".
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'For you' })).toHaveAttribute('aria-pressed', 'false')
+    expect(window.location.search).not.toContain('tab=')
+  })
+
+  it('keeps ?tab=video&post=<id> on the feed instead of bouncing to the permalink', async () => {
+    renderKeyed('/feed?tab=video&post=p1')
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true'))
+
+    // Once the tab param is gone a remounted feed would see a bare ?post= and
+    // redirect to /post/p1 — the video deep link would never stay on the feed.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.queryByText('permalink page')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

@@ -89,6 +89,24 @@ const POST_FEED_COLS_FALLBACK = 'id, content, created_at, user_id, post_type, th
 // can't double-count.
 const recordFeedView = createViewRecorder(supabase)
 
+// Drops one query param from the address bar WITHOUT a router navigation.
+//
+// main.jsx keys <Routes> on location.key, so ANY router navigation — a
+// `replace` included — remounts the page and throws away its state. Landing
+// params (?create=1, ?tab=video) are consumed into state on mount, so removing
+// them through setSearchParams remounted the feed straight after and lost what
+// they had just set. history.replaceState alone changes only the URL; passing
+// the current history.state through keeps react-router's own entry (key / idx /
+// usr) intact, which `{}` used to wipe. Reads window.location, not the router's
+// searchParams, so it also drops the param from a URL the router has not yet
+// caught up with.
+function dropUrlParam(name) {
+  const next = new URLSearchParams(window.location.search)
+  next.delete(name)
+  const qs = next.toString()
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+}
+
 function Feed() {
   const { user } = useAuth()
   const [subscriberOnly, setSubscriberOnly] = useState(false)
@@ -209,7 +227,7 @@ function Feed() {
   // modal owned by Feed — BackgroundRoutes decides whether that renders as
   // an overlay on top of this page or, on a cold load, PostPage standalone.
   // See onOpenDetail in cardProps below.
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   // Every URL shared before permalinks existed, and every notifications.link
   // row written before this change, uses /feed?post=<id>. Feed no longer
   // hosts a modal (Task 6 removed it), so this is read only to redirect to
@@ -351,17 +369,6 @@ function Feed() {
     engagement.state.setPosts(ranked)
   }
 
-  // Clears the ?tab= landing param once it has been applied (Item 5), the
-  // same replaceState-without-navigating shape BusinessProfile's ?reference=
-  // handling uses.
-  function clearTabParam() {
-    const next = new URLSearchParams(searchParams)
-    next.delete('tab')
-    const qs = next.toString()
-    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
-    setSearchParams(next, { replace: true })
-  }
-
   // Item 5: honor a ?tab=<key> landing param (bottom-nav Videos entry). Applied
   // once on mount, then dropped so a reload returns to the persisted tab.
   // Also handles ?tab=video&post=<id> for video deep-linking from feed taps.
@@ -374,26 +381,17 @@ function Feed() {
     if (tabParam === 'video' && deepLinkPostId) {
       videoFocusPostRef.current = deepLinkPostId
     }
-    clearTabParam()
+    dropUrlParam('tab')
   }, [])
 
   // Issue #2: honour ?create=1 from another screen's create button. Runs on
   // every change of the param (not just mount) so a second tap from the same
-  // page re-opens the selector, and drops the flag once it has been consumed.
-  //
-  // The flag is dropped with history.replaceState ALONE — never
-  // setSearchParams. main.jsx keys <Routes> on location.key, so any router
-  // navigation (replace included) remounts this page; calling setSearchParams
-  // here threw away the freshly opened selector with the rest of the state.
-  // Passing the current history.state through keeps react-router's own entry
-  // (key / idx / usr) intact, which `{}` used to wipe.
+  // page re-opens the selector, and drops the flag once it has been consumed
+  // (see dropUrlParam for why this must not go through the router).
   useEffect(() => {
     if (createParam !== '1') return
     setCreateOpen(true)
-    const next = new URLSearchParams(window.location.search)
-    next.delete(CREATE_PARAM)
-    const qs = next.toString()
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+    dropUrlParam(CREATE_PARAM)
   }, [createParam])
 
   // The event that proves a create tap worked. Correlating "[create] tap" with
@@ -1147,6 +1145,7 @@ function Feed() {
               <button
                 key={key}
                 onClick={() => setFeedTab(key)}
+                aria-pressed={feedTab === key}
                 style={{
                   flexShrink: 0, padding: '8px 14px', background: feedTab === key ? '#fff' : 'transparent',
                   border: 'none', borderRadius: theme.radius.full,
@@ -1172,6 +1171,7 @@ function Feed() {
             <button
               key={key}
               onClick={() => setFeedTab(key)}
+              aria-pressed={feedTab === key}
               style={{
                 flexShrink: 0, padding: '0 0 13px', background: 'none', border: 'none',
                 fontSize: 14, fontWeight: feedTab === key ? 800 : 600,
