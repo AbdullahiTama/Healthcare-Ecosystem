@@ -380,14 +380,20 @@ function Feed() {
   // Issue #2: honour ?create=1 from another screen's create button. Runs on
   // every change of the param (not just mount) so a second tap from the same
   // page re-opens the selector, and drops the flag once it has been consumed.
+  //
+  // The flag is dropped with history.replaceState ALONE — never
+  // setSearchParams. main.jsx keys <Routes> on location.key, so any router
+  // navigation (replace included) remounts this page; calling setSearchParams
+  // here threw away the freshly opened selector with the rest of the state.
+  // Passing the current history.state through keeps react-router's own entry
+  // (key / idx / usr) intact, which `{}` used to wipe.
   useEffect(() => {
     if (createParam !== '1') return
     setCreateOpen(true)
-    const next = new URLSearchParams(searchParams)
+    const next = new URLSearchParams(window.location.search)
     next.delete(CREATE_PARAM)
     const qs = next.toString()
-    window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
-    setSearchParams(next, { replace: true })
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
   }, [createParam])
 
   // The event that proves a create tap worked. Correlating "[create] tap" with
@@ -2021,7 +2027,7 @@ style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
 
       {showGoLive && <UserGoLive onClose={() => setShowGoLive(false)} />}
       <SupportPrompt creatorName="CareFind creators" />
-      {isMobile && <BottomNav autoHide={feedTab === 'video' && !isSearching} />}
+      {isMobile && <BottomNav autoHide={feedTab === 'video' && !isSearching} onCompose={() => setCreateOpen(true)} />}
       {giftingPost && (
         <GiftPanel
           postId={giftingPost.postId}

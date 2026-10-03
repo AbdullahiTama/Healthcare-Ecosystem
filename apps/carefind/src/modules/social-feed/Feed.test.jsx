@@ -1,6 +1,6 @@
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderWithQueryClient as render } from '../../test/renderWithQueryClient.jsx'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { describe, it, expect, vi } from 'vitest'
 
 // Minimal fake Supabase: every builder method is a thenable that resolves to
@@ -226,5 +226,39 @@ describe('postSync: Feed reloads on POSTS_DIRTY_EVENT', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     expect(postsFetchCount()).toBe(before)
+  })
+})
+
+// A create tap on any other screen lands here as /feed?create=1. main.jsx keys
+// <Routes> on location.key, so ANY router navigation — a `replace` included —
+// remounts the page. Feed used to strip the flag with setSearchParams, which
+// remounted it straight after opening the selector, so the selector never
+// stayed on screen. This mirrors main.jsx's keyed Routes to pin that down;
+// a bare <Feed /> (as in renderFeed) cannot reproduce a remount.
+describe('?create=1 opens the create selector (issue #2)', () => {
+  function KeyedRoutes() {
+    const location = useLocation()
+    return (
+      <Routes key={location.key}>
+        <Route path="/feed" element={<Feed />} />
+      </Routes>
+    )
+  }
+
+  it('opens the selector and keeps it open once the flag is consumed', async () => {
+    render(
+      <MemoryRouter initialEntries={['/feed?create=1']}>
+        <KeyedRoutes />
+      </MemoryRouter>
+    )
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Create')
+    expect(screen.getByRole('button', { name: 'Question' })).toBeInTheDocument()
+
+    // Survives past the effect that strips ?create=1 from the URL.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(window.location.search).not.toContain('create=1')
   })
 })
