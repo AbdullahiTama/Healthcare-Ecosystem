@@ -10,9 +10,11 @@ import { PREVIEW } from '../data/landingContent.js'
 // stays out of the accessibility tree). The visible disclaimer under the group
 // is what tells a sighted visitor these are samples.
 //
-// Two layouts:
-//   * `stack` — desktop. Four cards in a right-hand column, each nudged a
-//     little further right than the last so the group reads as layered.
+// Three layouts:
+//   * `inline` — desktop. Cards side by side in an equal-width row under the
+//     headline, so nothing sits over the photo's subject.
+//   * `stack` — a right-hand column, each card nudged a little further right
+//     than the last so the group reads as layered.
 //   * `row`  — mobile. A single horizontal scroll strip so the cards never
 //     push the headline or the feature strip out of the hero.
 
@@ -35,7 +37,7 @@ function Rating({ avg, count }) {
   )
 }
 
-function PreviewCard({ card, offset }) {
+function PreviewCard({ card, offset, wrapName }) {
   const Icon = card.icon ? resolveIcon(card.icon) : null
   const nudged = typeof offset === 'number'
 
@@ -92,7 +94,7 @@ function PreviewCard({ card, offset }) {
 
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: wrapName ? 'normal' : 'nowrap', lineHeight: wrapName ? 1.25 : undefined, overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {card.name}
             </span>
           </div>
@@ -167,6 +169,7 @@ function PreviewCard({ card, offset }) {
 
 export default function FloatingPreviews({ variant = 'stack', limit }) {
   const stack = variant === 'stack'
+  const inline = variant === 'inline'
   // The desktop stack deliberately shows fewer cards than the mobile row: it
   // is bottom-aligned under the photo's faces, and a fourth card would grow the
   // stack upward into them.
@@ -177,7 +180,9 @@ export default function FloatingPreviews({ variant = 'stack', limit }) {
       data-hero-group
       aria-hidden="true"
       style={
-        stack
+        inline
+          ? { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minWidth: 0 }
+          : stack
           ? { display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }
           : {
               display: 'flex',
@@ -194,9 +199,9 @@ export default function FloatingPreviews({ variant = 'stack', limit }) {
       {cards.map((card, index) => (
         <div
           key={card.id}
-          style={stack ? undefined : { scrollSnapAlign: 'start', flex: '0 0 auto', width: 232 }}
+          style={stack || inline ? { minWidth: 0 } : { scrollSnapAlign: 'start', flex: '0 0 auto', width: 232 }}
         >
-          <PreviewCard card={card} offset={stack ? STACK_OFFSETS[index] : undefined} />
+          <PreviewCard card={card} offset={stack ? STACK_OFFSETS[index] : undefined} wrapName={inline} />
         </div>
       ))}
     </div>

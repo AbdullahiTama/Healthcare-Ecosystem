@@ -25,8 +25,8 @@ import { HERO, PREVIEW } from '../data/landingContent.js'
 //   * Two gradient scrims guarantee white-text contrast: a vertical one
 //     everywhere (heaviest at the bottom, where the strips live) and — from
 //     laptop up — a horizontal one that darkens the text column.
-//   * Copy column left, cards column bottom-right. The cards are bottom-aligned
-//     on desktop so they float over the subject's body rather than her face.
+//   * Copy left, photo right, and the preview cards in a row beneath the copy
+//     so they never sit over her face.
 
 const ACCENT = '#5FD8B5'
 
@@ -111,7 +111,7 @@ function PreviewGroup({ variant, limit }) {
           fontSize: 11.5,
           lineHeight: 1.4,
           color: 'rgba(255,255,255,0.72)',
-          textAlign: variant === 'stack' ? 'right' : 'left',
+          textAlign: 'left',
         }}
       >
         {PREVIEW.disclaimer}
@@ -206,7 +206,7 @@ export default function Hero() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isMobileOrTablet ? 'minmax(0, 1fr)' : 'minmax(0, 1.04fr) minmax(0, 0.96fr)',
+            gridTemplateColumns: 'minmax(0, 1fr)',
             gap: isMobileOrTablet ? 24 : 48,
             alignItems: 'center',
             flex: '1 1 auto',
@@ -259,18 +259,13 @@ export default function Hero() {
             </div>
           </div>
 
-          {!isMobileOrTablet && (
-            <div style={{ minWidth: 0, alignSelf: 'end' }}>
-              <PreviewGroup variant="stack" limit={3} />
-            </div>
-          )}
         </div>
 
-        {isMobileOrTablet && (
-          <div style={{ marginTop: 28 }}>
-            <PreviewGroup variant="row" />
-          </div>
-        )}
+        {/* Desktop: a row under the copy, so the right side of the hero stays
+            clear for the photo's subject. Phones keep the scroll strip. */}
+        <div style={{ marginTop: isMobileOrTablet ? 28 : 32 }}>
+          <PreviewGroup variant={isMobileOrTablet ? 'row' : 'inline'} limit={isMobileOrTablet ? undefined : 3} />
+        </div>
 
         <FeatureStrip />
         <TrustStrip />
