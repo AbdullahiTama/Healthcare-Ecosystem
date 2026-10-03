@@ -1,12 +1,13 @@
 // Cart page - displays cart items, allows quantity updates, removal, and checkout
 
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from './CartProvider'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Empty, Loading } from '../../components/ui'
-import { ShoppingCart, Trash2, Plus, Minus, ArrowRight } from 'lucide-react'
+import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ChevronLeft } from 'lucide-react'
+import AppShell from '../../components/layout/AppShell.jsx'
 
 function SwipeToDelete({ onDelete, children }) {
   const [offsetX, setOffsetX] = useState(0)
@@ -39,7 +40,18 @@ function SwipeToDelete({ onDelete, children }) {
   )
 }
 
+// The cart page sits inside the site shell like every other signed-in page, so the header and navigation stay
+// available instead of leaving the shopper on a bare form.
 export default function Cart() {
+  const { user } = useAuth()
+  return (
+    <AppShell user={user}>
+      <CartContent />
+    </AppShell>
+  )
+}
+
+function CartContent() {
   const { items, count, total, updateQuantity, removeItem } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -68,6 +80,9 @@ export default function Cart() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+      <Link to="/search?tab=shop" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 12, minHeight: 44, color: theme.tealDeep, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
+        <ChevronLeft size={16} aria-hidden="true" /> Continue shopping
+      </Link>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24, color: theme.navy }}>
         Shopping Cart ({count} {count === 1 ? 'item' : 'items'})
       </h1>
