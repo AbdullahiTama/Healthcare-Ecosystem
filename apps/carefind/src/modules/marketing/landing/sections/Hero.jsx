@@ -9,23 +9,24 @@ import { HERO, PREVIEW } from '../data/landingContent.js'
 
 // The photographic hero.
 //
-// The brief for this page asked for an image-led hero: a real pharmacy scene
-// under a dark teal scrim, the headline and the one primary action on the left
+// An image-led hero: the headline and the one primary action on the left
 // (bottom-stacked on phones), the floating ecosystem cards on the right, and
-// the feature + capability strips closing the first viewport. The photo is the
-// only stock image on the page and it is a licensed Pexels photograph of an
-// actual pharmacy counter, not a staged "doctor smiling" shot
-// (docs/design/BRAND_GUIDELINES.md — photography must read as real).
+// the feature + capability strips closing the first viewport.
+//
+// The photo is portrait artwork (a pharmacist checking her phone), so it is
+// docked to the right ~58% of the hero from laptop up and faded into the dark
+// teal surface on its left edge with a mask — stretching a portrait image
+// edge to edge would crop it to a thin band across her chest. On phones the
+// portrait fits the portrait viewport and fills the section.
 //
 // Structure:
-//   * <picture> fills the section; a brand-teal gradient sits underneath as the
-//     fallback surface if the photo ever fails to load.
+//   * <picture> sits behind the content; a brand-teal gradient on the section
+//     is the fallback surface if the photo ever fails to load.
 //   * Two gradient scrims guarantee white-text contrast: a vertical one
 //     everywhere (heaviest at the bottom, where the strips live) and — from
-//     laptop up — a horizontal one that darkens the text column while leaving
-//     the people on the right of the photo clear.
+//     laptop up — a horizontal one that darkens the text column.
 //   * Copy column left, cards column bottom-right. The cards are bottom-aligned
-//     on desktop so they float over the subject's body rather than their face.
+//     on desktop so they float over the subject's body rather than her face.
 
 const ACCENT = '#5FD8B5'
 
@@ -126,8 +127,8 @@ export default function Hero() {
   const scrim = isMobileOrTablet
     ? 'linear-gradient(180deg, rgba(6,32,26,0.74) 0%, rgba(6,32,26,0.64) 30%, rgba(6,32,26,0.88) 62%, rgba(6,32,26,0.97) 100%)'
     : [
-        'linear-gradient(90deg, rgba(6,32,26,0.93) 0%, rgba(6,32,26,0.78) 42%, rgba(6,32,26,0.34) 70%, rgba(6,32,26,0.55) 100%)',
-        'linear-gradient(180deg, rgba(6,32,26,0.45) 0%, rgba(6,32,26,0.10) 34%, rgba(6,32,26,0.55) 74%, rgba(6,32,26,0.96) 100%)',
+        'linear-gradient(90deg, rgba(6,32,26,0.93) 0%, rgba(6,32,26,0.78) 42%, rgba(6,32,26,0.22) 70%, rgba(6,32,26,0.30) 100%)',
+        'linear-gradient(180deg, rgba(6,32,26,0.30) 0%, rgba(6,32,26,0.05) 34%, rgba(6,32,26,0.55) 74%, rgba(6,32,26,0.96) 100%)',
       ].join(', ')
 
   return (
@@ -145,13 +146,29 @@ export default function Hero() {
         color: '#fff',
       }}
     >
-      <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+      <picture
+        style={
+          isMobileOrTablet
+            ? { position: 'absolute', inset: 0, width: '100%', height: '100%' }
+            : {
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                width: '58%',
+                // Dissolve the photo's left edge into the dark surface so there
+                // is no hard seam where the portrait starts.
+                WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, #000 38%)',
+                maskImage: 'linear-gradient(90deg, transparent 0%, #000 38%)',
+              }
+        }
+      >
         <source media="(max-width: 767px)" srcSet={photo.mobile} />
         <img
           src={photo.desktop}
           alt={photo.alt}
-          width={1600}
-          height={1066}
+          width={1145}
+          height={1374}
           loading="eager"
           decoding="async"
           style={{
@@ -160,9 +177,9 @@ export default function Hero() {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            // Desktop crops 60px vertically — push the crop down so the two
-            // faces sit as high as possible, above the bottom-aligned cards.
-            objectPosition: isMobileOrTablet ? '66% center' : 'center bottom',
+            // Keep her face in frame: the portrait is cropped to the section's
+            // aspect ratio, and the subject's head sits in the top third.
+            objectPosition: isMobileOrTablet ? '50% 18%' : '50% 12%',
           }}
         />
       </picture>
