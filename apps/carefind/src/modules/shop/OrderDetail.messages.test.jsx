@@ -3,14 +3,15 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 
-const h = vi.hoisted(() => ({ getMessages: null, addMessage: null }))
+const ORDER = {
+  id: 'o1', order_ref: 'CF-ORDER-1', status: 'paid', payment_status: 'paid', customer_id: 'u1',
+  total_kobo: 650000, subtotal_kobo: 650000, delivery_kobo: 0, fulfilment_kobo: 0, created_at: '2026-10-01T10:00:00Z',
+  order_items: [{ id: 'i1', product_name: 'Paracetamol', quantity: 1, unit_price_kobo: 650000 }],
+}
+const h = vi.hoisted(() => ({ getMessages: null, addMessage: null, getById: null, startShopPayment: null }))
 vi.mock('./orderRepository', () => ({
   orderRepository: {
-    getById: async () => ({
-      id: 'o1', order_ref: 'CF-ORDER-1', status: 'paid', payment_status: 'paid', customer_id: 'u1',
-      total_kobo: 650000, subtotal_kobo: 650000, delivery_kobo: 0, fulfilment_kobo: 0, created_at: '2026-10-01T10:00:00Z',
-      order_items: [{ id: 'i1', product_name: 'Paracetamol', quantity: 1, unit_price_kobo: 650000 }],
-    }),
+    getById: (...a) => h.getById(...a),
     getMessages: (...a) => h.getMessages(...a),
     addMessage: (...a) => h.addMessage(...a),
   },
@@ -18,7 +19,7 @@ vi.mock('./orderRepository', () => ({
 vi.mock('./trackingRepository', () => ({ trackingRepository: { getTrackingEvents: async () => [] } }))
 vi.mock('./vendorRatingRepository', () => ({ vendorRatingRepository: { getByOrder: async () => null } }))
 vi.mock('./shopRepository', () => ({ shopRepository: { getPickupStationById: async () => null } }))
-vi.mock('./shopPaymentService', () => ({ shopPaymentService: { startShopPayment: vi.fn() } }))
+vi.mock('./shopPaymentService', () => ({ shopPaymentService: { startShopPayment: (...a) => h.startShopPayment(...a) } }))
 vi.mock('../../config/supabaseClient', () => ({ supabase: { auth: { getSession: async () => ({ data: { session: null } }) } } }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
 vi.mock('./CartProvider', () => ({ useCart: () => ({ addItem: vi.fn() }) }))
@@ -34,6 +35,8 @@ function mount() {
     </MemoryRouter>,
   )
 }
+
+beforeEach(() => { h.getById = async () => ({ ...ORDER }); h.startShopPayment = async () => ({ url: '/x' }) })
 
 describe('OrderDetail chat messages', () => {
   it('still shows the order, with an error in the chat panel, when messages cannot be loaded', async () => {
@@ -80,5 +83,50 @@ describe('OrderDetail chat messages', () => {
     fireEvent.click(screen.getByRole('button', { name: /send message/i }))
 
     expect(await screen.findByText('Is it ready?')).toBeTruthy()
+  })
+})
+
+// A failed action on a loaded order is a banner on that order. A failed load is a retryable error - and neither is
+// "Order not found", which is reserved for an order that really is not there.
+describe('OrderDetail errors', () => {
+  it('says the order could not be loaded, with a retry, when loading fails', async () => {
+    h.getById = async () => { throw { message: 'network down' } }
+    mount()
+
+    expect(await screen.findByText(/could not load this order/i)).toBeTruthy()
+    expect(screen.queryByText(/order not found/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy()
+  })
+
+  it('retries the load from the error screen', async () => {
+    let calls = 0
+    h.getById = async () => { calls++; if (calls === 1) throw { message: 'network down' }; return { ...ORDER } }
+    h.getMessages = async () => []
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+
+    expect((await screen.findAllByText(/CF-ORDER-1/)).length).toBeGreaterThan(0)
+  })
+
+  it('says order not found only when the order does not exist', async () => {
+    h.getById = async () => null
+    mount()
+
+    expect(await screen.findByText(/order not found/i)).toBeTruthy()
+  })
+
+  it('keeps the order on screen and shows a banner when starting payment fails', async () => {
+    h.getById = async () => ({ ...ORDER, status: 'pending_payment', payment_status: 'pending' })
+    h.getMessages = async () => []
+    h.startShopPayment = async () => { throw new Error('Could not check your earlier payment. Please try again in a moment.') }
+    mount()
+    await screen.findAllByText(/CF-ORDER-1/)
+
+    fireEvent.click(screen.getByRole('button', { name: /pay with paystack/i }))
+
+    expect(await screen.findByText(/could not check your earlier payment/i)).toBeTruthy()
+    expect(screen.queryByText(/order not found/i)).toBeNull()
+    expect(screen.getAllByText(/CF-ORDER-1/).length).toBeGreaterThan(0)
   })
 })

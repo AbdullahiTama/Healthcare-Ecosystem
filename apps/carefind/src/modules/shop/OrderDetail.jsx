@@ -29,7 +29,10 @@ export default function OrderDetail() {
   const [messagesError, setMessagesError] = useState('')
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  // `error` is a failed load (replaces the page, with a retry); `actionError` is a failed action on a loaded order
+  // (a banner on the order). Neither is "Order not found".
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [updating, setUpdating] = useState(false)
   const [station, setStation] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -201,11 +204,11 @@ export default function OrderDetail() {
 
   async function handleRequestReturn() {
     if (!returnReason.trim()) {
-      setError('Please select a return reason')
+      setActionError('Please select a return reason')
       return
     }
     setUpdating(true)
-    setError('')
+    setActionError('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Please sign in to request a return')
@@ -229,7 +232,7 @@ export default function OrderDetail() {
       await loadOrder()
       await loadReturnData()
     } catch (err) {
-      setError(err.message || 'Failed to request return')
+      setActionError(err.message || 'Failed to request return')
     } finally {
       setUpdating(false)
     }
@@ -261,10 +264,10 @@ export default function OrderDetail() {
           setPaymentJustConfirmed(true)
           await loadOrder()
         } else {
-          setError(data.error || 'Could not confirm payment. Keep your reference and contact support.')
+          setActionError(data.error || 'Could not confirm payment. Keep your reference and contact support.')
         }
       } catch (e) {
-        setError('Could not confirm payment')
+        setActionError('Could not confirm payment')
       }
     })()
     return () => { cancelled = true }
@@ -286,7 +289,7 @@ export default function OrderDetail() {
     setError('')
     try {
       const data = await orderRepository.getById(orderId)
-      if (!data) throw new Error('Order not found')
+      if (!data) { setOrder(null); return }
       setOrder(data)
       await loadMessages()
       if (data.pickup_station_id) {
@@ -300,8 +303,11 @@ export default function OrderDetail() {
         await loadReturnData()
       }
       // Load tracking events
-      const events = await trackingRepository.getTrackingEvents(orderId)
-      setTrackingEvents(events)
+      try {
+        setTrackingEvents(await trackingRepository.getTrackingEvents(orderId))
+      } catch (err) {
+        console.error('Failed to load tracking events:', err)
+      }
       
       // Load existing rating if any
       if (data.status === 'delivered' && data.vendor_business_id) {
@@ -327,7 +333,7 @@ export default function OrderDetail() {
       await loadOrder()
     } catch (err) {
       console.error('Failed to update status:', err)
-      setError(err.message || 'Failed to update status')
+      setActionError(err.message || 'Failed to update status')
     } finally {
       setUpdating(false)
     }
@@ -338,7 +344,7 @@ export default function OrderDetail() {
       const { url } = await shopPaymentService.startShopPayment(orderId)
       window.location.href = url
     } catch (err) {
-      setError(err.message || 'Could not start payment')
+      setActionError(err.message || 'Could not start payment')
     } finally { setUpdating(false) }
   }
   async function handleVerifyPayment() {
@@ -358,7 +364,7 @@ export default function OrderDetail() {
       if (!res.ok) throw new Error(data.error || 'Verification failed')
       await loadOrder()
     } catch (err) {
-      setError(err.message || 'Payment verification failed')
+      setActionError(err.message || 'Payment verification failed')
     } finally { setUpdating(false) }
   }
   async function handleCancel() {
@@ -368,7 +374,7 @@ export default function OrderDetail() {
       setShowCancelModal(false)
       setCancelReason('')
       await loadOrder()
-    } catch (err) { setError(err.message || 'Cancel failed') } finally { setUpdating(false) }
+    } catch (err) { setActionError(err.message || 'Cancel failed') } finally { setUpdating(false) }
   }
 
   async function handleSendMessage(e) {
@@ -393,7 +399,7 @@ export default function OrderDetail() {
         setTrackingToken(token)
       }
     } catch (err) {
-      setError('Failed to generate tracking link')
+      setActionError('Failed to generate tracking link')
     }
   }
 
@@ -414,10 +420,10 @@ export default function OrderDetail() {
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
         <Empty
           icon={<Package size={48} />}
-          title="Order not found"
+          title={error ? 'Could not load this order' : 'Order not found'}
           description={error || 'This order does not exist or you do not have access'}
-          action="Back to Orders"
-          onAction={() => navigate('/orders')}
+          action={error ? 'Try again' : 'Back to Orders'}
+          onAction={error ? loadOrder : () => navigate('/orders')}
         />
       </div>
     )
@@ -449,6 +455,12 @@ export default function OrderDetail() {
         Back to Orders
       </button>
 
+      {actionError && (
+        <div role="alert" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: 14 }}>
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError('')} aria-label="Dismiss error" style={{ background: 'none', border: 'none', color: theme.danger, fontWeight: 800, fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 4 }}>×</button>
+        </div>
+      )}
       {paymentJustConfirmed && (
         <div style={{
           display: 'flex',
