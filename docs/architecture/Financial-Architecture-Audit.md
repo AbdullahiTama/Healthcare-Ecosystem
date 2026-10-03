@@ -170,3 +170,12 @@ Applied to production as `withdrawal_daily_cap` (`20261003012643`). `request_wit
 
 ### Medium findings: all 12 closed
 M-1 fixed (2x), M-2 fixed, M-3 fixed (this entry), M-4 fixed+applied, M-5 fixed+applied, M-6 fixed in Phase 0, M-7 fixed, M-8 closed by H-1/H-2, M-9 fixed in Phase 0, M-10 fixed, M-11 downgraded to Low (no change needed), M-12 fixed. Remaining audit work: the Low items, and H-7 (two agent-commission ledgers), which needs a product decision before any code change.
+
+### 2026-10-03 - Low findings: closed out
+- **`notifyBusiness` ReferenceError:** fixed directly in the working copy (`apps/carefind/api/_handlers/booking.js`). Not committed on its own - the whole `enqueueOutbox` block it sits in is part of the still-uncommitted email-system work, not `HEAD`, so there is nothing to isolate the one-line fix from. It will land whenever that email work is committed; flagged to the user rather than invented as a standalone commit.
+- **Subaccount percentage drift:** moot. C-6 removed the subaccount split entirely (`create-subaccount.js` returns 410; neither charge handler sends `subaccount`/`transaction_charge`).
+- **No outbound idempotency keys on Paystack calls:** already mitigated, not a separate change. Every transfer/charge call in this codebase passes a server-generated `reference`, and the withdrawal flows (H-1/H-2) explicitly reuse a prior pending request's reference on retry before calling Paystack again - which is exactly what an idempotency key is for. Paystack dedupes transfers by reference, so a retried call cannot double-pay.
+- **No reconciliation job:** closed by the two sweepers added under H-1/H-2/H-3 (`reconcile-withdrawals` for CareFind, `reconcile-payments` for CareHub).
+
+### Audit status: everything actionable without a product decision is done
+CRITICAL 7/7, HIGH 10/11, MEDIUM 12/12, LOW 4/4. The sole exception is **H-7** (two parallel agent-commission ledgers, `commissions`+`payouts` vs `agent_earnings`+`payout_requests`) - deliberately not touched; it needs a decision on which ledger is canonical before any migration or code change, not an engineering call. The two sweeper crons (CareFind `reconcile-withdrawals`, CareHub `reconcile-payments`) are routed but **not scheduled** - see the open items already logged under H-1/H-2/H-3 (CareFind's cron cap, `CRON_SECRET` in both deployments).
