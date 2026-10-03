@@ -82,8 +82,8 @@ export async function subscribeWithPaystackFallback(subscriberId, creatorId, pri
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
+        // The server prices the subscription from the creator's profile; only the creator is named.
         creatorId,
-        priceCoins,
         callback_url: callbackUrl,
       }),
     })
