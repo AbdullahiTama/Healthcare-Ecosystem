@@ -57,7 +57,7 @@ describe('shop order fallback settlement', () => {
   const wrote = (table) => h.touched.some(([, t]) => t === table)
 
   beforeEach(() => {
-    h.maybeSingle = { shop_orders: { id: 'o1', vendor_business_id: 'v1', total_kobo: 100000, payment_status: 'pending', status: 'pending_payment', order_ref: 'CF-1' } }
+    h.maybeSingle = { shop_orders: { id: 'o1', payment_reference: 'cf_shop_1', vendor_business_id: 'v1', total_kobo: 100000, payment_status: 'pending', status: 'pending_payment', order_ref: 'CF-1' } }
     h.rpcImpl = async (name) => (name === 'claim_payment_event' ? { data: 'new', error: null } : { data: null, error: { message: 'rpc unavailable' } })
   })
 

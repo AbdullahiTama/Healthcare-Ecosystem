@@ -317,7 +317,7 @@ async function handleShopOrder(metadata, reference, amount) {
 
   const { data: order } = await supabase
     .from('shop_orders')
-    .select('id, vendor_business_id, total_kobo, payment_status, status, order_ref')
+    .select('id, vendor_business_id, total_kobo, payment_reference, paystack_reference, payment_status, status, order_ref')
     .eq('id', metadata.order_id)
     .maybeSingle()
   if (!order) return null
@@ -327,6 +327,17 @@ async function handleShopOrder(metadata, reference, amount) {
   if (order.total_kobo == null || amount !== order.total_kobo) {
     console.error('[paystack-webhook] shop order amount mismatch', { orderId: order.id, reference, paid: amount, expected: order.total_kobo })
     return { rejected: true }
+  }
+
+  // The reference must be an attempt of THIS order: the latest one is the order's payment_reference, earlier
+  // ones (a retried payment) are recorded in shop_payments.
+  if (reference !== order.payment_reference) {
+    const { data: attempt } = await supabase
+      .from('shop_payments').select('id').eq('order_id', order.id).eq('payment_reference', reference).maybeSingle()
+    if (!attempt) {
+      console.error('[paystack-webhook] shop payment reference is not an attempt of the order', { orderId: order.id, reference })
+      return { rejected: true }
+    }
   }
 
   // Deduplicate via shop_payment_events. The claim is recorded BEFORE settlement, so "already claimed" only
@@ -340,6 +351,13 @@ async function handleShopOrder(metadata, reference, amount) {
   })
   const alreadyPaid = order.payment_status === 'paid' || order.status === 'paid'
   if (claimed === 'already_processed' && alreadyPaid) return { alreadyProcessed: true }
+
+  // A different attempt succeeded on an order that is already paid: the customer has paid twice. Record it so
+  // it can be refunded - never settle again and never drop it.
+  if (alreadyPaid && order.paystack_reference && order.paystack_reference !== reference) {
+    await recordDuplicatePayment(order, reference, amount)
+    return { alreadyProcessed: true }
+  }
 
   // Try canonical shop RPCs
   let rpcRes = await supabase.rpc('verify_shop_payment', { p_order_id: order.id, p_paystack_reference: reference })
@@ -393,6 +411,25 @@ async function handleShopOrder(metadata, reference, amount) {
   })
 
   return { settled: true }
+}
+
+// A second successful payment for an order that was already settled. The ledger row (gateway_response.duplicate)
+// is the queryable refund worklist; the vendor is notified and the log line is tagged for alerting. Throws on a
+// write failure so the webhook answers 500 and Paystack redelivers - losing this record would lose track of money.
+async function recordDuplicatePayment(order, reference, amount) {
+  console.error('[shop-duplicate-payment] refund needed', { orderId: order.id, orderRef: order.order_ref, reference, settledWith: order.paystack_reference, amount })
+  const { error: ledgerErr } = await supabase.from('shop_payments').upsert({
+    order_id: order.id, payment_reference: reference, amount_kobo: amount, status: 'success', gateway: 'paystack',
+    gateway_response: { duplicate: true, settled_reference: order.paystack_reference },
+  }, { onConflict: 'payment_reference' })
+  if (ledgerErr) throw new Error(`could not record duplicate payment ${reference}: ${ledgerErr.message}`)
+  await supabase.from('staff_notifications').insert({
+    business_id: order.vendor_business_id, staff_id: null, is_owner: true,
+    kind: 'shop_duplicate_payment',
+    title: `Duplicate payment — ${order.order_ref}`,
+    body: `Order ${order.order_ref} was paid twice (₦${(amount / 100).toLocaleString()} extra, ref ${reference}). CareFind will refund the duplicate.`,
+    link: '/dashboard/ecommerce', read_at: null,
+  }).then(() => {}, () => {})
 }
 
 async function notifyCustomerPostPayment(orderId) {
