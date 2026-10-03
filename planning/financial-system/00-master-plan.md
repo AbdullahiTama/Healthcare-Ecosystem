@@ -81,3 +81,14 @@ Not done by design: webhook signature verification (Phase 11), replacing existin
 New finding: F-26 `checkBalance` may be a no-op (unverified; needs one real /balance response).
 Unresolved: confirm Paystack /balance field name; transfer reference format rule (16-50 lowercase) is enforced in the adapter — existing `cf_wd_<8>_<12hex>` references comply, `ch_wd_<8>_<12hex>` too.
 Next phase: PHASE 04 — CAREFIND PAYMENT FLOWS.
+
+## Business decisions log
+
+| Date | Question | Decision | Status |
+|---|---|---|---|
+| 2026-10-03 | Platform fee on CARD subscriptions and consultations (today: none, F-20) | **20%** (same as booking and withdrawal) — commercial rule CHANGE explicitly instructed by the owner. Interpretation to confirm: 20% of the amount paid, creator/professional receives 80%. | DECIDED (confirm interpretation) |
+| 2026-10-03 | Card booking refunds | Recommended: full card refund when the business cancels at any time, or the patient cancels >= 24h before (the rule `cancel-appointment` already enforces); otherwise none. Platform pays the provider refund, reverses its commission, recovers the business's 80% from held then available balance (never below zero; shortfall flagged, not negative). Paystack's own fee is absorbed by the platform. Replaces the dead 72h code. | RECOMMENDED, awaiting owner |
+| 2026-10-03 | Shop commission | Recommended: adopt the schedule already in the database (`calculate_shop_commission`: retail 10%, wholesale 5%, distributor 2.5%) and in vendors' accepted terms (`accepted_commission_rate`); platform collects, vendor owed order total minus commission, paid through the withdrawal engine. | RECOMMENDED, awaiting owner |
+| 2026-10-03 | Webhook endpoint | Recommended: one provider-events endpoint per deployment routing by the stored intent's `application`. | RECOMMENDED |
+
+Impact on Phase 04: the 20% fee needs `financial_config` keys (`subscription_platform_rate`, `consultation_platform_rate` = 0.20) added by migration, and settlement must credit creators/professionals 80% in CareCoin with the 20% booked to platform revenue — to be designed with the CareCoin rounding rule (F-20) in Phase 04/05.
