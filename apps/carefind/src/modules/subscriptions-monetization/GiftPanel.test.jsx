@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
+const toastShow = vi.hoisted(() => vi.fn())
+
 const mockSupabase = vi.hoisted(() => {
   const ctrl = { wallet: { user_id: 'sender1', balance: 50 }, rpcResult: { data: 'ok', error: null } }
   const query = () => {
@@ -30,7 +32,7 @@ vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: { id: 's
 vi.mock('../../services/notify.js', () => ({ notify: vi.fn() }))
 vi.mock('../../components/ui', () => ({
   Toast: () => null,
-  useToast: () => ({ msg: null, type: null, actionLabel: null, onAction: null, show: vi.fn() }),
+  useToast: () => ({ msg: null, type: null, actionLabel: null, onAction: null, show: toastShow }),
 }))
 
 const supabase = (await import('../../config/supabaseClient')).supabase
@@ -56,6 +58,7 @@ describe('GiftPanel (Feature 7 — gifting)', () => {
     mockSupabase.ctrl.rpcResult = { data: 'ok', error: null }
     notify.mockClear()
     supabase.rpc.mockClear()
+    toastShow.mockClear()
   })
 
   it('sends the selected gift via the send_gift RPC with the correct args', async () => {
@@ -93,6 +96,22 @@ describe('GiftPanel (Feature 7 — gifting)', () => {
     const send = await screen.findByRole('button', { name: /send .*pill/i })
     fireEvent.click(send)
     await new Promise((r) => setTimeout(r, 50))
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['recipient_not_found', /can no longer receive gifts/i],
+    ['invalid_coins', /at least one carecoin/i],
+    ['self', /cannot send a gift to yourself/i],
+    ['insufficient', /not enough carecoins\. top up/i],
+  ])('explains the server refusing a gift (%s) in plain words, not a code', async (code, message) => {
+    mockSupabase.ctrl.rpcResult = { data: code, error: null }
+    renderPanel()
+    fireEvent.click(await screen.findByRole('button', { name: /send .*pill/i }))
+    await waitFor(() => expect(toastShow).toHaveBeenCalled())
+    const [shown] = toastShow.mock.calls.at(-1)
+    expect(shown).toMatch(message)
+    expect(shown).not.toMatch(new RegExp(`could not send gift: ${code}`, 'i')) // never the raw machine code
     expect(notify).not.toHaveBeenCalled()
   })
 

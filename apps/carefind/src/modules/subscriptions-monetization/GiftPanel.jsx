@@ -7,6 +7,19 @@ import { notify } from '../../services/notify.js'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
+// The server decides whether a gift is allowed; these are its refusals in words a person can act on.
+const GIFT_REFUSALS = {
+  insufficient: 'Not enough CareCoins. Top up your wallet first.',
+  self: 'You cannot send a gift to yourself.',
+  invalid_coins: 'Choose a gift of at least one CareCoin.',
+  recipient_not_found: 'This person can no longer receive gifts.',
+  unauthorized: 'Please log in again to send a gift.',
+}
+function giftFailureMessage(result, error) {
+  return GIFT_REFUSALS[result] || 'Could not send gift: ' + (error?.message || result)
+}
+
+
 const GIFTS = [
   { emoji: '💊', name: 'Pill', coins: 1 },
   { emoji: '⭐', name: 'Star', coins: 5 },
@@ -102,7 +115,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
     })
 
     if (error || result !== 'ok') {
-      showToast(result === 'insufficient' ? 'Not enough CareCoins. Top up your wallet first.' : 'Could not send gift: ' + (error?.message || result), { type: result === 'insufficient' ? 'warning' : 'error' })
+      showToast(giftFailureMessage(result, error), { type: result === 'insufficient' ? 'warning' : 'error' })
       setSending(false)
       return
     }
