@@ -25,7 +25,9 @@ export default function FeatureStrip() {
         gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(5, minmax(0, 1fr))',
         gap: isMobile ? '20px 18px' : '24px',
         margin: 0,
-        padding: '32px 0 0',
+        // Bottom padding keeps the last line of body copy clear of TrustStrip's
+        // divider, which sits directly beneath this list.
+        padding: '32px 0 24px',
         borderTop: '1px solid rgba(255,255,255,0.18)',
       }}
     >

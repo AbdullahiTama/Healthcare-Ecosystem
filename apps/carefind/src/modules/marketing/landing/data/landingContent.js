@@ -74,9 +74,11 @@ export const HERO = {
   secondary: { label: 'See how it works', anchor: 'how-it-works' },
   photo: {
     // Served from public/; the small file is the srcset candidate for phones.
-    desktop: '/images/hero-carefind.jpg',
-    mobile: '/images/hero-carefind-sm.jpg',
-    alt: 'A pharmacist hands a customer a box of medicine across the counter.',
+    // Portrait artwork (1145x1374 / 720x864), so Hero.jsx docks it to the right
+    // of the hero instead of stretching it edge to edge.
+    desktop: '/images/hero-carefind-portrait.jpg',
+    mobile: '/images/hero-carefind-portrait-sm.jpg',
+    alt: 'A smiling pharmacist in a white coat and stethoscope checks her phone in a pharmacy aisle.',
   },
 }
 
