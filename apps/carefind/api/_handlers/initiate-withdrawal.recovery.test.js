@@ -6,17 +6,16 @@ const h = vi.hoisted(() => {
     initiateTransfer: vi.fn(),
     paystackFetch: vi.fn(),
     rpcCalls: [],
-    rows: { prior: null, current: null },
-    wdReads: 0,
+    rows: { current: null },
+    isCalls: 0,
   }
   const builderFor = (table) => {
     const b = {
-      select: () => b, eq: () => b, is: () => b, order: () => b, limit: () => b, update: () => b,
+      select: () => b, eq: () => b, is: () => { s.isCalls++; return b }, order: () => b, limit: () => b, update: () => b,
       maybeSingle: async () => {
         if (table === 'wallets') return { data: { balance: 100 } }
         if (table === 'withdrawal_requests') {
-          s.wdReads++
-          return { data: s.wdReads === 1 ? s.rows.prior : s.rows.current }
+          return { data: s.rows.current }
         }
         return { data: null }
       },
@@ -65,14 +64,23 @@ const row = (ageMs) => ({ id: 'wd-1', status: 'pending', paystack_reference: 'cf
 beforeEach(() => {
   h.routes.request_withdrawal = { data: 'ok' }
   h.rpcCalls.length = 0
-  h.wdReads = 0
-  h.rows.prior = null
+  h.isCalls = 0
   h.rows.current = row(1000)
   h.initiateTransfer.mockReset()
   h.paystackFetch.mockReset()
 })
 
 describe('initiate-withdrawal recovery after the wallet is debited', () => {
+  // Financial audit F-01: reusing an earlier pending row's reference made request_withdrawal return
+  // 'ok' without debiting, while the transfer went out for the NEW amount.
+  it('always files the request under a fresh reference and never looks for an earlier pending row to reuse', async () => {
+    h.initiateTransfer.mockResolvedValue({ transferCode: 'TRF_1' })
+    await handler(req, res())
+    const call = h.rpcCalls.find(([n]) => n === 'request_withdrawal')
+    expect(call[1].p_reference).toBe('cf_wd_ref1')
+    expect(h.isCalls).toBe(0)
+  })
+
   it('Paystack rejects the transfer and confirms it was never created: coins are refunded at once', async () => {
     h.initiateTransfer.mockRejectedValue(Object.assign(new Error('Your balance is not enough'), { paystackRejected: true }))
     h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })

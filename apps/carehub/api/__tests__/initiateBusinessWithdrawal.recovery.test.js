@@ -2,13 +2,13 @@
 // is called. When the transfer does not start the money must come back - but only once Paystack confirms
 // the transfer was not created, because a timeout can mean it exists anyway.
 const h = vi.hoisted(() => {
-  const s = { initiateTransfer: vi.fn(), paystackFetch: vi.fn(), rpcCalls: [], reads: 0, row: null }
+  const s = { initiateTransfer: vi.fn(), paystackFetch: vi.fn(), rpcCalls: [], isCalls: 0, row: null }
   const builderFor = (table) => {
     const b = {
-      select: () => b, eq: () => b, or: () => b, in: () => b, is: () => b, order: () => b, limit: () => b, update: () => b,
+      select: () => b, eq: () => b, or: () => b, in: () => b, is: () => { s.isCalls++; return b }, order: () => b, limit: () => b, update: () => b,
       maybeSingle: async () => {
         if (table === 'businesses') return { data: { id: 'biz-1' } }
-        if (table === 'business_withdrawal_requests') { s.reads++; return { data: s.reads === 1 ? null : s.row } }
+        if (table === 'business_withdrawal_requests') return { data: s.row }
         return { data: null }
       },
       then: (r) => r({ error: null }),
@@ -40,13 +40,23 @@ const row = (ageMs) => ({ id: 'bw-1', status: 'pending', paystack_reference: 'ch
 
 beforeEach(() => {
   h.rpcCalls.length = 0
-  h.reads = 0
+  h.isCalls = 0
   h.row = row(1000)
   h.initiateTransfer.mockReset()
   h.paystackFetch.mockReset()
 })
 
 describe('initiate-business-withdrawal recovery after the balance is reserved', () => {
+  // Financial audit F-01: borrowing an earlier pending row's reference made the RPC answer 'ok'
+  // without reserving anything while the transfer went out for the new amount.
+  it('always files the request under a fresh reference and never looks for an earlier pending row to reuse', async () => {
+    h.initiateTransfer.mockResolvedValue({ transferCode: 'TRF_1' })
+    await handler(req, res())
+    const call = h.rpcCalls.find(([n]) => n === 'request_business_withdrawal')
+    expect(call[1].p_reference).toBe('ch_wd_ref1')
+    expect(h.isCalls).toBe(0)
+  })
+
   it('Paystack rejects and confirms the transfer was never created: refunded at once', async () => {
     h.initiateTransfer.mockRejectedValue(Object.assign(new Error('Insufficient balance'), { paystackRejected: true }))
     h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })

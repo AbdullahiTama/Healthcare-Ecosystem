@@ -102,20 +102,12 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: "Could not check payment provider balance" })
   }
 
-  // Reuse a previous attempt's reference if a pending request never got its
-  // transfer code attached (crash window)  Paystack dedupes by reference, so
-  // re-initiating the same transfer can't double-pay.
-  const { data: prior } = await supabase
-    .from('withdrawal_requests')
-    .select('paystack_reference')
-    .eq('user_id', user.id)
-    .eq('status', 'pending')
-    .is('paystack_transfer_code', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const reference = prior?.paystack_reference || transferReference(user.id)
+  // Every request gets its own fresh reference. It used to be borrowed from the user's latest
+  // pending row that had no transfer code, but request_withdrawal answers 'ok' WITHOUT debiting
+  // for a reference it already knows, while the transfer below went out for the new amount
+  // (financial audit F-01). A request that crashed before its transfer was created is settled by
+  // the reconcile-withdrawals sweep, never by re-using its reference.
+  const reference = transferReference(user.id)
 
   // Tracks how far this request got, so a failure can be recovered correctly: once the
   // wallet is debited and the transfer did not start, the coins must come back.
