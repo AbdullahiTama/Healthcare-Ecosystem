@@ -43,10 +43,11 @@ export function LandingSection({
 }) {
   const { isMobileOrTablet } = useBreakpoint()
   const onDark = tone === 'dark'
-  const stacked = align === 'center' || isMobileOrTablet
+  const centered = align === 'center'
+  const stacked = centered || isMobileOrTablet
 
   const heading = (
-    <div style={{ minWidth: 0 }}>
+    <div style={{ minWidth: 0, textAlign: centered ? 'center' : undefined }}>
       {eyebrow && <Eyebrow tone={tone}>{eyebrow}</Eyebrow>}
       <h2
         style={{
@@ -68,7 +69,7 @@ export function LandingSection({
             fontSize: 15,
             lineHeight: 1.7,
             color: onDark ? 'rgba(255,255,255,0.78)' : theme.textMid,
-            margin: '14px 0 0',
+            margin: centered ? '14px auto 0' : '14px 0 0',
             maxWidth: 520,
           }}
         >
@@ -87,7 +88,10 @@ export function LandingSection({
       style={{
         background,
         color: onDark ? '#fff' : theme.textDark,
-        padding: `96px ${GUTTER} 104px`,
+        // GUTTER is a bare number, so it needs its unit here: `96px 20 104px`
+        // is invalid CSS and the browser drops the whole declaration, which
+        // removes the section's vertical rhythm and its side gutters.
+        padding: `96px ${GUTTER}px 104px`,
         borderTop: onDark ? 'none' : `1px solid ${theme.hairline}`,
       }}
     >
@@ -96,11 +100,9 @@ export function LandingSection({
           <>
             <div
               data-reveal
-              style={align === 'center' ? { textAlign: 'center', marginBottom: 56 } : { marginBottom: 48 }}
+              style={{ marginBottom: centered ? 56 : 48 }}
             >
-              {align === 'center' ? (
-                <div style={{ display: 'inline-block', textAlign: 'left' }}>{heading}</div>
-              ) : heading}
+              {heading}
             </div>
             <div data-reveal>{children}</div>
           </>
