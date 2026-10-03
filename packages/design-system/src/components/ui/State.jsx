@@ -55,7 +55,9 @@ export function CardSkeleton() {
 // (SCREEN_PATTERNS.md pattern 30) so the message and action are appropriate:
 // 'none' = nothing exists yet, 'filtered' = filters/search excluded everything,
 // 'positive' = a genuinely good empty state (e.g. "no pending approvals").
-export function Empty({ icon, message, action, onAction, cause = 'none' }) {
+// Copy is either `message` (a string or node) or `title` + `description`; an explicit `message` wins. Callers across
+// the shop and account screens pass title/description, so both shapes must render.
+export function Empty({ icon, message, title, description, action, onAction, cause = 'none' }) {
   // Backward compatible: a string icon (legacy emoji) still renders as text,
   // a passed lucide element renders as-is, and the default is a lucide Inbox.
   const node = icon == null ? <Inbox size={40} strokeWidth={1.5} color={theme.gray300} />
@@ -64,7 +66,14 @@ export function Empty({ icon, message, action, onAction, cause = 'none' }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, color: theme.gray300, textAlign: 'center' }}>
       <div style={{ marginBottom: 16, display: 'flex' }} aria-hidden="true">{node}</div>
-      <div style={{ fontSize: 15, color: theme.gray500, marginBottom: action ? 20 : 0, maxWidth: 320 }}>{message}</div>
+      <div style={{ fontSize: 15, color: theme.gray500, marginBottom: action ? 20 : 0, maxWidth: 320 }}>
+        {message != null ? message : (
+          <>
+            {title && <div style={{ fontSize: 15, fontWeight: 700, color: theme.textDark, marginBottom: description ? 4 : 0 }}>{title}</div>}
+            {description && <div style={{ fontSize: 13 }}>{description}</div>}
+          </>
+        )}
+      </div>
       {action && (
         <Button variant={cause === 'filtered' ? 'ghost' : 'primary'} onClick={onAction}>{action}</Button>
       )}
