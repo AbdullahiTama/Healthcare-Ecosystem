@@ -26,6 +26,13 @@ create table public.wallets (
   constraint wallets_balance_nonnegative check (balance >= 0)
 );
 
+-- Production has RLS on wallets with these two policies; the second one references `balance`, which
+-- blocks ALTER COLUMN TYPE until it is dropped and recreated (the coin_ledger migration does exactly that).
+alter table public.wallets enable row level security;
+create policy "Users can read their own wallet" on public.wallets for select using (user_id = (select auth.uid()));
+create policy "wallets insert own empty" on public.wallets for insert to authenticated
+  with check (user_id = auth.uid() and balance = 0);
+
 create table public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid,

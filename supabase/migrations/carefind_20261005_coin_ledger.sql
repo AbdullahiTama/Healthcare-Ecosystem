@@ -168,12 +168,18 @@ select w.user_id, floor(w.balance)::integer, floor(w.balance)::integer, 'opening
  where floor(w.balance) > 0;
 
 update public.wallets set balance = 0 where balance is null;
+-- Postgres refuses to change the type of a column that a policy mentions: drop it, convert, recreate it
+-- unchanged (a client may still create their OWN wallet, but only an empty one).
+drop policy if exists "wallets insert own empty" on public.wallets;
 alter table public.wallets drop constraint if exists wallets_balance_nonnegative;
 alter table public.wallets alter column balance type integer using floor(balance)::integer;
 alter table public.wallets alter column balance set default 0;
 alter table public.wallets alter column balance set not null;
 alter table public.wallets alter column user_id set not null;
 alter table public.wallets add constraint wallets_balance_nonnegative check (balance >= 0);
+create policy "wallets insert own empty" on public.wallets
+  for insert to authenticated
+  with check (user_id = auth.uid() and balance = 0);
 
 -- ---------------------------------------------------------------------------------------------
 -- Reconciliation (service_role only)
@@ -242,6 +248,10 @@ begin
    where table_schema = 'public' and table_name = 'coin_ledger'
      and ((grantee in ('anon', 'PUBLIC')) or (grantee in ('authenticated', 'service_role') and privilege_type <> 'SELECT'));
   if bad is not null then raise exception 'coin_ledger has write grants: %', bad; end if;
+
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'wallets' and policyname = 'wallets insert own empty') then
+    raise exception 'the wallets insert-own-empty policy was not restored';
+  end if;
 
   -- The cutover must leave every wallet reconciled.
   select count(*) into mismatched from public.reconcile_coin_wallets();
