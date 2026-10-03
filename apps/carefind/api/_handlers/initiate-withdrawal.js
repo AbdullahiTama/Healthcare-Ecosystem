@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  const { amount, bankCode, bankName, accountNumber, accountName, pin, deviceToken } = req.body
+  const { amount, bankCode, bankName, accountNumber, accountName, pin } = req.body
   const coins = Number(amount)
 
   if (!Number.isInteger(coins) || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
@@ -32,10 +32,12 @@ export default async function handler(req, res) {
   const trustLevel = trust?.trust_level || 'new'
   const requiredAuth = getRequiredAuth(trustLevel, coins)
 
-  const hasDeviceTrust = deviceToken && trust?.device_trust_enabled
+  // The PIN is the only second factor. Device trust used to stand in for it, but the client's
+  // `deviceToken` was never compared with a stored device, so any non-empty string passed
+  // (financial audit F-02). Re-introduce it only with a server-stored, hashed, expiring token.
   const hasPin = !!pin
 
-  if (!hasPin && !hasDeviceTrust) {
+  if (!hasPin) {
     return res.status(400).json({
       error: 'Authentication required',
       trustLevel,
