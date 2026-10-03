@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { settleIntentForRequest } from '../_lib/intentSettlement.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -23,26 +23,7 @@ export default async function handler(req, res) {
   if (out.outcome !== 'settled') return res.status(out.http).json(out.body)
 
   const { coins, new_balance: newBalance } = out.result
-  // Wallet top-up confirmation email - never blocks the credit outcome.
-  try {
-    if (user.email) {
-      await enqueueOutbox({
-        templateKey: 'payment_success',
-        toEmail: user.email,
-        payload: {
-          fullName: user.user_metadata?.full_name || user.email,
-          amount: (out.result.intent.expected_amount / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
-          reference,
-          purpose: 'CareCoin top-up',
-        },
-        subject: 'CareFind: payment received',
-        idempotencyKey: `payment-success:${reference}`,
-      })
-      flushOutbox().catch((err) => console.error('[verify-payment] outbox flush error:', err))
-    }
-  } catch (err) {
-    console.error('[verify-payment] email enqueue error:', err)
-  }
+  await runSettlementEffects(supabase, out.result)
 
   return res.status(200).json({ credited: coins, newBalance })
 }

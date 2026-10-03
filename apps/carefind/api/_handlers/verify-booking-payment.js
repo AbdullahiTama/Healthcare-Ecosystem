@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { settleIntentForRequest } from '../_lib/intentSettlement.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -38,50 +38,8 @@ export default async function handler(req, res) {
   }
   if (out.outcome !== 'settled') return res.status(out.http).json(out.body)
 
-  const { data: appt } = await supabase
-    .from('appointments')
-    .select('id, business_id, client_name, date, time, fee_amount, client_email, service')
-    .eq('id', appointmentId)
-    .maybeSingle()
-
-  if (appt) {
-    // Notify the business that payment landed.
-    await supabase.from('staff_notifications').insert({
-      business_id: appt.business_id,
-      staff_id: null,
-      is_owner: true,
-      kind: 'booking_paid',
-      title: `Payment received — ${appt.client_name}`,
-      body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
-      link: '/dashboard/appointments',
-      read_at: null,
-    })
-
-    // Booking confirmation email to the client (paid path). Only sent on fresh settlement: a replay
-    // returned above, so the webhook and the redirect cannot both send it.
-    if (appt.client_email && appt.client_email.includes('@')) {
-      try {
-        const { data: business } = await supabase.from('businesses').select('name').eq('id', appt.business_id).maybeSingle()
-        await enqueueOutbox({
-          templateKey: 'booking_confirmed',
-          toEmail: appt.client_email,
-          payload: {
-            fullName: appt.client_name,
-            businessName: business?.name || '',
-            service: appt.service || 'Consultation',
-            date: appt.date,
-            time: appt.time,
-          },
-          subject: 'Your booking is confirmed',
-          sourceId: appt.id,
-          idempotencyKey: `booking-confirmed:${appt.id}`,
-        })
-        flushOutbox().catch((err) => console.error('[verify-booking-payment] outbox flush error:', err))
-      } catch (err) {
-        console.error('[verify-booking-payment] booking confirmation email error:', err)
-      }
-    }
-  }
+  // Business notification and client email: run once, by the call that actually settled the intent.
+  await runSettlementEffects(supabase, out.result)
 
   return res.status(200).json({ success: true, id: appointmentId, paid: true })
 }
