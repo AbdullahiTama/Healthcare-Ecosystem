@@ -7,26 +7,13 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { createLegacyStubs } from './fixtures/legacyFunctions.js'
 
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 let db
 let n = 0
 const uid = () => `00000000-0000-4000-8000-${(++n + 40000).toString(16).padStart(12, '0')}`
 const ref = (p) => `${p}_${++n}`
-
-// Production's current signatures and who may call them (read live 2026-10-03).
-const LEGACY = [
-  ['credit_wallet_topup(p_user_id uuid, p_coins integer, p_naira_amount integer, p_reference text)', 'table(already_processed boolean, new_balance integer)', 'select false, 0', 'service_role'],
-  ['settle_subscription_payment(p_subscriber uuid, p_creator uuid, p_price integer, p_naira_amount integer, p_reference text)', 'table(already_processed boolean)', 'select false', 'service_role'],
-  ['settle_consultation_payment(p_patient uuid, p_professional uuid, p_fee numeric, p_reference text)', 'table(already_processed boolean, already_booked boolean)', 'select false, false', 'service_role'],
-  ['pay_booking_with_credits(p_user_id uuid, p_appointment_id uuid)', 'text', "select 'old'::text", 'service_role'],
-  ['pay_creator_subscription(p_creator uuid, p_price integer)', 'text', "select 'old'::text", 'authenticated, service_role'],
-  ['pay_professional_consultation(p_professional uuid)', 'text', "select 'old'::text", 'authenticated, service_role'],
-  ['send_gift(p_recipient uuid, p_coins integer, p_gift_type text, p_gift_emoji text, p_post_id uuid default null, p_live_session_id uuid default null)', 'text', "select 'old'::text", 'authenticated, service_role'],
-  ['request_withdrawal(p_user_id uuid, p_amount integer, p_bank_name text, p_account_number text, p_account_name text, p_reference text default null, p_daily_cap_coins integer default null)', 'text', "select 'old'::text", 'service_role'],
-  ['reject_withdrawal_request(p_request_id uuid)', 'text', "select 'old'::text", 'service_role'],
-  ['refund_appointment_payment(p_appointment_id uuid)', 'text', "select 'old'::text", 'service_role'],
-]
 
 beforeAll(async () => {
   db = new PGlite()
@@ -40,14 +27,10 @@ beforeAll(async () => {
   await db.exec(read('../../../../../supabase/migrations/carefind_20261003_payment_intents_foundation.sql'))
   await db.exec(read('../../../../../supabase/migrations/carefind_20261004_settle_payment_intent.sql'))
   await db.exec(read('../../../../../supabase/migrations/carefind_20261005_coin_ledger.sql'))
-  for (const [sig, returns, body, grant] of LEGACY) {
-    const name = sig.slice(0, sig.indexOf('('))
-    await db.exec(`create function public.${sig} returns ${returns} language sql as $$ ${body} $$;`)
-    // revoke by name+arg types: strip names/defaults for the REVOKE/GRANT signature
-    const types = sig.slice(sig.indexOf('(') + 1, sig.lastIndexOf(')')).split(',').map((a) => a.trim().split(/\s+/)[1]).join(', ')
-    await db.exec(`revoke all on function public.${name}(${types}) from public, anon, authenticated, service_role; grant execute on function public.${name}(${types}) to ${grant};`)
-  }
+  await createLegacyStubs(db)
   await db.exec(read('../../../../../supabase/migrations/carefind_20261005_coin_writers_use_ledger.sql'))
+  // ...and with the lock ON: every writer below must work while hand-written balance changes are refused.
+  await db.exec(read('../../../../../supabase/migrations/carefind_20261005_lock_wallets_to_ledger.sql'))
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
