@@ -15,6 +15,8 @@ const mockSupabase = vi.hoisted(() => {
       news: [], live_sessions: [], live_shows: [], playlists: [], feed_config: [],
     },
     rpcRows: {},
+    // table -> true makes every plain read of that table resolve with an error
+    errors: {},
   }
   const rows = (table) => data.tables[table] || []
   const matches = (row, cons) =>
@@ -38,7 +40,11 @@ const mockSupabase = vi.hoisted(() => {
       single: vi.fn(() => Promise.resolve({ data: rows(table).find((r) => matches(r, cons)) || null, error: null })),
       insert: vi.fn(() => Promise.resolve({ data: null, error: null })),
       upsert: vi.fn(() => Promise.resolve({ data: null, error: null })),
-      then: (resolve) => Promise.resolve({ data: rows(table).filter((r) => matches(r, cons)), error: null }).then(resolve),
+      then: (resolve) => Promise.resolve(
+        data.errors[table]
+          ? { data: null, error: { message: `permission denied for ${table}` } }
+          : { data: rows(table).filter((r) => matches(r, cons)), error: null }
+      ).then(resolve),
     }
     return b
   }
@@ -138,6 +144,7 @@ beforeEach(() => {
   mockSupabase.data.tables.posts = []
   mockSupabase.data.tables.profiles = []
   mockSupabase.data.rpcRows = {}
+  mockSupabase.data.errors = {}
   shareOrCopy.mockClear()
 })
 
@@ -294,5 +301,24 @@ describe('?tab= landing param (bottom-nav Videos entry)', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(screen.queryByText('permalink page')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Videos' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+// loadEngineConfig used to run its five reads in one try/catch, so one failing
+// read skipped everything after it. For a logged-out visitor the businesses
+// read (the Medical tab's facility list) failed and the experiment lookup that
+// comes after it was never made.
+describe('feed engine config degrades step by step', () => {
+  it('still looks up experiments when the businesses read fails', async () => {
+    mockSupabase.data.errors = { businesses: true }
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    renderFeed('/feed')
+
+    await waitFor(() =>
+      expect(mockSupabase.supabase.from.mock.calls.some((call) => call[0] === 'content_distribution_experiments')).toBe(true))
+
+    // The failure is still reported, labelled with the step that failed.
+    expect(errorSpy.mock.calls.some((args) => String(args[0]).includes('medical context'))).toBe(true)
+    errorSpy.mockRestore()
   })
 })

@@ -488,7 +488,15 @@ function Feed() {
   // 20260813_feed_engine migration makes the config real; without it every
   // read degrades to the built-in defaults and the feed still ranks.
   async function loadEngineConfig() {
-    try {
+    // Each step is independent and degrades to the built-in defaults on its
+    // own. They used to share one try/catch, so a single failing read (for a
+    // logged-out visitor it was the businesses read behind the Medical tab)
+    // silently skipped every step after it — including the experiment lookup.
+    const attempt = async (label, fn) => {
+      try { await fn() } catch (e) { console.error(`Feed engine config error (${label}):`, e) }
+    }
+
+    await attempt('ranking', async () => {
       const rows = await postRepository.getFeedRankingConfig()
       if (rows && rows.length) {
         const byKey = {}
@@ -498,31 +506,35 @@ function Feed() {
           diversity: { ...DEFAULT_RANKING_CONFIG.diversity, ...(byKey.diversity || {}) },
         })
       }
+    })
+    await attempt('pools', async () => {
       const poolRows = await postRepository.getCandidatePools()
       if (poolRows && poolRows.length) {
         const next = {}
         poolRows.forEach((r) => { next[r.pool] = { enabled: r.enabled !== false, priority: r.priority, limitCount: r.limit_count } })
         setPoolsConfig({ ...DEFAULT_POOLS, ...next })
       }
-      if (user) {
-        const me = await postRepository.getProfileLocation(user.id)
-        if (me) setMyRegion(normalizeRegion(`${me.location || ''} ${me.country || ''}`))
-      }
+    })
+    await attempt('region', async () => {
+      if (!user) return
+      const me = await postRepository.getProfileLocation(user.id)
+      if (me) setMyRegion(normalizeRegion(`${me.location || ''} ${me.country || ''}`))
+    })
+    await attempt('medical context', async () => {
       const [verifiedIds, medicalBizIds] = await Promise.all([
         postRepository.getVerifiedProfessionalIds(),
         postRepository.getMedicalBusinessIds(MEDICAL_BUSINESS_TYPES),
       ])
       setMedicalContext({ verifiedIds, medicalBizIds })
-
+    })
+    await attempt('experiments', async () => {
       const expRows = await postRepository.getExperiments()
       setActiveExperiment(resolveExperiment({
         experiments: expRows || [],
         userId: user?.id || null,
         sessionId: recordFeedView.sessionId,
       }))
-    } catch (e) {
-      console.error('Feed engine config error:', e)
-    }
+    })
   }
   useEffect(() => { loadEngineConfig() }, [user])
 
