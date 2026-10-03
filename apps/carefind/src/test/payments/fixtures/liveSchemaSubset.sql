@@ -9,6 +9,9 @@ create or replace function auth.uid() returns uuid language sql stable as
 create or replace function auth.role() returns text language sql stable as
   $$ select coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'anon') $$;
 
+create table auth.users (id uuid primary key);
+create or replace function public.is_platform_admin() returns boolean language sql stable as $$ select false $$;
+
 create table public.profiles (
   id uuid primary key,
   subscription_price integer
@@ -17,7 +20,7 @@ create table public.profiles (
 create table public.wallets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid,
-  balance numeric default 0,
+  balance numeric(14,4) default 0,   -- production scale: numeric with 4 decimals
   created_at timestamptz default now(),
   constraint wallets_user_id_key unique (user_id),
   constraint wallets_balance_nonnegative check (balance >= 0)
@@ -119,3 +122,32 @@ begin
   insert into platform_transactions (appointment_id, business_id, type, amount, reference) values (p_appointment_id, p_business_id, 'commission', p_platform_kobo, p_reference) on conflict (reference) where type = 'commission' do nothing;
 end;
 $function$;
+
+
+-- ---- tables the CareCoin wallet work (Phase 05) touches ------------------------------------------
+create table public.gifts (
+  id uuid primary key default gen_random_uuid(),
+  sender_id uuid,
+  recipient_id uuid,
+  post_id uuid,
+  live_session_id uuid,
+  gift_type text,
+  gift_emoji text,
+  coins numeric,
+  created_at timestamptz default now()
+);
+
+create table public.withdrawal_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  amount integer not null,
+  bank_name text,
+  bank_code text,
+  account_number text,
+  account_name text,
+  status text default 'pending',
+  paystack_reference text,
+  paystack_transfer_code text,
+  paystack_recipient_code text,
+  created_at timestamptz default now()
+);
