@@ -121,8 +121,9 @@ export function createOrderRepository(supabaseClient = supabase) {
     if (data && data !== 'ok' && data.startsWith('already')) throw new Error(data)
   }
 
-  async function addMessage(orderId, senderId, message, senderRole = 'customer') {
-    // Use RPC so server derives sender_role and auth.uid() correctly
+  // The server derives the sender (auth.uid()) and the role (customer / vendor / carefind_ops) and checks the caller
+  // may post on this order, so the client sends only the order and the text.
+  async function addMessage(orderId, message) {
     const { data, error } = await supabaseClient.rpc('shop_add_message', {
       p_order_id: orderId,
       p_message: message

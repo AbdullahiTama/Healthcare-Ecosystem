@@ -75,3 +75,20 @@ describe('orderRepository.getMessages', () => {
     await expect(createOrderRepository(client).getMessages('o1')).rejects.toMatchObject({ message: 'boom' })
   })
 })
+
+describe('orderRepository.addMessage', () => {
+  it('lets the server derive the sender and role: only the order and the text are sent', async () => {
+    const rpc = vi.fn(async () => ({ data: 'msg-1', error: null }))
+
+    const id = await createOrderRepository({ rpc }).addMessage('o1', 'Is it ready?')
+
+    expect(rpc).toHaveBeenCalledWith('shop_add_message', { p_order_id: 'o1', p_message: 'Is it ready?' })
+    expect(id).toBe('msg-1')
+  })
+
+  it('throws when the server rejects the message', async () => {
+    const rpc = async () => ({ data: null, error: { message: 'Not authorized for this order' } })
+
+    await expect(createOrderRepository({ rpc }).addMessage('o1', 'hi')).rejects.toMatchObject({ message: 'Not authorized for this order' })
+  })
+})

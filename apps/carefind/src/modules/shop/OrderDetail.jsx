@@ -376,7 +376,7 @@ export default function OrderDetail() {
     if (!newMessage.trim()) return
 
     try {
-      await orderRepository.addMessage(orderId, user.id, newMessage)
+      await orderRepository.addMessage(orderId, newMessage)
       setNewMessage('')
     } catch (err) {
       console.error('Failed to send message:', err)

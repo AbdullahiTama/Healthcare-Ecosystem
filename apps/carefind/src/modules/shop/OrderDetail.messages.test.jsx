@@ -72,7 +72,7 @@ describe('OrderDetail chat messages', () => {
   it('reloads the messages after a successful send', async () => {
     let stored = []
     h.getMessages = async () => stored
-    h.addMessage = async (_orderId, _userId, text) => { stored = [{ id: 'm9', sender_id: 'u1', sender_role: 'customer', message: text, created_at: '2026-10-01T12:00:00Z', profiles: { id: 'u1', full_name: 'Ada' } }] }
+    h.addMessage = async (_orderId, text) => { stored = [{ id: 'm9', sender_id: 'u1', sender_role: 'customer', message: text, created_at: '2026-10-01T12:00:00Z', profiles: { id: 'u1', full_name: 'Ada' } }] }
     mount()
     await screen.findAllByText(/CF-ORDER-1/)
 
