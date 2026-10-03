@@ -31,6 +31,7 @@ export const theme = {
   cardBg: '#FBFAF6',         // Card, modal, drawer backgrounds (=== gray50)
   border: '#ECEAE0',         // Default borders, dividers (=== gray200)
   hairline: '#E7E4D9',       // Subtle separators (=== gray300)
+  overlay: 'rgba(15,23,42,0.55)', // Modal/drawer/sheet backdrop (neutral slate — Slice 4)
   textDark: '#182722',       // Primary text (=== gray900, navy)
   textMid: '#3C4B44',        // Secondary text (=== gray600)
   textLight: '#8B978F',      // Muted text (=== gray500)
@@ -52,6 +53,27 @@ export const theme = {
   infoBg: '#eff6ff',
   purpleBg: '#f5f3ff',
   tealMist: '#E3EEE8',       // Teal-tinted surfaces (selected rows, hover)
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // BACKWARD-COMPAT ALIASES (legacy token names still referenced by app code)
+  // Values match the pre-unification per-app themes; aliases exist so existing
+  // call sites keep working without churn. Prefer the canonical names above.
+  // ──────────────────────────────────────────────────────────────────────────────
+  deepTeal: '#0B4A3E',       // CareHub legacy — same value as navy
+  alert: '#dc2626',          // Old danger alias (Login, AgentLogin, DrugProfile)
+  alertLight: '#fca5a5',     // Light danger tint (LiveSession like button)
+  amberText: '#92400e',      // Amber warning text (Register, Inventory, News)
+  amberBorder: '#fcd34d',    // Amber warning border (Register, AdminDashboard)
+  amberDeep: '#b45309',      // Darker amber emphasis (AdminDashboard)
+  amberBg: '#fef3c7',        // Amber status-pill background (News, AdminPanel)
+  amberSoft: '#fef9c3',      // Soft amber highlight (Feed unclaimed)
+  dangerBorder: '#fecaca',   // Danger alert border (Login, AgentLogin, DrugProfile)
+  dangerGradient: 'linear-gradient(135deg, #7F1D1D, #B91C1C)', // LiveSession
+  greenLive: '#4ade80',      // Live status dot (LiveSession)
+  slate: '#0f172a',          // Dark slate alias (Register, Feed live-now strip)
+  slateMuted: '#94a3b8',     // Muted slate text (Feed, GiftPanel)
+  starAmber: '#f5b301',      // Review/rating stars (Feed, postDisplay)
+  textFaint: '#888',         // Faint gray text (Register, AdminDashboard)
 
   // ──────────────────────────────────────────────────────────────────────────────
   // HEALTHCARE-SPECIFIC SEMANTIC STATES
@@ -90,13 +112,20 @@ export const theme = {
     bodySm: { size: 12, weight: 600, lineHeight: 1.4, letterSpacing: '0' },           // Secondary info, metadata
     caption: { size: 11, weight: 700, lineHeight: 1.4, letterSpacing: '0.02em' },     // Labels, pill text, timestamps
     micro: { size: 10.5, weight: 700, lineHeight: 1.3, letterSpacing: '0.04em' },     // Dense tables, footnotes
+    // Dashboard-only roles (DASHBOARD_FOUNDATION.md). Metric values are dominant
+    // but deliberately not oversized — they sit between h2 and display so a row
+    // of four reads as data, not as four headlines.
+    metric: { size: 28, weight: 800, lineHeight: 1.1, letterSpacing: '-0.02em' },     // Metric value
+    metricLabel: { size: 12, weight: 600, lineHeight: 1.4, letterSpacing: '0.01em' }, // Metric label
   },
 
   // ──────────────────────────────────────────────────────────────────────────────
   // SPACING (4px base scale)
+  // Dashboards compose from 8/12/16/20/24/32/40/48 — space[4]/[6]/[8]/[10]/
+  // [11]/[12]/[13]/[14]. Anything outside this set needs a documented reason.
   // ──────────────────────────────────────────────────────────────────────────────
   space: {
-    1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 24, 12: 32,
+    1: 2, 2: 4, 3: 6, 4: 8, 5: 10, 6: 12, 7: 14, 8: 16, 9: 18, 10: 20, 11: 24, 12: 32, 13: 40, 14: 48,
   },
 
   // ──────────────────────────────────────────────────────────────────────────────
@@ -168,5 +197,23 @@ export const theme = {
   },
   card: {
     padding: { dense: 8, default: 12, comfortable: 16 },
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────────
+  // DASHBOARD LAYOUT GEOMETRY (DASHBOARD_FOUNDATION.md)
+  // Lengths only — color, spacing, radius, type and elevation stay in their own
+  // scales so a dashboard can never drift from the rest of the system.
+  // Products may override per-instance (navWidth, contentMaxWidth) rather than
+  // fork the tokens: CareHub's rail and CareFind's control-center rail differ,
+  // the canvas/surface language they sit on does not.
+  // ──────────────────────────────────────────────────────────────────────────────
+  dashboard: {
+    navWidth: 232,           // Expanded left navigation rail
+    navCollapsedWidth: 72,   // Icon-only rail (tablet, or user-collapsed)
+    topbarHeight: 56,        // Utility bar: title/search/actions
+    contentMaxWidth: 1240,   // Central content stops growing here (wide monitors)
+    asideWidth: 300,         // Optional right-side context panel (>=1024px only)
+    metricMin: 168,          // MetricGrid: narrowest tile before the row wraps
+    chartMinHeight: 180,     // ChartCard plot area floor — never a squashed chart
   },
 };

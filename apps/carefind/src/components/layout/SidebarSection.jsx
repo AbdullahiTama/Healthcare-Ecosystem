@@ -9,6 +9,7 @@ import { Card } from '../ui'
 export function StickySidebar({ children, width = 320 }) {
   return (
     <aside
+      className="cf-sidebar-scroll"
       style={{
         width, flexShrink: 0, position: 'sticky', top: 80,
         height: 'fit-content', maxHeight: 'calc(100vh - 96px)', overflowY: 'auto',

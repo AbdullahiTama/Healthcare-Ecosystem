@@ -30,6 +30,22 @@ export function createProductRepository(request = sbFetch) {
       return results[0] || null
     },
 
+    // Type-ahead lookup for consultation forms: matches the brand name OR the
+    // generic name, case-insensitively. The query is URL-encoded before it is
+    // interpolated so a product name containing a comma cannot break the
+    // or=() clause structure. Selects only what pickers render — an earlier
+    // service-layer version selected a nonexistent `sku` column, which made
+    // every search fail with PGRST204 (swallowed by the caller's catch).
+    async search(businessId, query, limit = 30) {
+      const q = encodeURIComponent(query.trim())
+      if (!q) return []
+      return request(
+        `products?business_id=eq.${businessId}` +
+        `&or=(name.ilike.*${q}*,generic_name.ilike.*${q}*)` +
+        `&order=name.asc,id.asc&select=id,name,generic_name,price,category&limit=${limit}`,
+      )
+    },
+
     async create(businessId, product) {
       return request('products', {
         method: 'POST',

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -31,19 +32,19 @@ function Dashboard() {
       }
       setLoading(true)
 
-      const [postsRes, reviewsRes, savedRes, followRes, verifyRes] = await Promise.all([
-        supabase.from('posts').select('id, content, created_at, post_type').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('reviews').select('id, rating, comment, created_at, business_id, businesses(name)').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('saved_posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', user.id),
-        supabase.from('verification_requests').select('status').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      const [postsData, reviewsData, savedCountData, followingCountData, verificationData] = await Promise.all([
+        profileRepository.getMyPosts(user.id),
+        profileRepository.getMyReviews(user.id),
+        profileRepository.getSavedPostCount(user.id),
+        profileRepository.getFollowerCount(user.id),
+        profileRepository.getVerificationRequest(user.id),
       ])
 
-      setMyPosts(postsRes.data || [])
-      setMyReviews(reviewsRes.data || [])
-      setSavedCount(savedRes.count || 0)
-      setFollowingCount(followRes.count || 0)
-      setVerification(verifyRes.data)
+      setMyPosts(postsData || [])
+      setMyReviews(reviewsData || [])
+      setSavedCount(savedCountData || 0)
+      setFollowingCount(followingCountData || 0)
+      setVerification(verificationData)
       setLoading(false)
     }
     if (!authLoading) load()
@@ -185,7 +186,7 @@ function Dashboard() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

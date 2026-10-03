@@ -6,7 +6,7 @@ name: CareHub CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     paths:
       - 'apps/carehub/**'
       - 'packages/**'
@@ -38,9 +38,21 @@ jobs:
         working-directory: apps/carehub
         run: npm ci
 
+      - name: Lint
+        working-directory: apps/carehub
+        run: npm run lint
+
+      - name: Security audit
+        working-directory: apps/carehub
+        run: npm audit --audit-level=high
+
       - name: Run tests
         working-directory: apps/carehub
         run: npm run test
+
+      - name: Test coverage
+        working-directory: apps/carehub
+        run: npm run test:coverage
 
       - name: Build
         working-directory: apps/carehub

@@ -43,7 +43,11 @@ export async function initiateTransfer({ recipientCode, amountKobo, reason, refe
   })
 
   if (!data.status) {
-    throw new Error(data.message || 'Could not initiate transfer')
+    // Paystack answered and said no. Anything else that can go wrong here (timeout,
+    // dropped connection, bad JSON) is ambiguous: the transfer may exist anyway.
+    const err = new Error(data.message || 'Could not initiate transfer')
+    err.paystackRejected = true
+    throw err
   }
 
   return { transferCode: data.data.transfer_code, reference: data.data.reference }
@@ -61,16 +65,15 @@ export async function verifyTransfer(transferCode) {
 // actually belongs to the account number before any transfer is initiated,
 // so a typo can't route money to the wrong account.
 export async function resolveAccount({ bankCode, accountNumber }) {
-  const data = await paystackFetch('/bank/resolve', {
-    method: 'POST',
-    body: JSON.stringify({
-      bank_code: bankCode,
-      account_number: accountNumber,
-    }),
-  })
+  const qs = `account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
+  const data = await paystackFetch(`/bank/resolve?${qs}`)
 
   if (!data.status) {
-    throw new Error(data.message || 'Could not verify account')
+    const err = new Error(data.message || 'Could not verify account')
+    err.paystackMessage = data.message
+    err.bankCode = bankCode
+    err.accountNumber = accountNumber
+    throw err
   }
 
   return { accountName: data.data.account_name, accountNumber: data.data.account_number }

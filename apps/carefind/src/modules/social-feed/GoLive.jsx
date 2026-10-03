@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import { Gift, MessageSquare, Mic, Palette, Radio, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
+import { postRepository } from './repositories'
 
 export default function GoLive({ onClose }) {
   const { user } = useAuth()
@@ -18,29 +18,32 @@ export default function GoLive({ onClose }) {
   async function startLive() {
     if (!topic.trim()) return
     setStarting(true)
-    const { data, error } = await supabase.from('live_sessions').insert({
-      host_id: user.id,
-      topic: topic.trim(),
-      description: description.trim(),
-      status: 'live',
-      board_strokes: [],
-      likes: 0,
-      started_at: new Date().toISOString(),
-    }).select().single()
+    try {
+      const data = await postRepository.createLiveSession({
+        host_id: user.id,
+        topic: topic.trim(),
+        description: description.trim(),
+        status: 'live',
+        board_strokes: [],
+        likes: 0,
+        started_at: new Date().toISOString(),
+      })
 
-    if (error) { showToast('Could not start session: ' + error.message, { type: 'error' }); setStarting(false); return }
+      // Post to feed so followers see it
+      await ensureProfile(user)
+      await postRepository.createPost({
+        user_id: user.id,
+        content: `🔴 LIVE NOW: ${topic.trim()}${description ? '\n' + description.trim() : ''}\n\nJoin here 👇`,
+        post_type: 'text',
+        live_session_id: data.id,
+      })
 
-    // Post to feed so followers see it
-    await ensureProfile(user)
-    await supabase.from('posts').insert({
-      user_id: user.id,
-      content: `🔴 LIVE NOW: ${topic.trim()}${description ? '\n' + description.trim() : ''}\n\nJoin here 👇`,
-      post_type: 'text',
-      live_session_id: data.id,
-    })
-
-    onClose()
-    navigate(`/live/${data.id}`)
+      onClose()
+      navigate(`/live/${data.id}`)
+    } catch (error) {
+      showToast('Could not start session: ' + error.message, { type: 'error' })
+      setStarting(false)
+    }
   }
 
   return (

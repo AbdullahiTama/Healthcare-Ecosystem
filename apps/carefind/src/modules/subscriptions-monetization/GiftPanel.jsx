@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { subscriptionRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
 import { theme } from '../../styles/theme'
@@ -74,15 +75,15 @@ function GiftPanel({ postId, recipientId, onClose }) {
   useEffect(() => {
     async function loadWallet() {
       if (!user) return
-      let { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-      if (!data) {
-        const { data: newW } = await supabase.from('wallets').insert({ user_id: user.id, balance: 0 }).select().single()
-        data = newW
+      let balance = await subscriptionRepository.getWalletBalance(user.id)
+      if (balance === 0) {
+        await subscriptionRepository.ensureWallet(user.id)
+        balance = 0
       }
-      setWallet(data)
+      setWallet({ balance })
     }
     loadWallet()
-  }, [user])
+  }, [user?.id])
 
   async function sendGift() {
     if (!user || sending) return

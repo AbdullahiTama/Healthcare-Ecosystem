@@ -2,12 +2,8 @@ import { useState, useEffect } from 'react'
 import {
   ClipboardList, PackageX, MessageSquare, FileText, Plus, Printer, CheckCircle, Search, X, Zap,
 } from 'lucide-react'
-import {
-  getOutOfStock, addOutOfStock, updateOutOfStock,
-  getCustomerRequests, addCustomerRequest, updateCustomerRequest,
-  getRequisitions, addRequisition, updateRequisition,
-  getClients,
-} from '../../services/supabase'
+import { demandRepository } from './repositories'
+import { clientRepository } from '../clients/repositories'
 import { fmt, nowStr } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Textarea, GhostBtn, TealBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../components/ui'
@@ -64,7 +60,7 @@ export default function Demand({ brand, role, perms, products }) {
   useEffect(() => { load() }, [brand?.id])
   useEffect(() => {
     let live = true
-    getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
+    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
 
@@ -72,9 +68,9 @@ export default function Demand({ brand, role, perms, products }) {
     setLoading(true)
     try {
       const [o, r, q] = await Promise.all([
-        getOutOfStock(brand.id),
-        getCustomerRequests(brand.id),
-        getRequisitions(brand.id),
+        demandRepository.getOutOfStock(brand.id),
+        demandRepository.getCustomerRequests(brand.id),
+        demandRepository.getRequisitions(brand.id),
       ])
       setOutItems(o || []); setRequests(r || []); setRequisitions(q || []); setLoadError('')
     } catch (e) { setLoadError('Could not load demand. Check your connection and try again.') }
@@ -87,7 +83,7 @@ export default function Demand({ brand, role, perms, products }) {
     setSavingOut(true)
     try {
       const match = products.find(p => normName(p.name) === normName(outForm.product_name))
-      await addOutOfStock({
+      await demandRepository.addOutOfStock({
         business_id: brand.id,
         product_id: match?.id || null,
         product_name: outForm.product_name.trim(),
@@ -132,7 +128,7 @@ export default function Demand({ brand, role, perms, products }) {
     let saved = 0
     for (const r of valid) {
       try {
-        await addOutOfStock({
+        await demandRepository.addOutOfStock({
           business_id: brand.id,
           product_id: r.product_id || null,
           product_name: r.product_name.trim(),
@@ -153,7 +149,7 @@ export default function Demand({ brand, role, perms, products }) {
 
   async function fulfillOut(item) {
     try {
-      await updateOutOfStock(item.id, { status: 'fulfilled', fulfilled_at: new Date().toISOString() })
+      await demandRepository.updateOutOfStock(item.id, { status: 'fulfilled', fulfilled_at: new Date().toISOString() })
       showToast(item.product_name + ' marked as fulfilled', { type: 'success' })
       load()
     } catch (e) { showToast('Could not update. Please try again.', { type: 'error' }) }
@@ -169,7 +165,7 @@ export default function Demand({ brand, role, perms, products }) {
     if (!reqForm.product_name?.trim()) { showToast('Enter the product the customer asked for.', { type: 'warning' }); return }
     setSavingReq(true)
     try {
-      await addCustomerRequest({
+      await demandRepository.addCustomerRequest({
         business_id: brand.id,
         client_id: reqForm.client_id || null,
         client_name: reqForm.client_name || '',
@@ -186,7 +182,7 @@ export default function Demand({ brand, role, perms, products }) {
 
   async function fulfillReq(r) {
     try {
-      await updateCustomerRequest(r.id, { status: 'fulfilled' })
+      await demandRepository.updateCustomerRequest(r.id, { status: 'fulfilled' })
       showToast('Request marked as fulfilled!', { type: 'success' })
       load()
     } catch (e) { showToast('Could not update. Please try again.', { type: 'error' }) }
@@ -226,7 +222,7 @@ export default function Demand({ brand, role, perms, products }) {
     if (validReqItems.length === 0) { showToast('Add at least one item with a name and cost.', { type: 'warning' }); return }
     setSavingReqs(true)
     try {
-      await addRequisition({
+      await demandRepository.addRequisition({
         business_id: brand.id,
         supplier_name: reqsForm.supplier.trim(),
         note: reqsForm.notes || '',
@@ -240,7 +236,7 @@ export default function Demand({ brand, role, perms, products }) {
 
   async function markSent(r) {
     try {
-      await updateRequisition(r.id, { status: 'sent' })
+      await demandRepository.updateRequisition(r.id, { status: 'sent' })
       showToast('Requisition marked as sent to ' + r.supplier_name, { type: 'success' })
       load()
     } catch (e) { showToast('Could not update. Please try again.', { type: 'error' }) }

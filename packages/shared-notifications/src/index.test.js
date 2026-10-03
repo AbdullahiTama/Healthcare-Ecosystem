@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import {
   NOTIFICATION_TYPES,
   DEFAULT_MESSAGES,
@@ -120,5 +121,34 @@ describe('CareHubNotificationRepository.mapToStandard', () => {
     const repo = new CareHubNotificationRepository()
     const mapped = repo.mapToStandard({ id: 'n1', staff_id: 's1', kind: 'x', title: 'y', link: null, read_at: null, created_at: '2026-08-01T09:00:00Z' })
     expect(mapped.read).toBe(false)
+  })
+})
+
+describe('import safety outside a Vite build', () => {
+  // This package is consumed as plain ESM by serverless functions, scripts and
+  // non-Vite test runners. import.meta.env is injected by Vite and is undefined
+  // in plain Node, so a module-scope read of it makes the whole package
+  // unimportable outside a Vite build. A vitest test cannot catch that, because
+  // vitest *is* a Vite build and always defines import.meta.env — so the check
+  // has to happen in a real Node process.
+  it('imports cleanly in plain Node with no Vite context and no credentials', () => {
+    const entry = new URL('./index.js', import.meta.url).href
+    const script = `
+      const m = await import(${JSON.stringify(entry)})
+      const repo = new m.CareFindNotificationRepository()
+      const hub = new m.CareHubNotificationRepository()
+      if (Object.keys(m.DEFAULT_MESSAGES).length === 0) throw new Error('empty DEFAULT_MESSAGES')
+      let threwOnUse = false
+      try { void repo.supabase } catch { threwOnUse = true }
+      if (!threwOnUse) throw new Error('expected missing-credential error on first use')
+      void hub
+      process.stdout.write('ok')
+    `
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      // A deliberately empty env: no VITE_* keys must be needed to import.
+      env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot },
+    })
+    expect(out).toBe('ok')
   })
 })

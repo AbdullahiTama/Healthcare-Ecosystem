@@ -3,7 +3,8 @@ import { theme } from '../../styles/theme'
 import { Card, Inp, Sel, Textarea, Toggle, TealBtn, GhostBtn, useToast } from '../../components/ui'
 import SignaturePad from './SignaturePad'
 import { Chips, Pills, YesNo, SectionCard, ProductSearchPicker } from './formParts'
-import { getClients, addClient, addConsultation } from '../../services/supabase'
+import { consultationRepository } from './repositories'
+import { clientRepository } from '../clients/repositories'
 import { saleRepository } from '../pos/repositories'
 import { genId } from '../../lib/utils'
 
@@ -66,7 +67,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
   })
 
   useEffect(() => {
-    getClients(brand.id).then(c => setAllClients(c || [])).catch(() => {})
+    clientRepository.getAll(brand.id).then(c => setAllClients(c || [])).catch(() => {})
   }, [brand.id])
 
   const matched = useMemo(() => {
@@ -108,8 +109,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
   async function saveQuickAdd() {
     if (!quick.fullName.trim() || !quick.phone.trim()) { toast.show('Name and phone are required for a new client.', { type: 'warning' }); return }
     try {
-      const created = (await addClient({
-        business_id: brand.id,
+      const created = (await clientRepository.create(brand.id, {
         full_name: quick.fullName.trim(),
         phone: quick.phone.trim(),
         email: quick.email || '',
@@ -170,7 +170,7 @@ export default function PharmacyForm({ brand, products = [], staffName = '', ini
       }
 
       const source = chargeItems.length ? 'dispensed' : 'recommended'
-      const saved = await addConsultation({
+      const saved = await consultationRepository.create({
         business_id: brand.id,
         client_id: client.id,
         client_name: client.full_name,

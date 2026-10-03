@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../config/supabaseClient'
+import { feedConfigRepository } from './repositories/feedConfigRepository'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -44,22 +45,26 @@ export default function FeedRankingConfig() {
   useEffect(() => {
     let mounted = true
     async function load() {
-      const [{ data: rows }, { data: poolRows }, { data: me }] = await Promise.all([
-        supabase.from('feed_ranking_config').select('key, value'),
-        supabase.from('candidate_generation_pools').select('pool, label, enabled, priority, limit_count').order('priority', { ascending: true }),
-        supabase.auth.getUser().then(({ data }) =>
-          data.user ? supabase.from('profiles').select('is_admin').eq('id', data.user.id).maybeSingle() : null,
-        ),
-      ])
-      if (!mounted) return
-      if (rows && rows.length) {
-        const byKey = {}
-        rows.forEach((r) => { byKey[r.key] = r.value })
-        if (byKey.weights) setWeights({ ...FALLBACK.weights, ...byKey.weights })
-        if (byKey.diversity) setDiversity({ ...FALLBACK.diversity, ...byKey.diversity })
+      try {
+        const [rows, poolRows, me] = await Promise.all([
+          feedConfigRepository.getFeedRankingConfig(),
+          feedConfigRepository.getCandidatePools(),
+          supabase.auth.getUser().then(({ data }) =>
+            data.user ? feedConfigRepository.getProfileAdmin(data.user.id) : null,
+          ),
+        ])
+        if (!mounted) return
+        if (rows && rows.length) {
+          const byKey = {}
+          rows.forEach((r) => { byKey[r.key] = r.value })
+          if (byKey.weights) setWeights({ ...FALLBACK.weights, ...byKey.weights })
+          if (byKey.diversity) setDiversity({ ...FALLBACK.diversity, ...byKey.diversity })
+        }
+        setPools(poolRows || [])
+        setIsAdmin(me?.is_admin === true)
+      } catch (e) {
+        console.warn('load failed:', e)
       }
-      setPools(poolRows || [])
-      setIsAdmin(me?.data?.is_admin === true)
       setLoading(false)
     }
     load().catch(() => { if (mounted) setLoading(false) })
@@ -70,8 +75,8 @@ export default function FeedRankingConfig() {
     setSaving(true)
     try {
       await Promise.all([
-        supabase.rpc('set_feed_ranking_config', { p_key: 'weights', p_value: weights }),
-        supabase.rpc('set_feed_ranking_config', { p_key: 'diversity', p_value: diversity }),
+        feedConfigRepository.setFeedRankingConfig('weights', weights),
+        feedConfigRepository.setFeedRankingConfig('diversity', diversity),
       ])
       toast.show('Feed ranking saved', { type: 'success' })
     } catch (err) {

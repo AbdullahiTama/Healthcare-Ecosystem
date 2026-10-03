@@ -47,7 +47,11 @@ export async function initiateTransfer({ recipientCode, amountKobo, reason, refe
   })
 
   if (!data.status) {
-    throw new Error(data.message || 'Could not initiate transfer')
+    // Paystack answered and said no. Anything else that can go wrong here (timeout,
+    // dropped connection, bad JSON) is ambiguous: the transfer may exist anyway.
+    const err = new Error(data.message || 'Could not initiate transfer')
+    err.paystackRejected = true
+    throw err
   }
 
   return { transferCode: data.data.transfer_code, reference: data.data.reference }
@@ -59,6 +63,24 @@ export async function checkBalance() {
   if (!data.status) throw new Error('Could not check balance')
   const available = (data.data || []).reduce((sum, b) => sum + b.available_balance, 0)
   return available
+}
+
+// Resolve the account holder name for a bank/account-number pair via
+// Paystack's /bank/resolve. Used to verify the account name before initiating
+// a transfer, so a typo can't route money to the wrong account.
+export async function resolveAccount({ bankCode, accountNumber }) {
+  const qs = `account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`
+  const data = await paystackFetch(`/bank/resolve?${qs}`)
+
+  if (!data.status) {
+    const err = new Error(data.message || 'Could not verify account')
+    err.paystackMessage = data.message
+    err.bankCode = bankCode
+    err.accountNumber = accountNumber
+    throw err
+  }
+
+  return { accountName: data.data.account_name, accountNumber: data.data.account_number }
 }
 
 // Generate a unique reference for a business transfer.

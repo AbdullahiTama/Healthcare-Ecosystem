@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus } from 'lucide-react'
+import { Target, AlertCircle, AlertTriangle, CheckCircle, Receipt, BarChart2, Clipboard, DollarSign, Plus, ChevronDown } from 'lucide-react'
 import { expenseRepository } from './repositories'
 import { fmt, todayDate, currentMonth } from '../../lib/utils'
 import { EXPENSE_CATS } from '../../config/constants'
@@ -9,6 +9,7 @@ import { Card, StatCard, SectionHead, Modal, ConfirmDialog, Pill, Inp, Sel, Text
 const { tealDeep, tealBright, tealMist, navy, gray600, gray500, gray400, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, bg } = theme
 
 const BUDGET_KEY = 'carehub_expense_budget'
+const PAGE_SIZE = 50
 
 function getBudgets() {
   try { return JSON.parse(localStorage.getItem(BUDGET_KEY) || '{}') } catch (e) { return {} }
@@ -31,7 +32,11 @@ function getBudget(businessId, month) {
 export default function Expenses({ brand, role, perms }) {
   const [expenses, setExpenses] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [filterMonth, setFilterMonth] = useState(currentMonth())
+  const [totals, setTotals] = useState({ total_amount: 0, transaction_count: 0 })
+  const [categories, setCategories] = useState([])
   const [showAdd, setShowAdd] = useState(false)
   const [showBudget, setShowBudget] = useState(false)
   const [form, setForm] = useState({ date: todayDate() })
@@ -43,7 +48,7 @@ export default function Expenses({ brand, role, perms }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const isOwner = role === 'Owner'
 
-  useEffect(() => { load() }, [brand?.id])
+  useEffect(() => { load() }, [brand?.id, filterMonth])
   useEffect(() => {
     const b = getBudget(brand?.id, filterMonth)
     setBudget(b)
@@ -52,8 +57,38 @@ export default function Expenses({ brand, role, perms }) {
 
   async function load() {
     setLoading(true)
-    try { const e = await expenseRepository.getAll(brand.id); setExpenses(e || []) } catch (e) {}
+    setExpenses([])
+    setHasMore(true)
+    try {
+      const [page, totalData, catData] = await Promise.all([
+        expenseRepository.getPage(brand.id, { month: filterMonth || null, offset: 0, limit: PAGE_SIZE }),
+        expenseRepository.getTotals(brand.id, filterMonth || null),
+        expenseRepository.getCategories(brand.id, filterMonth || null),
+      ])
+      setExpenses(page || [])
+      setTotals(totalData?.[0] || { total_amount: 0, transaction_count: 0 })
+      // Aggregate categories from summary rows
+      const catMap = {}
+      ;(catData || []).forEach(r => {
+        if (!catMap[r.category]) catMap[r.category] = { category: r.category, total: 0, count: 0 }
+        catMap[r.category].total += r.category_amount || 0
+        catMap[r.category].count += 1
+      })
+      setCategories(Object.values(catMap).sort((a, b) => b.total - a.total))
+      setHasMore((page || []).length === PAGE_SIZE)
+    } catch (e) {}
     setLoading(false)
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const more = await expenseRepository.getPage(brand.id, { month: filterMonth || null, offset: expenses.length, limit: PAGE_SIZE })
+      setExpenses(p => [...p, ...(more || [])])
+      setHasMore((more || []).length === PAGE_SIZE)
+    } catch (e) {}
+    setLoadingMore(false)
   }
 
   async function save() {
@@ -88,15 +123,14 @@ export default function Expenses({ brand, role, perms }) {
     showToast('Budget set to ' + fmt(amount) + ' for ' + filterMonth, { type: 'success' })
   }
 
-  const filtered = filterMonth ? expenses.filter(e => e.created_at?.startsWith(filterMonth)) : expenses
-  const total = filtered.reduce((s, e) => s + (e.amount || 0), 0)
+  const total = Number(totals.total_amount) || 0
   const remaining = budget > 0 ? budget - total : 0
   const pctUsed = budget > 0 ? Math.round((total / budget) * 100) : 0
   const overBudget = budget > 0 && total > budget
   const nearLimit = budget > 0 && pctUsed >= 80 && !overBudget
 
   const byCategory = {}
-  filtered.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + (e.amount || 0) })
+  categories.forEach(c => { byCategory[c.category] = c.total })
 
   return (
     <div>
@@ -193,7 +227,7 @@ export default function Expenses({ brand, role, perms }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '12px', marginBottom: '20px' }}>
         <StatCard icon={<Receipt />} label='Total This Period' value={fmt(total)} />
         <StatCard icon={<BarChart2 />} label='Categories' value={Object.keys(byCategory).length} />
-        <StatCard icon={<Clipboard />} label='Transactions' value={filtered.length} />
+        <StatCard icon={<Clipboard />} label='Transactions' value={totals.transaction_count || 0} />
       </div>
 
       {/* Category breakdown */}
@@ -218,7 +252,7 @@ export default function Expenses({ brand, role, perms }) {
         <button onClick={() => setFilterMonth('')} style={{ padding: '9px 14px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: gray600, fontSize: '13px', cursor: 'pointer', fontWeight: '700' }}>All time</button>
       </div>
 
-      {loading ? <Loading /> : filtered.length === 0 ? (
+      {loading ? <Loading /> : expenses.length === 0 ? (
         <Empty icon={<Receipt size={40} />} message='No expenses recorded yet' action='+ Log Expense' onAction={() => setShowAdd(true)} />
       ) : (
         <Card>
@@ -232,7 +266,7 @@ export default function Expenses({ brand, role, perms }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(e => (
+                {expenses.map(e => (
                   <tr key={e.id} style={{ borderBottom: `1px solid ${gray100}` }}>
                     <td style={{ padding: '12px 16px' }}><Pill label={e.category} type='teal' /></td>
                     <td style={{ padding: '12px 16px', fontSize: '13px', color: gray600 }}>{e.description || '—'}</td>
@@ -247,6 +281,14 @@ export default function Expenses({ brand, role, perms }) {
               </tbody>
             </table>
           </div>
+          {hasMore && (
+            <div style={{ padding: '16px', textAlign: 'center' }}>
+              <button onClick={loadMore} disabled={loadingMore}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', borderRadius: theme.radius.md, border: `1px solid ${border}`, background: 'white', color: navy, fontWeight: '700', fontSize: '13px', cursor: loadingMore ? 'wait' : 'pointer' }}>
+                {loadingMore ? 'Loading...' : <><ChevronDown size={14} /> Load more</>}
+              </button>
+            </div>
+          )}
         </Card>
       )}
 
