@@ -1,7 +1,11 @@
 -- ============================================================================
 -- Business wallets, booking payment settlement, 20% commission, and release
 --
--- Status: NOT YET APPLIED — run via Supabase SQL editor / psql.
+-- Status: APPLIED to production (verified against the live catalog 2026-10-02: business_wallets,
+-- fn_credit_business_booking, pay_booking_with_credits, settle_card_booking and
+-- refund_appointment_payment all exist). Parts are superseded by later migrations:
+-- request_business_withdrawal -> 20260818_payment_idempotency_hardening.sql (6-arg, replay-safe),
+-- settle_card_booking -> 20261002_financial_medium_hardening.sql (reference guard).
 --
 -- Implements ADR-005 (decisions/ADR/005-consultation-payment-and-release.md).
 --

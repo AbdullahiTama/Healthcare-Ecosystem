@@ -3,7 +3,9 @@
 -- Spec: _bmad-output/specs/spec-payments-appointments-ecommerce
 --
 -- Story 1: DB columns + guard + manual confirm RPCs + vendor COD flag
--- Status: NOT YET APPLIED — run via Supabase SQL editor / psql
+-- Status: APPLIED to production (verified against the live catalog 2026-10-02: guard_appointment_payment_columns,
+-- confirm_pos_payment, confirm_transfer_payment and current_staff_id_for_business exist, and the
+-- trg_guard_appointment_payment trigger is on appointments)
 --
 -- Implements CAP-1..CAP-4 (appointment channels) + CAP-6 (vendor toggle)
 -- foundation for CAP-5/7/8. Preserves 20260811_business_wallets_and_booking_payments.
