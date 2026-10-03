@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { isValidEmail } from '@care-ecosystem/shared-email'
+import { requireAdmin } from '../_lib/requireAdmin.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -9,15 +11,14 @@ export default async function handler(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-  const authHeader = req.headers.authorization || ''
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-  if (!token) return res.status(401).json({ error: 'Missing authorization' })
-
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
-  if (authErr || !user) return res.status(401).json({ error: 'Invalid session' })
+  // Mails any address from the trusted sender, and password_reset / email_verification put payload links into the
+  // message, so only an active admin may call it (it used to accept any signed-in user).
+  const { status: authStatus, error: authError } = await requireAdmin(req, supabase)
+  if (authStatus) return res.status(authStatus).json({ error: authError })
 
   const { templateKey, toEmail, payload, subject } = req.body || {}
   if (!templateKey || !toEmail) return res.status(400).json({ error: 'templateKey and toEmail are required' })
+  if (!isValidEmail(toEmail)) return res.status(400).json({ error: 'toEmail must be a valid email address' })
 
   const allowedTemplates = ['customer_registration', 'order_confirmation', 'purchase_confirmed', 'subscription_created', 'subscription_expiry', 'password_reset', 'email_verification', 'appointment_confirmed']
   if (!allowedTemplates.includes(templateKey)) return res.status(400).json({ error: `Invalid templateKey. Allowed: ${allowedTemplates.join(', ')}` })

@@ -1,4 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '../_lib/requireAdmin.js'
+
+const MAX_LIMIT = 100
+// What an operator may move a row to by hand: re-queue it, schedule a retry, or give up on it. Anything else (sent,
+// bounced, complained ...) is a fact about delivery, not a decision.
+const SETTABLE_STATUSES = ['pending', 'retrying', 'failed']
+
+function toInt(value, fallback, min, max) {
+  const n = Number.parseInt(value, 10)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
 
 export default async function handler(req, res) {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -7,17 +19,16 @@ export default async function handler(req, res) {
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
-  // Admin authorization: require active admin session
-  const authHeader = req.headers.authorization || ''
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim()
-  // In production, validate token against supabase.auth.getUser(token)
-  // For now, we accept any valid bearer token for this dashboard endpoint
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized - missing bearer token' })
-  }
+  // This endpoint runs on the service-role client and returns every recipient and payload in the outbox (payloads
+  // carry live password-reset and verification links), so the caller must be an active admin. It used to accept any
+  // non-empty bearer string.
+  const { status: authStatus, error: authError } = await requireAdmin(req, supabase)
+  if (authStatus) return res.status(authStatus).json({ error: authError })
 
   if (req.method === 'GET') {
-    const { status, templateKey, app, startDate, endDate, limit = 50, offset = 0 } = req.query
+    const { status, templateKey, app, startDate, endDate } = req.query
+    const limit = toInt(req.query.limit, 50, 1, MAX_LIMIT)
+    const offset = toInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
 
     // Build query with filters
     let q = supabase.from('email_outbox').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(offset, offset + limit - 1)
@@ -59,6 +70,9 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { id, status: newStatus } = req.body || {}
     if (!id) return res.status(400).json({ error: 'id required' })
+    if (!SETTABLE_STATUSES.includes(newStatus)) {
+      return res.status(400).json({ error: `status must be one of: ${SETTABLE_STATUSES.join(', ')}` })
+    }
     const { data, error } = await supabase.from('email_outbox').update({ status: newStatus, next_retry_at: new Date().toISOString() }).eq('id', id).select().single()
     if (error) return res.status(500).json({ error: error.message })
     return res.status(200).json({ ok: true, outboxId: data.id })
