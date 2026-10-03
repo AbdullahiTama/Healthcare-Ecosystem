@@ -1,13 +1,13 @@
 # Financial System — Master Plan
 
 Current phase: **PHASE 02 — PAYMENT INTENTS**
-Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 READY_FOR_REVIEW (migration written + tested, NOT yet applied to production).
+Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
 |---|---|
 | 00 Baseline and audit | COMPLETED |
 | 01 Financial architecture | COMPLETED |
-| 02 Payment intents | READY_FOR_REVIEW |
+| 02 Payment intents | COMPLETED |
 | 03 Provider abstraction | NOT_STARTED |
 | 04 CareFind payment flows | NOT_STARTED |
 | 05 CareFind CareCoin wallet | NOT_STARTED |
@@ -66,7 +66,7 @@ Files changed:
 * `supabase/migrations/carefind_20261003_payment_intents_foundation.sql` (new; copy in `apps/carefind/sql/20261003_payment_intents_foundation.sql`)
 * `apps/carefind/src/test/payments/paymentIntents.db.test.js` (new, 44 tests, real Postgres via PGlite)
 * `apps/carefind/package.json`, `package-lock.json` (devDependency `@electric-sql/pglite`)
-Migrations: the file above — WRITTEN, TESTED LOCALLY, NOT APPLIED to production (awaiting approval).
+Migrations: the file above — APPLIED to production as `carefind_20261003_payment_intents_foundation`. Live catalog re-read: all 3 tables RLS on, 0 policies, only service_role grants (SELECT/INSERT/UPDATE/REFERENCES/TRIGGER; no DELETE/TRUNCATE), 2 triggers each, guard functions executable only by postgres/service_role, config seeded with the 8 current rules. Security advisor `rls_enabled_no_policy` rose 14 -> 17 (these 3 server-only tables; intended). Not behaviourally probed on production (writes there were not attempted); behaviour proven on PGlite with the same SQL.
 Tests: 44/44 pass (`npx vitest run --config vitest.payments.config.js src/test/payments/paymentIntents.db.test.js`). Not run: full CareFind suite.
-Unresolved: apply to production + post-apply catalog check; `customer_id`/`business_id` intentionally have no FK (money records must outlive accounts) — revisit if reconciliation needs it; `financial_config` has no change history yet (Phase 11 audit log); no flow uses the tables yet by design.
+Unresolved: `customer_id`/`business_id` intentionally have no FK (money records must outlive accounts) — revisit if reconciliation needs it; `financial_config` has no change history yet (Phase 11 audit log); no flow uses the tables yet by design.
 Next phase: PHASE 03 — PAYMENT PROVIDER ABSTRACTION.
