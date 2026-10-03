@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   // Generate a request ID for this cron invocation and store it in the module
   // so EmailService can pick it up via its package-scoped variable.
   const requestId = crypto.randomUUID?.() || 'cron-' + Date.now()
-  ;(global as any)._cronRequestId = requestId
+  globalThis._cronRequestId = requestId
 
   try {
     // drain(), not processBatch(): this endpoint is the minute worker behind
