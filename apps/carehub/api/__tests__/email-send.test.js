@@ -5,7 +5,19 @@ const enqueue = vi.hoisted(() => vi.fn())
 const processBatch = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/lib/emailService.js', () => ({ emailService: { enqueue, processBatch } }))
-vi.mock('../_lib/supabase.js', () => ({ supabase: { auth: { getUser } } }))
+// The endpoint requires a platform admin, so the stand-in client also answers the businesses lookup that proves it.
+const adminLookup = vi.hoisted(() => ({ rows: [{ id: 'biz-admin' }] }))
+vi.mock('../_lib/supabase.js', () => ({
+  supabase: {
+    auth: { getUser },
+    from: () => {
+      const b = {}
+      for (const m of ['select', 'ilike', 'eq', 'limit']) b[m] = () => b
+      b.then = (resolve) => resolve({ data: adminLookup.rows, error: null })
+      return b
+    },
+  },
+}))
 
 import handler from '../_handlers/email-send.js'
 
@@ -23,7 +35,8 @@ const valid = { templateKey: 'business_approved', toEmail: 'owner@example.com', 
 describe('POST /api/email/send', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
+    adminLookup.rows = [{ id: 'biz-admin' }]
+    getUser.mockResolvedValue({ data: { user: { id: 'u1', email: 'admin@carehub.test', email_confirmed_at: '2026-01-01T00:00:00Z' } }, error: null })
     enqueue.mockResolvedValue({ id: 'row-1' })
     processBatch.mockResolvedValue({ processed: 1, sent: 1, failed: 0 })
   })
