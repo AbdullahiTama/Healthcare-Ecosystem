@@ -6,6 +6,7 @@ import { orderRepository } from './orderRepository'
 import { trackingRepository } from './trackingRepository'
 import { vendorRatingRepository } from './vendorRatingRepository'
 import { supabase } from '../../config/supabaseClient'
+import { shopPaymentService } from './shopPaymentService'
 import { shopRepository } from './shopRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
@@ -321,18 +322,10 @@ export default function OrderDetail() {
     }
   }
   async function handlePayNow() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setError('Please sign in to pay'); return }
     setUpdating(true)
     try {
-      const res = await fetch('/api/initiate-shop-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ order_id: orderId }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not start Paystack payment')
-      if (data.authorization_url) window.location.href = data.authorization_url
+      const { url } = await shopPaymentService.startShopPayment(orderId)
+      window.location.href = url
     } catch (err) {
       setError(err.message || 'Could not start payment')
     } finally { setUpdating(false) }

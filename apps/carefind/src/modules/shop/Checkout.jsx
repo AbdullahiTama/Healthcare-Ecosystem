@@ -9,7 +9,7 @@ import { orderRepository } from './orderRepository'
 import { addressesRepository } from '../account/addressesRepository'
 import { calculateTotalFees } from './pricing'
 import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
-import { supabase } from '../../config/supabaseClient'
+import { shopPaymentService } from './shopPaymentService'
 import { shopRepository } from './shopRepository'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
@@ -217,21 +217,10 @@ export default function Checkout() {
     }
   }
 
-  async function initiatePaystackForOrder(orderId, paymentReference) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('Please sign in again to pay')
-    const res = await fetch('/api/initiate-shop-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ order_id: orderId }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Could not start Paystack payment')
-    if (data.authorization_url) {
-      window.location.href = data.authorization_url
-      return true
-    }
-    throw new Error('No authorization_url from Paystack')
+  async function initiatePaystackForOrder(orderId) {
+    const { url } = await shopPaymentService.startShopPayment(orderId)
+    window.location.href = url
+    return true
   }
 
   // Pre-checkout stock validation — queries real-time stock for all cart items
@@ -370,7 +359,7 @@ export default function Checkout() {
       }
       
       await maybeSaveAddress()
-      await initiatePaystackForOrder(createdOrderId, payment_reference)
+      await initiatePaystackForOrder(createdOrderId)
       // Redirected — clear cart optimistically; if user aborts, order remains pending_payment
       clearCart()
     } catch (err) {
