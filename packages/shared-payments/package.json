@@ -1,0 +1,18 @@
+{
+  "name": "@care-ecosystem/shared-payments",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Server-side payment provider abstraction (Paystack adapter) for CareHub + CareFind",
+  "main": "src/index.js",
+  "exports": {
+    ".": { "import": "./src/index.js" }
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "author": "Care Ecosystem",
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}
