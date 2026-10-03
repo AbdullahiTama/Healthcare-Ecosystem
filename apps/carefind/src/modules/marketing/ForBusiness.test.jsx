@@ -142,7 +142,7 @@ describe('ForBusiness — the public landing page at /', () => {
       expect(hero.getByText(content.PREVIEW.disclaimer)).toBeInTheDocument()
     })
 
-    it('shows three cards on desktop and the full four on phones', () => {
+    it('shows three floating cards on desktop and on phones', () => {
       setViewportWidth(1440)
       const wide = renderLanding()
       const wideHero = wide.container.querySelector('[data-section="hero"]')
@@ -152,8 +152,7 @@ describe('ForBusiness — the public landing page at /', () => {
       setViewportWidth(375)
       const narrow = renderLanding()
       const narrowHero = narrow.container.querySelector('[data-section="hero"]')
-      expect(narrowHero.querySelectorAll('article')).toHaveLength(4)
-      expect(within(narrowHero).getByText('Blood pressure check')).toBeInTheDocument()
+      expect(narrowHero.querySelectorAll('article')).toHaveLength(3)
       narrow.unmount()
 
       setViewportWidth(1440)

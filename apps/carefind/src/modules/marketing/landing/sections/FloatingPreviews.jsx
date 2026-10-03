@@ -10,9 +10,11 @@ import { PREVIEW } from '../data/landingContent.js'
 // stays out of the accessibility tree). The visible disclaimer under the group
 // is what tells a sighted visitor these are samples.
 //
-// Three layouts:
-//   * `inline` — desktop. Cards side by side in an equal-width row under the
-//     headline, so nothing sits over the photo's subject.
+// Four layouts:
+//   * `tilt` — desktop and phones. A tight, equal-width column; Hero.jsx pins it
+//     to the right edge below the subject's chin and scales and tilts it so it
+//     reads as floating beside her rather than over her face.
+//   * `inline` — cards side by side in an equal-width row.
 //   * `stack` — a right-hand column, each card nudged a little further right
 //     than the last so the group reads as layered.
 //   * `row`  — mobile. A single horizontal scroll strip so the cards never
@@ -170,6 +172,7 @@ function PreviewCard({ card, offset, wrapName }) {
 export default function FloatingPreviews({ variant = 'stack', limit }) {
   const stack = variant === 'stack'
   const inline = variant === 'inline'
+  const tilt = variant === 'tilt'
   // The desktop stack deliberately shows fewer cards than the mobile row: it
   // is bottom-aligned under the photo's faces, and a fourth card would grow the
   // stack upward into them.
@@ -180,7 +183,9 @@ export default function FloatingPreviews({ variant = 'stack', limit }) {
       data-hero-group
       aria-hidden="true"
       style={
-        inline
+        tilt
+          ? { display: 'flex', flexDirection: 'column', gap: 10, width: 300 }
+          : inline
           ? { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, minWidth: 0 }
           : stack
           ? { display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }
@@ -199,7 +204,7 @@ export default function FloatingPreviews({ variant = 'stack', limit }) {
       {cards.map((card, index) => (
         <div
           key={card.id}
-          style={stack || inline ? { minWidth: 0 } : { scrollSnapAlign: 'start', flex: '0 0 auto', width: 232 }}
+          style={stack || inline || tilt ? { minWidth: 0 } : { scrollSnapAlign: 'start', flex: '0 0 auto', width: 232 }}
         >
           <PreviewCard card={card} offset={stack ? STACK_OFFSETS[index] : undefined} wrapName={inline} />
         </div>
