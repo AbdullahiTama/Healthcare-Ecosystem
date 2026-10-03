@@ -12,6 +12,15 @@ vi.mock('../_lib/paystackCredit.js', () => ({ creditTopup: h.creditTopup }))
 vi.mock('../_lib/consultationSettle.js', () => ({ settleConsultationPayment: vi.fn() }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 
+vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({
+  ...(await importOriginal()),
+  // These legacy-path tests are about metadata dispatch; engine routing has its own test file.
+  recordProviderEvent: async () => ({ event: { id: 'e1', attempts: 0 }, isNew: true, alreadyHandled: false }),
+  finishProviderEvent: async () => {},
+  settleByReference: async () => ({ outcome: 'unknown_reference' }),
+}))
+vi.mock('../_lib/payments.js', () => ({ getPaystackProvider: () => ({}), paymentLogger: { info() {}, warn() {}, error() {} } }))
+
 import handler from './paystack-webhook.js'
 
 function request(body, { sign = true, signature } = {}) {

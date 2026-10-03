@@ -1,6 +1,9 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
+import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
@@ -559,58 +562,113 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Invalid signature' })
   }
 
-  const event = JSON.parse(rawBody.toString('utf8'))
+  let event
+  try {
+    event = JSON.parse(rawBody.toString('utf8'))
+  } catch {
+    // Signed but not JSON: nothing a retry could fix.
+    return res.status(400).json({ error: 'Invalid JSON' })
+  }
+
+  // Persist the event BEFORE processing: a replayed event that was already handled is acknowledged
+  // without reprocessing; one whose earlier attempt failed is processed again (retry-safe).
+  let recorded = null
+  const eventId = paystackEventId(event)
+  if (eventId) {
+    try {
+      recorded = await recordProviderEvent(supabase, {
+        provider: 'paystack',
+        eventId,
+        eventType: event.event,
+        reference: event.data?.reference ?? null,
+        payload: event,
+        signatureOk: true,
+      })
+    } catch (err) {
+      console.error('[paystack-webhook] could not persist event:', err)
+      return res.status(500).json({ error: 'Processing failed' })
+    }
+    if (recorded.alreadyHandled) return res.status(200).json({ received: true, duplicate: true })
+  }
 
   // Settle BEFORE acknowledging. Vercel can freeze a serverless function as soon as the
   // response is sent, so work done after res.json() may never run - and Paystack, having
   // been told 200, would never redeliver. Every handler is idempotent (claim-first RPCs,
   // unique references), so a failure answers 500 and Paystack retries the event.
   try {
-    await processWebhookEvent(event)
+    const outcome = await processWebhookEvent(event)
+    if (recorded) await finishProviderEvent(supabase, recorded.event, { outcome })
   } catch (err) {
     console.error('[paystack-webhook] processing error:', err)
+    if (recorded) await finishProviderEvent(supabase, recorded.event, { outcome: 'failed', error: err.message }).catch(() => {})
     return res.status(500).json({ error: 'Processing failed' })
   }
   return res.status(200).json({ received: true })
 }
 
+// Settlement of a gateway payment that has a payment intent. Returns null when the reference is not an
+// intent (a payment started before the settlement engine existed), so the caller falls back to the
+// legacy metadata dispatch below.
+async function settleIntentPayment(reference) {
+  const result = await settleByReference({ supabase, provider: getPaystackProvider(), reference, logger: paymentLogger })
+  if (result.outcome === 'unknown_reference') return null
+  if (result.outcome === 'not_paid' || result.outcome === 'rejected') {
+    // Paystack says charge.success but the verify call disagrees (or the engine refused): do not
+    // acknowledge, so Paystack redelivers and the state is re-examined.
+    throw new Error(`intent ${reference} not settled: ${result.outcome}${result.reason ? ` (${result.reason})` : ''}`)
+  }
+  if (result.outcome === 'needs_refund') {
+    // Money received that could not be applied. Never dropped: the intent is parked as needs_refund.
+    console.error('[payment-needs-refund]', { reference, purpose: result.purpose, reason: result.reason })
+  }
+  await runSettlementEffects(supabase, result) // only the call that actually settled sends emails/notices
+  return result
+}
+
+// -> 'processed' | 'ignored'
 async function processWebhookEvent(event) {
   // Dispatch by event type
   if (event.event === 'charge.success') {
     const { reference, metadata, amount } = event.data
 
+    // Payments that went through the settlement engine: one path, shared with the redirect handlers.
+    if (reference && await settleIntentPayment(reference)) return 'processed'
+
+    // Legacy dispatch (payments started before the engine): by metadata shape.
     // Try subscription first (has explicit purpose flag)
     let result = await handleSubscription(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
 
     // Try consultation booking (has its own purpose flag)
     result = await handleConsultation(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
 
     // Try CareFind appointment booking (has appointment_id in metadata)
     result = await handleBooking(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
 
     // Try Shop order (has order_id in metadata)
     result = await handleShopOrder(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
 
     // Try CareHub plan payment (has business_id)
     result = await handlePlanPayment(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
 
     // Fall through to top-up (has user_id + coins)
     result = await handleTopup(metadata, reference, amount)
-    if (result) return
+    if (result) return 'processed'
+    return 'ignored'
   }
 
   if (event.event === 'transfer.success') {
     await handleTransferSuccess(event.data.reference)
-    return
+    return 'processed'
   }
 
   if (event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
     await handleTransferFailed(event.data.reference)
-    return
+    return 'processed'
   }
+  return 'ignored'
 }
