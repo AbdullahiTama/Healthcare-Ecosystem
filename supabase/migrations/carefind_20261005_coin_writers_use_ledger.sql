@@ -518,6 +518,13 @@ begin
     return 'missing_bank_details';
   end if;
 
+  -- Serialise everything that carries the same reference, across ALL users, before looking at it: two
+  -- simultaneous requests under one reference would otherwise both pass the replay check below (found by
+  -- coinConcurrency.pg.test.js). The lock is released with the transaction.
+  if p_reference is not null then
+    perform pg_advisory_xact_lock(hashtextextended('withdrawal-reference:' || p_reference, 0));
+  end if;
+
   -- A replay is the SAME request again (same user, amount, account): answer ok, move nothing. A known
   -- reference carrying anything else is a conflict: it used to answer 'ok' without debiting while the
   -- caller paid out the NEW amount (audit F-01).
@@ -545,15 +552,22 @@ begin
     if v_recent + p_amount > p_daily_cap_coins then return 'daily_limit'; end if;
   end if;
 
-  if public._post_coin_entry(p_user_id, -p_amount, 'withdrawal', 'wd_' || v_id, null, jsonb_build_object('request_id', v_id)) is null then
-    return 'insufficient';
-  end if;
+  -- The debit and the request are one subtransaction: if the database's own one-live-request-per-reference
+  -- index (migration 3/3) still objects, the debit rolls back with it and the caller gets a clean answer.
+  begin
+    if public._post_coin_entry(p_user_id, -p_amount, 'withdrawal', 'wd_' || v_id, null, jsonb_build_object('request_id', v_id)) is null then
+      return 'insufficient';
+    end if;
 
-  insert into public.withdrawal_requests (id, user_id, amount, bank_name, account_number, account_name, status, paystack_reference)
-  values (v_id, p_user_id, p_amount, p_bank_name, p_account_number, p_account_name, 'pending', p_reference);
+    insert into public.withdrawal_requests (id, user_id, amount, bank_name, account_number, account_name, status, paystack_reference)
+    values (v_id, p_user_id, p_amount, p_bank_name, p_account_number, p_account_name, 'pending', p_reference);
 
-  insert into public.transactions (user_id, type, amount, reference, status)
-  values (p_user_id, 'withdrawal', p_amount, p_reference, 'success');
+    insert into public.transactions (user_id, type, amount, reference, status)
+    values (p_user_id, 'withdrawal', p_amount, p_reference, 'success');
+  exception
+    when unique_violation then
+      return 'reference_conflict';
+  end;
 
   return 'ok';
 end;
