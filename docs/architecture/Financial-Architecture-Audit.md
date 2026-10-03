@@ -162,3 +162,11 @@ File: `apps/carefind/sql/20261002_financial_phase0_lockdown.sql`. Dry-run on syn
 | M-12 | **Fixed.** Settle-before-acknowledge (earlier) plus a constant-time signature comparison. |
 
 **M-3 (open):** `TRUST_LEVELS.*.requiredAuth` is computed but never enforced - a bare PIN satisfies every tier, so the documented "veteran needs biometric + device" model is cosmetic - and no server-side maximum withdrawal exists at any tier (a new account with the right PIN can withdraw its whole balance). Either is a product call: enforce the tier rules, cap withdrawals per tier/day, or accept PIN-only and stop implying tiers.
+
+### 2026-10-03 - M-3 resolved per the user's decision (per-tier daily cap)
+Applied to production as `withdrawal_daily_cap` (`20261003012643`). `request_withdrawal` gained `p_daily_cap_coins` (the 6-arg overload was DROPPED first, not left beside the new 7-arg one): the cap is checked under the same wallet row lock as the debit, so concurrent requests cannot both slip under it, and rejected/failed/cancelled withdrawals don't count toward it. `trustLevels.js` gained `dailyCapCoins` per tier (new=50, trusted=200, veteran=1000) and `getDailyCap()`; `initiate-withdrawal.js` passes the server-chosen cap and returns 429 `daily_limit` when hit. Dry-run on synthetic rows (exact-cap boundary, over-cap rejection, reference replay, cap-omitted callers) passed before applying; advisors show no new finding on the function. 37 tests pass (trustLevels + initiate-withdrawal + the existing PIN-gate suite).
+
+**requiredAuth remains unenforced** (a bare PIN still satisfies every tier) - the user chose the cap over building the biometric/device client infrastructure `requiredAuth` implies. `getTrustDescription()`'s wording ("... with biometric authentication") is now misleading for `veteran` and should be corrected or the field removed; not done this pass.
+
+### Medium findings: all 12 closed
+M-1 fixed (2x), M-2 fixed, M-3 fixed (this entry), M-4 fixed+applied, M-5 fixed+applied, M-6 fixed in Phase 0, M-7 fixed, M-8 closed by H-1/H-2, M-9 fixed in Phase 0, M-10 fixed, M-11 downgraded to Low (no change needed), M-12 fixed. Remaining audit work: the Low items, and H-7 (two agent-commission ledgers), which needs a product decision before any code change.
