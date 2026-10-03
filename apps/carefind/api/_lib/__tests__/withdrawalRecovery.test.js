@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { reconcileWithdrawal } from '../withdrawalRecovery.js'
+import { reconcileWithdrawal, sweepWithdrawals } from '../withdrawalRecovery.js'
 import { IN_FLIGHT_GRACE_MS } from '../withdrawalAdmin.js'
+
+vi.mock('../emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 
 const NOW = Date.parse('2026-10-02T12:00:00Z')
 const old = new Date(NOW - IN_FLIGHT_GRACE_MS - 60_000).toISOString()
@@ -67,5 +69,67 @@ describe('reconcileWithdrawal', () => {
     const fresh = row({ created_at: new Date(NOW - 1000).toISOString() })
     expect((await reconcileWithdrawal(c, fresh, { ...opts('not_found'), graceMs: 0 })).outcome).toBe('refunded')
     expect((await reconcileWithdrawal(client().client, fresh, opts('not_found'))).outcome).toBe('waiting')
+  })
+})
+
+// sweepWithdrawals is the per-run loop: queries stale rows, calls reconcileWithdrawal per row, counts
+// outcomes, records trust only for a row THIS run completed, and notifies the user on a refund. Shared
+// by the standalone cron endpoint and the chained call from process-email-outbox.js.
+describe('sweepWithdrawals', () => {
+  function sweepClient({ rows = [], queryError = null, rpcResults = {} } = {}) {
+    const rpcCalls = []
+    const q = {
+      select: () => q, eq: () => q, not: () => q, lt: () => q, order: () => q, update: () => q,
+      limit: async () => ({ data: rows, error: queryError }),
+      // Lets `await <chain>` resolve when the chain ends on `.select(...)` right after `.update(...)`
+      // (reconcileWithdrawal's completion branch) - `select` itself just returns `q` to keep chaining.
+      then: (resolve) => resolve({ data: [{ id: 'flipped' }], error: null }),
+    }
+    return {
+      rpcCalls,
+      client: {
+        from: () => q,
+        rpc: async (name, args) => { rpcCalls.push([name, args]); return rpcResults[name] || { data: 'ok', error: null } },
+        auth: { admin: { getUserById: async () => ({ data: { user: { email: 'u@example.com' } } }) } },
+      },
+    }
+  }
+
+  it('counts each row\'s outcome and isolates a row that throws', async () => {
+    const rows = [
+      { id: 'w1', user_id: 'u1', amount: 10, status: 'pending', paystack_reference: 'r1', paystack_transfer_code: null, created_at: old },
+      { id: 'w2', user_id: 'u2', amount: 10, status: 'pending', paystack_reference: 'r2', paystack_transfer_code: 'T', created_at: old },
+      { id: 'w3', user_id: 'u3', amount: 10, status: 'pending', paystack_reference: 'r3', paystack_transfer_code: 'T', created_at: old },
+      { id: 'w4', user_id: 'u4', amount: 10, status: 'pending', paystack_reference: 'r4', paystack_transfer_code: 'T', created_at: old },
+    ]
+    const statuses = ['not_found', 'success', 'pending', null] // null -> getStatus throws below
+    let i = 0
+    const { client } = sweepClient({ rows })
+    const summary = await sweepWithdrawals(client, {
+      getStatus: async () => { const s = statuses[i++]; if (s === null) throw new Error('boom'); return s },
+      now: NOW,
+    })
+    expect(summary).toEqual({ checked: 4, refunded: 1, completed: 1, waiting: 2, errors: 0 })
+  })
+
+  it('records trust only for the row this run completed, never for a refunded or waiting one', async () => {
+    const rows = [
+      { id: 'w1', user_id: 'u1', amount: 10, status: 'pending', paystack_reference: 'r1', paystack_transfer_code: 'T', created_at: old },
+      { id: 'w2', user_id: 'u2', amount: 20, status: 'pending', paystack_reference: 'r2', paystack_transfer_code: 'T', created_at: old },
+      { id: 'w3', user_id: 'u3', amount: 30, status: 'pending', paystack_reference: 'r3', paystack_transfer_code: 'T', created_at: old },
+    ]
+    const statuses = ['failed', 'success', 'pending']
+    let i = 0
+    const { client, rpcCalls } = sweepClient({ rows })
+    await sweepWithdrawals(client, { getStatus: async () => statuses[i++], now: NOW })
+    expect(rpcCalls).toEqual([
+      ['reject_withdrawal_request', { p_request_id: 'w1' }],
+      ['update_withdrawal_trust_after_withdrawal', { p_user_id: 'u2', p_amount: 20, p_status: 'completed' }],
+    ])
+  })
+
+  it('a query failure throws instead of reporting success', async () => {
+    const { client } = sweepClient({ queryError: { message: 'db down' } })
+    await expect(sweepWithdrawals(client, { now: NOW })).rejects.toThrow('db down')
   })
 })
