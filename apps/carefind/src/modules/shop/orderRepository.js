@@ -139,14 +139,28 @@ export function createOrderRepository(supabaseClient = supabase) {
     return data
   }
 
+  // sender_id references auth.users, not profiles, so PostgREST cannot embed a profile through it (that query
+  // failed with "Could not find a relationship between 'shop_order_messages' and 'sender_id'" and took the
+  // whole order page down). Sender names are looked up from profiles separately and attached as `profiles`, the
+  // shape the order page reads. A failed lookup only costs the names, never the messages.
   async function getMessages(orderId) {
     const { data, error } = await supabaseClient
       .from('shop_order_messages')
-      .select('*, profiles:sender_id(id, full_name)')
+      .select('*')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true })
     if (error) throw error
-    return data || []
+    const messages = data || []
+    if (messages.length === 0) return messages
+
+    const senderIds = [...new Set(messages.map(m => m.sender_id))]
+    const { data: people, error: peopleError } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', senderIds)
+    if (peopleError) console.warn('[orderRepository] could not load message sender names:', peopleError.message)
+    const byId = new Map((people || []).map(p => [p.id, p]))
+    return messages.map(m => ({ ...m, profiles: byId.get(m.sender_id) || null }))
   }
 
   return {
