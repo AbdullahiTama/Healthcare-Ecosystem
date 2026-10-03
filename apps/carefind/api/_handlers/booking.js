@@ -1,6 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
-import { paystackFetch } from '../_lib/paystack.js'
+import { createPaymentIntent, markIntentPending } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 
@@ -269,32 +270,43 @@ export default async function handler(req, res) {
         const host = req.headers['x-forwarded-host'] || req.headers.host || ''
         const proto = req.headers['x-forwarded-proto'] || 'https'
         const origin = host ? `${proto}://${host}` : ''
-        const data = await paystackFetch('/transaction/initialize', {
-          method: 'POST',
-          body: JSON.stringify({
-            // Anonymous booking ΓÇö no user email. Paystack requires an email,
-            // so we use a synthetic one keyed on the appointment id.
-            email: `booking+${appointment.id}@carefind.ng`,
-            amount: feeKobo,
-            reference,
-            currency: 'NGN',
-            callback_url: `${origin}/business/${businessId}?reference=${reference}`,
-            metadata: { appointment_id: appointment.id, business_id: businessId, booking_type: wantType },
-          }),
+        // The intent records what this booking costs BEFORE Paystack is contacted; settlement later
+        // accepts only a payment that matches it (and credits the business from the amount actually paid).
+        const intent = await createPaymentIntent(supabase, {
+          reference,
+          application: 'carefind',
+          purpose: 'booking',
+          customerId: null, // bookings can be anonymous: the appointment id is the patient's handle
+          businessId,
+          entityType: 'appointment',
+          entityId: appointment.id,
+          expectedAmountKobo: feeKobo,
+          metadata: { booking_type: wantType },
         })
-        if (!data.status) {
-          return res.status(400).json({ error: data.message || 'Could not start payment' })
-        }
+        const init = await getPaystackProvider().initializePayment({
+          // Anonymous booking - no user email. Paystack requires an email,
+          // so we use a synthetic one keyed on the appointment id.
+          email: `booking+${appointment.id}@carefind.ng`,
+          amountKobo: feeKobo,
+          reference,
+          callbackUrl: `${origin}/business/${businessId}?reference=${reference}`,
+          metadata: { intent_id: intent.id, purpose: 'booking' },
+        })
+        await markIntentPending(supabase, intent.id)
         return res.status(200).json({
           success: true,
           id: appointment.id,
           paymentRequired: true,
-          authorization_url: data.data.authorization_url,
+          authorization_url: init.authorizationUrl,
           reference,
           fee: feeKobo,
         })
       } catch (err) {
-        return res.status(500).json({ error: err.message || 'Could not start payment' })
+        if (err.name === 'PaymentIntentError') {
+          paymentLogger.error('payment.intent.create_failed', { purpose: 'booking', code: err.code, message: err.message })
+          return res.status(500).json({ error: 'Could not start payment' })
+        }
+        return res.status(err.code === 'config' ? 500 : 502).json({ error: err.message || 'Could not start payment' })
       }
     }
 
