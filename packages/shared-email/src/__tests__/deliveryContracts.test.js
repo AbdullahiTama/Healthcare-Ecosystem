@@ -173,7 +173,7 @@ describe('subject authority contract', () => {
 // This matches U+FFFD only, which is unambiguous, rather than guessing at
 // mojibake byte pairs.
 describe('encoding integrity contract', () => {
-  it('confines replacement characters to the three known files, and only shrinks', () => {
+  it('confines replacement characters to the two known files, and only shrinks', () => {
     const found = []
     for (const file of SOURCE) {
       const count = (read(file).match(/\uFFFD/g) || []).length
@@ -181,7 +181,6 @@ describe('encoding integrity contract', () => {
     }
     expect(found.sort()).toEqual([
       'apps/carefind/api/_handlers/charge-subscription.js (2)',
-      'apps/carefind/api/_handlers/paystack-webhook.js (15)',
       'apps/carefind/api/_handlers/verify-subscription-payment.js (2)',
     ])
   })

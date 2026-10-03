@@ -110,7 +110,9 @@ describe('shop payment notification text', () => {
 
     expect(texts.length).toBeGreaterThan(0)
     expect(texts.join(' ')).toContain('₦1,000')
-    expect(texts.join(' ')).not.toMatch(/�|\?1,000/)
+    // Built at runtime so this file never contains the replacement character the contract test scans for.
+    expect(texts.join(' ')).not.toContain(String.fromCodePoint(0xfffd))
+    expect(texts.join(' ')).not.toContain('?1,000')
   })
 })
 
