@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   // Generate a request ID for this cron invocation and store it in the module
   // so EmailService can pick it up via its package-scoped variable.
   const requestId = crypto.randomUUID?.() || 'cron-' + Date.now()
-  ;(global as any)._cronRequestId = requestId
+  globalThis._cronRequestId = requestId
 
   // Fail closed. This guard used to read `if (token && process.env.CRON_SECRET)`,
   // which meant a request with no Authorization header skipped the check entirely
