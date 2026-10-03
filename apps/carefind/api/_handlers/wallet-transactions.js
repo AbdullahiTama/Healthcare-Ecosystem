@@ -16,18 +16,31 @@ export default async function handler(req, res) {
   const { business_id: businessId } = req.query || {}
   if (!businessId) return res.status(400).json({ error: 'Missing business_id' })
 
-  // Verify the user owns this business or is a platform admin
+  // Only the business owner may read its wallet and ledger
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Unauthorized' })
 
-  // Check ownership via business table
+  // Ownership mirrors CareHub's identity model (businesses.email is the owner's login email;
+  // branches share their parent's email, so the parent's owner may read a branch wallet).
+  // An unknown business and a business the caller does not own answer identically so ids
+  // cannot be probed.
   const { data: biz } = await supabase
     .from('businesses')
-    .select('id')
+    .select('id, email, parent_business_id')
     .eq('id', businessId)
     .maybeSingle()
 
-  if (!biz) return res.status(404).json({ error: 'Business not found' })
+  const callerEmail = String(user.email || '').trim().toLowerCase()
+  let owns = Boolean(callerEmail && biz && String(biz.email || '').trim().toLowerCase() === callerEmail)
+  if (!owns && callerEmail && biz?.parent_business_id) {
+    const { data: parent } = await supabase
+      .from('businesses')
+      .select('email')
+      .eq('id', biz.parent_business_id)
+      .maybeSingle()
+    owns = String(parent?.email || '').trim().toLowerCase() === callerEmail
+  }
+  if (!owns) return res.status(404).json({ error: 'Business not found' })
 
   // Fetch wallet and transactions
   const [{ data: wallet }, { data: transactions }] = await Promise.all([
