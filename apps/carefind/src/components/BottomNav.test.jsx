@@ -61,4 +61,23 @@ describe('BottomNav (five destinations, always visible)', () => {
     expect(screen.getByRole('link', { name: 'Home' }).style.color).toBe('var(--teal-deep)')
     expect(screen.getByRole('link', { name: 'News' }).style.color).toBe('rgb(139, 151, 143)')
   })
+
+  it('renders all five icons at one size so no destination looks heavier', () => {
+    renderNav('/feed')
+    const sizes = Array.from(screen.getByRole('navigation', { name: 'Primary' }).querySelectorAll('svg'))
+      .map((svg) => svg.getAttribute('width'))
+    expect(sizes).toHaveLength(5)
+    expect(new Set(sizes)).toEqual(new Set(['20']))
+  })
+
+  it('pins one UI font on the nav and has every label inherit it, the Create button included', () => {
+    renderNav('/news')
+    const nav = screen.getByRole('navigation', { name: 'Primary' })
+    expect(nav.style.fontFamily).toBe('var(--font-family)')
+    for (const name of ['Home', 'MedMarket', 'News', 'Profile']) {
+      expect(screen.getByRole('link', { name }).style.fontFamily).toBe('inherit')
+    }
+    // <button> does not inherit font by default, which is how Create drifted.
+    expect(screen.getByRole('button', { name: 'Create post' }).style.fontFamily).toBe('inherit')
+  })
 })

@@ -5,6 +5,11 @@ import { theme } from '../styles/theme'
 import { CREATE_PATH, logCreateTap } from '../modules/social-feed/createSelector.js'
 import { useCart } from '../modules/shop/CartProvider'
 
+// One icon size / stroke for all five items, so no destination looks heavier
+// than its neighbours. Active items go a step bolder, same as each other.
+const ICON_SIZE = 20
+const strokeFor = (active) => (active ? 2.4 : 2)
+
 function BottomNav({ onCompose, autoHide = false }) {
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -70,8 +75,13 @@ function BottomNav({ onCompose, autoHide = false }) {
     gap: 2,
     color: active ? theme.tealDeep : theme.textLight,
     textDecoration: 'none',
+    // <button> does not inherit the font the way links do; 'inherit' pulls it
+    // from the <nav>, which pins the app UI font (below), so all five labels
+    // match.
+    fontFamily: 'inherit',
     fontSize: 10,
     fontWeight: 800,
+    lineHeight: 1.2,
     flex: 1,
     padding: '6px 0 2px',
     WebkitTapHighlightColor: 'transparent',
@@ -95,6 +105,9 @@ function BottomNav({ onCompose, autoHide = false }) {
       role="navigation"
       aria-label="Primary"
       style={{
+        // Pinned, not inherited: pages such as News set a serif on their root,
+        // and the nav used to pick that up and change typeface per screen.
+        fontFamily: 'var(--font-family)',
         position: 'fixed',
         bottom: 0,
         left: '50%',
@@ -118,7 +131,7 @@ function BottomNav({ onCompose, autoHide = false }) {
     >
       <Link to="/feed" style={itemStyle(isHomeActive)} aria-current={isHomeActive ? 'page' : undefined}>
         <span style={iconCapsule(isHomeActive)}>
-          <Home size={20} strokeWidth={isHomeActive ? 2.4 : 2} aria-hidden="true" />
+          <Home size={ICON_SIZE} strokeWidth={strokeFor(isHomeActive)} aria-hidden="true" />
         </span>
         Home
       </Link>
@@ -128,7 +141,7 @@ function BottomNav({ onCompose, autoHide = false }) {
         aria-current={isMedMarketActive ? 'page' : undefined}
       >
         <span style={iconCapsule(isMedMarketActive)}>
-          <Store size={20} strokeWidth={isMedMarketActive ? 2.4 : 2} aria-hidden="true" />
+          <Store size={ICON_SIZE} strokeWidth={strokeFor(isMedMarketActive)} aria-hidden="true" />
           {count > 0 && (
             <span
               style={{
@@ -157,6 +170,7 @@ function BottomNav({ onCompose, autoHide = false }) {
         MedMarket
       </Link>
       <button
+        type="button"
         onClick={handleCompose}
         aria-label="Create post"
         style={{
@@ -173,9 +187,9 @@ function BottomNav({ onCompose, autoHide = false }) {
             color: '#fff',
           }}
         >
-          <Plus size={18} strokeWidth={2.6} aria-hidden="true" color="#fff" />
+          <Plus size={ICON_SIZE} strokeWidth={strokeFor(true)} aria-hidden="true" color="#fff" />
         </span>
-        <span style={{ fontSize: 10, fontWeight: 800, color: theme.textLight }}>Create</span>
+        Create
       </button>
       <Link
         to="/news"
@@ -183,13 +197,13 @@ function BottomNav({ onCompose, autoHide = false }) {
         aria-current={isNewsActive ? 'page' : undefined}
       >
         <span style={iconCapsule(isNewsActive)}>
-          <Newspaper size={20} strokeWidth={isNewsActive ? 2.4 : 2} aria-hidden="true" />
+          <Newspaper size={ICON_SIZE} strokeWidth={strokeFor(isNewsActive)} aria-hidden="true" />
         </span>
         News
       </Link>
       <Link to="/profile" style={itemStyle(isProfileActive)} aria-current={isProfileActive ? 'page' : undefined}>
         <span style={iconCapsule(isProfileActive)}>
-          <User size={20} strokeWidth={isProfileActive ? 2.4 : 2} aria-hidden="true" />
+          <User size={ICON_SIZE} strokeWidth={strokeFor(isProfileActive)} aria-hidden="true" />
         </span>
         Profile
       </Link>
