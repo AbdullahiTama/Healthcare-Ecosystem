@@ -54,5 +54,5 @@ Files changed: `docs/architecture/Financial-Architecture.md` (new). Migrations: 
 Read additionally: `verify_shop_payment`, `claim_payment_event`, `approve_withdrawal_request`, `complete_withdrawal_transfer` (live bodies).
 New findings: `claim_payment_event` executable by `authenticated` (low; Phase 14); shop settlement has no vendor ledger or commission (design decision D6).
 Decisions awaiting owner (doc §10-11): D1 settlement in Postgres; D2 wallets stay projections; D3 two currencies one ledger; D4 guest bookings via intent with null customer; D6 shop vendor payout model; consultation/subscription platform fee; card-booking refund policy; webhook endpoint per app.
-Unresolved: indexes and migration drift not yet checked; `agent_earnings` writers unknown; `planning/ROADMAP.md`, `planning/CODE_AUDIT.md`, `docs/PROJECT_OVERVIEW.md` still absent.
+Unresolved: indexes and migration drift not yet checked; `agent_earnings` is written by SQL function `calculate_agent_earnings` (carefindhub foundation; renamed by `20261002_financial_phase0_lockdown.sql`) — a SECOND commission system parallel to `commissions`, to be reconciled in Phase 07; `planning/ROADMAP.md`, `planning/CODE_AUDIT.md`, `docs/PROJECT_OVERVIEW.md` still absent.
 Next phase: PHASE 02 — PAYMENT INTENTS.
