@@ -1,63 +1,38 @@
-import { createHmac, timingSafeEqual } from 'crypto'
 import { supabase } from '../_lib/supabase.js'
+import { verifySvixSignature, applyResendEvent } from '@care-ecosystem/shared-email'
 
-// Verify Resend webhook signature
-function verifyWebhookSignature(req) {
-  const signature = req.headers['x-resend-signature']
-  if (!signature) return false
-
-  const secret = process.env.RESEND_WEBHOOK_SECRET
-  if (!secret) {
-    console.error('[webhooks/resend] RESEND_WEBHOOK_SECRET is required - rejecting request')
-    return res.status(401).json({ error: 'Webhook secret not configured' })
-  }
-
-  const body = JSON.stringify(req.body)
-  const expectedSignature = createHmac('sha256', secret).update(body).digest('hex')
-
-  try {
-    const sigBuffer = Buffer.from(signature)
-    const expectedBuffer = Buffer.from(expectedSignature)
-    return sigBuffer.length === expectedBuffer.length && timingSafeEqual(sigBuffer, expectedBuffer)
-  } catch {
-    return false
-  }
-}
-
+// Resend signs the EXACT bytes it sends (Svix: svix-id / svix-timestamp / svix-signature), so the body must not be
+// parsed and re-serialised before it is verified. The router keeps the bytes as req.rawBody (see rehydrateBody); if they
+// are ever missing, verification fails closed with a 401 rather than falling back to a re-serialised body.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  // Verify webhook signature
-  if (!verifyWebhookSignature(req)) {
-    console.error('[webhooks/resend] Invalid signature')
+  // Fail closed: without the secret nothing can be verified. A 5xx makes Resend redeliver once it is set.
+  const secret = process.env.RESEND_WEBHOOK_SECRET
+  if (!secret) {
+    console.error('[webhooks/resend] RESEND_WEBHOOK_SECRET is not set - rejecting')
+    return res.status(500).json({ error: 'Webhook secret not configured' })
+  }
+
+  const verdict = verifySvixSignature({ rawBody: req.rawBody, headers: req.headers, secret })
+  if (!verdict.ok) {
+    console.error('[webhooks/resend] rejected:', verdict.reason)
     return res.status(401).json({ error: 'Invalid signature' })
   }
 
-  const event = req.body
-  const { type, data } = event
-
-  if (type === 'email.bounced' || type === 'email.complained') {
-    const outboxId = data?.message?.id
-    if (outboxId) {
-      await supabase.from('email_outbox').update({
-        status: type === 'email.complained' ? 'complained' : 'bounced',
-        [type === 'email.complained' ? 'complained_at' : 'bounced_at']: new Date().toISOString(),
-      }).eq('id', outboxId)
-      await supabase.from('email_logs').insert({
-        outbox_id: outboxId,
-        event_type: type === 'email.complained' ? 'complained' : 'bounced',
-        detail: `${type} event from Resend`,
-        metadata: data,
-      })
-    }
+  let event
+  try {
+    event = JSON.parse(Buffer.from(req.rawBody).toString('utf8'))
+  } catch {
+    return res.status(400).json({ error: 'Invalid JSON body' })
   }
 
-  if (type === 'email.opened') {
-    const outboxId = data?.message?.id
-    if (outboxId) {
-      await supabase.from('email_outbox').update({ opened_at: new Date().toISOString() }).eq('id', outboxId)
-    }
+  try {
+    await applyResendEvent(supabase, { svixId: req.headers['svix-id'], event })
+    return res.status(200).json({ ok: true })
+  } catch (err) {
+    // 5xx: Resend redelivers, and applyResendEvent is idempotent on the event id.
+    console.error('[webhooks/resend] could not record event:', err?.message || err)
+    return res.status(500).json({ error: 'Could not record event' })
   }
-
-  return res.status(200).json({ ok: true })
 }
