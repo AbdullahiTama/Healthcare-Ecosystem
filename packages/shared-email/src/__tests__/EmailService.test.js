@@ -1031,3 +1031,89 @@ describe('payload scrubbing after send', () => {
   })
 })
 
+// ── Suppressed recipients ─────────────────────────────────────────────────────────────────────────────────────────────
+// An address that reported us as spam, or that bounced recently, is not mailed again. Every further send to it costs
+// sender reputation, which is what decides whether everyone else's password reset reaches the inbox. The list is the
+// outbox's own history (rows the Resend webhook marked bounced / complained), so there is nothing to keep in sync.
+describe('suppressed recipients', () => {
+  const service = (db, options = {}) => new EmailService({ supabase: db, writeRetryDelayMs: 0, ...options })
+  const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString()
+  const history = (overrides = {}) => row({ id: 'outbox-old', status: 'bounced', bounced_at: daysAgo(1), next_retry_at: daysAgo(2), ...overrides })
+
+  it('does not mail an address that reported an earlier email as spam, however long ago', async () => {
+    const db = rolloutDb({ settings: {}, rows: [history({ status: 'complained', bounced_at: null, complained_at: daysAgo(400) }), row()] })
+
+    const result = await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    const queued = db.__state.rows.find((r) => r.id === 'outbox-1')
+    expect(queued.status).toBe('failed')
+    expect(queued.last_error).toBe('recipient_suppressed')
+    expect(result.failed).toBe(1)
+  })
+
+  it('does not mail an address that bounced recently', async () => {
+    const db = rolloutDb({ settings: {}, rows: [history(), row()] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(db.__state.rows.find((r) => r.id === 'outbox-1').last_error).toBe('recipient_suppressed')
+  })
+
+  it('tries again once the bounce is older than the window (a full mailbox is not permanent)', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [history({ bounced_at: daysAgo(31) }), row()] })
+
+    await service(db, { bounceSuppressDays: 30 }).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(db.__state.rows.find((r) => r.id === 'outbox-1').status).toBe('sent')
+  })
+
+  it('matches the address whatever its letter case', async () => {
+    const db = rolloutDb({ settings: {}, rows: [history(), row({ to_email: 'Real.Customer@Gmail.com' })] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+  })
+
+  it('still mails other addresses', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [history({ to_email: 'someone.else@gmail.com' }), row()] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a bounce on a canary row, which was mailed to the canary inbox and not to this address', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [history({ is_canary: true }), row()] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends anyway when the history cannot be read, so a database hiccup never blocks a password reset', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const base = rolloutDb({ settings: {}, rows: [history(), row()] })
+    const failing = { in: () => failing, then: (res, rej) => Promise.resolve({ data: null, error: { message: 'boom' } }).then(res, rej) }
+    const db = {
+      __state: base.__state,
+      from: (t) => {
+        const table = base.from(t)
+        if (t !== 'email_outbox') return table
+        return { ...table, select: (cols) => (String(cols).startsWith('to_email') ? failing : table.select(cols)) }
+      },
+    }
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(db.__state.rows.find((r) => r.id === 'outbox-1').status).toBe('sent')
+  })
+})
+

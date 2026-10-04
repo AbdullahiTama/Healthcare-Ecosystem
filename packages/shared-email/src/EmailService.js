@@ -176,6 +176,9 @@ export class EmailService {
     // batchSize x maxBatches sequential sends. Stop CLAIMING new rows once this budget is spent so the function
     // finishes on its own terms: being killed mid-send leaves a row that was mailed but never acknowledged.
     this.timeBudgetMs = options.timeBudgetMs ?? boundedInt(process.env.EMAIL_OUTBOX_TIME_BUDGET_MS, 8000, 1000, 250000)
+    // How long a bounced address is left alone. A complaint never expires; a bounce does, because "mailbox full" and
+    // "address does not exist" arrive as the same status and only the second is permanent.
+    this.bounceSuppressDays = options.bounceSuppressDays ?? boundedInt(process.env.EMAIL_BOUNCE_SUPPRESS_DAYS, 30, 1, 3650)
     // Pause between attempts to record an outcome (see _release); 0 in tests.
     this.writeRetryDelayMs = options.writeRetryDelayMs ?? 100
 
@@ -335,6 +338,8 @@ export class EmailService {
     if (error) throw error
     if (!candidates || candidates.length === 0) return { processed: 0, sent: 0, failed: 0 }
 
+    const suppressed = await this._suppressedRecipients(candidates.map((c) => c.to_email))
+
     let sent = 0, failed = 0, retrying = 0, exhausted = 0, contended = 0, handled = 0
     for (const candidate of candidates) {
       // Out of time: leave the rest pending for the next run rather than risk being killed mid-send.
@@ -385,6 +390,14 @@ export class EmailService {
           await this._markFailed(row, 'payload_scrubbed')
           failed++
           logEvent('send_failed_permanent', { row: row.id, reason: 'payload_scrubbed' })
+          continue
+        }
+
+        // A canary row goes to the canary inbox, so the real recipient's history does not apply to it.
+        if (!row.is_canary && suppressed.has(String(row.to_email || '').toLowerCase())) {
+          await this._markFailed(row, 'recipient_suppressed')
+          failed++
+          logEvent('send_failed_permanent', { row: row.id, reason: 'recipient_suppressed' })
           continue
         }
 
@@ -559,6 +572,38 @@ export class EmailService {
       .eq('id', candidate.id)
       .in('status', ['pending', 'retrying', 'processing'])
       .or(`claim_token.is.null,claim_expires_at.lt.${new Date().toISOString()}`)
+  }
+
+  // Lower-cased addresses, among `emails`, that must not be mailed: one that reported an earlier email as spam, or one
+  // that bounced within bounceSuppressDays. The list is the outbox's own history as written by the Resend webhook, so
+  // there is no second table to keep in step with it. Fails open: if the history cannot be read the batch is sent as
+  // before, because a database hiccup must not stop a password reset.
+  async _suppressedRecipients(emails) {
+    const wanted = new Set()
+    for (const email of emails) {
+      if (typeof email !== 'string' || !email) continue
+      wanted.add(email)
+      wanted.add(email.toLowerCase())
+    }
+    const suppressed = new Set()
+    if (wanted.size === 0) return suppressed
+    try {
+      const db = await this._getDb()
+      const { data, error } = await db
+        .from('email_outbox').select('to_email, status, bounced_at, is_canary').in('to_email', [...wanted]).in('status', ['bounced', 'complained'])
+      if (error) throw error
+      const cutoff = Date.now() - this.bounceSuppressDays * 86400000
+      for (const past of data || []) {
+        // A canary row was mailed to the canary inbox, so its bounce says nothing about to_email.
+        if (past.is_canary) continue
+        const bouncedAt = Date.parse(past.bounced_at)
+        if (past.status === 'complained' || Number.isNaN(bouncedAt) || bouncedAt >= cutoff) suppressed.add(String(past.to_email).toLowerCase())
+      }
+    } catch (e) {
+      logEvent('suppression_check_failed', { error: e?.message || String(e) })
+      return new Set()
+    }
+    return suppressed
   }
 
   async _markFailed(row, error) {
