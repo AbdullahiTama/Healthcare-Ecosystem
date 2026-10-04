@@ -31,6 +31,8 @@ beforeAll(async () => {
   await db.exec(read('../../../../../supabase/migrations/carefind_20261005_coin_writers_use_ledger.sql'))
   // ...and with the lock ON: every writer below must work while hand-written balance changes are refused.
   await db.exec(read('../../../../../supabase/migrations/carefind_20261005_lock_wallets_to_ledger.sql'))
+  // Owner decision Q1: the 20% platform fee on the coin-paid and legacy settlement paths
+  await db.exec(read('../../../../../supabase/migrations/carefind_20261006_coin_paths_platform_fee.sql'))
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -104,12 +106,12 @@ describe('legacy card-settlement RPCs', () => {
     await expect(db.query('select * from credit_wallet_topup($1,$2,$3,$4)', [await user(), coins, 100, ref('x')])).rejects.toThrow(/positive whole number/)
   })
 
-  it('settle_subscription_payment credits the creator through the ledger, once, without debiting the subscriber', async () => {
+  it('settle_subscription_payment credits the creator 80% through the ledger, once, without debiting the subscriber', async () => {
     const creator = await user(), sub = await user(4)
     await db.query('select * from settle_subscription_payment($1,$2,$3,$4,$5)', [sub, creator, 3, 600, 'leg-sub-1'])
     const again = await one('select * from settle_subscription_payment($1,$2,$3,$4,$5)', [sub, creator, 3, 600, 'leg-sub-1'])
     expect(again.already_processed).toBe(true)
-    expect(await bal(creator)).toBe(3)
+    expect(await bal(creator)).toBe(2) // 3 coins less the 20% platform fee, rounded down
     expect(await bal(sub)).toBe(4)
     await booksBalance()
   })
@@ -119,7 +121,7 @@ describe('legacy card-settlement RPCs', () => {
     await db.query('select * from settle_consultation_payment($1,$2,$3,$4)', [patient, pro, 1000, 'leg-con-1'])
     const second = await one('select * from settle_consultation_payment($1,$2,$3,$4)', [patient, pro, 1000, 'leg-con-2'])
     expect(second).toMatchObject({ already_processed: false, already_booked: true })
-    expect(await bal(pro)).toBe(5)
+    expect(await bal(pro)).toBe(4) // N1,000 = 5 coins, less the 20% platform fee, rounded down
     await booksBalance()
   })
 })
@@ -166,14 +168,14 @@ describe('pay_creator_subscription (coins)', () => {
   const pay = async (me, creator, price) => { await as(me); return (await one('select pay_creator_subscription($1,$2) r', [creator, price])).r }
   const creatorWith = async (price) => { const c = await user(); await db.query('update profiles set subscription_price = $2 where id = $1', [c, price]); return c }
 
-  it('moves coins subscriber -> creator as one transfer: two legs, one reference, subscription granted', async () => {
+  it('subscriber pays the full price, the creator receives 80%: two legs, one reference, subscription granted', async () => {
     const creator = await creatorWith(6), me = await user(10)
     expect(await pay(me, creator, 6)).toBe('ok')
-    expect(await bal(me)).toBe(4)
-    expect(await bal(creator)).toBe(6)
+    expect(await bal(me)).toBe(4)       // pays the full price
+    expect(await bal(creator)).toBe(4)  // receives 80% (floor 4.8); the platform keeps 2
     const a = (await ledger(me)).at(-1), b = (await ledger(creator))[0]
     expect(a).toMatchObject({ kind: 'subscription_payment', delta: -6, counterparty_id: creator })
-    expect(b).toMatchObject({ kind: 'subscription_earning', delta: 6, counterparty_id: me })
+    expect(b).toMatchObject({ kind: 'subscription_earning', delta: 4, counterparty_id: me })
     expect(a.reference).toBe(b.reference)
     expect((await db.query('select 1 from creator_subscriptions where subscriber_id = $1 and creator_id = $2', [me, creator])).rows).toHaveLength(1)
     await booksBalance()
@@ -193,11 +195,11 @@ describe('pay_professional_consultation (coins)', () => {
   const pay = async (me, pro) => { await as(me); return (await one('select pay_professional_consultation($1) r', [pro])).r }
   const proWithOffer = async (fee) => { const p = await user(); await db.query(`insert into professional_consultations (professional_id, patient_id, type, fee, status) values ($1,$1,'video',$2,'setup')`, [p, fee]); return p }
 
-  it('moves the coins patient -> professional in one transfer and books the consultation', async () => {
+  it('the patient pays in full, the professional receives 80%, and the consultation is booked', async () => {
     const pro = await proWithOffer(1000), me = await user(10)
     expect(await pay(me, pro)).toBe('ok')
-    expect(await bal(me)).toBe(5)
-    expect(await bal(pro)).toBe(5)
+    expect(await bal(me)).toBe(5)   // pays all 5 coins (N1,000)
+    expect(await bal(pro)).toBe(4)  // receives 80%; the platform keeps 1
     expect((await ledger(me)).at(-1)).toMatchObject({ kind: 'consultation_payment', delta: -5, counterparty_id: pro })
     await booksBalance()
   })
@@ -207,7 +209,7 @@ describe('pay_professional_consultation (coins)', () => {
     await pay(me, pro)
     expect(await pay(me, pro)).toBe('already_booked')
     expect(await bal(me)).toBe(15)
-    expect(await bal(pro)).toBe(5)
+    expect(await bal(pro)).toBe(4)
     expect((await ledger(me)).filter((e) => e.kind === 'consultation_payment')).toHaveLength(1)
     await booksBalance()
   })
@@ -219,6 +221,89 @@ describe('pay_professional_consultation (coins)', () => {
     await db.query(`select set_config('request.jwt.claim.sub', '', false)`)
     expect((await one('select pay_professional_consultation($1) r', [pro])).r).toBe('not_signed_in')
     expect(await pay(pro, pro)).toBe('self_consultation')
+  })
+})
+
+describe('20% platform fee on the CareCoin paths (owner decision Q1)', () => {
+  const sub = async (me, creator, price) => { await as(me); return (await one('select pay_creator_subscription($1,$2) r', [creator, price])).r }
+  const consult = async (me, pro) => { await as(me); return (await one('select pay_professional_consultation($1) r', [pro])).r }
+  const creatorWith = async (price) => { const c = await user(); await db.query('update profiles set subscription_price = $2 where id = $1', [c, price]); return c }
+  const platformRows = async (type, reference) => (await db.query('select user_id, amount from transactions where type = $1 and reference = $2', [type, reference])).rows
+
+  it.each([[1, 0, 1], [2, 1, 1], [5, 4, 1], [10, 8, 2], [12, 9, 3]])('a %i-coin subscription pays the creator %i and the platform keeps %i', async (price, creatorGets, platformGets) => {
+    const creator = await creatorWith(price), me = await user(price + 3)
+    expect(await sub(me, creator, price)).toBe('ok')
+    expect(await bal(me)).toBe(3)
+    expect(await bal(creator)).toBe(creatorGets)
+    const debit = (await ledger(me)).at(-1)
+    expect(debit.delta).toBe(-price)
+    const fee = await platformRows('platform_fee_subscription', debit.reference)
+    expect(fee).toHaveLength(1)
+    expect(fee[0].user_id).toBeNull()
+    expect(Number(fee[0].amount)).toBe(platformGets)
+    // conservation: what the payer lost = what the creator gained + what the platform kept
+    expect(price).toBe(creatorGets + platformGets)
+    await booksBalance()
+  })
+
+  it('a 1-coin subscription writes no creator ledger entry at all (nothing to credit) but still debits the subscriber', async () => {
+    const creator = await creatorWith(1), me = await user(4)
+    await sub(me, creator, 1)
+    expect(await ledger(creator)).toEqual([])
+    expect(await bal(me)).toBe(3)
+  })
+
+  it("records the platform share in the debit entry's meta", async () => {
+    const creator = await creatorWith(10), me = await user(10)
+    await sub(me, creator, 10)
+    const e = (await db.query(`select meta from coin_ledger where user_id = $1 and kind = 'subscription_payment' order by id desc limit 1`, [me])).rows[0]
+    expect(e.meta.platform_coins).toBe(2)
+  })
+
+  it('a consultation: N1,050 = 6 coins, the professional receives floor(6 x 0.8) = 4, the platform keeps 2', async () => {
+    const pro = await user()
+    await db.query(`insert into professional_consultations (professional_id, patient_id, type, fee, status) values ($1,$1,'video',1050,'setup')`, [pro])
+    const me = await user(10)
+    expect(await consult(me, pro)).toBe('ok')
+    expect(await bal(me)).toBe(4)
+    expect(await bal(pro)).toBe(4)
+    const debit = (await ledger(me)).at(-1)
+    expect(Number((await platformRows('platform_fee_consultation', debit.reference))[0].amount)).toBe(2)
+    await booksBalance()
+  })
+
+  it('takes both rates from financial_config, not from the function', async () => {
+    await db.query(`update financial_config set value = 0.5 where key in ('subscription_platform_rate', 'consultation_platform_rate')`)
+    try {
+      const creator = await creatorWith(10), me = await user(30)
+      await sub(me, creator, 10)
+      expect(await bal(creator)).toBe(5)
+      const pro = await user()
+      await db.query(`insert into professional_consultations (professional_id, patient_id, type, fee, status) values ($1,$1,'video',2000,'setup')`, [pro]) // 10 coins
+      await consult(me, pro)
+      expect(await bal(pro)).toBe(5)
+    } finally {
+      await db.query(`update financial_config set value = 0.20 where key in ('subscription_platform_rate', 'consultation_platform_rate')`)
+    }
+  })
+
+  it('insufficient funds still moves nothing and records no fee', async () => {
+    const creator = await creatorWith(10), poor = await user(9)
+    const feesBefore = Number((await one(`select count(*) c from transactions where type = 'platform_fee_subscription'`)).c)
+    expect(await sub(poor, creator, 10)).toBe('insufficient')
+    expect(await bal(poor)).toBe(9)
+    expect(await bal(creator)).toBe(0)
+    expect(Number((await one(`select count(*) c from transactions where type = 'platform_fee_subscription'`)).c)).toBe(feesBefore)
+  })
+
+  it('_post_coin_split is private, refuses a share above the total, and refuses an unaffordable total without writing', async () => {
+    const r = await one(`select has_function_privilege('anon', p.oid,'execute') a, has_function_privilege('authenticated', p.oid,'execute') u, has_function_privilege('service_role', p.oid,'execute') s from pg_proc p where p.proname = '_post_coin_split'`)
+    expect(r).toEqual({ a: false, u: false, s: false })
+    const a = await user(5), b = await user()
+    await expect(db.query(`select _post_coin_split($1,$2,5,6,'subscription_payment','subscription_earning','x')`, [a, b])).rejects.toThrow(/share must be between/)
+    expect((await one(`select _post_coin_split($1,$2,9,7,'subscription_payment','subscription_earning',$3) ok`, [a, b, ref('sp')])).ok).toBe(false)
+    expect(await bal(a)).toBe(5)
+    expect(await bal(b)).toBe(0)
   })
 })
 

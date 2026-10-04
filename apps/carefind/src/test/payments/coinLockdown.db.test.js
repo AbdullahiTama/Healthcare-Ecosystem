@@ -35,6 +35,7 @@ beforeAll(async () => {
   await createLegacyStubs(db)
   await db.exec(M('carefind_20261005_coin_writers_use_ledger'))
   await db.exec(M('carefind_20261005_lock_wallets_to_ledger'))
+  await db.exec(M('carefind_20261006_coin_paths_platform_fee'))
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]

@@ -20,6 +20,7 @@ const SQL = [
   M('carefind_20261005_coin_ledger'),
   M('carefind_20261005_coin_writers_use_ledger'),
   M('carefind_20261005_lock_wallets_to_ledger'),
+  M('carefind_20261006_coin_paths_platform_fee'),
 ]
 
 let pool, drop, n = 0
