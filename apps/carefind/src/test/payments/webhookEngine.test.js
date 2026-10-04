@@ -156,6 +156,47 @@ describe('webhook -> settlement engine', () => {
   })
 })
 
+describe('webhook: CareHub payments use the same engine', () => {
+  const PLAN_REF = 'ch_plan_biz1_aaaaaaaaaaaa'
+  const APPT_REF = 'ch_appt_a1b2c3d4_aaaaaaaaaaaa'
+
+  it('a CareHub plan payment is settled through the engine (not the legacy renew_business_plan branch) and the owner is emailed once', async () => {
+    h.db = createFakeSupabase({
+      tables: {
+        payment_intents: [{ id: 'p1', reference: PLAN_REF, purpose: 'plan_renewal', business_id: 'biz-1', status: 'pending', expected_amount: 833300, metadata: { months: 1 } }],
+        payment_provider_events: [],
+        businesses: [{ id: 'biz-1', name: 'Clinic', plan: 'growth', plan_expires_at: '2026-11-05T00:00:00Z', owner_name: 'Dr Obi', owner_email: 'o@x.com' }],
+      },
+      rpc: { settle_payment_intent: async () => ({ outcome: 'settled', purpose: 'plan_renewal', payment_id: 'pay-1', is_first_payment: true }) },
+    })
+    h.provider = createFakeProvider({ verify: async () => verifiedPayment({ reference: PLAN_REF, amountKobo: 833300, providerTransactionId: '55' }) })
+    const res = await deliver({ event: 'charge.success', data: { id: 55, reference: PLAN_REF, amount: 833300 } })
+    expect(res.statusCode).toBe(200)
+    expect(h.db.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['settle_payment_intent'])
+    expect(h.enqueue).toHaveBeenCalledTimes(1)
+    expect(h.enqueue.mock.calls[0][0]).toMatchObject({ templateKey: 'subscription_created', toEmail: 'o@x.com' })
+  })
+
+  it('a CareHub appointment payment is settled through the engine, the business is notified and the client gets the CareHub confirmation', async () => {
+    h.db = createFakeSupabase({
+      tables: {
+        payment_intents: [{ id: 'p2', reference: APPT_REF, purpose: 'appointment', business_id: 'biz-1', entity_id: 'a1', status: 'pending', expected_amount: 150050, metadata: {} }],
+        payment_provider_events: [],
+        appointments: [{ id: 'a1', business_id: 'biz-1', client_name: 'Ada', date: '2026-10-10', time: '10:00', fee_amount: 150050, client_email: 'ada@x.com', service: 'Consult', source: 'carehub' }],
+        businesses: [{ id: 'biz-1', name: 'Clinic' }],
+        staff_notifications: [],
+      },
+      rpc: { settle_payment_intent: async () => ({ outcome: 'settled', purpose: 'appointment', business_kobo: 120040, platform_kobo: 30010 }) },
+    })
+    h.provider = createFakeProvider({ verify: async () => verifiedPayment({ reference: APPT_REF, amountKobo: 150050, providerTransactionId: '56' }) })
+    const res = await deliver({ event: 'charge.success', data: { id: 56, reference: APPT_REF, amount: 150050 } })
+    expect(res.statusCode).toBe(200)
+    expect(h.db.data.staff_notifications).toHaveLength(1)
+    expect(h.enqueue.mock.calls[0][0]).toMatchObject({ templateKey: 'appointment_confirmed', toEmail: 'ada@x.com' })
+    expect(h.db.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['settle_payment_intent'])
+  })
+})
+
 describe('webhook: transition and hygiene', () => {
   it('a payment with no intent (started before the engine) still goes through the legacy metadata path', async () => {
     h.db = createFakeSupabase({ tables: { payment_intents: [], payment_provider_events: [] } })

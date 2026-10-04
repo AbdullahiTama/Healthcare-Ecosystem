@@ -5,7 +5,12 @@
   "description": "Server-side payment provider abstraction (Paystack adapter) for CareHub + CareFind",
   "main": "src/index.js",
   "exports": {
-    ".": { "import": "./src/index.js" }
+    ".": {
+      "import": "./src/index.js"
+    },
+    "./testing": {
+      "import": "./src/testing.js"
+    }
   },
   "scripts": {
     "test": "vitest run"
