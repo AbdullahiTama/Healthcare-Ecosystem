@@ -165,6 +165,12 @@ export class EmailService {
     // enough that a worker killed mid batch does not strand the row until the
     // next deploy. An expired claim is reclaimable by any worker.
     this.claimTtlMs = options.claimTtlMs ?? 120000
+    // A serverless function has a hard wall-clock limit (the platform default is about 10s) and a drain is up to
+    // batchSize x maxBatches sequential sends. Stop CLAIMING new rows once this budget is spent so the function
+    // finishes on its own terms: being killed mid-send leaves a row that was mailed but never acknowledged.
+    this.timeBudgetMs = options.timeBudgetMs ?? boundedInt(process.env.EMAIL_OUTBOX_TIME_BUDGET_MS, 8000, 1000, 250000)
+    // Pause between attempts to record an outcome (see _release); 0 in tests.
+    this.writeRetryDelayMs = options.writeRetryDelayMs ?? 100
 
     // Observability metrics (in-process, process-local; persisted via email_logs)
     this.metrics = {
@@ -264,18 +270,26 @@ export class EmailService {
   // returning no row means somebody else won. toISOString() is used deliberately,
   // because a 'Z' suffix keeps the value safe inside a PostgREST or() filter,
   // where a '+' offset would be read as a space.
+  //
+  // The attempt is counted HERE, at claim time, not after the send. A row that hangs or crashes the worker is never
+  // released, so counting only on release meant its attempts never advanced and it was reclaimed forever. The write is
+  // conditional on the attempts value that was read, so a candidate that went stale (another worker claimed and
+  // released it in between) is contended instead of silently losing an increment.
   async _claimRow(row, nowIso) {
     const db = await this._getDb()
     const token = newClaimToken()
+    const attempts = row.attempts || 0
     const { data, error } = await db
       .from('email_outbox')
       .update({
         status: 'processing',
+        attempts: attempts + 1,
         claim_token: token,
         claimed_at: nowIso,
         claim_expires_at: new Date(Date.now() + this.claimTtlMs).toISOString(),
       })
       .eq('id', row.id)
+      .eq('attempts', attempts)
       .in('status', ['pending', 'retrying', 'processing'])
       .or(`claim_token.is.null,claim_expires_at.lt.${nowIso}`)
       .select()
@@ -284,7 +298,8 @@ export class EmailService {
     return data ? { ...data, claim_token: token } : null
   }
 
-  async processBatch() {
+  // `startedAt` lets drain() share one budget across its batches.
+  async processBatch({ startedAt = Date.now() } = {}) {
     const { sendEmail, getTemplate } = await deps()
     const db = await this._getDb()
 
@@ -311,8 +326,14 @@ export class EmailService {
     if (error) throw error
     if (!candidates || candidates.length === 0) return { processed: 0, sent: 0, failed: 0 }
 
-    let sent = 0, failed = 0, retrying = 0, exhausted = 0, contended = 0
+    let sent = 0, failed = 0, retrying = 0, exhausted = 0, contended = 0, handled = 0
     for (const candidate of candidates) {
+      // Out of time: leave the rest pending for the next run rather than risk being killed mid-send.
+      if (Date.now() - startedAt > this.timeBudgetMs) {
+        logEvent('time_budget_reached', { budget_ms: this.timeBudgetMs, left: candidates.length - handled })
+        break
+      }
+      handled++
       // Exhausted rows are retired, not retried forever. This is also the
       // backstop for a row whose claim was released by a worker crash after it
       // had already burned every attempt.
@@ -368,26 +389,28 @@ export class EmailService {
         }
 
         const html = templateFn(payload)
-        const result = await sendEmail({ to, subject: row.subject, html, text: htmlToText(html), from: row.from_email })
+        // The row id is the idempotency key: if this row is ever sent again (the process died after the provider
+        // accepted it, or the outcome could not be recorded) the provider collapses it into the original.
+        const result = await sendEmail({ to, subject: row.subject, html, text: htmlToText(html), from: row.from_email, idempotencyKey: row.id })
         if (result.success) {
           await this._markSent(row, result.data)
           sent++
-          logEvent('send_ok', { row: row.id, app, template: row.template_key, attempt: (row.attempts || 0) + 1 })
+          logEvent('send_ok', { row: row.id, app, template: row.template_key, attempt: row.attempts || 0 })
         } else {
           const retryable = result.retryable === true || /429|timeout|network|econn|fetch failed/i.test(String(result.error || ''))
-          if (retryable && (row.attempts || 0) + 1 < (row.max_attempts ?? this.maxRetries)) {
+          if (retryable && (row.attempts || 0) < (row.max_attempts ?? this.maxRetries)) {
             const next = await this._markRetrying(row, result)
             retrying++
             failed++
-            logEvent('send_retry_scheduled', { row: row.id, status: result.statusCode ?? null, attempt: (row.attempts || 0) + 1, next_retry_at: next, retry_after_ms: result.retryAfterMs ?? null })
+            logEvent('send_retry_scheduled', { row: row.id, status: result.statusCode ?? null, attempt: row.attempts || 0, next_retry_at: next, retry_after_ms: result.retryAfterMs ?? null })
           } else {
             await this._markFailed(row, result.error || 'send failed')
             failed++
-            logEvent('send_failed_permanent', { row: row.id, status: result.statusCode ?? null, attempt: (row.attempts || 0) + 1, reason: retryable ? 'attempts_exhausted' : 'permanent' })
+            logEvent('send_failed_permanent', { row: row.id, status: result.statusCode ?? null, attempt: row.attempts || 0, reason: retryable ? 'attempts_exhausted' : 'permanent' })
           }
         }
       } catch (e) {
-        if ((row.attempts || 0) + 1 < (row.max_attempts ?? this.maxRetries)) {
+        if ((row.attempts || 0) < (row.max_attempts ?? this.maxRetries)) {
           const next = await this._markRetrying(row, { error: e.message, retryable: true })
           retrying++
           failed++
@@ -399,8 +422,8 @@ export class EmailService {
         }
       }
     }
-    logEvent('batch_complete', { batch_size: this.batchSize, claimed: candidates.length, sent, retrying, failed, exhausted, contended })
-    return { processed: candidates.length, sent, failed, retrying, exhausted, contended }
+    logEvent('batch_complete', { batch_size: this.batchSize, claimed: handled, sent, retrying, failed, exhausted, contended })
+    return { processed: handled, sent, failed, retrying, exhausted, contended }
   }
 
   // Drain in bounded batches. One cron tick on a cold queue must not be limited
@@ -409,8 +432,10 @@ export class EmailService {
   async drain(options = {}) {
     const maxBatches = options.maxBatches ?? boundedInt(process.env.EMAIL_OUTBOX_MAX_BATCHES, 4, 1, 20)
     const totals = { processed: 0, sent: 0, failed: 0, retrying: 0, exhausted: 0, contended: 0, batches: 0, paused: false }
+    const startedAt = Date.now()
     for (let i = 0; i < maxBatches; i++) {
-      const r = await this.processBatch()
+      if (Date.now() - startedAt > this.timeBudgetMs) break
+      const r = await this.processBatch({ startedAt })
       if (r.paused) { totals.paused = true; return totals }
       // The final empty probe is not work. Counting it would report batches
       // that never claimed a row.
@@ -427,11 +452,39 @@ export class EmailService {
     return totals
   }
 
-  // Both terminal writes are scoped to the claim token and clear it. Scoping is
-  // what makes a slow worker harmless: if its lease expired and another worker
-  // already took the row, the write matches nothing instead of overwriting a
-  // newer attempt's status or double incrementing attempts.
-async _markSent(row, providerData) {
+  // Records what happened to a claimed row. The write is scoped to the claim token and clears it. Scoping is what makes
+  // a slow worker harmless: if its lease expired and another worker already took the row, the write matches nothing
+  // instead of overwriting a newer attempt's status.
+  //
+  // Supabase reports a failed write in { error } rather than throwing, and this used to ignore it: a database blip
+  // right after a successful send left the row claimed, so after the lease it was sent AGAIN. The write is now
+  // retried, a lost lease is reported, and a write that cannot be made is logged loudly (the row then stays claimed and
+  // is re-sent after the lease, which the idempotency key makes harmless).
+  async _release(row, patch, outcome) {
+    const db = await this._getDb()
+    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
+    let lastError = null
+    for (let i = 0; i < 3; i++) {
+      const { data, error } = await db.from('email_outbox')
+        .update({ ...patch, ...release })
+        .eq('id', row.id)
+        .eq('claim_token', row.claim_token)
+        .select('id')
+      if (!error) {
+        if (!data || data.length === 0) {
+          logEvent('lease_lost', { row: row.id, outcome })
+          return false
+        }
+        return true
+      }
+      lastError = error
+      if (i < 2 && this.writeRetryDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.writeRetryDelayMs * (i + 1)))
+    }
+    logEvent('state_write_failed', { row: row.id, outcome, error: lastError && lastError.message })
+    return false
+  }
+
+  async _markSent(row, providerData) {
     const db = await this._getDb()
     // Resend returns { id }, but the wrapper is also injected in tests and older
     // call sites pass a bare id. Storing the raw object here wrote the literal
@@ -440,12 +493,9 @@ async _markSent(row, providerData) {
     const providerId = typeof providerData === 'string'
       ? providerData
       : providerData && (providerData.id || providerData.message_id || providerData.messageId)
-    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
-    await db.from('email_outbox')
-      .update({ status: 'sent', provider_id: providerId ?? null, provider_message_id: providerId ?? null, sent_at: new Date().toISOString(), ...release })
-      .eq('id', row.id).eq('claim_token', row.claim_token)
+    await this._release(row, { status: 'sent', provider_id: providerId ?? null, provider_message_id: providerId ?? null, sent_at: new Date().toISOString() }, 'sent')
     await this.rowState.set(row.id, {
-      attempts: (row.attempts || 0) + 1,
+      attempts: row.attempts || 0,
       status: 'sent',
       providerMessageId: providerId,
       createdAt: row.createdAt,
@@ -477,21 +527,24 @@ async _markSent(row, providerData) {
     })
   }
 
+  // Retires a row that has used every attempt without being claimed. This includes a row stuck in `processing` whose
+  // lease has expired (the worker that owned it hung or died): it can only reach its ceiling through claims now that the
+  // attempt is counted at claim time, and without this it was reclaimed forever. A LIVE lease is left alone, because its
+  // owner may still be sending.
   async _markFailedById(candidate) {
     const db = await this._getDb()
     await db.from('email_outbox')
       .update({ status: 'failed', last_error: 'max attempts reached' })
       .eq('id', candidate.id)
-      .in('status', ['pending', 'retrying'])
+      .in('status', ['pending', 'retrying', 'processing'])
+      .or(`claim_token.is.null,claim_expires_at.lt.${new Date().toISOString()}`)
   }
 
   async _markFailed(row, error) {
     const db = await this._getDb()
-    const newAttempts = (row.attempts || 0) + 1
-    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
-    await db.from('email_outbox')
-      .update({ status: 'failed', attempts: newAttempts, last_error: String(error || '').slice(0, 500), failed_at: new Date().toISOString(), ...release })
-      .eq('id', row.id).eq('claim_token', row.claim_token)
+    // The attempt was already counted when the row was claimed.
+    const newAttempts = row.attempts || 0
+    await this._release(row, { status: 'failed', attempts: newAttempts, last_error: String(error || '').slice(0, 500), failed_at: new Date().toISOString() }, 'failed')
     await this.rowState.set(row.id, {
       attempts: newAttempts,
       status: 'failed',
@@ -540,15 +593,13 @@ async _markSent(row, providerData) {
 
   async _markRetrying(row, result) {
     const db = await this._getDb()
-    const newAttempts = (row.attempts || 0) + 1
+    // The attempt was already counted when the row was claimed.
+    const newAttempts = row.attempts || 0
     const delay = this._nextRetryDelayMs(newAttempts, result && result.retryAfterMs)
     const nextRetry = new Date(Date.now() + delay).toISOString()
-    const release = { claim_token: null, claimed_at: null, claim_expires_at: null }
     // scheduled_at mirrors the next attempt time so the row reads the same
     // whether an operator or the worker looks at it.
-    await db.from('email_outbox')
-      .update({ status: 'retrying', attempts: newAttempts, last_error: String((result && result.error) || '').slice(0, 500), next_retry_at: nextRetry, scheduled_at: nextRetry, ...release })
-      .eq('id', row.id).eq('claim_token', row.claim_token)
+    await this._release(row, { status: 'retrying', attempts: newAttempts, last_error: String((result && result.error) || '').slice(0, 500), next_retry_at: nextRetry, scheduled_at: nextRetry }, 'retrying')
     await this.rowState.set(row.id, {
       attempts: newAttempts,
       status: 'retrying',

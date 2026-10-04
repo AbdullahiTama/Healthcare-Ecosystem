@@ -768,3 +768,150 @@ describe('processor logging', () => {
     } finally { spy.mockRestore() }
   })
 })
+
+// ── Send-path hardening ─────────────────────────────────────────────────────────────────────────────────────────────
+// A serverless drain can be killed mid-batch (the platform default is ~10s; a drain is up to 80 sequential sends), so a
+// row can be sent but never acknowledged, or crash the worker every time it is claimed. These pin the guards.
+describe('send-path hardening', () => {
+  const service = (db, options = {}) => new EmailService({ supabase: db, writeRetryDelayMs: 0, ...options })
+
+  // Makes the next `times` terminal writes (sent / retrying / failed) report a database error without applying them.
+  function failTerminalWrites(db, times) {
+    let left = times
+    const realFrom = db.from
+    db.from = (t) => {
+      const tbl = realFrom(t)
+      if (t !== 'email_outbox') return tbl
+      const realUpdate = tbl.update
+      return {
+        ...tbl,
+        update: (p) => {
+          const b = realUpdate(p)
+          if (['sent', 'retrying', 'failed'].includes(p.status) && left > 0) {
+            left--
+            b.then = (res, rej) => Promise.resolve({ data: null, error: { message: 'db down' } }).then(res, rej)
+          }
+          return b
+        },
+      }
+    }
+    return db
+  }
+
+  const loggedEvents = (spy) => spy.mock.calls
+    .map(([line]) => { try { return JSON.parse(line) } catch { return null } })
+    .filter(Boolean)
+
+  it('sends with the outbox row id as the idempotency key, so a repeated send of the row cannot mail the customer twice', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [row({ id: 'row-77' })] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).toHaveBeenCalledWith(expect.objectContaining({ idempotencyKey: 'row-77' }))
+  })
+
+  it('counts the attempt when the row is claimed, so a worker that dies mid-send still burns an attempt', async () => {
+    let attemptsDuringSend = null
+    sendEmailMock.mockImplementationOnce(async () => {
+      attemptsDuringSend = db.__state.rows[0].attempts
+      return { success: true, data: { id: 'x' } }
+    })
+    const db = rolloutDb({ settings: {}, rows: [row({ attempts: 0 })] })
+
+    await service(db).processBatch()
+
+    expect(attemptsDuringSend).toBe(1)
+  })
+
+  it('retires a row stuck in processing with an expired lease that has used every attempt', async () => {
+    // A row that hangs or crashes the worker is never released, so its attempts only advance through claims. Once it
+    // has used them all it must stop being reclaimed forever.
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ status: 'processing', attempts: 5, max_attempts: 5, claim_token: 'dead', claim_expires_at: new Date(Date.now() - 1000).toISOString() })],
+    })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(db.__state.rows[0].status).toBe('failed')
+  })
+
+  it('leaves a processing row at its ceiling alone while its lease is live, because its owner may still be sending', async () => {
+    const db = rolloutDb({
+      settings: {},
+      rows: [row({ status: 'processing', attempts: 5, max_attempts: 5, claim_token: 'live', claim_expires_at: new Date(Date.now() + 60000).toISOString() })],
+    })
+
+    await service(db).processBatch()
+
+    expect(db.__state.rows[0].status).toBe('processing')
+    expect(db.__state.rows[0].claim_token).toBe('live')
+  })
+
+  it('retries the acknowledgement write when the database blips right after a successful send', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = failTerminalWrites(rolloutDb({ settings: {}, rows: [row()] }), 2)
+
+    await service(db).processBatch()
+
+    expect(db.__state.rows[0].status).toBe('sent')
+    expect(db.__state.rows[0].claim_token).toBeNull()
+  })
+
+  it('reports a persistent acknowledgement failure instead of swallowing it, and does not throw', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = failTerminalWrites(rolloutDb({ settings: {}, rows: [row({ id: 'row-9' })] }), 99)
+
+    await expect(service(db).processBatch()).resolves.toBeTruthy()
+
+    const failure = loggedEvents(log).find((e) => e.event === 'state_write_failed')
+    expect(failure).toMatchObject({ row: 'row-9', outcome: 'sent' })
+    // still claimed: it will be re-sent after the lease, which the idempotency key makes harmless
+    expect(db.__state.rows[0].status).toBe('processing')
+    log.mockRestore()
+  })
+
+  it('reports it when another worker took the row over before this one could record the outcome', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    sendEmailMock.mockImplementationOnce(async () => {
+      db.__state.rows[0].claim_token = 'someone-else'
+      return { success: true, data: { id: 'resend-1' } }
+    })
+    const db = rolloutDb({ settings: {}, rows: [row({ id: 'row-5' })] })
+
+    await service(db).processBatch()
+
+    expect(loggedEvents(log).find((e) => e.event === 'lease_lost')).toMatchObject({ row: 'row-5', outcome: 'sent' })
+    log.mockRestore()
+  })
+
+  it('stops claiming new rows once its time budget is spent, leaving the rest for the next run', async () => {
+    sendEmailMock.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 40))
+      return { success: true, data: { id: 'ok' } }
+    })
+    const db = rolloutDb({ settings: {}, rows: [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'c' })] })
+
+    await service(db, { timeBudgetMs: 10 }).processBatch()
+
+    expect(db.__state.rows.filter((r) => r.status === 'sent')).toHaveLength(1)
+    expect(db.__state.rows.filter((r) => r.status === 'pending')).toHaveLength(2)
+  })
+
+  it('does not start another batch once the time budget is spent', async () => {
+    sendEmailMock.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 40))
+      return { success: true, data: { id: 'ok' } }
+    })
+    const db = rolloutDb({ settings: {}, rows: [row({ id: 'a' }), row({ id: 'b' })] })
+
+    const totals = await service(db, { timeBudgetMs: 10, batchSize: 1 }).drain({ maxBatches: 5 })
+
+    expect(totals.batches).toBe(1)
+    expect(db.__state.rows.filter((r) => r.status === 'pending')).toHaveLength(1)
+  })
+})
+
