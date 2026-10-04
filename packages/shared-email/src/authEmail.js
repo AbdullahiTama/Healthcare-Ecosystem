@@ -47,6 +47,46 @@ function renderDate(d) {
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// Per-recipient ceilings, emails per hour, counted from the outbox itself (no extra table). These actions sit behind
+// unauthenticated endpoints, so without a ceiling anyone can flood an address, and - because minting a recovery link
+// invalidates the previous one - keep a victim's own reset link permanently dead.
+// Keyed by the template_key the outbox stores (staff invitations are stored as staff_welcome).
+const RATE_LIMIT_PER_HOUR = { password_reset: 3, email_verification: 5, staff_welcome: 5 }
+const RATE_WINDOW_MS = 60 * 60 * 1000
+const MAX_NAME_LENGTH = 80
+
+// Anything shown in the greeting is reduced to a short single line: no control characters, no runs of whitespace.
+// (HTML escaping is still the template's job; this bounds length and removes line breaks and control codes.)
+function cleanName(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_NAME_LENGTH)
+    .trim()
+}
+
+// True when this address already received its quota of this email in the last hour. Fails OPEN: if the count cannot be
+// read (error, or a client without .from) the request proceeds, because blocking a real person's password reset on a
+// database hiccup is worse than a missed throttle.
+async function isRateLimited(db, { toEmail, templateKey }) {
+  const limit = RATE_LIMIT_PER_HOUR[templateKey]
+  if (!limit) return false
+  try {
+    const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString()
+    const { count, error } = await db
+      .from('email_outbox')
+      .select('id', { count: 'exact', head: true })
+      .eq('to_email', toEmail)
+      .eq('template_key', templateKey)
+      .gte('created_at', since)
+    if (error) return false
+    return (count || 0) >= limit
+  } catch {
+    return false
+  }
+}
+
 // Send an auth-flow email. Resolves to { ok: true, sent: boolean }.
 // `sent` is false when the address has no account — that is a normal outcome,
 // not an error, so it must not throw: callers answer every pre-session
@@ -87,6 +127,11 @@ export async function sendAuthEmail({
   // never passed from browser → server.
   if (action === 'password_reset' || action === 'email_verification' || action === 'staff_setup') {
     const admin = await getAdminClient(supabase)
+    const templateKey = action === 'password_reset' ? 'password_reset' : action === 'staff_setup' ? 'staff_welcome' : 'email_verification'
+    // Checked before generateLink: every minted link invalidates the previous one.
+    if (await isRateLimited(admin, { toEmail, templateKey })) {
+      return { ok: true, sent: false, limited: true }
+    }
     // staff_setup uses the same recovery-type action link Supabase already
     // honors: the account owner (the Auth user being set up) lands on the
     // same /reset-password page and picks their own password there. No
@@ -104,14 +149,19 @@ export async function sendAuthEmail({
     const actionLink = data?.properties?.action_link || data?.properties?.email_otp || ''
     if (!actionLink) throw new Error('Could not generate auth link')
 
-    const resolved = resolveDisplayName ? await resolveDisplayName(data.user) : ''
-    const displayName = (resolved || '').trim() || fullName.trim() || toEmail.split('@')[0]
+    const resolved = cleanName(resolveDisplayName ? await resolveDisplayName(data.user) : '')
+    // Public actions (reset / verification) never use a name the caller typed: it would let a stranger choose text in
+    // another person's email. They use the name resolved from the account, then the name stored on the auth user.
+    // staff_setup is authorised and its name comes from the staff record, so the caller-supplied one is trusted there.
+    const accountName = cleanName(data.user?.user_metadata?.full_name || data.user?.user_metadata?.name)
+    const displayName = (action === 'staff_setup'
+      ? resolved || cleanName(fullName)
+      : resolved || accountName) || toEmail.split('@')[0]
 
-    const templateKey = action === 'password_reset' ? 'password_reset' : action === 'staff_setup' ? 'staff_welcome' : 'email_verification'
     const payload = action === 'password_reset'
       ? { fullName: displayName, resetLink: actionLink }
       : action === 'staff_setup'
-        ? { fullName: displayName, businessName: businessName || '', role, setupLink: actionLink }
+        ? { fullName: displayName, businessName: cleanName(businessName), role: cleanName(role), setupLink: actionLink }
         : { fullName: displayName, verifyLink: actionLink }
 
     await emailService.enqueue({
@@ -130,13 +180,16 @@ export async function sendAuthEmail({
   } else {
     // Welcome email — no link required, and no auth record to resolve a
     // name from, so the caller-supplied name is the only signal available.
-    const displayName = fullName.trim() || toEmail.split('@')[0]
+    const displayName = cleanName(fullName) || toEmail.split('@')[0]
     await emailService.enqueue({
       templateKey: 'customer_registration',
       toEmail: toEmail,
       fromEmail: branding.fromEmail,
       app: branding.app,
       eventKey: 'customer_registration',
+      // One welcome email per address, ever: this action is reachable without a session, so it must not be a way to
+      // mail an arbitrary address repeatedly. A repeat resolves to the existing row (see EmailService.enqueue).
+      idempotencyKey: `customer_registration:${toEmail}`,
       payload: { fullName: displayName, email: toEmail },
       subject: `Welcome to ${branding.label}!`,
     })

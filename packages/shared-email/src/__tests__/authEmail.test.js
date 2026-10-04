@@ -192,3 +192,116 @@ describe('sendAuthEmail password reset', () => {
     expect([...new Set(adminCalls)]).toEqual(['generateLink'])
   })
 })
+
+// ── Abuse resistance ────────────────────────────────────────────────────────
+// sendAuthEmail backs the unauthenticated /api/auth-email endpoints, so it must not be usable to flood an address,
+// to invalidate a victim's reset link by minting new ones, or to put caller-chosen text into someone else's email.
+
+// A client whose email_outbox count answers the per-recipient rate-limit query.
+function clientWithRecentCount(count, { error = null } = {}) {
+  const query = { filters: [] }
+  const b = {}
+  b.select = (cols, opts) => { query.select = [cols, opts]; return b }
+  b.eq = (c, v) => { query.filters.push(['eq', c, v]); return b }
+  b.gte = (c, v) => { query.filters.push(['gte', c, v]); return b }
+  b.then = (resolve) => resolve({ count, data: null, error })
+  return { query, client: { auth: { admin: { generateLink } }, from: (table) => { query.table = table; return b } } }
+}
+
+describe('sendAuthEmail rate limiting', () => {
+  it('stops after 3 password resets to one address in an hour, without minting another link', async () => {
+    const { client, query } = clientWithRecentCount(3)
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({ action: 'password_reset', email: 'victim@example.com', app: 'carehub', supabase: client })
+
+    expect(result).toEqual({ ok: true, sent: false, limited: true })
+    // minting a link invalidates the previous one, so a flood must not reach generateLink at all
+    expect(generateLink).not.toHaveBeenCalled()
+    expect(enqueue).not.toHaveBeenCalled()
+    expect(query.table).toBe('email_outbox')
+    expect(query.filters).toContainEqual(['eq', 'to_email', 'victim@example.com'])
+    expect(query.filters).toContainEqual(['eq', 'template_key', 'password_reset'])
+    expect(query.filters.find(([op, col]) => op === 'gte' && col === 'created_at')).toBeTruthy()
+  })
+
+  it('still sends while under the limit', async () => {
+    const { client } = clientWithRecentCount(2)
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({ action: 'password_reset', email: 'someone@example.com', app: 'carehub', supabase: client })
+
+    expect(result).toEqual({ ok: true, sent: true })
+    expect(enqueue).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows 5 verification emails an hour', async () => {
+    generateLink.mockResolvedValue(linkResponse)
+
+    const at4 = await sendAuthEmail({ action: 'email_verification', email: 'a@example.com', app: 'carefind', supabase: clientWithRecentCount(4).client })
+    const at5 = await sendAuthEmail({ action: 'email_verification', email: 'a@example.com', app: 'carefind', supabase: clientWithRecentCount(5).client })
+
+    expect(at4.sent).toBe(true)
+    expect(at5).toEqual({ ok: true, sent: false, limited: true })
+  })
+
+  it('limits staff invitations by the template they are stored under (staff_welcome)', async () => {
+    const { client, query } = clientWithRecentCount(5)
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({ action: 'staff_setup', email: 'staff@example.com', app: 'carehub', supabase: client, businessName: 'B', role: 'R' })
+
+    expect(result).toEqual({ ok: true, sent: false, limited: true })
+    expect(query.filters).toContainEqual(['eq', 'template_key', 'staff_welcome'])
+    expect(generateLink).not.toHaveBeenCalled()
+  })
+
+  it('fails open when the limit cannot be checked, so a database hiccup never blocks a real reset', async () => {
+    const { client } = clientWithRecentCount(null, { error: { message: 'db down' } })
+    generateLink.mockResolvedValue(linkResponse)
+
+    const result = await sendAuthEmail({ action: 'password_reset', email: 'someone@example.com', app: 'carehub', supabase: client })
+
+    expect(result.sent).toBe(true)
+  })
+})
+
+describe('sendAuthEmail content from untrusted callers', () => {
+  it('ignores a caller-supplied name on public actions (password reset text cannot be chosen by a stranger)', async () => {
+    generateLink.mockResolvedValue({ ...linkResponse, data: { ...linkResponse.data, user: { id: 'user-1', email: 'someone@example.com' } } })
+
+    await sendAuthEmail({ action: 'password_reset', email: 'someone@example.com', fullName: 'Your account is suspended, call 0800-EVIL', app: 'carehub' })
+
+    expect(enqueue.mock.calls[0][0].payload.fullName).toBe('someone')
+  })
+
+  it('uses the name stored on the account, cleaned and capped', async () => {
+    generateLink.mockResolvedValue({
+      ...linkResponse,
+      data: { ...linkResponse.data, user: { id: 'user-1', email: 'someone@example.com', user_metadata: { full_name: `Ada ${'x'.repeat(200)}` } } },
+    })
+
+    await sendAuthEmail({ action: 'email_verification', email: 'someone@example.com', app: 'carefind' })
+
+    const name = enqueue.mock.calls[0][0].payload.fullName
+    expect(name.startsWith('Ada ')).toBe(true)
+    expect(name).not.toContain('')
+    expect(name.length).toBeLessThanOrEqual(80)
+  })
+
+  it('sends one welcome email per address, ever', async () => {
+    await sendAuthEmail({ action: 'customer_registration', email: 'New@Example.com', fullName: 'New Person', app: 'carefind' })
+
+    const row = enqueue.mock.calls[0][0]
+    expect(row.idempotencyKey).toBe('customer_registration:new@example.com')
+  })
+
+  it('caps and cleans the name in a welcome email', async () => {
+    await sendAuthEmail({ action: 'customer_registration', email: 'new@example.com', fullName: `Eve 
+${'y'.repeat(300)}`, app: 'carefind' })
+
+    const name = enqueue.mock.calls[0][0].payload.fullName
+    expect(name).not.toMatch(/[ -]/)
+    expect(name.length).toBeLessThanOrEqual(80)
+  })
+})
