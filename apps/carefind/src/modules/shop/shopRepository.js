@@ -13,7 +13,9 @@ export function createShopRepository(client = supabase) {
     async getActiveProducts({ segment, query, limit = 50 } = {}) {
       const { data, error } = await client
         .from('ecommerce_products')
-        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,category,price_unit,sale_type,emoji,image_url)')
+        // `businesses` is the seller shown on each card. Public RLS only exposes active, visible businesses, so a
+        // vendor outside that comes back as null — callers must tolerate a product with no seller.
+        .select('id,business_id,product_id,status,description,category,ecommerce_price_kobo,active_at,prescription_required,warnings,restrictions,is_restricted, products(id,name,generic_name,price,stock,reorder_level,category,price_unit,sale_type,emoji,image_url), businesses(id,name,business_type,logo_url,city,state,lat,lng)')
         .eq('status', 'Active')
         .eq('is_restricted', false)
         .order('active_at', { ascending: false })
