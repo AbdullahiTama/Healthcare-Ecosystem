@@ -1,6 +1,6 @@
 # Referral Commission Engine (Phase 07)
 
-Status: implemented and tested in the repo; the migration `carefind_20261007_commission_engine` is **written, NOT yet applied** to production (see section 6).
+Status: implemented and tested in the repo; the migration `carefind_20261007_commission_engine` is **APPLIED to production (2026-10-04)** and verified; deploy the CareHub code next (section 6).
 
 ## 1. Rules (existing, unchanged)
 
