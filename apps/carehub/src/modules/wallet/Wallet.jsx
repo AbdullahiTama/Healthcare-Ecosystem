@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
 import { walletRepository } from './repositories'
-import { authClient } from '../../lib/authClient'
+import WithdrawalPinField from './WithdrawalPinField'
+import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -16,6 +17,8 @@ export default function Wallet({ brand, role }) {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
+  const [withdrawPin, setWithdrawPin] = useState('')
+  const [needsPin, setNeedsPin] = useState(false)
   const [banks, setBanks] = useState([])
   const [accountResolving, setAccountResolving] = useState(false)
   const [accountResolved, setAccountResolved] = useState(false)
@@ -106,28 +109,25 @@ export default function Wallet({ brand, role }) {
     if (amountKobo > (wallet?.available_balance || 0)) {
       showToast('Amount exceeds available balance.', { type: 'warning' }); return
     }
+    if (!/^\d{4,6}$/.test(withdrawPin)) {
+      showToast('Enter your 4-6 digit withdrawal PIN.', { type: 'warning' }); return
+    }
     setWithdrawing(true)
     try {
-      const { data: { session } } = await authClient.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
-      const res = await fetch('/api/initiate-business-withdrawal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          business_id: brand.id,
-          amount: amountKobo,
-          bankCode: withdrawForm.bankCode,
-          bankName: withdrawForm.bankName,
-          accountNumber: withdrawForm.accountNumber,
-          accountName: withdrawForm.accountName,
-        }),
+      const r = await startBusinessWithdrawal({
+        businessId: brand.id, amountKobo,
+        bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName,
+        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin,
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        showToast(data.error === 'insufficient' ? 'Not enough available balance.' : data.error || 'Could not start withdrawal.', { type: 'error' })
+      if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
+      if (r.networkError) { showToast('Network error.', { type: 'error' }); setWithdrawing(false); return }
+      if (!r.ok) {
+        if (r.data.needsPin) setNeedsPin(true)
+        showToast(withdrawalErrorMessage(r.data), { type: 'error' })
+        setWithdrawPin('')
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setShowWithdraw(false); setAccountResolved(false)
+      setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
@@ -166,7 +166,7 @@ export default function Wallet({ brand, role }) {
         <StatCard icon={<WalletIcon />} label="Available" value={naira(wallet?.available_balance)} sub="Withdrawable" />
         <StatCard icon={<Clock />} label="Held" value={naira(wallet?.held_balance)} sub="Awaiting completion" />
         <StatCard icon={<Banknote />} label="Total Received" value={naira(totalReceived)} sub={`${txs.length} transactions`} />
-        <StatCard icon={<ArrowUpCircle />} label="Pending Withdrawals" value={withdrawals.filter(w => w.status === 'pending' || w.status === 'processing').length} sub="In progress" />
+        <StatCard icon={<ArrowUpCircle />} label="Pending Withdrawals" value={withdrawals.filter(w => w.status === 'reserved' || w.status === 'processing').length} sub="In progress" />
       </div>
 
       {wallet?.available_balance > 0 && (
@@ -213,7 +213,7 @@ export default function Wallet({ brand, role }) {
               { key: 'created_at', label: 'Date', render: r => <span style={{ fontSize: '12px' }}>{r.created_at?.split('T')[0]}</span> },
               { key: 'amount', label: 'Amount', render: r => <span style={{ fontWeight: '700' }}>{naira(r.amount)}</span> },
               { key: 'bank_name', label: 'Bank', render: r => <span style={{ fontSize: '12px' }}>{r.bank_name} · {r.account_number}</span> },
-              { key: 'status', label: 'Status', render: r => <Pill label={r.status} type={r.status === 'completed' ? 'green' : r.status === 'failed' ? 'red' : 'amber'} /> },
+              { key: 'status', label: 'Status', render: r => <Pill label={r.status} type={r.status === 'completed' ? 'green' : r.status === 'failed' || r.status === 'reversed' ? 'red' : r.status === 'refunded' ? 'gray' : 'amber'} /> },
             ]}
           />
         </>
@@ -274,9 +274,10 @@ export default function Wallet({ brand, role }) {
                   <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
                 )}
               </div>
+              <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>
