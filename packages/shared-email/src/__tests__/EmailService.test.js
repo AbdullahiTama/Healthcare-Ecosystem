@@ -902,13 +902,15 @@ describe('send-path hardening', () => {
   })
 
   it('does not start another batch once the time budget is spent', async () => {
+    // The budget has to outlast the first batch's start-up (loading the templates on a busy machine) and the send has
+    // to outlast the budget; with 10ms and 40ms the budget could be gone before the first row was even claimed.
     sendEmailMock.mockImplementation(async () => {
-      await new Promise((r) => setTimeout(r, 40))
+      await new Promise((r) => setTimeout(r, 700))
       return { success: true, data: { id: 'ok' } }
     })
     const db = rolloutDb({ settings: {}, rows: [row({ id: 'a' }), row({ id: 'b' })] })
 
-    const totals = await service(db, { timeBudgetMs: 10, batchSize: 1 }).drain({ maxBatches: 5 })
+    const totals = await service(db, { timeBudgetMs: 400, batchSize: 1 }).drain({ maxBatches: 5 })
 
     expect(totals.batches).toBe(1)
     expect(db.__state.rows.filter((r) => r.status === 'pending')).toHaveLength(1)
