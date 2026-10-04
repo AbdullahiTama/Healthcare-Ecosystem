@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Shield, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react'
+import { RefreshCw, Shield, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Card, GhostBtn, Loading, Empty, ErrorState, useToast, Toast } from '../../../components/ui'
 import { createHealthRepository } from '../../../modules/health/repositories'
 
@@ -49,23 +49,12 @@ export default function FeatureFlags({ repository = createHealthRepository() }) 
   if (error) return <ErrorState message={error} onRetry={load} />
   if (!flags || flags.length === 0) return <Empty icon={<Shield size={28} />} message="No feature flags seeded. Run 20260908_admin_platform_health.sql seed." />
 
-  const isPlaceholder = (() => {
-    try { return String(import.meta.env.VITE_PAYSTACK_SECRET_KEY || import.meta.env.PAYSTACK_SECRET_KEY || '').includes('REPLACE') } catch { return false }
-  })()
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Card style={{ padding: 12, background: 'var(--panel)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--fg)', display: 'flex', alignItems: 'center', gap: 6 }}><Shield size={14} /> Feature switches <span style={{ fontSize: 11, background: 'var(--hairline)', color: 'var(--muted)', padding: '2px 6px', borderRadius: 6 }}>owner only • audited</span></div>
         <GhostBtn onClick={load}><RefreshCw size={12} style={{ marginRight: 6 }} />Refresh</GhostBtn>
       </Card>
-
-      {isPlaceholder && (
-        <Card style={{ padding: 12, background: 'var(--amber-bg)', border: '1px solid var(--amber)', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <AlertTriangle size={16} style={{ color: 'var(--amber)' }} />
-          <div style={{ fontSize: 12, color: 'var(--amber)', fontWeight: 700 }}>PAYSTACK_SECRET_KEY is placeholder `sk_live_REPLACE...` — live payments will fail. Set real key in env.</div>
-        </Card>
-      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 12 }}>
         {flags.map(f => (
