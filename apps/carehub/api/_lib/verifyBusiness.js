@@ -5,6 +5,15 @@
 // businesses.email rather than a business.owner_id foreign key, so this
 // mirrors that instead of assuming a shape CareFind's simpler user_id
 // model has but CareHub doesn't.
+
+// The email goes into an ILIKE pattern to get a case-insensitive match. `_` and `%` are pattern wildcards, so an
+// unescaped `j_hn@provider.com` would also match `john@provider.com` (audit F-09). Escape them so the pattern can
+// only ever match the literal address.
+export function escapeLikePattern(value) {
+  return String(value).replace(/[\\%_]/g, '\\$&')
+}
+
+// -> { business, user } | { error }
 export async function verifyBusiness(supabase, req) {
   const authHeader = req.headers['authorization'] || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
@@ -21,10 +30,11 @@ export async function verifyBusiness(supabase, req) {
   const { data: business } = await supabase
     .from('businesses')
     .select('id, email, plan, plan_expires_at, parent_business_id')
-    .ilike('email', userData.user.email)
+    .ilike('email', escapeLikePattern(userData.user.email))
     .is('parent_business_id', null)
     .maybeSingle()
 
   if (!business) return { error: 'no_business' }
-  return { business }
+  // `user` is the verified auth identity (needed for the withdrawal PIN, which is per person, not per business).
+  return { business, user: { id: userData.user.id, email: userData.user.email, email_confirmed_at: userData.user.email_confirmed_at || null } }
 }
