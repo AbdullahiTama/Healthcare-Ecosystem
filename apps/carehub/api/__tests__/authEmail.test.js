@@ -30,11 +30,16 @@ const post = (body) => {
 beforeEach(() => {
   process.env.SUPABASE_URL = 'https://stub.supabase.co'
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'stub-service-role-key'
+  // The handler pads every public response to a minimum duration (timing side channel); switch the floor off for speed.
+  process.env.AUTH_EMAIL_MIN_RESPONSE_MS = '0'
   sendAuthEmail.mockReset().mockResolvedValue({ ok: true, sent: true })
   generateLink.mockReset()
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  delete process.env.AUTH_EMAIL_MIN_RESPONSE_MS
+  vi.restoreAllMocks()
+})
 
 describe('/api/auth-email', () => {
   it('rejects non-POST and malformed input before touching Supabase', async () => {
@@ -50,11 +55,11 @@ describe('/api/auth-email', () => {
     expect(sendAuthEmail).not.toHaveBeenCalled()
   })
 
-  it('returns 200 sent:true and hands the link work to shared-email', async () => {
+  it('returns 200 { ok: true } and hands the link work to shared-email', async () => {
     const res = await post({ action: 'password_reset', email: 'user@example.com' })
 
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ ok: true, sent: true })
+    expect(res.body).toEqual({ ok: true })
     expect(sendAuthEmail).toHaveBeenCalledTimes(1)
     const arg = sendAuthEmail.mock.calls[0][0]
     expect(arg.action).toBe('password_reset')
@@ -83,21 +88,23 @@ describe('/api/auth-email', () => {
     expect(generateLink).not.toHaveBeenCalled()
   })
 
-  it('answers 200 sent:false for an unknown address without leaking that fact', async () => {
+  it('answers an unknown address exactly like a known one, so the endpoint cannot enumerate accounts', async () => {
+    sendAuthEmail.mockResolvedValue({ ok: true, sent: true })
+    const known = await post({ action: 'password_reset', email: 'user@example.com' })
     sendAuthEmail.mockResolvedValue({ ok: true, sent: false })
-    const res = await post({ action: 'password_reset', email: 'nobody@nowhere.invalid' })
+    const unknown = await post({ action: 'password_reset', email: 'nobody@nowhere.invalid' })
 
-    // Identical shape to success apart from `sent`, which the browser never
-    // reads — that is what keeps the endpoint from enumerating accounts.
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ ok: true, sent: false })
+    // `sent: false` used to be returned here and meant "no such account"; any difference between these two responses
+    // is an account-existence oracle.
+    expect(unknown.statusCode).toBe(known.statusCode)
+    expect(unknown.body).toEqual(known.body)
   })
 
   it('still answers a generic 200 when dispatch throws', async () => {
     sendAuthEmail.mockRejectedValue(new Error('SMTP down'))
     const res = await post({ action: 'password_reset', email: 'user@example.com' })
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ ok: true, sent: false })
+    expect(res.body).toEqual({ ok: true })
   })
 
   it('passes a display-name resolver that prefers the profile, then the business owner', async () => {

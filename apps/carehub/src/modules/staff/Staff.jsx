@@ -198,15 +198,14 @@ export default function Staff({ brand, role, perms }) {
       let emailResult = null
       try {
         const { data: { session } } = await authClient.auth.getSession()
+        // staff_setup is authorised server-side: it needs the owner's session, and the business name, role and the
+        // person's name are read from the database there, so they are not sent.
         const res = await fetch('/api/auth-email', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({
             action: 'staff_setup',
             email: form.email.toLowerCase(),
-            fullName: form.fullName,
-            businessName: brand.name,
-            role: form.role,
             redirectTo: window.location.origin + '/reset-password',
           }),
         })
