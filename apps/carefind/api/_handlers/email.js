@@ -65,14 +65,18 @@ export default async function handler(req, res) {
   req.query = {}
   for (const [key, value] of searchParams) req.query[key] = value
 
-  // Rehydrate body for POST
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  // Rehydrate body for POST, but only if nothing has yet. Behind the router the stream was already consumed (req.body and
+  // req.rawBody are set), and reading it a second time waits forever for 'data' / 'end' events that have already fired,
+  // so the request hangs until the platform kills it.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.body === undefined) {
     const raw = await new Promise((resolve, reject) => {
       const chunks = []
       req.on('data', c => chunks.push(c))
       req.on('end', () => resolve(Buffer.concat(chunks)))
       req.on('error', reject)
     })
+    // Keep the exact bytes: a webhook signature covers them, and req.body is a re-parse.
+    req.rawBody = raw
     const text = raw.toString('utf8').trim()
     if (text) req.body = JSON.parse(text)
     else req.body = {}

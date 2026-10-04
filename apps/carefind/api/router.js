@@ -108,6 +108,8 @@ async function rehydrateBody(req) {
     return
   }
   const raw = await readRawBody(req)
+  // Keep the exact bytes: a webhook signature (Resend / Svix) covers them, and req.body is a re-parse.
+  req.rawBody = raw
   const text = raw.toString('utf8').trim()
   if (!text) {
     req.body = {}
