@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 06 — CAREHUB PAYMENT FLOWS**
+Current phase: **PHASE 07 — COMMISSION ENGINE**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -12,7 +12,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 04 CareFind payment flows | COMPLETED (migrations applied; app code not yet deployed) |
 | 05 CareFind CareCoin wallet | COMPLETED (migrations applied; app code not yet deployed) |
 | 06 CareHub payment flows | COMPLETED (migrations applied; app code not yet deployed) |
-| 07 Commission engine | NOT_STARTED |
+| 07 Commission engine | READY_FOR_REVIEW (migration written, not applied) |
 | 08 Withdrawal engine | NOT_STARTED |
 | 09 Refund engine | NOT_STARTED |
 | 10 Central settlement engine | NOT_STARTED |
@@ -131,3 +131,12 @@ Migrations: 2 — **APPLIED to production 2026-10-04** in order (`carefind_20261
 Tests: payments folder (CareFind, default config) 390 passed / 20 skipped (real-concurrency cases need `PG_CONCURRENCY_URL`); shared-payments 156; CareHub API 37 new pass, existing 12 files pass (`authEmail` passes alone but failed 3 tests in a loaded full run; its handler and test carry someone else's uncommitted edits, not mine). Real Postgres 18.4: settlement concurrency 11, wallet concurrency 9 — all pass. Mutation-checked: business-ownership check and server-side pricing.
 Unresolved: deploy both apps (Phase 04, 05, 06 code is still undeployed); referral commission still computed in Node after settlement and the first-payment race in `renew_business_plan` (Phase 07); `verifyBusiness` ilike wildcard, business-withdrawal controls (Phase 08); refunds for needs_refund payments (Phase 09); legacy webhook branches drain then removed (Phase 10); `callback_url` client-supplied (F-27); docs relocation from `docs/` to `apps/docs/` still unresolved (see Phase 05 note).
 Next phase: PHASE 07 — COMMISSION ENGINE.
+
+## Phase 07 — Commission engine
+
+Completed work: referral commissions (existing rules: first payment 40%, later 5%) moved into the database. `renew_business_plan` now locks the business row BEFORE deciding "first payment" (F-05) and creates the commission (or a review flag) in the same transaction as the payment row and the expiry extension; unique partial indexes make a second first-payment / second bonus impossible even if bypassed. `commissions` gains `base_amount`, CHECKs (amount = round(base x rate, 2), rate 0..1, type/status enumerated), an immutability + forward-only status trigger, no deletes/truncates. All write privileges on `commissions`/`commission_review_flags` are revoked from every role (client creation impossible); `set_commission_status()` for admin/server. `reconcile_commissions()` (missing, wrong type/rate/base/agent, first-payment integrity, double-program) and `backfill_missing_commissions()` (set-based, oldest-first, no window cap) added. Rates and the inactive-agent policy are `financial_config` rows. Node `computeCommission` and its tests deleted; the CareHub cron now calls backfill + reconcile.
+Files: migration `carefind_20261007_commission_engine.sql` (+ copy in `apps/carefind/sql/`); CareHub `api/_handlers/{verify-plan-payment,cron-reconcile-payments}.js`, `api/_lib/commissionReconcile.js` (rewritten), `api/_lib/commissions.js` (deleted), `src/lib/referral_program.js` (comment); tests `commissionEngine.db` 25, `commissionConcurrency.pg` 6 (real Postgres), CareHub `commissionReconcile` 3, `paymentFlows` 36; fixture `liveSchemaSubset.sql` (+agents/commissions/flags/agent_earnings); docs `docs/architecture/Commission-Engine.md`, `CareHub-Payment-Flows.md`.
+Migrations: 1 — **NOT applied** (`carefind_20261007_commission_engine`). Apply BEFORE deploying the new CareHub code; the migration refuses to apply if `reconcile_commissions()` is not clean (production tables are empty) and asserts ACLs itself.
+Tests: payments folder 441 passed with `PG_CONCURRENCY_URL` set (real-Postgres included); CareHub phase-07 files 51 passed. Mutation-checked: dropping the business lock and the unique indexes fails the overlapping-transactions test (12 "first" payments).
+Unresolved / for owner: the tier-based `agent_earnings`/payout program (10/5/3%) is a separate scheme from the 40/5 referral commissions: which should pay the agent, or both? (`double_program` reconciliation flags overlaps; decision needed before Phase 08 payouts); apply the migration; deploy Phase 04-07 code; docs relocation still unresolved.
+Next phase: PHASE 08 — WITHDRAWAL ENGINE.

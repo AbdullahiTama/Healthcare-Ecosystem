@@ -45,7 +45,7 @@ Card money stays in kobo end to end; CareCoin money (Phase 05) is a different cu
 
 ## 5. Still true (deliberately not in this phase)
 
-* **Referral commission** is still computed in Node after settlement (`computeCommission`), and by the daily reconcile cron when the webhook settled first. The first-payment determination inside `renew_business_plan` is still the old non-atomic one (F-05). **Phase 07** moves both into one atomic database step.
+* **Referral commission** moved into the database in Phase 07: created inside `renew_business_plan`, atomically with the payment, with an atomic first-payment determination (see `Commission-Engine.md`).
 * **Business withdrawals** (`initiate-business-withdrawal`), the `ilike` owner matching in `verifyBusiness` (F-09) and the missing PIN/limits (F-08) are **Phase 08**.
 * **Refunds** for `needs_refund` payments and the business-wallet refund gaps are **Phase 09**.
 * `callback_url` is still client-supplied (F-27, low).
