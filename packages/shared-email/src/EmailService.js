@@ -61,6 +61,13 @@ export function redactPayload(value) {
   return value
 }
 
+// True when a credential-bearing key has already been scrubbed (see _markSent). Such a row can no longer be rendered
+// into a usable email, so it must not be sent again.
+export function isScrubbed(value) {
+  if (Array.isArray(value) || !value || typeof value !== 'object') return false
+  return Object.entries(value).some(([k, v]) => (SENSITIVE_PAYLOAD_KEY.test(k) ? v === REDACTED : isScrubbed(v)))
+}
+
 // crypto.randomUUID needs a secure context. Every current runtime has it, but
 // a claim that silently reused one constant would let two workers both believe
 // they own the same row, which is the exact bug this token exists to prevent.
@@ -372,6 +379,15 @@ export class EmailService {
           continue
         }
 
+        // A sent row has its action link scrubbed. If one is queued again (an operator re-queues it), mailing it would
+        // deliver a link that reads "[redacted]"; fail it so the sender is asked for a fresh email instead.
+        if (isScrubbed(row.payload)) {
+          await this._markFailed(row, 'payload_scrubbed')
+          failed++
+          logEvent('send_failed_permanent', { row: row.id, reason: 'payload_scrubbed' })
+          continue
+        }
+
         let to = row.to_email
         let payload = row.payload
         if (row.is_canary) {
@@ -495,7 +511,10 @@ export class EmailService {
     const providerId = typeof providerData === 'string'
       ? providerData
       : providerData && (providerData.id || providerData.message_id || providerData.messageId)
-    await this._release(row, { status: 'sent', provider_id: providerId ?? null, provider_message_id: providerId ?? null, sent_at: new Date().toISOString() }, 'sent')
+    // The email is out, so the live action link (password reset, verification, staff setup) has no further use in the
+    // database, where anyone able to read the outbox could use it until it expires. Only credential-bearing keys are
+    // replaced; the rest of the payload stays for audit.
+    await this._release(row, { status: 'sent', provider_id: providerId ?? null, provider_message_id: providerId ?? null, sent_at: new Date().toISOString(), payload: redactPayload(row.payload) }, 'sent')
     await this.rowState.set(row.id, {
       attempts: row.attempts || 0,
       status: 'sent',

@@ -972,3 +972,62 @@ describe('outbox logging', () => {
   })
 })
 
+// ── Credentials do not outlive the send ───────────────────────────────────────────────────────────────────────────────
+// A password-reset or verification row carries a live action link in its payload. Once the email is sent the link has
+// no further use in the database, where anyone who can read the outbox could use it until it expires.
+describe('payload scrubbing after send', () => {
+  const service = (db, options = {}) => new EmailService({ supabase: db, writeRetryDelayMs: 0, ...options })
+
+  it('replaces the action link in the stored payload once the email is sent, and keeps the rest', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    await service(db).processBatch()
+
+    const stored = db.__state.rows[0]
+    expect(stored.status).toBe('sent')
+    expect(stored.payload.resetLink).toBe('[redacted]')
+    expect(stored.payload.fullName).toBe('Real Customer')
+    expect(JSON.stringify(stored.payload)).not.toContain('SECRETTOKEN')
+  })
+
+  it('still sends the real link in the email itself', async () => {
+    let htmlSent = null
+    sendEmailMock.mockImplementationOnce(async ({ html }) => { htmlSent = html; return { success: true, data: { id: 'resend-1' } } })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    await service(db).processBatch()
+
+    expect(htmlSent).toContain('SECRETTOKEN')
+  })
+
+  it('keeps the link on a row that still has to be retried', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: false, error: 'temporary outage', retryable: true, statusCode: 503 })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    await service(db).processBatch()
+
+    expect(db.__state.rows[0].status).toBe('retrying')
+    expect(db.__state.rows[0].payload.resetLink).toContain('SECRETTOKEN')
+  })
+
+  it('fails a scrubbed row that was queued again instead of emailing a "[redacted]" link', async () => {
+    const db = rolloutDb({ settings: {}, rows: [row({ payload: { fullName: 'Real Customer', resetLink: '[redacted]' } })] })
+
+    await service(db).processBatch()
+
+    expect(sendEmailMock).not.toHaveBeenCalled()
+    expect(db.__state.rows[0].status).toBe('failed')
+    expect(db.__state.rows[0].last_error).toBe('payload_scrubbed')
+  })
+
+  it('leaves a payload with nothing sensitive in it unchanged', async () => {
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [row({ template_key: 'business_approved', payload: { businessName: 'Clinic', ownerName: 'Ada', ownerEmail: 'a@example.com' } })] })
+
+    await service(db).processBatch()
+
+    expect(db.__state.rows[0].payload).toEqual({ businessName: 'Clinic', ownerName: 'Ada', ownerEmail: 'a@example.com' })
+  })
+})
+
