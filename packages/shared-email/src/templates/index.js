@@ -93,5 +93,8 @@ export const CAREFIND_TEMPLATES = FindTemplates
 // as a mislabelled email. Callers treat null as a hard error.
 export function getTemplate(templateKey, app = 'carefind') {
   const byKey = app === 'carehub' ? HUB_BY_KEY : FIND_BY_KEY
+  // Own keys only: byKey is a plain object, so 'constructor' or 'toString' would otherwise resolve to something on
+  // Object.prototype and be 'rendered' instead of failing the row.
+  if (typeof templateKey !== 'string' || !Object.hasOwn(byKey, templateKey)) return null
   return byKey[templateKey] || null
 }
