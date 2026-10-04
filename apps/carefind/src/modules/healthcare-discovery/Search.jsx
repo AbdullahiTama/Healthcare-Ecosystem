@@ -82,6 +82,8 @@ function Search() {
   const [showRxOnly, setShowRxOnly] = useState(false)
   const [inStockOnly, setInStockOnly] = useState(true)
   const [sort, setSort] = useState('popular')
+  // The Shop tab fetches its own catalogue (useSearchResults is disabled for it), so its categories come from Shop.
+  const [shopCategories, setShopCategories] = useState(['all'])
 
   const { data: featuredData } = useFeatured()
   const featured = featuredData?.items || []
@@ -489,7 +491,13 @@ function Search() {
 
         {/* Shop tab — delegates to Shop component */}
         {!loading && tab === 'shop' && (
-          <Shop segment={saleType} query={query} embedded />
+          <Shop
+            segment={saleType}
+            query={query}
+            embedded
+            filters={{ priceMin, priceMax, category: filterCategory, showRxOnly, inStockOnly, sort }}
+            onCategoriesChange={setShopCategories}
+          />
         )}
 
         {/* Products tab — original CareFind healthcare product cards */}
@@ -561,7 +569,7 @@ function Search() {
         onPriceMaxChange={setPriceMax}
         category={filterCategory}
         onCategoryChange={setFilterCategory}
-        categories={filterCategories}
+        categories={tab === 'shop' ? shopCategories : filterCategories}
         showRxOnly={showRxOnly}
         onShowRxOnlyChange={setShowRxOnly}
         inStockOnly={inStockOnly}

@@ -16,7 +16,10 @@ import ProductGrid from '../marketplace/ProductGrid'
 
 const shopRepository = createShopRepository()
 
-export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false }) {
+// Embedded in Search, the Filters sheet owns price/category/Rx/stock/sort and passes them as `filters`; Shop's own
+// controls only exist (and only matter) when it renders standalone. `onCategoriesChange` lets the sheet offer this
+// catalogue's categories, since Search's own category list is only fetched for the other tabs.
+export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false, filters, onCategoriesChange }) {
   const { count, addItem } = useCart()
   const location = useLocation()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
@@ -112,26 +115,31 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     return ['all', ...Array.from(s)]
   }, [products])
 
+  useEffect(() => { onCategoriesChange?.(categories) }, [categories, onCategoriesChange])
+
+  // The filter values in effect: the parent's sheet when embedded, Shop's own controls otherwise.
+  const active = embedded && filters ? filters : { priceMin, priceMax, category, showRxOnly, inStockOnly, sort }
+
   const filtered = useMemo(() => {
     let rows = [...products]
     if (brand !== 'all') rows = rows.filter(r => (r.category || r.products?.category) === brand)
-    if (category !== 'all') rows = rows.filter(r => (r.ecommerce_category || r.category) === category)
-    if (priceMin !== '') rows = rows.filter(r => {
+    if (active.category !== 'all') rows = rows.filter(r => (r.ecommerce_category || r.category) === active.category)
+    if (active.priceMin !== '') rows = rows.filter(r => {
       const k = r.ecommerce_price_kobo ?? (r.products.price!=null ? Math.round(r.products.price*100) : null)
-      return k != null && k >= Math.round(parseFloat(priceMin)*100)
+      return k != null && k >= Math.round(parseFloat(active.priceMin)*100)
     })
-    if (priceMax !== '') rows = rows.filter(r => {
+    if (active.priceMax !== '') rows = rows.filter(r => {
       const k = r.ecommerce_price_kobo ?? (r.products.price!=null ? Math.round(r.products.price*100) : null)
-      return k != null && k <= Math.round(parseFloat(priceMax)*100)
+      return k != null && k <= Math.round(parseFloat(active.priceMax)*100)
     })
-    if (showRxOnly) rows = rows.filter(r => r.prescription_required)
-    if (inStockOnly) rows = rows.filter(r => (r.products?.stock ?? 0) > 0)
-    if (sort === 'price_asc') rows.sort((a,b) => (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0) - (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0))
-    else if (sort === 'price_desc') rows.sort((a,b) => (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0) - (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0))
-    else if (sort === 'newest') rows.sort((a,b) => new Date(b.active_at) - new Date(a.active_at))
-    else if (sort === 'rating') rows.sort((a,b) => (ratings[b.id]?.avg||0) - (ratings[a.id]?.avg||0))
+    if (active.showRxOnly) rows = rows.filter(r => r.prescription_required)
+    if (active.inStockOnly) rows = rows.filter(r => (r.products?.stock ?? 0) > 0)
+    if (active.sort === 'price_asc') rows.sort((a,b) => (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0) - (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0))
+    else if (active.sort === 'price_desc') rows.sort((a,b) => (b.ecommerce_price_kobo ?? b.products.price*100 ?? 0) - (a.ecommerce_price_kobo ?? a.products.price*100 ?? 0))
+    else if (active.sort === 'newest') rows.sort((a,b) => new Date(b.active_at) - new Date(a.active_at))
+    else if (active.sort === 'rating') rows.sort((a,b) => (ratings[b.id]?.avg||0) - (ratings[a.id]?.avg||0))
     return rows
-  }, [products, brand, category, priceMin, priceMax, showRxOnly, inStockOnly, sort, ratings])
+  }, [products, brand, active.category, active.priceMin, active.priceMax, active.showRxOnly, active.inStockOnly, active.sort, ratings])
 
   const featured = filtered.slice(0, 6)
   const grid = filtered
