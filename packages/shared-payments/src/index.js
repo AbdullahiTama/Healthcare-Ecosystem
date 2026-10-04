@@ -8,3 +8,7 @@ export { settleByReference } from './settlement.js'
 export { paystackEventId, recordProviderEvent, finishProviderEvent } from './events.js'
 export { settleIntentForRequest } from './requestSettlement.js'
 export { createSettlementEffects } from './effects.js'
+export {
+  IN_FLIGHT_GRACE_MS, WITHDRAWAL_KINDS, TRANSFER_EVENT_OUTCOMES, ATTENTION_RESULTS,
+  getTransferStatus, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
+} from './withdrawals.js'

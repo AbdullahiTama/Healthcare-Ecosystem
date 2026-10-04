@@ -24,6 +24,11 @@ const STATUS_PILLS = {
   paid: { label: 'Paid', type: 'green' },
   unpaid: { label: 'Unpaid', type: 'red' },
   refunded: { label: 'Refunded', type: 'gray' },
+  // Withdrawal lifecycle
+  reserved: { label: 'Reserved', type: 'amber' },
+  processing: { label: 'Processing', type: 'blue' },
+  failed: { label: 'Failed', type: 'red' },
+  reversed: { label: 'Reversed', type: 'red' },
   active: { label: 'Active', type: 'green' },
   suspended: { label: 'Suspended', type: 'red' },
 }
