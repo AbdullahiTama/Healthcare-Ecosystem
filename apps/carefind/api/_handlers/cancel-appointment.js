@@ -121,16 +121,11 @@ export default async function handler(req, res) {
           status: 'confirmed',
         })
 
-        // Reverse the held balance
-        await supabase.rpc('request_business_withdrawal', {
-          p_business_id: appt.business_id,
-          p_amount: appt.fee_amount,
-          p_bank_name: 'refund',
-          p_account_number: '0000000000',
-          p_account_name: 'Refund reversal',
-        }).catch(() => {
-          // If withdrawal RPC fails, just log — the refund is still recorded
-        })
+        // NOTE: this used to "reverse the held balance" by filing a fake withdrawal (request_business_withdrawal with
+        // bank 'refund' / account 0000000000). That abused the withdrawal path - it left a payout request that
+        // nothing could ever settle - and the function is gone with the withdrawal engine (Phase 08). The wallet
+        // reversal and the money back to the client belong to the refund engine (Phase 09); until then the
+        // appointment stays marked 'refunded' for review, exactly as the comment above says.
       }
     }
   }
