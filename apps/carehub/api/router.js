@@ -19,6 +19,7 @@ import ecommerceReviewHandler from './_handlers/ecommerce-review.js'
 import emailHandler from './_handlers/email-handler.js'
 import initiateAppointmentPaymentHandler from './_handlers/initiate-appointment-payment.js'
 import initiateBusinessWithdrawalHandler from './_handlers/initiate-business-withdrawal.js'
+import withdrawalPinHandler from './_handlers/withdrawal-pin.js'
 import initiatePlanPaymentHandler from './_handlers/initiate-plan-payment.js'
 import notifyBusinessStatusHandler from './_handlers/notify-business-status.js'
 import notifyRegistrationHandler from './_handlers/notify-registration.js'
@@ -82,6 +83,7 @@ const HANDLERS = {
   'notify-business-status':       notifyBusinessStatusHandler,
   'initiate-plan-payment':        initiatePlanPaymentHandler,
   'initiate-business-withdrawal': initiateBusinessWithdrawalHandler,
+  'withdrawal-pin':               withdrawalPinHandler,
   'initiate-appointment-payment': initiateAppointmentPaymentHandler,
   'ecommerce-review':             ecommerceReviewHandler,
   'auth-email':                   authEmailHandler,
