@@ -6,8 +6,8 @@ import handler from '../_handlers/auth-email.js'
 
 // This handler carried the same `supabase.auth.admin.getUserByEmail` call that
 // 500'd CareHub in production. It also differs from CareHub's copy: it accepts
-// customer_registration, has no action allowlist of its own, and has no
-// businesses fallback for the display name.
+// customer_registration (CareHub does not), has its own allowlist of public
+// actions, and has no businesses fallback for the display name.
 
 const sendAuthEmail = vi.fn()
 // supabase-js query builders are thenables, not Promises. A stub whose
@@ -32,10 +32,15 @@ const post = (body) => call({ method: 'POST', body })
 beforeEach(() => {
   process.env.SUPABASE_URL = 'https://stub.supabase.co'
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'stub-service-role-key'
+  // The handler pads every response to a minimum duration (timing side channel); switch the floor off for speed.
+  process.env.AUTH_EMAIL_MIN_RESPONSE_MS = '0'
   sendAuthEmail.mockReset().mockResolvedValue({ ok: true, sent: true })
 })
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  delete process.env.AUTH_EMAIL_MIN_RESPONSE_MS
+  vi.restoreAllMocks()
+})
 
 describe('/api/auth-email (carefind)', () => {
   it('rejects non-POST and malformed input', async () => {
@@ -60,7 +65,8 @@ describe('/api/auth-email (carefind)', () => {
       const res = await post({ action: 'password_reset', email: 'user@example.com' })
 
       expect(res.statusCode).toBe(200)
-      expect(res.body).toEqual({ ok: true, sent: true })
+      // `sent` is never returned: false would mean "no such account".
+      expect(res.body).toEqual({ ok: true })
       expect(sendAuthEmail.mock.calls[0][0]).toMatchObject({
         action: 'password_reset',
         email: 'user@example.com',
@@ -84,23 +90,24 @@ describe('/api/auth-email (carefind)', () => {
     expect(sendAuthEmail.mock.calls[0][0].action).toBe('customer_registration')
   })
 
-  it('leaves action validation to shared-email', async () => {
-    // Unlike CareHub, this handler has no allowlist, so an unknown action is
-    // delegated rather than rejected with a 400.
-    const res = await post({ action: 'sneeze', email: 'user@example.com' })
-    expect(res.statusCode).toBe(200)
-    expect(sendAuthEmail).toHaveBeenCalledTimes(1)
+  it('rejects an action CareFind does not use, without calling shared-email', async () => {
+    // The public endpoint forwards only its own actions; staff_setup is CareHub's and needs an authorised caller.
+    for (const action of ['sneeze', 'staff_setup']) {
+      const res = await post({ action, email: 'user@example.com' })
+      expect(res.statusCode).toBe(400)
+    }
+    expect(sendAuthEmail).not.toHaveBeenCalled()
   })
 
   it('answers a generic 200 when the address is unknown or dispatch fails', async () => {
     sendAuthEmail.mockResolvedValue({ ok: true, sent: false })
     expect((await post({ action: 'password_reset', email: 'nobody@nowhere.invalid' })).body)
-      .toEqual({ ok: true, sent: false })
+      .toEqual({ ok: true })
 
     sendAuthEmail.mockRejectedValue(new Error('SMTP down'))
     const res = await post({ action: 'password_reset', email: 'user@example.com' })
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ ok: true, sent: false })
+    expect(res.body).toEqual({ ok: true })
   })
 
   it('resolves the display name from the profile only', async () => {
