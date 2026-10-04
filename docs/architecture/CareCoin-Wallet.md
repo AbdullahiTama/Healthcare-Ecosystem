@@ -75,7 +75,7 @@ Apply 1 then 2 then 3 in a row (between 1 and 3 the old functions keep working b
 
 ## 8. Open items
 
-* **Q1** — CareCoin-paid subscriptions/consultations still credit the creator/professional 100% (card paths 80%). Waiting for the owner.
+* **Q1 — RESOLVED (owner, 2026-10-04): the 20% platform fee applies to CareCoin-paid subscriptions and consultations too** (migration `carefind_20261006_coin_paths_platform_fee`): the payer is debited the full price, the creator/professional receives floor(price x 80%), the remainder is a `platform_fee_*` row in `transactions` and is recorded in the debit entry's `meta.platform_coins`. Card and coin paths now agree.
 * `refund_appointment_payment`: the business-wallet side still refunds without deducting when the business already withdrew (the `else null` branch) and a card-paid booking has no patient refund — **Phase 09**.
 * `pay_booking_with_credits(p_user_id, …)` takes the user as a parameter (service_role only; the handler passes the verified JWT user). It is safe as long as only the server calls it; moving the identity inside would need a signed-in RPC.
 * Business wallets (`business_wallets`, held/available kobo) are not yet on a ledger — **Phase 06/08**.
