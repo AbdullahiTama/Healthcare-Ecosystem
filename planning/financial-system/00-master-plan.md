@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 05 — CAREFIND CARECOIN WALLET**
+Current phase: **PHASE 06 — CAREHUB PAYMENT FLOWS**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -11,7 +11,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 03 Provider abstraction | COMPLETED |
 | 04 CareFind payment flows | COMPLETED (migrations applied; app code not yet deployed) |
 | 05 CareFind CareCoin wallet | COMPLETED (migrations applied; app code not yet deployed) |
-| 06 CareHub payment flows | NOT_STARTED |
+| 06 CareHub payment flows | READY_FOR_REVIEW |
 | 07 Commission engine | NOT_STARTED |
 | 08 Withdrawal engine | NOT_STARTED |
 | 09 Refund engine | NOT_STARTED |
@@ -114,3 +114,19 @@ Found by tests: a real race in `request_withdrawal` (identical retries returned 
 Unresolved: Q1 (20% fee on CareCoin-paid paths); refund gaps in `refund_appointment_payment` (Phase 09); business wallets not yet on a ledger (Phase 06/08); account deletion with coins now refused (F-31, needs an admin settle procedure); application code from Phase 04 still not deployed.
 **Docs location incident:** the `docs/` tree was moved to `apps/docs/` outside this session; the audit findings F-17/F-30/F-31 (see `CareCoin-Wallet.md` §5/§8) are NOT yet written into `Financial-Architecture-Audit.md`, and commit `27a9d2f` accidentally recorded that file's deletion from `docs/architecture/`. Waiting for the owner to say which location is canonical.
 Next phase: PHASE 06 — CAREHUB PAYMENT FLOWS.
+
+## Business decisions log (update 2026-10-04)
+
+| Date | Question | Decision | Status |
+|---|---|---|---|
+| 2026-10-04 | Q1: 20% platform fee on CareCoin-paid subscriptions/consultations | **20%** (owner), same as the card paths; payer pays the full price, payee gets floor(price x 80%), platform keeps the rest | DECIDED, implemented (migration `carefind_20261006_coin_paths_platform_fee`, not yet applied) |
+| 2026-10-03 | Card booking/appointment refund policy; shop commission schedule; webhook endpoint | recommendations stand (see log above) | still awaiting explicit owner confirmation; needed for Phase 09 / shop |
+
+## Phase 06 — CareHub payment flows
+
+Completed work: CareHub plan payments and appointment payments through payment intents and the settlement engine. `settle_payment_intent` now settles `appointment` (same handler as a CareFind booking: business credited from the actual kobo paid, 80% held / 20% platform) and `plan_renewal` (new handler calling the existing `renew_business_plan`, so renewal has one definition; no duplicate renewal). CareHub initiators price on the server (plan table / stored appointment fee), record the intent for the verified business before Paystack, and give every appointment attempt its own reference (F-15); redirect handlers authorise by `intent.business_id` and settle only through the engine; the shared webhook settles CareHub intents through the same engine. Settle-for-caller and post-settlement effects moved into `shared-payments` and are shared with CareFind. Card money stays in kobo; CareCoin money is untouched.
+Files: migration `carefind_20261006_settle_plan_and_carehub_appointments.sql` (+ copy in `apps/carefind/sql/`); `packages/shared-payments/src/{requestSettlement,effects,testing}.js` (+ exports, tests); CareHub `api/_lib/{payments,intentSettlement,settlementEffects}.js`, handlers `initiate-plan-payment, verify-plan-payment, initiate-appointment-payment, verify-appointment-payment`, `package.json`/lockfile (shared-payments dependency; the lockfile was already out of sync with package.json); CareFind `api/_lib/{intentSettlement,settlementEffects}.js` become thin wrappers; tests `carehubSettlement.db` 21, `paymentFlows` (CareHub) 37, 3 real-Postgres concurrency cases, 2 webhook cases, 23 shared-code tests; `docs/architecture/CareHub-Payment-Flows.md`.
+Migrations: 2 pending, **NOT applied** — `carefind_20261006_coin_paths_platform_fee` then `carefind_20261006_settle_plan_and_carehub_appointments`; apply BEFORE deploying the new CareHub/CareFind code (until applied, plan/appointment payments on the new code would error in the engine).
+Tests: payments folder (CareFind, default config) 390 passed / 20 skipped (real-concurrency cases need `PG_CONCURRENCY_URL`); shared-payments 156; CareHub API 37 new pass, existing 12 files pass (`authEmail` passes alone but failed 3 tests in a loaded full run; its handler and test carry someone else's uncommitted edits, not mine). Real Postgres 18.4: settlement concurrency 11, wallet concurrency 9 — all pass. Mutation-checked: business-ownership check and server-side pricing.
+Unresolved: apply the two migrations + post-apply catalog check; deploy both apps (Phase 04, 05, 06 code is still undeployed); referral commission still computed in Node after settlement and the first-payment race in `renew_business_plan` (Phase 07); `verifyBusiness` ilike wildcard, business-withdrawal controls (Phase 08); refunds for needs_refund payments (Phase 09); legacy webhook branches drain then removed (Phase 10); `callback_url` client-supplied (F-27); docs relocation from `docs/` to `apps/docs/` still unresolved (see Phase 05 note).
+Next phase: PHASE 07 — COMMISSION ENGINE.
