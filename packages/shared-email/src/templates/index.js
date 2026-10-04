@@ -1,6 +1,5 @@
 import * as HubTemplates from './Transactional/index.js'
 import * as FindTemplates from './Transactional/CareFind/index.js'
-import * as CareHubTemplates from './CareHub/index.js'
 
 // Map camelCase function names to snake_case keys used in the database
 const HUB_TEMPLATE_MAP = {
@@ -56,25 +55,6 @@ const FIND_TEMPLATE_MAP = {
 // order_status_update, appointment_confirmed, ...).
 const HUB_BY_KEY = Object.fromEntries(Object.entries(HubTemplates).map(([name, fn]) => [HUB_TEMPLATE_MAP[name] || name, fn]))
 const FIND_BY_KEY = Object.fromEntries(Object.entries(FindTemplates).map(([name, fn]) => [FIND_TEMPLATE_MAP[name] || name, fn]))
-
-// CareHub's standardized templates take precedence over the legacy builders
-// for these events — same rendered keys, one branded layout, escaped fields,
-// env-driven URLs, preheader, and details tables.
-const CAREHUB_OVERRIDES = {
-  registration_owner: CareHubTemplates.registrationOwner,
-  admin_new_registration: CareHubTemplates.adminNewRegistration,
-  business_approved: CareHubTemplates.businessApproved,
-  business_rejected: CareHubTemplates.businessRejected,
-  appointment_confirmed: CareHubTemplates.appointmentConfirmed,
-  staff_welcome: CareHubTemplates.staffWelcome,
-  credit_reminder: CareHubTemplates.creditReminder,
-  agent_approved: CareHubTemplates.agentApproved,
-  agent_rejected: CareHubTemplates.agentRejected,
-  withdrawal_requested: CareHubTemplates.withdrawalRequested,
-  withdrawal_completed: CareHubTemplates.withdrawalCompleted,
-  withdrawal_failed: CareHubTemplates.withdrawalFailed,
-}
-for (const [key, fn] of Object.entries(CAREHUB_OVERRIDES)) HUB_BY_KEY[key] = fn
 
 // Merged registry, CareFind preferred for shared keys — kept for preview /
 // listing tools where a single non-app-scoped view is needed.

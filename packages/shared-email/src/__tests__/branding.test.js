@@ -32,8 +32,8 @@ describe('brand-aware template registry', () => {
       resetLink: 'https://x/reset',
     })
     expect(html).toContain('CareHub')
-    expect(html).toContain('https://carefindhub.com/logo-wordmark.png')
-    expect(html).toContain('carefindhub.com/logo-wordmark.png" alt="CareHub logo"')
+    expect(html).toContain('<img src="https://carefindhub.com/email-logo.png"')
+    expect(html).not.toContain('carefind.app')
     expect(html).not.toContain('carefind.ng')
   })
 
@@ -43,7 +43,7 @@ describe('brand-aware template registry', () => {
       verifyLink: 'https://x/verify',
     })
     expect(html).toContain('CareFind')
-    expect(html).toContain('https://carefind.app/logo-wordmark.png')
+    expect(html).toContain('<img src="https://carefind.app/email-logo.png"')
     expect(html).not.toContain('carefindhub.com')
   })
 
@@ -105,7 +105,7 @@ describe('resolveAppFromSender', () => {
 describe('transactional template branding', () => {
   it('CareHub templates use the CareHub logo and site domain', () => {
     const html = HubTemplates.emailVerification({ fullName: 'A', verifyLink: 'https://x/v' })
-    expect(html).toContain('https://carefindhub.com/logo-wordmark.png')
+    expect(html).toContain('https://carefindhub.com/email-logo.png')
     expect(html).toContain('carefindhub.com')
     expect(html).toContain('CareHub')
     expect(html).not.toContain('carehub.ng')
@@ -113,8 +113,10 @@ describe('transactional template branding', () => {
 
   it('CareFind templates use the CareFind logo and site domain', () => {
     const html = FindTemplates.passwordReset({ fullName: 'A', resetLink: 'https://x/r' })
-    expect(html).toContain('https://carefind.app/logo-wordmark.png')
-    expect(html).toContain('carefind.ng')
+    expect(html).toContain('https://carefind.app/email-logo.png')
+    // The footer names the site the app is actually served from.
+    expect(html).toContain('carefind.app')
+    expect(html).not.toContain('carefind.ng')
     expect(html).toContain('CareFind')
   })
 })

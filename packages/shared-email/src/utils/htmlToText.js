@@ -4,10 +4,14 @@
 export function htmlToText(html) {
   if (!html) return ''
   return String(html)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .replace(/<div[^>]*display:none[^>]*>[\s\S]*?<\/div>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h1|h2|h3|tr)>/gi, '\n')
+    .replace(/<\/td>\s*<td[^>]*>/gi, ' ')
     .replace(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, '$2 ($1)')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')

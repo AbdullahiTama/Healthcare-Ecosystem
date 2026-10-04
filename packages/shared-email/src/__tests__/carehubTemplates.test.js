@@ -21,7 +21,7 @@ describe('CareHub templates — structural guarantees', () => {
     it(`${key}: branded, responsive shell, CTA present, footer present`, () => {
       const html = getTemplate(key, 'carehub')(PAYLOADS[key])
       expect(html).toContain('CareHub')
-      expect(html).toContain('logo-wordmark.png')
+      expect(html).toContain('email-logo.png')
       expect(html).toContain('role="presentation"')
       expect(html).toContain('<!doctype html>')
       expect(html).toContain('All rights reserved')
