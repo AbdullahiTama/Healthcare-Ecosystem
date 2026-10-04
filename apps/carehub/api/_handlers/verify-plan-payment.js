@@ -1,67 +1,33 @@
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
-import { paystackFetch } from '../_lib/paystack.js'
+import { settleIntentForRequest } from '../_lib/intentSettlement.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 import { computeCommission } from '../_lib/commissions.js'
 
-// Called when the business owner is redirected back from Paystack. Asks
-// Paystack directly whether the charge succeeded before extending anything â€”
-// nothing here is trusted from the client except which reference to look
-// up, same principle as CareFind's api/verify-payment.js.
+// Called when the business owner is redirected back from Paystack. Nothing is trusted from the client except
+// which reference to look up: the plan, months, amount and business all come from the payment intent the
+// server created, and settle_payment_intent() renews the plan only for a Paystack payment that matches it.
+// The webhook calls the same settlement, so whichever arrives first renews and the other is a no-op.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const { business, error: authError } = await verifyBusiness(supabase, req)
   if (authError) return res.status(401).json({ error: authError })
 
-  const { reference } = req.body
-  if (!reference) return res.status(400).json({ error: 'Missing reference' })
+  const { reference } = req.body || {}
+  const out = await settleIntentForRequest({ supabase, reference, purpose: 'plan_renewal', business })
 
-  let paystackData
-  try {
-    paystackData = await paystackFetch(`/transaction/verify/${encodeURIComponent(reference)}`)
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Could not verify payment' })
-  }
-
-  if (!paystackData.status || paystackData.data?.status !== 'success') {
-    return res.status(400).json({ error: 'Payment not confirmed by Paystack' })
-  }
-
-  const { metadata, amount } = paystackData.data
-  if (!metadata?.business_id || !metadata?.months) {
-    return res.status(400).json({ error: 'Transaction has no plan metadata' })
-  }
-  if (metadata.business_id !== business.id) {
-    return res.status(403).json({ error: 'This transaction does not belong to your business' })
-  }
-
-  const months = parseInt(metadata.months)
-  const { data, error } = await supabase.rpc('renew_business_plan', {
-    p_business_id: business.id,
-    p_months: months,
-    // Paystack reports kobo; plan_payments.naira_amount is NAIRA (it used to store kobo, which
-    // overstated revenue 100x in every report that read it as naira).
-    p_naira_amount: Math.round(amount / 100),
-    p_reference: reference,
-  })
-  if (error) return res.status(500).json({ error: error.message })
-
-  const row = Array.isArray(data) ? data[0] : data
-  if (!row) return res.status(500).json({ error: 'Could not renew plan' })
-  if (row.already_processed) {
-    // Commission may have been skipped if the webhook settled first; attempt it
-    // now (idempotent via UNIQUE payment_id).
-    const { data: paymentRow } = await supabase
-      .from('plan_payments')
-      .select('id, is_first_payment')
-      .eq('reference', reference)
-      .maybeSingle()
+  if (out.outcome === 'already_settled') {
+    // The webhook settled first. Its path does not compute the referral commission, so attempt it now
+    // (idempotent: UNIQUE(payment_id)).
+    const intent = out.result?.intent
+    const { data: paymentRow } = await supabase.from('plan_payments').select('id, is_first_payment').eq('reference', reference).maybeSingle()
     if (paymentRow?.id) {
       try {
         await computeCommission(supabase, {
           paymentId: paymentRow.id,
           businessId: business.id,
-          nairaCharged: amount / 100,
+          nairaCharged: (intent?.expected_amount || 0) / 100,
           isFirstPayment: paymentRow.is_first_payment,
         })
       } catch (err) {
@@ -70,50 +36,23 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({ alreadyProcessed: true })
   }
+  if (out.outcome !== 'settled') return res.status(out.http).json(out.body)
 
-  if (row.payment_id) {
+  const { payment_id: paymentId, new_expiry: newExpiry, is_first_payment: isFirstPayment } = out.result
+  if (paymentId) {
     try {
       await computeCommission(supabase, {
-        paymentId: row.payment_id,
+        paymentId,
         businessId: business.id,
-        nairaCharged: amount / 100,
-        isFirstPayment: row.is_first_payment,
+        nairaCharged: out.result.intent.expected_amount / 100,
+        isFirstPayment,
       })
     } catch (err) {
       console.error('Commission computation failed:', err)
     }
   }
 
-  // Subscription created email (templated, via outbox) â€” enqueue + flush.
-  try {
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('name, plan, plan_expires_at, owner_name, owner_email, email')
-      .eq('id', business.id)
-      .maybeSingle()
-    const ownerEmail = biz?.owner_email || biz?.email
-    if (biz && ownerEmail) {
-      const { EmailService } = await import('@care-ecosystem/shared-email')
-      const emailService = new EmailService()
-      await emailService.enqueue({
-        templateKey: 'subscription_created',
-        toEmail: ownerEmail,
-        payload: {
-          fullName: biz.owner_name || 'Business Owner',
-          plan: biz.plan || 'Standard',
-          businessName: biz.name,
-          expiryDate: biz.plan_expires_at ? new Date(biz.plan_expires_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
-        },
-        subject: 'Your CareHub subscription is active',
-        idempotencyKey: `subscription-started:${reference}`,
-      })
-      emailService.processBatch().catch((err) => {
-        console.error('[verify-plan-payment] outbox flush error:', err)
-      })
-    }
-  } catch (err) {
-    console.error('[verify-plan-payment] subscription email error:', err)
-  }
+  await runSettlementEffects(supabase, out.result)
 
-  return res.status(200).json({ credited: true, newExpiry: row.new_expiry })
+  return res.status(200).json({ credited: true, newExpiry })
 }

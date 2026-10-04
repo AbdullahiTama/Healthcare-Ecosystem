@@ -1,7 +1,12 @@
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
-import { paystackFetch } from '../_lib/paystack.js'
+import { settleIntentForRequest } from '../_lib/intentSettlement.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 
+// Called when the business is redirected back from Paystack after paying for an appointment. The amount,
+// appointment and business come from the payment intent the server created; settle_payment_intent() credits
+// the business wallet (80% held, 20% platform) from the amount ACTUALLY paid. The webhook calls the same
+// settlement, so whichever arrives first settles and the other is a no-op.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -9,102 +14,24 @@ export default async function handler(req, res) {
   if (authError) return res.status(401).json({ error: authError })
 
   const { reference } = req.body || {}
-  if (!reference) return res.status(400).json({ error: 'Missing reference' })
+  const out = await settleIntentForRequest({ supabase, reference, purpose: 'appointment', business })
+  const appointmentId = out.result?.intent?.entity_id
 
-  const { data: appt, error: apptErr } = await supabase
-    .from('appointments')
-    .select('id, business_id, client_name, booking_type, date, time, fee_amount, payment_status, client_email, client_id, service')
-    .eq('payment_reference', reference)
-    .eq('business_id', business.id)
-    .maybeSingle()
-  if (apptErr || !appt) return res.status(404).json({ error: 'No appointment found for this reference' })
-  if (appt.payment_status === 'paid') return res.status(200).json({ success: true, id: appt.id, alreadyPaid: true })
-
-  let paystackData
-  try {
-    paystackData = await paystackFetch(`/transaction/verify/${encodeURIComponent(reference)}`)
-  } catch (err) {
-    return res.status(500).json({ error: err.message || 'Could not verify payment' })
+  if (out.outcome === 'unknown_reference') {
+    // An appointment paid before the settlement engine shipped has no intent; the webhook settles those.
+    const { data: legacy } = await supabase.from('appointments').select('id, payment_status').eq('payment_reference', reference).eq('business_id', business.id).maybeSingle()
+    if (legacy?.payment_status === 'paid') return res.status(200).json({ success: true, id: legacy.id, alreadyPaid: true })
+    return res.status(404).json({ error: 'No appointment found for this reference' })
   }
-  if (!paystackData.status || paystackData.data?.status !== 'success') {
-    return res.status(400).json({ error: 'Payment not confirmed by Paystack' })
+  if (out.outcome === 'already_settled') return res.status(200).json({ success: true, id: appointmentId, alreadyPaid: true })
+  if (out.outcome === 'needs_refund' && out.result?.reason === 'already_paid') {
+    // Paid another way in the meantime (POS / transfer): the appointment stays paid, this card payment is queued for refund.
+    return res.status(200).json({ success: true, id: appointmentId, alreadyPaid: true, needsRefund: true })
   }
+  if (out.outcome !== 'settled') return res.status(out.http).json(out.body)
 
-  const verifiedAmount = paystackData.data.amount
-  if (verifiedAmount !== appt.fee_amount) {
-    return res.status(400).json({ error: 'Payment amount does not match the appointment fee' })
-  }
+  // Staff notice and client confirmation: run once, by the call that actually settled the intent.
+  await runSettlementEffects(supabase, out.result)
 
-  const { data: settleResult, error: settleError } = await supabase.rpc('settle_card_booking', {
-    p_appointment_id: appt.id,
-    p_reference: reference,
-  })
-  if (settleError) return res.status(500).json({ error: settleError.message })
-  if (settleResult !== 'ok' && settleResult !== 'already_paid') {
-    return res.status(400).json({ error: settleResult || 'Could not settle payment' })
-  }
-
-  // Only notify on a fresh settlement â€” the webhook also notifies on 'ok',
-  // so this prevents duplicate staff_notifications when the webhook settles
-  // first and the redirect path runs afterward.
-  if (settleResult === 'ok') {
-    await supabase.from('staff_notifications').insert({
-      business_id: appt.business_id,
-      staff_id: null,
-      is_owner: true,
-      kind: 'booking_paid',
-      title: `Payment received â€” ${appt.client_name}`,
-      body: `${appt.date} at ${appt.time} â€” â‚¦${(appt.fee_amount / 100).toLocaleString()}`,
-      link: '/dashboard/appointments',
-      read_at: null,
-    })
-  }
-
-  // Appointment confirmation email to the client â€” enqueue + flush.
-  // Only sent on a fresh settlement ('ok'); on 'already_paid' the webhook
-  // (or an earlier redirect) already sent it, so emailing again would be a
-  // duplicate â€” same first-settler-wins invariant as the webhook.
-  if (settleResult === 'ok') {
-    try {
-      let clientEmail = appt.client_email
-      if (!clientEmail && appt.client_id) {
-        const { data: client } = await supabase
-          .from('clients')
-          .select('email')
-          .eq('id', appt.client_id)
-          .maybeSingle()
-        clientEmail = client?.email || null
-      }
-      if (clientEmail && clientEmail.includes('@')) {
-        const { data: biz } = await supabase
-          .from('businesses')
-          .select('name')
-          .eq('id', appt.business_id)
-          .maybeSingle()
-        const { EmailService } = await import('@care-ecosystem/shared-email')
-        const emailService = new EmailService()
-        await emailService.enqueue({
-          templateKey: 'appointment_confirmed',
-          toEmail: clientEmail,
-          payload: {
-            fullName: appt.client_name,
-            businessName: biz?.name || '',
-            service: appt.service || 'Consultation',
-            date: appt.date,
-            time: appt.time,
-            staffName: '',
-          },
-          subject: 'Your appointment is confirmed',
-          idempotencyKey: `appointment-confirmed:${appt.id}`,
-        })
-        emailService.processBatch().catch((err) => {
-          console.error('[verify-appointment-payment] outbox flush error:', err)
-        })
-      }
-    } catch (err) {
-      console.error('[verify-appointment-payment] appointment confirmation email error:', err)
-    }
-  }
-
-  return res.status(200).json({ success: true, id: appt.id, paid: true })
+  return res.status(200).json({ success: true, id: appointmentId, paid: true })
 }
