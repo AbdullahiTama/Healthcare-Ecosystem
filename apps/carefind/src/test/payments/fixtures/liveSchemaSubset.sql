@@ -216,3 +216,34 @@ end;
 $function$;
 revoke all on function public.renew_business_plan(uuid, integer, integer, text) from public, anon, authenticated;
 grant execute on function public.renew_business_plan(uuid, integer, integer, text) to service_role;
+
+-- ---- Referral program tables (Phase 07), as read from production. ---------------------------------
+create table public.agents (
+  id uuid primary key default gen_random_uuid(),
+  name text not null default 'Agent',
+  status text not null default 'pending_review'
+);
+create table public.commissions (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null references public.agents(id),
+  business_id uuid not null references public.businesses(id),
+  payment_id uuid not null unique references public.plan_payments(id),
+  type text not null,
+  amount numeric not null,
+  rate numeric not null,
+  status text not null default 'accrued',
+  created_at timestamptz not null default now()
+);
+create table public.commission_review_flags (
+  id uuid primary key default gen_random_uuid(),
+  payment_id uuid not null references public.plan_payments(id),
+  reason text not null default '',
+  created_at timestamptz not null default now()
+);
+create policy "commission_review_flags admin manage" on public.commission_review_flags for all using (public.is_platform_admin());
+alter table public.commission_review_flags enable row level security;
+create table public.agent_earnings (
+  id uuid primary key default gen_random_uuid(),
+  agent_id uuid not null,
+  payment_reference text not null
+);
