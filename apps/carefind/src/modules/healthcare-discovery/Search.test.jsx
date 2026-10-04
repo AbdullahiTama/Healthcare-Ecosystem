@@ -422,3 +422,44 @@ describe('Search — shop banner and search card', () => {
     expect(localStorage.getItem('carefind_recent_searches')).toBeNull()
   })
 })
+
+// The Products tab opens with a rail above the results: promotions when any are running, otherwise trending products.
+// Both branches render components the page must import — a missing import only crashes once there is data to show.
+describe('Search — Products tab featured rail', () => {
+  beforeEach(() => {
+    mockSupabase.data.tables.businesses = []
+    mockSupabase.data.tables.promotions = []
+    mockSupabase.data.tables.products = []
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear()
+  })
+
+  it('shows running promotions', async () => {
+    mockSupabase.data.tables.promotions = [
+      { id: 'pr1', title: 'Malaria week: 10% off', image_url: null, link_url: '/search', expires_at: null },
+    ]
+
+    render(
+      <MemoryRouter initialEntries={['/search?tab=products']}>
+        <Search />
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Featured promotions')).toBeInTheDocument()
+    expect(screen.getAllByText('Malaria week: 10% off').length).toBeGreaterThan(0)
+  })
+
+  it('falls back to trending products when no promotion is running', async () => {
+    mockSupabase.data.tables.products = [
+      { id: 'p1', name: 'Paracetamol 500mg', emoji: null, price: 500, show_price: true, business_id: 'b1', list_on_carefind: true, businesses: { name: 'MediPlus Pharmacy', show_prices: true } },
+    ]
+
+    render(
+      <MemoryRouter initialEntries={['/search?tab=products']}>
+        <Search />
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Trending Now')).toBeInTheDocument()
+    expect(screen.getAllByText('Paracetamol 500mg').length).toBeGreaterThan(0)
+  })
+})

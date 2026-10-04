@@ -5,7 +5,7 @@ import Shop from '../shop/Shop'
 import ShopHero from '../shop/ShopHero.jsx'
 import { useAuth } from '../../providers/AuthContext'
 import {
-  BadgeCheck, ChevronRight, MapPin, Search as SearchIcon, SearchX, ShoppingBag,
+  BadgeCheck, ChevronRight, MapPin, Pill as PillIcon, Search as SearchIcon, SearchX, ShoppingBag,
   Sparkles, Star, Stethoscope,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -14,7 +14,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Avatar, Empty, Toast, useToast } from '../../components/ui'
+import { Avatar, Card, Empty, Toast, useToast } from '../../components/ui'
 import StoryAvatar from '../../components/StoryAvatar.jsx'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
 import { markStoriesViewed } from '../social-feed/storyViews.js'
