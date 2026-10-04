@@ -158,3 +158,37 @@ export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.
   }
   return summary
 }
+
+/** Normalise an account name for comparison: trim, collapse whitespace, lower-case. */
+export function normalizeAccountName(name) {
+  return (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+const ACCOUNT_CHECK_FAILED = 'Could not verify account details. Check the bank and account number and try again.'
+
+/**
+ * Check that the typed account name belongs to the account number BEFORE any money is reserved, so a typo (or a
+ * hostile payee) cannot route a payout to the wrong account. If Paystack says the bank does not support name
+ * resolution, the typed name is accepted (the same UX as the resolve-account endpoint).
+ * -> { ok: true, accountName } | { ok: false, status, error }
+ * @param {(args: {bankCode: string, accountNumber: string}) => Promise<{accountName: string}>} resolveAccount
+ */
+export async function verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName }) {
+  let resolved
+  try {
+    resolved = await resolveAccount({ bankCode, accountNumber })
+  } catch (err) {
+    const msg = err.paystackMessage || err.message || ''
+    if (/not supported|does not support|unable to resolve|cannot resolve/i.test(msg)) {
+      const typed = String(accountName || '').trim()
+      return typed ? { ok: true, accountName: typed, unverified: true } : { ok: false, status: 400, error: ACCOUNT_CHECK_FAILED }
+    }
+    return { ok: false, status: 400, error: ACCOUNT_CHECK_FAILED }
+  }
+  if (!resolved || !resolved.accountName) return { ok: false, status: 400, error: ACCOUNT_CHECK_FAILED }
+  const submitted = normalizeAccountName(accountName)
+  if (!submitted || submitted !== normalizeAccountName(resolved.accountName)) {
+    return { ok: false, status: 400, error: 'Account name does not match the account number. Use the name registered with your bank.' }
+  }
+  return { ok: true, accountName: resolved.accountName }
+}

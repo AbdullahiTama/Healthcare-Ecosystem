@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  decideTransferAction, getTransferStatus, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals, IN_FLIGHT_GRACE_MS,
+  decideTransferAction, getTransferStatus, verifyBankAccount, normalizeAccountName, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals, IN_FLIGHT_GRACE_MS,
 } from '../withdrawals.js'
 
 const NOW = Date.parse('2026-10-04T12:00:00Z')
@@ -163,5 +163,30 @@ describe('sweepWithdrawals', () => {
     const s = fake({}, [])
     await sweepWithdrawals(s, 'carehub', { now: NOW, getStatus: async () => 'failed' })
     expect(s.calls[0].sweep).toBe('business_withdrawal_requests')
+  })
+})
+
+describe('verifyBankAccount', () => {
+  const args = { bankCode: '058', accountNumber: '0123456789', accountName: '  ada   OBI ' }
+  it('accepts a name that matches after normalisation, and returns the bank spelling', async () => {
+    expect(await verifyBankAccount(async () => ({ accountName: 'Ada Obi' }), args)).toEqual({ ok: true, accountName: 'Ada Obi' })
+    expect(normalizeAccountName('  ADA   Obi ')).toBe('ada obi')
+  })
+  it('refuses a name that does not belong to the account', async () => {
+    const r = await verifyBankAccount(async () => ({ accountName: 'Someone Else' }), args)
+    expect(r).toMatchObject({ ok: false, status: 400 })
+    expect(r.error).toMatch(/does not match/)
+  })
+  it('refuses when the bank cannot be asked (never pays an unverified account on a resolver failure)', async () => {
+    expect(await verifyBankAccount(async () => { throw new Error('timeout') }, args)).toMatchObject({ ok: false, status: 400 })
+    expect(await verifyBankAccount(async () => ({}), args)).toMatchObject({ ok: false })
+  })
+  it('a bank that does not support resolution falls back to the typed name, flagged unverified', async () => {
+    const err = Object.assign(new Error('x'), { paystackMessage: 'This bank is not supported' })
+    expect(await verifyBankAccount(async () => { throw err }, args)).toEqual({ ok: true, accountName: 'ada   OBI', unverified: true })
+    expect(await verifyBankAccount(async () => { throw err }, { ...args, accountName: '  ' })).toMatchObject({ ok: false })
+  })
+  it('an empty typed name never matches', async () => {
+    expect((await verifyBankAccount(async () => ({ accountName: 'Ada' }), { ...args, accountName: '' })).ok).toBe(false)
   })
 })

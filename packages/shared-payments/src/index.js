@@ -10,5 +10,6 @@ export { settleIntentForRequest } from './requestSettlement.js'
 export { createSettlementEffects } from './effects.js'
 export {
   IN_FLIGHT_GRACE_MS, WITHDRAWAL_KINDS, TRANSFER_EVENT_OUTCOMES, ATTENTION_RESULTS,
-  getTransferStatus, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
+  getTransferStatus, normalizeAccountName, verifyBankAccount, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
 } from './withdrawals.js'
+export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin } from './pin.js'
