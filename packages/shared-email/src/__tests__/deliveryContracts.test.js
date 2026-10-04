@@ -64,9 +64,9 @@ const OUTBOX_WRITER = 'packages/shared-email/src/EmailService.js'
 const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carehub/api/_handlers/notify-registration.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/notify-business-status.js': 'batch 3: move onto the catalog',
-  // Added 2026-10-04: introduced by the withdrawal-recovery work while this contract could not load (EmailService.js
-  // did not parse). Passes a literal subject, same as the webhook's identical withdrawal-failed email.
-  'apps/carefind/api/_lib/withdrawalRecovery.js': 'batch 3: move onto the catalog',
+  // The withdrawal emails (settled / failed), each with a literal subject. They were written in withdrawalRecovery.js
+  // and moved here unchanged by the phase 08 withdrawal engine, so this is the same offender under a new name.
+  'apps/carefind/api/_lib/withdrawalEffects.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/booking.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/verify-shop-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/paystack-webhook.js': 'batch 3: move onto the catalog',
