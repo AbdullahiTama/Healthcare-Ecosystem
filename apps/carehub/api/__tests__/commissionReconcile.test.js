@@ -1,57 +1,44 @@
 import { describe, it, expect, vi } from 'vitest'
-
-// Financial audit H-3: a plan payment settled by the shared Paystack webhook (the business closed the
-// tab before the redirect) never ran computeCommission, so the agent earned nothing. This reconciler
-// finds those payments and runs it.
-const h = vi.hoisted(() => ({ computeCommission: vi.fn() }))
-vi.mock('../_lib/commissions.js', () => ({ computeCommission: h.computeCommission }))
-
 import { reconcileCommissions } from '../_lib/commissionReconcile.js'
 
-function client({ referred = [], payments = [], commissions = [], flags = [] } = {}) {
-  const tableRows = { businesses: referred, plan_payments: payments, commissions, commission_review_flags: flags }
+// The commission itself is made by the database (see apps/carefind/src/test/payments/commissionEngine.db.test.js).
+// This job only repairs payments that predate the engine and reports inconsistencies.
+const client = ({ created = 0, problems = [], backfillError = null, reconcileError = null } = {}) => {
+  const calls = []
   return {
-    from: (table) => {
-      const q = {
-        select: () => q, in: () => q, not: () => q, gte: () => q, order: () => q,
-        limit: async () => ({ data: tableRows[table], error: null }),
-        then: (r) => r({ data: tableRows[table], error: null }),
-      }
-      return q
+    calls,
+    rpc: async (name, args) => {
+      calls.push({ name, args })
+      if (name === 'backfill_missing_commissions') return { data: created, error: backfillError }
+      if (name === 'reconcile_commissions') return { data: problems, error: reconcileError }
+      throw new Error(`unexpected rpc ${name}`)
     },
   }
 }
 
-const pay = (id, extra = {}) => ({ id, business_id: 'biz-1', naira_amount: 10000, is_first_payment: false, created_at: '2026-09-30T00:00:00Z', ...extra })
-
 describe('reconcileCommissions', () => {
-  it('does nothing when no business has a referring agent', async () => {
-    expect(await reconcileCommissions(client())).toEqual({ checked: 0, created: 0, flagged: 0, errors: 0 })
-    expect(h.computeCommission).not.toHaveBeenCalled()
+  it('backfills, then reconciles; a clean ledger reports nothing', async () => {
+    const c = client({ created: 3 })
+    expect(await reconcileCommissions(c)).toEqual({ created: 3, problems: 0, byKind: {}, errors: 0 })
+    expect(c.calls.map((x) => x.name)).toEqual(['backfill_missing_commissions', 'reconcile_commissions'])
+    expect(c.calls[0].args).toEqual({ p_limit: 500 })
   })
 
-  it('computes commission only for payments with neither a commission nor a review flag', async () => {
-    h.computeCommission.mockReset()
-    h.computeCommission.mockResolvedValue({ commission: { id: 'c' }, flag: null })
-    const c = client({
-      referred: [{ id: 'biz-1' }],
-      payments: [pay('p1', { is_first_payment: true }), pay('p2'), pay('p3')],
-      commissions: [{ payment_id: 'p2' }],
-      flags: [{ payment_id: 'p3' }],
-    })
-    const summary = await reconcileCommissions(c)
-    expect(summary).toEqual({ checked: 1, created: 1, flagged: 0, errors: 0 })
-    expect(h.computeCommission).toHaveBeenCalledTimes(1)
-    expect(h.computeCommission.mock.calls[0][1]).toEqual({ paymentId: 'p1', businessId: 'biz-1', nairaCharged: 10000, isFirstPayment: true })
+  it('reports and loudly logs every inconsistency, grouped by kind', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const c = client({ problems: [
+      { kind: 'wrong_rate', payment_id: 'p1', business_id: 'b1', agent_id: 'a1', detail: 'rate 0.5 for referral_bonus' },
+      { kind: 'wrong_rate', payment_id: 'p2', business_id: 'b2', agent_id: 'a1', detail: 'x' },
+      { kind: 'double_program', payment_id: 'p3', business_id: 'b3', agent_id: 'a2', detail: 'y' },
+    ] })
+    const r = await reconcileCommissions(c)
+    expect(r).toMatchObject({ problems: 3, byKind: { wrong_rate: 2, double_program: 1 } })
+    expect(err).toHaveBeenCalledTimes(3)
+    err.mockRestore()
   })
 
-  it('counts review flags and isolates a failing payment', async () => {
-    h.computeCommission.mockReset()
-    h.computeCommission
-      .mockResolvedValueOnce({ commission: null, flag: true })
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({ commission: { id: 'c' }, flag: null })
-    const c = client({ referred: [{ id: 'biz-1' }], payments: [pay('p1'), pay('p2'), pay('p3')] })
-    expect(await reconcileCommissions(c)).toEqual({ checked: 3, created: 1, flagged: 1, errors: 1 })
+  it('a database error is thrown (the cron reports the run as failed), never swallowed', async () => {
+    await expect(reconcileCommissions(client({ backfillError: { message: 'db down' } }))).rejects.toThrow('db down')
+    await expect(reconcileCommissions(client({ reconcileError: { message: 'nope' } }))).rejects.toThrow('nope')
   })
 })

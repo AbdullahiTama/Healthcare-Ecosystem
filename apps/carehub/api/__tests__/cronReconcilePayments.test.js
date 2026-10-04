@@ -11,7 +11,7 @@ const call = async (headers = {}, method = 'GET') => { const r = res(); await ha
 beforeEach(() => {
   process.env.CRON_SECRET = 'cron-secret'
   h.withdrawals.mockReset().mockResolvedValue({ checked: 2, refunded: 1, completed: 1, waiting: 0, errors: 0 })
-  h.commissions.mockReset().mockResolvedValue({ checked: 1, created: 1, flagged: 0, errors: 0 })
+  h.commissions.mockReset().mockResolvedValue({ checked: 1, created: 1, problems: 0, byKind: {}, errors: 0 })
 })
 
 describe('reconcile-payments cron (it moves money, so it fails closed)', () => {

@@ -2,14 +2,13 @@
 // Phase 06: CareHub plan payments and appointment payments through payment intents and the settlement
 // engine. The engine itself (SQL) is proven in carehubSettlement.db.test.js; here the handlers are checked
 // to price on the server, record the intent first, authorise by business, and settle only via the engine.
-const h = vi.hoisted(() => ({ db: null, provider: null, auth: null, commission: vi.fn(), enqueue: vi.fn(), flush: vi.fn() }))
+const h = vi.hoisted(() => ({ db: null, provider: null, auth: null, enqueue: vi.fn(), flush: vi.fn() }))
 
 vi.mock('../_lib/supabase.js', () => ({
   supabase: { from: (...a) => h.db.from(...a), rpc: (...a) => h.db.rpc(...a), auth: { admin: { getUserById: (...a) => h.db.auth.admin.getUserById(...a) } } },
 }))
 vi.mock('../_lib/verifyBusiness.js', () => ({ verifyBusiness: async () => h.auth }))
 vi.mock('../_lib/payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error() {} } }))
-vi.mock('../_lib/commissions.js', () => ({ computeCommission: (...a) => h.commission(...a) }))
 vi.mock('../../src/lib/emailService.js', () => ({ emailService: { enqueue: (...a) => h.enqueue(...a), processBatch: (...a) => h.flush(...a) } }))
 
 import initiatePlan from '../_handlers/initiate-plan-payment.js'
@@ -26,7 +25,6 @@ beforeEach(() => {
   h.auth = { business: { ...BIZ } }
   h.provider = createFakeProvider()
   h.db = createFakeSupabase()
-  h.commission.mockReset().mockResolvedValue({})
   h.enqueue.mockReset().mockResolvedValue(undefined)
   h.flush.mockReset().mockResolvedValue(undefined)
 })
@@ -95,26 +93,16 @@ describe('verify-plan-payment', () => {
   const settledAnswer = { outcome: 'settled', purpose: 'plan_renewal', payment_id: 'pay-1', new_expiry: '2026-11-05T00:00:00Z', is_first_payment: true, months: 1 }
   const verified = () => createFakeProvider({ verify: async () => verifiedPayment({ amountKobo: 833300, providerTransactionId: '777' }) })
 
-  it('settles through the engine with PAYSTACK\'s numbers, then computes the commission once and emails the owner', async () => {
+  it('settles through the engine with PAYSTACK\'s numbers, then emails the owner (the commission is made by the database, not here)', async () => {
     h.db = createFakeSupabase({ tables: { payment_intents: [seed()], businesses: [{ id: 'biz-1', name: 'Clinic', plan: 'growth', plan_expires_at: '2026-11-05T00:00:00Z', owner_name: 'Dr Obi', owner_email: 'o@x.com' }] }, rpc: rpc(settledAnswer) })
     h.provider = verified()
     const res = await post(verifyPlan, { reference: REF, months: 99, amount: 1 })
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual({ credited: true, newExpiry: '2026-11-05T00:00:00Z' })
     expect(h.db.calls.find((c) => c.op === 'rpc').args).toEqual({ p_reference: REF, p_provider: 'paystack', p_provider_txn_id: '777', p_amount_kobo: 833300, p_currency: 'NGN' })
-    expect(h.commission).toHaveBeenCalledTimes(1)
-    expect(h.commission).toHaveBeenCalledWith(expect.anything(), { paymentId: 'pay-1', businessId: 'biz-1', nairaCharged: 8333, isFirstPayment: true })
+    expect(h.db.calls.some((c) => c.table === 'commissions' || c.table === 'commission_review_flags')).toBe(false) // never written from Node
     expect(h.enqueue).toHaveBeenCalledTimes(1)
     expect(h.enqueue.mock.calls[0][0]).toMatchObject({ templateKey: 'subscription_created', toEmail: 'o@x.com', idempotencyKey: `subscription-started:${REF}` })
-  })
-
-  it('a commission failure never fails the renewal', async () => {
-    h.db = createFakeSupabase({ tables: { payment_intents: [seed()], businesses: [{ id: 'biz-1', name: 'C', owner_email: 'o@x.com' }] }, rpc: rpc(settledAnswer) })
-    h.provider = verified()
-    h.commission.mockRejectedValue(new Error('commission db down'))
-    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect((await post(verifyPlan, { reference: REF })).statusCode).toBe(200)
-    err.mockRestore()
   })
 
   it('refuses another business\'s reference before contacting Paystack or the engine', async () => {
@@ -130,23 +118,21 @@ describe('verify-plan-payment', () => {
     expect((await post(verifyPlan, { reference: REF })).statusCode).toBe(400)
   })
 
-  it('a replay (the webhook settled first): alreadyProcessed, no second email, commission attempted idempotently from the stored payment', async () => {
+  it('a replay (the webhook settled first): alreadyProcessed, no second email, nothing else done', async () => {
     h.db = createFakeSupabase({ tables: { payment_intents: [seed({ status: 'settled' })], plan_payments: [{ id: 'pay-9', reference: REF, is_first_payment: false }] } })
     const res = await post(verifyPlan, { reference: REF })
     expect(res.body).toEqual({ alreadyProcessed: true })
     expect(h.provider.verifyPayment).not.toHaveBeenCalled()
     expect(h.enqueue).not.toHaveBeenCalled()
-    expect(h.commission).toHaveBeenCalledWith(expect.anything(), { paymentId: 'pay-9', businessId: 'biz-1', nairaCharged: 8333, isFirstPayment: false })
   })
 
-  it('a payment the engine cannot apply is 409 needs-refund: no commission, no email, no renewal reported', async () => {
+  it('a payment the engine cannot apply is 409 needs-refund: no email, no renewal reported', async () => {
     h.db = createFakeSupabase({ tables: { payment_intents: [seed()] }, rpc: rpc({ outcome: 'needs_refund', purpose: 'plan_renewal', reason: 'amount_mismatch' }) })
     h.provider = verified()
     const res = await post(verifyPlan, { reference: REF })
     expect(res.statusCode).toBe(409)
     expect(res.body).toMatchObject({ needsRefund: true, reason: 'amount_mismatch' })
     expect(res.body.credited).toBeUndefined()
-    expect(h.commission).not.toHaveBeenCalled()
     expect(h.enqueue).not.toHaveBeenCalled()
   })
 

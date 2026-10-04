@@ -1,7 +1,8 @@
-// CareHub Referral Agent program — single source of truth for the money rules
-// (plan §3). Referenced by the client for display only and by the server-side
-// commission job (api/_lib/commissions.js) for the actual math — any rate or
-// policy change is a one-line edit here, never a schema change.
+// CareHub Referral Agent program - the money rules (plan 3), for DISPLAY on the client.
+// The commission itself is computed by the database (renew_business_plan ->
+// _record_referral_commission) from financial_config: referral_first_payment_rate,
+// referral_residual_rate and referral_accrue_while_inactive. These constants must match
+// those rows (a test asserts it); change the rate in financial_config, not only here.
 export const REFERRAL_RATES = {
   referral_bonus: 0.40,   // one-time, on the business's FIRST successful payment
   residual: 0.05,         // recurring, on every subsequent payment

@@ -6,8 +6,8 @@ import { reconcileCommissions } from '../_lib/commissionReconcile.js'
 //   * business withdrawals still pending/processing after the grace period (the Paystack
 //     transfer call failed ambiguously, or its webhook never arrived) - checked against
 //     Paystack by reference: succeeded -> completed, failed/never created -> refunded.
-//   * plan payments from referred businesses that never earned their agent a commission
-//     (settled by the webhook, so the redirect handler that computes it never ran).
+//   * referral commissions: backfill payments that predate the commission engine and report inconsistencies
+//     (new commissions are created by the database inside the plan renewal itself).
 //
 // This endpoint moves money, so like process-email-outbox it fails closed on CRON_SECRET.
 export default async function handler(req, res) {
