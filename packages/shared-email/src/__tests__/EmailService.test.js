@@ -915,3 +915,60 @@ describe('send-path hardening', () => {
   })
 })
 
+// ── Logging that has to be usable when something goes wrong ─────────────────────────────────────────────────────────
+describe('outbox logging', () => {
+  const service = (db, options = {}) => new EmailService({ supabase: db, writeRetryDelayMs: 0, ...options })
+  const events = (spy) => spy.mock.calls
+    .map(([line]) => { try { return JSON.parse(line) } catch { return null } })
+    .filter(Boolean)
+
+  it('logs a numeric latency measured from the row\'s created_at, not NaN', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [row({ created_at: new Date(Date.now() - 5000).toISOString() })] })
+
+    await service(db).processBatch()
+
+    const sent = events(log).find((e) => e.event === 'send_ok' && e.email_outbox_id)
+    expect(typeof sent.latency_ms).toBe('number')
+    expect(sent.latency_ms).toBeGreaterThanOrEqual(4000)
+    log.mockRestore()
+  })
+
+  it('keeps numbers as numbers in log lines', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+
+    await service(db).processBatch()
+
+    const sent = events(log).find((e) => e.event === 'send_ok' && e.email_outbox_id)
+    expect(sent.attempt_count).toBe(1)
+    log.mockRestore()
+  })
+
+  it('stamps the invoking request\'s id on its log lines, so a cron run can be followed end to end', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const db = rolloutDb({ settings: {}, rows: [row()] })
+    sendEmailMock.mockResolvedValueOnce({ success: true, data: { id: 'resend-1' } })
+
+    await service(db, { requestId: 'req-from-cron-123' }).processBatch()
+
+    const lines = events(log)
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every((e) => e.request_id === 'req-from-cron-123')).toBe(true)
+    log.mockRestore()
+  })
+
+  it('can be imported on a runtime that has no global crypto', async () => {
+    const saved = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    vi.resetModules()
+    delete globalThis.crypto
+    try {
+      await expect(import('../EmailService.js')).resolves.toBeTruthy()
+    } finally {
+      if (saved) Object.defineProperty(globalThis, 'crypto', saved)
+    }
+  })
+})
+

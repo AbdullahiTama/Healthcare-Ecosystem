@@ -86,7 +86,7 @@ export function boundedInt(raw, fallback, min, max) {
 // Correlates every log line and email_logs insert with a request ID so operators
 // can trace a complete end-to-end flow from API request → worker → provider → DB.
 // Falls back to a deterministic per-process ID when none is supplied.
-let requestId = crypto?.randomUUID?.() || 'worker-' + Date.now()
+let requestId = globalThis.crypto?.randomUUID?.() || 'worker-' + Date.now()
 
 // Structured, single line, no addresses and no rendered content. Correlating by
 // outbox row id is enough to trace a send; the recipient and the payload stay
@@ -190,7 +190,7 @@ export class EmailService {
     // Per-row state: attempts, status, provider message id, timestamps
     this.rowState = new Map() // id -> { attempts, status, providerMessageId, createdAt, sentAt, deliveredAt }
     // Request ID from the invoking cron/handler (overrides module-level default)
-    this.requestId = options.requestId || globalThis._cronRequestId || crypto?.randomUUID?.() || 'worker-' + Date.now()
+    this.requestId = options.requestId || globalThis._cronRequestId || globalThis.crypto?.randomUUID?.() || 'worker-' + Date.now()
   }
 
   async _getDb() {
@@ -302,6 +302,8 @@ export class EmailService {
   async processBatch({ startedAt = Date.now() } = {}) {
     const { sendEmail, getTemplate } = await deps()
     const db = await this._getDb()
+    // Every log line of this run carries the invoking request's id (see logEvent).
+    requestId = this.requestId
 
     // dispatch_paused is the documented rollback lever and it existed in the
     // schema with no code reading it. Honouring it here means business writes
@@ -498,7 +500,7 @@ export class EmailService {
       attempts: row.attempts || 0,
       status: 'sent',
       providerMessageId: providerId,
-      createdAt: row.createdAt,
+      createdAt: row.created_at,
       sentAt: new Date().toISOString(),
     })
     this.metrics.sent++
@@ -512,10 +514,10 @@ export class EmailService {
       attempt_count: this.rowState.get(row.id)?.attempts || 0,
       status: 'sent',
       provider_message_id: providerId ?? null,
-      latency_ms: new Date().getTime() - new Date(row.createdAt).getTime(),
+      latency_ms: new Date().getTime() - new Date(row.created_at).getTime(),
       error_category: null,
       retry_count: (row.attempts || 0),
-      created_timestamp: row.createdAt,
+      created_timestamp: row.created_at,
       sent_timestamp: new Date().toISOString(),
       delivery_timestamp: new Date().toISOString(),
       metadata: {
@@ -549,7 +551,7 @@ export class EmailService {
       attempts: newAttempts,
       status: 'failed',
       providerMessageId: row.provider_message_id || null,
-      createdAt: row.createdAt,
+      createdAt: row.created_at,
       sentAt: null,
       deliveredAt: null,
     })
@@ -565,10 +567,10 @@ export class EmailService {
       attempt_count: newAttempts,
       status: 'failed',
       provider_message_id: row.provider_message_id || null,
-      latency_ms: new Date().getTime() - new Date(row.createdAt).getTime(),
+      latency_ms: new Date().getTime() - new Date(row.created_at).getTime(),
       error_category: errorCategory,
       retry_count: newAttempts,
-      created_timestamp: row.createdAt,
+      created_timestamp: row.created_at,
       sent_timestamp: null,
       delivery_timestamp: null,
       metadata: {
@@ -604,7 +606,7 @@ export class EmailService {
       attempts: newAttempts,
       status: 'retrying',
       providerMessageId: row.provider_message_id || null,
-      createdAt: row.createdAt,
+      createdAt: row.created_at,
       sentAt: null,
       deliveredAt: null,
     })
@@ -619,10 +621,10 @@ export class EmailService {
       attempt_count: newAttempts,
       status: 'retrying',
       provider_message_id: row.provider_message_id || null,
-      latency_ms: new Date().getTime() - new Date(row.createdAt).getTime(),
+      latency_ms: new Date().getTime() - new Date(row.created_at).getTime(),
       error_category: result && result.retryable ? 'retryable' : 'permanent',
       retry_count: newAttempts,
-      created_timestamp: row.createdAt,
+      created_timestamp: row.created_at,
       sent_timestamp: null,
       delivery_timestamp: null,
       metadata: {
