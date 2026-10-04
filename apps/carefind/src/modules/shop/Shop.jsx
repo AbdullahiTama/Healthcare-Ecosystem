@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Package, Heart, ShoppingCart, SlidersHorizontal, ChevronDown, Lock } from 'lucide-react'
+import { Heart, ShoppingCart, SlidersHorizontal, ChevronDown, ChevronRight, Lock } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { Card, Toast } from '../../components/ui'
 import { useToast } from '../../components/ui'
@@ -18,8 +18,9 @@ const shopRepository = createShopRepository()
 
 // Embedded in Search, the Filters sheet owns price/category/Rx/stock/sort and passes them as `filters`; Shop's own
 // controls only exist (and only matter) when it renders standalone. `onCategoriesChange` lets the sheet offer this
-// catalogue's categories, since Search's own category list is only fetched for the other tabs.
-export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false, filters, onCategoriesChange }) {
+// catalogue's categories, since Search's own category list is only fetched for the other tabs. `userCoords` is the
+// buyer's location (Search already asked for it) so each card can show how far the seller is.
+export default function Shop({ segment: initialSegment = 'all', query: externalQuery = '', embedded = false, filters, onCategoriesChange, userCoords }) {
   const { count, addItem } = useCart()
   const location = useLocation()
   const { msg: toastMsg, type: toastType, show: showToast } = useToast()
@@ -37,6 +38,7 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
   const [ratings, setRatings] = useState({})
   const { isMobile } = useBreakpoint()
   const [showFilters, setShowFilters] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const touchStartY = useRef(null)
@@ -141,8 +143,11 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
     return rows
   }, [products, brand, active.category, active.priceMin, active.priceMax, active.showRxOnly, active.inStockOnly, active.sort, ratings])
 
-  const featured = filtered.slice(0, 6)
-  const grid = filtered
+  // The unfiltered landing shows a featured row; any query, segment or filter shows every match straight away.
+  const filtersActive = active.priceMin !== '' || active.priceMax !== '' || active.category !== 'all' || active.showRxOnly || !active.inStockOnly || active.sort !== 'popular'
+  const isFiltered = externalQuery.trim() !== '' || segment !== 'all' || brand !== 'all' || filtersActive
+  const canCollapse = !isFiltered && filtered.length > 4
+  const collapsed = canCollapse && !showAll
   const recent = useMemo(() => {
     if (!recentIds.length) return []
     const map = new Map(filtered.map(r => [r.id, r]))
@@ -301,46 +306,40 @@ export default function Shop({ segment: initialSegment = 'all', query: externalQ
       )}
       {!embedded && <div style={{ fontSize:11, color: theme.textMid, marginBottom: 12 }}>{filtered.length} products {inStockOnly ? '· in stock' : ''} · {showRxOnly ? 'Rx only · ' : ''}sorted {sort}</div>}
 
-      {/* Featured horizontal row — cf-hscroll hides scrollbar track to prevent hover jitter */}
-      {featured.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: theme.navy, marginBottom: 8 }}>Featured</div>
-          <div className="cf-hscroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }} role="list" aria-label="Featured products">
-            {featured.map(row => {
-              const p = row.products
-              const priceKobo = row.ecommerce_price_kobo ?? (p.price != null ? Math.round(p.price * 100) : null)
-              const priceLabel = priceKobo != null ? `₦${(priceKobo/100).toLocaleString()}` : 'Ask for price'
-              const thumb = row.primary_image_url || p.image_url || null
-              const wished = hasWishlist(row.id)
-              return (
-                <div key={row.id} style={{ position:'relative', flex:'0 0 160px' }} role="listitem">
-                  <Link to={`/shop/${row.id}`} style={{ textDecoration: 'none' }}>
-                    <Card style={{ padding: 10, height: 180, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ height: 80, borderRadius: 8, background: thumb ? `url(${thumb}) center/cover` : theme.tealMist, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}>
-                        {!thumb && <Package size={24} />}
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: theme.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: theme.tealDeep }}>{priceLabel}</div>
-                      {p.sale_type && <span style={{ fontSize: 10, fontWeight: 700, color: theme.textLight, border: `1px solid ${theme.border}`, background: '#fff', padding: '2px 6px', borderRadius: 6, alignSelf: 'flex-start' }}>{p.sale_type}</span>}
-                    </Card>
-                  </Link>
-                  <button onClick={(e)=>{ e.preventDefault(); toggleWishlist(row.id)}} aria-label={wished ? 'Remove from wishlist' : 'Add to wishlist'} style={{ position:'absolute', top:6, right:6, width:28, height:28, borderRadius:'50%', border:`1px solid ${theme.border}`, background: wished ? theme.tealDeep : '#fff', color: wished ? '#fff' : theme.navy, display:'grid', placeItems:'center', cursor:'pointer' }}><Heart size={14} fill={wished ? '#fff' : 'none'} /></button>
-                </div>
-              )
-            })}
-          </div>
+      {/* Section header: "Featured products" on the landing, a result count once the buyer has searched or filtered */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, margin: '4px 0 12px' }}>
+        <div style={{ minWidth: 0 }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, letterSpacing: '-0.02em', color: theme.navy }}>{isFiltered ? 'Products' : 'Featured products'}</h2>
+          <p style={{ margin: '2px 0 0 0', fontSize: 13, color: theme.textMid }}>
+            {isFiltered ? `${filtered.length} ${filtered.length === 1 ? 'product' : 'products'} found` : 'Health products from trusted sellers near you.'}
+          </p>
         </div>
-      )}
+        {canCollapse && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+            aria-controls="shop-product-grid"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 44, padding: '0 4px', background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 700, fontSize: 13.5, cursor: 'pointer', flexShrink: 0 }}
+          >
+            {showAll ? 'Show less' : 'View all'}
+            <ChevronRight size={16} aria-hidden="true" style={{ transform: showAll ? 'rotate(90deg)' : 'none', transition: `transform ${theme.motion.fast}` }} />
+          </button>
+        )}
+      </div>
 
-      {/* Grid catalog — now via shared ProductGrid for consistent 2-col mobile */}
+      {/* Grid catalog — shared ProductGrid; collapsed to one row until "View all" */}
       <ProductGrid
-        rows={grid}
+        gridId="shop-product-grid"
+        rows={filtered}
         loading={false}
         error=""
+        collapsed={collapsed}
         onAddToCart={handleAddToCart}
         onToggleWishlist={toggleWishlist}
         hasWishlist={hasWishlist}
         ratings={ratings}
+        userCoords={userCoords}
         variant="shop"
         emptyTitle={externalQuery ? `No products found for "${externalQuery}"` : 'No products match'}
         emptyHint={externalQuery ? 'Try a different search term or adjust filters.' : 'Try adjusting filters or search.'}

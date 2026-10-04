@@ -66,7 +66,10 @@ describe('Shop embedded: filters from the Search sheet', () => {
 
   it('includes out-of-stock products when "in stock only" is switched off', async () => {
     mount({ filters: { ...DEFAULTS, inStockOnly: false } })
-    await waitFor(() => expect(shown()).toHaveLength(3))
+    // The sold-out product appears, but its button says so and cannot be used to add it.
+    const soldOut = await screen.findByRole('button', { name: 'Charlie is out of stock' })
+    expect(soldOut).toBeDisabled()
+    expect(shown()).toEqual(['Bravo', 'Alpha'])
   })
 
   it('applies the category', async () => {

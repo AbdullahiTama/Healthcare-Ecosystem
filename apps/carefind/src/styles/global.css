@@ -497,11 +497,73 @@ body {
   }
 }
 
-/* ── Marketplace grid — moved from ProductGrid inline <style> to avoid per-render CSSOM churn */
+/* ── Marketplace grid — moved from ProductGrid inline <style> to avoid per-render CSSOM churn.
+   Columns follow the width the grid actually gets (container query), not the viewport: on desktop the page sits in
+   AppShell's capped main column beside a sidebar, so a 1280px window can still mean a ~700px grid. Browsers without
+   container queries keep the stacked two-column layout. The container is a dedicated wrapper (not a page root) because
+   container-type makes it the containing block for fixed-position descendants. */
+.cf-mp-container { container-type: inline-size; container-name: cfmp; }
 .mp-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
-@media (min-width: 768px) { .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 1024px) { .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .mp-grid > * { min-width: 0; }
+@container cfmp (min-width: 640px) { .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container cfmp (min-width: 800px) { .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container cfmp (min-width: 1000px) { .mp-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* "Featured" view of the shop grid: show one tidy row (two on phones) until the buyer taps View all. Hidden cards stay
+   in the DOM but display:none removes them from layout, tab order and the accessibility tree. The cut-off follows the
+   column count above so the last row is never ragged. The ranges don't overlap and the hide is !important because the
+   list-item wrappers set display:flex inline, which would otherwise win. */
+@container cfmp (max-width: 639.98px) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@supports not (container-type: inline-size) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@container cfmp (min-width: 640px) and (max-width: 799.98px) { .mp-grid--collapsed > :nth-child(n+4) { display: none !important; } }
+@container cfmp (min-width: 800px) and (max-width: 999.98px) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@container cfmp (min-width: 1000px) { .mp-grid--collapsed > :nth-child(n+6) { display: none !important; } }
+
+/* ── Shop hero banner (modules/shop/ShopHero.jsx) — stacked on phones, copy + portrait beside it on mid widths, and
+   copy + portrait + trust points in one row once there is room. Sized by its own container, like the grid. */
+.cf-shop-hero-wrap { container-type: inline-size; container-name: cfhero; margin: 0 0 12px; }
+.cf-shop-hero {
+  display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr);
+  padding: 18px; border-radius: 20px; overflow: hidden;
+  background: var(--teal-mist);
+}
+.cf-shop-hero__img { display: none; border-radius: 16px; object-fit: cover; object-position: center 20%; width: 100%; height: 100%; max-height: 190px; }
+.cf-shop-hero__points { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+.cf-shop-hero__points::-webkit-scrollbar { display: none; }
+.cf-shop-hero__point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: 8px 12px 8px 8px; border-radius: 999px; background: rgba(255,255,255,0.7); }
+.cf-shop-hero__icon { width: 34px; height: 34px; border-radius: 999px; background: #fff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cf-shop-hero__point-title { display: block; font-size: 13px; font-weight: 700; color: var(--color-navy); white-space: nowrap; }
+.cf-shop-hero__point-text { display: none; font-size: 12px; color: var(--color-text-mid); }
+@container cfhero (min-width: 520px) {
+  .cf-shop-hero { grid-template-columns: minmax(0, 1fr) 170px; align-items: center; padding: 20px 22px; }
+  .cf-shop-hero__img { display: block; grid-column: 2; grid-row: 1; }
+  .cf-shop-hero__points { grid-column: 1 / -1; grid-row: 2; }
+}
+@container cfhero (min-width: 820px) {
+  .cf-shop-hero { grid-template-columns: minmax(0, 1.25fr) 220px minmax(0, 0.95fr); gap: 24px; padding: 22px 28px; }
+  .cf-shop-hero__img { grid-column: 2; grid-row: 1; max-height: 176px; }
+  .cf-shop-hero__points { grid-column: 3; grid-row: 1; flex-direction: column; overflow: visible; gap: 12px; }
+  .cf-shop-hero__point { padding: 0; background: none; border-radius: 0; gap: 12px; }
+  .cf-shop-hero__icon { width: 40px; height: 40px; background: rgba(255,255,255,0.75); }
+  .cf-shop-hero__point-title { font-size: 13.5px; }
+  .cf-shop-hero__point-text { display: block; }
+}
+
+/* ── Marketplace search card: query + Search on the first row, location + Filters on the second; one row when the card
+   is wide enough. Container-sized for the same AppShell reason as the grid. */
+.cf-search-card-wrap { container-type: inline-size; container-name: cfsearch; }
+.cf-search-card {
+  display: grid; gap: 8px; align-items: center; padding: 8px;
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "q go" "loc filt";
+  background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--elevation-1);
+}
+.cf-search-card__q { grid-area: q; }
+.cf-search-card__loc { grid-area: loc; }
+.cf-search-card__go { grid-area: go; }
+.cf-search-card__filt { grid-area: filt; }
+@container cfsearch (min-width: 720px) {
+  .cf-search-card { grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) auto auto; grid-template-areas: "q loc go filt"; }
+}
 
 /* Market marquee — CSS only, GPU via transform, respects reduced motion */
 @keyframes cf-marquee {

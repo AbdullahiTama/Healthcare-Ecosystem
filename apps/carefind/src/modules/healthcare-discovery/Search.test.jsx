@@ -364,3 +364,61 @@ describe('Search tab <-> URL sync under keyed Routes', () => {
     expect(screen.getByPlaceholderText('Search medication, facility, professional...')).toHaveValue('amoxicillin')
   })
 })
+
+// The Shop tab opens with the marketplace banner and a single search card (query, location, Search, Filters).
+describe('Search — shop banner and search card', () => {
+  beforeEach(() => {
+    mockSupabase.data.tables.businesses = []
+    mockSupabase.data.tables.products = []
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear()
+  })
+
+  it('shows the marketplace banner on the Shop tab', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=shop']}>
+        <Search />
+      </MemoryRouter>
+    )
+    expect(await screen.findByRole('heading', { name: 'Find trusted health products near you' })).toBeInTheDocument()
+    expect(screen.getByText('Verified sellers')).toBeInTheDocument()
+  })
+
+  it('does not show the banner on the other tabs', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses']}>
+        <Search />
+      </MemoryRouter>
+    )
+    await screen.findByLabelText('Search medication, facility, professional')
+    expect(screen.queryByRole('heading', { name: 'Find trusted health products near you' })).toBeNull()
+  })
+
+  it('keeps query, location, Search and Filters in one search form', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses']}>
+        <Search />
+      </MemoryRouter>
+    )
+    const form = await screen.findByRole('search', { name: 'Marketplace search' })
+    expect(form).toContainElement(screen.getByLabelText('Search medication, facility, professional'))
+    expect(form).toContainElement(screen.getByLabelText('Filter by city or state'))
+    expect(form).toContainElement(screen.getByRole('button', { name: 'Search' }))
+    expect(form).toContainElement(screen.getByRole('button', { name: /filters/i }))
+  })
+
+  it('opens the filters without submitting the search form', async () => {
+    render(
+      <MemoryRouter initialEntries={['/search?tab=businesses']}>
+        <Search />
+      </MemoryRouter>
+    )
+    const input = await screen.findByLabelText('Search medication, facility, professional')
+    fireEvent.change(input, { target: { value: 'amoxicillin' } })
+    const filters = screen.getByRole('button', { name: /filters/i })
+    expect(filters).toHaveAttribute('type', 'button')
+
+    fireEvent.click(filters)
+    // A submit would have recorded the query as a recent search and put it in the URL.
+    expect(localStorage.getItem('carefind_recent_searches')).toBeNull()
+  })
+})

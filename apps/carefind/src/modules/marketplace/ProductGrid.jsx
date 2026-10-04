@@ -46,6 +46,9 @@ export default function ProductGrid({
   onToggleWishlist,
   hasWishlist,
   ratings,
+  userCoords,
+  collapsed = false,
+  gridId,
   emptyTitle = 'No products found',
   emptyHint = 'Try another search or filter.',
   skeletonType = 'grid',
@@ -54,7 +57,7 @@ export default function ProductGrid({
 
   if (loading) {
     if (skeletonType === 'list') return <BusinessSkeleton />
-    return <GridSkeleton />
+    return <div className="cf-mp-container"><GridSkeleton /></div>
   }
   if (error)
     return (
@@ -72,24 +75,26 @@ export default function ProductGrid({
   }
 
   return (
-    <div role="list" aria-label="Products" className="mp-grid" style={{ alignItems: 'stretch' }}>
-
-      {rows.map((row) => {
-        const id = row.id || row.products?.id
-        return (
-          <div key={id} role="listitem" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <ProductCard
-              row={row}
-              onAddToCart={onAddToCart}
-              onToggleWishlist={onToggleWishlist}
-              wished={hasWishlist ? hasWishlist(id) : false}
-              rating={ratings?.[id]}
-              variant={variant}
-            />
-          </div>
-        )
-      })}
+    <div className="cf-mp-container">
+      <div id={gridId} role="list" aria-label="Products" className={collapsed ? 'mp-grid mp-grid--collapsed' : 'mp-grid'} style={{ alignItems: 'stretch' }}>
+        {rows.map((row) => {
+          const id = row.id || row.products?.id
+          return (
+            <div key={id} role="listitem" style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <ProductCard
+                row={row}
+                onAddToCart={onAddToCart}
+                onToggleWishlist={onToggleWishlist}
+                wished={hasWishlist ? hasWishlist(id) : false}
+                rating={ratings?.[id]}
+                userCoords={userCoords}
+                variant={variant}
+              />
+            </div>
+          )
+        })}
       </div>
+    </div>
   )
 }
 

@@ -2,6 +2,7 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import Shop from '../shop/Shop'
+import ShopHero from '../shop/ShopHero.jsx'
 import { useAuth } from '../../providers/AuthContext'
 import {
   BadgeCheck, ChevronRight, MapPin, Search as SearchIcon, SearchX, ShoppingBag,
@@ -286,10 +287,13 @@ function Search() {
         <MarketplaceTabs activeTab={tab} onChange={setTab} />
       </div>
 
-      {/* 3 — Search Bar */}
-      <div style={{ padding: '0 0 12px' }}>
-        <form onSubmit={runSearch} role="search" aria-label="Marketplace search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+      {/* 2b — Shop banner (Shop tab only) */}
+      {tab === 'shop' && <ShopHero />}
+
+      {/* 3 — Search card: query + Search, then location + Filters (one row on desktop — see .cf-search-card) */}
+      <div className="cf-search-card-wrap" style={{ padding: '0 0 12px', position: 'relative' }}>
+        <form onSubmit={runSearch} role="search" aria-label="Marketplace search" className="cf-search-card">
+          <div className="cf-search-card__q" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <SearchIcon size={18} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
             <input
               ref={searchInputRef}
@@ -318,13 +322,44 @@ function Search() {
               }}
             />
           </div>
+
+          <div className="cf-search-card__loc" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <MapPin size={16} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
+            <input
+              value={stateFilter}
+              onChange={(e) => setStateFilter(e.target.value)}
+              placeholder="City or state"
+              aria-label="Filter by city or state"
+              list="carefind-locations"
+              style={{
+                width: '100%',
+                minHeight: 44,
+                padding: '9px 12px 9px 36px',
+                fontSize: 14,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 12,
+                boxSizing: 'border-box',
+                fontFamily: theme.fontFamily,
+                background: '#fff',
+              }}
+            />
+            <datalist id="carefind-locations">
+              {NG_STATES.map(s => <option key={s} value={s} />)}
+            </datalist>
+          </div>
+
           <button
             type="submit"
             aria-label="Search"
+            className="cf-search-card__go"
             style={{
               minHeight: 44,
-              padding: '0 20px',
-              background: theme.tealDeep,
+              padding: '0 22px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              background: theme.tealGradient,
               color: '#fff',
               border: 'none',
               borderRadius: 12,
@@ -336,15 +371,20 @@ function Search() {
               WebkitTapHighlightColor: 'transparent',
             }}
           >
+            <SearchIcon size={16} aria-hidden="true" />
             Search
           </button>
+
+          <div className="cf-search-card__filt">
+            <FilterFAB onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
+          </div>
         </form>
         {/* Recent searches dropdown */}
         {showRecent && recentSearches.length > 0 && (
           <div ref={recentRef} role="listbox" aria-label="Recent searches" style={{
             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
             background: '#fff', border: `1px solid ${theme.border}`, borderRadius: 12,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: -8, overflow: 'hidden',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px 6px', borderBottom: `1px solid ${theme.border}` }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textLight, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent</span>
@@ -360,35 +400,6 @@ function Search() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* 4 — Location + Filter FAB (one row) */}
-      <div style={{ padding: '0 0 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <MapPin size={16} color={theme.textMid} aria-hidden="true" style={{ position: 'absolute', left: 12, pointerEvents: 'none' }} />
-          <input
-            value={stateFilter}
-            onChange={(e) => setStateFilter(e.target.value)}
-            placeholder="City or state"
-            aria-label="Filter by city or state"
-            list="carefind-locations"
-            style={{
-              width: '100%',
-              minHeight: 40,
-              padding: '9px 12px 9px 36px',
-              fontSize: 13,
-              border: `1px solid ${theme.border}`,
-              borderRadius: 10,
-              boxSizing: 'border-box',
-              fontFamily: theme.fontFamily,
-              background: '#fff',
-            }}
-          />
-        </div>
-        <FilterFAB onClick={() => setFilterOpen(true)} activeCount={activeFilterCount} />
-        <datalist id="carefind-locations">
-          {NG_STATES.map(s => <option key={s} value={s} />)}
-        </datalist>
       </div>
 
       {/* Specialty filter — professionals tab only */}
@@ -476,14 +487,6 @@ function Search() {
 
       {/* 6 — Marketplace Content */}
       <div style={{ paddingBottom: 16 }}>
-        {/* Shop heading */}
-        {tab === 'shop' && (
-          <div style={{ marginBottom: 12 }}>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: theme.navy, letterSpacing: '-0.02em' }}>Shop</h2>
-            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: theme.textMid }}>Health products from trusted sellers near you.</p>
-          </div>
-        )}
-
         {/* Loading states */}
         {loading && tab !== 'shop' && (
           <ProductGrid rows={[]} loading={true} skeletonType={tab === 'products' ? 'grid' : 'list'} variant={tab === 'products' ? 'products' : 'shop'} />
@@ -497,6 +500,7 @@ function Search() {
             embedded
             filters={{ priceMin, priceMax, category: filterCategory, showRxOnly, inStockOnly, sort }}
             onCategoriesChange={setShopCategories}
+            userCoords={userCoords}
           />
         )}
 
