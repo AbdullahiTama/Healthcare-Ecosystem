@@ -247,3 +247,20 @@ create table public.agent_earnings (
   agent_id uuid not null,
   payment_reference text not null
 );
+
+-- ---- CareHub business withdrawals (Phase 08), as read from production. -------------------------------
+create table public.business_withdrawal_requests (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null,
+  amount integer not null,
+  bank_name text,
+  account_number text,
+  account_name text,
+  status text not null default 'pending',
+  paystack_reference text,
+  paystack_transfer_code text,
+  paystack_recipient_code text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index business_withdrawal_requests_paystack_reference_uniq on public.business_withdrawal_requests (paystack_reference) where paystack_reference is not null;
