@@ -5,17 +5,9 @@ import { supabase } from '../../config/supabaseClient'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { Button, Card, Inp } from '../../components/ui'
-import { AlertCircle, ArrowLeft, MailCheck, ShieldCheck, Tag, Truck } from 'lucide-react'
+import { AlertCircle, ArrowLeft, MailCheck } from 'lucide-react'
 import Logo from '../social-feed/Logo.jsx'
-
-// Real, existing features only — no invented stats or testimonials (there's
-// no real usage data to quote yet), mirrors this file's own "specific over
-// fabricated" writing rule.
-const TRUST_POINTS = [
-  { Icon: ShieldCheck, title: 'Verified sellers', text: 'Trusted pharmacies & suppliers' },
-  { Icon: Truck, title: 'Fast & reliable', text: 'Get products near you' },
-  { Icon: Tag, title: 'Compare prices', text: 'Find the best deals' },
-]
+import { TRUST_POINTS } from '../marketplace/trustPoints.js'
 
 const PHOTO_ALT = 'A smiling pharmacist in a white coat checking her phone in a pharmacy'
 
