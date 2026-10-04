@@ -64,15 +64,11 @@ const OUTBOX_WRITER = 'packages/shared-email/src/EmailService.js'
 const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carehub/api/_handlers/notify-registration.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/notify-business-status.js': 'batch 3: move onto the catalog',
-  'apps/carehub/api/_handlers/verify-plan-payment.js': 'batch 3: move onto the catalog',
-  'apps/carehub/api/_handlers/verify-appointment-payment.js': 'batch 3: move onto the catalog',
   // Added 2026-10-04: introduced by the withdrawal-recovery work while this contract could not load (EmailService.js
   // did not parse). Passes a literal subject, same as the webhook's identical withdrawal-failed email.
   'apps/carefind/api/_lib/withdrawalRecovery.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/booking.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/verify-booking-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/verify-shop-payment.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/verify-subscription-payment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/paystack-webhook.js': 'batch 3: move onto the catalog',
   // Added in batch 2. The original detection required a `subject:` literal, which
   // missed every producer that forwards a variable, and these four are the
@@ -87,10 +83,19 @@ const KNOWN_SUBJECT_OFFENDERS = {
   // of the rollout. Batch 3 centralizes subjects through the catalog instead.
   'apps/carefind/api/_handlers/cancel-appointment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/initiate-withdrawal.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/verify-consultation-payment.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/verify-payment.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/initiate-business-withdrawal.js': 'batch 3: move onto the catalog',
+  // Added 2026-10-04. The finance refactor moved the settlement confirmations out of six verify-* handlers (which
+  // left this list) into one shared module. Its five literal subjects are the same ones those handlers carried, so
+  // this is six offenders becoming one, not six being fixed.
+  'packages/shared-payments/src/effects.js': 'batch 3: move onto the catalog',
 }
+
+// Files that build an email message and hand it to a callback the app wires to enqueue, so they never call enqueue
+// themselves and the call-site pattern below cannot see them. Without this list, moving a producer behind a callback
+// makes it vanish from the offender set while it still chooses its own subject.
+const INDIRECT_PRODUCERS = new Set([
+  'packages/shared-payments/src/effects.js',
+])
 
 // The services themselves and the auth path. authEmail.js is exempt because
 // enqueue_business_email_event rejects the auth category outright, so the auth
@@ -143,7 +148,7 @@ describe('subject authority contract', () => {
   // the request body.
   const SUBJECT_AT_CALL_SITE = /\bsubject\s*[:,}]/
   const offenders = SOURCE
-    .filter((f) => /(?:enqueue|enqueueOutbox)\s*\(/.test(read(f)))
+    .filter((f) => INDIRECT_PRODUCERS.has(rel(f)) || /(?:enqueue|enqueueOutbox)\s*\(/.test(read(f)))
     .filter((f) => SUBJECT_AT_CALL_SITE.test(read(f)))
     .map(rel)
     .filter((p) => !SUBJECT_EXEMPT.has(p))
@@ -167,6 +172,12 @@ describe('subject authority contract', () => {
     expect(SUBJECT_AT_CALL_SITE.test("await emailService.enqueue({ subject: x })")).toBe(true)
     expect(SUBJECT_AT_CALL_SITE.test("await emailService.enqueue({ toEmail })")).toBe(false)
   })
+
+  it('still scans every indirect producer it names', () => {
+    // A renamed or deleted file would silently drop out of the scan.
+    const scanned = new Set(SOURCE.map(rel))
+    for (const path of INDIRECT_PRODUCERS) expect(scanned.has(path), `${path} is not in the tree`).toBe(true)
+  })
 })
 
 // U+FFFD is a replacement character: a byte sequence was decoded as the wrong
@@ -176,15 +187,12 @@ describe('subject authority contract', () => {
 // This matches U+FFFD only, which is unambiguous, rather than guessing at
 // mojibake byte pairs.
 describe('encoding integrity contract', () => {
-  it('confines replacement characters to the two known files, and only shrinks', () => {
+  it('finds no replacement character in any source file', () => {
     const found = []
     for (const file of SOURCE) {
       const count = (read(file).match(/\uFFFD/g) || []).length
       if (count) found.push(`${rel(file)} (${count})`)
     }
-    expect(found.sort()).toEqual([
-      'apps/carefind/api/_handlers/charge-subscription.js (2)',
-      'apps/carefind/api/_handlers/verify-subscription-payment.js (2)',
-    ])
+    expect(found.sort()).toEqual([])
   })
 })
