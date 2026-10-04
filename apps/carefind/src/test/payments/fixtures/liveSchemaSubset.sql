@@ -161,3 +161,58 @@ create table public.withdrawal_requests (
 -- Production already has this (read live 2026-10-03): a reference can never be used twice, even after the
 -- earlier request was rejected or completed.
 create unique index withdrawal_requests_paystack_reference_uniq on public.withdrawal_requests (paystack_reference) where paystack_reference is not null;
+
+-- ---- CareHub plan payments (Phase 06). renew_business_plan is verbatim from production. -------------
+create table public.businesses (
+  id uuid primary key default gen_random_uuid(),
+  name text,
+  plan text,
+  plan_expires_at timestamptz,
+  referring_agent_id uuid
+);
+
+create table public.plan_payments (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null,
+  months integer,
+  naira_amount integer,
+  reference text,
+  status text,
+  is_first_payment boolean,
+  created_at timestamptz default now(),
+  constraint plan_payments_reference_key unique (reference)
+);
+
+create or replace function public.renew_business_plan(p_business_id uuid, p_months integer, p_naira_amount integer, p_reference text)
+returns table(already_processed boolean, payment_id uuid, new_expiry timestamp with time zone, is_first_payment boolean)
+language plpgsql security definer set search_path to 'public' as $function$
+declare
+  v_count bigint;
+  v_base timestamptz;
+  v_new_expiry timestamptz;
+  v_payment_id uuid;
+begin
+  select count(*) into v_count from public.plan_payments where business_id = p_business_id;
+
+  insert into public.plan_payments (business_id, months, naira_amount, reference, status, is_first_payment)
+  values (p_business_id, p_months, p_naira_amount, p_reference, 'success', v_count = 0)
+  on conflict (reference) do nothing
+  returning id into v_payment_id;
+
+  if v_payment_id is null then
+    return query select true, null::uuid, null::timestamptz, false;
+    return;
+  end if;
+
+  select plan_expires_at into v_base from public.businesses where id = p_business_id for update;
+  if v_base is null or v_base < now() then
+    v_base := now();
+  end if;
+  v_new_expiry := v_base + make_interval(months => p_months);
+  update public.businesses set plan_expires_at = v_new_expiry where id = p_business_id;
+
+  return query select false, v_payment_id, v_new_expiry, v_count = 0;
+end;
+$function$;
+revoke all on function public.renew_business_plan(uuid, integer, integer, text) from public, anon, authenticated;
+grant execute on function public.renew_business_plan(uuid, integer, integer, text) to service_role;

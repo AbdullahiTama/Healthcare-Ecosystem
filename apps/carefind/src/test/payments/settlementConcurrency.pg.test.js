@@ -21,6 +21,7 @@ const SQL = [
   read('./fixtures/liveSchemaSubset.sql'),
   read('../../../../../supabase/migrations/carefind_20261003_payment_intents_foundation.sql'),
   read('../../../../../supabase/migrations/carefind_20261004_settle_payment_intent.sql'),
+  read('../../../../../supabase/migrations/carefind_20261006_settle_plan_and_carehub_appointments.sql'),
 ]
 
 const COIN = 20000
@@ -124,6 +125,36 @@ describe.skipIf(!URL_ENV)('settlement engine under real concurrency', () => {
     const sub = await one('select expires_at from creator_subscriptions where subscriber_id = $1 and creator_id = $2', [subscriber, creator])
     const days = (new Date(sub.expires_at).getTime() - Date.now()) / 86400e3
     expect(days).toBeGreaterThan(6 * 30 - 1) // six paid months, not one
+  })
+
+  it('the same CareHub plan payment settled by 25 callers at once renews the plan exactly once', async () => {
+    const b = (await pool.query(`insert into businesses (name) values ('Clinic') returning id`)).rows[0].id
+    const i = await intent({ purpose: 'plan_renewal', customer_id: null, business_id: b, expected_amount: 500000, metadata: { months: 1 } })
+    const results = await Promise.all(Array.from({ length: 25 }, () => settle(i)))
+    expect(tally(results)).toEqual({ settled: 1, already_settled: 24 })
+    expect(Number((await one('select count(*) c from plan_payments where business_id = $1', [b])).c)).toBe(1)
+    const days = (new Date((await one('select plan_expires_at e from businesses where id = $1', [b])).e).getTime() - Date.now()) / 86400e3
+    expect(days).toBeGreaterThan(27)
+    expect(days).toBeLessThan(32)
+  })
+
+  it('6 DIFFERENT plan payments for one business at once: every one recorded and the paid months stack (no lost renewal)', async () => {
+    const b = (await pool.query(`insert into businesses (name) values ('Clinic') returning id`)).rows[0].id
+    const intents = await Promise.all(Array.from({ length: 6 }, () => intent({ purpose: 'plan_renewal', customer_id: null, business_id: b, expected_amount: 500000, metadata: { months: 1 } })))
+    const results = await Promise.all(intents.map((i) => settle(i)))
+    expect(tally(results)).toEqual({ settled: 6 })
+    expect(Number((await one('select count(*) c from plan_payments where business_id = $1', [b])).c)).toBe(6)
+    const days = (new Date((await one('select plan_expires_at e from businesses where id = $1', [b])).e).getTime() - Date.now()) / 86400e3
+    expect(days).toBeGreaterThan(6 * 28) // six paid months, not one
+  })
+
+  it('10 card payments for ONE CareHub appointment at once: one pays it, nine are needs_refund(already_paid), the business is credited once', async () => {
+    const business = uid()
+    const a = (await pool.query(`insert into appointments (business_id, client_name, source, fee_amount, payment_status) values ($1,'Ada','carehub',150050,'unpaid') returning id`, [business])).rows[0]
+    const intents = await Promise.all(Array.from({ length: 10 }, () => intent({ purpose: 'appointment', customer_id: null, business_id: business, entity_type: 'appointment', entity_id: a.id, expected_amount: 150050, metadata: {} })))
+    const results = await Promise.all(intents.map((i) => settle(i)))
+    expect(tally(results)).toEqual({ settled: 1, needs_refund: 9 })
+    expect(Number((await one('select held_balance h from business_wallets where business_id = $1', [business])).h)).toBe(120040)
   })
 
   it('a mixed storm (top-ups, subscriptions, consultations, bookings, duplicates) completes with no deadlock or error', async () => {
