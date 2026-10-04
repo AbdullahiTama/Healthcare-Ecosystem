@@ -120,7 +120,8 @@ Next phase: PHASE 06 — CAREHUB PAYMENT FLOWS.
 | Date | Question | Decision | Status |
 |---|---|---|---|
 | 2026-10-04 | Q1: 20% platform fee on CareCoin-paid subscriptions/consultations | **20%** (owner), same as the card paths; payer pays the full price, payee gets floor(price x 80%), platform keeps the rest | DECIDED, implemented and APPLIED to production 2026-10-04 |
-| 2026-10-03 | Card booking/appointment refund policy; shop commission schedule; webhook endpoint | recommendations stand (see log above) | still awaiting explicit owner confirmation; needed for Phase 09 / shop |
+| 2026-10-04 | Shop commission | **20% flat** (owner), replacing the schedule in `calculate_shop_commission` (retail 10% / wholesale 5% / distributor 2.5%). NOT yet implemented: nothing live changes until the shop moves onto the engine. Implementation must also update `apps/carehub/src/lib/ecommerceSegments.js` (UI rates/labels), the vendor terms version, and decide how vendors who already accepted `accepted_commission_rate` of 10/5/2.5 are treated (a contractual question for the owner: honour their accepted rate until they re-accept, or migrate all). A `shop_commission_rate = 0.20` key goes into `financial_config` with that migration. | DECIDED, implementation pending (shop phase) |
+| 2026-10-03 | Card booking/appointment refund policy; webhook endpoint | recommendations stand (see log above) | still awaiting explicit owner confirmation; needed for Phase 09 / Phase 11 |
 
 ## Phase 06 — CareHub payment flows
 
