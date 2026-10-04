@@ -1,3 +1,5 @@
+import { createEmailProvider } from './provider.js'
+
 // Resolved at send time so tests and serverless invocations always see the
 // current environment. EMAIL_FROM / EMAIL_REPLY_TO are canonical; the legacy
 // RESEND_* names are accepted as fallbacks. No production sender is
@@ -9,29 +11,33 @@ export function resolveReplyTo() {
   return process.env.EMAIL_REPLY_TO || process.env.RESEND_REPLY_TO || resolveFromEmail()
 }
 
-function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') }
-
-// Retry-After is either delta-seconds or an HTTP-date. Both are accepted, and
-// anything unparseable falls back to the normal backoff schedule.
-function parseRetryAfterMs(headers) {
-  if (!headers || typeof headers.get !== 'function') return undefined
-  const raw = headers.get('retry-after')
-  if (!raw) return undefined
-  const seconds = Number(raw)
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000)
-  const at = Date.parse(raw)
-  if (Number.isFinite(at)) return Math.max(0, at - Date.now())
-  return undefined
+// The sender is usually "Name <address>", but reply_to must be a bare address.
+function bareAddress(value) {
+  const m = String(value || '').match(/<([^<>]+)>/)
+  return (m ? m[1] : String(value || '')).trim()
 }
 
-// 429 and 5xx are transient, as is any transport level failure. Everything
-// else (4xx) is a permanent rejection that retrying cannot fix.
-function classifyStatus(status) {
-  if (status === 429) return true
-  return status >= 500
+// How long one provider call may take before it is abandoned and retried. Without a bound a hung connection holds the
+// serverless function (and the outbox row's claim) until the platform kills it.
+function sendTimeoutMs() {
+  const n = Number(process.env.EMAIL_SEND_TIMEOUT_MS)
+  return Number.isFinite(n) && n >= 1000 && n <= 60000 ? Math.trunc(n) : 15000
 }
 
-export async function sendEmail({ to, subject, html, text, from }) {
+// A validation message names the offending value; keep the recipient address out of results and logs.
+function safeError(result) {
+  if (result.errorCode === 'validation_error') {
+    return String(result.errorMessage || 'validation_error').replace(/^(invalid recipient):.*$/s, '$1')
+  }
+  return result.errorMessage || `Resend ${result.statusCode}`
+}
+
+// Sends one email through the hardened provider (input validation, a request timeout, an Idempotency-Key, sanitised
+// errors) and returns the result shape the outbox processor's retry policy is built on:
+//   { success, data?: { id }, error?, statusCode, retryable, retryAfterMs?, timeout? }
+// `idempotencyKey` should be stable per outbox row: Resend then collapses a repeated send of the same row (a crash
+// after the provider accepted it, a lost write) into the original instead of mailing the customer twice.
+export async function sendEmail({ to, subject, html, text, from, idempotencyKey }) {
   const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
   if (!RESEND_API_KEY) {
     // Recipient count only, never the address itself.
@@ -42,43 +48,40 @@ export async function sendEmail({ to, subject, html, text, from }) {
   if (!resolvedFrom) {
     return { success: false, error: 'EMAIL_FROM not configured', retryable: false, statusCode: null }
   }
-  const REPLY_TO = resolveReplyTo()
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + RESEND_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: resolvedFrom,
-        to: Array.isArray(to) ? to : [to],
-        reply_to: REPLY_TO,
-        subject,
-        html,
-        ...(text ? { text } : {}),
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      // Log the status and the provider message only. The response body can
-      // echo request content, and the request is a rendered customer email.
-      console.error('[shared-email] resend_rejected', JSON.stringify({ status: res.status, message: data?.message || null }))
-      const retryAfterMs = res.status === 429 ? parseRetryAfterMs(res.headers) : undefined
-      return {
-        success: false,
-        error: data?.message || `Resend ${res.status}`,
-        data,
-        statusCode: res.status,
-        retryable: classifyStatus(res.status),
-        retryAfterMs,
-      }
-    }
-    return { success: true, data, statusCode: res.status }
-  } catch (e) {
-    // Transport failures (DNS, reset, abort/timeout) are always transient.
-    const timeout = e.name === 'AbortError' || e.name === 'TimeoutError'
-    console.error('[shared-email] resend_transport_error', JSON.stringify({ name: e.name, message: e.message, timeout }))
-    return { success: false, error: e.message, retryable: true, timeout, statusCode: null }
+
+  const provider = createEmailProvider({ apiKey: RESEND_API_KEY, timeoutMs: sendTimeoutMs() })
+  const result = await provider.send({
+    from: resolvedFrom,
+    to,
+    subject,
+    html,
+    text,
+    replyTo: bareAddress(resolveReplyTo()) || undefined,
+    idempotencyKey,
+  })
+
+  if (result.success) {
+    return { success: true, data: { id: result.providerMessageId }, statusCode: result.statusCode }
+  }
+
+  const error = safeError(result)
+  if (result.errorCode === 'validation_error') {
+    console.error('[shared-email] send_rejected', JSON.stringify({ code: result.errorCode }))
+  } else if (result.statusCode) {
+    // Log the status and the provider message only. The response body can echo request content, and the request is a
+    // rendered customer email.
+    console.error('[shared-email] resend_rejected', JSON.stringify({ status: result.statusCode, message: result.errorMessage || null }))
+  } else {
+    // Transport failures (DNS, reset, timeout) are always transient.
+    console.error('[shared-email] resend_transport_error', JSON.stringify({ code: result.errorCode, message: result.errorMessage || null }))
+  }
+
+  return {
+    success: false,
+    error,
+    statusCode: result.statusCode ?? null,
+    retryable: result.retryable === true,
+    ...(result.retryAfterMs !== undefined ? { retryAfterMs: result.retryAfterMs } : {}),
+    ...(result.errorCode === 'timeout' ? { timeout: true } : {}),
   }
 }

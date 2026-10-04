@@ -62,7 +62,7 @@ export function createEmailProvider({
     // send() never throws for provider/transport outcomes — it returns a
     // normalized result so callers can branch on retryable/errorCode. It
     // throws only for programmer error (invalid message shape).
-    async send({ from, to, subject, html, replyTo, idempotencyKey } = {}) {
+    async send({ from, to, subject, html, text, replyTo, idempotencyKey } = {}) {
       const validationError = validateMessage({ from, to, subject, html, replyTo })
       if (validationError) {
         return {
@@ -96,6 +96,7 @@ export function createEmailProvider({
               to: Array.isArray(to) ? to : [to],
               subject,
               html,
+              ...(text ? { text } : {}),
               ...(replyTo ? { reply_to: replyTo } : {}),
             }),
           })

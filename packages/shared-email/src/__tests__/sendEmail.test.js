@@ -151,3 +151,57 @@ describe('sendEmail configuration and logging', () => {
     expect(joined).not.toContain('customer@example.com')
   })
 })
+
+// The live send path used to be a bare fetch: no timeout (a hung connection held the function until the platform killed
+// it, with the row still claimed), no idempotency key (a repeat send after a crash mailed the customer twice) and no
+// input checks. It now goes through the hardened provider.
+describe('sendEmail hardening', () => {
+  const sentBody = () => JSON.parse(fetchMock.mock.calls[0][1].body)
+  const sentHeaders = () => fetchMock.mock.calls[0][1].headers
+
+  it('sends an Idempotency-Key so a repeated send of the same row cannot mail the customer twice', async () => {
+    fetchMock.mockResolvedValueOnce(response({ status: 200, body: { id: 'resend-1' } }))
+
+    await sendEmail({ ...args, idempotencyKey: 'outbox-row-42' })
+
+    expect(sentHeaders()['Idempotency-Key']).toBe('outbox-row-42')
+  })
+
+  it('gives up on a hung request after the timeout and reports a retryable timeout', async () => {
+    process.env.EMAIL_SEND_TIMEOUT_MS = '1000'
+    fetchMock.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    }))
+
+    const result = await sendEmail(args)
+
+    expect(result).toMatchObject({ success: false, retryable: true, timeout: true })
+  }, 10000)
+
+  it('still sends the plain-text part, and a bare reply-to address when the sender is "Name <address>"', async () => {
+    fetchMock.mockResolvedValueOnce(response({ status: 200, body: { id: 'resend-1' } }))
+
+    await sendEmail({ ...args, text: 'hi in text' })
+
+    expect(sentBody().text).toBe('hi in text')
+    expect(sentBody().reply_to).toBe('support@mail.carefindhub.com')
+    expect(sentBody().from).toBe('CareHub <support@mail.carefindhub.com>')
+  })
+
+  it('rejects a malformed recipient without calling the provider, and keeps the address out of the logs', async () => {
+    const result = await sendEmail({ ...args, to: 'not-an-address@' })
+
+    expect(result).toMatchObject({ success: false, retryable: false })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(logs.join(' ')).not.toContain('not-an-address')
+    expect(String(result.error)).not.toContain('not-an-address')
+  })
+
+  it('rejects an empty subject as a permanent failure', async () => {
+    const result = await sendEmail({ ...args, subject: '' })
+
+    expect(result).toMatchObject({ success: false, retryable: false })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
