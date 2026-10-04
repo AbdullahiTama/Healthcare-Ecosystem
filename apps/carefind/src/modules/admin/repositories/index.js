@@ -180,7 +180,7 @@ export const adminRepository = {
       reports: reportData.filter(r => r.status === 'pending').length,
       revenue: revenue / 100,
       transactions: txData.length,
-      pendingWithdrawals: withdrawData.filter(w => w.status === 'pending').length,
+      pendingWithdrawals: withdrawData.filter(w => w.status === 'reserved' || w.status === 'processing').length,
     }
   },
 
@@ -199,7 +199,7 @@ export const adminRepository = {
       ...(verifRes.data || []).filter(v => v.status === 'pending').map(v => ({ id: v.id, type: 'verification', title: `Verification: ${v.full_name}`, subtitle: v.profession, time: v.created_at, tab: 'verifications' })),
       ...(claimsRes.data || []).filter(c => c.status === 'pending').map(c => ({ id: c.id, type: 'claim', title: `Claim: ${c.businesses?.name}`, subtitle: 'Pending approval', time: c.created_at, tab: 'verifications' })),
       ...(reportsRes.data || []).filter(r => r.status === 'pending').map(r => ({ id: r.id, type: 'report', title: `Report: ${r.reason}`, subtitle: r.posts?.content?.slice(0, 60), time: r.created_at, tab: 'reports' })),
-      ...(withdrawRes.data || []).filter(w => w.status === 'pending').map(w => ({ id: w.id, type: 'withdrawal', title: `Withdrawal: ₦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, tab: 'orders' })),
+      ...(withdrawRes.data || []).filter(w => w.status === 'reserved' || w.status === 'processing').map(w => ({ id: w.id, type: 'withdrawal', title: `Withdrawal: ₦${(w.amount * 200).toLocaleString()}`, subtitle: w.profiles?.full_name || 'User', time: w.created_at, tab: 'orders' })),
       ...(newsRes.data || []).filter(n => n.status === 'pending').map(n => ({ id: n.id, type: 'news', title: `News: ${(n.headline || 'Article').slice(0, 60)}`, subtitle: n.profiles?.full_name || 'Contributor', time: n.created_at, tab: 'posts' })),
     ].sort((a, b) => new Date(b.time) - new Date(a.time))
   },

@@ -2,6 +2,8 @@
 import { processBatch as flushOutbox } from '../_lib/emailService.js'
 import { requireAdmin } from '../_lib/requireAdmin.js'
 import { decideAdminApprove, decideAdminReject } from '../_lib/withdrawalAdmin.js'
+import { settleWithdrawal } from '@care-ecosystem/shared-payments'
+import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
 
 export default async function handler(req, res) {
   try {
@@ -308,25 +310,12 @@ async function handleRequest(req, res) {
     if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
     const { id } = req.body
     if (!id) return res.status(400).json({ error: 'id required' })
-    const { data: wdRow } = await supabase
-      .from('withdrawal_requests')
-      .select('id, status, paystack_reference, paystack_transfer_code, created_at')
-      .eq('id', id)
-      .maybeSingle()
+    // Every withdrawal is reserved and paid out by the withdrawal engine (create_withdrawal -> Paystack ->
+    // settle_withdrawal); there is no approval state any more, so approving would only park a request where the
+    // completion webhook cannot settle it.
+    const { data: wdRow } = await supabase.from('withdrawal_requests').select('id, status, paystack_reference').eq('id', id).maybeSingle()
     if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })
-    // Automated (Paystack) withdrawals are already being paid; approving would only
-    // park the row where the completion webhook cannot settle it.
-    const approveDecision = decideAdminApprove(wdRow)
-    if (approveDecision.action === 'block') return res.status(409).json({ error: approveDecision.message })
-    // request_withdrawal() already deducted the coins when the request was
-    // filed, so approval is just a status change. Routed through a
-    // SECURITY DEFINER RPC (row-locks the request) instead of a JS
-    // read-then-write so two concurrent approve calls for the same request
-    // (retry, stale tab, two admins) can't both pass the pending check.
-    const { data: result, error } = await supabase.rpc('approve_withdrawal_request', { p_request_id: id })
-    if (error) return res.status(400).json({ error: error.message })
-    if (result !== 'ok') return res.status(400).json({ error: result === 'not_found' ? 'Withdrawal request not found' : `Already ${result.replace('already_', '')}` })
-    return res.status(200).json({ success: true })
+    return res.status(409).json({ error: decideAdminApprove(wdRow).message })
   }
 
   if (action === 'reject_withdrawal') {
@@ -342,27 +331,31 @@ async function handleRequest(req, res) {
       .eq('id', id)
       .maybeSingle()
     if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })
-
-    // For an automated withdrawal the transfer may already be paying the user's bank.
-    // Refunding the coins while it pays is a double payout, so ask Paystack first.
-    const rejectDecision = wdRow.status === 'pending'
-      ? await decideAdminReject(wdRow)
-      : { action: 'refund' } // non-pending: the RPC below reports "already ..."
-    if (rejectDecision.action === 'block') return res.status(409).json({ error: rejectDecision.message })
-    if (rejectDecision.action === 'complete') {
-      await supabase.from('withdrawal_requests').update({ status: 'completed' }).eq('id', id).eq('status', 'pending')
-      return res.status(409).json({ error: rejectDecision.message })
+    if (!['reserved', 'processing'].includes(wdRow.status)) {
+      return res.status(400).json({ error: `Already ${wdRow.status}` })
     }
 
-    // Coins were deducted when the request was filed — a rejection has to
-    // give them back, or they'd just vanish. reject_withdrawal_request()
-    // does the pending-status check, the refund, and the status change as
-    // one atomic unit (row-locked), replacing a JS read-balance/
-    // compute-in-JS/write sequence that could double-refund under a
-    // concurrent double-submit.
-    const { data: result, error } = await supabase.rpc('reject_withdrawal_request', { p_request_id: id })
-    if (error) return res.status(400).json({ error: error.message })
-    if (result !== 'ok') return res.status(400).json({ error: result === 'not_found' ? 'Withdrawal request not found' : `Already ${result.replace('already_', '')}` })
+    // For an automated withdrawal the transfer may already be paying the user's bank. Refunding the coins while
+    // it pays is a double payout, so ask Paystack first.
+    const rejectDecision = await decideAdminReject(wdRow)
+    if (rejectDecision.action === 'block') return res.status(409).json({ error: rejectDecision.message })
+
+    // The database does the status check, the refund and the status change as one atomic, replay-safe unit.
+    const outcome = rejectDecision.action === 'complete' ? 'success' : 'failed'
+    let settled
+    try {
+      settled = await settleWithdrawal(supabase, 'carefind', { outcome, requestId: id, detail: outcome === 'failed' ? 'admin_rejected' : 'admin_confirmed_paid' })
+    } catch (err) {
+      return res.status(400).json({ error: err.message })
+    }
+    if (rejectDecision.action === 'complete') {
+      if (settled.result === 'completed') await applyWithdrawalResult(supabase, 'success', settled)
+      return res.status(409).json({ error: rejectDecision.message })
+    }
+    if (settled.result !== 'refunded') {
+      return res.status(400).json({ error: settled.result === 'not_found' ? 'Withdrawal request not found' : `Already ${String(settled.result).replace('already_', '')}` })
+    }
+    await applyWithdrawalResult(supabase, 'failed', settled)
     return res.status(200).json({ success: true })
   }
 

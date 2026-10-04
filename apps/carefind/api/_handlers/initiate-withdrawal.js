@@ -2,17 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
-import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount, transferReference } from '../_lib/paystackTransfer.js'
+import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
+import { settleWithdrawal } from '@care-ecosystem/shared-payments'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
-
-const TRANSFER_FEE_RATE = 0.2
-const COIN_VALUE_NAIRA = 200
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -77,60 +75,22 @@ export default async function handler(req, res) {
     }
   }
 
-  // Verify wallet has enough balance
-  const { data: wallet } = await supabase
-    .from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-
-  if (!wallet || wallet.balance < coins) {
-    return res.status(400).json({ error: 'insufficient' })
-  }
-
-  const nairaAmount = coins * COIN_VALUE_NAIRA
-  const payoutNaira = Math.floor(nairaAmount * (1 - TRANSFER_FEE_RATE))
-  const amountKobo = payoutNaira * 100
-
-  // Check Paystack balance before proceeding
+  // Verify the typed account name actually belongs to the account number BEFORE any money is reserved.
+  // If Paystack reports the bank does not support / cannot resolve the account, allow the manually-entered
+  // name (same UX as /api/resolve-account's unsupportedBank branch).
+  let verifiedAccountName
   try {
-    const available = await checkBalance()
-    if (available < amountKobo) {
-      console.error("[initiate-withdrawal] Paystack balance insufficient", { available, amountKobo, userId: user.id })
-      res.setHeader("Retry-After", "60")
-      return res.status(503).json({ error: "Payment provider balance low - try again later" })
-    }
-  } catch (err) {
-    console.error("[initiate-withdrawal] Paystack balance check failed", err)
-    return res.status(502).json({ error: "Could not check payment provider balance" })
-  }
-
-  // Every request gets its own fresh reference. It used to be borrowed from the user's latest
-  // pending row that had no transfer code, but request_withdrawal answers 'ok' WITHOUT debiting
-  // for a reference it already knows, while the transfer below went out for the new amount
-  // (financial audit F-01). A request that crashed before its transfer was created is settled by
-  // the reconcile-withdrawals sweep, never by re-using its reference.
-  const reference = transferReference(user.id)
-
-  // Tracks how far this request got, so a failure can be recovered correctly: once the
-  // wallet is debited and the transfer did not start, the coins must come back.
-  let debited = false
-  let transferStarted = false
-
-  try {
-    // Verify the typed account name actually belongs to the account number.
-    // If Paystack reports the bank does not support / cannot resolve the account,
-    // allow the manually-entered name (same UX as /api/resolve-account's unsupportedBank branch).
     let resolved
-    let verifiedAccountName
     let isUnsupportedBank = false
     try {
       resolved = await resolveAccount({ bankCode, accountNumber })
     } catch (err) {
       const msg = err.paystackMessage || err.message || ''
       isUnsupportedBank = /not supported|does not support|unable to resolve|cannot resolve/i.test(msg)
-      if (isUnsupportedBank) {
-        verifiedAccountName = String(accountName).trim()
-      } else {
+      if (!isUnsupportedBank) {
         return res.status(400).json({ error: 'Could not verify account details. Check the bank and account number and try again.' })
       }
+      verifiedAccountName = String(accountName).trim()
     }
     if (!isUnsupportedBank) {
       if (!resolved || !resolved.accountName) {
@@ -143,68 +103,91 @@ export default async function handler(req, res) {
       }
       verifiedAccountName = resolved.accountName
     }
+  } catch (err) {
+    return res.status(502).json({ error: err.message || 'Payment provider error' })
+  }
 
-    // Create or reuse Paystack transfer recipient
-    const recipientCode = await createTransferRecipient({
-      bankCode,
-      accountNumber,
-      accountName: verifiedAccountName,
-      userId: user.id,
+  // Reserve: ONE atomic database step checks the balance and the rolling 24h cap, debits the coins through the
+  // ledger, creates the request and derives its Paystack reference from the request id. The amount paid out
+  // (after the fee) is computed there from financial_config, not here. No Paystack call happens while any lock
+  // is held: the reservation has committed before the first provider call below.
+  const { data: created, error: createError } = await supabase.rpc('create_withdrawal', {
+    p_user_id: user.id,
+    p_coins: coins,
+    p_bank_name: bankName,
+    p_bank_code: bankCode,
+    p_account_number: accountNumber,
+    p_account_name: verifiedAccountName,
+    p_daily_cap_coins: getDailyCap(trustLevel),
+  })
+
+  if (createError || !created) {
+    console.error('[initiate-withdrawal] create_withdrawal failed', createError?.message)
+    return res.status(500).json({ error: 'Could not process withdrawal request' })
+  }
+  if (created.outcome === 'daily_limit') {
+    return res.status(429).json({
+      error: 'daily_limit',
+      message: `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
+      dailyCapCoins: getDailyCap(trustLevel),
     })
+  }
+  if (created.outcome !== 'ok') {
+    return res.status(400).json({ error: created.outcome === 'insufficient' ? 'insufficient' : 'Could not process withdrawal request' })
+  }
 
-    // Deduct coins and record the withdrawal request (atomic via RPC)
-    // The reference is stored at creation time so there's never a crash
-    // window where a pending request lacks a reference.
-    const { data: requestResult, error: requestError } = await supabase.rpc('request_withdrawal', {
-      p_user_id: user.id,
-      p_amount: coins,
-      p_bank_name: bankName,
-      p_account_number: accountNumber,
-      p_account_name: verifiedAccountName,
-      p_reference: reference,
-      // Rolling 24h ceiling for this trust tier, checked inside the same locked transaction as the debit.
-      p_daily_cap_coins: getDailyCap(trustLevel),
-    })
+  const { id: requestId, reference, payout_kobo: payoutKobo } = created
+  const payoutNaira = Number(payoutKobo) / 100
+  let transferAttempted = false
 
-    if (requestResult === 'daily_limit') {
-      return res.status(429).json({
-        error: 'daily_limit',
-        message: `Daily withdrawal limit reached. Your ${trustLevel} level allows up to ${getDailyCap(trustLevel)} CareCoins in any 24 hours.`,
-        dailyCapCoins: getDailyCap(trustLevel),
-      })
+  // Give the coins back for a request whose transfer was never attempted: nothing can have reached the bank,
+  // so no provider check is needed.
+  const releaseUnsent = async (detail) => {
+    try {
+      const r = await settleWithdrawal(supabase, 'carefind', { outcome: 'failed', requestId, detail })
+      return r.result === 'refunded' || r.result === 'already_refunded'
+    } catch (e) {
+      console.error('[initiate-withdrawal] release of an unsent withdrawal failed; the sweep will settle it', { reference, message: e.message })
+      return false
+    }
+  }
+
+  try {
+    // Check Paystack's balance before sending (we know the exact amount only now).
+    try {
+      const available = await checkBalance()
+      if (available < Number(payoutKobo)) {
+        console.error('[initiate-withdrawal] Paystack balance insufficient', { available, payoutKobo, userId: user.id })
+        await releaseUnsent('provider_balance_low')
+        res.setHeader('Retry-After', '60')
+        return res.status(503).json({ error: 'Payment provider balance low - try again later', refunded: true })
+      }
+    } catch (err) {
+      console.error('[initiate-withdrawal] Paystack balance check failed', err)
+      const refunded = await releaseUnsent('provider_balance_check_failed')
+      return res.status(502).json({ error: 'Could not check payment provider balance', refunded })
     }
 
-    if (requestError || requestResult !== 'ok') {
-      return res.status(400).json({
-        error: requestResult === 'insufficient' ? 'insufficient' : 'Could not process withdrawal request',
-      })
-    }
+    const recipientCode = await createTransferRecipient({ bankCode, accountNumber, accountName: verifiedAccountName, userId: user.id })
 
-    debited = true
-
-    // Initiate the Paystack transfer (idempotent by reference)
+    transferAttempted = true
     const { transferCode } = await initiateTransfer({
       recipientCode,
-      amountKobo,
-      reason: `CareFind withdrawal: ${coins} CareCoins (?${payoutNaira.toLocaleString()})`,
+      amountKobo: Number(payoutKobo),
+      reason: `CareFind withdrawal: ${coins} CareCoins (NGN ${payoutNaira.toLocaleString()})`,
       reference,
     })
-    transferStarted = true
 
-    // Attach transfer details by reference (unique), not "latest pending"
-    await supabase
-      .from('withdrawal_requests')
-      .update({
-        paystack_transfer_code: transferCode,
-        paystack_recipient_code: recipientCode,
-      })
-      .eq('user_id', user.id)
-      .eq('paystack_reference', reference)
+    // Link the provider's codes to THIS request by its id (never "the latest row"). A failure here is not
+    // fatal: the webhook and the sweep both settle by the reference, which is already on the request.
+    try {
+      await supabase.rpc('attach_withdrawal_transfer', { p_request_id: requestId, p_transfer_code: transferCode, p_recipient_code: recipientCode })
+    } catch (e) {
+      console.error('[initiate-withdrawal] could not record the transfer linkage', { reference, message: e.message })
+    }
 
-    // Trust is recorded when the transfer SETTLES (the transfer.success / transfer.failed webhook,
-    // or the reconcile-withdrawals sweep), not here. Paystack has only accepted the request at
-    // this point; counting it as a completed withdrawal let transfers that later failed or were
-    // reversed build a streak toward the higher-trust, lower-friction tiers.
+    // Trust is recorded when the transfer SETTLES (the transfer.success / transfer.failed webhook, or the
+    // reconcile sweep), not here.
     const { data: updatedTrust } = await supabase.rpc('get_withdrawal_trust', { p_user_id: user.id })
     const trustData = Array.isArray(updatedTrust) ? updatedTrust[0] : updatedTrust
 
@@ -232,37 +215,31 @@ export default async function handler(req, res) {
       nextThreshold: trustData?.instant_threshold || 0,
     })
   } catch (err) {
-    // No trust update here: a transfer that never started is a provider or system failure, not
-    // withdrawal behaviour, and every call to the trust RPC counts as a withdrawal.
-
-    // The wallet was debited but no transfer started: give the coins back, but only when
-    // Paystack confirms nothing was created (see withdrawalRecovery.js). An explicit
-    // Paystack rejection is checked immediately; an ambiguous failure (timeout, dropped
-    // connection) is left pending for the reconcile-withdrawals sweep, which waits out the
-    // grace period before believing "not found".
-    if (debited && !transferStarted) {
-      try {
-        const { data: row } = await supabase
-          .from('withdrawal_requests')
-          .select('id, status, paystack_reference, paystack_transfer_code, created_at')
-          .eq('user_id', user.id)
-          .eq('paystack_reference', reference)
-          .maybeSingle()
-        if (row && row.status === 'pending') {
-          const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
-          if (recovery.outcome === 'refunded') {
-            return res.status(502).json({ error: `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.`, refunded: true })
-          }
-          console.error('[initiate-withdrawal] transfer failed; left pending for reconciliation', { reference, detail: recovery.detail })
-        }
-      } catch (recoveryErr) {
-        console.error('[initiate-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })
-      }
+    // Before the transfer call nothing was sent: release the reservation at once.
+    if (!transferAttempted) {
+      const refunded = await releaseUnsent('recipient_failed')
       return res.status(502).json({
-        error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
-        pending: true,
+        error: refunded ? `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.` : `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+        refunded,
       })
     }
-    return res.status(502).json({ error: err.message || 'Payment provider error' })
+
+    // The transfer call itself failed. A definite Paystack refusal is checked immediately; an ambiguous failure
+    // (timeout, dropped connection) may still have created the transfer, so it is only refunded once Paystack
+    // confirms it did not (the sweep waits out the grace period before believing "not found").
+    try {
+      const row = { id: requestId, paystack_reference: reference, paystack_transfer_code: null, created_at: new Date().toISOString() }
+      const recovery = await reconcileWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+      if (recovery.outcome === 'refunded') {
+        return res.status(502).json({ error: `${err.message || 'Payment provider error'}. Your CareCoins have been returned to your wallet.`, refunded: true })
+      }
+      console.error('[initiate-withdrawal] transfer failed; left for reconciliation', { reference, detail: recovery.detail })
+    } catch (recoveryErr) {
+      console.error('[initiate-withdrawal] recovery after failed transfer errored', { reference, message: recoveryErr.message })
+    }
+    return res.status(502).json({
+      error: `${err.message || 'Payment provider error'}. We are checking this withdrawal; your balance will be corrected automatically if it did not go through.`,
+      pending: true,
+    })
   }
 }

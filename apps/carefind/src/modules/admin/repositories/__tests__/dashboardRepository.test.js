@@ -136,7 +136,7 @@ describe('dashboardRepository', () => {
         data: [{ status: 'pending' }, { status: 'pending' }, { status: 'resolved' }],
       }
       transport.apiResponses.list_withdrawal_requests = {
-        data: [{ status: 'pending' }],
+        data: [{ status: 'reserved' }, { status: 'refunded' }],
       }
       transport.queryResponses.live_shows = { data: [{ id: 1 }, { id: 2 }, { id: 3 }] }
 

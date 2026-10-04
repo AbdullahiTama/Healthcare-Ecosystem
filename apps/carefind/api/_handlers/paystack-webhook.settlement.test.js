@@ -88,40 +88,70 @@ describe('shop order fallback settlement', () => {
   })
 })
 
-// Financial audit M-2: withdrawal trust (tiers and streaks) is recorded when a transfer SETTLES, once per
-// settlement, never when Paystack merely accepted the request.
-describe('withdrawal trust is recorded at settlement', () => {
+// Transfer webhooks are settled by the DATABASE (settle_withdrawal / settle_business_withdrawal); the handler maps the
+// event, then runs trust + email only for a change THIS delivery made (so a redelivery or a racing sweep cannot
+// count a withdrawal twice).
+describe('transfer webhooks settle through the withdrawal engine', () => {
   const trust = () => h.rpcCalls.filter(([n]) => n === 'update_withdrawal_trust_after_withdrawal').map(([, a]) => a)
-  const settledRow = { id: 'w1', user_id: 'u1', amount: 10, bank_name: 'GTB', account_number: '0123456789' }
+  const settles = () => h.rpcCalls.filter(([n]) => n.startsWith('settle_')).map(([n, a]) => [n, a])
+  const row = { id: 'w1', user_id: 'u1', amount: 10, payout_kobo: 160000, reference: 'cf_wd_1' }
+  const answer = (result, extra = {}) => async (name) => (name === 'settle_withdrawal' ? { data: { ...row, result, from_status: 'processing', ...extra }, error: null } : { data: null, error: null })
 
-  beforeEach(() => {
-    h.maybeSingle = { withdrawal_requests: settledRow }
-    h.rpcImpl = async (name) => (name === 'reject_withdrawal_request' ? { data: h.rejectResult ?? 'ok', error: null } : { data: null, error: null })
-    h.rejectResult = undefined
-  })
-
-  it('transfer.success that completes the row records one completed withdrawal', async () => {
-    h.updateRows = [settledRow]
-    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1' } })
+  it('transfer.success completes the request with the provider amount and records one completed withdrawal', async () => {
+    h.rpcImpl = answer('completed')
+    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1', amount: 160000 } })
+    expect(settles()[0]).toEqual(['settle_withdrawal', { p_outcome: 'success', p_reference: 'cf_wd_1', p_request_id: null, p_amount_kobo: 160000, p_detail: 'transfer.success' }])
     expect(trust()).toEqual([{ p_user_id: 'u1', p_amount: 10, p_status: 'completed' }])
   })
 
-  it('a redelivery that finds nothing left to complete records nothing', async () => {
-    h.updateRows = []
-    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1' } })
+  it('a redelivery (already completed) records nothing', async () => {
+    h.rpcImpl = answer('already_completed')
+    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1', amount: 160000 } })
     expect(trust()).toHaveLength(0)
   })
 
+  it('an amount mismatch completes nothing and records nothing', async () => {
+    h.rpcImpl = answer('amount_mismatch')
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await post({ event: 'transfer.success', data: { reference: 'cf_wd_1', amount: 1 } })
+    expect(trust()).toHaveLength(0)
+    err.mockRestore()
+  })
+
   it('transfer.failed that this delivery refunded records a failed withdrawal', async () => {
-    h.updateRows = [settledRow]
+    h.rpcImpl = answer('refunded')
     await post({ event: 'transfer.failed', data: { reference: 'cf_wd_1' } })
+    expect(settles()[0][1]).toMatchObject({ p_outcome: 'failed', p_amount_kobo: null })
     expect(trust()).toEqual([{ p_user_id: 'u1', p_amount: 10, p_status: 'failed' }])
   })
 
   it('transfer.failed already settled by another path records nothing', async () => {
-    h.updateRows = [settledRow]
-    h.rejectResult = 'already_rejected'
+    h.rpcImpl = answer('already_refunded')
     await post({ event: 'transfer.failed', data: { reference: 'cf_wd_1' } })
+    expect(trust()).toHaveLength(0)
+  })
+
+  it('transfer.reversed of an already-completed transfer is refunded and does NOT record a failure (it was counted as completed)', async () => {
+    h.rpcImpl = answer('refunded', { from_status: 'completed' })
+    await post({ event: 'transfer.reversed', data: { reference: 'cf_wd_1', amount: 160000 } })
+    expect(settles()[0][1]).toMatchObject({ p_outcome: 'reversed', p_amount_kobo: null })
+    expect(trust()).toHaveLength(0)
+  })
+
+  it('a CareHub business reference is settled by the business function and runs no CareFind effects', async () => {
+    h.rpcImpl = async (name) => (name === 'settle_withdrawal' ? { data: { result: 'not_found' }, error: null }
+      : name === 'settle_business_withdrawal' ? { data: { result: 'refunded', id: 'b1', business_id: 'biz', amount: 500000, from_status: 'processing', reference: 'ch_wd_1' }, error: null }
+      : { data: null, error: null })
+    const res = await post({ event: 'transfer.failed', data: { reference: 'ch_wd_1' } })
+    expect(res.statusCode).toBe(200)
+    expect(settles().map(([n]) => n)).toEqual(['settle_withdrawal', 'settle_business_withdrawal'])
+    expect(trust()).toHaveLength(0)
+  })
+
+  it('a reference nobody knows is acknowledged (200) and changes nothing', async () => {
+    h.rpcImpl = async () => ({ data: { result: 'not_found' }, error: null })
+    const res = await post({ event: 'transfer.success', data: { reference: 'zzz', amount: 1 } })
+    expect(res.statusCode).toBe(200)
     expect(trust()).toHaveLength(0)
   })
 })

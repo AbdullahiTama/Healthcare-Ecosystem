@@ -1,103 +1,30 @@
-// Recovery for automated withdrawals whose Paystack transfer did not settle cleanly.
+// Recovery for automated withdrawals whose Paystack transfer did not settle cleanly. The decision logic and the
+// settlement calls live in shared-payments (one definition for CareFind and CareHub); this file binds them to
+// CareFind's Paystack client and its side effects (trust tiers, emails).
 //
-// initiate-withdrawal.js debits the wallet (request_withdrawal) and only then calls
-// Paystack. If that call fails, the coins are gone and no money moved. Refunding is
-// only safe once Paystack confirms the transfer will not happen, because a timeout
-// can mean the transfer was created anyway; refunding then pays the user twice. So every
-// recovery path asks Paystack by reference and applies the same decision the admin
-// reject uses (decideAdminReject): success -> completed, in flight -> wait, failed or
-// never created -> refund through the atomic reject_withdrawal_request RPC.
+// A refund is only ever chosen once Paystack confirms the transfer will not happen: a timeout can mean the
+// transfer was created anyway, and refunding then pays the user twice. The refund itself is the database's
+// settle_withdrawal(): replay-safe, at most once.
+import { reconcileWithdrawal as reconcile, sweepWithdrawals as sweep, getTransferStatus } from '@care-ecosystem/shared-payments'
+import { paystackFetch } from './paystack.js'
+import { applyWithdrawalResult } from './withdrawalEffects.js'
 
-import { decideAdminReject, IN_FLIGHT_GRACE_MS } from './withdrawalAdmin.js'
-import { enqueue as enqueueOutbox, processBatch as flushOutbox } from './emailService.js'
+const getStatus = (reference) => getTransferStatus(reference, paystackFetch)
 
 // -> { outcome: 'refunded' | 'completed' | 'waiting', detail? }
-export async function reconcileWithdrawal(supabase, row, opts = {}) {
-  const decision = await decideAdminReject(row, opts)
-
-  if (decision.action === 'refund') {
-    const { data, error } = await supabase.rpc('reject_withdrawal_request', { p_request_id: row.id })
-    if (error) return { outcome: 'waiting', detail: error.message }
-    // 'already_*' means a concurrent path (webhook, admin) settled it first.
-    if (data !== 'ok') return { outcome: 'waiting', detail: data }
-    return { outcome: 'refunded' }
-  }
-
-  if (decision.action === 'complete') {
-    const { data: flipped } = await supabase
-      .from('withdrawal_requests')
-      .update({ status: 'completed' })
-      .eq('id', row.id)
-      .eq('status', 'pending')
-      .select('id')
-    // Nothing flipped: the webhook (or an admin) settled it first, so the caller must not
-    // act on it a second time (e.g. record trust twice).
-    if (!flipped || flipped.length === 0) return { outcome: 'waiting', detail: 'already settled' }
-    return { outcome: 'completed' }
-  }
-
-  return { outcome: 'waiting', detail: decision.message }
+export function reconcileWithdrawal(supabase, row, opts = {}) {
+  return reconcile(supabase, 'carefind', row, { getStatus, ...opts })
 }
 
-// Sweep: every automated withdrawal still `pending` after the grace period, checked against
-// Paystack and settled one way or the other. Shared by the standalone cron/reconcile-withdrawals.js
-// endpoint (for a manual/on-demand run, or a future dedicated schedule) and the chained call from
-// cron/process-email-outbox.js (CareFind's actual production trigger today - see that file for why).
-export async function sweepWithdrawals(supabase, { limit = 50, ...opts } = {}) {
-  const cutoff = new Date(Date.now() - IN_FLIGHT_GRACE_MS).toISOString()
-  const { data: rows, error } = await supabase
-    .from('withdrawal_requests')
-    .select('id, user_id, amount, status, paystack_reference, paystack_transfer_code, created_at')
-    .eq('status', 'pending')
-    .not('paystack_reference', 'is', null)
-    .lt('created_at', cutoff)
-    .order('created_at', { ascending: true })
-    .limit(limit)
-  if (error) throw new Error(error.message)
-
-  const summary = { checked: 0, refunded: 0, completed: 0, waiting: 0, errors: 0 }
-  for (const row of rows || []) {
-    summary.checked++
-    try {
-      const result = await reconcileWithdrawal(supabase, row, opts)
-      summary[result.outcome]++
-      if (result.outcome === 'refunded') {
-        // Refunded because the transfer was never created or failed: no trust update - a transfer
-        // that never happened is not withdrawal behaviour.
-        console.warn('[reconcile-withdrawals] refunded unsettled withdrawal', { id: row.id, reference: row.paystack_reference })
-        await notifyRefunded(supabase, row)
-      }
-      if (result.outcome === 'completed') {
-        // reconcileWithdrawal only reports 'completed' when THIS call flipped the row, so the
-        // webhook cannot also have recorded it.
-        const { error: trustError } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', {
-          p_user_id: row.user_id, p_amount: row.amount, p_status: 'completed',
-        })
-        if (trustError) console.error('[reconcile-withdrawals] trust update failed', { id: row.id, message: trustError.message })
-      }
-    } catch (err) {
-      summary.errors++
-      console.error('[reconcile-withdrawals] row failed', { id: row.id, reference: row.paystack_reference, message: err.message })
-    }
-  }
-  return summary
-}
-
-async function notifyRefunded(supabase, row) {
-  try {
-    const { data: authData } = await supabase.auth.admin.getUserById(row.user_id)
-    const email = authData?.user?.email
-    if (!email) return
-    await enqueueOutbox({
-      templateKey: 'withdrawal_failed',
-      toEmail: email,
-      payload: { fullName: email, amount: row.amount, reference: row.paystack_reference },
-      subject: 'CareFind: withdrawal failed',
-      sourceId: row.id,
-      idempotencyKey: `withdrawal-failed:${row.paystack_reference}`,
-    })
-    flushOutbox().catch((err) => console.error('[reconcile-withdrawals] flush error:', err))
-  } catch (err) {
-    console.error('[reconcile-withdrawals] notify error:', err)
-  }
+// Sweep: every withdrawal still reserved/processing after the grace period, checked against Paystack and settled
+// one way or the other. Shared by cron/reconcile-withdrawals.js and the chained call in cron/process-email-outbox.js.
+export function sweepWithdrawals(supabase, { limit = 50, ...opts } = {}) {
+  return sweep(supabase, 'carefind', {
+    limit,
+    getStatus,
+    // The hooks run only for changes THIS sweep made, so a webhook that settled first is never counted twice.
+    onRefunded: (row, result) => applyWithdrawalResult(supabase, 'failed', { ...result, reference: row.paystack_reference }),
+    onCompleted: (row, result) => applyWithdrawalResult(supabase, 'success', { ...result, reference: row.paystack_reference }),
+    ...opts,
+  })
 }

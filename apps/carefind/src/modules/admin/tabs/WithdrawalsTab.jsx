@@ -1,19 +1,24 @@
-import { DollarSign, CheckCircle, XCircle, Building2 } from 'lucide-react'
+import { DollarSign, XCircle, Building2 } from 'lucide-react'
 import { theme } from '../../../styles/theme'
 import { Button, Card, StatusBadge, Empty } from '@care-ecosystem/design-system/components/ui'
 import { AdminPageHeader, timeAgo } from '../ui'
 
-export default function WithdrawalsTab({ withdrawals, onApprove, onReject }) {
+// A withdrawal is in flight while its coins are reserved and Paystack has not settled the transfer.
+const isOpen = (w) => w.status === 'reserved' || w.status === 'processing'
+
+// Withdrawals are reserved and paid out automatically; there is nothing to approve. An admin can only reject one that
+// Paystack confirms did not pay (the server asks Paystack first), which refunds the coins.
+export default function WithdrawalsTab({ withdrawals, onReject }) {
   return (
     <div>
       <AdminPageHeader
         title="Withdrawal Requests"
-        subtitle="Process pending withdrawal requests from users"
+        subtitle="Withdrawals are paid out automatically. Reject only one that is stuck."
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: theme.space[3] }}>
           <DollarSign size={18} color={theme.tealDeep} />
           <span style={{ fontSize: theme.type.caption.size, fontWeight: 700, color: theme.textMid }}>
-            {withdrawals.filter(w => w.status === 'pending').length} pending
+            {withdrawals.filter(isOpen).length} in progress
           </span>
         </div>
       </AdminPageHeader>
@@ -31,7 +36,7 @@ export default function WithdrawalsTab({ withdrawals, onApprove, onReject }) {
             style={{
               padding: theme.space[5],
               marginBottom: theme.space[4],
-              borderColor: w.status === 'pending' ? theme.warning : theme.border,
+              borderColor: isOpen(w) ? theme.warning : theme.border,
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.space[4] }}>
@@ -67,17 +72,8 @@ export default function WithdrawalsTab({ withdrawals, onApprove, onReject }) {
               <StatusBadge status={w.status} />
             </div>
 
-            {w.status === 'pending' && (
+            {isOpen(w) && (
               <div style={{ display: 'flex', gap: theme.space[3] }}>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  fullWidth
-                  leftIcon={<CheckCircle size={14} />}
-                  onClick={() => onApprove(w.id)}
-                >
-                  Approve
-                </Button>
                 <Button
                   variant="danger"
                   size="sm"
@@ -85,7 +81,7 @@ export default function WithdrawalsTab({ withdrawals, onApprove, onReject }) {
                   leftIcon={<XCircle size={14} />}
                   onClick={() => onReject(w.id)}
                 >
-                  Reject
+                  Reject and refund
                 </Button>
               </div>
             )}

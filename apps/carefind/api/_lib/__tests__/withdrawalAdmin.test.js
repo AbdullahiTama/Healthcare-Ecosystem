@@ -8,11 +8,9 @@ const fresh = new Date(NOW - 30_000).toISOString()
 const auto = (extra = {}) => ({ id: 'w1', status: 'pending', paystack_reference: 'cf_wd_1', paystack_transfer_code: 'TRF_1', created_at: old, ...extra })
 
 describe('decideAdminApprove', () => {
-  it('blocks approving an automated (Paystack) withdrawal', () => {
+  it('never approves: withdrawals are settled automatically, with or without a Paystack reference', () => {
     expect(decideAdminApprove(auto()).action).toBe('block')
-  })
-  it('keeps approving legacy manual withdrawals (no reference)', () => {
-    expect(decideAdminApprove({ paystack_reference: null }).action).toBe('approve')
+    expect(decideAdminApprove({ paystack_reference: null }).action).toBe('block')
   })
 })
 

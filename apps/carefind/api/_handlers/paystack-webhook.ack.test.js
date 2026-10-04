@@ -62,6 +62,7 @@ describe('paystack webhook acknowledgement', () => {
 
   it('a processing failure answers 500 so Paystack redelivers the event', async () => {
     const res = response()
+    h.db.rpc = async () => ({ data: null, error: { message: 'db down' } })
     await handler(request({ event: 'transfer.success', data: { reference: 'cf_wd_1' } }), res)
     expect(res.statusCode).toBe(500)
   })

@@ -1,135 +1,74 @@
 import { describe, it, expect, vi } from 'vitest'
+
+// CareFind's binding of the shared withdrawal recovery: Paystack lookup + trust/email effects. The decision and
+// settlement logic itself is tested in shared-payments; the refund is the database's settle_withdrawal.
+const h = vi.hoisted(() => ({ paystackFetch: vi.fn(), applied: [] }))
+vi.mock('../paystack.js', () => ({ paystackFetch: h.paystackFetch }))
+vi.mock('../withdrawalEffects.js', () => ({ applyWithdrawalResult: async (_s, outcome, result) => { h.applied.push([outcome, result]) } }))
+
 import { reconcileWithdrawal, sweepWithdrawals } from '../withdrawalRecovery.js'
-import { IN_FLIGHT_GRACE_MS } from '../withdrawalAdmin.js'
 
-vi.mock('../emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
+const NOW = Date.now()
+const old = new Date(NOW - 30 * 60 * 1000).toISOString()
+const row = (over = {}) => ({ id: 'w1', user_id: 'u1', amount: 10, status: 'processing', paystack_reference: 'cf_wd_1', paystack_transfer_code: null, created_at: old, ...over })
 
-const NOW = Date.parse('2026-10-02T12:00:00Z')
-const old = new Date(NOW - IN_FLIGHT_GRACE_MS - 60_000).toISOString()
-const row = (extra = {}) => ({ id: 'w1', status: 'pending', paystack_reference: 'cf_wd_1', paystack_transfer_code: null, created_at: old, ...extra })
-
-// `flipped` is what the guarded UPDATE ... .select('id') returns: one row when this call changed the
-// status, none when another path (webhook, admin) had already settled it.
-function client(rpcResult = { data: 'ok', error: null }, flipped = [{ id: 'w1' }]) {
-  const updates = []
-  const b = {
-    update: (v) => { updates.push(v); return b },
-    eq: () => b,
-    select: async () => ({ data: flipped, error: null }),
+const fakeSupabase = (rows, settle) => {
+  const rpcCalls = []
+  return {
+    rpcCalls,
+    rpc: async (name, args) => { rpcCalls.push([name, args]); return { data: settle(args), error: null } },
+    from: () => {
+      const b = { select: () => b, in: () => b, not: () => b, lt: () => b, order: () => b, limit: async () => ({ data: rows, error: null }) }
+      return b
+    },
   }
-  return { client: { rpc: vi.fn(async () => rpcResult), from: () => b }, updates }
 }
-const opts = (status) => ({ getStatus: async () => status, now: NOW })
 
-describe('reconcileWithdrawal', () => {
-  it('Paystack never created the transfer: refunds through the atomic RPC', async () => {
-    const { client: c } = client()
-    expect(await reconcileWithdrawal(c, row(), opts('not_found'))).toEqual({ outcome: 'refunded' })
-    expect(c.rpc).toHaveBeenCalledWith('reject_withdrawal_request', { p_request_id: 'w1' })
+describe('reconcileWithdrawal (CareFind)', () => {
+  it('Paystack never created the transfer: refunds through settle_withdrawal by request id', async () => {
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const s = fakeSupabase([], () => ({ result: 'refunded' }))
+    expect(await reconcileWithdrawal(s, row())).toMatchObject({ outcome: 'refunded' })
+    expect(s.rpcCalls[0]).toEqual(['settle_withdrawal', expect.objectContaining({ p_outcome: 'failed', p_request_id: 'w1' })])
   })
 
-  it('transfer failed or reversed: refunds', async () => {
-    for (const s of ['failed', 'reversed']) {
-      const { client: c } = client()
-      expect((await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts(s))).outcome).toBe('refunded')
-    }
+  it('transfer succeeded: completes, never refunds', async () => {
+    h.paystackFetch.mockResolvedValue({ status: true, data: { status: 'success' } })
+    const s = fakeSupabase([], () => ({ result: 'completed' }))
+    expect((await reconcileWithdrawal(s, row({ paystack_transfer_code: 'T' }))).outcome).toBe('completed')
+    expect(s.rpcCalls.every(([, a]) => a.p_outcome === 'success')).toBe(true)
   })
 
-  it('transfer succeeded: completes, and does NOT refund', async () => {
-    const { client: c, updates } = client()
-    expect((await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts('success'))).outcome).toBe('completed')
-    expect(updates).toEqual([{ status: 'completed' }])
-    expect(c.rpc).not.toHaveBeenCalled()
+  it('still in flight at Paystack: waits and touches nothing', async () => {
+    h.paystackFetch.mockResolvedValue({ status: true, data: { status: 'processing' } })
+    const s = fakeSupabase([], () => ({ result: 'x' }))
+    expect((await reconcileWithdrawal(s, row({ paystack_transfer_code: 'T' }))).outcome).toBe('waiting')
+    expect(s.rpcCalls).toHaveLength(0)
   })
 
-  it('succeeded but the webhook already completed it: waits, so the caller cannot record it twice', async () => {
-    const { client: c } = client(undefined, [])
-    expect(await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts('success'))).toEqual({ outcome: 'waiting', detail: 'already settled' })
-  })
-
-  it('transfer still in flight: waits, no refund, no completion', async () => {
-    const { client: c, updates } = client()
-    expect((await reconcileWithdrawal(c, row({ paystack_transfer_code: 'T' }), opts('pending'))).outcome).toBe('waiting')
-    expect(c.rpc).not.toHaveBeenCalled()
-    expect(updates).toEqual([])
-  })
-
-  it('refund RPC reports the row was already settled by another path: waits instead of double-refunding', async () => {
-    const { client: c } = client({ data: 'already_completed', error: null })
-    expect(await reconcileWithdrawal(c, row(), opts('not_found'))).toEqual({ outcome: 'waiting', detail: 'already_completed' })
-  })
-
-  it('refund RPC error: waits', async () => {
-    const { client: c } = client({ data: null, error: { message: 'db' } })
-    expect((await reconcileWithdrawal(c, row(), opts('failed'))).outcome).toBe('waiting')
-  })
-
-  it('graceMs: 0 lets a fresh row be checked immediately (used right after an explicit rejection)', async () => {
-    const { client: c } = client()
-    const fresh = row({ created_at: new Date(NOW - 1000).toISOString() })
-    expect((await reconcileWithdrawal(c, fresh, { ...opts('not_found'), graceMs: 0 })).outcome).toBe('refunded')
-    expect((await reconcileWithdrawal(client().client, fresh, opts('not_found'))).outcome).toBe('waiting')
+  it('graceMs: 0 lets a fresh row be checked immediately (right after an explicit Paystack rejection)', async () => {
+    h.paystackFetch.mockResolvedValue({ status: false, message: 'Transfer not found' })
+    const s = fakeSupabase([], () => ({ result: 'refunded' }))
+    expect((await reconcileWithdrawal(s, row({ created_at: new Date().toISOString() }), { graceMs: 0 })).outcome).toBe('refunded')
+    expect((await reconcileWithdrawal(s, row({ created_at: new Date().toISOString() }))).outcome).toBe('waiting')
   })
 })
 
-// sweepWithdrawals is the per-run loop: queries stale rows, calls reconcileWithdrawal per row, counts
-// outcomes, records trust only for a row THIS run completed, and notifies the user on a refund. Shared
-// by the standalone cron endpoint and the chained call from process-email-outbox.js.
-describe('sweepWithdrawals', () => {
-  function sweepClient({ rows = [], queryError = null, rpcResults = {} } = {}) {
-    const rpcCalls = []
-    const q = {
-      select: () => q, eq: () => q, not: () => q, lt: () => q, order: () => q, update: () => q,
-      limit: async () => ({ data: rows, error: queryError }),
-      // Lets `await <chain>` resolve when the chain ends on `.select(...)` right after `.update(...)`
-      // (reconcileWithdrawal's completion branch) - `select` itself just returns `q` to keep chaining.
-      then: (resolve) => resolve({ data: [{ id: 'flipped' }], error: null }),
-    }
-    return {
-      rpcCalls,
-      client: {
-        from: () => q,
-        rpc: async (name, args) => { rpcCalls.push([name, args]); return rpcResults[name] || { data: 'ok', error: null } },
-        auth: { admin: { getUserById: async () => ({ data: { user: { email: 'u@example.com' } } }) } },
-      },
-    }
-  }
-
-  it('counts each row\'s outcome and isolates a row that throws', async () => {
-    const rows = [
-      { id: 'w1', user_id: 'u1', amount: 10, status: 'pending', paystack_reference: 'r1', paystack_transfer_code: null, created_at: old },
-      { id: 'w2', user_id: 'u2', amount: 10, status: 'pending', paystack_reference: 'r2', paystack_transfer_code: 'T', created_at: old },
-      { id: 'w3', user_id: 'u3', amount: 10, status: 'pending', paystack_reference: 'r3', paystack_transfer_code: 'T', created_at: old },
-      { id: 'w4', user_id: 'u4', amount: 10, status: 'pending', paystack_reference: 'r4', paystack_transfer_code: 'T', created_at: old },
-    ]
-    const statuses = ['not_found', 'success', 'pending', null] // null -> getStatus throws below
-    let i = 0
-    const { client } = sweepClient({ rows })
-    const summary = await sweepWithdrawals(client, {
-      getStatus: async () => { const s = statuses[i++]; if (s === null) throw new Error('boom'); return s },
-      now: NOW,
-    })
-    expect(summary).toEqual({ checked: 4, refunded: 1, completed: 1, waiting: 2, errors: 0 })
-  })
-
-  it('records trust only for the row this run completed, never for a refunded or waiting one', async () => {
-    const rows = [
-      { id: 'w1', user_id: 'u1', amount: 10, status: 'pending', paystack_reference: 'r1', paystack_transfer_code: 'T', created_at: old },
-      { id: 'w2', user_id: 'u2', amount: 20, status: 'pending', paystack_reference: 'r2', paystack_transfer_code: 'T', created_at: old },
-      { id: 'w3', user_id: 'u3', amount: 30, status: 'pending', paystack_reference: 'r3', paystack_transfer_code: 'T', created_at: old },
-    ]
-    const statuses = ['failed', 'success', 'pending']
-    let i = 0
-    const { client, rpcCalls } = sweepClient({ rows })
-    await sweepWithdrawals(client, { getStatus: async () => statuses[i++], now: NOW })
-    expect(rpcCalls).toEqual([
-      ['reject_withdrawal_request', { p_request_id: 'w1' }],
-      ['update_withdrawal_trust_after_withdrawal', { p_user_id: 'u2', p_amount: 20, p_status: 'completed' }],
-    ])
+describe('sweepWithdrawals (CareFind)', () => {
+  it('applies trust/email effects only for the changes this sweep made', async () => {
+    h.applied.length = 0
+    h.paystackFetch.mockImplementation(async (path) => (path.includes('cf_wd_ok')
+      ? { status: true, data: { status: 'success' } }
+      : path.includes('cf_wd_gone') ? { status: false, message: 'Transfer not found' } : { status: true, data: { status: 'success' } }))
+    const rows = [row({ id: 'a', paystack_reference: 'cf_wd_ok', paystack_transfer_code: 'T' }), row({ id: 'b', paystack_reference: 'cf_wd_gone' }), row({ id: 'c', paystack_reference: 'cf_wd_late', paystack_transfer_code: 'T' })]
+    const s = fakeSupabase(rows, (a) => (a.p_request_id === 'c' ? { result: 'already_completed' } : a.p_outcome === 'success' ? { result: 'completed', id: a.p_request_id } : { result: 'refunded', id: a.p_request_id }))
+    const out = await sweepWithdrawals(s, { now: NOW })
+    expect(out).toEqual({ checked: 3, refunded: 1, completed: 1, waiting: 1, errors: 0 })
+    expect(h.applied.map(([o, r]) => [o, r.id])).toEqual([['success', 'a'], ['failed', 'b']])
   })
 
   it('a query failure throws instead of reporting success', async () => {
-    const { client } = sweepClient({ queryError: { message: 'db down' } })
-    await expect(sweepWithdrawals(client, { now: NOW })).rejects.toThrow('db down')
+    const s = { rpc: async () => ({}), from: () => { const b = { select: () => b, in: () => b, not: () => b, lt: () => b, order: () => b, limit: async () => ({ data: null, error: { message: 'db down' } }) }; return b } }
+    await expect(sweepWithdrawals(s)).rejects.toThrow('db down')
   })
 })

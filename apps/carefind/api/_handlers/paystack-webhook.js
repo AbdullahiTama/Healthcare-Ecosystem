@@ -1,7 +1,8 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
-import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId } from '@care-ecosystem/shared-payments'
+import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId, settleTransferWebhook } from '@care-ecosystem/shared-payments'
+import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { runSettlementEffects } from '../_lib/settlementEffects.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
@@ -97,109 +98,14 @@ async function handleSubscription(metadata, reference, amount) {
   return { credited: true }
 }
 
-// Transfer handler (automated withdrawal payouts)
-async function handleTransferSuccess(reference) {
-  // CareFind user withdrawals
-  const { data: completedUserRows } = await supabase
-    .from('withdrawal_requests')
-    .update({ status: 'completed' })
-    .eq('paystack_reference', reference)
-    // 'approved' rows (approved by an admin while the transfer was in flight) must
-    // still settle, or they sit there forever although the money has moved.
-    .in('status', ['pending', 'approved'])
-    .select('id, user_id, amount, bank_name, account_number')
-
-  if (completedUserRows && completedUserRows[0]) {
-    // Trust is recorded here, when the transfer settles - not when it was merely accepted. Only the
-    // delivery that actually flipped the row to completed gets here, so a redelivery cannot count twice.
-    await recordWithdrawalTrust(completedUserRows[0].user_id, completedUserRows[0].amount, 'completed')
-    try {
-      const { data: authData } = await supabase.auth.admin.getUserById(completedUserRows[0].user_id)
-      const email = authData?.user?.email
-      if (email) {
-        await enqueueOutbox({
-          templateKey: 'withdrawal_completed',
-          toEmail: email,
-          payload: { fullName: email, amount: completedUserRows[0].amount, reference, bankName: completedUserRows[0].bank_name, accountNumber: completedUserRows[0].account_number },
-          subject: 'CareFind: withdrawal settled',
-          sourceId: completedUserRows[0].id,
-          idempotencyKey: `withdrawal-completed:${reference}`,
-        })
-        flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal flush error:', err))
-      }
-    } catch (err) {
-      console.error('[paystack-webhook] withdrawal email error:', err)
-    }
-  }
-
-  // CareHub business withdrawals
-  await supabase
-    .from('business_withdrawal_requests')
-    .update({ status: 'completed' })
-    .eq('paystack_reference', reference)
-    .in('status', ['pending', 'processing'])
-
-  return { received: true }
-}
-
-// Withdrawal trust (tiers, streaks) must reflect what actually settled. Best effort: a failure here must
-// never undo or block the settlement that triggered it.
-async function recordWithdrawalTrust(userId, amount, status) {
-  try {
-    const { error } = await supabase.rpc('update_withdrawal_trust_after_withdrawal', { p_user_id: userId, p_amount: amount, p_status: status })
-    if (error) console.error('[paystack-webhook] trust update failed:', error.message)
-  } catch (err) {
-    console.error('[paystack-webhook] trust update error:', err)
-  }
-}
-
-async function handleTransferFailed(reference) {
-  // CareFind user withdrawals
-  const { data: requests } = await supabase
-    .from('withdrawal_requests')
-    .select('id')
-    .eq('paystack_reference', reference)
-    .eq('status', 'pending')
-    .limit(1)
-
-  if (requests && requests.length > 0) {
-    const { data: rejected } = await supabase.rpc('reject_withdrawal_request', { p_request_id: requests[0].id })
-    try {
-      const { data: failedRow } = await supabase.from('withdrawal_requests').select('id, user_id, amount').eq('id', requests[0].id).maybeSingle()
-      if (failedRow) {
-        // 'ok' means THIS delivery refunded it; any other result was settled by another path already.
-        if (rejected === 'ok') await recordWithdrawalTrust(failedRow.user_id, failedRow.amount, 'failed')
-        const { data: authData } = await supabase.auth.admin.getUserById(failedRow.user_id)
-        const email = authData?.user?.email
-        if (email) {
-          await enqueueOutbox({
-            templateKey: 'withdrawal_failed',
-            toEmail: email,
-            payload: { fullName: email, amount: failedRow.amount, reference },
-            subject: 'CareFind: withdrawal failed',
-            sourceId: failedRow.id,
-            idempotencyKey: `withdrawal-failed:${reference}`,
-          })
-          flushOutbox().catch((err) => console.error('[paystack-webhook] withdrawal-failed flush error:', err))
-        }
-      }
-    } catch (err) {
-      console.error('[paystack-webhook] withdrawal-failed email error:', err)
-    }
-  }
-
-  // CareHub business withdrawals
-  const { data: bizRequests } = await supabase
-    .from('business_withdrawal_requests')
-    .select('id')
-    .eq('paystack_reference', reference)
-    .in('status', ['pending', 'processing'])
-    .limit(1)
-
-  if (bizRequests && bizRequests.length > 0) {
-    await supabase.rpc('reject_business_withdrawal', { p_request_id: bizRequests[0].id })
-  }
-
+// Transfer webhooks (automated withdrawal payouts). The DATABASE settles them (settle_withdrawal /
+// settle_business_withdrawal: replay-safe, refunds at most once, completes only for the amount reserved, and a
+// reversal of an already-completed transfer is refunded); this only maps the event to an outcome and runs the
+// side effects (trust tier, email) for a change THIS delivery made. An RPC error throws, so the event is
+// recorded as failed and Paystack's retry settles it.
+async function handleTransferEvent(event) {
+  const settled = await settleTransferWebhook(supabase, event, { logger: paymentLogger })
+  if (settled.kind === 'carefind') await applyWithdrawalResult(supabase, settled.outcome, settled.result)
   return { received: true }
 }
 
@@ -661,13 +567,8 @@ async function processWebhookEvent(event) {
     return 'ignored'
   }
 
-  if (event.event === 'transfer.success') {
-    await handleTransferSuccess(event.data.reference)
-    return 'processed'
-  }
-
-  if (event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
-    await handleTransferFailed(event.data.reference)
+  if (event.event === 'transfer.success' || event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
+    await handleTransferEvent(event)
     return 'processed'
   }
   return 'ignored'
