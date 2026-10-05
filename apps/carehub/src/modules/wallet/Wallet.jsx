@@ -8,6 +8,12 @@ import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Emp
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, success, danger, warning, bg } = theme
 
+// Ledger types as the owner reads them (the table stores the raw type).
+const TYPE_LABELS = {
+  booking_credit: 'booking', shop_credit: 'shop sale', shop_release: 'shop sale released',
+  refund_debit: 'refund', refund_restore: 'refund reversed', withdrawal: 'withdrawal', withdrawal_refund: 'withdrawal returned',
+}
+
 export default function Wallet({ brand, role }) {
   const [wallet, setWallet] = useState(null)
   const [txs, setTxs] = useState([])
@@ -145,8 +151,8 @@ export default function Wallet({ brand, role }) {
     showToast('Transactions exported!', { type: 'success' })
   }
 
-  const filtered = filter === 'all' ? txs : txs.filter(t => t.type === filter)
-  const totalReceived = txs.filter(t => t.type === 'booking_credit' || t.type === 'release').reduce((s, t) => s + (t.amount || 0), 0)
+  const filtered = filter === 'all' ? txs : txs.filter(t => (filter === 'booking_credit' ? t.type === 'booking_credit' || t.type === 'shop_credit' : t.type === filter))
+  const totalReceived = txs.filter(t => t.type === 'booking_credit' || t.type === 'shop_credit' || t.type === 'release').reduce((s, t) => s + (t.amount || 0), 0)
   const isOwner = role === 'Owner'
 
   if (loading) return <Loading text="Loading wallet..." />
@@ -196,7 +202,7 @@ export default function Wallet({ brand, role }) {
         count={`${filtered.length} transaction${filtered.length !== 1 ? 's' : ''}`}
         columns={[
           { key: 'created_at', label: 'Date', sortable: true, render: r => <span style={{ fontSize: '12px', color: gray600 }}>{r.created_at ? new Date(r.created_at).toLocaleDateString() : '—'}</span> },
-          { key: 'type', label: 'Type', sortable: true, render: r => <Pill label={r.type} type={r.type === 'booking_credit' || r.type === 'release' ? 'green' : r.type === 'refund' ? 'red' : r.type === 'withdrawal' ? 'amber' : 'gray'} /> },
+          { key: 'type', label: 'Type', sortable: true, render: r => <Pill label={TYPE_LABELS[r.type] || r.type} type={r.type === 'booking_credit' || r.type === 'shop_credit' || r.type === 'shop_release' || r.type === 'release' ? 'green' : r.type === 'refund' ? 'red' : r.type === 'withdrawal' ? 'amber' : 'gray'} /> },
           { key: 'amount', label: 'Amount', sortable: true, render: r => <span style={{ fontWeight: '800', fontSize: '13px', color: r.amount < 0 ? danger : success }}>{r.amount < 0 ? '-' : '+'}{naira(Math.abs(r.amount || 0))}</span> },
           { key: 'reference', label: 'Reference', render: r => <span style={{ fontSize: '11px', color: gray400, fontFamily: theme.fontMono }}>{r.reference || '—'}</span> },
         ]}

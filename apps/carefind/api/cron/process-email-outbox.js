@@ -73,5 +73,19 @@ export default async function handler(req, res) {
     refunds = { error: e.message }
   }
 
-  return res.status(200).json({ ok: true, ...result, withdrawals, refunds })
+  // Vendor payouts: the vendor's share of a shop order moves held -> available once the order was delivered and the return
+  // window has passed. Idempotent and race-safe in the database; isolated here so it can never block email delivery.
+  let vendorPayouts
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const { data, error } = await supabase.rpc('release_shop_vendor_credits', { p_limit: 200 })
+    if (error) throw error
+    vendorPayouts = data
+    if (data?.partial > 0) paymentLogger.warn('shop.vendor_release_partial', { partial: data.partial })
+  } catch (e) {
+    console.error('[cron/process-email-outbox] vendor payout release failed', e)
+    vendorPayouts = { error: e.message }
+  }
+
+  return res.status(200).json({ ok: true, ...result, withdrawals, refunds, vendorPayouts })
 }

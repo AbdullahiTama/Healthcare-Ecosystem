@@ -314,3 +314,36 @@ create table public.notifications (
   link text,
   created_at timestamptz not null default now()
 );
+
+-- ---- Shop returns / cancellation (vendor payout model), as read from production. -------------------------
+create or replace function auth.email() returns text language sql stable as
+  $$ select nullif(current_setting('request.jwt.claim.email', true), '') $$;
+alter table public.businesses add column if not exists email text;
+create table public.shop_order_returns (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.shop_orders(id),
+  customer_id uuid not null,
+  vendor_business_id uuid not null,
+  status text not null default 'requested',
+  reason text not null,
+  description text,
+  refund_amount_kobo integer not null,
+  refund_method text,
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by uuid,
+  resolution_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_order_returns_refund_amount_kobo_check check (refund_amount_kobo >= 0),
+  constraint shop_order_returns_refund_method_check check (refund_method = any (array['original_payment','wallet','manual'])),
+  constraint shop_order_returns_status_check check (status = any (array['requested','approved','rejected','completed','cancelled']))
+);
+create table public.staff_notifications (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid, staff_id uuid, is_owner boolean, kind text, title text, body text, link text,
+  created_at timestamptz not null default now()
+);
+create function public.current_business_ids() returns setof uuid language sql stable as
+  $$ select id from public.businesses where lower(email) = lower(auth.email()) $$;
+create function public.shop_restore_inventory_on_cancel(p_order_id uuid) returns void language sql as $$ select $$;
