@@ -85,14 +85,17 @@ Each screen keeps its existing permission key so that roles already created keep
 | Platform | Audit log | `/platform/audit-log` | `audit_log` | `AuditLog` |
 | Platform | Errors | `/platform/errors` | `errors` | `ErrorsTab` |
 | Platform | Email templates | `/platform/email-templates` | `email_templates` | `EmailTemplatesTab` |
+| Platform | Feed ranking | `/platform/feed-ranking` | `overview` | `FeedRankingConfig` and `DistributionExperiments`, which today sit at the bottom of the overview tab; the permission key is unchanged so nobody gains or loses access |
 
 Further rules:
 
-- **Alerts** (`notifications`) leaves the sidebar and becomes the bell in the top bar, opening a panel with the same content as `NotificationsTab`.
+- **Alerts** (`notifications`) leaves the sidebar and becomes the bell in the top bar, opening a panel with the same content as `NotificationsTab`. In Plan 1 the bell links to an interim `/admin/alerts` page that renders the existing tab; it becomes a panel in Plan 2 when the batch query behind it is retired.
 - **Pending counts** appear beside Queue, Reports, Verifications, Claims, News, Withdrawals, Agent applications and Shop.
 - **A group with no permitted screens is hidden.**
+- **Interim Directory screens in Plan 1.** Until the three business lists are merged in Plan 2, `BusinessesHub` and `BusinessDirectoryPage` are mounted unchanged inside the console as "Business hub" (`/directory/business-hub`, key `businesses`) and "Directory manager" (`/directory/manager`, key `business_import`), so no function is lost and both are gated. The Categories screen and the `business_categories` key arrive with the merge.
+- **Pending counts in Plan 1** cover Queue, Reports, Verifications, Claims, News and Withdrawals. Agent applications and Shop gain counts when those screens are migrated in Plan 2.
 - **New permission keys are not granted implicitly to restricted roles.** The sidebar today treats any key that is not explicitly `false` as allowed. For the five new keys, a role sees the screen only if it is the unrestricted admin role or the key is explicitly `true`. Existing keys keep today's behaviour.
-- **Redirects:** `/admin-panel` → `/admin`; `/admin/dashboard` → `/admin`; `/admin/businesses` → `/admin/directory/businesses` (preserving `?id=` as `/:id`); `/admin/applications` and `/admin/agents` → `/admin/agents/applications`; `/admin/earnings` → `/admin/agents/earnings`; `/admin/transfers` → `/admin/agents/transfers`; `/business-directory` → `/admin/directory/businesses`.
+- **Redirects:** `/admin-panel` → `/admin`; `/admin/dashboard` → `/admin`; `/admin/businesses` → the business list (in Plan 1 the interim `/admin/directory/business-hub`, keeping `?id=`; after the merge `/admin/directory/businesses/:id`); `/admin/applications` and `/admin/agents` → `/admin/agents/applications`; `/admin/earnings` → `/admin/agents/earnings`; `/admin/transfers` → `/admin/agents/transfers`; `/business-directory` → the directory screens (in Plan 1 the interim `/admin/directory/manager`).
 - **Agent-facing routes are untouched:** `/agent-login`, `/agents/register`. The routes `/agents/approval`, `/agents/earnings` and `/agents/transfer` currently render the admin components without a gate; they redirect to the gated console.
 - **The public route `/business-discovery` is untouched.** It imports hooks and `BusinessCard` from the `business-directory` module; those shared pieces stay where they are.
 
@@ -156,21 +159,19 @@ In step 1, the body of `AdminPanel.jsx` becomes `legacy/LegacyScreens.jsx`: it k
 
 ## 6. Building blocks
 
-All live in `admin/ui` and build on the design system (`Card`, `Button`, `Input`, `StatusBadge`, `Empty`, `ConfirmDialog`, `Toast`) and the existing admin pieces (`AdminPageHeader`, `AdminFilterBar`, `FilterPills`, `BulkActionBar`, `RowActions`), which are extended rather than duplicated.
+**Amended 2026-10-05 during planning.** The shared design system (`packages/design-system`, re-exported from `src/components/ui`) already ships most of what this section first proposed to build: `DashboardShell`, `PageHeader`, `MetricGrid`, `StatCard`, `SectionCard`, `DataTable` (sorting, pagination, loading/error/empty states and an automatic phone card layout), `FilterBar`, `SearchBar`, `Modal` with a `drawer` variant (focus trap, Esc, focus return), `StatusBadge`, `Empty`, `ErrorState`, `ConfirmDialog` and `Toast`. The console uses those. Only the pieces below are new, and they live in `admin/ui`.
 
-| Block | Responsibility | Depends on |
+| Block | Responsibility | Built on |
 |---|---|---|
-| `PageHeader` | Title, one-line summary, primary action slot | — |
-| `StatTile` | Label, value, context line, `tone` (neutral, warning, danger), optional link | — |
-| `DataTable` | Column definitions, sortable headers, sticky header, row click, row selection, pagination, loading skeleton rows; renders stacked cards below 768px using columns marked `primary` | `BulkActionBar` |
-| `FilterBar` | Search with leading icon, pill filters with counts, date range; reads and writes URL state through `useUrlFilters` | `FilterPills` |
-| `DetailDrawer` | Slide-over panel bound to a record id in the URL; header, scrolling body, pinned action footer; focus trap, Esc to close, focus returns to the originating row; full-screen below 768px | — |
-| `DetailPage` | Breadcrumb, header with actions, tabs, two-column body | — |
-| `StatusPill` | One mapping of status to colour and label | — |
-| `LoadingState`, `EmptyState`, `ErrorState` | Skeleton; message with a next step; message with retry | — |
-| `NoAccess` | Shown when a permission check fails | — |
+| `useUrlFilters(defaults)` | Maps search text, filters, page and the open record id to the query string | `react-router-dom` |
+| `DetailDrawer` | Slide-over for one record, bound to a record id in the URL | `Modal variant="drawer"` |
+| `StatusPill` | Adds the admin statuses the shared registry lacks (approved, rejected, resolved, flagged) | `Pill`, `StatusBadge` |
+| `primaryCell`, `selectionColumn` | A keyboard-reachable "open record" cell and a checkbox column, expressed as `DataTable` column definitions so the shared table is not modified | `DataTable` |
+| `NoAccess` | Shown when a permission check fails | `Empty` |
 
-`useUrlFilters(schema)` is the one hook that maps filter state to the query string.
+Existing admin pieces (`AdminPageHeader`, `AdminFilterBar`, `FilterPills`, `DateRange`, `BulkActionBar`, `RowActions`, `timeAgo`, `exportCSV`) are kept and reused. `AdminPageHeader` renders its title as an `<h1>`.
+
+Server-side pagination for `DataTable` is needed first by Users, Posts and Businesses and is designed in Plan 2.
 
 ## 7. Visual standard
 
