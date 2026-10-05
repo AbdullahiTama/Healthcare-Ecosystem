@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 12 — PERFORMANCE AND RESILIENCE**
+Current phase: **PHASE 13 — FINANCIAL TEST SUITE**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -17,8 +17,8 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 09 Refund engine | COMPLETED (migration applied; app code not yet deployed) |
 | 10 Central settlement engine | COMPLETED (migration applied; app code not yet deployed) |
 | 11 Webhooks and reconciliation | COMPLETED (migrations applied; app code not yet deployed) |
-| 12 Performance and resilience | READY_FOR_REVIEW (see the Phase 12 section for what is applied; app code not yet deployed) |
-| 13 Financial test suite | NOT_STARTED |
+| 12 Performance and resilience | COMPLETED (migrations applied; app code not yet deployed) |
+| 13 Financial test suite | READY_FOR_REVIEW (migration 20261018 applied; app code not yet deployed) |
 | 14 Red-team audit | NOT_STARTED |
 | 15 Production readiness | NOT_STARTED |
 
@@ -207,3 +207,12 @@ Found: the quadratic sync; the per-row config lookup; unbounded waits on locks; 
 Unresolved: a p95 of about 5 s remains in a 20-way single-vendor burst on the Windows dev database (row-lock queueing on one wallet row; not attributed further, not claimed fixed); the finance steps still share the email cron function (a dedicated endpoint needs a Vault secret and a function slot); event retention/archiving is an owner decision; no load test on a production-like Linux database; deploy the Phase 04-12 code.
 Applied to production 2026-10-05: `carefind_20261016_reconciliation_scale`, `carefind_20261017_engine_timeouts_and_hot_paths`, and `carefind_20261016b_sync_findings_small_report_fast_path` (the repo file of 16 already contains the final sync function: creating and analysing a temp table cost about 0.5 s per call on a busy machine for a report of three findings, so the index and statistics are built only for reports over 500 findings). Catalog re-read: engine functions service_role-only with lock_timeout 10s / statement_timeout 30s (120s for reconciliation); `fn_credit_business_booking`, `_settle_shop_order`, `_apply_engine_timeouts`, `_recon_*` private; a live reconciliation run unchanged (0 critical). Side effect worth knowing: the new lock_timeout makes a pile-up of overlapping reconciliation runs fail fast with 55P03 (the next minute's run retries) instead of waiting; the concurrency tests were re-sized accordingly.
 Next phase: PHASE 13 — FINANCIAL TEST SUITE.
+
+## Phase 13 — Financial test suite
+
+Completed work: asked whether the tests would NOTICE wrong money code, and proved it. (1) `financialInvariants.db.test.js`: seeded random programs (top-ups, subscriptions, shop orders, bookings, deliveries, release, full and partial refunds that complete or fail, coin withdrawals) run through the real engines; after every step the coin wallets equal their ledgers, nothing is negative and business wallets equal their ledgers; at the end every card payment is split completely, settled payments have transaction ids and paid entities, refunds never exceed payments, reconciliation is clean; and replaying EVERY call twice ends in identical books. (2) Mutation testing: 25 deliberate defects in money code (`npm run test:mutation`, always restores the file); first run killed 21, the 3 survivors were real holes (an untested reconciliation branch, an untested webhook-replay rule, a stale mutant), all closed: 25/25 killed. (3) CI: a `finance-suite` job (Postgres 16 service) runs the shared-payments package, the PGlite engines and handlers, and the real-Postgres concurrency suites, and is triggered by `supabase/**`. (4) Handler tests for the uncovered money and auth endpoints; scripts `test:finance`, `test:finance:pg`, `test:mutation`, `bench:finance`.
+Found: **a regression I introduced** - `request_shop_return` hardening (20261013) refused the server endpoint's service-role call (no auth.uid()), so every customer return request would have failed; no delivered order or return existed yet, so nobody was affected. Fixed by `carefind_20261018_shop_return_service_caller` (the function acts for the customer NAMED by a service-role caller and applies the ownership test; a signed-in caller can never use the parameter; the endpoint passes the authenticated user), APPLIED 2026-10-06; the refund engine's tests exercised superseded definitions (now the full migration chain); CI never ran shared-payments, the concurrency suites, or reacted to migration changes; `checkBalance` summed all currencies (fixed, NGN only); `lookup-appointment` returns a patient's appointments to anyone who knows a phone number and business id, and `resolve-account` is an unauthenticated account-name oracle (both for Phase 14).
+Files: `docs/architecture/Financial-Test-Plan.md`; migration `carefind_20261018_shop_return_service_caller.sql` (+ copy); `apps/carefind/src/test/payments/{financialInvariants.db,bookingCredits,engineTimeouts}.test.js` and `mutation/`; handler tests under `api/_handlers` and `api/_lib/__tests__`; `packages/shared-payments/src/__tests__/{effects,events}.test.js`; `.github/workflows/carefind-ci.yml`; `apps/carefind/package.json`.
+Tests: CareFind api + payments 926 pass (74 files, real-Postgres suites included); shared-payments 333 (97% lines).
+Unresolved: the migrations are tested on PGlite and a plain Postgres server, never on Supabase's own stack; no browser end-to-end of a payment; mutants should grow with every bug; CareHub handlers not re-audited; the two exposures above; deploy the Phase 04-13 code.
+Next phase: PHASE 14 — RED-TEAM AUDIT.

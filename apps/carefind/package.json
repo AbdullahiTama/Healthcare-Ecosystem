@@ -11,7 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:concurrency": "vitest run --config vitest.payments.config.js src/test/payments/settlementConcurrency.pg.test.js"
+    "test:concurrency": "vitest run --config vitest.payments.config.js src/test/payments/settlementConcurrency.pg.test.js",
+    "test:finance": "vitest run api src/test/payments --exclude \"**/*.pg.test.js\"",
+    "test:finance:pg": "vitest run --no-file-parallelism pg.test",
+    "test:mutation": "node src/test/payments/mutation/run.mjs",
+    "bench:finance": "node src/test/payments/bench/scale.bench.mjs"
   },
   "dependencies": {
     "@care-ecosystem/shared-email": "file:../../packages/shared-email",

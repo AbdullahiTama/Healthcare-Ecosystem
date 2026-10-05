@@ -16,12 +16,14 @@ on:
       - 'apps/carefind/**'
       - 'apps/carehub/vercel.json'
       - 'packages/**'
+      - 'supabase/**'
       - '.github/workflows/carefind-ci.yml'
   pull_request:
     paths:
       - 'apps/carefind/**'
       - 'apps/carehub/vercel.json'
       - 'packages/**'
+      - 'supabase/**'
       - '.github/workflows/carefind-ci.yml'
 
 concurrency:
@@ -64,3 +66,54 @@ jobs:
       - name: Build
         working-directory: apps/carefind
         run: npm run build
+
+  # The financial system: every money migration is replayed on a real Postgres, the engines are exercised through it, the
+  # concurrency suites run with genuinely overlapping transactions (they are SKIPPED without PG_CONCURRENCY_URL, so the job above
+  # never runs them), and the shared payments package is tested on its own. A change to any migration triggers this job.
+  finance-suite:
+    name: Financial suite (real Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PG_CONCURRENCY_URL: postgres://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            apps/carefind/package-lock.json
+            packages/shared-payments/package-lock.json
+
+      - name: Install CareFind
+        working-directory: apps/carefind
+        run: npm ci
+
+      - name: Install shared-payments
+        working-directory: packages/shared-payments
+        run: npm ci
+
+      - name: shared-payments unit tests
+        working-directory: packages/shared-payments
+        run: npm test
+
+      - name: Financial tests (PGlite migrations, engines, handlers)
+        working-directory: apps/carefind
+        run: npm run test:finance
+
+      - name: Real-Postgres concurrency suites
+        working-directory: apps/carefind
+        run: npm run test:finance:pg

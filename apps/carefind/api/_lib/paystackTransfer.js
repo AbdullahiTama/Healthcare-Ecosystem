@@ -90,7 +90,8 @@ export function normalizeAccountName(name) {
 export async function checkBalance() {
   const data = await paystackFetch('/balance')
   if (!data.status) throw new Error('Could not check balance')
-  const available = (data.data || []).reduce((sum, b) => sum + b.available_balance, 0)
+  // Only NGN counts: summing every currency's balance overstates what can be paid out (a USD balance is not naira kobo).
+  const available = (data.data || []).filter((b) => String(b.currency || 'NGN').toUpperCase() === 'NGN').reduce((sum, b) => sum + b.available_balance, 0)
   return available
 }
 

@@ -31,7 +31,22 @@ const newDb = async () => {
   await d.exec(M('carefind_20261005_coin_writers_use_ledger'))
   await d.exec(M('carefind_20261005_lock_wallets_to_ledger'))
   await d.exec(M('carefind_20261006_settle_plan_and_carehub_appointments'))
+  await d.exec(M('carefind_20261007_commission_engine'))
+  await d.exec(M('carefind_20261008_commission_reconcile_first_payment'))
+  await d.exec(M('carefind_20261008_withdrawal_engine'))
   await d.exec(M('carefind_20261009_refund_engine'))
+  // The refund engine as PRODUCTION runs it: later migrations replaced request_refund and settle_refund (shop orders, vendor
+  // recovery) and the engine entry points' timeouts. Testing only the 09 definitions would test code that is no longer live.
+  await d.exec(M('carefind_20261010_central_settlement'))
+  await d.exec(`
+    create function public.cancel_shop_order(p_order_id uuid, p_reason text default null) returns text language sql as $$ select 'old'::text $$;
+    create function public.process_shop_return(p_return_id uuid, p_action text, p_notes text default null) returns text language sql as $$ select 'old'::text $$;
+  `)
+  await d.exec(M('carefind_20261012_shop_vendor_payouts'))
+  await d.exec(M('carefind_20261014_reconciliation'))
+  await d.exec(M('carefind_20261015_reconciliation_ops'))
+  await d.exec(M('carefind_20261016_reconciliation_scale'))
+  await d.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
   return d
 }
 beforeAll(async () => { db = await newDb() }, 180_000)

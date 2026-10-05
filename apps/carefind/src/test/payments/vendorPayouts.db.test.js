@@ -59,6 +59,7 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261015_reconciliation_ops'))
   await db.exec(M('carefind_20261016_reconciliation_scale'))
   await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))   // reorders _settle_shop_order and re-times the engines: every test below runs on the final code
+  await db.exec(M('carefind_20261018_shop_return_service_caller'))   // the endpoint calls with the service-role key and names the customer
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -412,6 +413,16 @@ describe('reconciliation and permissions', () => {
     expect((await one("select count(*)::int c from pg_proc where proname = 'request_refund'")).c).toBe(1)
   })
 
+  it('detects a vendor credit that is not subtotal minus commission (a tampered or mis-written amount)', async () => {
+    const o = await paidOrder()
+    await db.exec('set session_replication_role = replica')
+    await db.query('update shop_vendor_credits set amount_kobo = amount_kobo + 1 where order_id = $1', [o.id])
+    await db.exec('set session_replication_role = origin')
+    const rows = await all('select kind, detail from reconcile_shop_vendor_credits() where order_id = $1', [o.id])
+    expect(rows.map((r) => r.kind)).toContain('credit_amount_mismatch')
+    expect(rows.find((r) => r.kind === 'credit_amount_mismatch').detail).toMatch(new RegExp(`credit ${VENDOR + 1} <> subtotal - commission ${VENDOR}`))
+  })
+
   it('the config rows exist', async () => {
     expect(Number((await one("select value from financial_config where key = 'shop_vendor_return_window_days'")).value)).toBe(7)
   })
@@ -454,5 +465,71 @@ describe('request_shop_return hardening', () => {
     await release()
     expect((await credit(old.id)).status).toBe('released')     // outside the window: released, and no longer returnable
     await expect(request(old, null)).rejects.toThrow(/expired/)
+  })
+})
+
+describe('the booking credit primitive (carefind_20261017)', () => {
+  const credit = (b, appt, ref) => db.query('select fn_credit_business_booking($1,$2,$3,$4,$5)', [b, appt, 1000000, 200000, ref])
+  const newAppt = async (b) => (await db.query(`insert into appointments (business_id, client_name, source, fee_amount, payment_status, payment_reference) values ($1,'x','carehub',1000000,'paid',$2) returning id`, [b, ref('appt')])).rows[0].id
+
+  it('credits a business with no wallet yet (creates it) and an existing one (adds to it)', async () => {
+    const b = uid()
+    await credit(b, await newAppt(b), ref('bk'))
+    expect(await wallet(b)).toEqual({ held: 800000, avail: 0 })
+    await credit(b, await newAppt(b), ref('bk'))
+    expect(await wallet(b)).toEqual({ held: 1600000, avail: 0 })
+  })
+
+  it('is replay-safe on its own: the same reference twice credits the wallet ONCE (ledger first, wallet only for a new ledger row)', async () => {
+    const b = uid(); const appt = await newAppt(b); const r = ref('bk')
+    await credit(b, appt, r)
+    await credit(b, appt, r)
+    expect(await wallet(b)).toEqual({ held: 800000, avail: 0 })
+    expect((await ledger(b, 'booking_credit')).length).toBe(1)
+    expect((await one("select count(*)::int c from platform_transactions where reference = $1 and type = 'commission'", [r])).c).toBe(1)
+  })
+
+  it('no API role can call it', async () => {
+    for (const role of ['anon', 'authenticated', 'service_role']) {
+      await expect(asRole(role, () => credit(uid(), uid(), ref('bk')))).rejects.toThrow(/permission denied/)
+    }
+  })
+})
+
+describe('request_shop_return called by the server endpoint (service role) - carefind_20261018', () => {
+  const asServer = (o, customer, amount = null) => asRole('service_role', () => one('select request_shop_return($1, $2, null, $3, $4) r', [o.id, 'damaged', amount, customer]))
+  const asUser = (o, sub, claimed) => asRole('authenticated', () => one('select request_shop_return($1, $2, null, null, $3) r', [o.id, 'damaged', claimed]), { sub })
+
+  it('works for the customer it is told to act for (this is the production path: auth.uid() is null for the service role)', async () => {
+    const o = await paidOrder(); await deliver(o.id, 1)
+    const r = await asServer(o, o.customer)
+    expect(r.r).toBeTruthy()
+    expect((await orderRow(o.id)).status).toBe('refund_requested')
+    expect(await one('select refund_amount_kobo::int a, customer_id from shop_order_returns where id = $1', [r.r])).toEqual({ a: TOTAL, customer_id: o.customer })
+  })
+
+  it('refuses a service-role call that names nobody, and one that names somebody who does not own the order', async () => {
+    const o = await paidOrder(); await deliver(o.id, 1)
+    await expect(asServer(o, null)).rejects.toThrow(/Not authorized/)
+    await expect(asServer(o, uid())).rejects.toThrow(/Not authorized/)
+    expect((await orderRow(o.id)).status).toBe('delivered')
+  })
+
+  it('keeps every other rule: the amount cap and the window apply to the server path too', async () => {
+    const o = await paidOrder(); await deliver(o.id, 1)
+    await expect(asServer(o, o.customer, TOTAL + 1)).rejects.toThrow(/between 1 and the order total/)
+    const old = await paidOrder(); await deliver(old.id, 8)
+    await expect(asServer(old, old.customer)).rejects.toThrow(/expired/)
+  })
+
+  it('a SIGNED-IN caller cannot act for anyone else by passing a customer id (it is ignored); anon cannot call it', async () => {
+    const o = await paidOrder(); await deliver(o.id, 1)
+    await expect(asUser(o, uid(), o.customer)).rejects.toThrow(/Not authorized/)            // a stranger claiming to be the owner
+    expect((await asUser(o, o.customer, uid())).r).toBeTruthy()                             // the owner, passing garbage: acts as themselves
+    await expect(asRole('anon', () => db.query('select request_shop_return($1, $2, null, null, $3)', [o.id, 'x', o.customer]))).rejects.toThrow(/permission denied/)
+  })
+
+  it('exactly one function of that name exists (no stale overload that skips the checks)', async () => {
+    expect((await one("select count(*)::int c from pg_proc where proname = 'request_shop_return'")).c).toBe(1)
   })
 })

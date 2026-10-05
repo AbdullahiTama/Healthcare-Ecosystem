@@ -65,7 +65,10 @@ export default async function handler(req, res) {
     p_order_id: orderId,
     p_reason: reason,
     p_description: description || null,
-    p_refund_amount_kobo: order.total_kobo
+    p_refund_amount_kobo: order.total_kobo,
+    // This endpoint calls with the service-role key (no user session): the function acts for the customer NAMED here, and applies its own
+    // ownership test to it. The user was authenticated above; a signed-in caller of the function directly can never use this parameter.
+    p_customer_id: user.id,
   })
 
   if (rpcError) {

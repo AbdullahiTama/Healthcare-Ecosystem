@@ -16,3 +16,4 @@ dist/
 
 # Local git worktrees
 .claude/worktrees/
+apps/carefind/.mutation-backups/
