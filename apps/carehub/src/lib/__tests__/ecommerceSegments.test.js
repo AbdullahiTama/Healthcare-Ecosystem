@@ -29,15 +29,13 @@ describe('ecommerceSegments', () => {
   it('invalid override is ignored and falls back to businessType mapping', () => {
     expect(resolveEcommerceSegment('pharmacy', 'invalid')).toBe('retail')
   })
-  it('SEGMENT_RATES matches spec 10%/5%/2.5%', () => {
-    expect(SEGMENT_RATES.retail).toBe(0.10)
-    expect(SEGMENT_RATES.wholesale).toBe(0.05)
-    expect(SEGMENT_RATES.distributor).toBe(0.025)
+  it('SEGMENT_RATES is 20% flat for every segment (owner decision 2026-10-05)', () => {
+    expect(SEGMENT_RATES).toEqual({ retail: 0.20, wholesale: 0.20, distributor: 0.20 })
   })
   it('getCommissionRate returns correct rate and throws on invalid', () => {
-    expect(getCommissionRate('retail')).toBe(0.10)
-    expect(getCommissionRate('wholesale')).toBe(0.05)
-    expect(getCommissionRate('distributor')).toBe(0.025)
+    expect(getCommissionRate('retail')).toBe(0.20)
+    expect(getCommissionRate('wholesale')).toBe(0.20)
+    expect(getCommissionRate('distributor')).toBe(0.20)
     expect(() => getCommissionRate('invalid')).toThrow('Invalid e-commerce segment')
   })
   it('assertValidSegment throws on invalid, passes on valid', () => {
@@ -53,20 +51,16 @@ describe('ecommerceSegments', () => {
     expect(() => getCommissionRate('manufacturer')).toThrow()
   })
   it('SEGMENT_RATES stays in sync with CareFind pricing COMMISSION_RATES', async () => {
-    // Cross-app drift guard: both apps must agree on 10%/5%/2.5%
+    // Cross-app drift guard: both apps must agree on 20% flat
     const fs = await import('fs')
     const path = await import('path')
     const pricingPath = path.resolve('C:/Users/USER/Desktop/HealthCare-Ecosystem/apps/carefind/src/modules/shop/pricing.js')
     // Fallback literal check if file not readable in CI
     try {
       const content = fs.readFileSync(pricingPath, 'utf8')
-      expect(content).toContain('retail: 0.10')
-      expect(content).toContain('wholesale: 0.05')
-      expect(content).toContain('distributor: 0.025')
+      expect(content).toContain('FLAT_COMMISSION_RATE = 0.20')
     } catch {}
-    expect(SEGMENT_RATES.retail).toBe(0.10)
-    expect(SEGMENT_RATES.wholesale).toBe(0.05)
-    expect(SEGMENT_RATES.distributor).toBe(0.025)
+    expect(SEGMENT_RATES).toEqual({ retail: 0.20, wholesale: 0.20, distributor: 0.20 })
   })
   it('commissionExample arithmetic matches rate', () => {
     for (const seg of ['retail','wholesale','distributor']) {

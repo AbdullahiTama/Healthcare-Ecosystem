@@ -9,9 +9,9 @@ const P1 = 'prod-1'
 const P2 = 'prod-2'
 
 const TERMS = [
-  { id: 't-retail', segment: 'retail', version: 'v1', title: 'Retail Terms', content: 'Retail Terms full content with commission 10% at top. '.repeat(5), commission_rate: 0.10, commission_label: '10%', is_active: true },
-  { id: 't-wholesale', segment: 'wholesale', version: 'v1', title: 'Wholesale Terms', content: 'Wholesale Terms full content 5% '.repeat(5), commission_rate: 0.05, commission_label: '5%', is_active: true },
-  { id: 't-distributor', segment: 'distributor', version: 'v1', title: 'Distributor Terms', content: 'Distributor Terms full content 2.5% '.repeat(5), commission_rate: 0.025, commission_label: '2.5%', is_active: true },
+  { id: 't-retail', segment: 'retail', version: 'v1', title: 'Retail Terms', content: 'Retail Terms full content with commission 10% at top. '.repeat(5), commission_rate: 0.20, commission_label: '20%', is_active: true },
+  { id: 't-wholesale', segment: 'wholesale', version: 'v1', title: 'Wholesale Terms', content: 'Wholesale Terms full content 5% '.repeat(5), commission_rate: 0.20, commission_label: '20%', is_active: true },
+  { id: 't-distributor', segment: 'distributor', version: 'v1', title: 'Distributor Terms', content: 'Distributor Terms full content 2.5% '.repeat(5), commission_rate: 0.20, commission_label: '20%', is_active: true },
 ]
 
 function seeded() {
@@ -23,8 +23,8 @@ function seeded() {
       { id: 'p9', business_id: B, name: 'Other', price: 20, stock: 10 },
     ],
     ecommerce_applications: [
-      { id: 'appA', business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.10 },
-      { id: 'appB', business_id: B, status: 'Submitted', terms_accepted: true, segment: 'wholesale', terms_version_id: 't-wholesale', accepted_commission_rate: 0.05 },
+      { id: 'appA', business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.20 },
+      { id: 'appB', business_id: B, status: 'Submitted', terms_accepted: true, segment: 'wholesale', terms_version_id: 't-wholesale', accepted_commission_rate: 0.20 },
     ],
     ecommerce_products: [
       { id: 'e1', business_id: A, product_id: P1, status: 'Active', description: 'Good drug for fever', category: 'medicine', ecommerce_price_kobo: 1000 },
@@ -69,14 +69,14 @@ describe('ecommerceRepository', () => {
     const { repo } = seeded()
     const retail = await repo.getTermsForSegment('retail')
     expect(retail.segment).toBe('retail')
-    expect(retail.commission_rate).toBe(0.10)
+    expect(retail.commission_rate).toBe(0.20)
     expect(retail.content).toContain('10%')
     const wholesale = await repo.getTermsForSegment('wholesale')
     expect(wholesale.segment).toBe('wholesale')
-    expect(wholesale.commission_rate).toBe(0.05)
+    expect(wholesale.commission_rate).toBe(0.20)
     const distributor = await repo.getTermsForSegment('distributor')
     expect(distributor.segment).toBe('distributor')
-    expect(distributor.commission_rate).toBe(0.025)
+    expect(distributor.commission_rate).toBe(0.20)
   })
 
   it('wholesale terms do not contain retail commission leakage', async () => {
@@ -111,7 +111,7 @@ describe('ecommerceRepository', () => {
     await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', applicant_user_id: 'user-1', audit_metadata: { userAgent: 'test' }, account_number: '1234567890' })
     const rows = client.rows('ecommerce_applications')
     expect(rows.length).toBe(1)
-    expect(rows[0]).toMatchObject({ business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.10, applicant_user_id: 'user-1', account_number: '1234567890' })
+    expect(rows[0]).toMatchObject({ business_id: A, status: 'Approved', terms_accepted: true, segment: 'retail', terms_version_id: 't-retail', accepted_commission_rate: 0.20, applicant_user_id: 'user-1', account_number: '1234567890' })
     expect(rows[0].acceptance_timestamp).toBeTruthy()
     expect(rows[0].approval_timestamp).toBeTruthy()
     expect(rows[0].submitted_at).toBeTruthy()
@@ -122,21 +122,21 @@ describe('ecommerceRepository', () => {
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
     await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', terms_version_id: 't-retail', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
-    expect(row.accepted_commission_rate).toBe(0.10)
+    expect(row.accepted_commission_rate).toBe(0.20)
   })
   it('successful wholesale Apply stores 5% rate', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
     await repo.submitApplication(B, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'wholesale', terms_version_id: 't-wholesale', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications').find(r => r.business_id === B)
-    expect(row.accepted_commission_rate).toBe(0.05)
+    expect(row.accepted_commission_rate).toBe(0.20)
   })
   it('successful distributor Apply stores 2.5% rate', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
     await repo.submitApplication('biz-C', { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'distributor', terms_version_id: 't-distributor', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
-    expect(row.accepted_commission_rate).toBe(0.025)
+    expect(row.accepted_commission_rate).toBe(0.20)
   })
 
   it('Apply auto-resolves terms_version when only segment given', async () => {
@@ -145,7 +145,7 @@ describe('ecommerceRepository', () => {
     await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'Ada', contactPhone: '08012345678' }, segment: 'retail', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.terms_version_id).toBe('t-retail')
-    expect(row.accepted_commission_rate).toBe(0.10)
+    expect(row.accepted_commission_rate).toBe(0.20)
   })
 
   it('Apply without explicit acceptance is blocked (Apply cannot be completed without required acceptance)', async () => {
@@ -300,9 +300,9 @@ describe('ecommerceRepository', () => {
 
   it('downstream commission matches accepted segment rate', async () => {
     const cases = [
-      { seg: 'retail', id: 't-retail', rate: 0.10 },
-      { seg: 'wholesale', id: 't-wholesale', rate: 0.05 },
-      { seg: 'distributor', id: 't-distributor', rate: 0.025 },
+      { seg: 'retail', id: 't-retail', rate: 0.20 },
+      { seg: 'wholesale', id: 't-wholesale', rate: 0.20 },
+      { seg: 'distributor', id: 't-distributor', rate: 0.20 },
     ]
     for (const c of cases) {
       const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
@@ -348,7 +348,7 @@ describe('ecommerceRepository', () => {
     await repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, terms_version_id: 't-distributor', account_number: '1234567890' })
     const row = client.rows('ecommerce_applications')[0]
     expect(row.segment).toBe('distributor')
-    expect(row.accepted_commission_rate).toBe(0.025)
+    expect(row.accepted_commission_rate).toBe(0.20)
   })
   it('submit rejects whitespace contactName/phone', async () => {
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS] })
@@ -417,7 +417,7 @@ describe('ecommerceRepository', () => {
     await expect(repo.setStatus(A, P1, 'Active')).rejects.toThrow('Description')
   })
   it('terms commission_rate must match configured SEGMENT_RATES', async () => {
-    const mismatched = [{ id: 't-bad', segment: 'retail', version: 'v2', title: 'Bad', content: 'bad', commission_rate: 0.20, commission_label: '20%', is_active: true }]
+    const mismatched = [{ id: 't-bad', segment: 'retail', version: 'v2', title: 'Bad', content: 'bad', commission_rate: 0.15, commission_label: '15%', is_active: true }]
     const client = createInMemoryClient({ ecommerce_terms: [...TERMS, ...mismatched] })
     const repo = createEcommerceRepository({ request: client, upload: async () => 'url' })
     await expect(repo.submitApplication(A, { terms_accepted: true, seller_info: { contactName: 'A', contactPhone: '080' }, segment: 'retail', terms_version_id: 't-bad', account_number: '1234567890' })).rejects.toThrow('mismatch')

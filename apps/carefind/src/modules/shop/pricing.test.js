@@ -12,19 +12,19 @@ import {
 
 describe('Pricing Engine', () => {
   describe('calculateCommission', () => {
-    it('calculates retail commission (10%)', () => {
-      expect(calculateCommission('retail', 350000)).toBe(35000) // ₦3500 → ₦350
-      expect(calculateCommission('retail', 100000)).toBe(10000) // ₦1000 → ₦100
+    it('calculates retail commission (20% flat)', () => {
+      expect(calculateCommission('retail', 350000)).toBe(70000) // ₦3500 → ₦700
+      expect(calculateCommission('retail', 100000)).toBe(20000) // ₦1000 → ₦200
     })
 
-    it('calculates wholesale commission (5%)', () => {
-      expect(calculateCommission('wholesale', 1000000)).toBe(50000) // ₦10000 → ₦500
-      expect(calculateCommission('wholesale', 200000)).toBe(10000) // ₦2000 → ₦100
+    it('calculates wholesale commission (20% flat)', () => {
+      expect(calculateCommission('wholesale', 1000000)).toBe(200000) // ₦10000 → ₦2000
+      expect(calculateCommission('wholesale', 200000)).toBe(40000) // ₦2000 → ₦400
     })
 
-    it('calculates distributor commission (2.5%)', () => {
-      expect(calculateCommission('distributor', 5000000)).toBe(125000) // ₦50000 → ₦1250
-      expect(calculateCommission('distributor', 1000000)).toBe(25000) // ₦10000 → ₦250
+    it('calculates distributor commission (20% flat)', () => {
+      expect(calculateCommission('distributor', 5000000)).toBe(1000000) // ₦50000 → ₦10000
+      expect(calculateCommission('distributor', 1000000)).toBe(200000) // ₦10000 → ₦2000
     })
 
     it('returns 0 for zero order total', () => {
@@ -135,10 +135,10 @@ describe('Pricing Engine', () => {
         includeDelivery: false
       })
       
-      expect(result.commission).toBe(35000) // 10% of ₦3500
+      expect(result.commission).toBe(70000) // 20% of ₦3500
       expect(result.fulfilment).toBe(60000) // MAX(₦600, 3% of ₦3500)
       expect(result.delivery).toBe(0) // not included
-      expect(result.total).toBe(95000) // 35000 + 60000 + 0
+      expect(result.total).toBe(130000) // 70000 + 60000 + 0
     })
 
     it('calculates all fees with delivery', () => {
@@ -149,10 +149,10 @@ describe('Pricing Engine', () => {
         includeDelivery: true
       })
       
-      expect(result.commission).toBe(35000)
+      expect(result.commission).toBe(70000)
       expect(result.fulfilment).toBe(60000)
       expect(result.delivery).toBe(60000) // 4-6km bracket
-      expect(result.total).toBe(155000) // 35000 + 60000 + 60000
+      expect(result.total).toBe(190000) // 70000 + 60000 + 60000
     })
 
     it('defaults to no delivery', () => {
@@ -181,9 +181,7 @@ describe('Pricing Engine', () => {
     })
 
     it('exports COMMISSION_RATES', () => {
-      expect(COMMISSION_RATES.retail).toBe(0.10)
-      expect(COMMISSION_RATES.wholesale).toBe(0.05)
-      expect(COMMISSION_RATES.distributor).toBe(0.025)
+      expect(COMMISSION_RATES).toEqual({ retail: 0.20, wholesale: 0.20, distributor: 0.20 })
     })
 
     it('exports FULFILMENT_RATES', () => {

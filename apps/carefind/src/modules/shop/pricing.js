@@ -3,10 +3,14 @@
 
 export const SEGMENTS = ['retail', 'wholesale', 'distributor']
 
+// Owner decision 2026-10-05: the shop commission is 20% flat for every segment (it replaced 10% / 5% / 2.5%). The per-segment
+// shape is kept because every caller passes a segment. The database is the authority: calculate_shop_commission() reads
+// financial_config.shop_commission_rate and create_shop_order() refuses an order whose commission differs, so this MUST match it.
+export const FLAT_COMMISSION_RATE = 0.20
 export const COMMISSION_RATES = {
-  retail: 0.10,      // 10%
-  wholesale: 0.05,   // 5%
-  distributor: 0.025 // 2.5%
+  retail: FLAT_COMMISSION_RATE,
+  wholesale: FLAT_COMMISSION_RATE,
+  distributor: FLAT_COMMISSION_RATE,
 }
 
 export const FULFILMENT_RATES = {
