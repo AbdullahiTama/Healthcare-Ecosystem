@@ -36,7 +36,7 @@ describe('PaystackProvider: contract', () => {
   it('implements the full PaymentProvider interface', () => {
     const { provider } = make(() => reply(200, {}))
     expect(assertPaymentProvider(provider)).toBe(provider)
-    expect(PROVIDER_METHODS).toHaveLength(8)
+    expect(PROVIDER_METHODS).toHaveLength(9)
   })
 
   it('assertPaymentProvider rejects an incomplete provider', () => {
@@ -154,6 +154,23 @@ describe('PaystackProvider: refundPayment', () => {
     const err = await flaky.provider.refundPayment({ reference: PAY_REF }).catch((e) => e)
     expect(err.ambiguous).toBe(true)
     expect(flaky.fetchImpl).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('PaystackProvider: verifyRefund', () => {
+  it.each([['pending', 'processing'], ['processed', 'completed'], ['failed', 'failed']])('maps %s to %s (object or list reply)', async (from, to) => {
+    for (const shape of [(d) => d, (d) => [d]]) {
+      const { provider, calls } = make(() => reply(200, { status: true, data: shape({ id: 9, status: from, amount: 250000 }) }))
+      expect(await provider.verifyRefund({ reference: PAY_REF })).toMatchObject({ providerRefundId: '9', status: to, amountKobo: 250000 })
+      expect(calls[0]).toMatchObject({ path: `/refund/${PAY_REF}`, method: 'GET' })
+    }
+  })
+  it('an empty reply is not_found, an unknown status is refused, and a bad reference never reaches the provider', async () => {
+    expect((await make(() => reply(200, { status: true, data: [] })).provider.verifyRefund({ reference: PAY_REF }).catch((e) => e)).code).toBe('not_found')
+    expect((await make(() => reply(200, { status: true, data: { id: 1, status: 'weird' } })).provider.verifyRefund({ reference: PAY_REF }).catch((e) => e)).code).toBe('invalid_response')
+    const bad = make(() => reply(200, {}))
+    expect((await bad.provider.verifyRefund({ reference: 'no spaces allowed' }).catch((e) => e)).code).toBe('invalid_request')
+    expect(bad.fetchImpl).not.toHaveBeenCalled()
   })
 })
 

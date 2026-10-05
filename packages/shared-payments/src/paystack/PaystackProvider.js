@@ -175,6 +175,20 @@ export class PaystackProvider {
     return { providerRefundId: String(d.id ?? ''), status, amountKobo: Number.isSafeInteger(d.amount) ? d.amount : amountKobo ?? null, raw: d }
   }
 
+  // Look a refund up by the reference of the payment it belongs to. Read-only, so safe to retry. A refund the provider
+  // has never heard of is reported as `not_found` (the caller must NOT treat that as "failed" without a grace period).
+  async verifyRefund({ reference }) {
+    const op = 'verifyRefund'
+    assertPattern(op, reference, PAYMENT_REF, 'reference')
+    const { data, correlationId } = await this.#http.request({ operation: op, path: `/refund/${encodeURIComponent(reference)}` })
+    this.#assertOk(op, data, correlationId)
+    const d = Array.isArray(data.data) ? data.data[0] : data.data
+    if (!d || typeof d !== 'object') throw new ProviderError({ code: E.NOT_FOUND, message: 'The provider has no refund for this payment', operation: op, correlationId, retryable: false, ambiguous: false })
+    const status = REFUND_STATUS[String(d.status || '').toLowerCase()]
+    if (!status) throw badResponse(op, correlationId, `Provider returned an unknown refund status "${d.status}"`, true)
+    return { providerRefundId: String(d.id ?? ''), status, amountKobo: Number.isSafeInteger(d.amount) ? d.amount : null, raw: d }
+  }
+
   // ---- transfers / payouts --------------------------------------------------------------
 
   async resolveAccount({ accountNumber, bankCode }) {
