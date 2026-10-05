@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 08 — WITHDRAWAL ENGINE**
+Current phase: **PHASE 09 — REFUND ENGINE**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -12,9 +12,9 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 04 CareFind payment flows | COMPLETED (migrations applied; app code not yet deployed) |
 | 05 CareFind CareCoin wallet | COMPLETED (migrations applied; app code not yet deployed) |
 | 06 CareHub payment flows | COMPLETED (migrations applied; app code not yet deployed) |
-| 07 Commission engine | COMPLETED (migration applied; one follow-up migration pending; app code not yet deployed) |
+| 07 Commission engine | COMPLETED (migrations applied incl. the follow-up; app code not yet deployed) |
 | 08 Withdrawal engine | READY_FOR_REVIEW (migrations written, not applied) |
-| 09 Refund engine | NOT_STARTED |
+| 09 Refund engine | READY_FOR_REVIEW (migration applied; app code not yet deployed) |
 | 10 Central settlement engine | NOT_STARTED |
 | 11 Webhooks and reconciliation | NOT_STARTED |
 | 12 Performance and resilience | NOT_STARTED |
@@ -150,3 +150,13 @@ Tests: CareFind payments + api with `PG_CONCURRENCY_URL` set: 692 passed (55 fil
 Found: F-32 CareFind `/api/withdrawal-pin/set` lets any session replace a PIN (needs a forgot-PIN flow); F-33 `cancel-appointment` marks card payments refunded without moving money and used to abuse the withdrawal path (Phase 09); 3 legacy CareFind withdrawals (41 coins) debited with no transfer in production, two without a reference: admin reject needed.
 Unresolved: apply + deploy; decide on the 3 legacy withdrawals; F-32/F-33; refund engine (Phase 09); business wallets still have no balance ledger of their own beyond `business_wallet_transactions`; docs relocation; `callback_url` client-supplied (F-27).
 Next phase: PHASE 09 — REFUND ENGINE.
+
+## Phase 09 — Refund engine
+
+Completed work: one `refunds` table and one door for CareFind and CareHub refunds. Kinds: `card` (completes ONLY when Paystack confirms), `carecoin` (ledger, same transaction), `platform_funded` (platform pays, business keeps its money). `request_refund` is atomic: policy checks, entity lock, the business share taken back (held first, then available, never below zero, shortfall recorded), one live refund per payment; the provider is called after it commits. `settle_refund` is the only door for provider outcomes (webhook, sweep, handler): replay-safe, amount-checked, a failure restores the business exactly, contradictions reported. Payments that could not be applied (`needs_refund`) are refunded in full. Cancelled-but-unrefunded appointments are retried by the cron. Reconciliation covers 11 inconsistency kinds. `PaystackProvider.verifyRefund` added; the sweep asks the provider before ever re-sending. Retired `refund_appointment_payment` (refunded coins for card payments). Owner policy confirmed 2026-10-05 (full refund when the business cancels any time or the patient cancels 24h+ ahead; platform absorbs Paystack's fee).
+Files: migration `carefind_20261009_refund_engine.sql` (+ copy in `apps/carefind/sql/`); `packages/shared-payments/src/{refunds,paystack/PaystackProvider,PaymentProvider}.js`; CareFind `api/_handlers/{cancel-appointment,paystack-webhook}.js`, `api/cron/process-email-outbox.js`; CareHub `api/_handlers/cron-reconcile-payments.js`; docs `docs/architecture/Refund-Engine.md`.
+Migrations: 2 — **APPLIED to production 2026-10-05**: `carefind_20261008_commission_reconcile_first_payment` (replaces the Phase 07 reconcile function) and `carefind_20261009_refund_engine`. Catalog re-read: one function per name, `refunds_guard` executable by nobody, the rest service_role only, `refunds` has RLS and no grants, `appointments.cancelled_at` now exists, `refund_appointment_payment` gone, `reconcile_refunds` and `reconcile_commissions` return 0 rows.
+Tests: PGlite 20 + real-Postgres 8 (mutation-checked); shared-payments 25 + 4; CareFind cancel-appointment 10, webhook refund events 4; CareHub cron 2.
+Found: **F-34** production lacked `appointments.cancelled_at`, so `cancel-appointment` failed on EVERY cancellation (migration drift; fixed by the refund migration); `refund_appointment_payment` refunded coins to nobody for card payments.
+Unresolved: **`carefind_20261008_withdrawal_engine` (Phase 08) is still NOT applied** - applying it before the new CareFind/CareHub code is deployed breaks live withdrawals; deploy Phase 04-09 code; Paystack must send `refund.*` events to the shared webhook; shop returns are not on the engine (Phase 10); no admin UI for admin/platform-funded refunds; F-32 (CareFind PIN replaceable by any session); 3 legacy withdrawals (41 coins) need an admin decision.
+Next phase: PHASE 10 — CENTRAL SETTLEMENT ENGINE.
