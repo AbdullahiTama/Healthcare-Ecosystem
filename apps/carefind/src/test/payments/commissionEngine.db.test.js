@@ -295,6 +295,17 @@ describe('reconciliation and repair', () => {
     expect(kinds.has('wrong_agent')).toBe(true)
   })
 
+  it('does NOT flag a first payment whose created_at is later than a sibling (created_at is transaction start, "first" is lock order)', async () => {
+    const a = await agent(); const b = await business(a)
+    await renew(b, 5000)
+    await renew(b, 5000)
+    // make the flagged first payment look newer than the second, as happens when a transaction that started earlier waits on the lock
+    await db.exec('alter table plan_payments disable trigger all')
+    await db.query("update plan_payments set created_at = now() + interval '1 second' where business_id = $1 and is_first_payment", [b])
+    await db.exec('alter table plan_payments enable trigger all')
+    expect((await reconcile()).filter((x) => x.business_id === b)).toEqual([])
+  })
+
   it('reports a payment paid by BOTH programs (tier agent_earnings and referral commissions)', async () => {
     const a = await agent(); const b = await business(a)
     const r = await renew(b, 5000)

@@ -274,13 +274,14 @@ as $$
     from public.commissions c join public.businesses b on b.id = c.business_id
    where b.referring_agent_id is distinct from c.agent_id
   union all
-  -- a business with payments but not exactly one first payment, or whose first payment is not the earliest
+  -- a business with payments but not exactly one first payment. ("Earliest by created_at" is deliberately NOT checked:
+  -- created_at is the transaction START time, and the first payment is whichever transaction took the business lock
+  -- first, so under concurrency the two legitimately differ.)
   select 'first_payment_integrity', null::uuid, x.business_id, null::uuid, x.detail
     from (
       select pp.business_id,
              case when count(*) filter (where pp.is_first_payment) = 0 then 'payments exist but none is flagged first'
                   when count(*) filter (where pp.is_first_payment) > 1 then 'more than one payment is flagged first'
-                  when (array_agg(pp.is_first_payment order by pp.created_at, pp.id))[1] is not true then 'the flagged first payment is not the earliest'
              end detail
         from public.plan_payments pp where pp.status = 'success' group by pp.business_id
     ) x where x.detail is not null
