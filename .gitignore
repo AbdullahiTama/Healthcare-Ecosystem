@@ -13,3 +13,6 @@ dist/
 
 # Brainstorming visual companion sessions
 .superpowers/
+
+# Local git worktrees
+.claude/worktrees/
