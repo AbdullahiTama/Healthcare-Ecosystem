@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 07 — COMMISSION ENGINE**
+Current phase: **PHASE 08 — WITHDRAWAL ENGINE**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -12,8 +12,8 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 04 CareFind payment flows | COMPLETED (migrations applied; app code not yet deployed) |
 | 05 CareFind CareCoin wallet | COMPLETED (migrations applied; app code not yet deployed) |
 | 06 CareHub payment flows | COMPLETED (migrations applied; app code not yet deployed) |
-| 07 Commission engine | COMPLETED (migration applied; app code not yet deployed) |
-| 08 Withdrawal engine | NOT_STARTED |
+| 07 Commission engine | COMPLETED (migration applied; one follow-up migration pending; app code not yet deployed) |
+| 08 Withdrawal engine | READY_FOR_REVIEW (migrations written, not applied) |
 | 09 Refund engine | NOT_STARTED |
 | 10 Central settlement engine | NOT_STARTED |
 | 11 Webhooks and reconciliation | NOT_STARTED |
@@ -140,3 +140,13 @@ Migrations: 1 — **APPLIED to production 2026-10-04** (`carefind_20261007_commi
 Tests: payments folder 441 passed with `PG_CONCURRENCY_URL` set (real-Postgres included); CareHub phase-07 files 51 passed. Mutation-checked: dropping the business lock and the unique indexes fails the overlapping-transactions test (12 "first" payments).
 Unresolved / for owner: the tier-based `agent_earnings`/payout program (10/5/3%) is a separate scheme from the 40/5 referral commissions: which should pay the agent, or both? (`double_program` reconciliation flags overlaps; decision needed before Phase 08 payouts); deploy Phase 04-07 code; decision recorded 2026-10-04: agents are paid from referral commissions only, the tier-based agent_earnings scheme is to be retired in Phase 08; docs relocation still unresolved.
 Next phase: PHASE 08 — WITHDRAWAL ENGINE.
+
+## Phase 08 — Withdrawal engine
+
+Completed work: one withdrawal architecture for CareFind (CareCoins) and CareHub (business wallets). States reserved -> processing -> completed -> reversed, failed -> refunded, enforced by a trigger. The database creates the request and derives the Paystack reference from its id (no client reference, no latest-row lookup, F-01); reservation is atomic (balance, rolling 24h cap, ledger debit, request row, payout from `financial_config`) and commits before any Paystack call; the transfer is linked by request id; every provider outcome (webhook, sweep, admin, handler recovery) settles through `settle_withdrawal` / `settle_business_withdrawal`: replay-safe, refund at most once, completes only for the reserved amount, completed-then-reversed transfers are refunded, contradictory signals are reported not applied. Request tables are write-locked for every role. CareHub gained the controls CareFind has (F-08): withdrawal PIN (new `/api/withdrawal-pin`, replacing a PIN needs the current one), bank-account-name verification, minimum N100 and N1,000,000/24h cap (owner decision 2026-10-04, in `financial_config`). `verifyBusiness` ILIKE wildcard fixed (F-09). Legacy functions incl. the replay branch and the 5-arg overload dropped (F-16). Shared lifecycle logic moved to `shared-payments`. Also fixed a false alarm in the Phase 07 commission reconcile found by the concurrency suite.
+Files: migrations `carefind_20261008_withdrawal_engine.sql`, `carefind_20261008_commission_reconcile_first_payment.sql` (+ copies in `apps/carefind/sql/`); `packages/shared-payments/src/{withdrawals,pin}.js`; CareFind `api/_handlers/{initiate-withdrawal,paystack-webhook,admin-auth,cancel-appointment}.js`, `api/_lib/{withdrawalRecovery,withdrawalEffects,withdrawalAdmin,pinCrypto}.js`, admin UI (`WithdrawalsTab`, repositories), design-system `StatusBadge`; CareHub `api/_handlers/{initiate-business-withdrawal,withdrawal-pin}.js`, `api/_lib/{verifyBusiness,withdrawalRecovery}.js`, `api/router.js`, `src/modules/wallet/{WithdrawalPinField,withdrawalApi}`, Wallet and Appointments screens; docs `docs/architecture/Withdrawal-Engine.md`.
+Migrations: 2 — **NOT applied** (Supabase was unreachable at the end of the session). Apply `carefind_20261008_withdrawal_engine` TOGETHER with deploying the CareFind and CareHub code (old code calls functions/statuses that no longer exist), then `carefind_20261008_commission_reconcile_first_payment`. Re-read `proacl` afterwards.
+Tests: CareFind payments + api with `PG_CONCURRENCY_URL` set: 692 passed (55 files; includes PGlite 27 + real-Postgres 10 withdrawal tests, mutation-checked); shared-payments 188 passed; CareHub api 170 passed + wallet UI 15; CareHub production build passes.
+Found: F-32 CareFind `/api/withdrawal-pin/set` lets any session replace a PIN (needs a forgot-PIN flow); F-33 `cancel-appointment` marks card payments refunded without moving money and used to abuse the withdrawal path (Phase 09); 3 legacy CareFind withdrawals (41 coins) debited with no transfer in production, two without a reference: admin reject needed.
+Unresolved: apply + deploy; decide on the 3 legacy withdrawals; F-32/F-33; refund engine (Phase 09); business wallets still have no balance ledger of their own beyond `business_wallet_transactions`; docs relocation; `callback_url` client-supplied (F-27).
+Next phase: PHASE 09 — REFUND ENGINE.
