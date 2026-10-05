@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 10 — CENTRAL SETTLEMENT ENGINE**
+Current phase: **PHASE 11 — WEBHOOKS AND RECONCILIATION**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -15,8 +15,8 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 07 Commission engine | COMPLETED (migrations applied incl. the follow-up; app code not yet deployed) |
 | 08 Withdrawal engine | COMPLETED (migrations applied; app code not yet deployed) |
 | 09 Refund engine | COMPLETED (migration applied; app code not yet deployed) |
-| 10 Central settlement engine | READY_FOR_REVIEW (migration applied; app code not yet deployed) |
-| 11 Webhooks and reconciliation | NOT_STARTED |
+| 10 Central settlement engine | COMPLETED (migration applied; app code not yet deployed) |
+| 11 Webhooks and reconciliation | READY_FOR_REVIEW (migration applied; app code not yet deployed) |
 | 12 Performance and resilience | NOT_STARTED |
 | 13 Financial test suite | NOT_STARTED |
 | 14 Red-team audit | NOT_STARTED |
@@ -186,3 +186,13 @@ Migrations: 2 - both **APPLIED** 2026-10-05; catalog re-read (request_refund exi
 Tests: CareFind 2059, CareHub 1216, shared-payments 219, all passing (real-Postgres suites run sequentially).
 Found and fixed: `process_shop_return` approve moved no money; `cancel_shop_order` kept the customer's money for paid orders; `request_shop_return` was executable by `anon`, accepted any refund amount, and measured the window from `updated_at`; (test-found) a partial-refund history row restarted the release window, now measured from the first delivery.
 Unresolved: (1) the 9 orders paid before credits (CF-000012...000026, N1,170 of vendor share) are listed by `reconcile_shop_vendor_credits()` for a human decision, not auto-credited, because the old flow never verified those payments with Paystack; (2) deploy the code (the sweep that releases held money is in the cron); (3) a second partial refund of one order is not possible (one live refund per order); (4) no admin UI for platform-funded shop refunds; (5) vendors who accepted terms v1/v2 should accept v3; (6) shop returns cannot be refunded to wallet/manual, only to the original card.
+
+## Phase 11 — Webhooks and reconciliation
+
+Completed work: failures are now recoverable and visible. (1) What a Paystack event means moved to `api/_lib/webhookProcessor.js`, so a stored event whose processing failed is replayed by exactly the live code; bad signatures are logged. (2) `shared-payments/reconciliation.js`: replay of failed/stuck events; a sweep that asks Paystack about payments still open after 15 minutes and settles them through the one engine (and closes never-paid expired attempts); a comparison of Paystack's own list of successful charges with our intents (`charge_without_intent`, `amount_mismatch`, `transaction_id_mismatch`, `paid_not_settled`); `PaymentProvider.listTransactions` added. (3) Database: `reconciliation_findings` (auto-resolve, reopen, acknowledge, dismiss-with-note), `reconciliation_runs`, one writer `sync_reconciliation_findings`, and `run_db_reconciliation()` which finally RUNS every engine's reconcile function plus new checks on payment intents and webhook events (including every charge no intent recognised). (4) `financial_config_history` (who changed which commercial constant). (5) CareFind admin API actions to list, acknowledge/dismiss and run now; the cron runs a pass daily.
+Files: migration `carefind_20261014_reconciliation.sql` (+ copy in `apps/carefind/sql/`); `packages/shared-payments/src/{reconciliation,PaymentProvider,index,paystack/PaystackProvider}.js`; CareFind `api/_lib/{webhookProcessor,financeReconcile}.js`, `api/_handlers/{paystack-webhook,admin-auth}.js`, `api/cron/process-email-outbox.js`; doc `docs/architecture/Reconciliation.md`.
+Migrations: 1 - **APPLIED 2026-10-05**; catalog re-read (all functions `service_role` only, tables unreadable by every API role, 18 config baselines). First live run: 0 critical; 3 warnings (the 3 legacy withdrawals), 9 info (the 9 pre-credit shop orders); coins, commissions, refunds, intents and events clean.
+Tests: reconciliation.db 19; reconciliationConcurrency.pg 3 (mutation-checked); shared-payments reconciliation 22 + listTransactions 3; CareFind admin actions 6 + wiring 1.
+Found: nothing ran the engine reconcile functions and nothing stored or reported their results; a webhook that failed past Paystack's retries was lost for good; a payment missed by both the redirect and the webhook stayed unsettled indefinitely; `payment.unmatched_charge` existed only as a log line.
+Unresolved: no alert channel (owner's choice: email, Slack, PagerDuty); no admin screen for findings (API only); the cron is daily, so a payment recoverable only by the sweep can wait up to a day; no reverse comparison of settled intents against the provider list; Paystack payout/settlement-batch reconciliation is out of scope; deploy the Phase 04-11 code.
+Next phase: PHASE 12 — PERFORMANCE AND RESILIENCE.

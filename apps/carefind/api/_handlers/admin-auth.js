@@ -1,6 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { processBatch as flushOutbox } from '../_lib/emailService.js'
 import { requireAdmin } from '../_lib/requireAdmin.js'
+import { runFinanceReconciliation } from '../_lib/financeReconcile.js'
 import { decideAdminApprove, decideAdminReject } from '../_lib/withdrawalAdmin.js'
 import { settleWithdrawal } from '@care-ecosystem/shared-payments'
 import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
@@ -316,6 +317,28 @@ async function handleRequest(req, res) {
     const { data: wdRow } = await supabase.from('withdrawal_requests').select('id, status, paystack_reference').eq('id', id).maybeSingle()
     if (!wdRow) return res.status(400).json({ error: 'Withdrawal request not found' })
     return res.status(409).json({ error: decideAdminApprove(wdRow).message })
+  }
+
+  // ---- Reconciliation (Phase 11): what the money checks found, and what a person decided about it ----
+  if (action === 'admin_list_reconciliation') {
+    const status = req.body.status
+    if (status !== undefined && !['open', 'acknowledged', 'resolved', 'dismissed'].includes(status)) return res.status(400).json({ error: 'invalid status' })
+    const { data, error } = await supabase.rpc('list_reconciliation_findings', { p_status: status ?? null, p_limit: 200 })
+    if (error) return res.status(500).json({ error: 'Could not load findings' })
+    return res.status(200).json({ data: data || [] })
+  }
+  if (action === 'admin_update_reconciliation_finding') {
+    const { id, op, note } = req.body
+    if (!id || !['acknowledge', 'dismiss', 'reopen'].includes(op)) return res.status(400).json({ error: 'id and op (acknowledge | dismiss | reopen) required' })
+    if (op === 'dismiss' && String(note || '').trim().length < 5) return res.status(400).json({ error: 'A dismissal needs a note explaining why' })
+    const { data, error } = await supabase.rpc('update_reconciliation_finding', { p_id: id, p_action: op, p_note: note ? String(note).slice(0, 500) : null, p_by: admin.id })
+    if (error) return res.status(400).json({ error: error.message })
+    if (data === 'not_found') return res.status(404).json({ error: 'Finding not found' })
+    return res.status(200).json({ success: true, result: data })
+  }
+  if (action === 'admin_run_reconciliation') {
+    const report = await runFinanceReconciliation(supabase)
+    return res.status(report.failed?.length ? 207 : 200).json({ report })
   }
 
   if (action === 'reject_withdrawal') {

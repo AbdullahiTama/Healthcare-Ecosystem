@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sweepWithdrawals } from '../_lib/withdrawalRecovery.js'
 import { runRefundSweeps } from '@care-ecosystem/shared-payments'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
+import { runFinanceReconciliation } from '../_lib/financeReconcile.js'
 import { EmailService } from '@care-ecosystem/shared-email'
 
 export default async function handler(req, res) {
@@ -87,5 +88,16 @@ export default async function handler(req, res) {
     vendorPayouts = { error: e.message }
   }
 
-  return res.status(200).json({ ok: true, ...result, withdrawals, refunds, vendorPayouts })
+  // Reconciliation: replay failed webhooks, settle payments Paystack says were paid but nobody settled, compare Paystack's list of
+  // charges with our intents, run every database check. Last, so it sees what the sweeps above repaired. Never throws.
+  let reconciliation
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    reconciliation = await runFinanceReconciliation(supabase)
+  } catch (e) {
+    console.error('[cron/process-email-outbox] reconciliation failed', e)
+    reconciliation = { error: e.message }
+  }
+
+  return res.status(200).json({ ok: true, ...result, withdrawals, refunds, vendorPayouts, reconciliation })
 }

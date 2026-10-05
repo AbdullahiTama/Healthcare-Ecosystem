@@ -36,7 +36,7 @@ describe('PaystackProvider: contract', () => {
   it('implements the full PaymentProvider interface', () => {
     const { provider } = make(() => reply(200, {}))
     expect(assertPaymentProvider(provider)).toBe(provider)
-    expect(PROVIDER_METHODS).toHaveLength(9)
+    expect(PROVIDER_METHODS).toHaveLength(10)
   })
 
   it('assertPaymentProvider rejects an incomplete provider', () => {
@@ -171,6 +171,37 @@ describe('PaystackProvider: verifyRefund', () => {
     const bad = make(() => reply(200, {}))
     expect((await bad.provider.verifyRefund({ reference: 'no spaces allowed' }).catch((e) => e)).code).toBe('invalid_request')
     expect(bad.fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe('PaystackProvider: listTransactions', () => {
+  const row = (over = {}) => ({ id: 1, reference: PAY_REF, status: 'success', amount: 500000, currency: 'NGN', paid_at: '2026-10-03T10:00:00.000Z', channel: 'card', customer: { email: 'a@b.com' }, metadata: '{"a":1}', ...over })
+  const window = { from: '2026-10-03T00:00:00.000Z', to: '2026-10-04T00:00:00.000Z' }
+
+  it('normalises a page of successful transactions and reports whether there is another page', async () => {
+    const { provider, calls } = make(() => reply(200, { status: true, data: [row(), row({ id: 2, reference: 'cf_pay_zz12cd34_0123456789ab', amount: 100 })], meta: { page: 1, pageCount: 3 } }))
+    const r = await provider.listTransactions(window)
+    expect(r).toMatchObject({ skipped: 0, page: 1, hasMore: true })
+    expect(r.transactions[0]).toMatchObject({ provider: 'paystack', reference: PAY_REF, providerTransactionId: '1', status: 'success', amountKobo: 500000, currency: 'NGN', metadata: { a: 1 } })
+    expect(calls[0]).toMatchObject({ path: '/transaction', method: 'GET', query: { from: window.from, to: window.to, status: 'success', page: '1', perPage: '100' } })
+    expect((await make(() => reply(200, { status: true, data: [row()], meta: { page: 3, pageCount: 3 } })).provider.listTransactions({ ...window, page: 3 })).hasMore).toBe(false)
+  })
+
+  it('skips rows it cannot compare (and says how many) instead of guessing', async () => {
+    const { provider } = make(() => reply(200, { status: true, data: [row(), row({ amount: 1.5 }), row({ status: 'weird' }), row({ reference: null }), null], meta: { pageCount: 1 } }))
+    const r = await provider.listTransactions(window)
+    expect(r.transactions).toHaveLength(1)
+    expect(r.skipped).toBe(4)
+  })
+
+  it('validates its arguments locally and refuses a malformed reply', async () => {
+    const bad = make(() => reply(200, {}))
+    for (const args of [{ from: 'yesterday', to: window.to }, { from: window.from }, { ...window, page: 0 }, { ...window, perPage: 500 }]) {
+      expect((await bad.provider.listTransactions(args).catch((e) => e)).code).toBe('invalid_request')
+    }
+    expect(bad.fetchImpl).not.toHaveBeenCalled()
+    expect((await make(() => reply(200, { status: true, data: {} })).provider.listTransactions(window).catch((e) => e)).code).toBe('invalid_response')
+    expect((await make(() => reply(200, { status: false, message: 'nope' })).provider.listTransactions(window).catch((e) => e)).code).toBe('provider_rejected')
   })
 })
 

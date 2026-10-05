@@ -1,10 +1,9 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
-import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId, settleTransferWebhook, settleRefundWebhook } from '@care-ecosystem/shared-payments'
-import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
-import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
-import { runSettlementEffects } from '../_lib/settlementEffects.js'
+import { recordProviderEvent, finishProviderEvent, paystackEventId } from '@care-ecosystem/shared-payments'
+import { paymentLogger } from '../_lib/payments.js'
+import { processWebhookEvent } from '../_lib/webhookProcessor.js'
 
 // Single Paystack webhook for all apps - register this URL in the Paystack dashboard.
 //   charge.success   -> the ONE settlement engine (settle_payment_intent). The event decides nothing: the payment intent recorded
@@ -28,25 +27,6 @@ function readRawBody(req) {
   })
 }
 
-// Transfer webhooks (automated withdrawal payouts). The DATABASE settles them (settle_withdrawal /
-// settle_business_withdrawal: replay-safe, refunds at most once, completes only for the amount reserved, and a
-// reversal of an already-completed transfer is refunded); this only maps the event to an outcome and runs the
-// side effects (trust tier, email) for a change THIS delivery made. An RPC error throws, so the event is
-// recorded as failed and Paystack's retry settles it.
-async function handleTransferEvent(event) {
-  const settled = await settleTransferWebhook(supabase, event, { logger: paymentLogger })
-  if (settled.kind === 'carefind') await applyWithdrawalResult(supabase, settled.outcome, settled.result)
-  return { received: true }
-}
-
-// Refund webhooks (refund.pending / processing / processed / failed). The DATABASE settles them (settle_refund: replay-safe,
-// completes only for the refunded amount, a failure restores the business exactly, contradictions are reported). An RPC
-// error throws so the event is recorded as failed and Paystack's retry settles it.
-async function handleRefundEvent(event) {
-  await settleRefundWebhook(supabase, event, { logger: paymentLogger })
-  return { received: true }
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -66,6 +46,8 @@ export default async function handler(req, res) {
   const received = Buffer.from(String(req.headers['x-paystack-signature'] || ''))
   const expected = Buffer.from(hash)
   if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
+    // A forged or mis-keyed call: nothing is stored or processed, but an operator should be able to see it happening.
+    paymentLogger.warn('webhook.invalid_signature', { hasSignature: Boolean(req.headers['x-paystack-signature']), bytes: rawBody.length })
     return res.status(401).json({ error: 'Invalid signature' })
   }
 
@@ -103,7 +85,7 @@ export default async function handler(req, res) {
   // been told 200, would never redeliver. Every handler is idempotent (claim-first RPCs,
   // unique references), so a failure answers 500 and Paystack retries the event.
   try {
-    const outcome = await processWebhookEvent(event)
+    const outcome = await processWebhookEvent(supabase, event)
     if (recorded) await finishProviderEvent(supabase, recorded.event, { outcome })
   } catch (err) {
     console.error('[paystack-webhook] processing error:', err)
@@ -113,46 +95,3 @@ export default async function handler(req, res) {
   return res.status(200).json({ received: true })
 }
 
-// Settlement of a gateway payment. Every payment now has a payment intent (recorded before checkout), so this is the only
-// settlement path. -> the engine's answer, or null when the reference is not ours / not an intent.
-async function settleIntentPayment(reference) {
-  const result = await settleByReference({ supabase, provider: getPaystackProvider(), reference, logger: paymentLogger })
-  if (result.outcome === 'unknown_reference') return null
-  if (result.outcome === 'not_paid' || result.outcome === 'rejected') {
-    // Paystack says charge.success but the verify call disagrees (or the engine refused): do not
-    // acknowledge, so Paystack redelivers and the state is re-examined.
-    throw new Error(`intent ${reference} not settled: ${result.outcome}${result.reason ? ` (${result.reason})` : ''}`)
-  }
-  if (result.outcome === 'needs_refund') {
-    // Money received that could not be applied. Never dropped: the intent is parked as needs_refund and the refund engine
-    // (cron) refunds it.
-    console.error('[payment-needs-refund]', { reference, purpose: result.purpose, reason: result.reason })
-  }
-  await runSettlementEffects(supabase, result) // only the call that actually settled sends emails/notices
-  return result
-}
-
-// -> 'processed' | 'ignored'
-async function processWebhookEvent(event) {
-  // Dispatch by event type
-  if (event.event === 'charge.success') {
-    const reference = event.data?.reference
-    if (reference && await settleIntentPayment(reference)) return 'processed'
-    // A successful charge that no payment intent recognises: not one of ours (another Paystack integration on the same account),
-    // or a payment started before payment intents existed. It is acknowledged (a retry cannot change it) but logged LOUDLY so
-    // reconciliation / an operator sees real money that nothing settled. NEVER guessed from its metadata.
-    paymentLogger.error('payment.unmatched_charge', { reference: reference || null, amount: event.data?.amount ?? null, currency: event.data?.currency ?? null })
-    return 'ignored'
-  }
-
-  if (event.event === 'transfer.success' || event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
-    await handleTransferEvent(event)
-    return 'processed'
-  }
-
-  if (event.event === 'refund.processed' || event.event === 'refund.failed' || event.event === 'refund.pending' || event.event === 'refund.processing') {
-    await handleRefundEvent(event)
-    return 'processed'
-  }
-  return 'ignored'
-}

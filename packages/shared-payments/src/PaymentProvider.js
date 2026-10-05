@@ -25,6 +25,7 @@ export const PROVIDER_METHODS = Object.freeze([
   'initiateTransfer',  // ({ reference, amountKobo, recipientCode, reason?, currency? }) -> { transferCode, reference, status: TransferStatus, amountKobo }
   'verifyTransfer',    // ({ reference }) -> { reference, transferCode, status: TransferStatus, amountKobo, raw }   (safe to retry)
   'getBalance',        // ({ currency? }) -> { currency, availableKobo, raw }       (safe to retry)
+  'listTransactions',  // ({ from, to, status?, page?, perPage? }) -> { transactions: VerifiedTransaction[], page, hasMore }   (safe to retry; reconciliation)
 ])
 
 /** Throws if `provider` does not implement the full contract. */
