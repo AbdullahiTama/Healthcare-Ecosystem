@@ -56,7 +56,7 @@ export function usePendingCounts() {
     total += counts[name]
   })
   // The moderation queue lists reports and pending verifications together.
-  counts.queue = counts.reports == null || counts.verifications == null ? null : counts.reports + counts.verifications
+  counts.queue = counts.reports === null || counts.verifications === null ? null : counts.reports + counts.verifications
 
   return { counts, total, failed }
 }
