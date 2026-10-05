@@ -26,6 +26,7 @@ const SQL = [
   M('carefind_20261010_central_settlement'),
   M('carefind_20261012_shop_vendor_payouts'),
   M('carefind_20261014_reconciliation'),
+  M('carefind_20261015_reconciliation_ops'),
 ]
 
 let pool, drop
@@ -72,5 +73,20 @@ describe.skipIf(!hasRealPostgres)('reconciliation under real concurrency', () =>
     expect(tally(results)).toEqual({ ok: 8 })
     expect((await q('select count(*)::int c from reconciliation_runs where finished_at is not null'))[0].c).toBe(8)
     expect(await q("select kind, status, occurrences::int occ from reconciliation_findings where kind = 'unmatched_charge'")).toEqual([{ kind: 'unmatched_charge', status: 'open', occ: 8 }])
+  })
+
+  it('20 overlapping callers of one job slot: exactly one is told it is due', async () => {
+    const results = await together(20, async (c) => (await c.query("select claim_job_slot('conc_job', 60) r")).rows[0].r)
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true)
+    expect(results.filter((r) => r.value === true)).toHaveLength(1)
+  })
+
+  it('12 overlapping alert claims over 30 critical findings: every finding is handed to exactly one caller', async () => {
+    await pool.query('select sync_reconciliation_findings($1,$2::jsonb)', ['conc_alert', JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ kind: 'k', subject_type: 't', subject_id: String(i), severity: 'critical', detail: 'd' })))])
+    const results = await together(12, async (c) => (await c.query('select subject_id from claim_findings_to_alert(24, 100)')).rows.map((r) => r.subject_id))
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true)
+    const all = results.flatMap((r) => r.value).filter((id) => /^\d+$/.test(id))
+    expect(all).toHaveLength(30)
+    expect(new Set(all).size).toBe(30)
   })
 })

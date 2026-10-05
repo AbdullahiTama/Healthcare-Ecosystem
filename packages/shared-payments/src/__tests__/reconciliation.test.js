@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ProviderError } from '../errors.js'
 import { createFakeSupabase } from '../testing.js'
-import { replayProviderEvents, sweepOpenIntents, reconcileProviderTransactions, runReconciliation, runDbReconciliation } from '../reconciliation.js'
+import { replayProviderEvents, sweepOpenIntents, reconcileProviderTransactions, runReconciliation, runDbReconciliation, alertOnCriticalFindings, RECONCILIATION_SCHEDULE } from '../reconciliation.js'
 
 const FUTURE = new Date(Date.now() + 3600_000).toISOString()
 const PAST = new Date(Date.now() - 3600_000).toISOString()
@@ -44,7 +44,7 @@ describe('replayProviderEvents', () => {
 
 describe('sweepOpenIntents', () => {
   const sweep = async ({ rows, verify, settle, tables, onSettled } = {}) => {
-    const s = createFakeSupabase({ tables: { payment_intents: tables || rows }, rpc: { list_open_intents_to_check: () => rows, settle_payment_intent: settle || (() => ({ outcome: 'settled', purpose: 'shop_order' })) } })
+    const s = createFakeSupabase({ tables: { payment_intents: tables || rows }, rpc: { list_open_intents_to_check: () => rows, mark_intents_checked: () => 1, settle_payment_intent: settle || (() => ({ outcome: 'settled', purpose: 'shop_order' })) } })
     const p = provider({ verifyPayment: vi.fn(verify || (async () => ({ status: 'success', providerTransactionId: '9', amountKobo: 100000, currency: 'NGN' }))) })
     return { s, p, summary: await sweepOpenIntents(s, p, { onSettled }) }
   }
@@ -177,17 +177,18 @@ describe('runReconciliation', () => {
   it('runs replay, sweep, provider comparison and the database checks, in that order', async () => {
     const s = createFakeSupabase({ rpc: base() })
     const p = provider({ listTransactions: async () => ({ transactions: [], hasMore: false, skipped: 0 }) })
-    const r = await runReconciliation(s, p, { processEvent: async () => 'processed' })
+    const r = await runReconciliation(s, p, { processEvent: async () => 'processed', force: true })
     expect(r.failed).toEqual([])
     expect(r.replay).toMatchObject({ checked: 0 }); expect(r.sweep).toMatchObject({ checked: 0 }); expect(r.provider).toMatchObject({ scanned: 0 }); expect(r.db.totals.open_info).toBe(1)
     expect(s.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['list_replayable_provider_events', 'list_open_intents_to_check', 'sync_reconciliation_findings', 'run_db_reconciliation'])
+    expect(s.calls.some((c) => c.name === 'claim_job_slot')).toBe(false)      // force bypasses the gate
   })
 
   it('a failing step is reported and does not stop the others; open critical findings are logged loudly', async () => {
     const s = createFakeSupabase({ rpc: base({ list_open_intents_to_check: () => ({ data: null, error: { message: 'db' } }), run_db_reconciliation: () => ({ run_id: 'r', totals: { open_critical: 2, open_warning: 0, open_info: 0 } }) }) })
     const p = provider({ listTransactions: async () => { throw new Error('paystack down') } })
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-    const r = await runReconciliation(s, p, { processEvent: async () => 'processed', logger })
+    const r = await runReconciliation(s, p, { processEvent: async () => 'processed', logger, force: true })
     expect(r.failed).toEqual(['sweep', 'provider'])
     expect(r.db.totals.open_critical).toBe(2)
     expect(logger.error).toHaveBeenCalledWith('reconciliation.open_findings', { open_critical: 2, open_warning: 0, open_info: 0 })
@@ -195,7 +196,7 @@ describe('runReconciliation', () => {
 
   it('without a processEvent the replay is skipped (CareHub has no webhook of its own)', async () => {
     const s = createFakeSupabase({ rpc: base() })
-    const r = await runReconciliation(s, provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) }))
+    const r = await runReconciliation(s, provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) }), { force: true })
     expect(r.replay).toBeNull()
   })
 
@@ -203,11 +204,113 @@ describe('runReconciliation', () => {
     const s = createFakeSupabase({ rpc: base() })
     const list = vi.fn(async () => ({ transactions: [], hasMore: false }))
     const now = new Date('2026-10-05T12:00:00Z')
-    await runReconciliation(s, provider({ listTransactions: list }), { now: () => now, lookbackHours: 24 })
+    await runReconciliation(s, provider({ listTransactions: list }), { now: () => now, lookbackHours: 24, force: true })
     expect(list.mock.calls[0][0]).toMatchObject({ from: '2026-10-04T12:00:00.000Z', to: '2026-10-05T12:00:00.000Z' })
   })
 
   it('runDbReconciliation surfaces a database error', async () => {
     await expect(runDbReconciliation(createFakeSupabase({ rpc: { run_db_reconciliation: () => ({ data: null, error: { message: 'x' } }) } }))).rejects.toThrow(/run_db_reconciliation: x/)
+  })
+})
+
+describe('sweep backoff bookkeeping', () => {
+  it('records every checked intent (so the database backs off), even when the check fails', async () => {
+    const rows = [intent({ id: 'i1', reference: 'ref_00000001' }), intent({ id: 'i2', reference: 'ref_00000002' })]
+    const s = createFakeSupabase({ tables: { payment_intents: rows }, rpc: { list_open_intents_to_check: () => rows, mark_intents_checked: () => 2, settle_payment_intent: () => ({ outcome: 'settled' }) } })
+    const p = provider({ verifyPayment: vi.fn(async () => { throw new Error('network') }) })
+    const r = await sweepOpenIntents(s, p, {})
+    expect(r.errors).toBe(2)
+    expect(s.calls.find((c) => c.name === 'mark_intents_checked').args).toEqual({ p_ids: ['i1', 'i2'] })
+  })
+
+  it('a failure to record does not stop the sweep', async () => {
+    const rows = [intent()]
+    const s = createFakeSupabase({ tables: { payment_intents: rows }, rpc: { list_open_intents_to_check: () => rows, mark_intents_checked: () => ({ data: null, error: { message: 'db' } }), settle_payment_intent: () => ({ outcome: 'settled', purpose: 'shop_order' }) } })
+    const p = provider({ verifyPayment: vi.fn(async () => ({ status: 'success', providerTransactionId: '9', amountKobo: 100000, currency: 'NGN' })) })
+    expect((await sweepOpenIntents(s, p, {})).settled).toBe(1)
+  })
+})
+
+describe('alertOnCriticalFindings', () => {
+  const found = [{ id: 'a', kind: 'unmatched_charge', subject_id: 'ref_1', detail: 'd1' }, { id: 'b', kind: 'event_failed', subject_id: 'e2', detail: 'd2' }]
+
+  it('does nothing when no finding is due', async () => {
+    const send = vi.fn()
+    const s = createFakeSupabase({ rpc: { claim_findings_to_alert: () => [] } })
+    expect(await alertOnCriticalFindings(s, { send })).toEqual({ claimed: 0 })
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('sends what the database handed out, once', async () => {
+    const send = vi.fn(async () => {})
+    const s = createFakeSupabase({ rpc: { claim_findings_to_alert: () => found } })
+    expect(await alertOnCriticalFindings(s, { send, remindHours: 12 })).toEqual({ claimed: 2 })
+    expect(send).toHaveBeenCalledWith(found)
+    expect(s.calls.find((c) => c.name === 'claim_findings_to_alert').args).toEqual({ p_remind_hours: 12, p_limit: 100 })
+    expect(s.calls.some((c) => c.name === 'release_finding_alerts')).toBe(false)
+  })
+
+  it('releases the claim when the message could not be queued, so the next pass tries again, and reports the error', async () => {
+    const logger = { info() {}, warn() {}, error: vi.fn() }
+    const s = createFakeSupabase({ rpc: { claim_findings_to_alert: () => found, release_finding_alerts: () => 2 } })
+    await expect(alertOnCriticalFindings(s, { send: async () => { throw new Error('outbox down') }, logger })).rejects.toThrow('outbox down')
+    expect(s.calls.find((c) => c.name === 'release_finding_alerts').args).toEqual({ p_ids: ['a', 'b'] })
+    expect(logger.error).toHaveBeenCalledWith('reconciliation.alert_failed', { count: 2, message: 'outbox down' })
+  })
+
+  it('needs a send function', async () => {
+    await expect(alertOnCriticalFindings(createFakeSupabase({}), {})).rejects.toThrow(/send function/)
+  })
+})
+
+describe('runReconciliation gating and alerts', () => {
+  const rpcs = (over = {}) => ({
+    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0,
+    run_db_reconciliation: () => ({ totals: { open_critical: 1, open_warning: 0, open_info: 0 } }), claim_findings_to_alert: () => [], ...over,
+  })
+  const p = () => provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) })
+
+  it('runs only the steps whose slot it wins; the others report not_due and are not run', async () => {
+    const won = new Set(['recon_sweep', 'recon_db'])
+    const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: ({ p_job }) => won.has(p_job) }) })
+    const r = await runReconciliation(s, p(), { processEvent: async () => 'processed', sendAlert: async () => {} })
+    expect(r.replay).toEqual({ skipped: 'not_due' })
+    expect(r.provider).toEqual({ skipped: 'not_due' })
+    expect(r.alert).toEqual({ skipped: 'not_due' })
+    expect(r.sweep).toMatchObject({ checked: 0 })
+    expect(r.db.totals.open_critical).toBe(1)
+    const names = s.calls.filter((c) => c.op === 'rpc').map((c) => c.name)
+    expect(names).not.toContain('list_replayable_provider_events')
+    expect(names).not.toContain('claim_findings_to_alert')
+  })
+
+  it('asks each gate for its own interval', async () => {
+    const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: () => true }) })
+    await runReconciliation(s, p(), { processEvent: async () => 'processed', sendAlert: async () => {} })
+    const asked = Object.fromEntries(s.calls.filter((c) => c.name === 'claim_job_slot').map((c) => [c.args.p_job, c.args.p_min_minutes]))
+    expect(asked).toEqual({ recon_replay: RECONCILIATION_SCHEDULE.replay, recon_sweep: RECONCILIATION_SCHEDULE.sweep, recon_provider: RECONCILIATION_SCHEDULE.provider, recon_db: RECONCILIATION_SCHEDULE.db, recon_alert: RECONCILIATION_SCHEDULE.alert })
+    expect(RECONCILIATION_SCHEDULE.provider).toBeGreaterThan(RECONCILIATION_SCHEDULE.sweep)
+  })
+
+  it('if the gate itself fails, it runs rather than never reconciling', async () => {
+    const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: () => ({ data: null, error: { message: 'down' } }) }) })
+    const r = await runReconciliation(s, p(), {})
+    expect(r.sweep).toMatchObject({ checked: 0 })
+    expect(r.db).toBeTruthy()
+  })
+
+  it('sends the alert after the database checks, and a failed alert is reported without stopping the pass', async () => {
+    const send = vi.fn(async () => { throw new Error('no outbox') })
+    const s = createFakeSupabase({ rpc: rpcs({ claim_findings_to_alert: () => [{ id: 'a' }], release_finding_alerts: () => 1 }) })
+    const r = await runReconciliation(s, p(), { force: true, sendAlert: send })
+    expect(r.failed).toEqual(['alert'])
+    const names = s.calls.filter((c) => c.op === 'rpc').map((c) => c.name)
+    expect(names.indexOf('claim_findings_to_alert')).toBeGreaterThan(names.indexOf('run_db_reconciliation'))
+    expect(r.db.totals.open_critical).toBe(1)
+  })
+
+  it('without a sendAlert there is no alert step', async () => {
+    const s = createFakeSupabase({ rpc: rpcs() })
+    expect((await runReconciliation(s, p(), { force: true })).alert).toBeNull()
   })
 })

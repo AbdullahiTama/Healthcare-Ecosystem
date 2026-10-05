@@ -33,6 +33,7 @@ import DrugsTab from './tabs/DrugsTab.jsx'
 import TasksTab from './tabs/TasksTab.jsx'
 import TeamsTab from './tabs/TeamsTab.jsx'
 import WithdrawalsTab from './tabs/WithdrawalsTab.jsx'
+import ReconciliationTab from './tabs/ReconciliationTab.jsx'
 import BusinessesTab from './tabs/BusinessesTab.jsx'
 import StoriesTab from './tabs/StoriesTab.jsx'
 import NewsTab from './tabs/NewsTab.jsx'
@@ -850,6 +851,7 @@ let adminLoggingOut = false
         {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
+        {tab === 'reconciliation' && <ReconciliationTab showToast={showToast} />}
         {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
         {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}

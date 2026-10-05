@@ -68,8 +68,6 @@ const KNOWN_SUBJECT_OFFENDERS = {
   // and moved here unchanged by the phase 08 withdrawal engine, so this is the same offender under a new name.
   'apps/carefind/api/_lib/withdrawalEffects.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/booking.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/verify-shop-payment.js': 'batch 3: move onto the catalog',
-  'apps/carefind/api/_handlers/paystack-webhook.js': 'batch 3: move onto the catalog',
   // Added in batch 2. The original detection required a `subject:` literal, which
   // missed every producer that forwards a variable, and these four are the
   // dangerous ones: an authenticated caller supplies the subject. Two were

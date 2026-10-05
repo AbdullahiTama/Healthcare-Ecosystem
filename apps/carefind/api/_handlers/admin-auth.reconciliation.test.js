@@ -74,6 +74,7 @@ describe('admin_run_reconciliation', () => {
   it('runs a pass and returns the report; a failed step makes it a 207 (partial)', async () => {
     h.run.mockResolvedValueOnce({ failed: [], db: { totals: { open_critical: 0 } } })
     expect((await call({ action: 'admin_run_reconciliation' })).statusCode).toBe(200)
+    expect(h.run).toHaveBeenCalledWith(expect.anything(), { force: true })        // an administrator pressing the button is never throttled
     h.run.mockResolvedValueOnce({ failed: ['provider'], db: null })
     const r = await call({ action: 'admin_run_reconciliation' })
     expect(r.statusCode).toBe(207)

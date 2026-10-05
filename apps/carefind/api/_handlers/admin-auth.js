@@ -337,7 +337,7 @@ async function handleRequest(req, res) {
     return res.status(200).json({ success: true, result: data })
   }
   if (action === 'admin_run_reconciliation') {
-    const report = await runFinanceReconciliation(supabase)
+    const report = await runFinanceReconciliation(supabase, { force: true })
     return res.status(report.failed?.length ? 207 : 200).json({ report })
   }
 

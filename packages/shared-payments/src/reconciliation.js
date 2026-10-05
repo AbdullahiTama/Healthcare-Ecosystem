@@ -69,6 +69,8 @@ export async function replayProviderEvents(supabase, { process, olderThanMinutes
 export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 15, limit = 50, onSettled, logger = quietLogger } = {}) {
   const rows = (await rpc(supabase, 'list_open_intents_to_check', { p_older_than_minutes: olderThanMinutes, p_limit: limit })) || []
   const summary = { checked: rows.length, settled: 0, alreadySettled: 0, notPaid: 0, expired: 0, needsRefund: 0, errors: 0 }
+  // Every attempt is recorded (even a failed one) so the database backs off instead of asking again next minute.
+  if (rows.length) await rpc(supabase, 'mark_intents_checked', { p_ids: rows.map((r) => r.id) }).catch((err) => logger.warn('payment.sweep_mark_failed', { message: err.message }))
   for (const row of rows) {
     try {
       const result = await settleByReference({ supabase, provider, reference: row.reference, logger })
@@ -166,12 +168,48 @@ export async function reconcileProviderTransactions(supabase, provider, { from, 
 }
 
 /**
- * One reconciliation pass: replay, sweep, compare with the provider, then the database checks (last, so they see the repairs).
- * Every step is isolated. -> { replay, sweep, provider, db, failed: string[] }
+ * Tell the administrators about critical findings, once each (then a reminder every `remindHours` while they stay open and
+ * unacknowledged). The database hands every finding to exactly one caller; if the message cannot be queued the claim is released so
+ * the next pass tries again, and the error is rethrown.
+ * @param {(findings: object[]) => Promise<void>} p.send   queue the alert email(s); throws if it could not
+ * @returns {Promise<{ claimed: number }>}
  */
-export async function runReconciliation(supabase, provider, { processEvent, onSettled, logger = quietLogger, now = () => new Date(), lookbackHours = 48 } = {}) {
-  const report = { replay: null, sweep: null, provider: null, db: null, failed: [] }
+export async function alertOnCriticalFindings(supabase, { send, remindHours = 24, logger = quietLogger } = {}) {
+  if (typeof send !== 'function') throw new TypeError('alertOnCriticalFindings needs a send function')
+  const findings = (await rpc(supabase, 'claim_findings_to_alert', { p_remind_hours: remindHours, p_limit: 100 })) || []
+  if (!findings.length) return { claimed: 0 }
+  try {
+    await send(findings)
+  } catch (err) {
+    await rpc(supabase, 'release_finding_alerts', { p_ids: findings.map((f) => f.id) }).catch(() => {})
+    logger.error('reconciliation.alert_failed', { count: findings.length, message: err.message })
+    throw err
+  }
+  logger.warn('reconciliation.alerted', { count: findings.length })
+  return { claimed: findings.length }
+}
+
+// How often each step is due (minutes). The cron endpoint runs every minute; Paystack and the database should not be asked that often.
+export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, provider: 30, db: 10, alert: 5 })
+
+/**
+ * One reconciliation pass: replay, sweep, compare with the provider, the database checks (last, so they see the repairs), then the
+ * alert for anything critical. Each step runs only when it is due (an atomic database gate shared by every instance), unless `force`
+ * (an administrator pressing "run now"). Every step is isolated. -> { replay, sweep, provider, db, alert, failed: string[] }
+ * A step that was not due reports { skipped: 'not_due' }.
+ */
+export async function runReconciliation(supabase, provider, { processEvent, onSettled, sendAlert, logger = quietLogger, now = () => new Date(), lookbackHours = 48, force = false, schedule = RECONCILIATION_SCHEDULE } = {}) {
+  const report = { replay: null, sweep: null, provider: null, db: null, alert: null, failed: [] }
+  const due = async (name) => {
+    if (force) return true
+    try { return Boolean(await rpc(supabase, 'claim_job_slot', { p_job: `recon_${name}`, p_min_minutes: schedule[name] })) } catch (err) {
+      // If the gate itself is broken, running is safer than never reconciling
+      logger.warn('reconciliation.gate_failed', { step: name, message: err.message })
+      return true
+    }
+  }
   const step = async (name, fn) => {
+    if (!(await due(name))) { report[name] = { skipped: 'not_due' }; return }
     try { report[name] = await fn() } catch (err) {
       report[name] = { error: err.message }
       report.failed.push(name)
@@ -184,6 +222,7 @@ export async function runReconciliation(supabase, provider, { processEvent, onSe
   const from = new Date(to.getTime() - lookbackHours * 3600 * 1000)
   await step('provider', () => reconcileProviderTransactions(supabase, provider, { from: from.toISOString(), to: to.toISOString(), onSettled, logger }))
   await step('db', () => runDbReconciliation(supabase))
+  if (sendAlert) await step('alert', () => alertOnCriticalFindings(supabase, { send: sendAlert, logger }))
 
   const totals = report.db?.totals
   if (totals && (totals.open_critical > 0 || totals.open_warning > 0)) {

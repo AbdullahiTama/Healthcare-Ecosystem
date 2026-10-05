@@ -1,6 +1,6 @@
 # Webhooks, recovery and reconciliation (Phase 11)
 
-Status: implemented and tested. Migration `carefind_20261014_reconciliation` is **APPLIED to production (2026-10-05)**; the first live run found no critical finding. The Node side (replay, sweep, provider comparison, admin actions) ships with the next CareFind deploy.
+Status: implemented and tested. Migrations `carefind_20261014_reconciliation` and `carefind_20261015_reconciliation_ops` are **APPLIED to production (2026-10-05)**; the first live run found no critical finding. The Node side (replay, sweep, provider comparison, alerts, admin screen) ships with the next CareFind deploy.
 
 ## 1. The problem this phase closes
 
@@ -37,13 +37,20 @@ Every change to a commercial constant is recorded (`financial_config_history`: k
 
 0 critical. 3 warnings: the three legacy CareFind withdrawals still `reserved` since July/September (known; decision pending). 9 info: the nine shop orders paid before vendor credits. Coins, commissions, refunds, intents and webhook events: clean. No unmatched charge yet (the old webhook is still live).
 
-## 8. Not done / open
+## 8. Alerts, the admin screen and the cadence (owner decisions 2026-10-05; migration `carefind_20261015_reconciliation_ops`, APPLIED)
 
-* **No alert channel.** A critical finding is logged and listed, but nobody is paged or emailed; the channel (admin email, Slack, PagerDuty) is the owner's choice.
-* **No admin screen.** The API exists; a Reconciliation tab in the admin dashboard is a follow-up.
-* **Cadence.** The cron is daily (Vercel plan). A payment recoverable only by the sweep (both the redirect and the webhook failed) can therefore wait up to a day; the webhook's own retries and the redirect usually settle it within minutes.
+* **Email alerts.** A CRITICAL finding is emailed to every active platform admin (plus `FINANCE_ALERT_EMAILS`, comma separated, for people who are not admins) through the email catalog event `finance_alert` (so the catalog's sender, subject and rollout switch govern it; `enabled` and `live`). Each finding is handed to exactly one caller (`claim_findings_to_alert`, row-locked, skip-locked); if the email cannot be queued the claim is released and the next pass retries. While a finding stays open and unacknowledged it is repeated once a day; acknowledging silences the reminders. Warnings and info are never emailed (they are in the screen).
+* **Admin screen.** Admin panel > Commerce > "Money Checks" (`/admin-panel`, command palette `G K`): filter by open / acknowledged / resolved / dismissed, acknowledge, dismiss with a note, reopen, and "Run checks now". Loading, error (with retry), empty and success states; labelled controls; wraps on narrow widths. It only records decisions; it cannot move money.
+* **Cadence.** The CareFind cron endpoint is driven **every minute** by Supabase Cron (`email-outbox-carefind`), not daily as `vercel.json` suggests, so the pass must not hit Paystack every minute. `claim_job_slot(job, minutes)` is an atomic "is it due?" gate shared by every instance: replay and sweep every 5 minutes, the Paystack comparison every 30, the database checks every 10, alerts every 5. "Run now" bypasses the gates. If the gate itself fails the step runs (never reconciling is worse than reconciling twice).
+* **Sweep backoff.** An open payment attempt is re-checked with Paystack every 10 minutes in its first hour, hourly in its first day, then every 12 hours (`payment_intent_checks`), instead of every pass for a week.
+
+## 8b. Still open
+
+* The alert goes to email only; a second channel (Slack, SMS, a pager) is not wired.
+* A payment recoverable only by the sweep now waits at most about 15 minutes (5-minute gate + 15-minute grace), not a day.
 * Settled intents are not cross-checked against the provider's list in the reverse direction (settlement itself requires a verified success, and a missing transaction id is a database check).
 * Paystack settlement-batch and bank-statement reconciliation (what Paystack pays out to the platform's bank) is out of scope.
+* The screen's layout uses wrapping flex rows and was not verified in a real browser at mobile / tablet / desktop widths.
 
 ## 9. Tests
 

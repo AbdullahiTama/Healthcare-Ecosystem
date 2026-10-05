@@ -37,6 +37,7 @@ beforeAll(async () => {
   `)
   await db.exec(M('carefind_20261012_shop_vendor_payouts'))
   await db.exec(M('carefind_20261014_reconciliation'))
+  await db.exec(M('carefind_20261015_reconciliation_ops'))
 }, 240_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -270,5 +271,110 @@ describe('replay and sweep lists', () => {
     const refs = (await asRole('service_role', () => all('select reference from list_open_intents_to_check(15, 200)'))).map((r) => r.reference)
     expect(refs).toEqual(expect.arrayContaining([pending, created]))
     for (const r of [fresh, settled, ancient]) expect(refs).not.toContain(r)
+  })
+})
+
+describe('alerts (claim_findings_to_alert)', () => {
+  const claim = (hours = 24) => asRole('service_role', () => all('select id, kind, subject_id from claim_findings_to_alert($1, 100)', [hours]))
+  const crit = (id) => ({ kind: 'k', subject_type: 't', subject_id: id, severity: 'critical', detail: 'd' })
+
+  it('hands each open critical finding to exactly one caller, once; warnings and info are never alerted', async () => {
+    await sync('al1', [crit('a'), crit('b'), f('w', 'c', 'warning'), f('i', 'd', 'info')])
+    const first = (await claim()).filter((r) => ['a', 'b', 'c', 'd'].includes(r.subject_id))
+    expect(first.map((r) => r.subject_id).sort()).toEqual(['a', 'b'])
+    expect((await claim()).filter((r) => ['a', 'b'].includes(r.subject_id))).toEqual([])
+  })
+
+  it('reminds after the interval while still open, never for an acknowledged, dismissed or resolved finding', async () => {
+    await sync('al2', [crit('x'), crit('y'), crit('z')])
+    await claim()
+    const ids = Object.fromEntries((await all("select id, subject_id from reconciliation_findings where source = 'al2'")).map((r) => [r.subject_id, r.id]))
+    await db.query("update reconciliation_findings set alerted_at = now() - interval '25 hours' where source = 'al2'")
+    await asRole('service_role', () => one("select update_reconciliation_finding($1,'acknowledge','looking')", [ids.y]))
+    await asRole('service_role', () => one("select update_reconciliation_finding($1,'dismiss','known and explained')", [ids.z]))
+    expect((await claim()).filter((r) => ['x', 'y', 'z'].includes(r.subject_id)).map((r) => r.subject_id)).toEqual(['x'])
+    await sync('al2', [crit('y'), crit('z')])                         // x resolved
+    await db.query("update reconciliation_findings set alerted_at = now() - interval '25 hours' where source = 'al2'")
+    expect((await claim()).filter((r) => ['x', 'y', 'z'].includes(r.subject_id))).toEqual([])
+  })
+
+  it('a claim that could not be emailed is released and is handed out again', async () => {
+    await sync('al3', [crit('r')])
+    const got = (await claim()).filter((r) => r.subject_id === 'r')
+    expect(got).toHaveLength(1)
+    expect((await asRole('service_role', () => one('select release_finding_alerts($1::uuid[]) n', [[got[0].id]]))).n).toBe(1)
+    expect((await claim()).filter((r) => r.subject_id === 'r')).toHaveLength(1)
+  })
+
+  it('only service_role may use them', async () => {
+    for (const role of ['anon', 'authenticated']) {
+      await expect(asRole(role, () => db.query('select * from claim_findings_to_alert()'))).rejects.toThrow(/permission denied/)
+      await expect(asRole(role, () => db.query('select release_finding_alerts(array[]::uuid[])'))).rejects.toThrow(/permission denied/)
+      await expect(asRole(role, () => db.query("select claim_job_slot('x_job', 1)"))).rejects.toThrow(/permission denied/)
+      await expect(asRole(role, () => db.query('select mark_intents_checked(array[]::uuid[])'))).rejects.toThrow(/permission denied/)
+    }
+  })
+})
+
+describe('claim_job_slot', () => {
+  const slot = (job, mins) => asRole('service_role', () => one('select claim_job_slot($1,$2) r', [job, mins])).then((x) => x.r)
+  it('is true for the first caller and false until the interval has passed', async () => {
+    expect(await slot('job_a', 30)).toBe(true)
+    expect(await slot('job_a', 30)).toBe(false)
+    await db.query("update job_slots set last_started_at = now() - interval '31 minutes' where job = 'job_a'")
+    expect(await slot('job_a', 30)).toBe(true)
+    expect(await slot('job_a', 30)).toBe(false)
+  })
+  it('jobs are independent, a zero interval is always due, and bad input is refused', async () => {
+    expect(await slot('job_b', 30)).toBe(true)
+    expect(await slot('job_c', 0)).toBe(true)
+    expect(await slot('job_c', 0)).toBe(true)
+    await expect(slot('Bad Job!', 5)).rejects.toThrow(/invalid job name/)
+    await expect(slot('job_d', -1)).rejects.toThrow(/invalid interval/)
+  })
+})
+
+describe('sweep backoff', () => {
+  const mk = async (ageMin) => {
+    const reference = ref('bo')
+    await db.query(`insert into payment_intents (reference, application, purpose, customer_id, entity_type, entity_id, expected_amount) values ($1,'carefind','shop_order',$2,'shop_order',$3,1000)`, [reference, uid(), uid()])
+    await db.exec('set session_replication_role = replica')
+    await db.query(`update payment_intents set status = 'pending', created_at = now() - make_interval(mins => $2), updated_at = now() - make_interval(mins => $2) where reference = $1`, [reference, ageMin])
+    await db.exec('set session_replication_role = origin')
+    return (await one('select id from payment_intents where reference = $1', [reference])).id
+  }
+  const due = async () => (await asRole('service_role', () => all('select id from list_open_intents_to_check(15, 200)'))).map((r) => r.id)
+  const check = (id, agoMin) => db.query(`insert into payment_intent_checks (intent_id, last_checked_at) values ($1, now() - make_interval(mins => $2)) on conflict (intent_id) do update set last_checked_at = excluded.last_checked_at`, [id, agoMin])
+
+  it('an intent is due when never checked; a young one again after 10 minutes, a day-old one after an hour, an old one after 12 hours', async () => {
+    const young = await mk(30); const day = await mk(300); const old = await mk(3000)
+    expect(await due()).toEqual(expect.arrayContaining([young, day, old]))
+    for (const id of [young, day, old]) await check(id, 1)
+    const d1 = await due()
+    for (const id of [young, day, old]) expect(d1).not.toContain(id)
+    await check(young, 11); await check(day, 11); await check(old, 11)
+    const d2 = await due()
+    expect(d2).toContain(young); expect(d2).not.toContain(day); expect(d2).not.toContain(old)
+    await check(day, 61); await check(old, 61)
+    const d3 = await due()
+    expect(d3).toContain(day); expect(d3).not.toContain(old)
+    await check(old, 12 * 60 + 1)
+    expect(await due()).toContain(old)
+  })
+
+  it('mark_intents_checked records the check, counts repeats, and takes the intent out of the due list', async () => {
+    const id = await mk(30)
+    expect(await due()).toContain(id)
+    await asRole('service_role', () => one('select mark_intents_checked($1::uuid[])', [[id]]))
+    await asRole('service_role', () => one('select mark_intents_checked($1::uuid[])', [[id]]))
+    expect(await one('select checks::int c from payment_intent_checks where intent_id = $1', [id])).toEqual({ c: 2 })
+    expect(await due()).not.toContain(id)
+  })
+
+  it('the operations tables are unreadable by every API role', async () => {
+    for (const role of ['anon', 'authenticated', 'service_role']) {
+      await expect(asRole(role, () => db.query('select * from job_slots'))).rejects.toThrow(/permission denied/)
+      await expect(asRole(role, () => db.query('select * from payment_intent_checks'))).rejects.toThrow(/permission denied/)
+    }
   })
 })

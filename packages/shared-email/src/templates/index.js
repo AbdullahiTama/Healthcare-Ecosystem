@@ -47,6 +47,7 @@ const FIND_TEMPLATE_MAP = {
   withdrawalFailed: 'withdrawal_failed',
   referralAgentApproved: 'referral_agent_approved',
   referralAgentRejected: 'referral_agent_rejected',
+  financeAlert: 'finance_alert',
 }
 
 // Build per-app key tables so CareHub and CareFind each resolve their OWN

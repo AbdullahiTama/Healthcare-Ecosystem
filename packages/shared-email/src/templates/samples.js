@@ -30,6 +30,7 @@ export const SAMPLES = {
   withdrawal_failed: { fullName: 'Tunde Bakare', businessName: 'Lifeline Pharmacy', amount: '₦45,000', reference: 'WD-7Q2M9' },
   referral_agent_approved: { agentName: 'Kola Adeyemi', agentEmail: 'kola@example.com', referralCode: 'REF-KOLA-21' },
   referral_agent_rejected: { agentName: 'Kemi Balogun', reason: 'We could not verify the identity document you uploaded.' },
+  finance_alert: { critical_count: '2', lines: 'unmatched charge (ref_x1): Paystack reported a successful charge of 2500.00 NGN that no payment intent recognises\nsettled without transaction id (intent 7): intent is settled but no provider transaction id was recorded', more_count: '0' },
 }
 
 export const TEMPLATE_META = [
@@ -64,4 +65,5 @@ export const TEMPLATE_META = [
   { key: 'withdrawal_failed', label: 'Withdrawal Failed', app: 'Both', icon: '⚠️', desc: 'Withdrawal could not be completed.' },
   { key: 'referral_agent_approved', label: 'Referral Agent Approved', app: 'CareFind', icon: '🤝', desc: 'CareFind referral agent approved.' },
   { key: 'referral_agent_rejected', label: 'Referral Agent Rejected', app: 'CareFind', icon: '📋', desc: 'CareFind referral agent declined.' },
+  { key: 'finance_alert', label: 'Finance Alert (admin)', app: 'CareFind', icon: '🚨', desc: 'Critical money-check findings, sent to the platform administrators.' },
 ]

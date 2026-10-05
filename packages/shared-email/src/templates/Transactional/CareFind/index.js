@@ -18,5 +18,6 @@ export const paymentFailed = CareFind.paymentFailed
 export const withdrawalRequested = CareFind.withdrawalRequested
 export const withdrawalCompleted = CareFind.withdrawalCompleted
 export const withdrawalFailed = CareFind.withdrawalFailed
+export const financeAlert = CareFind.financeAlert
 export const referralAgentApproved = CareFind.referralAgentApproved
 export const referralAgentRejected = CareFind.referralAgentRejected

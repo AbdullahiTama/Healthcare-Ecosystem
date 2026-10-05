@@ -11,6 +11,7 @@ export const BASE_COMMANDS = [
   { id: 'go-moderation', label: 'Go to Moderation', keywords: ['moderation','queue','review'], section: 'Navigation', shortcut: 'G M', action: 'navigate', target: 'moderation' },
   { id: 'go-orders', label: 'Go to Orders', keywords: ['orders','transactions','finance'], section: 'Navigation', shortcut: 'G O', action: 'navigate', target: 'orders' },
   { id: 'go-withdrawals', label: 'Go to Withdrawals', keywords: ['withdrawals','payouts','pay'], section: 'Navigation', shortcut: 'G W', action: 'navigate', target: 'withdrawals' },
+  { id: 'go-reconciliation', label: 'Go to Money Checks', keywords: ['reconciliation','money','checks','findings','payments'], section: 'Navigation', shortcut: 'G K', action: 'navigate', target: 'reconciliation' },
   { id: 'go-shop', label: 'Go to Shop', keywords: ['shop','products','ecommerce'], section: 'Navigation', shortcut: 'G S', action: 'navigate', target: 'shop' },
   { id: 'go-audit', label: 'Go to Audit Log', keywords: ['audit','log','history'], section: 'Navigation', shortcut: 'G A', action: 'navigate', target: 'audit_log' },
   { id: 'go-errors', label: 'Go to Error Inbox', keywords: ['errors','bugs','inbox'], section: 'Navigation', shortcut: 'G E', action: 'navigate', target: 'errors' },

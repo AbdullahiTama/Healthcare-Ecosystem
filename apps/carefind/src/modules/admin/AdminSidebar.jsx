@@ -4,7 +4,7 @@ import {
   ShoppingBag, DollarSign, Landmark, Building2, Users, Shield,
   Pill, ClipboardList, Target, Search, Bell, LogOut, Menu, X,
   ChevronDown, Settings, Mail, Layers, ClipboardCheck, AlertTriangle,
-  PanelLeftClose, PanelLeftOpen, Command,
+  PanelLeftClose, PanelLeftOpen, Command, ShieldCheck,
 } from 'lucide-react'
 import Logo from '../social-feed/Logo'
 
@@ -38,6 +38,7 @@ const NAV_GROUPS = [
       { key: 'revenue', label: 'Revenue', icon: DollarSign },
       { key: 'orders', label: 'Orders', icon: ClipboardCheck },
       { key: 'withdrawals', label: 'Withdrawals', icon: Landmark },
+      { key: 'reconciliation', label: 'Money Checks', icon: ShieldCheck },
       { key: 'businesses', label: 'Companies', icon: Building2 },
     ],
   },

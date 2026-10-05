@@ -253,6 +253,29 @@ export function withdrawalFailed({ fullName, amount, reference } = {}) {
   })
 }
 
+// ── Operations ───────────────────────────────────────────────────────────────────────────────────────────────────────
+// Sent to the platform administrators when the money checks find something critical (catalog event `finance_alert`; the
+// payload is flat strings because the catalog schema is). `lines` is one finding per line.
+export function financeAlert({ critical_count, lines, more_count } = {}) {
+  const rows = String(lines || '').split('\n').filter(Boolean).map((line) => {
+    const i = line.indexOf(': ')
+    return i > 0 ? [line.slice(0, i), line.slice(i + 2)] : [line, '']
+  })
+  const more = Number(more_count) > 0 ? Number(more_count) : 0
+  return email({
+    title: `${critical_count || 'Some'} critical finance finding${Number(critical_count) === 1 ? '' : 's'} need attention`,
+    preheader: 'The money checks found something that needs a decision.',
+    body: [
+      paragraph('The automatic money checks found a difference between our books, the payment engines and Paystack. Nothing has been changed automatically: a person needs to look.'),
+      detailsTable(rows),
+      ...(more ? [paragraph(`…and ${more} more in the admin panel.`)] : []),
+      notice('warn', 'You will be reminded once a day while a finding stays open. Acknowledge it in the admin panel to stop the reminders, or dismiss it with a note if it is explained.'),
+    ],
+    cta: { href: siteLink(APP, '/admin-panel'), label: 'Open Money Checks' },
+    reason: 'You are receiving this email because you are a CareFind administrator.',
+  })
+}
+
 // ── Referral agents ──────────────────────────────────────────────────────────────────────────────────────────────────
 export function referralAgentApproved({ agentName, agentEmail, referralCode } = {}) {
   return email({
