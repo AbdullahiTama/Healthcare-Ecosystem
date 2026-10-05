@@ -313,6 +313,15 @@ describe('the table cannot be changed around the engine', () => {
 })
 
 describe('reconciliation', () => {
+  it('reports a paid appointment that was cancelled and never refunded (the cron retries it)', async () => {
+    const b = uid()
+    const a = (await db.query(`insert into appointments (business_id, client_name, source, fee_amount, payment_status, payment_channel, payment_reference, status, cancelled_at) values ($1,'x','carehub',1000,'paid','card',$2,'cancelled', now() - interval '3 hours') returning id`, [b, ref('z')])).rows[0]
+    expect((await all('select kind from reconcile_refunds(60) where entity_id = $1', [a.id])).map((x) => x.kind)).toEqual(['cancelled_appointment_not_refunded'])
+    await db.query("update appointments set payment_channel = 'pos' where id = $1", [a.id])     // offline money: not the platform's to refund
+    expect(await all('select kind from reconcile_refunds(60) where entity_id = $1', [a.id])).toEqual([])
+  })
+
+
   it('a clean history reports nothing, and detects the inconsistencies it can see', async () => {
     const p = await paidCardAppointment()
     const r = await request('booking_cancelled', 'appointment', p.id)

@@ -391,6 +391,11 @@ as $$
   select 'business_shortfall', r.id, r.entity_id, 'the business could not cover ' || r.business_shortfall_kobo || ' kobo; the platform bears it' from public.refunds r
    where r.business_shortfall_kobo > 0 and r.status <> 'failed'
   union all
+  select 'cancelled_appointment_not_refunded', null::uuid, a.id, 'cancelled while paid by ' || a.payment_channel || ' and no refund exists' from public.appointments a
+   where a.status = 'cancelled' and a.payment_status = 'paid' and a.payment_channel in ('card', 'carecoins')
+     and a.cancelled_at < now() - make_interval(mins => p_stale_minutes)
+     and not exists (select 1 from public.refunds r where r.entity_type = 'appointment' and r.entity_id = a.id and r.status <> 'failed')
+  union all
   select 'refunded_appointment_without_refund', null::uuid, a.id, 'payment_status refunded with no completed refund' from public.appointments a
    where a.payment_status = 'refunded' and a.refunded_at >= public._refund_cutover()
      and not exists (select 1 from public.refunds r where r.entity_type = 'appointment' and r.entity_id = a.id and r.status = 'completed')
@@ -426,7 +431,7 @@ begin
   if exists (select 1 from information_schema.role_table_grants where table_schema = 'public' and table_name = 'refunds' and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC')) then
     raise exception 'refunds must have no table grants';
   end if;
-  if exists (select 1 from public.reconcile_refunds(60) where kind not in ('stuck', 'needs_refund_without_refund')) then
+  if exists (select 1 from public.reconcile_refunds(60) where kind not in ('stuck', 'needs_refund_without_refund', 'cancelled_appointment_not_refunded')) then
     raise exception 'refunds do not reconcile; resolve before applying';
   end if;
 end $$;

@@ -182,3 +182,30 @@ describe('refundUnappliedPayments', () => {
     expect(await refundUnappliedPayments(s, provider, { logger: quiet })).toMatchObject({ checked: 2, errors: 1, alreadyRequested: 1 })
   })
 })
+
+describe('refundCancelledAppointments / runRefundSweeps', () => {
+  it('refunds each cancelled-but-paid appointment once: CareCoin refunds complete in the database, card refunds go to the provider', async () => {
+    const { refundCancelledAppointments } = await import('../refunds.js')
+    const provider = { refundPayment: vi.fn(async () => ({ providerRefundId: '1', status: 'processing', amountKobo: 5 })) }
+    const answers = [
+      { outcome: 'completed', id: 'r1' },
+      { outcome: 'requested', id: 'r2', reference: 'rf_2', amount_kobo: 5, provider_transaction_reference: 'chapp_1_abcdefgh' },
+      { outcome: 'already_requested', id: 'r3' },
+      { outcome: 'not_refundable_by_platform' },
+    ]
+    let i = 0
+    const s = fake({ request_refund: () => answers[i++], mark_refund_processing: 'ok' }, { appointments: [{ id: 'a1' }, { id: 'a2' }, { id: 'a3' }, { id: 'a4' }] })
+    expect(await refundCancelledAppointments(s, provider, { logger: quiet })).toEqual({ checked: 4, requested: 2, alreadyRequested: 1, completed: 1, processing: 1, failed: 0, pending: 0, errors: 0 })
+    expect(provider.refundPayment).toHaveBeenCalledTimes(1)
+    expect(rpcs(s, 'request_refund')[0]).toMatchObject({ p_cause: 'booking_cancelled', p_entity_type: 'appointment', p_entity_id: 'a1' })
+  })
+  it('runRefundSweeps runs all three jobs and one failing does not stop the others', async () => {
+    const { runRefundSweeps } = await import('../refunds.js')
+    const provider = { verifyRefund: vi.fn(), refundPayment: vi.fn() }
+    const s = { rpc: async () => ({ data: null, error: null }), from: (t) => { const c = { select: () => c, in: () => c, eq: () => c, lt: () => c, order: () => c, limit: async () => (t === 'refunds' ? { data: null, error: { message: 'down' } } : { data: [], error: null }) }; return c } }
+    const out = await runRefundSweeps(s, provider, { logger: quiet })
+    expect(out.sweep).toEqual({ error: 'down' })
+    expect(out.unapplied).toMatchObject({ checked: 0 })
+    expect(out.cancelled).toMatchObject({ checked: 0 })
+  })
+})

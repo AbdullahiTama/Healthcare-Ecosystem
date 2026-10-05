@@ -173,6 +173,49 @@ export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.
 }
 
 /**
+ * Appointments that were cancelled while paid by card or CareCoins but never got a refund (the cancel call died between
+ * cancelling and refunding). Requests and sends the refund (idempotent). -> same shape as refundUnappliedPayments
+ */
+export async function refundCancelledAppointments(supabase, provider, { limit = 25, logger = console } = {}) {
+  const { data: appts, error } = await supabase
+    .from('appointments')
+    .select('id')
+    .eq('status', 'cancelled')
+    .eq('payment_status', 'paid')
+    .in('payment_channel', ['card', 'carecoins'])
+    .order('cancelled_at', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(error.message)
+
+  const summary = { checked: 0, requested: 0, alreadyRequested: 0, completed: 0, processing: 0, failed: 0, pending: 0, errors: 0 }
+  for (const a of appts || []) {
+    summary.checked++
+    try {
+      const refund = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: a.id, reason: 'appointment cancelled' })
+      if (refund.outcome === 'already_requested') { summary.alreadyRequested++; continue }
+      if (refund.outcome === 'completed') { summary.requested++; summary.completed++; continue }
+      if (refund.outcome !== 'requested') continue
+      summary.requested++
+      const r = await executeCardRefund(supabase, provider, refund, { reason: 'Appointment cancelled', logger })
+      summary[r.state]++
+    } catch (err) {
+      summary.errors++
+      logger.error?.('refund.cancelled.failed', { appointment: a.id, message: err.message })
+    }
+  }
+  return summary
+}
+
+/** Everything the refund cron does, each part independent (one failing never stops the others). */
+export async function runRefundSweeps(supabase, provider, { logger = console } = {}) {
+  const out = {}
+  for (const [name, job] of [['sweep', sweepRefunds], ['unapplied', refundUnappliedPayments], ['cancelled', refundCancelledAppointments]]) {
+    try { out[name] = await job(supabase, provider, { logger }) } catch (err) { out[name] = { error: err.message }; logger.error?.('refund.cron.failed', { job: name, message: err.message }) }
+  }
+  return out
+}
+
+/**
  * Payments that could not be applied (payment_intents.needs_refund) are refunded in full. Requests the refund (idempotent) and
  * sends it. -> { checked, requested, alreadyRequested, completed, processing, failed, pending, errors }
  */

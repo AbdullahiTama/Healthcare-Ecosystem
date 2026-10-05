@@ -15,5 +15,5 @@ export {
 export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin } from './pin.js'
 export {
   REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
-  requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments,
+  requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps,
 } from './refunds.js'

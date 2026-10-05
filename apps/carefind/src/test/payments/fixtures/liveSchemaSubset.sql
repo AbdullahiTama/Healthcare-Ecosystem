@@ -83,6 +83,8 @@ create table public.appointments (
   payment_channel text,
   patient_user_id uuid,
   refunded_at timestamptz,
+  status text,
+  cancelled_at timestamptz,
   constraint appointments_payment_status_check check (payment_status is null or payment_status in ('unpaid','paid','refunded','pending'))
 );
 
