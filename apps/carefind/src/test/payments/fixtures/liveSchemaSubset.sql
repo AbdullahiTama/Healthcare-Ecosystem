@@ -266,3 +266,51 @@ create table public.business_withdrawal_requests (
   updated_at timestamptz not null default now()
 );
 create unique index business_withdrawal_requests_paystack_reference_uniq on public.business_withdrawal_requests (paystack_reference) where paystack_reference is not null;
+
+-- ---- Shop (Phase 10), as read from production. ---------------------------------------------------------
+create table public.shop_orders (
+  id uuid primary key default gen_random_uuid(),
+  order_ref text not null unique,
+  customer_id uuid not null,
+  vendor_business_id uuid not null,
+  status text not null default 'pending_payment',
+  payment_status text not null default 'pending',
+  subtotal_kobo integer not null default 0,
+  commission_kobo integer not null default 0,
+  total_kobo integer not null,
+  payment_reference text unique,
+  paystack_reference text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_orders_payment_status_check check (payment_status in ('pending','paid','failed','refunded')),
+  constraint shop_orders_status_check check (status in ('pending_payment','paid','accepted','processing','packed','at_pickup_station','ready_for_pickup','in_transit','delivered','cancelled','refund_requested','refunded','disputed','delivery_quote_pending'))
+);
+create table public.shop_payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null,
+  payment_reference text not null unique,
+  amount_kobo integer not null,
+  status text not null default 'pending',
+  gateway text not null default 'paystack',
+  gateway_response jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_payments_status_check check (status in ('pending','success','failed','refunded'))
+);
+create table public.shop_order_status_history (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null,
+  from_status text,
+  to_status text not null,
+  changed_by uuid,
+  note text,
+  created_at timestamptz not null default now()
+);
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_id uuid,
+  type text,
+  message text,
+  link text,
+  created_at timestamptz not null default now()
+);
