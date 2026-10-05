@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   const out = await settleIntentForRequest({ supabase, reference, purpose: 'booking' })
 
-  // A booking paid just before the settlement engine shipped has no intent; the webhook settles those.
+  // A booking paid before payment intents existed has no intent; this only REPORTS it if it is already paid (nothing settles from here).
   if (out.outcome === 'unknown_reference') {
     const { data: legacy } = await supabase.from('appointments').select('id, payment_status').eq('payment_reference', reference).maybeSingle()
     if (legacy?.payment_status === 'paid') return res.status(200).json({ success: true, id: legacy.id, alreadyPaid: true })

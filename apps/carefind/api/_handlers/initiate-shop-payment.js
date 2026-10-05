@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
-import { paystackFetch } from '../_lib/paystack.js'
+import { createPaymentIntent, markIntentPending, markIntentFailed, newReference, findIntent } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
+import { settleIntentForRequest } from '../_lib/intentSettlement.js'
+import { runSettlementEffects } from '../_lib/settlementEffects.js'
 import { verifyUser } from '../_lib/verifyUser.js'
 
 const supabase = createClient(
@@ -10,7 +12,10 @@ const supabase = createClient(
 
 // Initiate Paystack payment for a shop order.
 // Body: { order_id }
-// Uses total_kobo server-side; never trusts client amount.
+//
+// The amount is the order's own total_kobo, read here on the server and recorded as a payment intent BEFORE Paystack is
+// contacted; settlement later accepts only a Paystack payment that matches it (amount, currency, provider) for THIS customer
+// and THIS order. Every attempt has its own intent/reference, mirrored in shop_payments (the order's attempt ledger).
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -34,7 +39,7 @@ export default async function handler(req, res) {
   if (order.payment_status === 'paid' || order.status === 'paid') {
     return res.status(400).json({ error: 'Already paid' })
   }
-  if (!order.total_kobo || order.total_kobo <= 0) {
+  if (!Number.isSafeInteger(order.total_kobo) || order.total_kobo <= 0) {
     return res.status(400).json({ error: 'No amount to pay' })
   }
   // Only pending_payment orders can be paid (strict Paystack)
@@ -42,10 +47,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Order status ${order.status} cannot be paid` })
   }
 
-  // Every attempt gets its own Paystack reference, recorded in shop_payments. Before starting another one, the
-  // previous attempt is checked with Paystack: if it was actually paid (the customer lost the callback) the
-  // client is told to verify it instead of paying twice; otherwise it is closed as failed. A late payment on a
-  // closed attempt is still accepted by verify/webhook because the ledger remembers it.
+  const provider = getPaystackProvider()
+
+  // Before starting another attempt, the previous one is checked: if it was actually paid (the customer lost the callback) it is
+  // settled now and the client is told, instead of paying twice; otherwise it is closed as failed. A late payment on a closed
+  // attempt is still accepted by the redirect verify and the webhook because its intent remembers it.
   const { data: pending } = await supabase
     .from('shop_payments')
     .select('id, payment_reference')
@@ -54,26 +60,65 @@ export default async function handler(req, res) {
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  // An order started before attempts were recorded has its reference only on the order.
   const previousRef = pending?.payment_reference || order.payment_reference
   if (previousRef) {
-    let check
-    try {
-      check = await paystackFetch(`/transaction/verify/${encodeURIComponent(previousRef)}`)
-    } catch (err) {
+    const prior = await settleIntentForRequest({ supabase, reference: previousRef, purpose: 'shop_order', user })
+    if (prior.outcome === 'settled') {
+      await runSettlementEffects(supabase, prior.result)
+      return res.status(200).json({ alreadyPaid: true, reference: previousRef })
+    }
+    if (prior.outcome === 'already_settled') return res.status(200).json({ alreadyPaid: true, reference: previousRef })
+    if (prior.outcome === 'error') {
       // Cannot tell whether the earlier attempt was paid: starting another could make the customer pay twice.
       return res.status(502).json({ error: 'Could not check your earlier payment. Please try again in a moment.' })
     }
-    if (check?.status && check.data?.status === 'success') {
-      return res.status(200).json({ alreadyPaid: true, reference: previousRef })
+    if (prior.outcome === 'unknown_reference') {
+      // An attempt from before payment intents existed: it cannot be settled by the engine. If Paystack says it was paid, do NOT
+      // take a second payment; it needs a human.
+      let check
+      try {
+        check = await provider.verifyPayment({ reference: previousRef })
+      } catch {
+        return res.status(502).json({ error: 'Could not check your earlier payment. Please try again in a moment.' })
+      }
+      if (check?.status === 'success') {
+        paymentLogger.error('payment.shop.legacy_attempt_paid', { order: order.id, reference: previousRef })
+        return res.status(409).json({ error: 'An earlier payment for this order is being reviewed. Please contact support before paying again.' })
+      }
     }
+
+    // not paid / could not be applied / legacy and unpaid: close the previous attempt (its intent too, if it has one)
     const closed = pending
       ? await supabase.from('shop_payments').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', pending.id)
       : await supabase.from('shop_payments').insert({ order_id: order.id, payment_reference: previousRef, amount_kobo: order.total_kobo, status: 'failed', gateway: 'paystack' })
     if (closed.error) return res.status(500).json({ error: 'Could not start payment' })
+    try {
+      const priorIntent = await findIntent(supabase, previousRef)
+      if (priorIntent && ['created', 'pending'].includes(priorIntent.status)) await markIntentFailed(supabase, priorIntent.id)
+    } catch (err) {
+      paymentLogger.warn('payment.shop.close_previous_intent_failed', { reference: previousRef, message: err.message })
+    }
   }
 
-  const reference = `CF-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`
+  const reference = newReference('cf_shop', order.id)
+  let intent
+  try {
+    intent = await createPaymentIntent(supabase, {
+      reference,
+      application: 'carefind',
+      purpose: 'shop_order',
+      customerId: user.id,
+      businessId: order.vendor_business_id,
+      entityType: 'shop_order',
+      entityId: order.id,
+      expectedAmountKobo: order.total_kobo,
+      metadata: { order_ref: order.order_ref },
+    })
+  } catch (err) {
+    paymentLogger.error('payment.intent.create_failed', { purpose: 'shop_order', code: err.code, message: err.message })
+    return res.status(500).json({ error: 'Could not start payment' })
+  }
+
   const { error: attemptErr } = await supabase.from('shop_payments').insert({
     order_id: order.id,
     payment_reference: reference,
@@ -83,11 +128,13 @@ export default async function handler(req, res) {
   })
   if (attemptErr) {
     console.error('[initiate-shop-payment] could not record payment attempt:', attemptErr.message)
+    await markIntentFailed(supabase, intent.id).catch(() => {})
     return res.status(500).json({ error: 'Could not start payment' })
   }
   const { error: refErr } = await supabase.from('shop_orders').update({ payment_reference: reference }).eq('id', order.id)
   if (refErr) {
     console.error('[initiate-shop-payment] could not save payment reference:', refErr.message)
+    await markIntentFailed(supabase, intent.id).catch(() => {})
     return res.status(500).json({ error: 'Could not start payment' })
   }
 
@@ -96,24 +143,18 @@ export default async function handler(req, res) {
   const origin = host ? `${proto}://${host}` : ''
 
   try {
-    const data = await paystackFetch('/transaction/initialize', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: user.email || `order+${order.id}@carefind.ng`,
-        amount: order.total_kobo,
-        reference,
-        currency: 'NGN',
-        callback_url: `${origin}/orders/${order.id}?reference=${reference}`,
-        metadata: { order_id: order.id, vendor_business_id: order.vendor_business_id, type: 'shop_order' },
-      }),
-    })
-    if (!data.status) return res.status(400).json({ error: data.message || 'Could not start payment' })
-    return res.status(200).json({
-      authorization_url: data.data.authorization_url,
+    const init = await provider.initializePayment({
+      email: user.email || `order+${order.id}@carefind.ng`,
+      amountKobo: intent.expected_amount,
       reference,
-      amount: order.total_kobo,
+      callbackUrl: `${origin}/orders/${order.id}?reference=${reference}`,
+      metadata: { intent_id: intent.id, purpose: 'shop_order', order_id: order.id },
     })
+    await markIntentPending(supabase, intent.id)
+    return res.status(200).json({ authorization_url: init.authorizationUrl, reference, amount: order.total_kobo })
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Could not start payment' })
+    // A definite refusal closes the intent; an ambiguous failure leaves it open to expire (the customer was never sent a checkout link).
+    if (!err.ambiguous) await markIntentFailed(supabase, intent.id).catch(() => {})
+    return res.status(err.code === 'config' ? 500 : 502).json({ error: err.message || 'Could not start payment' })
   }
 }

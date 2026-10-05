@@ -6,13 +6,15 @@ import { getPaystackProvider, paymentLogger } from './payments.js'
 // because the unguessable reference is their handle.
 //
 // -> { http, body, outcome, result }
-export function settleIntentForRequest({ supabase, reference, purpose, user = null, provider = getPaystackProvider() }) {
+// `entityId`, when the client named the thing it is paying for (an order), must be the intent's own entity: a reference can never
+// be used to settle a different order than the one named.
+export function settleIntentForRequest({ supabase, reference, purpose, user = null, entityId = null, provider = getPaystackProvider() }) {
   return settleForRequest({
     supabase,
     provider,
     reference,
     purpose,
-    authorize: (intent) => !user || intent.customer_id === user.id,
+    authorize: (intent) => (!user || intent.customer_id === user.id) && (!entityId || intent.entity_id === entityId),
     logger: paymentLogger,
   })
 }

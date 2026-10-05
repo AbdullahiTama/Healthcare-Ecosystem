@@ -7,7 +7,7 @@ import { findIntent, PaymentIntentError } from './intents.js'
 // and idempotently.
 //
 // Outcomes:
-//   unknown_reference   no intent with this reference (a legacy payment, or someone else's)
+//   unknown_reference   no intent with this reference (a payment from before payment intents, or someone else's): never guessed
 //   already_settled     settled earlier; nothing moved now
 //   settled             settled by this call (data carries the purpose-specific result)
 //   needs_refund        paid, but cannot be applied (amount mismatch, already booked, ...): reason given

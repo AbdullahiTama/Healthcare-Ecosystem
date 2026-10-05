@@ -28,7 +28,7 @@ vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), proc
 
 vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({
   ...(await importOriginal()),
-  // These legacy-path tests are about metadata dispatch; engine routing has its own test file.
+  // These tests are about how each event type is mapped; the charge.success engine routing has its own test file.
   recordProviderEvent: async () => ({ event: { id: 'e1', attempts: 0 }, isNew: true, alreadyHandled: false }),
   finishProviderEvent: async () => {},
   settleByReference: async () => ({ outcome: 'unknown_reference' }),
@@ -56,36 +56,6 @@ beforeEach(() => {
   h.maybeSingle = {}
   h.updateRows = null
   h.rpcImpl = async () => ({ data: [{ already_processed: true }], error: null })
-})
-
-// Financial audit M-7: the shop fallback (used only when both settle RPCs error) is a guarded UPDATE. If it
-// matches no row, another path (the redirect verify, or an earlier delivery) already settled the order, and
-// repeating the history row, vendor notification and customer email would duplicate them.
-describe('shop order fallback settlement', () => {
-  const shopEvent = { event: 'charge.success', data: { reference: 'cf_shop_1', amount: 100000, metadata: { order_id: 'o1' } } }
-  const wrote = (table) => h.touched.some(([, t]) => t === table)
-
-  beforeEach(() => {
-    h.maybeSingle = { shop_orders: { id: 'o1', payment_reference: 'cf_shop_1', vendor_business_id: 'v1', total_kobo: 100000, payment_status: 'pending', status: 'pending_payment', order_ref: 'CF-1' } }
-    h.rpcImpl = async (name) => (name === 'claim_payment_event' ? { data: 'new', error: null } : { data: null, error: { message: 'rpc unavailable' } })
-  })
-
-  it('the update matched no row (already settled elsewhere): no duplicate history, notification or payment row', async () => {
-    h.updateRows = []
-    const res = await post(shopEvent)
-    expect(res.statusCode).toBe(200)
-    expect(wrote('shop_order_status_history')).toBe(false)
-    expect(wrote('staff_notifications')).toBe(false)
-    expect(wrote('shop_payments')).toBe(false)
-  })
-
-  it('the update settled the order: history, payment row and vendor notification are written once', async () => {
-    h.updateRows = [{ id: 'o1' }]
-    await post(shopEvent)
-    expect(h.touched.filter(([, t]) => t === 'shop_order_status_history')).toHaveLength(1)
-    expect(h.touched.filter(([, t]) => t === 'staff_notifications')).toHaveLength(1)
-    expect(wrote('shop_payments')).toBe(true)
-  })
 })
 
 // Transfer webhooks are settled by the DATABASE (settle_withdrawal / settle_business_withdrawal); the handler maps the
@@ -189,18 +159,5 @@ describe('refund webhooks settle through the refund engine', () => {
   it('a database error answers 500 so Paystack redelivers the event', async () => {
     h.rpcImpl = async () => ({ data: null, error: { message: 'db down' } })
     expect((await post(ev('refund.processed'))).statusCode).toBe(500)
-  })
-})
-
-describe('plan and subscription amounts are stored in naira (Paystack reports kobo)', () => {
-  it('CareHub plan renewal: 500000 kobo is recorded as 5000 naira', async () => {
-    const res = await post({ event: 'charge.success', data: { reference: 'ch_1', amount: 500000, metadata: { business_id: 'biz-1', months: '1' } } })
-    expect(res.statusCode).toBe(200)
-    expect(rpc('renew_business_plan')).toMatchObject({ p_business_id: 'biz-1', p_months: 1, p_naira_amount: 5000, p_reference: 'ch_1' })
-  })
-
-  it('CareFind creator subscription: 100000 kobo is recorded as 1000 naira', async () => {
-    await post({ event: 'charge.success', data: { reference: 'cf_sub_1', amount: 100000, metadata: { purpose: 'subscription', user_id: 'u1', creator_id: 'c1', coins: '5' } } })
-    expect(rpc('settle_subscription_payment')).toMatchObject({ p_subscriber: 'u1', p_creator: 'c1', p_price: 5, p_naira_amount: 1000, p_reference: 'cf_sub_1' })
   })
 })

@@ -119,9 +119,9 @@ describe('createSettlementEffects (shared by both apps)', () => {
     expect(sb.calls).toEqual([])
   })
 
-  it('ignores a purpose it has no effect for (shop orders are not on the engine yet)', async () => {
+  it('ignores a purpose it has no effect for', async () => {
     const { run, sent } = setup()
-    await run(settled('shop_order', intentRow({ purpose: 'shop_order' })))
+    await run(settled('some_future_purpose', intentRow({ purpose: 'some_future_purpose' })))
     expect(sent).toEqual([])
   })
 
@@ -172,6 +172,43 @@ describe('createSettlementEffects (shared by both apps)', () => {
     await run(settled('booking', { entity_id: 'a1' }))
     expect(sb.data.staff_notifications).toHaveLength(1)
     expect(sent).toEqual([])
+  })
+
+  describe('shop_order', () => {
+    const shopResult = { outcome: 'settled', purpose: 'shop_order', order_id: 'o1', order_ref: 'CF-1', vendor_business_id: 'b1', total_kobo: 2500000, intent: { reference: 'cf_shop_1' } }
+    const order = (over = {}) => ({ id: 'o1', order_ref: 'CF-1', total_kobo: 2500000, delivery_address: '1 Main St', delivery_email: 'buyer@x.com', customer_name: 'Ada', ...over })
+
+    it('notifies the vendor and sends the order confirmation once, keyed by the order', async () => {
+      const { run, sent, sb } = setup({ shop_orders: [order()], shop_order_items: [], staff_notifications: [] })
+      await run(shopResult)
+      expect(sb.data.staff_notifications[0]).toMatchObject({ business_id: 'b1', kind: 'shop_order_paid', is_owner: true, link: '/dashboard/ecommerce' })
+      expect(sent).toHaveLength(1)
+      expect(sent[0]).toMatchObject({ templateKey: 'order_confirmation', toEmail: 'buyer@x.com', idempotencyKey: 'order-confirmation:o1' })
+      expect(sent[0].payload).toMatchObject({ orderRef: 'CF-1', totalNaira: 25000, fullName: 'Ada' })
+    })
+
+    it('an order with no usable delivery email still notifies the vendor and sends nothing', async () => {
+      const { run, sent, sb } = setup({ shop_orders: [order({ delivery_email: null })], staff_notifications: [] })
+      await run(shopResult)
+      expect(sb.data.staff_notifications).toHaveLength(1)
+      expect(sent).toEqual([])
+    })
+
+    it('one failing step never blocks the others and nothing throws (no rpc, a failing email)', async () => {
+      const logger = { error: vi.fn() }
+      const sb = fakeSupabase({ shop_orders: [order()], staff_notifications: [] })
+      const run = createSettlementEffects({ supabase: sb, send: async () => { throw new Error('smtp down') }, logger })
+      await expect(run(shopResult)).resolves.toBeUndefined()
+      expect(sb.data.staff_notifications).toHaveLength(1)
+      expect(logger.error).toHaveBeenCalled()
+    })
+
+    it('does nothing for a shop payment that was not settled by this call', async () => {
+      const { run, sent, sb } = setup({ shop_orders: [order()] })
+      await run({ ...shopResult, outcome: 'already_settled' })
+      expect(sent).toEqual([])
+      expect(sb.calls).toEqual([])
+    })
   })
 
   it('an email failure never breaks the caller (it is logged, the settlement stands)', async () => {

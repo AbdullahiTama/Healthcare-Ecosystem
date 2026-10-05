@@ -148,6 +148,51 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
         idempotencyKey: `subscription-started:${intent.reference}`,
       })
     },
+
+    // A paid shop order: tell the vendor, record the purchase pattern, confirm to the customer. Every step is best-effort
+    // and independent: one failing never blocks the others (and nothing here can fail the settlement).
+    async shop_order({ order_id, order_ref, vendor_business_id, total_kobo }) {
+      const step = async (name, fn) => {
+        try { await fn() } catch (err) { logger.error('settlement.effects.step_failed', { purpose: 'shop_order', step: name, message: err.message }) }
+      }
+      await step('vendor_notice', async () => {
+        await supabase.from('staff_notifications').insert({
+          business_id: vendor_business_id,
+          staff_id: null,
+          is_owner: true,
+          kind: 'shop_order_paid',
+          title: `Shop order paid - ${order_ref}`,
+          body: `Order ${order_ref} - ${'\u20a6'}${(total_kobo / 100).toLocaleString()} via Paystack`,
+          link: '/dashboard/ecommerce',
+          read_at: null,
+        })
+      })
+      await step('purchase_pattern', async () => { await supabase.rpc('track_purchase_pattern', { p_order_id: order_id }) })
+      await step('customer_email', async () => {
+        const { data: order } = await supabase
+          .from('shop_orders')
+          .select('id, order_ref, total_kobo, delivery_address, delivery_email, customer_name')
+          .eq('id', order_id)
+          .maybeSingle()
+        const email = order?.delivery_email
+        if (!order || !email || !email.includes('@')) return
+        const { data: items } = await supabase.from('shop_order_items').select('product_name, quantity, unit_price_kobo').eq('order_id', order_id)
+        await safeSend({
+          templateKey: 'order_confirmation',
+          toEmail: email,
+          payload: {
+            fullName: order.customer_name || 'Valued Customer',
+            orderRef: order.order_ref,
+            items: (items || []).map((it) => ({ name: it.product_name, quantity: it.quantity, price: Math.round((it.unit_price_kobo || 0) / 100) })),
+            totalNaira: Math.round((order.total_kobo || 0) / 100),
+            businessName: 'CareFind',
+            deliveryAddress: order.delivery_address || '',
+          },
+          subject: `Order Confirmed - ${order.order_ref}`,
+          idempotencyKey: `order-confirmation:${order.id}`,
+        })
+      })
+    },
   }
   effects.appointment = effects.booking
 

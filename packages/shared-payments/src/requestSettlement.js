@@ -15,7 +15,8 @@ export async function settleIntentForRequest({ supabase, provider, reference, pu
   if (typeof reference !== 'string' || !reference) return { http: 400, body: { error: 'Missing reference' }, outcome: 'invalid' }
 
   const intent = await findIntent(supabase, reference)
-  // Payments started before the settlement engine have no intent; the webhook still settles those.
+  // No intent: not one of ours, or a payment started before payment intents existed. The webhook no longer settles from event metadata, so
+  // the caller can only report it (read-only) - the engine never guesses.
   if (!intent) return { http: 404, body: { error: 'No payment found for this reference' }, outcome: 'unknown_reference' }
   if (intent.purpose !== purpose) return { http: 400, body: { error: 'This payment is not for this purpose' }, outcome: 'wrong_purpose' }
   if (!authorize(intent)) return { http: 403, body: { error: 'This transaction does not belong to you' }, outcome: 'forbidden' }
