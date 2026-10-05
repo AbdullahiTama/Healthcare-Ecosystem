@@ -1,6 +1,6 @@
 # The Settlement Engine (Phase 10)
 
-Status: implemented and tested in the repo. **The migration `carefind_20261010_central_settlement` is written and NOT applied to production** (section 6): it drops functions the live shop code calls, so it goes live together with the new CareFind/CareHub code.
+Status: implemented and tested. **The migration `carefind_20261010_central_settlement` is APPLIED to production (2026-10-05).** Until the new CareFind code is deployed the OLD shop code fails (it calls `verify_shop_payment` / `claim_payment_event`, which are gone): deploy now.
 
 ## 1. One definition
 
