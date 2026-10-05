@@ -1,4 +1,5 @@
 import { findIntent, PaymentIntentError } from './intents.js'
+import { rpcWithRetry } from './rpcRetry.js'
 
 // The ONE entry point that turns "the customer says they paid" or "the provider says it was paid"
 // into settlement. The redirect handler and the webhook both call it, so there is a single
@@ -38,13 +39,14 @@ export async function settleByReference({ supabase, provider, reference, logger 
     return { outcome: 'not_paid', providerStatus: verified.status, intent_id: intent.id, purpose: intent.purpose, intent }
   }
 
-  const { data, error } = await supabase.rpc('settle_payment_intent', {
+  // The engine is idempotent, so a deadlock / lock timeout / dropped connection is retried here instead of failing the payment.
+  const { data, error } = await rpcWithRetry(supabase, 'settle_payment_intent', {
     p_reference: reference,
     p_provider: provider.name,
     p_provider_txn_id: verified.providerTransactionId,
     p_amount_kobo: verified.amountKobo,
     p_currency: verified.currency,
-  })
+  }, { logger })
   if (error) throw new PaymentIntentError('settlement_failed', error.message)
 
   const result = Array.isArray(data) ? data[0] : data

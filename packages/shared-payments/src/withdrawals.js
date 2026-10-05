@@ -5,6 +5,9 @@
 // Paystack about a request that looks stuck, or from an admin - and reports what happened so each app can run
 // its own side effects (trust tiers, emails). It never writes a request table itself.
 
+import { rpcWithRetry } from './rpcRetry.js'
+import { createLoopGuard } from './scheduler.js'
+
 export const IN_FLIGHT_GRACE_MS = 10 * 60 * 1000
 
 const IN_FLIGHT = new Set(['pending', 'otp', 'processing', 'queued', 'received'])
@@ -72,7 +75,7 @@ export async function decideTransferAction(row, { getStatus, now = Date.now(), g
 export async function settleWithdrawal(supabase, kind, { outcome, reference, requestId, amountKobo, detail } = {}) {
   const def = WITHDRAWAL_KINDS[kind]
   if (!def) throw new Error(`unknown withdrawal kind ${kind}`)
-  const { data, error } = await supabase.rpc(def.settleRpc, {
+  const { data, error } = await rpcWithRetry(supabase, def.settleRpc, {
     p_outcome: outcome,
     p_reference: requestId ? null : reference ?? null,
     p_request_id: requestId ?? null,
@@ -127,7 +130,7 @@ export async function reconcileWithdrawal(supabase, kind, row, opts = {}) {
 }
 
 /** Sweep every request still reserved/processing after the grace period. Hooks run only for changes this sweep made. */
-export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, getStatus, onRefunded, onCompleted, logger = console } = {}) {
+export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.now(), graceMs = IN_FLIGHT_GRACE_MS, getStatus, onRefunded, onCompleted, logger = console, deadline = null } = {}) {
   const def = WITHDRAWAL_KINDS[kind]
   const cutoff = new Date(now - graceMs).toISOString()
   const { data: rows, error } = await supabase
@@ -141,10 +144,13 @@ export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.
   if (error) throw new Error(error.message)
 
   const summary = { checked: 0, refunded: 0, completed: 0, waiting: 0, errors: 0 }
+  const guard = createLoopGuard({ deadline })
   for (const row of rows || []) {
+    if (guard.stop()) { summary.stopped = guard.reason; break }
     summary.checked++
     try {
       const r = await reconcileWithdrawal(supabase, kind, row, { getStatus, now, graceMs })
+      guard.success()
       summary[r.outcome]++
       if (r.outcome === 'refunded') {
         logger.warn?.('withdrawal.sweep.refunded', { kind, id: row.id, reference: row.paystack_reference })
@@ -153,6 +159,7 @@ export async function sweepWithdrawals(supabase, kind, { limit = 50, now = Date.
       if (r.outcome === 'completed') await onCompleted?.(row, r.result)
     } catch (err) {
       summary.errors++
+      guard.failure(err)
       logger.error?.('withdrawal.sweep.failed', { kind, id: row.id, reference: row.paystack_reference, message: err.message })
     }
   }

@@ -20,6 +20,7 @@ import { findIntent } from './intents.js'
 import { settleByReference } from './settlement.js'
 import { finishProviderEvent } from './events.js'
 import { ERROR_CODES, isProviderError } from './errors.js'
+import { createLoopGuard } from './scheduler.js'
 
 const quietLogger = { info() {}, warn() {}, error() {} }
 
@@ -30,8 +31,9 @@ const rpc = async (supabase, name, args = {}) => {
 }
 
 /** Run every database check and sync the findings. -> { run_id, sources, totals } */
-export async function runDbReconciliation(supabase) {
-  return rpc(supabase, 'run_db_reconciliation')
+export async function runDbReconciliation(supabase, { heavy = true } = {}) {
+  // heavy = the checks that grow with the whole history (coin wallets vs ledger, the ledger chain, settled intents vs their entities)
+  return rpc(supabase, 'run_db_reconciliation', { p_heavy: heavy })
 }
 
 /**
@@ -66,14 +68,19 @@ export async function replayProviderEvents(supabase, { process, olderThanMinutes
  * @param {(result: object) => Promise<void>} [p.onSettled]  runs the app's side effects (emails, notices) for a payment THIS sweep settled
  * @returns {Promise<{ checked, settled, alreadySettled, notPaid, expired, needsRefund, errors }>}
  */
-export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 15, limit = 50, onSettled, logger = quietLogger } = {}) {
+export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 15, limit = 50, onSettled, logger = quietLogger, deadline = null } = {}) {
   const rows = (await rpc(supabase, 'list_open_intents_to_check', { p_older_than_minutes: olderThanMinutes, p_limit: limit })) || []
   const summary = { checked: rows.length, settled: 0, alreadySettled: 0, notPaid: 0, expired: 0, needsRefund: 0, errors: 0 }
   // Every attempt is recorded (even a failed one) so the database backs off instead of asking again next minute.
   if (rows.length) await rpc(supabase, 'mark_intents_checked', { p_ids: rows.map((r) => r.id) }).catch((err) => logger.warn('payment.sweep_mark_failed', { message: err.message }))
+  const guard = createLoopGuard({ deadline })
   for (const row of rows) {
+    // Stop on a deadline, or when the provider keeps failing (asking it forty more times only burns the budget): the remaining
+    // intents are due again after their backoff, nothing is lost.
+    if (guard.stop()) { summary.stopped = guard.reason; break }
     try {
       const result = await settleByReference({ supabase, provider, reference: row.reference, logger })
+      guard.success()
       if (result.outcome === 'settled') {
         summary.settled++
         logger.warn('payment.recovered_by_sweep', { reference: row.reference, purpose: result.purpose })
@@ -95,6 +102,7 @@ export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 
         if (!error) { summary.expired++; summary.notPaid++; continue }
       }
       summary.errors++
+      guard.failure(err)
       logger.warn('payment.sweep_failed', { reference: row.reference, code: err.code, message: err.message })
     }
   }
@@ -110,11 +118,12 @@ export async function sweepOpenIntents(supabase, provider, { olderThanMinutes = 
  *                           payment that STILL is not settled stays a finding
  * @returns {Promise<{ scanned, skipped, findings, recovered, pages }>}
  */
-export async function reconcileProviderTransactions(supabase, provider, { from, to, maxPages = 20, perPage = 100, onSettled, logger = quietLogger } = {}) {
+export async function reconcileProviderTransactions(supabase, provider, { from, to, maxPages = 20, perPage = 100, onSettled, logger = quietLogger, deadline = null } = {}) {
   const txns = []
   let skipped = 0
   let pages = 0
   for (let page = 1; page <= maxPages; page++) {
+    if (deadline != null && Date.now() >= deadline) break      // compare what was listed; the scope below names only what was scanned
     const r = await provider.listTransactions({ from, to, status: 'success', page, perPage })
     pages++
     skipped += r.skipped || 0
@@ -190,7 +199,7 @@ export async function alertOnCriticalFindings(supabase, { send, remindHours = 24
 }
 
 // How often each step is due (minutes). The cron endpoint runs every minute; Paystack and the database should not be asked that often.
-export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, provider: 30, db: 10, alert: 5 })
+export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, provider: 30, db: 10, db_heavy: 60, alert: 5 })
 
 /**
  * One reconciliation pass: replay, sweep, compare with the provider, the database checks (last, so they see the repairs), then the
@@ -198,7 +207,7 @@ export const RECONCILIATION_SCHEDULE = Object.freeze({ replay: 5, sweep: 5, prov
  * (an administrator pressing "run now"). Every step is isolated. -> { replay, sweep, provider, db, alert, failed: string[] }
  * A step that was not due reports { skipped: 'not_due' }.
  */
-export async function runReconciliation(supabase, provider, { processEvent, onSettled, sendAlert, logger = quietLogger, now = () => new Date(), lookbackHours = 48, force = false, schedule = RECONCILIATION_SCHEDULE } = {}) {
+export async function runReconciliation(supabase, provider, { processEvent, onSettled, sendAlert, logger = quietLogger, now = () => new Date(), lookbackHours = 48, force = false, schedule = RECONCILIATION_SCHEDULE, deadline = null } = {}) {
   const report = { replay: null, sweep: null, provider: null, db: null, alert: null, failed: [] }
   const due = async (name) => {
     if (force) return true
@@ -209,6 +218,7 @@ export async function runReconciliation(supabase, provider, { processEvent, onSe
     }
   }
   const step = async (name, fn) => {
+    if (deadline != null && deadline - Date.now() < 2000) { report[name] = { skipped: 'out_of_time' }; return }
     if (!(await due(name))) { report[name] = { skipped: 'not_due' }; return }
     try { report[name] = await fn() } catch (err) {
       report[name] = { error: err.message }
@@ -217,11 +227,12 @@ export async function runReconciliation(supabase, provider, { processEvent, onSe
     }
   }
   if (processEvent) await step('replay', () => replayProviderEvents(supabase, { process: processEvent, logger }))
-  await step('sweep', () => sweepOpenIntents(supabase, provider, { onSettled, logger }))
+  await step('sweep', () => sweepOpenIntents(supabase, provider, { onSettled, logger, deadline }))
   const to = now()
   const from = new Date(to.getTime() - lookbackHours * 3600 * 1000)
-  await step('provider', () => reconcileProviderTransactions(supabase, provider, { from: from.toISOString(), to: to.toISOString(), onSettled, logger }))
-  await step('db', () => runDbReconciliation(supabase))
+  await step('provider', () => reconcileProviderTransactions(supabase, provider, { from: from.toISOString(), to: to.toISOString(), onSettled, logger, deadline }))
+  // the cheap checks every `db` minutes; the history-sized ones only when their own (longer) slot is won
+  await step('db', async () => runDbReconciliation(supabase, { heavy: force || (await due('db_heavy')) }))
   if (sendAlert) await step('alert', () => alertOnCriticalFindings(supabase, { send: sendAlert, logger }))
 
   const totals = report.db?.totals

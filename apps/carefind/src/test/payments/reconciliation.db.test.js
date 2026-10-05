@@ -38,6 +38,8 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261012_shop_vendor_payouts'))
   await db.exec(M('carefind_20261014_reconciliation'))
   await db.exec(M('carefind_20261015_reconciliation_ops'))
+  await db.exec(M('carefind_20261016_reconciliation_scale'))
+  await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
 }, 240_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]
@@ -376,5 +378,76 @@ describe('sweep backoff', () => {
       await expect(asRole(role, () => db.query('select * from job_slots'))).rejects.toThrow(/permission denied/)
       await expect(asRole(role, () => db.query('select * from payment_intent_checks'))).rejects.toThrow(/permission denied/)
     }
+  })
+})
+
+describe('at scale (carefind_20261016_reconciliation_scale)', () => {
+  const many = (n, severity = 'warning', prefix = '') => Array.from({ length: n }, (_, i) => ({ kind: 'k', subject_type: 't', subject_id: `${prefix}${i}`, severity, detail: 'd' }))
+
+  it('syncing 3,000 findings in one report is set-based and the counts are right (the real-Postgres benchmark covers 80,000)', async () => {
+    const t0 = Date.now()
+    const r1 = await sync('big', many(3000))
+    expect(r1).toMatchObject({ inserted: 3000, reopened: 0, resolved: 0, open: 3000 })
+    const r2 = await sync('big', many(2990))                            // 10 cleared
+    expect(r2).toMatchObject({ inserted: 0, resolved: 10, open: 2990 })
+    const r3 = await sync('big', many(3000))                            // the 10 come back
+    expect(r3).toMatchObject({ inserted: 0, reopened: 10, resolved: 0, open: 3000 })
+    expect((await one("select max(occurrences)::int m from reconciliation_findings where source = 'big'")).m).toBe(3)
+    expect(Date.now() - t0).toBeLessThan(60_000)
+  }, 90_000)
+
+  it('duplicates inside one report are one finding, not an error', async () => {
+    const r = await sync('dups', [f('a', '1'), f('a', '1'), f('a', '2')])
+    expect(r).toMatchObject({ inserted: 2, open: 2 })
+  })
+
+  it('a finding that is reported again with a new severity or detail takes the new values', async () => {
+    await sync('upd', [{ kind: 'k', subject_type: 't', subject_id: '1', severity: 'warning', detail: 'first' }])
+    await sync('upd', [{ kind: 'k', subject_type: 't', subject_id: '1', severity: 'critical', detail: 'second' }])
+    expect(await one("select severity, detail, occurrences::int occ from reconciliation_findings where source = 'upd'")).toEqual({ severity: 'critical', detail: 'second', occ: 2 })
+  })
+
+  it('a rejected report writes nothing (the whole call fails together)', async () => {
+    await expect(sync('atomic', [f('a', '1'), { kind: 'a', subject_type: 't', subject_id: '2', severity: 'bogus', detail: 'd' }])).rejects.toThrow(/invalid finding/)
+    expect((await one("select count(*)::int c from reconciliation_findings where source = 'atomic'")).c).toBe(0)
+  })
+
+  it('the cap keeps the worst findings (critical first) and adds one summary finding saying how many were left out', async () => {
+    const mixed = [...many(300, 'info', 'i'), ...many(400, 'critical', 'c'), ...many(100, 'warning', 'w')]
+    const capped = (await one('select _recon_cap($1, $2::jsonb, 500) r', ['src', JSON.stringify(mixed)])).r
+    expect(capped).toHaveLength(501)
+    const bySeverity = capped.reduce((m, x) => ({ ...m, [x.severity]: (m[x.severity] || 0) + 1 }), {})
+    expect(bySeverity).toEqual({ critical: 401, warning: 100 })           // all 400 critical + all 100 warning kept; the 300 info dropped; +1 summary (critical)
+    const summary = capped.at(-1)
+    expect(summary).toMatchObject({ kind: 'too_many_findings', subject_type: 'source', subject_id: 'src', severity: 'critical' })
+    expect(summary.detail).toMatch(/reported 800 findings; only the 500 worst/)
+    const small = JSON.stringify(many(3))
+    expect((await one('select _recon_cap($1, $2::jsonb) r', ['src', small])).r).toHaveLength(3)
+  })
+
+  it('run_db_reconciliation(false) skips the history-sized checks; the default runs them', async () => {
+    const light = await asRole('service_role', () => one('select run_db_reconciliation(false) r')).then((x) => x.r)
+    expect(light.heavy).toBe(false)
+    expect(light.sources.map((s) => s.source)).toEqual(['commissions', 'withdrawals', 'refunds', 'shop_vendor', 'events'])
+    const full = await asRole('service_role', () => one('select run_db_reconciliation() r')).then((x) => x.r)
+    expect(full.heavy).toBe(true)
+    expect(full.sources.map((s) => s.source)).toEqual(['coins', 'commissions', 'withdrawals', 'refunds', 'shop_vendor', 'intents', 'events'])
+  })
+
+  it('a light run leaves the findings of the heavy checks alone (it neither resolves nor reopens them)', async () => {
+    await sync('coins', [{ kind: 'wallet_differs_from_ledger', subject_type: 'user', subject_id: 'u-keep', severity: 'critical', detail: 'x' }])
+    await asRole('service_role', () => one('select run_db_reconciliation(false)'))
+    expect((await one("select status from reconciliation_findings where source = 'coins' and subject_id = 'u-keep'")).status).toBe('open')
+    await asRole('service_role', () => one('select run_db_reconciliation(true)'))
+    expect((await one("select status from reconciliation_findings where source = 'coins' and subject_id = 'u-keep'")).status).toBe('resolved')
+  })
+
+  it('the private cap helper cannot be called by any API role; the indexes that keep the checks O(matches) exist', async () => {
+    for (const role of ['anon', 'authenticated', 'service_role']) {
+      await expect(asRole(role, () => db.query("select _recon_cap('x', '[]'::jsonb)"))).rejects.toThrow(/permission denied/)
+    }
+    const idx = (await all("select indexname from pg_indexes where schemaname = 'public' and indexname in ('payment_provider_events_unmatched_idx','payment_intents_settled_no_txn_idx','payment_intents_open_check_idx')")).map((r) => r.indexname)
+    expect(idx.sort()).toEqual(['payment_intents_open_check_idx', 'payment_intents_settled_no_txn_idx', 'payment_provider_events_unmatched_idx'])
+    expect((await one("select count(*)::int c from pg_proc where proname = 'run_db_reconciliation'")).c).toBe(1)
   })
 })

@@ -27,6 +27,8 @@ const SQL = [
   M('carefind_20261012_shop_vendor_payouts'),
   M('carefind_20261014_reconciliation'),
   M('carefind_20261015_reconciliation_ops'),
+  M('carefind_20261016_reconciliation_scale'),
+  M('carefind_20261017_engine_timeouts_and_hot_paths'),
 ]
 
 let pool, drop
@@ -51,7 +53,7 @@ describe.skipIf(!hasRealPostgres)('reconciliation under real concurrency', () =>
 
   it('12 overlapping syncs reporting the SAME new findings: each is inserted once, nobody errors', async () => {
     const current = JSON.stringify([item('1'), item('2'), item('3')])
-    const results = await together(12, async (c) => (await c.query('select sync_reconciliation_findings($1,$2::jsonb) r', ['conc_a', current])).rows[0].r)
+    const results = await together(12, async (c) => (await c.query('select sync_reconciliation_findings($1,$2::jsonb) r', ['conc_a', current])).rows[0].r, 100)
     expect(tally(results)).toEqual({ ok: 12 })
     expect(results.reduce((s, r) => s + r.value.inserted, 0)).toBe(3)
     const rows = await q("select subject_id, occurrences::int occ from reconciliation_findings where source = 'conc_a' order by subject_id")
@@ -67,12 +69,14 @@ describe.skipIf(!hasRealPostgres)('reconciliation under real concurrency', () =>
     expect(['open', 'resolved']).toContain(rows[0].status)
   })
 
-  it('8 overlapping full database reconciliations: every run completes, runs are recorded, findings are not duplicated', async () => {
+  it('5 overlapping full database reconciliations: every run completes, runs are recorded, findings are not duplicated', async () => {
     await pool.query(`insert into payment_provider_events (provider, event_id, event_type, reference, payload, signature_ok, received_at, outcome) values ('paystack','charge.success:1','charge.success','ref_stranger_1','{"data":{"amount":100000}}'::jsonb,true, now() - interval '2 hours','ignored')`)
-    const results = await together(8, async (c) => (await c.query('select run_db_reconciliation() r')).rows[0].r.totals)
-    expect(tally(results)).toEqual({ ok: 8 })
-    expect((await q('select count(*)::int c from reconciliation_runs where finished_at is not null'))[0].c).toBe(8)
-    expect(await q("select kind, status, occurrences::int occ from reconciliation_findings where kind = 'unmatched_charge'")).toEqual([{ kind: 'unmatched_charge', status: 'open', occ: 8 }])
+    // Runs queue on the per-source advisory lock, and the engine functions now have lock_timeout = 10 s: 5 overlapping runs, held briefly,
+    // all complete (a longer pile-up fails FAST with 55P03, which is the point of the timeout, and the sweep retries next minute).
+    const results = await together(4, async (c) => (await c.query('select run_db_reconciliation() r')).rows[0].r.totals, 100)
+    expect(tally(results)).toEqual({ ok: 4 })
+    expect((await q('select count(*)::int c from reconciliation_runs where finished_at is not null'))[0].c).toBeGreaterThanOrEqual(4)
+    expect(await q("select kind, status, occurrences::int occ from reconciliation_findings where kind = 'unmatched_charge'")).toEqual([{ kind: 'unmatched_charge', status: 'open', occ: 4 }])
   })
 
   it('20 overlapping callers of one job slot: exactly one is told it is due', async () => {

@@ -288,7 +288,7 @@ describe('runReconciliation gating and alerts', () => {
     const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: () => true }) })
     await runReconciliation(s, p(), { processEvent: async () => 'processed', sendAlert: async () => {} })
     const asked = Object.fromEntries(s.calls.filter((c) => c.name === 'claim_job_slot').map((c) => [c.args.p_job, c.args.p_min_minutes]))
-    expect(asked).toEqual({ recon_replay: RECONCILIATION_SCHEDULE.replay, recon_sweep: RECONCILIATION_SCHEDULE.sweep, recon_provider: RECONCILIATION_SCHEDULE.provider, recon_db: RECONCILIATION_SCHEDULE.db, recon_alert: RECONCILIATION_SCHEDULE.alert })
+    expect(asked).toEqual({ recon_replay: RECONCILIATION_SCHEDULE.replay, recon_sweep: RECONCILIATION_SCHEDULE.sweep, recon_provider: RECONCILIATION_SCHEDULE.provider, recon_db: RECONCILIATION_SCHEDULE.db, recon_db_heavy: RECONCILIATION_SCHEDULE.db_heavy, recon_alert: RECONCILIATION_SCHEDULE.alert })
     expect(RECONCILIATION_SCHEDULE.provider).toBeGreaterThan(RECONCILIATION_SCHEDULE.sweep)
   })
 
@@ -312,5 +312,41 @@ describe('runReconciliation gating and alerts', () => {
   it('without a sendAlert there is no alert step', async () => {
     const s = createFakeSupabase({ rpc: rpcs() })
     expect((await runReconciliation(s, p(), { force: true })).alert).toBeNull()
+  })
+})
+
+describe('the heavy database checks have their own, longer slot', () => {
+  const rpcs = (over = {}) => ({
+    sync_reconciliation_findings: () => ({}), list_open_intents_to_check: () => [], list_replayable_provider_events: () => [], mark_intents_checked: () => 0,
+    run_db_reconciliation: () => ({ totals: { open_critical: 0, open_warning: 0, open_info: 0 } }), ...over,
+  })
+  const p = () => provider({ listTransactions: async () => ({ transactions: [], hasMore: false }) })
+
+  it('asks for the light checks when the heavy slot is not due, and for everything when it is', async () => {
+    const won = new Set(['recon_sweep', 'recon_provider', 'recon_db'])
+    const s = createFakeSupabase({ rpc: rpcs({ claim_job_slot: ({ p_job }) => won.has(p_job) }) })
+    await runReconciliation(s, p(), {})
+    expect(s.calls.find((c) => c.name === 'run_db_reconciliation').args).toEqual({ p_heavy: false })
+    won.add('recon_db_heavy')
+    const s2 = createFakeSupabase({ rpc: rpcs({ claim_job_slot: ({ p_job }) => won.has(p_job) }) })
+    await runReconciliation(s2, p(), {})
+    expect(s2.calls.find((c) => c.name === 'run_db_reconciliation').args).toEqual({ p_heavy: true })
+  })
+
+  it('"run now" always runs the heavy checks', async () => {
+    const s = createFakeSupabase({ rpc: rpcs() })
+    await runReconciliation(s, p(), { force: true })
+    expect(s.calls.find((c) => c.name === 'run_db_reconciliation').args).toEqual({ p_heavy: true })
+  })
+
+  it('a deadline that has passed skips every step', async () => {
+    const s = createFakeSupabase({ rpc: rpcs() })
+    const r = await runReconciliation(s, p(), { force: true, deadline: Date.now() - 1, processEvent: async () => 'processed', sendAlert: async () => {} })
+    expect(r.replay).toEqual({ skipped: 'out_of_time' })
+    expect(r.sweep).toEqual({ skipped: 'out_of_time' })
+    expect(r.provider).toEqual({ skipped: 'out_of_time' })
+    expect(r.db).toEqual({ skipped: 'out_of_time' })
+    expect(r.alert).toEqual({ skipped: 'out_of_time' })
+    expect(s.calls.filter((c) => c.op === 'rpc')).toEqual([])
   })
 })

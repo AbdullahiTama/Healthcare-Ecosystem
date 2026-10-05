@@ -39,6 +39,8 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261005_lock_wallets_to_ledger'))
   await db.exec(M('carefind_20261006_settle_plan_and_carehub_appointments'))
   await db.exec(M('carefind_20261007_commission_engine'))
+  await db.exec(M('carefind_20261008_commission_reconcile_first_payment'))
+  await db.exec(M('carefind_20261008_withdrawal_engine'))
   await db.exec(M('carefind_20261009_refund_engine'))
   // production start state of the shop functions this migration replaces (their bodies are overwritten; the ACLs are the live ones)
   await db.exec(M('carefind_20261010_central_settlement'))
@@ -53,6 +55,10 @@ beforeAll(async () => {
     grant execute on function public.request_shop_return(uuid, text, text, integer) to anon, authenticated, service_role;
   `)
   await db.exec(M('carefind_20261013_shop_return_hardening'))
+  await db.exec(M('carefind_20261014_reconciliation'))
+  await db.exec(M('carefind_20261015_reconciliation_ops'))
+  await db.exec(M('carefind_20261016_reconciliation_scale'))
+  await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))   // reorders _settle_shop_order and re-times the engines: every test below runs on the final code
 }, 180_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]

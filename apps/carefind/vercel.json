@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/cron/process-email-outbox.js": { "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/cron/process-email-outbox",

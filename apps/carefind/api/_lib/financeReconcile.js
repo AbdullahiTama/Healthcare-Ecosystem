@@ -52,10 +52,11 @@ export function createFinanceAlertSender(supabase, { env = process.env, logger =
   }
 }
 
-export async function runFinanceReconciliation(supabase, { force = false } = {}) {
+export async function runFinanceReconciliation(supabase, { force = false, deadline = null } = {}) {
   return runReconciliation(supabase, getPaystackProvider(), {
     logger: paymentLogger,
     force,
+    deadline,
     processEvent: (event) => processWebhookEvent(supabase, event),
     onSettled: (result) => runSettlementEffects(supabase, result),
     sendAlert: createFinanceAlertSender(supabase),

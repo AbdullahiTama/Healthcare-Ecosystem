@@ -21,9 +21,15 @@ const SQL = [
   M('carefind_20261005_lock_wallets_to_ledger'),
   M('carefind_20261006_settle_plan_and_carehub_appointments'),
   M('carefind_20261007_commission_engine'),
+  M('carefind_20261008_commission_reconcile_first_payment'),
+  M('carefind_20261008_withdrawal_engine'),
   M('carefind_20261009_refund_engine'),
   M('carefind_20261010_central_settlement'),
   M('carefind_20261012_shop_vendor_payouts'),
+  M('carefind_20261014_reconciliation'),
+  M('carefind_20261015_reconciliation_ops'),
+  M('carefind_20261016_reconciliation_scale'),
+  M('carefind_20261017_engine_timeouts_and_hot_paths'),
 ]
 
 const SUBTOTAL = 2_000_000, COMMISSION = 400_000, TOTAL = 2_050_000, VENDOR = 1_600_000

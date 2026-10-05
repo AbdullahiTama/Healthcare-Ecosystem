@@ -1,11 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
-import { sweepWithdrawals } from '../_lib/withdrawalRecovery.js'
-import { runRefundSweeps } from '@care-ecosystem/shared-payments'
-import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
-import { runFinanceReconciliation } from '../_lib/financeReconcile.js'
+import { createBudget } from '@care-ecosystem/shared-payments'
+import { runFinanceJobs } from '../_lib/financeJobs.js'
 import { EmailService } from '@care-ecosystem/shared-email'
 
+// One deadline for the whole invocation (email drain + the finance steps). vercel.json gives this function 60 s; the budget leaves room
+// to answer. Override with CRON_BUDGET_MS if the plan's limit differs.
+const BUDGET_MS = Number(process.env.CRON_BUDGET_MS) > 0 ? Number(process.env.CRON_BUDGET_MS) : 50_000
+
 export default async function handler(req, res) {
+  const budget = createBudget(BUDGET_MS)
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -49,55 +52,17 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: e.message })
   }
 
-  // Withdrawal-reconciliation sweep (financial audit H-1/H-2) rides this existing daily schedule
-  // rather than its own vercel.json entry: this project is on Vercel Hobby, already at its cron
-  // count with process-email-outbox and subscription-expiry. cron/reconcile-withdrawals.js stays
-  // as a standalone endpoint for a manual run or a future dedicated schedule. Isolated in its own
-  // try/catch so a failure here can never block email delivery, or vice versa.
-  let withdrawals
+  // The financial work, as named steps with intervals (vendor payouts, withdrawal sweep, refund sweep, reconciliation): see
+  // _lib/financeJobs.js. This endpoint is driven every minute, so each step runs only when its slot is due, the whole invocation shares
+  // one deadline (a step that no longer fits runs next minute), and a failing step never blocks the others or the email delivery above.
+  let finance
   try {
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-    withdrawals = await sweepWithdrawals(supabase)
+    finance = await runFinanceJobs(supabase, { budget })
   } catch (e) {
-    console.error('[cron/process-email-outbox] withdrawal sweep failed', e)
-    withdrawals = { error: e.message }
+    console.error('[cron/process-email-outbox] finance jobs failed', e)
+    finance = { error: e.message }
   }
 
-  // Refund engine sweep: finish card refunds the provider has not answered, refund payments that could not be applied, and
-  // refund appointments that were cancelled while paid but never refunded. Each part is isolated; none can block email.
-  let refunds
-  try {
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-    refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger })
-  } catch (e) {
-    console.error('[cron/process-email-outbox] refund sweep failed', e)
-    refunds = { error: e.message }
-  }
-
-  // Vendor payouts: the vendor's share of a shop order moves held -> available once the order was delivered and the return
-  // window has passed. Idempotent and race-safe in the database; isolated here so it can never block email delivery.
-  let vendorPayouts
-  try {
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-    const { data, error } = await supabase.rpc('release_shop_vendor_credits', { p_limit: 200 })
-    if (error) throw error
-    vendorPayouts = data
-    if (data?.partial > 0) paymentLogger.warn('shop.vendor_release_partial', { partial: data.partial })
-  } catch (e) {
-    console.error('[cron/process-email-outbox] vendor payout release failed', e)
-    vendorPayouts = { error: e.message }
-  }
-
-  // Reconciliation: replay failed webhooks, settle payments Paystack says were paid but nobody settled, compare Paystack's list of
-  // charges with our intents, run every database check. Last, so it sees what the sweeps above repaired. Never throws.
-  let reconciliation
-  try {
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-    reconciliation = await runFinanceReconciliation(supabase)
-  } catch (e) {
-    console.error('[cron/process-email-outbox] reconciliation failed', e)
-    reconciliation = { error: e.message }
-  }
-
-  return res.status(200).json({ ok: true, ...result, withdrawals, refunds, vendorPayouts, reconciliation })
+  return res.status(200).json({ ok: true, ...result, finance })
 }

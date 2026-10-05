@@ -6,6 +6,8 @@
 // settle call. A card refund is `completed` only when the PROVIDER says so; "we asked" is never "done".
 
 import { isProviderError } from './errors.js'
+import { rpcWithRetry } from './rpcRetry.js'
+import { createLoopGuard } from './scheduler.js'
 
 export const REFUND_GRACE_MS = 10 * 60 * 1000
 
@@ -24,7 +26,7 @@ const ALREADY_DONE = /already|fully (refunded|reversed)|has been (refunded|rever
 
 /** Ask the database for a refund (idempotent: one live refund per payment). -> the database's answer ({ outcome, id, reference, ... }) */
 export async function requestRefund(supabase, { cause, entityType, entityId, requestedBy = null, reason = null, platformFunded = false }) {
-  const { data, error } = await supabase.rpc('request_refund', {
+  const { data, error } = await rpcWithRetry(supabase, 'request_refund', {
     p_cause: cause, p_entity_type: entityType, p_entity_id: entityId,
     p_requested_by: requestedBy, p_reason: reason, p_platform_funded: platformFunded,
   })
@@ -34,7 +36,7 @@ export async function requestRefund(supabase, { cause, entityType, entityId, req
 
 /** Apply one provider outcome to one refund. Throws on an RPC error. -> { result, ... } */
 export async function settleRefund(supabase, { outcome, id, reference, providerRefundId, transactionReference, amountKobo, detail } = {}) {
-  const { data, error } = await supabase.rpc('settle_refund', {
+  const { data, error } = await rpcWithRetry(supabase, 'settle_refund', {
     p_outcome: outcome, p_refund_id: id ?? null, p_reference: id ? null : reference ?? null,
     p_provider_refund_id: providerRefundId ?? null, p_transaction_reference: transactionReference ?? null,
     p_amount_kobo: amountKobo ?? null, p_detail: detail ?? null,
@@ -118,7 +120,7 @@ export async function settleRefundWebhook(supabase, event, { logger = console } 
  * has never heard of is sent (a timed-out call may have created it). `processing` ones are completed or failed from the answer.
  * -> { checked, completed, failed, processing, pending, errors }
  */
-export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.now(), graceMs = REFUND_GRACE_MS, logger = console } = {}) {
+export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.now(), graceMs = REFUND_GRACE_MS, logger = console, deadline = null } = {}) {
   const cutoff = new Date(now - graceMs).toISOString()
   const { data: rows, error } = await supabase
     .from('refunds')
@@ -131,7 +133,9 @@ export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.
   if (error) throw new Error(error.message)
 
   const summary = { checked: 0, completed: 0, failed: 0, processing: 0, pending: 0, errors: 0 }
+  const guard = createLoopGuard({ deadline })
   for (const row of rows || []) {
+    if (guard.stop()) { summary.stopped = guard.reason; break }
     summary.checked++
     try {
       // ALWAYS ask the provider first: a `requested` refund whose call timed out may exist at the provider, and sending it
@@ -139,7 +143,9 @@ export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.
       let answer = null
       try {
         answer = await provider.verifyRefund({ reference: row.provider_transaction_reference })
+        guard.success()
       } catch (err) {
+        guard.failure(err)
         if (err?.code !== 'not_found') {
           summary.pending++
           logger.error?.('refund.sweep.lookup_failed', { refund: row.reference, code: err?.code, message: err?.message })
@@ -176,7 +182,7 @@ export async function sweepRefunds(supabase, provider, { limit = 50, now = Date.
  * Appointments that were cancelled while paid by card or CareCoins but never got a refund (the cancel call died between
  * cancelling and refunding). Requests and sends the refund (idempotent). -> same shape as refundUnappliedPayments
  */
-export async function refundCancelledAppointments(supabase, provider, { limit = 25, logger = console } = {}) {
+export async function refundCancelledAppointments(supabase, provider, { limit = 25, logger = console, deadline = null } = {}) {
   const { data: appts, error } = await supabase
     .from('appointments')
     .select('id')
@@ -188,7 +194,9 @@ export async function refundCancelledAppointments(supabase, provider, { limit = 
   if (error) throw new Error(error.message)
 
   const summary = { checked: 0, requested: 0, alreadyRequested: 0, completed: 0, processing: 0, failed: 0, pending: 0, errors: 0 }
+  const guard = createLoopGuard({ deadline })
   for (const a of appts || []) {
+    if (guard.stop()) { summary.stopped = guard.reason; break }
     summary.checked++
     try {
       const refund = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: a.id, reason: 'appointment cancelled' })
@@ -207,10 +215,10 @@ export async function refundCancelledAppointments(supabase, provider, { limit = 
 }
 
 /** Everything the refund cron does, each part independent (one failing never stops the others). */
-export async function runRefundSweeps(supabase, provider, { logger = console } = {}) {
+export async function runRefundSweeps(supabase, provider, { logger = console, deadline = null } = {}) {
   const out = {}
   for (const [name, job] of [['sweep', sweepRefunds], ['unapplied', refundUnappliedPayments], ['cancelled', refundCancelledAppointments]]) {
-    try { out[name] = await job(supabase, provider, { logger }) } catch (err) { out[name] = { error: err.message }; logger.error?.('refund.cron.failed', { job: name, message: err.message }) }
+    try { out[name] = await job(supabase, provider, { logger, deadline }) } catch (err) { out[name] = { error: err.message }; logger.error?.('refund.cron.failed', { job: name, message: err.message }) }
   }
   return out
 }
@@ -219,7 +227,7 @@ export async function runRefundSweeps(supabase, provider, { logger = console } =
  * Payments that could not be applied (payment_intents.needs_refund) are refunded in full. Requests the refund (idempotent) and
  * sends it. -> { checked, requested, alreadyRequested, completed, processing, failed, pending, errors }
  */
-export async function refundUnappliedPayments(supabase, provider, { limit = 25, logger = console } = {}) {
+export async function refundUnappliedPayments(supabase, provider, { limit = 25, logger = console, deadline = null } = {}) {
   const { data: intents, error } = await supabase
     .from('payment_intents')
     .select('id, reference')
@@ -229,7 +237,9 @@ export async function refundUnappliedPayments(supabase, provider, { limit = 25, 
   if (error) throw new Error(error.message)
 
   const summary = { checked: 0, requested: 0, alreadyRequested: 0, completed: 0, processing: 0, failed: 0, pending: 0, errors: 0 }
+  const guard = createLoopGuard({ deadline })
   for (const intent of intents || []) {
+    if (guard.stop()) { summary.stopped = guard.reason; break }
     summary.checked++
     try {
       const refund = await requestRefund(supabase, { cause: 'needs_refund_intent', entityType: 'payment_intent', entityId: intent.id, reason: 'payment could not be applied' })
@@ -240,6 +250,7 @@ export async function refundUnappliedPayments(supabase, provider, { limit = 25, 
       summary[r.state]++
     } catch (err) {
       summary.errors++
+      guard.failure(err)
       logger.error?.('refund.unapplied.failed', { intent: intent.reference, message: err.message })
     }
   }
