@@ -53,4 +53,22 @@ describe('callAdminAuth', () => {
     await expect(callAdminAuth('verify')).rejects.toThrow(/session has expired/i)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('announces an expired session when the API answers 401', async () => {
+    const heard = vi.fn()
+    window.addEventListener('admin:session-expired', heard)
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'Invalid or expired token' }) })
+    await expect(callAdminAuth('list_reports')).rejects.toThrow('Invalid or expired token')
+    expect(heard).toHaveBeenCalledTimes(1)
+    window.removeEventListener('admin:session-expired', heard)
+  })
+
+  it('does not announce an expired session for other failures', async () => {
+    const heard = vi.fn()
+    window.addEventListener('admin:session-expired', heard)
+    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: 'boom' }) })
+    await expect(callAdminAuth('list_reports')).rejects.toThrow('boom')
+    expect(heard).not.toHaveBeenCalled()
+    window.removeEventListener('admin:session-expired', heard)
+  })
 })
