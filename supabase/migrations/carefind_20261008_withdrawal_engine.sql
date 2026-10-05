@@ -79,11 +79,13 @@ alter table public.business_withdrawal_requests alter column status set default 
 alter table public.withdrawal_requests
   add constraint withdrawal_requests_status_check check (status in ('reserved', 'processing', 'completed', 'failed', 'reversed', 'refunded')),
   add constraint withdrawal_requests_amount_positive check (amount > 0) not valid,
-  add constraint withdrawal_requests_reference_present check (paystack_reference is not null) not valid;
+  -- legacy manual rows have no reference (and no payout_kobo); every engine-created row has both. A NOT VALID "reference is not null"
+  -- check would still fire when such a legacy row is UPDATED, making it impossible to refund.
+  add constraint withdrawal_requests_reference_present check (paystack_reference is not null or payout_kobo is null);
 alter table public.business_withdrawal_requests
   add constraint business_withdrawal_requests_status_check check (status in ('reserved', 'processing', 'completed', 'failed', 'reversed', 'refunded')),
   add constraint business_withdrawal_requests_amount_positive check (amount > 0) not valid,
-  add constraint business_withdrawal_requests_reference_present check (paystack_reference is not null) not valid;
+  add constraint business_withdrawal_requests_reference_present check (paystack_reference is not null or initiated_by is null);
 
 -- One withdrawal ledger entry and one refund entry per request (the references are derived from the request id).
 create unique index if not exists business_wallet_tx_withdrawal_ref_uniq
@@ -108,7 +110,7 @@ begin
     raise exception 'withdrawal requests are never deleted' using errcode = '42501';
   end if;
   -- the reference may be set once (legacy rows without one), never changed
-  if old.paystack_reference is null then v_mutable := v_mutable || 'paystack_reference'; end if;
+  if old.paystack_reference is null then v_mutable := array_append(v_mutable, 'paystack_reference'); end if;
   if (v_new - v_mutable) is distinct from (v_old - v_mutable) then
     raise exception 'a withdrawal''s owner, amount and bank details are immutable' using errcode = '23514';
   end if;

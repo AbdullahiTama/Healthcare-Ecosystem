@@ -407,5 +407,11 @@ describe('applying the migration to production-shaped data', () => {
     // legacy rows still settle through the engine (a rows without a transfer code can be refunded)
     const r = (await d.query("select settle_withdrawal('failed', 'a1') r")).rows[0].r
     expect(r.result).toBe('refunded')
+    // ... including the legacy rows that have NO reference at all (pre-automation requests): refunded by exact id
+    const noRef = (await d.query('select settle_withdrawal($1,$2,$3) r', ['failed', null, ids.pendingNoRef])).rows[0].r
+    expect(noRef).toMatchObject({ result: 'refunded', user_id: u, amount: 5 })
+    expect(await status('withdrawal_requests', ids.pendingNoRef)).toBe('refunded')
+    // but an engine-shaped row cannot be stored without a reference
+    await expect(d.query("insert into withdrawal_requests (user_id, amount, payout_kobo, status) values ($1,5,160000,'reserved')", [u])).rejects.toThrow(/reference_present/)
   }, 180_000)
 })
