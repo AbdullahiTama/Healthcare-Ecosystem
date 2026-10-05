@@ -10,3 +10,6 @@ dist/
 
 # Local Supabase MCP auth cache (tokens)
 .opencode/supabase-auth.json
+
+# Brainstorming visual companion sessions
+.superpowers/
