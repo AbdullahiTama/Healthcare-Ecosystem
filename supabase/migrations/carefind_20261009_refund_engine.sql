@@ -31,6 +31,10 @@ begin
   if to_regprocedure('public.financial_no_truncate()') is null then raise exception 'apply carefind_20261003_payment_intents_foundation first'; end if;
 end $$;
 
+-- cancel-appointment stamps cancelled_at, but production never received the migration that adds it (20260828_business_services
+-- was applied without this column), so every cancellation failed with a database error. The refund reconciliation also needs it.
+alter table public.appointments add column if not exists cancelled_at timestamptz;
+
 insert into public.financial_config (key, value, unit, description) values
   ('refund_engine_cutover_epoch', extract(epoch from now()), 'epoch', 'When the refund engine went live; reconciliation of refunded appointments applies to refunds after it.')
 on conflict (key) do nothing;
