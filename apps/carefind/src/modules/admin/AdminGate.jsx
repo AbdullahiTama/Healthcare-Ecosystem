@@ -48,9 +48,12 @@ export function AdminGate({ children }) {
         }
         const verified = await callAdminAuth('verify')
         if (!verified?.admin?.id) throw new Error('Could not verify admin access.')
-        localStorage.setItem('admin_user', JSON.stringify(verified.admin))
-        localStorage.setItem('admin_permissions', JSON.stringify(verified.permissions || {}))
-        if (alive) setState({ status: 'ready', adminUser: verified.admin, permissions: verified.permissions || {} })
+        // A sign-out or expiry may have begun while verify was in flight.
+        if (alive && !leaving.current) {
+          localStorage.setItem('admin_user', JSON.stringify(verified.admin))
+          localStorage.setItem('admin_permissions', JSON.stringify(verified.permissions || {}))
+          setState({ status: 'ready', adminUser: verified.admin, permissions: verified.permissions || {} })
+        }
       } catch {
         if (alive) leave()
       }

@@ -88,6 +88,25 @@ describe('AdminGate', () => {
     expect(await screen.findByText('LOGIN PAGE')).toBeInTheDocument()
   })
 
+  it('ignores a late verify result once an expiry has begun leaving', async () => {
+    let resolveVerify
+    callAdminAuth.mockImplementation((action) => {
+      if (action === 'verify') return new Promise((resolve) => { resolveVerify = resolve })
+      return Promise.resolve({})
+    })
+    renderGate()
+    await waitFor(() => expect(callAdminAuth).toHaveBeenCalledWith('verify'))
+    act(() => { window.dispatchEvent(new CustomEvent('admin:session-expired')) })
+    expect(await screen.findByText('LOGIN PAGE')).toBeInTheDocument()
+    await act(async () => {
+      resolveVerify({ admin: { id: 'a1', full_name: 'Ada', role: 'moderator' }, permissions: { news: true } })
+    })
+    expect(screen.queryByText(/hello/)).not.toBeInTheDocument()
+    expect(screen.getByText('LOGIN PAGE')).toBeInTheDocument()
+    expect(localStorage.getItem('admin_user')).toBeNull()
+    expect(localStorage.getItem('admin_permissions')).toBeNull()
+  })
+
   it('signOut logs out on the server, clears the cache and goes to login', async () => {
     renderGate()
     ;(await screen.findByText('out')).click()
