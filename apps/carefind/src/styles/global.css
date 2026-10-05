@@ -643,3 +643,6 @@ body {
     animation: none !important;
   }
 }
+/* Admin console sidebar: hover cannot be expressed in inline styles. */
+.cf-admin-nav-item:hover { background: var(--hairline); }
+.cf-admin-nav-item[aria-current="page"]:hover { background: var(--teal-mist); }

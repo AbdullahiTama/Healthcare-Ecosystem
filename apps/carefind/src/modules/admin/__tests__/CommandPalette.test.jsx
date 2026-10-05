@@ -24,8 +24,8 @@ vi.mock('../../../styles/theme', () => ({
   },
 }))
 
-vi.mock('../AdminSidebar', () => ({
-  NAV_GROUPS: [
+vi.mock('../navigation', () => {
+  const NAV_GROUPS = [
     {
       id: 'overview',
       label: 'Overview',
@@ -42,9 +42,13 @@ vi.mock('../AdminSidebar', () => ({
         { key: 'reports', label: 'Reports', icon: () => null },
       ],
     },
-  ],
-  default: () => null,
-}))
+  ]
+  return {
+    GROUPS: NAV_GROUPS.map(g => ({ id: g.id, label: g.label })),
+    SCREENS: NAV_GROUPS.flatMap(g => g.items.map(i => ({ ...i, group: g.id, permission: i.key, path: i.key }))),
+    canAccess: (item, { permissions } = {}) => permissions?.[item.permission] !== false,
+  }
+})
 
 import CommandPalette from '../CommandPalette.jsx'
 

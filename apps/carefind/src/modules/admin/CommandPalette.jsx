@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import {
-  LayoutDashboard, Bell, UserCheck, Flag, FileText, Image, Newspaper, Radio,
-  ShoppingBag, DollarSign, Landmark, Building2, Users, Shield,
-  Pill, ClipboardList, Target, Search, LogOut, RotateCcw, Clock,
-} from 'lucide-react'
+import { Search, LogOut, RotateCcw } from 'lucide-react'
 import { theme } from '../../styles/theme'
-import { NAV_GROUPS } from './AdminSidebar'
+import { GROUPS, SCREENS, canAccess } from './navigation'
 
-const ALL_TABS = NAV_GROUPS.flatMap(g =>
-  g.items.map(item => ({ ...item, group: g.label, type: 'tab' }))
-)
+const ALL_TABS = SCREENS.map(s => ({
+  ...s,
+  group: GROUPS.find(g => g.id === s.group)?.label || 'Home',
+  type: 'tab',
+}))
 
 const QUICK_ACTIONS = [
   { key: 'signout', label: 'Sign out', icon: LogOut, group: 'Actions', type: 'action', action: 'onSignOut' },
@@ -36,7 +34,7 @@ function scoreMatch(query, item) {
   return 10
 }
 
-export default function CommandPalette({ open, onClose, onNavigate, onSignOut, onRefresh, permissions }) {
+export default function CommandPalette({ open, onClose, onNavigate, onSignOut, onRefresh, permissions, adminUser }) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef(null)
@@ -58,7 +56,7 @@ export default function CommandPalette({ open, onClose, onNavigate, onSignOut, o
   }, [open])
 
   const filtered = useMemo(() => {
-    const tabs = ALL_TABS.filter(t => permissions?.[t.key] !== false)
+    const tabs = ALL_TABS.filter(t => canAccess(t, { adminUser: adminUser || { role: '' }, permissions }))
     const all = [...tabs, ...QUICK_ACTIONS]
 
     if (!query.trim()) return all
@@ -66,7 +64,7 @@ export default function CommandPalette({ open, onClose, onNavigate, onSignOut, o
     return all
       .filter(item => fuzzyMatch(query, item.label))
       .sort((a, b) => scoreMatch(query, b) - scoreMatch(query, a))
-  }, [query, permissions])
+  }, [query, permissions, adminUser])
 
   useEffect(() => { setActiveIndex(0) }, [query])
 
