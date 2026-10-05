@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
-import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId, settleTransferWebhook } from '@care-ecosystem/shared-payments'
+import { settleByReference, recordProviderEvent, finishProviderEvent, paystackEventId, settleTransferWebhook, settleRefundWebhook } from '@care-ecosystem/shared-payments'
 import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
 import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { runSettlementEffects } from '../_lib/settlementEffects.js'
@@ -106,6 +106,14 @@ async function handleSubscription(metadata, reference, amount) {
 async function handleTransferEvent(event) {
   const settled = await settleTransferWebhook(supabase, event, { logger: paymentLogger })
   if (settled.kind === 'carefind') await applyWithdrawalResult(supabase, settled.outcome, settled.result)
+  return { received: true }
+}
+
+// Refund webhooks (refund.pending / processing / processed / failed). The DATABASE settles them (settle_refund: replay-safe,
+// completes only for the refunded amount, a failure restores the business exactly, contradictions are reported). An RPC
+// error throws so the event is recorded as failed and Paystack's retry settles it.
+async function handleRefundEvent(event) {
+  await settleRefundWebhook(supabase, event, { logger: paymentLogger })
   return { received: true }
 }
 
@@ -569,6 +577,11 @@ async function processWebhookEvent(event) {
 
   if (event.event === 'transfer.success' || event.event === 'transfer.failed' || event.event === 'transfer.reversed') {
     await handleTransferEvent(event)
+    return 'processed'
+  }
+
+  if (event.event === 'refund.processed' || event.event === 'refund.failed' || event.event === 'refund.pending' || event.event === 'refund.processing') {
+    await handleRefundEvent(event)
     return 'processed'
   }
   return 'ignored'

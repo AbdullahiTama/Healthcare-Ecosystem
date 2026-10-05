@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { sweepWithdrawals } from '../_lib/withdrawalRecovery.js'
+import { runRefundSweeps } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 import { EmailService } from '@care-ecosystem/shared-email'
 
 export default async function handler(req, res) {
@@ -60,5 +62,16 @@ export default async function handler(req, res) {
     withdrawals = { error: e.message }
   }
 
-  return res.status(200).json({ ok: true, ...result, withdrawals })
+  // Refund engine sweep: finish card refunds the provider has not answered, refund payments that could not be applied, and
+  // refund appointments that were cancelled while paid but never refunded. Each part is isolated; none can block email.
+  let refunds
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger })
+  } catch (e) {
+    console.error('[cron/process-email-outbox] refund sweep failed', e)
+    refunds = { error: e.message }
+  }
+
+  return res.status(200).json({ ok: true, ...result, withdrawals, refunds })
 }

@@ -156,6 +156,42 @@ describe('transfer webhooks settle through the withdrawal engine', () => {
   })
 })
 
+// Refund webhooks are settled by the DATABASE (settle_refund); the handler maps the event and the payment reference.
+describe('refund webhooks settle through the refund engine', () => {
+  const settles = () => h.rpcCalls.filter(([n]) => n === 'settle_refund').map(([, a]) => a)
+  const answer = (result) => async (name) => (name === 'settle_refund' ? { data: { result, id: 'rf1', reference: 'rf_1' }, error: null } : { data: null, error: null })
+  const ev = (event, extra = {}) => ({ event, data: { id: 77, transaction_reference: 'chapp_1_abcdefgh', amount: 1000000, ...extra } })
+
+  it('refund.processed completes the refund with the provider id, the payment reference and the refunded amount', async () => {
+    h.rpcImpl = answer('completed')
+    const res = await post(ev('refund.processed'))
+    expect(res.statusCode).toBe(200)
+    expect(settles()[0]).toEqual({ p_outcome: 'processed', p_refund_id: null, p_reference: null, p_provider_refund_id: '77', p_transaction_reference: 'chapp_1_abcdefgh', p_amount_kobo: 1000000, p_detail: 'refund.processed' })
+  })
+
+  it('refund.failed fails it (the business is restored by the database); pending/processing only mark it in flight', async () => {
+    h.rpcImpl = answer('failed')
+    await post(ev('refund.failed'))
+    expect(settles()[0]).toMatchObject({ p_outcome: 'failed', p_amount_kobo: null })
+    for (const e of ['refund.pending', 'refund.processing']) await post(ev(e))
+    expect(settles().slice(1).every((s) => s.p_outcome === 'processing')).toBe(true)
+  })
+
+  it('a redelivery, an unknown refund, or a contradiction is acknowledged (200) and never throws', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (const result of ['already_completed', 'not_found', 'conflict_processed_after_failed', 'amount_mismatch']) {
+      h.rpcImpl = answer(result)
+      expect((await post(ev('refund.processed'))).statusCode).toBe(200)
+    }
+    err.mockRestore()
+  })
+
+  it('a database error answers 500 so Paystack redelivers the event', async () => {
+    h.rpcImpl = async () => ({ data: null, error: { message: 'db down' } })
+    expect((await post(ev('refund.processed'))).statusCode).toBe(500)
+  })
+})
+
 describe('plan and subscription amounts are stored in naira (Paystack reports kobo)', () => {
   it('CareHub plan renewal: 500000 kobo is recorded as 5000 naira', async () => {
     const res = await post({ event: 'charge.success', data: { reference: 'ch_1', amount: 500000, metadata: { business_id: 'biz-1', months: '1' } } })
