@@ -29,11 +29,11 @@ import SearchesTab from '../tabs/SearchesTab.jsx'
 import GoLiveTab from '../tabs/GoLiveTab.jsx'
 import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
-import ModerationQueue from '../tabs/ModerationQueue.jsx'
 import AuditLog from '../components/AuditLog.jsx'
 import OrdersTab from '../tabs/OrdersTab.jsx'
 import DashboardTab from '../tabs/DashboardTab.jsx'
 import ErrorsTab from '../tabs/ErrorsTab.jsx'
+// Still needed by the legacy Posts tab; goes when Posts is rebuilt.
 import { ModerationProvider } from '../stores/moderationStore'
 
 // Migration adapter (spec section 5.7): the body of the old AdminPanel with
@@ -619,7 +619,6 @@ export default function LegacyScreens({ tab }) {
         {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
         {tab === 'overview' && <DashboardTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} verifications={verifications} reports={reports} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
-        {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}

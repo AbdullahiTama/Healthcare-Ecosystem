@@ -468,3 +468,24 @@ describe('Admin list_news', () => {
     expect(validStatuses).not.toContain('published')
   })
 })
+
+describe('Legacy screens inside the console', () => {
+  it('renders the Posts screen, which still reads the shared moderation selection store', async () => {
+    supa._fromImpl = () => {
+      const q = {}
+      q.select = vi.fn(() => q)
+      q.order = vi.fn(() => q)
+      q.limit = vi.fn(() => q)
+      q.eq = vi.fn(() => q)
+      q.then = (resolve) => resolve({ data: [], error: null, count: 0 })
+      return q
+    }
+    setAdminSession()
+    render(
+      <MemoryRouter initialEntries={['/admin/content/posts']}>
+        <AdminApp />
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('0 total posts')).toBeInTheDocument()
+  })
+})

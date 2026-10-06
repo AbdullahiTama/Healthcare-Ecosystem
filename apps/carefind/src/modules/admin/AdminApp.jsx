@@ -21,6 +21,7 @@ const SCREEN_COMPONENTS = {
   verifications: lazy(() => import('./screens/moderation/VerificationsScreen.jsx')),
   reports: lazy(() => import('./screens/moderation/ReportsScreen.jsx')),
   claims: lazy(() => import('./screens/moderation/ClaimsScreen.jsx')),
+  moderation: lazy(() => import('./screens/moderation/QueueScreen.jsx')),
 }
 
 function ScreenElement({ item }) {
