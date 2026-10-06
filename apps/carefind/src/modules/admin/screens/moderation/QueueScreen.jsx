@@ -106,18 +106,14 @@ export default function QueueScreen() {
     return false
   }, tally('Approved'))
 
+  // Reject is for verifications. A report is dismissed with Approve or its
+  // post removed with Delete; "rejecting" it would only dismiss it while
+  // reading as if the reported content had been acted on.
   const bulkReject = () => runBulk(async (item) => {
-    if (item.source === 'verification') {
-      await callAdminAuth('reject_verification', { id: item.id })
-      audit('reject', 'verification', item.id, {})
-      return true
-    }
-    if (item.source === 'report') {
-      await callAdminAuth('resolve_report', { id: item.raw.id })
-      audit('resolve', 'report', item.raw.id, {})
-      return true
-    }
-    return false
+    if (item.source !== 'verification') return false
+    await callAdminAuth('reject_verification', { id: item.id })
+    audit('reject', 'verification', item.id, {})
+    return true
   }, tally('Rejected'))
 
   function bulkDelete() {

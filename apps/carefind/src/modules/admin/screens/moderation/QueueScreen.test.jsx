@@ -146,4 +146,14 @@ describe('QueueScreen', () => {
     expect(screen.getByRole('checkbox', { name: 'Select No reason given' })).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/null/)
   })
+
+  it('bulk reject applies to verifications only and leaves reports alone', async () => {
+    at('/admin/moderation/queue')
+    await screen.findByRole('button', { name: 'Open Misinformation' })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject selected' }))
+    expect(await screen.findByText('Rejected 1, skipped 2')).toBeInTheDocument()
+    expect(calls('reject_verification')[0][1]).toEqual({ id: 'v1' })
+    expect(calls('resolve_report')).toHaveLength(0)
+  })
 })
