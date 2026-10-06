@@ -85,7 +85,7 @@ create or replace function public.create_shop_order(
   p_customer_id uuid, p_vendor_business_id uuid, p_items jsonb, p_subtotal_kobo integer, p_commission_kobo integer, p_fulfilment_kobo integer,
   p_delivery_kobo integer, p_total_kobo integer, p_delivery_address text, p_delivery_city text, p_delivery_state text, p_delivery_phone text,
   p_delivery_email text, p_delivery_instructions text, p_delivery_preference text, p_distance_km numeric, p_is_approved_city boolean,
-  p_customer_name text, p_payment_reference text, p_pickup_station_id uuid)
+  p_customer_name text, p_payment_reference text, p_pickup_station_id uuid default null)
 returns uuid
 language plpgsql
 security definer
@@ -379,7 +379,7 @@ grant execute on function public.reconcile_shop_vendor_credits() to service_role
 -- ---------------------------------------------------------------------------------------------
 -- F-39 update_shop_order_status: only the vendor (forward through fulfilment, on a PAID order) or an admin / the server
 -- ---------------------------------------------------------------------------------------------
-create or replace function public.update_shop_order_status(p_order_id uuid, p_to_status text, p_changed_by uuid, p_note text)
+create or replace function public.update_shop_order_status(p_order_id uuid, p_to_status text, p_changed_by uuid, p_note text default null)
 returns void
 language plpgsql
 security definer
@@ -429,7 +429,7 @@ end;
 $$;
 
 -- the vendor's tracking event follows the same rules (it also set the order status)
-create or replace function public.add_tracking_event(p_order_id uuid, p_status text, p_notes text, p_location jsonb)
+create or replace function public.add_tracking_event(p_order_id uuid, p_status text, p_notes text default null, p_location jsonb default null)
 returns void
 language plpgsql
 security definer
@@ -503,7 +503,7 @@ begin
 end;
 $$;
 
-create or replace function public.get_purchases_page(p_business_id uuid, p_search text, p_month text, p_year text, p_offset integer, p_limit integer)
+create or replace function public.get_purchases_page(p_business_id uuid, p_search text default null, p_month text default null, p_year text default null, p_offset integer default 0, p_limit integer default 50)
 returns table (id uuid, supplier_name text, product_name text, quantity integer, cost_price numeric, total_cost numeric, amount_paid numeric, balance numeric,
                supply_date text, due_date text, expiry text, batch text, status text, notes text, created_at timestamp with time zone)
 language plpgsql stable security definer set search_path = public
@@ -528,7 +528,7 @@ $$;
 revoke all on function public.get_purchase_totals(uuid), public.get_purchases_page(uuid, text, text, text, integer, integer) from public, anon;
 grant execute on function public.get_purchase_totals(uuid), public.get_purchases_page(uuid, text, text, text, integer, integer) to authenticated, service_role;
 
-create or replace function public.get_expense_totals(p_business_id uuid, p_month text)
+create or replace function public.get_expense_totals(p_business_id uuid, p_month text default null)
 returns table (total_amount numeric, transaction_count bigint)
 language plpgsql stable security definer set search_path = public
 as $$
@@ -545,7 +545,7 @@ begin
 end;
 $$;
 
-create or replace function public.get_expense_summary(p_business_id uuid, p_month text)
+create or replace function public.get_expense_summary(p_business_id uuid, p_month text default null)
 returns table (total_amount numeric, transaction_count bigint, category text, category_amount numeric, category_count bigint)
 language plpgsql stable security definer set search_path = public
 as $$
@@ -563,7 +563,7 @@ begin
 end;
 $$;
 
-create or replace function public.get_expenses_page(p_business_id uuid, p_month text, p_offset integer, p_limit integer)
+create or replace function public.get_expenses_page(p_business_id uuid, p_month text default null, p_offset integer default 0, p_limit integer default 50)
 returns table (id uuid, category text, description text, amount numeric, date text, staff_name text, created_at timestamp with time zone)
 language plpgsql stable security definer set search_path = public
 as $$
@@ -634,7 +634,7 @@ revoke execute on function public.cleanup_old_sequences() from public, anon, aut
 revoke execute on function public.book_appointment_slot(uuid, uuid, date, time without time zone, text, text, integer, text, text, text) from public, anon, authenticated;
 
 -- a promo check answers for the CALLER: a signed-in user cannot probe another user's usage, and anonymous callers cannot enumerate codes
-create or replace function public.validate_promo_code(p_code text, p_user_id uuid, p_order_kobo integer, p_segment text)
+create or replace function public.validate_promo_code(p_code text, p_user_id uuid, p_order_kobo integer, p_segment text default null)
 returns jsonb
 language plpgsql security definer set search_path = public
 as $$

@@ -19,7 +19,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 11 Webhooks and reconciliation | COMPLETED (migrations applied; app code not yet deployed) |
 | 12 Performance and resilience | COMPLETED (migrations applied; app code not yet deployed) |
 | 13 Financial test suite | READY_FOR_REVIEW (migration 20261018 applied; app code not yet deployed) |
-| 14 Red-team audit | READY_FOR_REVIEW (migration 20261019 written and tested, NOT yet applied to production) |
+| 14 Red-team audit | READY_FOR_REVIEW (migration 20261019 applied to production 2026-10-06) |
 | 15 Production readiness | NOT_STARTED |
 
 ## Phase 00
@@ -222,5 +222,6 @@ Next phase: PHASE 14 — RED-TEAM AUDIT.
 Completed work: attacked the system as an anonymous visitor, a customer, a vendor and a business member; 8 findings (2 critical, 2 high, 2 medium, 1 low plus F-43 policy gaps), each reproduced as a test before the fix. Critical: any user's password could be reset via `provision_staff_auth` (F-37); the vendor credit could be inflated through an unchecked subtotal (F-38). High: any user could change any order's status (F-39); completing dummy appointments drained a business's held balance (F-40); anon could read purchase records (F-41).
 Files: `supabase/migrations/carefind_20261019_red_team_fixes.sql` (+ copy in `apps/carefind/sql/`), `apps/carefind/src/test/payments/redTeam.db.test.js` (30 tests), fixture additions, `docs/architecture/Red-Team-Audit.md`.
 Tests: redTeam 30 pass; PGlite payments suite 33 files / 621 tests pass.
-Unresolved: **the migration is NOT yet applied to production** (apply was blocked; needs the owner's go-ahead); concurrency suites, bench and mutants not yet updated for migration 19; endpoint/webhook/CORS/CareHub/referral/storage review not done; vendor-controlled delivered status, mint squatting, lookup-appointment and resolve-account exposures remain.
-Next phase: PHASE 15 — PRODUCTION READINESS (after the migration is applied and verified).
+Unresolved: the full PGlite and real-Postgres concurrency suites not re-run since migration 19 joined the chains (7 mutants killed); the first production apply rolled back on live parameter defaults the test fixture lacked (fixed, second apply clean); endpoint/webhook/CORS/CareHub/referral/storage review not done; vendor-controlled delivered status, mint squatting, lookup-appointment and resolve-account exposures remain.
+Applied to production 2026-10-06 and catalog-verified (see Red-Team-Audit.md section 5).
+Next phase: PHASE 15 — PRODUCTION READINESS.

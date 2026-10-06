@@ -1,6 +1,6 @@
 # Red-team audit (Phase 14)
 
-Status: findings confirmed and fixed in `supabase/migrations/carefind_20261019_red_team_fixes.sql`. **The migration is written and tested but NOT YET APPLIED to production** (the apply call was blocked by the permission classifier; see section 5). Until it is applied, every finding below is still exploitable in production.
+Status: findings confirmed and fixed in `supabase/migrations/carefind_20261019_red_team_fixes.sql`, **APPLIED to production 2026-10-06** and verified against the catalog (section 5).
 
 ## 1. Method
 
@@ -34,6 +34,10 @@ Migration 19 is now in the chain of every suite that settles shop orders (vendor
 * Promo-code enumeration needs rate limiting.
 * **Not reviewed in this phase**: Node endpoint auth and rate limits (initiate-payment, charge-*, withdrawal PIN set), webhook forgery/replay, CORS and secret exposure, CareHub handlers, agent/referral abuse (self-referral, own-ALL policies), storage buckets.
 
-## 5. Applying the fix
+## 5. Applied to production
 
-Apply `carefind_20261019_red_team_fixes.sql` (copy in `apps/carefind/sql/`), then verify: ACLs on the revoked functions, the three dropped policies, `_settle_shop_order` proconfig timeouts, one `create_shop_order` 20-arg, and run `run_db_reconciliation`. Then check the callers still work: CareHub `complete_appointment_and_release`, `provision_staff_auth`, vendor `update_shop_order_status`, `get_expense_*` and `get_purchase*`. Note for callers: a CareHub flow that relied on `provision_staff_auth` resetting an existing user's password will now link the staff row to the existing account instead.
+The first apply attempt rolled back on production's real signatures (`cannot remove parameter defaults from existing function`): the live `create_shop_order`, `update_shop_order_status`, `add_tracking_event`, `validate_promo_code` and the expense/purchase readers carry parameter defaults that the PGlite fixture did not have. The migration now declares the same defaults (read from `pg_get_function_arguments`) and the second apply succeeded; nothing was half-applied. Lesson: the fixture's signatures must be copied from the live catalog, defaults included.
+
+Catalog after apply: `create_shop_order` has exactly the 20-argument function and the 19-argument wrapper; `_settle_shop_order` keeps `lock_timeout=10s`, `statement_timeout=30s`; anon cannot execute `get_purchase_totals` or `validate_promo_code`; signed-in users cannot execute `record_shop_notification` or `cleanup_old_sequences`; the three client write policies are gone; the subtotal guard is present and `provision_staff_auth` no longer touches `encrypted_password`; open reconciliation findings are the known 9 info and 3 warning, none critical. CareHub callers keep working (signatures unchanged), except that `provision_staff_auth` now links an existing account instead of resetting its password.
+
+Original checklist, for reference: verify ACLs on the revoked functions, the three dropped policies, `_settle_shop_order` proconfig timeouts, one `create_shop_order` 20-arg, and run `run_db_reconciliation`. Then check the callers still work: CareHub `complete_appointment_and_release`, `provision_staff_auth`, vendor `update_shop_order_status`, `get_expense_*` and `get_purchase*`. Note for callers: a CareHub flow that relied on `provision_staff_auth` resetting an existing user's password will now link the staff row to the existing account instead.
