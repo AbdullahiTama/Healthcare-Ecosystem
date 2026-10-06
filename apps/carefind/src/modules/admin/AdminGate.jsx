@@ -20,7 +20,11 @@ function clearAdminCache() {
 // The client gate exists for a sensible experience only. The admin API and
 // the database policies remain the authority on what an admin may do.
 export function AdminGate({ children }) {
+  // useNavigate returns a new function whenever the address changes. Held in a
+  // ref so that moving between screens does not re-run the verify effect.
   const navigate = useNavigate()
+  const navigateRef = useRef(navigate)
+  navigateRef.current = navigate
   const [state, setState] = useState({ status: 'checking', adminUser: null, permissions: {} })
   const leaving = useRef(false)
 
@@ -33,8 +37,8 @@ export function AdminGate({ children }) {
     try { await supabase.auth.signOut() } catch { /* access is denied either way */ }
     clearAdminCache()
     setState({ status: 'denied', adminUser: null, permissions: {} })
-    navigate('/login', { replace: true })
-  }, [navigate])
+    navigateRef.current('/login', { replace: true })
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -43,7 +47,7 @@ export function AdminGate({ children }) {
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error || !session) {
           clearAdminCache()
-          if (alive) { setState({ status: 'denied', adminUser: null, permissions: {} }); navigate('/login', { replace: true }) }
+          if (alive) { setState({ status: 'denied', adminUser: null, permissions: {} }); navigateRef.current('/login', { replace: true }) }
           return
         }
         const verified = await callAdminAuth('verify')
@@ -59,7 +63,7 @@ export function AdminGate({ children }) {
       }
     })()
     return () => { alive = false }
-  }, [navigate, leave])
+  }, [leave])
 
   useEffect(() => {
     const onExpired = () => leave()

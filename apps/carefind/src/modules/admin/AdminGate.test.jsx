@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 
 const { supabase, callAdminAuth } = vi.hoisted(() => ({
   supabase: { auth: { getSession: vi.fn(), signOut: vi.fn() } },
@@ -86,6 +86,22 @@ describe('AdminGate', () => {
     await screen.findByText('hello Ada')
     act(() => { window.dispatchEvent(new CustomEvent('admin:session-expired')) })
     expect(await screen.findByText('LOGIN PAGE')).toBeInTheDocument()
+  })
+
+  it('verifies once, not again each time the address changes', async () => {
+    function Screen() {
+      const { pathname } = useLocation()
+      return <div><span>at:{pathname}</span><Link to="/admin/next">next</Link></div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <AdminGate><Screen /></AdminGate>
+      </MemoryRouter>,
+    )
+    ;(await screen.findByText('next')).click()
+    expect(await screen.findByText('at:/admin/next')).toBeInTheDocument()
+    await act(async () => { await Promise.resolve() })
+    expect(callAdminAuth.mock.calls.filter(c => c[0] === 'verify')).toHaveLength(1)
   })
 
   it('ignores a late verify result once an expiry has begun leaving', async () => {
