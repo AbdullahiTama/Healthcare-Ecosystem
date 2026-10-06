@@ -5,7 +5,9 @@ import { useLocation } from 'react-router-dom'
 const { callAdminAuth, getTotals } = vi.hoisted(() => ({ callAdminAuth: vi.fn(), getTotals: vi.fn() }))
 vi.mock('../../adminApi', () => ({ callAdminAuth, SESSION_EXPIRED_EVENT: 'admin:session-expired' }))
 vi.mock('../../repositories/dashboardRepository', () => ({ dashboardRepository: { getTotals } }))
-vi.mock('../../HealthPulse.jsx', () => ({ default: () => <div>pulse strip</div> }))
+vi.mock('../../HealthPulse.jsx', () => ({
+  default: ({ canSee }) => <div>pulse strip revenue:{String(canSee?.('revenue'))} notifications:{String(canSee?.('notifications'))} reports:{String(canSee?.('reports'))}</div>,
+}))
 
 import { renderAdmin } from '../../test/renderAdmin.jsx'
 import HomeScreen from './HomeScreen.jsx'
@@ -100,5 +102,30 @@ describe('HomeScreen', () => {
     expect(screen.queryByText('Revenue')).not.toBeInTheDocument()
     expect(callAdminAuth).not.toHaveBeenCalledWith('list_transactions', expect.anything())
     expect(screen.queryByRole('button', { name: 'Open MedPlus Ikeja' })).not.toBeInTheDocument()
+  })
+
+  it('does not call the queues clear when they could not be loaded', async () => {
+    mockApi(Object.fromEntries(Object.keys(lists).map(a => [a, async () => { throw new Error('down') }])))
+    at()
+    expect(await screen.findByText('The queues could not be loaded')).toBeInTheDocument()
+    expect(screen.queryByText('Nothing needs attention right now')).not.toBeInTheDocument()
+    expect(screen.queryByText('All queues are clear')).not.toBeInTheDocument()
+    expect(screen.getByText('Nothing can be shown until the queues load.')).toBeInTheDocument()
+  })
+
+  it('says some queues are missing when only one failed', async () => {
+    mockApi({ list_reports: async () => { throw new Error('down') } })
+    at()
+    expect(await screen.findByText('4 items need attention; some queues could not be loaded')).toBeInTheDocument()
+  })
+
+  it('says the revenue figure only covers the most recent transactions', async () => {
+    at()
+    expect(await screen.findByText(/Revenue is added up from the most recent transactions only/)).toBeInTheDocument()
+  })
+
+  it('lets the pulse strip show only what the role may open', async () => {
+    at({ admin: { id: 'm', role: 'moderator' }, permissions: { revenue: false, notifications: false } })
+    expect(await screen.findByText('pulse strip revenue:false notifications:false reports:true')).toBeInTheDocument()
   })
 })

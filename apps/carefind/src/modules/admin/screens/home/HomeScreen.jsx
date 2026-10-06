@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle, DollarSign, FileText, Flag, Landmark, Newspaper, Shield, UserCheck, Users } from 'lucide-react'
+import { AlertTriangle, CheckCircle, DollarSign, FileText, Flag, Landmark, Newspaper, Shield, UserCheck, Users } from 'lucide-react'
 import { DataTable, Empty, MetricGrid, Pill, SectionCard, StatCard } from '@care-ecosystem/design-system/components/ui'
 import { theme } from '../../../../styles/theme'
 import { callAdminAuth } from '../../adminApi'
 import { useAdmin } from '../../AdminGate.jsx'
 import { QUEUES, usePendingCounts, useQueue } from '../../data/queues'
 import { dashboardRepository } from '../../repositories/dashboardRepository'
-import { canAccess, pathFor, screenByKey } from '../../navigation'
+import { ALERTS, canAccess, pathFor, screenByKey } from '../../navigation'
 import HealthPulse from '../../HealthPulse.jsx'
 import AdminPageHeader from '../../ui/AdminPageHeader.jsx'
 import { DateRange } from '../../ui/FilterPills.jsx'
@@ -85,9 +85,14 @@ export default function HomeScreen() {
   // Until every permitted queue has answered, a zero total means "not known
   // yet", not "nothing to do".
   const loading = permitted.some(name => queues[name].isLoading)
-  const subtitle = total > 0
-    ? `${total} ${total === 1 ? 'item needs' : 'items need'} attention across ${permitted.length} ${permitted.length === 1 ? 'queue' : 'queues'}`
-    : loading ? 'Checking the queues…' : 'Nothing needs attention right now'
+  // A queue that failed to load is unknown, never "clear".
+  const allFailed = permitted.length > 0 && permitted.every(name => queues[name].isError)
+  const countText = `${total} ${total === 1 ? 'item needs' : 'items need'} attention`
+  let subtitle
+  if (allFailed) subtitle = 'The queues could not be loaded'
+  else if (failed) subtitle = total > 0 ? `${countText}; some queues could not be loaded` : 'Some queues could not be loaded'
+  else if (total > 0) subtitle = `${countText} across ${permitted.length} ${permitted.length === 1 ? 'queue' : 'queues'}`
+  else subtitle = loading ? 'Checking the queues…' : 'Nothing needs attention right now'
 
   const columns = [
     { key: 'title', label: 'Item', render: i => primaryCell({ title: i.title, onOpen: () => open(i), openLabel: `Open ${i.title}` }) },
@@ -95,7 +100,9 @@ export default function HomeScreen() {
     { key: 'created_at', label: 'Waiting', render: i => (i.created_at ? timeAgo(i.created_at) : '—') },
   ]
 
-  const period = f.from || f.to ? 'selected period' : 'all loaded transactions'
+  // The admin API returns only its most recent transactions, so this figure
+  // is a floor, not a total. Say so rather than present it as period revenue.
+  const revenueNote = `Revenue is added up from the most recent transactions only${f.from || f.to ? ', within the dates chosen' : ''}, so the true figure can be higher.`
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[10] }}>
@@ -125,11 +132,13 @@ export default function HomeScreen() {
           columns={columns}
           onRowClick={open}
           loading={loading}
-          empty={<Empty icon={<CheckCircle size={40} strokeWidth={1.5} color={theme.gray300} />} message="All queues are clear" />}
+          empty={failed
+            ? <Empty icon={<AlertTriangle size={40} strokeWidth={1.5} color={theme.gray300} />} message="Nothing can be shown until the queues load." />
+            : <Empty icon={<CheckCircle size={40} strokeWidth={1.5} color={theme.gray300} />} message="All queues are clear" />}
         />
       </SectionCard>
 
-      <SectionCard title="Platform" sub={canSeeRevenue ? `Revenue covers ${period}.` : undefined}>
+      <SectionCard title="Platform" sub={canSeeRevenue ? revenueNote : undefined}>
         <MetricGrid label="Platform totals">
           <StatCard icon={<Users />} label="Users" value={totalsQ.isError ? UNAVAILABLE : (totalsQ.data ? totalsQ.data.users.toLocaleString() : '…')} />
           <StatCard icon={<FileText />} label="Posts" value={totalsQ.isError ? UNAVAILABLE : (totalsQ.data ? totalsQ.data.posts.toLocaleString() : '…')} />
@@ -144,7 +153,10 @@ export default function HomeScreen() {
         )}
       </SectionCard>
 
-      <HealthPulse onNavigate={(key) => navigate(pathFor(key))} />
+      <HealthPulse
+        onNavigate={(key) => navigate(pathFor(key))}
+        canSee={(key) => canAccess(key === ALERTS.key ? ALERTS : screenByKey(key), admin)}
+      />
     </div>
   )
 }
