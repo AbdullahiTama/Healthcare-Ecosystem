@@ -3,6 +3,7 @@
 // side-effect import must evaluate ahead of every other local import
 // (including providers/AuthContext.jsx). ESM evaluates imports in source order.
 import './modules/account/verifyEmailParams'
+import './modules/account/recoveryRedirect'
 
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'

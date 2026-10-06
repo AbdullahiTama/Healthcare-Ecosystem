@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
+import { capturedVerifyEmailParams } from './verifyEmailParams'
 import { MailCheck } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -18,7 +19,15 @@ function ResetPassword() {
   const navigate = useNavigate()
   const { isMobileOrTablet } = useBreakpoint()
 
-  const [recovering, setRecovering] = useState(false)
+  // Check the import-time snapshot too: supabase-js emits PASSWORD_RECOVERY
+  // during createClient() at app boot, before this lazy chunk mounts, so the
+  // listener alone would miss it. verifyEmailParams captured the URL before
+  // supabase cleared the hash.
+  const [recovering, setRecovering] = useState(
+    () =>
+      (capturedVerifyEmailParams.type === 'recovery' && capturedVerifyEmailParams.hasAccessToken) ||
+      capturedVerifyEmailParams.hasCode
+  )
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
