@@ -1,6 +1,6 @@
 # Financial System — Master Plan
 
-Current phase: **PHASE 14 — RED-TEAM AUDIT**
+Current phase: **PHASE 15 — PRODUCTION READINESS**
 Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted). Phase 02 COMPLETED (migration applied to production and catalog-verified).
 
 | Phase | Status |
@@ -20,7 +20,7 @@ Overall status: Phase 00 COMPLETED. Phase 01 COMPLETED (decisions D1-D5 accepted
 | 12 Performance and resilience | COMPLETED (migrations applied; app code not yet deployed) |
 | 13 Financial test suite | READY_FOR_REVIEW (migration 20261018 applied; app code not yet deployed) |
 | 14 Red-team audit | READY_FOR_REVIEW (migration 20261019 applied to production 2026-10-06) |
-| 15 Production readiness | NOT_STARTED |
+| 15 Production readiness | READY_FOR_REVIEW (audit and runbook; no code or database change; NOT ready to go live, see doc) |
 
 ## Phase 00
 
@@ -225,3 +225,11 @@ Tests: redTeam 30 pass; PGlite payments suite 33 files / 621 tests pass.
 Unresolved: the full PGlite and real-Postgres concurrency suites not re-run since migration 19 joined the chains (7 mutants killed); the first production apply rolled back on live parameter defaults the test fixture lacked (fixed, second apply clean); endpoint/webhook/CORS/CareHub/referral/storage review not done; vendor-controlled delivered status, mint squatting, lookup-appointment and resolve-account exposures remain.
 Applied to production 2026-10-06 and catalog-verified (see Red-Team-Audit.md section 5).
 Next phase: PHASE 15 — PRODUCTION READINESS.
+
+## Phase 15 — Production readiness
+
+Completed work: read the live system as a go-live reviewer. Full finance suite on the final code: 67 files / 898 tests pass. Security advisors reviewed (money-adjacent SECURITY DEFINER functions each read; none lacks a caller check). Wrote the deploy runbook, rollback, monitoring queries and go/no-go in `docs/architecture/Production-Readiness.md`.
+Found: **every scheduled job in production fails**: all 2,880 pg_cron runs in 24 h raised `Vault secret email_outbox_cron_<app>_url is not set` (the secrets for the two cron URLs and the shared secret were never set), so neither app's email outbox is drained and the scheduled finance steps (webhook replay, sweeps, vendor release, reconciliation, alert mail) never run. No kill switch exists for the engines (proposal in the doc). Backups/PITR could not be verified from here. Leaked-password protection is off.
+Files: `docs/architecture/Production-Readiness.md`.
+Unresolved (owner): deploy the Phase 04-14 code, THEN set the three Vault secrets; confirm backups/PITR; enable leaked-password protection; decide the kill-switch proposal, a second alert channel, event retention, the 3 legacy withdrawals and the 9 pre-credit shop orders; the Phase 14 not-done review areas; `test:finance:pg` not re-run this session.
+Phase status: the planned 16-phase program (00-15) is complete; go-live is gated on the owner items above.
