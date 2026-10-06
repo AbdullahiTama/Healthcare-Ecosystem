@@ -347,3 +347,67 @@ create table public.staff_notifications (
 create function public.current_business_ids() returns setof uuid language sql stable as
   $$ select id from public.businesses where lower(email) = lower(auth.email()) $$;
 create function public.shop_restore_inventory_on_cancel(p_order_id uuid) returns void language sql as $$ select $$;
+
+-- ---- Red-team (Phase 14): the pieces carefind_20261019_red_team_fixes touches, as read from production. ---------------------------
+alter table auth.users add column if not exists email text;
+alter table auth.users add column if not exists encrypted_password text;
+alter table public.shop_orders add column if not exists fulfilment_kobo integer default 0, add column if not exists delivery_kobo integer default 0, add column if not exists delivery_address text, add column if not exists delivery_city text, add column if not exists delivery_state text, add column if not exists delivery_phone text, add column if not exists delivery_email text, add column if not exists delivery_instructions text, add column if not exists delivery_preference text, add column if not exists distance_km numeric, add column if not exists is_approved_city boolean, add column if not exists customer_name text, add column if not exists pickup_station_id uuid, add column if not exists segment text;
+alter table public.businesses add column if not exists status text default 'active';
+alter table public.businesses add column if not exists is_platform_admin boolean default false;
+alter table public.businesses add column if not exists shop_allow_pay_on_delivery boolean default false;
+alter table public.appointments add column if not exists amount integer;
+alter table public.appointments add column if not exists completed_at timestamptz;
+alter table public.appointments add column if not exists timeslot_id uuid;
+alter table public.appointments add column if not exists released_at timestamptz;
+alter table public.appointments add column if not exists dispute_until timestamptz;
+create table public.staff (
+  id uuid primary key default gen_random_uuid(), business_id uuid not null, email text, status text not null default 'active', auth_user_id uuid
+);
+create table public.service_availability (id uuid primary key default gen_random_uuid(), is_booked boolean, status text, appointment_id uuid);
+create table public.purchases (
+  id uuid primary key default gen_random_uuid(), business_id uuid not null, supplier_name text, product_name text, quantity integer, cost_price numeric, total_cost numeric,
+  amount_paid numeric, balance numeric, supply_date text, due_date text, expiry text, batch text, status text, notes text, created_at timestamptz default now()
+);
+create table public.expenses (
+  id uuid primary key default gen_random_uuid(), business_id uuid not null, category text, description text, amount numeric, date text, staff_name text, created_at timestamptz default now()
+);
+create table public.shop_order_items (
+  id uuid primary key default gen_random_uuid(), order_id uuid not null references public.shop_orders(id), ecommerce_product_id uuid, product_id uuid,
+  product_name text, quantity integer not null default 1, unit_price_kobo integer not null default 0, line_total_kobo integer not null
+);
+-- test convenience: an order inserted DIRECTLY gets one item worth its subtotal (production orders get their items from create_shop_order;
+-- the red-team tests build those through the function, whose generated refs start with CF-RT-)
+create function public.fx_shop_order_default_item() returns trigger language plpgsql as $$
+begin
+  if new.order_ref not like 'CF-RT-%' then
+    insert into public.shop_order_items (order_id, product_name, quantity, unit_price_kobo, line_total_kobo) values (new.id, 'fixture item', 1, new.subtotal_kobo, new.subtotal_kobo);
+  end if;
+  return new;
+end $$;
+create trigger fx_shop_order_default_item after insert on public.shop_orders for each row execute function public.fx_shop_order_default_item();
+create table public.shop_order_tracking_events (id uuid primary key default gen_random_uuid(), order_id uuid, status text, location jsonb, notes text, created_by uuid);
+create table public.shop_order_notifications (id uuid primary key default gen_random_uuid(), order_id uuid, notification_type text, message text, channel text, recipient_id uuid, sent_at timestamptz default now(), read_at timestamptz);
+create table public.shop_promo_codes (
+  id uuid primary key default gen_random_uuid(), code text, is_active boolean default true, valid_from timestamptz default now(), valid_until timestamptz, min_order_kobo integer default 0,
+  applicable_segments text[], usage_limit integer, used_count integer default 0, usage_limit_per_user integer, discount_type text, discount_value integer, max_discount_kobo integer, description text
+);
+create table public.shop_promo_code_usage (id uuid primary key default gen_random_uuid(), promo_code_id uuid, user_id uuid, order_id uuid, discount_kobo integer);
+create table public.shop_pickup_stations (id uuid primary key default gen_random_uuid(), is_active boolean default true);
+create table public.products (id uuid primary key default gen_random_uuid(), name text, price numeric, stock integer, sale_type text);
+create table public.ecommerce_products (id uuid primary key default gen_random_uuid(), business_id uuid, product_id uuid, status text default 'Active', is_restricted boolean default false, ecommerce_price_kobo integer);
+create function public.generate_shop_order_ref() returns text language sql as $$ select 'CF-RT-' || floor(random() * 1e9)::text $$;
+create function public.is_ecommerce_vendor_approved(p_business_id uuid) returns boolean language sql as $$ select true $$;
+create function public.calculate_shop_fulfilment_fee(p_segment text, p_order_total_kobo integer, p_carton_count integer) returns integer language sql as $$ select 50000 $$;
+create function public.calculate_shop_delivery_fee(p_distance_km numeric, p_delivery_preference text) returns integer language sql as $$ select 0 $$;
+create function public.mint_confirmed_auth_user(p_email text, p_password text) returns uuid language plpgsql as $$
+declare v uuid := gen_random_uuid(); begin insert into auth.users (id) values (v); update auth.users set email = lower(p_email), encrypted_password = 'hash:' || p_password where id = v; return v; end $$;
+-- production's anon/authenticated-callable server functions the migration revokes (bodies irrelevant here)
+create function public.record_shop_notification(p_order_id uuid, p_notification_type text, p_message text, p_recipient_id uuid, p_channel text) returns uuid language sql as $$ select gen_random_uuid() $$;
+create function public.cleanup_old_sequences() returns integer language sql as $$ select 0 $$;
+create function public.book_appointment_slot(p_business_id uuid, p_service_id uuid, p_date date, p_time time, p_client_name text, p_phone text, p_fee_amount integer, p_payment_reference text, p_booking_type text, p_concern text) returns uuid language sql as $$ select gen_random_uuid() $$;
+create function public.current_staff_id_for_business(p_business_id uuid) returns uuid language sql as $$ select null::uuid $$;
+alter table public.shop_order_returns enable row level security;
+create policy "shop_returns_customer_insert" on public.shop_order_returns for insert to authenticated with check (customer_id = auth.uid());
+create policy "shop_returns_vendor_update" on public.shop_order_returns for update to authenticated using (true);
+alter table public.shop_order_items enable row level security;
+create policy "shop_order_items system insert" on public.shop_order_items for insert with check (true);
