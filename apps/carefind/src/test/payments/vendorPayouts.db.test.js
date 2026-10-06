@@ -58,7 +58,8 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261014_reconciliation'))
   await db.exec(M('carefind_20261015_reconciliation_ops'))
   await db.exec(M('carefind_20261016_reconciliation_scale'))
-  await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))   // reorders _settle_shop_order and re-times the engines: every test below runs on the final code
+  await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
+  await db.exec(M('carefind_20261019_red_team_fixes'))   // reorders _settle_shop_order and re-times the engines: every test below runs on the final code
   await db.exec(M('carefind_20261018_shop_return_service_caller'))   // the endpoint calls with the service-role key and names the customer
 }, 180_000)
 

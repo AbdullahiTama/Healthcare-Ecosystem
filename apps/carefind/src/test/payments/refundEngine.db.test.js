@@ -47,6 +47,7 @@ const newDb = async () => {
   await d.exec(M('carefind_20261015_reconciliation_ops'))
   await d.exec(M('carefind_20261016_reconciliation_scale'))
   await d.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
+  await d.exec(M('carefind_20261019_red_team_fixes'))
   return d
 }
 beforeAll(async () => { db = await newDb() }, 180_000)

@@ -30,6 +30,7 @@ const SQL = [
   M('carefind_20261015_reconciliation_ops'),
   M('carefind_20261016_reconciliation_scale'),
   M('carefind_20261017_engine_timeouts_and_hot_paths'),
+  M('carefind_20261019_red_team_fixes'),
 ]
 
 const SUBTOTAL = 2_000_000, COMMISSION = 400_000, TOTAL = 2_050_000, VENDOR = 1_600_000

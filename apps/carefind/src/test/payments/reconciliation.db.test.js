@@ -40,6 +40,7 @@ beforeAll(async () => {
   await db.exec(M('carefind_20261015_reconciliation_ops'))
   await db.exec(M('carefind_20261016_reconciliation_scale'))
   await db.exec(M('carefind_20261017_engine_timeouts_and_hot_paths'))
+  await db.exec(M('carefind_20261019_red_team_fixes'))
 }, 240_000)
 
 const one = async (sql, p = []) => (await db.query(sql, p)).rows[0]

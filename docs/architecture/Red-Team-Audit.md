@@ -23,7 +23,7 @@ Attacker's view: enumerate every SECURITY DEFINER function executable by `anon`/
 
 `redTeam.db.test.js`: 30 tests. All pass. The full PGlite payments suite (33 files, 621 tests) passes with the new fixture. The fixture (`liveSchemaSubset.sql`) gained the production tables the fix touches.
 
-Not yet done: add the migration to the chains of the concurrency (`*.pg`) suites and bench, mutants for the new guards (subtotal check, vendor-forward-only rule, trigger-only release), and a re-run of `test:finance:pg`.
+Migration 19 is now in the chain of every suite that settles shop orders (vendor payouts, invariants, reconciliation, refunds, timeouts, both concurrency suites, bench). Five mutants guard the new code (M26 subtotal check, M27 vendor forward-only, M28 actor spoofing, M29 items back the subtotal, M30 business ownership of completion) and M02/M17 were retargeted to it: 7 of 7 killed. Not re-run since the chain change: the full PGlite suite and `test:finance:pg` (a memory-pressure stop interrupted the session).
 
 ## 4. Residual risks (not fixed)
 

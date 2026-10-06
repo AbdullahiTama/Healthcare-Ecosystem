@@ -19,7 +19,7 @@ const MIGRATIONS = [
   'carefind_20261005_coin_writers_use_ledger', 'carefind_20261005_lock_wallets_to_ledger', 'carefind_20261006_settle_plan_and_carehub_appointments',
   'carefind_20261007_commission_engine', 'carefind_20261008_commission_reconcile_first_payment', 'carefind_20261008_withdrawal_engine',
   'carefind_20261009_refund_engine', 'carefind_20261010_central_settlement', 'carefind_20261012_shop_vendor_payouts',
-  'carefind_20261014_reconciliation', 'carefind_20261015_reconciliation_ops', 'carefind_20261016_reconciliation_scale', 'carefind_20261017_engine_timeouts_and_hot_paths',
+  'carefind_20261014_reconciliation', 'carefind_20261015_reconciliation_ops', 'carefind_20261016_reconciliation_scale', 'carefind_20261017_engine_timeouts_and_hot_paths', 'carefind_20261019_red_team_fixes',
   ...(process.env.EXTRA_MIGRATIONS ? process.env.EXTRA_MIGRATIONS.split(',') : []),
 ]
 const SQL = [read('../fixtures/liveSchemaSubset.sql'), ...MIGRATIONS.map(M)]

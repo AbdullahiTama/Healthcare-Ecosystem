@@ -20,7 +20,7 @@ export const MUTANTS = [
   // ---------------------------------------------------------------- the settlement engine
   { id: 'M01', what: 'the engine stops checking the paid amount against the expected amount', file: `${MIG}carefind_20261010_central_settlement.sql`,
     find: "when p_amount_kobo is distinct from i.expected_amount then 'amount_mismatch'", replace: "when false then 'amount_mismatch'", run: { cwd: APP, files: [`${T}centralSettlement.db.test.js`] } },
-  { id: 'M02', what: 'the vendor is credited the whole subtotal instead of subtotal minus commission', file: `${MIG}carefind_20261017_engine_timeouts_and_hot_paths.sql`,
+  { id: 'M02', what: 'the vendor is credited the whole subtotal instead of subtotal minus commission', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
     find: 'v_credit := o.subtotal_kobo - o.commission_kobo;', replace: 'v_credit := o.subtotal_kobo;', run: vendor, alsoRun: invariants },
   { id: 'M03', what: 'the booking credit credits the wallet again for a reference it already recorded', file: `${MIG}carefind_20261017_engine_timeouts_and_hot_paths.sql`,
     find: 'if v_new > 0 then', replace: 'if true then', run: vendor },
@@ -60,7 +60,7 @@ export const MUTANTS = [
     find: 'where public.job_slots.last_started_at <= now() - make_interval(mins => p_min_minutes)', replace: 'where true', run: { cwd: APP, files: [`${T}reconciliation.db.test.js`] } },
   { id: 'M16', what: 'an acknowledged finding is alerted again', file: `${MIG}carefind_20261015_reconciliation_ops.sql`,
     find: "where f.severity = 'critical' and f.status = 'open'", replace: "where f.severity = 'critical'", run: { cwd: APP, files: [`${T}reconciliation.db.test.js`] } },
-  { id: 'M17', what: 'the vendor-credit reconciliation stops comparing the credit with subtotal minus commission', file: `${MIG}carefind_20261017_engine_timeouts_and_hot_paths.sql`,
+  { id: 'M17', what: 'the vendor-credit reconciliation stops comparing the credit with subtotal minus commission', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
     find: 'where c.amount_kobo <> o.subtotal_kobo - o.commission_kobo', replace: 'where false', run: vendor },
   // ---------------------------------------------------------------- Node: the shared payments package
   { id: 'N01', what: 'every database error is treated as transient and retried (including business refusals)', file: `${PKG}/src/rpcRetry.js`,
@@ -77,4 +77,15 @@ export const MUTANTS = [
     find: "if (intent.status === 'settled' || intent.status === 'refunded') {", replace: 'if (false) {', run: { cwd: PKG, files: ['src/__tests__/settlement.test.js', 'src/__tests__/reconciliation.test.js'] } },
   { id: 'N07', what: 'a webhook event that FAILED is treated as handled (so its retry is dropped)', file: `${PKG}/src/events.js`,
     find: "const handled = existing.processed_at != null && ['processed', 'ignored', 'duplicate'].includes(existing.outcome)", replace: 'const handled = existing.outcome != null', run: { cwd: PKG, files: ['src/__tests__/events.test.js'] } },
+  // ---------------------------------------------------------------- Phase 14 red-team fixes
+  { id: 'M26', what: 'create_shop_order stops comparing the client subtotal with the items', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
+    find: 'IF p_subtotal_kobo IS DISTINCT FROM v_subtotal_calc THEN', replace: 'IF false THEN', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
+  { id: 'M27', what: 'a vendor may move an order backwards or set payment states (the forward-only rule is off)', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
+    find: 'or v_rank_from is null or v_rank_to is null or v_rank_to <= v_rank_from then', replace: 'then', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
+  { id: 'M28', what: 'a non-admin caller may name the actor of a status change', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
+    find: 'v_actor := case when v_admin then coalesce(p_changed_by, auth.uid()) else auth.uid() end;', replace: 'v_actor := coalesce(p_changed_by, auth.uid());', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
+  { id: 'M29', what: 'settlement stops checking that the items back the subtotal', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
+    find: 'if v_items_n = 0 or v_items_total <> o.subtotal_kobo then', replace: 'if false then', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
+  { id: 'M30', what: 'complete_appointment_and_release is not limited to its own business', file: `${MIG}carefind_20261019_red_team_fixes.sql`,
+    find: "if not (v_business_id in (select current_business_ids()) or is_platform_admin()) then return 'forbidden'; end if;", replace: '', run: { cwd: APP, files: [`${T}redTeam.db.test.js`] } },
 ]

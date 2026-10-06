@@ -29,6 +29,7 @@ const SQL = [
   M('carefind_20261015_reconciliation_ops'),
   M('carefind_20261016_reconciliation_scale'),
   M('carefind_20261017_engine_timeouts_and_hot_paths'),
+  M('carefind_20261019_red_team_fixes'),
 ]
 
 let pool, drop
