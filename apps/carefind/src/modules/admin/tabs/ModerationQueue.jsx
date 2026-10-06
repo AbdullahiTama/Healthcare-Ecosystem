@@ -345,9 +345,11 @@ export default function ModerationQueue({ reports, posts, verifications, showToa
       )}
 
       <BulkActionBar
+        selectedCount={selectedIds.size}
         onApprove={handleBulkApprove}
         onReject={handleBulkReject}
         onDelete={handleBulkDelete}
+        onClear={clearSelection}
       />
     </div>
   );
