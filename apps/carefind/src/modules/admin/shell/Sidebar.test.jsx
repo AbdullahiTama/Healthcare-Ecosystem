@@ -61,4 +61,11 @@ describe('Sidebar', () => {
     expect(container).toHaveTextContent('Admin')
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
   })
+
+  it('offers no collapse control where the rail cannot expand', () => {
+    renderAdmin(<Sidebar {...base} collapsed collapsible={false} />)
+    expect(screen.queryByRole('button', { name: 'Expand sidebar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse sidebar' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
 })

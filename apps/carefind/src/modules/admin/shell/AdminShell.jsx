@@ -70,6 +70,7 @@ export default function AdminShell() {
         nav={(
           <Sidebar
             collapsed={collapsed}
+            collapsible={!isMobileOrTablet}
             onToggleCollapse={() => setUserCollapsed(v => !v)}
             counts={counts}
             countsFailed={failed}

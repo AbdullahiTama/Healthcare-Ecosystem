@@ -49,7 +49,7 @@ function NavItem({ item, count, collapsed, onNavigate }) {
   )
 }
 
-export default function Sidebar({ collapsed, onToggleCollapse, counts = {}, countsFailed = false, isMobile, mobileOpen, onCloseMobile }) {
+export default function Sidebar({ collapsed, collapsible = true, onToggleCollapse, counts = {}, countsFailed = false, isMobile, mobileOpen, onCloseMobile }) {
   const admin = useAdmin()
   const { adminUser, signOut } = admin
   const groups = visibleGroups(admin)
@@ -63,7 +63,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, counts = {}, coun
         {!isCollapsed && <Logo size={26} />}
         {isMobile ? (
           <button onClick={onCloseMobile} aria-label="Close menu" style={iconButton}><X size={16} aria-hidden="true" /></button>
-        ) : (
+        ) : collapsible && (
           <button onClick={onToggleCollapse} aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={iconButton}>
             {isCollapsed ? <PanelLeftOpen size={15} aria-hidden="true" /> : <PanelLeftClose size={15} aria-hidden="true" />}
           </button>
