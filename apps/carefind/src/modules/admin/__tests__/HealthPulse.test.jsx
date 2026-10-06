@@ -109,4 +109,15 @@ describe('HealthPulse', () => {
     await act(async () => { vi.advanceTimersByTime(30000) })
     expect(mockGetHealthPulse).toHaveBeenCalledTimes(3)
   })
+
+  it('leaves out items the role may not open', async () => {
+    mockGetHealthPulse.mockResolvedValue(PULSE_DATA)
+    render(<HealthPulse onNavigate={vi.fn()} canSee={(tab) => tab !== 'revenue' && tab !== 'reports'} />)
+    await act(async () => { vi.advanceTimersByTime(0) })
+
+    expect(screen.queryByText('Revenue Today')).not.toBeInTheDocument()
+    expect(screen.queryByText('Open Disputes')).not.toBeInTheDocument()
+    expect(screen.getByText('Pending Items')).toBeInTheDocument()
+    expect(screen.getByText('Active Lives')).toBeInTheDocument()
+  })
 })

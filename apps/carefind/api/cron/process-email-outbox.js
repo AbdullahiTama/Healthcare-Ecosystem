@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { sweepWithdrawals } from '../_lib/withdrawalRecovery.js'
+import { runRefundSweeps } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
+import { runFinanceReconciliation } from '../_lib/financeReconcile.js'
 import { EmailService } from '@care-ecosystem/shared-email'
 
 export default async function handler(req, res) {
@@ -60,5 +63,41 @@ export default async function handler(req, res) {
     withdrawals = { error: e.message }
   }
 
-  return res.status(200).json({ ok: true, ...result, withdrawals })
+  // Refund engine sweep: finish card refunds the provider has not answered, refund payments that could not be applied, and
+  // refund appointments that were cancelled while paid but never refunded. Each part is isolated; none can block email.
+  let refunds
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger })
+  } catch (e) {
+    console.error('[cron/process-email-outbox] refund sweep failed', e)
+    refunds = { error: e.message }
+  }
+
+  // Vendor payouts: the vendor's share of a shop order moves held -> available once the order was delivered and the return
+  // window has passed. Idempotent and race-safe in the database; isolated here so it can never block email delivery.
+  let vendorPayouts
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const { data, error } = await supabase.rpc('release_shop_vendor_credits', { p_limit: 200 })
+    if (error) throw error
+    vendorPayouts = data
+    if (data?.partial > 0) paymentLogger.warn('shop.vendor_release_partial', { partial: data.partial })
+  } catch (e) {
+    console.error('[cron/process-email-outbox] vendor payout release failed', e)
+    vendorPayouts = { error: e.message }
+  }
+
+  // Reconciliation: replay failed webhooks, settle payments Paystack says were paid but nobody settled, compare Paystack's list of
+  // charges with our intents, run every database check. Last, so it sees what the sweeps above repaired. Never throws.
+  let reconciliation
+  try {
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    reconciliation = await runFinanceReconciliation(supabase)
+  } catch (e) {
+    console.error('[cron/process-email-outbox] reconciliation failed', e)
+    reconciliation = { error: e.message }
+  }
+
+  return res.status(200).json({ ok: true, ...result, withdrawals, refunds, vendorPayouts, reconciliation })
 }

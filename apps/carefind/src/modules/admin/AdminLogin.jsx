@@ -50,7 +50,7 @@ export default function AdminLogin() {
       localStorage.setItem('admin_user', JSON.stringify(r.admin))
       localStorage.setItem('admin_permissions', JSON.stringify(r.permissions || {}))
 
-      navigate('/admin-panel')
+      navigate('/admin')
     } catch (err) {
       try {
         await supabase.auth.signOut()

@@ -52,6 +52,8 @@ Core Modules:
 - Maps & Location
 - Appointment Booking (Future)
 
+The CareFind admin console (`/admin`) is documented in `apps/carefind/docs/ADMIN_CONSOLE.md`.
+
 ---
 
 ## Testing

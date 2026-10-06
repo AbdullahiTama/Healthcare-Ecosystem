@@ -1,6 +1,6 @@
 # Withdrawal Engine (Phase 08)
 
-Status: implemented and tested in the repo. **Two migrations are written and NOT applied to production** (section 7). CareFind and CareHub code must be deployed together with the first one.
+Status: implemented and tested. **Both migrations are APPLIED to production (2026-10-05).** Until the new CareFind and CareHub code is deployed, withdrawals on the OLD live code fail (it calls functions that no longer exist) - deploy now.
 
 ## 1. The shape
 

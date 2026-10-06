@@ -5,6 +5,7 @@ export { PROVIDER_METHODS, assertPaymentProvider } from './PaymentProvider.js'
 export { PaystackProvider } from './paystack/PaystackProvider.js'
 export { PaymentIntentError, newReference, createPaymentIntent, findIntent, markIntentPending, markIntentFailed } from './intents.js'
 export { settleByReference } from './settlement.js'
+export { runDbReconciliation, replayProviderEvents, sweepOpenIntents, reconcileProviderTransactions, runReconciliation } from './reconciliation.js'
 export { paystackEventId, recordProviderEvent, finishProviderEvent } from './events.js'
 export { settleIntentForRequest } from './requestSettlement.js'
 export { createSettlementEffects } from './effects.js'
@@ -13,3 +14,7 @@ export {
   getTransferStatus, normalizeAccountName, verifyBankAccount, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
 } from './withdrawals.js'
 export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin } from './pin.js'
+export {
+  REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
+  requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps,
+} from './refunds.js'

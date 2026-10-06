@@ -2,10 +2,12 @@
 // Canonical rates from apps/carefind/src/modules/shop/pricing.js COMMISSION_RATES — kept in sync manually
 // with compile-time assertion below. No manufacturer/importer rate exists by design.
 
+// Owner decision 2026-10-05: 20% flat for every segment (replaces 10% / 5% / 2.5%). Must equal financial_config.shop_commission_rate
+// (the database refuses an order whose commission differs) and the active ecommerce_terms version.
 export const SEGMENT_RATES = {
-  retail: 0.10,
-  wholesale: 0.05,
-  distributor: 0.025,
+  retail: 0.20,
+  wholesale: 0.20,
+  distributor: 0.20,
 }
 
 export const SEGMENT_LABELS = {
@@ -15,9 +17,9 @@ export const SEGMENT_LABELS = {
 }
 
 export const SEGMENT_COMMISSION_LABELS = {
-  retail: '10% of sale (vendor-paid, deducted from vendor payout)',
-  wholesale: '5% of sale (vendor-paid, deducted from vendor payout)',
-  distributor: '2.5% of sale (vendor-paid, deducted from vendor payout)',
+  retail: '20% of sale (vendor-paid, deducted from vendor payout)',
+  wholesale: '20% of sale (vendor-paid, deducted from vendor payout)',
+  distributor: '20% of sale (vendor-paid, deducted from vendor payout)',
 }
 
 export const SEGMENT_CHECKBOX_LABELS = {
@@ -59,9 +61,9 @@ export function resolveEcommerceSegment(businessType, overrideSegment) {
 
 export function commissionExample(segment) {
   assertValidSegment(segment)
-  if (segment === 'retail') return { saleKobo: 500000, commissionKobo: 50000, payoutKobo: 450000, label: '₦5,000 sale → ₦500 commission → ₦4,500 vendor payout before other adjustments' }
-  if (segment === 'wholesale') return { saleKobo: 1000000, commissionKobo: 50000, payoutKobo: 950000, label: '₦10,000 sale → ₦500 commission → ₦9,500 vendor payout' }
-  return { saleKobo: 2000000, commissionKobo: 50000, payoutKobo: 1950000, label: '₦20,000 sale → ₦500 commission → ₦19,500 vendor payout' }
+  if (segment === 'retail') return { saleKobo: 500000, commissionKobo: 100000, payoutKobo: 400000, label: '₦5,000 sale → ₦1,000 commission → ₦4,000 vendor payout before other adjustments' }
+  if (segment === 'wholesale') return { saleKobo: 1000000, commissionKobo: 200000, payoutKobo: 800000, label: '₦10,000 sale → ₦2,000 commission → ₦8,000 vendor payout' }
+  return { saleKobo: 2000000, commissionKobo: 400000, payoutKobo: 1600000, label: '₦20,000 sale → ₦4,000 commission → ₦16,000 vendor payout' }
 }
 
 // Compile-time sync guard: if pricing.js diverges, tests will catch it via cross-import.

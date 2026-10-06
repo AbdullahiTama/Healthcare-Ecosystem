@@ -4,20 +4,18 @@
 import crypto from 'crypto'
 import { EventEmitter } from 'events'
 
-const h = vi.hoisted(() => ({ creditTopup: vi.fn(), db: null }))
+const h = vi.hoisted(() => ({ settle: vi.fn(), db: null }))
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (...a) => h.db.from(...a), rpc: (...a) => h.db.rpc(...a) }) }))
 vi.mock('../_lib/paystack.js', () => ({ getPaystackSecretKey: () => 'sk_test_secret' }))
-vi.mock('../_lib/paystackCredit.js', () => ({ creditTopup: h.creditTopup }))
-vi.mock('../_lib/consultationSettle.js', () => ({ settleConsultationPayment: vi.fn() }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 
 vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({
   ...(await importOriginal()),
-  // These legacy-path tests are about metadata dispatch; engine routing has its own test file.
+  // These tests are about WHEN the webhook acknowledges; engine routing has its own test file.
   recordProviderEvent: async () => ({ event: { id: 'e1', attempts: 0 }, isNew: true, alreadyHandled: false }),
   finishProviderEvent: async () => {},
-  settleByReference: async () => ({ outcome: 'unknown_reference' }),
+  settleByReference: (...a) => h.settle(...a),
 }))
 vi.mock('../_lib/payments.js', () => ({ getPaystackProvider: () => ({}), paymentLogger: { info() {}, warn() {}, error() {} } }))
 
@@ -38,21 +36,21 @@ function response() {
   return r
 }
 
-const topup = { event: 'charge.success', data: { reference: 'ref-1', amount: 100000, metadata: { user_id: 'u1', coins: '5' } } }
+const topup = { event: 'charge.success', data: { reference: 'ref-1', amount: 100000 } }
 
 beforeEach(() => {
-  h.creditTopup.mockReset()
+  h.settle.mockReset().mockResolvedValue({ outcome: 'already_settled' })
   h.db = { from: () => { throw new Error('db down') }, rpc: async () => ({ data: null, error: null }) }
 })
 
 describe('paystack webhook acknowledgement', () => {
   it('does not acknowledge until the event has been settled', async () => {
     let release
-    h.creditTopup.mockImplementation(() => new Promise((resolve) => { release = () => resolve({ credited: true }) }))
+    h.settle.mockImplementation(() => new Promise((resolve) => { release = () => resolve({ outcome: 'already_settled' }) }))
     const res = response()
     const pending = handler(request(topup), res)
     await new Promise((r) => setTimeout(r, 30))
-    expect(h.creditTopup).toHaveBeenCalled()
+    expect(h.settle).toHaveBeenCalled()
     expect(res.body).toBeNull() // still settling: nothing sent yet
     release()
     await pending
@@ -75,13 +73,13 @@ describe('paystack webhook acknowledgement', () => {
       await handler(request(topup, { signature }), res)
       expect(res.statusCode).toBe(401)
     }
-    expect(h.creditTopup).not.toHaveBeenCalled()
+    expect(h.settle).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid signature without processing anything', async () => {
     const res = response()
     await handler(request(topup, { sign: false }), res)
     expect(res.statusCode).toBe(401)
-    expect(h.creditTopup).not.toHaveBeenCalled()
+    expect(h.settle).not.toHaveBeenCalled()
   })
 })

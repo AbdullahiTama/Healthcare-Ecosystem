@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { userOwnsBusiness } from '../_lib/businessOwnership.js'
+import { requestRefund, executeCardRefund } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -98,36 +100,14 @@ export default async function handler(req, res) {
       .eq('is_booked', true)
   }
 
-  // Process refund if payment was made (within 72-hour dispute window)
+  // Refund through the refund engine. Reaching this point means the cancellation is allowed under the refund policy (the
+  // business may cancel at any time; a patient only 24h or more ahead, checked above), so a paid card / CareCoin booking
+  // is refunded in full: a card refund goes back through Paystack and completes only when Paystack confirms; CareCoins go
+  // back through the ledger. The business's share is recovered inside the engine. If anything here fails, the cron
+  // finds cancelled-but-unrefunded appointments and finishes the job, so a crash can never lose a refund.
+  let refund = { status: 'none' }
   if (appt.payment_status === 'paid' && appt.fee_amount > 0) {
-    const appointmentCreated = new Date(appt.created_at)
-    const hoursSinceCreation = (Date.now() - appointmentCreated.getTime()) / (1000 * 60 * 60)
-
-    if (hoursSinceCreation <= 72) {
-      // Within dispute window — mark for refund review
-      await supabase
-        .from('appointments')
-        .update({ payment_status: 'refunded', refunded_at: new Date().toISOString() })
-        .eq('id', appointmentId)
-
-      // Record refund in wallet ledger
-      if (appt.business_id) {
-        await supabase.from('business_wallet_transactions').insert({
-          business_id: appt.business_id,
-          appointment_id: appointmentId,
-          type: 'refund',
-          amount: -appt.fee_amount,
-          reference: appt.payment_reference,
-          status: 'confirmed',
-        })
-
-        // NOTE: this used to "reverse the held balance" by filing a fake withdrawal (request_business_withdrawal with
-        // bank 'refund' / account 0000000000). That abused the withdrawal path - it left a payout request that
-        // nothing could ever settle - and the function is gone with the withdrawal engine (Phase 08). The wallet
-        // reversal and the money back to the client belong to the refund engine (Phase 09); until then the
-        // appointment stays marked 'refunded' for review, exactly as the comment above says.
-      }
-    }
+    refund = await refundCancelledBooking(appointmentId)
   }
 
   // Notify the business
@@ -163,6 +143,30 @@ export default async function handler(req, res) {
     success: true,
     message: 'Appointment cancelled',
     slot_freed: true,
-    refund_processed: appt.payment_status === 'paid' && appt.fee_amount > 0,
+    refund_processed: ['completed', 'processing', 'pending'].includes(refund.status),
+    refund,
   })
+}
+
+// -> { status: 'completed' | 'processing' | 'pending' | 'failed' | 'already' | 'offline' | 'not_refunded' }
+//   completed   money is back with the customer (CareCoins) or the provider confirmed the refund
+//   processing  the provider accepted the refund; it completes by webhook
+//   pending     could not be sent yet; the cron retries
+//   offline     paid at the POS / by transfer / cash: the platform never held that money, the business refunds the client directly
+async function refundCancelledBooking(appointmentId) {
+  try {
+    const r = await requestRefund(supabase, { cause: 'booking_cancelled', entityType: 'appointment', entityId: appointmentId, reason: 'appointment cancelled' })
+    if (r.outcome === 'completed') return { status: 'completed' }
+    if (r.outcome === 'requested') {
+      const sent = await executeCardRefund(supabase, getPaystackProvider(), r, { reason: 'Appointment cancelled', logger: paymentLogger })
+      return { status: sent.state }
+    }
+    if (r.outcome === 'already_requested' || r.outcome === 'already_refunded') return { status: 'already' }
+    if (r.outcome === 'not_refundable_by_platform') return { status: 'offline' }
+    console.error('[cancel-appointment] refund not created', { appointmentId, outcome: r.outcome })
+    return { status: 'not_refunded', reason: r.outcome }
+  } catch (err) {
+    console.error('[cancel-appointment] refund request failed; the cron will retry', { appointmentId, message: err.message })
+    return { status: 'pending' }
+  }
 }

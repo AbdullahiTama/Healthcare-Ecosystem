@@ -5,13 +5,11 @@
 import crypto from 'crypto'
 import { EventEmitter } from 'events'
 
-const h = vi.hoisted(() => ({ db: null, provider: null, creditTopup: null, enqueue: null, user: null }))
+const h = vi.hoisted(() => ({ db: null, provider: null, enqueue: null, user: null, log: null }))
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: (...a) => h.db.from(...a), rpc: (...a) => h.db.rpc(...a), auth: { admin: { getUserById: (...a) => h.db.auth.admin.getUserById(...a) } } }) }))
 vi.mock('../../../api/_lib/paystack.js', () => ({ getPaystackSecretKey: () => 'sk_test_secret' }))
-vi.mock('../../../api/_lib/payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error() {} } }))
-vi.mock('../../../api/_lib/paystackCredit.js', () => ({ creditTopup: (...a) => h.creditTopup(...a) }))
-vi.mock('../../../api/_lib/consultationSettle.js', () => ({ settleConsultationPayment: vi.fn() }))
+vi.mock('../../../api/_lib/payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error: (...a) => h.log(...a) } }))
 vi.mock('../../../api/_lib/emailService.js', () => ({ enqueue: (...a) => h.enqueue(...a), processBatch: vi.fn(async () => {}) }))
 vi.mock('../../../api/_lib/verifyUser.js', () => ({ verifyUser: async () => h.user }))
 
@@ -49,7 +47,7 @@ function settlingEngine(extra = {}) {
 
 beforeEach(() => {
   h.user = { id: 'u1234567-aaaa', email: 'u@example.com' }
-  h.creditTopup = vi.fn(async () => ({ alreadyProcessed: false, newBalance: 1 }))
+  h.log = vi.fn()
   h.enqueue = vi.fn(async () => {})
   h.provider = createFakeProvider({ verify: async () => verifiedPayment({ amountKobo: 95000, providerTransactionId: '4099' }) })
   h.db = createFakeSupabase({ tables: { payment_intents: [intentRow()], payment_provider_events: [] }, rpc: settlingEngine() })
@@ -59,12 +57,12 @@ const eventsOf = () => h.db.data.payment_provider_events
 const engineCalls = () => h.db.calls.filter((c) => c.op === 'rpc' && c.name === 'settle_payment_intent')
 
 describe('webhook -> settlement engine', () => {
-  it('settles an intent payment through the engine with Paystack\'s verified facts, and never runs the legacy handlers', async () => {
+  it('settles an intent payment through the engine with Paystack\'s verified facts, and nothing else settles money', async () => {
     const res = await deliver(chargeSuccess())
     expect(res.statusCode).toBe(200)
     expect(engineCalls()).toHaveLength(1)
     expect(engineCalls()[0].args).toEqual({ p_reference: REF, p_provider: 'paystack', p_provider_txn_id: '4099', p_amount_kobo: 95000, p_currency: 'NGN' })
-    expect(h.creditTopup).not.toHaveBeenCalled()
+    expect(h.db.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual(['settle_payment_intent'])
     expect(h.db.data.payment_intents[0].status).toBe('settled')
   })
 
@@ -160,7 +158,7 @@ describe('webhook: CareHub payments use the same engine', () => {
   const PLAN_REF = 'ch_plan_biz1_aaaaaaaaaaaa'
   const APPT_REF = 'ch_appt_a1b2c3d4_aaaaaaaaaaaa'
 
-  it('a CareHub plan payment is settled through the engine (not the legacy renew_business_plan branch) and the owner is emailed once', async () => {
+  it('a CareHub plan payment is settled through the engine and the owner is emailed once', async () => {
     h.db = createFakeSupabase({
       tables: {
         payment_intents: [{ id: 'p1', reference: PLAN_REF, purpose: 'plan_renewal', business_id: 'biz-1', status: 'pending', expected_amount: 833300, metadata: { months: 1 } }],
@@ -198,13 +196,13 @@ describe('webhook: CareHub payments use the same engine', () => {
 })
 
 describe('webhook: transition and hygiene', () => {
-  it('a payment with no intent (started before the engine) still goes through the legacy metadata path', async () => {
+  it('a charge no payment intent recognises is NEVER settled from its metadata: acknowledged, recorded as ignored, logged loudly', async () => {
     h.db = createFakeSupabase({ tables: { payment_intents: [], payment_provider_events: [] } })
-    const res = await deliver({ event: 'charge.success', data: { id: 7, reference: 'legacy_ref_00001', amount: 100000, metadata: { user_id: 'u1', coins: '5' } } })
+    const res = await deliver({ event: 'charge.success', data: { id: 7, reference: 'legacy_ref_00001', amount: 100000, metadata: { user_id: 'u1', coins: '5', business_id: 'b1', months: '12', order_id: 'o1' } } })
     expect(res.statusCode).toBe(200)
-    expect(h.creditTopup).toHaveBeenCalledTimes(1)
-    expect(h.db.calls.filter((c) => c.name === 'settle_payment_intent')).toHaveLength(0)
-    expect(eventsOf()[0].outcome).toBe('processed')
+    expect(h.db.calls.filter((c) => c.op === 'rpc').map((c) => c.name)).toEqual([])   // not even the engine: there is no intent to settle
+    expect(h.log).toHaveBeenCalledWith('payment.unmatched_charge', { reference: 'legacy_ref_00001', amount: 100000, currency: null })
+    expect(eventsOf()[0].outcome).toBe('ignored')
   })
 
   it('an event nobody handles is recorded as ignored and acknowledged', async () => {

@@ -175,6 +175,20 @@ export class PaystackProvider {
     return { providerRefundId: String(d.id ?? ''), status, amountKobo: Number.isSafeInteger(d.amount) ? d.amount : amountKobo ?? null, raw: d }
   }
 
+  // Look a refund up by the reference of the payment it belongs to. Read-only, so safe to retry. A refund the provider
+  // has never heard of is reported as `not_found` (the caller must NOT treat that as "failed" without a grace period).
+  async verifyRefund({ reference }) {
+    const op = 'verifyRefund'
+    assertPattern(op, reference, PAYMENT_REF, 'reference')
+    const { data, correlationId } = await this.#http.request({ operation: op, path: `/refund/${encodeURIComponent(reference)}` })
+    this.#assertOk(op, data, correlationId)
+    const d = Array.isArray(data.data) ? data.data[0] : data.data
+    if (!d || typeof d !== 'object') throw new ProviderError({ code: E.NOT_FOUND, message: 'The provider has no refund for this payment', operation: op, correlationId, retryable: false, ambiguous: false })
+    const status = REFUND_STATUS[String(d.status || '').toLowerCase()]
+    if (!status) throw badResponse(op, correlationId, `Provider returned an unknown refund status "${d.status}"`, true)
+    return { providerRefundId: String(d.id ?? ''), status, amountKobo: Number.isSafeInteger(d.amount) ? d.amount : null, raw: d }
+  }
+
   // ---- transfers / payouts --------------------------------------------------------------
 
   async resolveAccount({ accountNumber, bankCode }) {
@@ -264,6 +278,48 @@ export class PaystackProvider {
     const available = row ? (row.balance ?? row.available_balance) : 0
     if (!Number.isSafeInteger(available) || available < 0) throw badResponse(op, correlationId, 'Provider returned an invalid balance')
     return { currency, availableKobo: available, raw: data.data }
+  }
+
+  /**
+   * One page of the provider's own transaction list, for reconciliation (what Paystack says it received, independent of any
+   * webhook or redirect). `from`/`to` are ISO timestamps; `status` defaults to 'success'. A row with an unusable shape is
+   * skipped, never guessed: it cannot be compared and the caller is told how many were skipped.
+   */
+  async listTransactions({ from, to, status = 'success', page = 1, perPage = 100 } = {}) {
+    const op = 'listTransactions'
+    for (const [name, v] of [['from', from], ['to', to]]) {
+      if (typeof v !== 'string' || Number.isNaN(Date.parse(v))) throw invalid(op, `${name} must be an ISO timestamp`)
+    }
+    if (!Number.isInteger(page) || page < 1 || page > 1000) throw invalid(op, 'page must be 1..1000')
+    if (!Number.isInteger(perPage) || perPage < 1 || perPage > 200) throw invalid(op, 'perPage must be 1..200')
+    const { data, correlationId } = await this.#http.request({
+      operation: op,
+      path: '/transaction',
+      query: { from, to, status, page, perPage },
+    })
+    this.#assertOk(op, data, correlationId)
+    if (!Array.isArray(data.data)) throw badResponse(op, correlationId, 'Provider returned no transaction list')
+    const transactions = []
+    let skipped = 0
+    for (const d of data.data) {
+      const st = PAYMENT_STATUS[String(d?.status || '').toLowerCase()]
+      if (!d || typeof d.reference !== 'string' || !Number.isSafeInteger(d.amount) || d.amount < 0 || !st) { skipped++; continue }
+      transactions.push({
+        provider: this.name,
+        reference: d.reference,
+        providerTransactionId: String(d.id ?? ''),
+        status: st,
+        amountKobo: d.amount,
+        currency: String(d.currency || '').toUpperCase(),
+        paidAt: d.paid_at || null,
+        payerEmail: d.customer?.email || null,
+        channel: d.channel || null,
+        metadata: parseMetadata(d.metadata),
+      })
+    }
+    const pageCount = Number(data.meta?.pageCount)
+    const hasMore = Number.isFinite(pageCount) ? page < pageCount : data.data.length === perPage
+    return { transactions, skipped, page, hasMore }
   }
 
   // Paystack answers some failures with HTTP 200 and `status:false`.

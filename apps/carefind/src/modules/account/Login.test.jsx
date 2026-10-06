@@ -106,7 +106,7 @@ describe('Login', () => {
     rpc.mockResolvedValue({ data: { id: 'a1', role: 'moderator' } })
     renderLogin()
     fillAndSubmit()
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin-panel'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin'))
   })
 
   it('says phone login is coming soon and exposes the switch state to assistive tech', () => {

@@ -83,6 +83,8 @@ create table public.appointments (
   payment_channel text,
   patient_user_id uuid,
   refunded_at timestamptz,
+  status text,
+  cancelled_at timestamptz,
   constraint appointments_payment_status_check check (payment_status is null or payment_status in ('unpaid','paid','refunded','pending'))
 );
 
@@ -264,3 +266,84 @@ create table public.business_withdrawal_requests (
   updated_at timestamptz not null default now()
 );
 create unique index business_withdrawal_requests_paystack_reference_uniq on public.business_withdrawal_requests (paystack_reference) where paystack_reference is not null;
+
+-- ---- Shop (Phase 10), as read from production. ---------------------------------------------------------
+create table public.shop_orders (
+  id uuid primary key default gen_random_uuid(),
+  order_ref text not null unique,
+  customer_id uuid not null,
+  vendor_business_id uuid not null,
+  status text not null default 'pending_payment',
+  payment_status text not null default 'pending',
+  subtotal_kobo integer not null default 0,
+  commission_kobo integer not null default 0,
+  total_kobo integer not null,
+  payment_reference text unique,
+  paystack_reference text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_orders_payment_status_check check (payment_status in ('pending','paid','failed','refunded')),
+  constraint shop_orders_status_check check (status in ('pending_payment','paid','accepted','processing','packed','at_pickup_station','ready_for_pickup','in_transit','delivered','cancelled','refund_requested','refunded','disputed','delivery_quote_pending'))
+);
+create table public.shop_payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null,
+  payment_reference text not null unique,
+  amount_kobo integer not null,
+  status text not null default 'pending',
+  gateway text not null default 'paystack',
+  gateway_response jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_payments_status_check check (status in ('pending','success','failed','refunded'))
+);
+create table public.shop_order_status_history (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null,
+  from_status text,
+  to_status text not null,
+  changed_by uuid,
+  note text,
+  created_at timestamptz not null default now()
+);
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  recipient_id uuid,
+  type text,
+  message text,
+  link text,
+  created_at timestamptz not null default now()
+);
+
+-- ---- Shop returns / cancellation (vendor payout model), as read from production. -------------------------
+create or replace function auth.email() returns text language sql stable as
+  $$ select nullif(current_setting('request.jwt.claim.email', true), '') $$;
+alter table public.businesses add column if not exists email text;
+create table public.shop_order_returns (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.shop_orders(id),
+  customer_id uuid not null,
+  vendor_business_id uuid not null,
+  status text not null default 'requested',
+  reason text not null,
+  description text,
+  refund_amount_kobo integer not null,
+  refund_method text,
+  requested_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by uuid,
+  resolution_notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint shop_order_returns_refund_amount_kobo_check check (refund_amount_kobo >= 0),
+  constraint shop_order_returns_refund_method_check check (refund_method = any (array['original_payment','wallet','manual'])),
+  constraint shop_order_returns_status_check check (status = any (array['requested','approved','rejected','completed','cancelled']))
+);
+create table public.staff_notifications (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid, staff_id uuid, is_owner boolean, kind text, title text, body text, link text,
+  created_at timestamptz not null default now()
+);
+create function public.current_business_ids() returns setof uuid language sql stable as
+  $$ select id from public.businesses where lower(email) = lower(auth.email()) $$;
+create function public.shop_restore_inventory_on_cancel(p_order_id uuid) returns void language sql as $$ select $$;

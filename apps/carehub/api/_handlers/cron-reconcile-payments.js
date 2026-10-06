@@ -1,11 +1,15 @@
 import { supabase } from '../_lib/supabase.js'
 import { reconcileBusinessWithdrawals } from '../_lib/withdrawalRecovery.js'
 import { reconcileCommissions } from '../_lib/commissionReconcile.js'
+import { runRefundSweeps } from '@care-ecosystem/shared-payments'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 
 // Cron: backstop for the two ways CareHub money gets stuck.
 //   * business withdrawals still pending/processing after the grace period (the Paystack
 //     transfer call failed ambiguously, or its webhook never arrived) - checked against
 //     Paystack by reference: succeeded -> completed, failed/never created -> refunded.
+//   * refunds: finish card refunds the provider has not answered, refund payments that could not be applied and
+//     appointments cancelled while paid (the same sweep CareFind runs; every step is idempotent).
 //   * referral commissions: backfill payments that predate the commission engine and report inconsistencies
 //     (new commissions are created by the database inside the plan renewal itself).
 //
@@ -21,7 +25,7 @@ export default async function handler(req, res) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
   if (token !== expected) return res.status(401).json({ error: 'Unauthorized' })
 
-  const result = { withdrawals: null, commissions: null }
+  const result = { withdrawals: null, commissions: null, refunds: null }
   let failed = false
 
   // Independent jobs: one failing must not stop the other.
@@ -38,6 +42,14 @@ export default async function handler(req, res) {
     failed = true
     result.commissions = { error: err.message }
     console.error('[cron/reconcile-payments] commissions failed:', err)
+  }
+
+  try {
+    result.refunds = await runRefundSweeps(supabase, getPaystackProvider(), { logger: paymentLogger })
+  } catch (err) {
+    failed = true
+    result.refunds = { error: err.message }
+    console.error('[cron/reconcile-payments] refunds failed:', err)
   }
 
   return res.status(failed ? 500 : 200).json(result)

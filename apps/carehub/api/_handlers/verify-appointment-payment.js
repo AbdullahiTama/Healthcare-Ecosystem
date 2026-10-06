@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   const appointmentId = out.result?.intent?.entity_id
 
   if (out.outcome === 'unknown_reference') {
-    // An appointment paid before the settlement engine shipped has no intent; the webhook settles those.
+    // An appointment paid before payment intents existed has no intent; this only REPORTS it if it is already paid (nothing settles from here).
     const { data: legacy } = await supabase.from('appointments').select('id, payment_status').eq('payment_reference', reference).eq('business_id', business.id).maybeSingle()
     if (legacy?.payment_status === 'paid') return res.status(200).json({ success: true, id: legacy.id, alreadyPaid: true })
     return res.status(404).json({ error: 'No appointment found for this reference' })

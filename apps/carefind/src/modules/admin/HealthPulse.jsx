@@ -6,7 +6,7 @@ import { useRealtimeChannel } from './hooks/useRealtimeChannel'
 
 const PULSE_INTERVAL = 30000
 
-export default function HealthPulse({ onNavigate }) {
+export default function HealthPulse({ onNavigate, canSee }) {
   const [pulse, setPulse] = useState(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -70,6 +70,9 @@ export default function HealthPulse({ onNavigate }) {
       alert: (pulse?.openDisputes || 0) > 3,
     },
   ]
+  // Each item links to a screen; a role sees only the ones it may open.
+  const visible = canSee ? items.filter(item => canSee(item.tab)) : items
+  if (visible.length === 0) return null
 
   return (
     <div style={{
@@ -102,6 +105,7 @@ export default function HealthPulse({ onNavigate }) {
           )}
           <button
             onClick={fetchPulse}
+            aria-label="Refresh platform pulse"
             style={{
               background: 'none',
               border: 'none',
@@ -118,10 +122,10 @@ export default function HealthPulse({ onNavigate }) {
       </div>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 12,
       }}>
-        {items.map(item => {
+        {visible.map(item => {
           const Icon = item.icon
           return (
             <button
