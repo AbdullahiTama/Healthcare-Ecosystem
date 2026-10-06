@@ -120,4 +120,30 @@ describe('QueueScreen', () => {
     at('/admin/moderation/queue')
     expect(await screen.findByText('Nothing is waiting for review')).toBeInTheDocument()
   })
+
+  it('drops the selection when the filter changes, so hidden items are never acted on', async () => {
+    at('/admin/moderation/queue')
+    await screen.findByRole('button', { name: 'Open Misinformation' })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Misinformation' }))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Verifications' }))
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Verification: Amina Bello' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Approve selected' }))
+    expect(await screen.findByText('Approved 1 items')).toBeInTheDocument()
+    expect(calls('resolve_report')).toHaveLength(0)
+  })
+
+  it('names items that have no reason, name or profession instead of printing null', async () => {
+    mockApi({
+      list_reports: async () => ({ data: [{ id: 'r9', post_id: null, reason: null, status: 'pending', created_at: iso(2), posts: null }] }),
+      list_verification_requests: async () => ({ data: [{ id: 'v9', user_id: 'u9', full_name: null, profession: null, workplace: null, status: 'pending', created_at: iso(3) }] }),
+    })
+    getPosts.mockResolvedValue([])
+    at('/admin/moderation/queue')
+    expect(await screen.findByRole('button', { name: 'Open No reason given' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open Verification: Unnamed applicant' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Select No reason given' })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/null/)
+  })
 })

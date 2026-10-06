@@ -58,7 +58,10 @@ export default function QueueScreen() {
   const toggle = (id) => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
   const toggleAll = () => setSelectedIds(prev => (filtered.length > 0 && filtered.every(i => prev.has(i.id)) ? new Set() : new Set(filtered.map(i => i.id))))
   const clear = () => setSelectedIds(new Set())
-  const chosen = () => items.filter(i => selectedIds.has(i.id))
+  // Only what is on screen can be acted on: a selection hidden by a filter
+  // must never be approved or deleted unseen.
+  const chosen = () => filtered.filter(i => selectedIds.has(i.id))
+  const setFilter = (patch) => { clear(); setF(patch) }
 
   function openItem(item) {
     if (item.source === 'verification') navigate(`${pathFor('verifications')}?id=${encodeURIComponent(item.id)}`)
@@ -149,8 +152,8 @@ export default function QueueScreen() {
       <AdminPageHeader title="Moderation queue" subtitle={`${items.length} ${items.length === 1 ? 'item needs' : 'items need'} review`} />
 
       <FilterBar label="Queue filters" style={{ marginBottom: theme.space[8] }}>
-        <FilterPills value={f.source} onChange={(source) => setF({ source })} options={SOURCES} />
-        <FilterPills value={f.priority} onChange={(priority) => setF({ priority })} options={PRIORITIES} />
+        <FilterPills value={f.source} onChange={(source) => setFilter({ source })} options={SOURCES} />
+        <FilterPills value={f.priority} onChange={(priority) => setFilter({ priority })} options={PRIORITIES} />
       </FilterBar>
 
       {postsQ.error && (
@@ -167,7 +170,7 @@ export default function QueueScreen() {
       />
 
       <BulkActionBar
-        selectedCount={selectedIds.size}
+        selectedCount={chosen().length}
         onApprove={working ? undefined : bulkApprove}
         onReject={working ? undefined : bulkReject}
         onDelete={working ? undefined : bulkDelete}
