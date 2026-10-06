@@ -15,6 +15,21 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 initSentry()
 
+// After a redeploy, chunk hashes change. Tabs still running the previous
+// bundle request chunks that no longer exist, failing the dynamic import.
+// Reload once to pick up the new entry; guard against reload loops.
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  try {
+    if (sessionStorage.getItem('cf_chunk_reload')) return
+    sessionStorage.setItem('cf_chunk_reload', '1')
+  } catch {}
+  window.location.reload()
+})
+window.addEventListener('load', () => {
+  try { sessionStorage.removeItem('cf_chunk_reload') } catch {}
+})
+
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import { CartProvider } from './modules/shop/CartProvider.jsx'
 import { WishlistProvider } from './modules/shop/WishlistProvider.jsx'
