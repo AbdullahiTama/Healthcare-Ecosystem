@@ -20,6 +20,7 @@ const SCREEN_COMPONENTS = {
   agent_transfers: lazy(() => import('../agents-hub/AgentTransfer.jsx')),
   verifications: lazy(() => import('./screens/moderation/VerificationsScreen.jsx')),
   reports: lazy(() => import('./screens/moderation/ReportsScreen.jsx')),
+  claims: lazy(() => import('./screens/moderation/ClaimsScreen.jsx')),
 }
 
 function ScreenElement({ item }) {
