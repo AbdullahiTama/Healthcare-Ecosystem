@@ -15,7 +15,6 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import OverviewTab from '../tabs/OverviewTab.jsx'
 import ClaimsTab from '../tabs/ClaimsTab.jsx'
-import ReportsTab from '../tabs/ReportsTab.jsx'
 import UsersTab from '../tabs/UsersTab.jsx'
 import PostsTab from '../tabs/PostsTab.jsx'
 import RevenueTab from '../tabs/RevenueTab.jsx'
@@ -64,7 +63,6 @@ export default function LegacyScreens({ tab }) {
   const [postDateTo, setPostDateTo] = useState('')
   const [userVerifiedFilter, setUserVerifiedFilter] = useState('all')
   const [userSpecialtyFilter, setUserSpecialtyFilter] = useState('')
-  const [reportStatusFilter, setReportStatusFilter] = useState('pending')
   const [selectedUser, setSelectedUser] = useState(null)
   const [suspendDays, setSuspendDays] = useState('7')
   const [userPosts, setUserPosts] = useState([])
@@ -579,18 +577,6 @@ export default function LegacyScreens({ tab }) {
     }
   }
 
-  async function resolveReport(id) {
-    try {
-      await callAdminAuth('resolve_report', {  id })
-      logAuditAction('resolve', 'report', id, {})
-      recordAction({ action: 'approve', target: 'report', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Report resolved', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't resolve the report: ${err.message}`, { type: 'error' })
-    }
-  }
-
   async function manualVerify(userId, specialty) {
     if (!specialty) return
     try {
@@ -662,7 +648,6 @@ export default function LegacyScreens({ tab }) {
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
-        {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}
         {tab === 'posts' && <PostsTab posts={posts} selectedPost={selectedPost} setSelectedPost={setSelectedPost} postAuthor={postAuthor} setPostAuthor={setPostAuthor} postSearch={postSearch} setPostSearch={setPostSearch} postTypeFilter={postTypeFilter} setPostTypeFilter={setPostTypeFilter} postDateFrom={postDateFrom} setPostDateFrom={setPostDateFrom} postDateTo={postDateTo} setPostDateTo={setPostDateTo} viewPostDetails={viewPostDetails} deletePost={deletePost} />}
         {tab === 'revenue' && <RevenueTab transactions={transactions} />}
