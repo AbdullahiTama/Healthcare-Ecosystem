@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, XCircle, Shield } from 'lucide-react'
 import { Button, DataTable, Empty, FilterBar, SearchBar } from '@care-ecosystem/design-system/components/ui'
@@ -53,21 +53,28 @@ export default function ClaimsScreen() {
   const open = (row) => setF({ id: row.id }, { replace: false })
   const close = () => setF({ id: null })
 
+  // The record open right now. An action that finishes later closes the
+  // drawer only if it is still showing the record that was acted on.
+  const openId = useRef(f.id)
+  openId.current = f.id
+  const closeIf = (id) => { if (openId.current === String(id)) close() }
+
   async function decide(kind) {
     if (busy || !selected) return
+    const record = selected
     setBusy(kind)
     const verb = kind === 'approve' ? 'approve' : 'reject'
     try {
       if (kind === 'approve') {
-        await callAdminAuth('approve_claim', { claimId: selected.id, businessId: selected.business_id })
-        audit('approve', 'claim', selected.id, { businessId: selected.business_id })
+        await callAdminAuth('approve_claim', { claimId: record.id, businessId: record.business_id })
+        audit('approve', 'claim', record.id, { businessId: record.business_id })
       } else {
-        await callAdminAuth('reject_claim', { claimId: selected.id })
-        audit('reject', 'claim', selected.id, {})
+        await callAdminAuth('reject_claim', { claimId: record.id })
+        audit('reject', 'claim', record.id, {})
       }
-      recordAction({ action: verb, target: 'claim', id: selected.id })
+      recordAction({ action: verb, target: 'claim', id: record.id })
       showToast(kind === 'approve' ? 'Claim approved' : 'Claim rejected', { type: 'success' })
-      close()
+      closeIf(record.id)
       qc.invalidateQueries({ queryKey: ['admin'] })
     } catch (err) {
       showToast(`Couldn't ${verb} the claim: ${err.message}`, { type: 'error' })

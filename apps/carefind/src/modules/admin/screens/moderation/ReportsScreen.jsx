@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, Flag, Trash2 } from 'lucide-react'
 import { Button, DataTable, Empty, FilterBar, SearchBar } from '@care-ecosystem/design-system/components/ui'
@@ -52,17 +52,23 @@ export default function ReportsScreen() {
   const selected = f.id ? rows.find(r => String(r.id) === f.id) : null
   const open = (row) => setF({ id: row.id }, { replace: false })
   const close = () => setF({ id: null })
-  const done = () => { close(); qc.invalidateQueries({ queryKey: ['admin'] }) }
+  // The record open right now. An action that finishes later closes the
+  // drawer only if it is still showing the record that was acted on.
+  const openId = useRef(f.id)
+  openId.current = f.id
+  const closeIf = (id) => { if (openId.current === String(id)) close() }
+  const done = (id) => { closeIf(id); qc.invalidateQueries({ queryKey: ['admin'] }) }
 
   async function dismiss() {
     if (busy || !selected) return
+    const record = selected
     setBusy('dismiss')
     try {
-      await callAdminAuth('resolve_report', { id: selected.id })
-      audit('resolve', 'report', selected.id, {})
-      recordAction({ action: 'approve', target: 'report', id: selected.id })
+      await callAdminAuth('resolve_report', { id: record.id })
+      audit('resolve', 'report', record.id, {})
+      recordAction({ action: 'approve', target: 'report', id: record.id })
       showToast('Report dismissed', { type: 'success' })
-      done()
+      done(record.id)
     } catch (err) {
       showToast(`Couldn't dismiss the report: ${err.message}`, { type: 'error' })
     } finally {
@@ -84,7 +90,7 @@ export default function ReportsScreen() {
           audit('delete', 'post', report.post_id, { reportId: report.id })
           recordAction({ action: 'reject', target: 'post', id: report.post_id })
           showToast('Post deleted', { type: 'success' })
-          done()
+          done(report.id)
         } catch (err) {
           showToast(`Couldn't delete the post: ${err.message}`, { type: 'error' })
         } finally {

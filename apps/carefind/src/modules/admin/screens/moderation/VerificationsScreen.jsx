@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, XCircle, FileText, ExternalLink, UserCheck } from 'lucide-react'
 import { Button, DataTable, Empty, FilterBar, SearchBar } from '@care-ecosystem/design-system/components/ui'
@@ -47,21 +47,28 @@ export default function VerificationsScreen() {
   const open = (row) => { setCredentialError(''); setF({ id: row.id }, { replace: false }) }
   const close = () => { setCredentialError(''); setF({ id: null }) }
 
+  // The record open right now. An action that finishes later closes the
+  // drawer only if it is still showing the record that was acted on.
+  const openId = useRef(f.id)
+  openId.current = f.id
+  const closeIf = (id) => { if (openId.current === String(id)) close() }
+
   async function decide(kind) {
     if (busy || !selected) return
+    const record = selected
     setBusy(kind)
     const verb = kind === 'approve' ? 'approve' : 'reject'
     try {
       if (kind === 'approve') {
-        await callAdminAuth('approve_verification', { id: selected.id, userId: selected.user_id, profession: selected.profession })
-        audit('approve', 'verification', selected.id, { userId: selected.user_id, profession: selected.profession })
+        await callAdminAuth('approve_verification', { id: record.id, userId: record.user_id, profession: record.profession })
+        audit('approve', 'verification', record.id, { userId: record.user_id, profession: record.profession })
       } else {
-        await callAdminAuth('reject_verification', { id: selected.id })
-        audit('reject', 'verification', selected.id, {})
+        await callAdminAuth('reject_verification', { id: record.id })
+        audit('reject', 'verification', record.id, {})
       }
-      recordAction({ action: verb, target: 'verification', id: selected.id })
+      recordAction({ action: verb, target: 'verification', id: record.id })
       showToast(kind === 'approve' ? 'Verification approved' : 'Verification rejected', { type: 'success' })
-      close()
+      closeIf(record.id)
       qc.invalidateQueries({ queryKey: ['admin'] })
     } catch (err) {
       showToast(`Couldn't ${verb} the verification: ${err.message}`, { type: 'error' })
@@ -77,7 +84,11 @@ export default function VerificationsScreen() {
     if (busy || !selected) return
     setBusy('credential')
     setCredentialError('')
-    const tab = window.open('', '_blank', 'noopener,noreferrer')
+    // Not opened with the noopener feature: that makes window.open return
+    // null, so the tab could never be sent to the document. The opener link
+    // is cut by hand before the tab is pointed anywhere.
+    const tab = window.open('', '_blank')
+    if (tab) tab.opener = null
     try {
       const { url } = await callAdminAuth('credential_url', { requestId: selected.id })
       if (tab) tab.location = url

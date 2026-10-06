@@ -120,12 +120,16 @@ describe('VerificationsScreen', () => {
   })
 
   it('opens the credential in a tab opened during the click', async () => {
-    const tab = { location: '', close: vi.fn() }
+    const tab = { location: '', close: vi.fn(), opener: window }
     const open = vi.spyOn(window, 'open').mockReturnValue(tab)
     mockApi({ credential_url: async () => ({ url: 'https://signed.example/doc' }) })
     at('/admin/moderation/verifications?id=v1')
     fireEvent.click(await screen.findByRole('button', { name: 'View credential' }))
-    expect(open).toHaveBeenCalledWith('', '_blank', 'noopener,noreferrer')
+    // Opened without the noopener feature (which makes window.open return
+    // null, so the tab could never be pointed at the document); the opener
+    // link is cut by hand instead.
+    expect(open).toHaveBeenCalledWith('', '_blank')
+    expect(tab.opener).toBeNull()
     await waitFor(() => expect(tab.location).toBe('https://signed.example/doc'))
     expect(calls('credential_url')[0][1]).toEqual({ requestId: 'v1' })
     open.mockRestore()
@@ -138,5 +142,20 @@ describe('VerificationsScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'View credential' }))
     expect(await screen.findByText(/blocked the document window/)).toBeInTheDocument()
     open.mockRestore()
+  })
+
+  it('does not close a different record that was opened while an action was still running', async () => {
+    let release
+    mockApi({ approve_verification: () => new Promise(r => { release = () => r({}) }) })
+    at('/admin/moderation/verifications?id=v1')
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+    await waitFor(() => expect(calls('approve_verification')).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Open Tunde Afolabi' }))
+    expect(within(await screen.findByRole('dialog')).getByText('Doctor')).toBeInTheDocument()
+    release()
+    expect(await screen.findByText('Verification approved')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByText('Doctor')).toBeInTheDocument()
   })
 })
