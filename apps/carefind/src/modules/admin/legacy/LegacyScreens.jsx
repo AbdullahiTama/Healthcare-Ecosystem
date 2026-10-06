@@ -14,7 +14,6 @@ import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdm
 import { useQueryClient } from '@tanstack/react-query'
 
 import OverviewTab from '../tabs/OverviewTab.jsx'
-import VerificationsTab from '../tabs/VerificationsTab.jsx'
 import ClaimsTab from '../tabs/ClaimsTab.jsx'
 import ReportsTab from '../tabs/ReportsTab.jsx'
 import UsersTab from '../tabs/UsersTab.jsx'
@@ -52,10 +51,6 @@ export default function LegacyScreens({ tab }) {
   const { recordAction } = useAdminActivity()
   const setTab = useCallback((key) => navigate(pathFor(key)), [navigate])
 
-  // Credential review: which document is being signed, and any failure to
-  // report inline against that row.
-  const [credentialLoadingId, setCredentialLoadingId] = useState(null)
-  const [credentialError, setCredentialError] = useState({ id: null, message: '' })
   const [userSearch, setUserSearch] = useState('')
   const [postSearch, setPostSearch] = useState('')
   const [drugSearch, setDrugSearch] = useState('')
@@ -540,58 +535,6 @@ export default function LegacyScreens({ tab }) {
     invalidateAdmin()
   }
 
-  // Resolve a private credential document to a short-lived signed URL and
-  // open it. The admin API holds the service-role key; the browser never does.
-  async function openCredential(requestId) {
-    setCredentialLoadingId(requestId)
-    setCredentialError({ id: null, message: '' })
-
-    // The tab is opened SYNCHRONOUSLY, inside the click's user-activation
-    // window, and pointed at the signed URL once it arrives. Calling
-    // window.open() after the await is blocked by Chrome and Safari, which
-    // would look like the button doing nothing at all.
-    const tab = window.open('', '_blank', 'noopener,noreferrer')
-    try {
-      const { url } = await callAdminAuth('credential_url', {  requestId })
-      if (tab) {
-        tab.location = url
-      } else {
-        // Popups blocked entirely — hand the reviewer a link rather than
-        // failing silently.
-        setCredentialError({ id: requestId, message: 'Your browser blocked the document window. Allow popups for this site and try again.' })
-      }
-    } catch (err) {
-      if (tab) tab.close()
-      setCredentialError({ id: requestId, message: `Could not open the document: ${err.message}` })
-    } finally {
-      setCredentialLoadingId(null)
-    }
-  }
-
-  async function approveVerif(id, userId, profession) {
-    try {
-      await callAdminAuth('approve_verification', {  id, userId, profession })
-      logAuditAction('approve', 'verification', id, { userId, profession })
-      recordAction({ action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Verification approved', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't approve the verification: ${err.message}`, { type: 'error' })
-    }
-  }
-
-  async function rejectVerif(id) {
-    try {
-      await callAdminAuth('reject_verification', {  id })
-      logAuditAction('reject', 'verification', id, {})
-      recordAction({ action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() })
-      invalidateAdmin()
-      showToast('Verification rejected', { type: 'success' })
-    } catch (err) {
-      showToast(`Couldn't reject the verification: ${err.message}`, { type: 'error' })
-    }
-  }
-
   async function approveClaim(id, businessId) {
     try {
       await callAdminAuth('approve_claim', {  claimId: id, businessId })
@@ -718,7 +661,6 @@ export default function LegacyScreens({ tab }) {
         {tab === 'moderation' && <ModerationQueue reports={reports} posts={posts} verifications={verifications} showToast={showToast} loadAll={loadAll} />}
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
-        {tab === 'verifications' && <VerificationsTab verifications={verifications} openCredential={openCredential} credentialLoadingId={credentialLoadingId} credentialError={credentialError} approveVerif={approveVerif} rejectVerif={rejectVerif} />}
         {tab === 'claims' && <ClaimsTab claims={claims} approveClaim={approveClaim} rejectClaim={rejectClaim} />}
         {tab === 'reports' && <ReportsTab reports={reports} deletePost={deletePost} resolveReport={resolveReport} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}
