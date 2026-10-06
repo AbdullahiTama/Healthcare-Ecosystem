@@ -102,6 +102,7 @@ export default function HealthPulse({ onNavigate }) {
           )}
           <button
             onClick={fetchPulse}
+            aria-label="Refresh platform pulse"
             style={{
               background: 'none',
               border: 'none',
@@ -118,7 +119,7 @@ export default function HealthPulse({ onNavigate }) {
       </div>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
         gap: 12,
       }}>
         {items.map(item => {

@@ -2,6 +2,16 @@ import { adminTransport } from './transport.js'
 
 export function createDashboardRepository(transport = adminTransport) {
   return {
+    // Whole-table counts, not the size of a loaded batch. Errors propagate so
+    // the screen can say "unavailable" instead of showing a false zero.
+    async getTotals() {
+      const [users, posts] = await Promise.all([
+        transport.query('profiles', { select: 'id', count: 'head' }),
+        transport.query('posts', { select: 'id', count: 'head' }),
+      ])
+      return { users: users.count ?? 0, posts: posts.count ?? 0 }
+    },
+
     async getStats() {
       const [usersRes, postsRes, verifRes, claimsRes, reportsRes, txRes, newsRes] = await Promise.all([
         transport.query('profiles', { select: 'id', count: 'head' }),

@@ -13,6 +13,7 @@ vi.mock('./hooks/useRealtimeChannel', () => ({ useRealtimeChannel: () => {} }))
 vi.mock('./AdminAiCopilot.jsx', () => ({ default: () => null }))
 vi.mock('../social-feed/Logo', () => ({ default: () => <span>logo</span> }))
 vi.mock('./legacy/LegacyScreens.jsx', () => ({ default: ({ tab }) => <div>legacy:{tab}</div> }))
+vi.mock('./screens/home/HomeScreen.jsx', () => ({ default: () => <div>home screen</div> }))
 vi.mock('../agents-hub/AgentApproval.jsx', () => ({ default: () => <div>agent approval page</div> }))
 vi.mock('../agents-hub/AgentEarnings.jsx', () => ({ default: () => <div>agent earnings page</div> }))
 vi.mock('../agents-hub/AgentTransfer.jsx', () => ({ default: () => <div>agent transfer page</div> }))
@@ -60,8 +61,8 @@ describe('AdminApp', () => {
   })
 
   it.each([
-    ['/admin-panel', 'legacy:overview'],
-    ['/admin/dashboard', 'legacy:overview'],
+    ['/admin-panel', 'home screen'],
+    ['/admin/dashboard', 'home screen'],
     ['/admin/businesses', 'business hub page'],
     ['/admin/agents', 'agent approval page'],
     ['/admin/applications', 'agent approval page'],

@@ -8,12 +8,10 @@ import { callAdminAuth } from '../adminApi'
 import { useAdmin } from '../AdminGate.jsx'
 import { useAdminToast, useAdminConfirm, useAdminActivity } from '../AdminFeedback.jsx'
 import { pathFor, PERMISSION_ITEMS } from '../navigation'
-import HealthPulse from '../HealthPulse.jsx'
 import ShopTab from '../tabs/ShopTab.jsx'
 import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 
-import OverviewTab from '../tabs/OverviewTab.jsx'
 import UsersTab from '../tabs/UsersTab.jsx'
 import PostsTab from '../tabs/PostsTab.jsx'
 import RevenueTab from '../tabs/RevenueTab.jsx'
@@ -31,7 +29,6 @@ import NotificationsTab from '../tabs/NotificationsTab.jsx'
 import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
 import AuditLog from '../components/AuditLog.jsx'
 import OrdersTab from '../tabs/OrdersTab.jsx'
-import DashboardTab from '../tabs/DashboardTab.jsx'
 import ErrorsTab from '../tabs/ErrorsTab.jsx'
 // Still needed by the legacy Posts tab; goes when Posts is rebuilt.
 import { ModerationProvider } from '../stores/moderationStore'
@@ -88,8 +85,6 @@ export default function LegacyScreens({ tab }) {
   const [staffMsg, setStaffMsg] = useState('')
   const [verifyingUser, setVerifyingUser] = useState(null)
   const [verifySpecialty, setVerifySpecialty] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [storyTitle, setStoryTitle] = useState('')
   const [storyBody, setStoryBody] = useState('')
   const [storyBg, setStoryBg] = useState('var(--color-primary)')
@@ -136,7 +131,7 @@ export default function LegacyScreens({ tab }) {
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], verifications = [], claims = [], reports = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, stats = {} } = adminData || {}
+  const { posts = [], users = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {} } = adminData || {}
   const newsItems = newsData?.items || []
   const newsPhones = newsData?.phones || {}
   const activeShows = liveShowsData?.active || []
@@ -616,9 +611,6 @@ export default function LegacyScreens({ tab }) {
   return (
     <ModerationProvider>
       <div aria-live="polite">
-        {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
-        {tab === 'overview' && <DashboardTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} verifications={verifications} reports={reports} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
-        {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'audit_log' && <AuditLog />}
         {tab === 'errors' && <ErrorsTab showToast={showToast} />}
         {tab === 'users' && <UsersTab users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} userSearch={userSearch} setUserSearch={setUserSearch} userVerifiedFilter={userVerifiedFilter} setUserVerifiedFilter={setUserVerifiedFilter} userSpecialtyFilter={userSpecialtyFilter} setUserSpecialtyFilter={setUserSpecialtyFilter} phoneMap={phoneMap} viewUserDetails={viewUserDetails} suspendDays={suspendDays} setSuspendDays={setSuspendDays} suspendUser={suspendUser} deleteUser={deleteUser} deletingUser={deletingUser} userPosts={userPosts} verifyingUser={verifyingUser} setVerifyingUser={setVerifyingUser} verifySpecialty={verifySpecialty} setVerifySpecialty={setVerifySpecialty} manualVerify={manualVerify} adminUser={adminUser} />}

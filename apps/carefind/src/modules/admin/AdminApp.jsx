@@ -22,6 +22,8 @@ const SCREEN_COMPONENTS = {
   reports: lazy(() => import('./screens/moderation/ReportsScreen.jsx')),
   claims: lazy(() => import('./screens/moderation/ClaimsScreen.jsx')),
   moderation: lazy(() => import('./screens/moderation/QueueScreen.jsx')),
+  overview: lazy(() => import('./screens/home/HomeScreen.jsx')),
+  feed_ranking: lazy(() => import('./screens/platform/FeedRankingScreen.jsx')),
 }
 
 function ScreenElement({ item }) {
