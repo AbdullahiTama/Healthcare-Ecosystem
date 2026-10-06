@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router-dom'
 const toastShow = vi.hoisted(() => vi.fn())
 const navigateMock = vi.hoisted(() => vi.fn())
 
-// supabase mock with queue for News and direct builder for AdminPanel
+// supabase mock with queue for News and direct builder for the admin console
 const supa = vi.hoisted(() => {
   const ctrl = {
     queue: [],
@@ -54,6 +54,7 @@ const supa = vi.hoisted(() => {
       data: { session: { user: { id: 'user-1' }, access_token: 'test-access-token' } },
       error: null,
     })),
+    signOut: vi.fn(() => Promise.resolve({ error: null })),
   }
   ctrl.rpc = vi.fn(() => Promise.resolve({ data: null, error: null }))
   ctrl.channel = vi.fn(() => ({ on: vi.fn(() => ({ subscribe: vi.fn() })), subscribe: vi.fn(), unsubscribe: vi.fn() }))
@@ -62,7 +63,7 @@ const supa = vi.hoisted(() => {
 })
 
 const adminApi = vi.hoisted(() => {
-  const m = { callAdminAuth: vi.fn() }
+  const m = { callAdminAuth: vi.fn(), SESSION_EXPIRED_EVENT: 'admin:session-expired' }
   return m
 })
 
@@ -101,7 +102,10 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../news-publishing/ArticleEditor.jsx', () => ({ default: ({ value }) => <div data-testid="article-editor">{value}</div> }))
 
 import News from '../news-publishing/News.jsx'
-import AdminPanel from './AdminPanel.jsx'
+import AdminApp from './AdminApp.jsx'
+// AdminApp loads the legacy adapter lazily. Loaded here so the tests below
+// wait on behaviour, not on the first transform of ~30 screen modules.
+import './legacy/LegacyScreens.jsx'
 
 function setAdminSession(_legacyToken = 'valid-token', role = 'super_admin') {
   supa.auth.getSession.mockResolvedValue({
@@ -253,8 +257,8 @@ describe('Admin list_news', () => {
     // also need queue for supabase.from('profiles') count
     setAdminSession()
     render(
-      <MemoryRouter>
-        <AdminPanel />
+      <MemoryRouter initialEntries={['/admin/content/news']}>
+        <AdminApp />
       </MemoryRouter>
     )
     // wait for news tab badge to show pending count
@@ -293,8 +297,8 @@ describe('Admin list_news', () => {
     })
     setAdminSession()
     render(
-      <MemoryRouter>
-        <AdminPanel />
+      <MemoryRouter initialEntries={['/admin/content/news']}>
+        <AdminApp />
       </MemoryRouter>
     )
     await waitFor(() => expect(adminApi.callAdminAuth).toHaveBeenCalledWith('list_news', expect.any(Object)))
@@ -334,8 +338,8 @@ describe('Admin list_news', () => {
     })
     setAdminSession()
     render(
-      <MemoryRouter>
-        <AdminPanel />
+      <MemoryRouter initialEntries={['/admin/content/news']}>
+        <AdminApp />
       </MemoryRouter>
     )
     await waitFor(() => expect(adminApi.callAdminAuth).toHaveBeenCalled())
@@ -355,7 +359,7 @@ describe('Admin list_news', () => {
     expect(await adminApi.callAdminAuth('list_news')).toEqual({ data: [] })
   })
 
-  it('AdminPanel shows Session expired toast on 401 and not silent 0', async () => {
+  it('Admin console shows Session expired toast on 401 and not silent 0', async () => {
     adminApi.callAdminAuth.mockImplementation(async (action) => {
       if (action === 'verify') {
         return { admin: { id: 'admin-1', full_name: 'Admin', role: 'super_admin' }, permissions: {} }
@@ -382,8 +386,8 @@ describe('Admin list_news', () => {
     }
     setAdminSession()
     render(
-      <MemoryRouter>
-        <AdminPanel />
+      <MemoryRouter initialEntries={['/admin/content/news']}>
+        <AdminApp />
       </MemoryRouter>
     )
     await waitFor(() => expect(toastShow).toHaveBeenCalledWith('Session expired, re-login', expect.any(Object)), { timeout: 8000 })
@@ -428,8 +432,8 @@ describe('Admin list_news', () => {
     }
     setAdminSession('valid-token', 'super_admin')
     render(
-      <MemoryRouter>
-        <AdminPanel />
+      <MemoryRouter initialEntries={['/admin/content/news']}>
+        <AdminApp />
       </MemoryRouter>
     )
     // totalNotifs should be pendingVerifs(1) + pendingNews(1) =2

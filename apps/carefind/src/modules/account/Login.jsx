@@ -98,7 +98,7 @@ function Login() {
           const token = btoa(`${admin.id}|${admin.role}|${Date.now()}`)
           localStorage.setItem('admin_token', token)
           localStorage.setItem('admin_user', JSON.stringify(admin))
-          navigate('/admin-panel')
+          navigate('/admin')
         } else {
           navigate('/feed')
         }

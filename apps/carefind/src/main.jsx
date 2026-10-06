@@ -18,6 +18,7 @@ initSentry()
 import RequireAuth from './modules/account/RequireAuth.jsx'
 import { CartProvider } from './modules/shop/CartProvider.jsx'
 import { WishlistProvider } from './modules/shop/WishlistProvider.jsx'
+import { isAdminPath } from './modules/admin/navigation'
 
 const ForBusiness = lazy(() => import('./modules/marketing/ForBusiness.jsx'))
 const About = lazy(() => import('./modules/marketing/About.jsx'))
@@ -60,17 +61,11 @@ const Addresses = lazy(() => import('./modules/account/Addresses.jsx'))
 const PublicTracking = lazy(() => import('./modules/shop/PublicTracking.jsx'))
 const NotFound = lazy(() => import('./modules/marketing/NotFound.jsx'))
 
-const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
-const BusinessesHub = lazy(() => import('./modules/businesses-hub/BusinessesHub.jsx'))
-const DashboardHub = lazy(() => import('./modules/dashboard-hub/DashboardHub.jsx'))
+const AdminApp = lazy(() => import('./modules/admin/AdminApp.jsx'))
 const AgentRegistration = lazy(() => import('./modules/agents-hub/AgentRegistration.jsx'))
-const AgentApproval = lazy(() => import('./modules/agents-hub/AgentApproval.jsx'))
-const AgentEarnings = lazy(() => import('./modules/agents-hub/AgentEarnings.jsx'))
-const AgentTransfer = lazy(() => import('./modules/agents-hub/AgentTransfer.jsx'))
 const AgentLogin = lazy(() => import('./pages/AgentLogin.jsx'))
 
-// Business Directory & Discovery
-const BusinessDirectoryPage = lazy(() => import('./modules/business-directory/BusinessDirectoryPage'))
+// Business Discovery
 const BusinessDiscoveryPage = lazy(() => import('./modules/business-discovery/BusinessDiscoveryPage'))
 
 const Loading = () => (
@@ -86,6 +81,10 @@ const SuspenseWrapper = ({ children }) => (
 
 const RoutesWithKey = () => {
   const location = useLocation()
+  // The admin console keeps its own, un-keyed router: its shell, filters and
+  // any open record must survive navigation, which the keyed <Routes> below
+  // deliberately does not allow.
+  if (isAdminPath(location.pathname)) return <SuspenseWrapper><AdminApp /></SuspenseWrapper>
   return (
     <Routes key={location.key}>
       {/* Public — no login required */}
@@ -127,24 +126,11 @@ const RoutesWithKey = () => {
       <Route path="/playlist/:id/edit/:partId" element={<SuspenseWrapper><RequireAuth><PlaylistCreate /></RequireAuth></SuspenseWrapper>} />
       <Route path="/live-dashboard/:id" element={<SuspenseWrapper><RequireAuth><LiveDashboard /></RequireAuth></SuspenseWrapper>} />
 
-      {/* Admin — accessible only via /login redirect */}
-      <Route path="/admin-panel" element={<SuspenseWrapper><AdminPanel /></SuspenseWrapper>} />
-      <Route path="/admin/businesses" element={<SuspenseWrapper><BusinessesHub /></SuspenseWrapper>} />
-      <Route path="/admin/dashboard" element={<SuspenseWrapper><DashboardHub /></SuspenseWrapper>} />
-      <Route path="/admin/agents" element={<SuspenseWrapper><AgentApproval /></SuspenseWrapper>} />
-      <Route path="/admin/applications" element={<SuspenseWrapper><AgentApproval /></SuspenseWrapper>} />
-      <Route path="/admin/earnings" element={<SuspenseWrapper><AgentEarnings /></SuspenseWrapper>} />
-      <Route path="/admin/transfers" element={<SuspenseWrapper><AgentTransfer /></SuspenseWrapper>} />
-
-      {/* Business Directory & Discovery */}
-      <Route path="/business-directory" element={<SuspenseWrapper><BusinessDirectoryPage /></SuspenseWrapper>} />
+      {/* Business Discovery */}
       <Route path="/business-discovery" element={<SuspenseWrapper><BusinessDiscoveryPage /></SuspenseWrapper>} />
 
       {/* Agents */}
       <Route path="/agents/register" element={<SuspenseWrapper><AgentRegistration /></SuspenseWrapper>} />
-      <Route path="/agents/approval" element={<SuspenseWrapper><AgentApproval /></SuspenseWrapper>} />
-      <Route path="/agents/earnings" element={<SuspenseWrapper><AgentEarnings /></SuspenseWrapper>} />
-      <Route path="/agents/transfer" element={<SuspenseWrapper><AgentTransfer /></SuspenseWrapper>} />
       <Route path="/agent-login" element={<SuspenseWrapper><AgentLogin /></SuspenseWrapper>} />
 
       {/* Shop — Cart & Checkout */}

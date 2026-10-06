@@ -54,7 +54,7 @@ describe('AdminLogin', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Sign In' }))
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin-panel'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/admin'))
     expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({
       email: 'admin@example.com',
       password: 'correct-password',

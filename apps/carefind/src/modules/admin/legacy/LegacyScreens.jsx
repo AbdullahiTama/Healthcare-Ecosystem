@@ -1,68 +1,56 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../config/supabaseClient'
-import '../../styles/tokens.css'
-import { usersRepository } from './repositories/usersRepository'
-import { contentRepository } from './repositories/contentRepository'
-import { commerceRepository } from './repositories/commerceRepository'
-import { liveRepository } from './repositories/liveRepository'
-import { theme } from '../../styles/theme'
-import { callAdminAuth } from './adminApi'
-import AdminLayout from './AdminLayout.jsx'
-import { useRealtimeChannel } from './hooks/useRealtimeChannel'
-import ShopTab from './tabs/ShopTab.jsx'
-import CommandPalette from './CommandPalette.jsx'
-import HealthPulse from './HealthPulse.jsx'
-import AdminAiCopilot from './AdminAiCopilot.jsx'
-import useCommandPalette from './useCommandPalette.js'
-import { ConfirmDialog, Loading, Toast, useToast } from '../../components/ui'
-import { NAV_GROUPS } from './AdminSidebar.jsx'
-import { Sparkles } from 'lucide-react'
-import { timeAgo } from './ui'
-import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../hooks/queries'
+import { supabase } from '../../../config/supabaseClient'
+import { usersRepository } from '../repositories/usersRepository'
+import { commerceRepository } from '../repositories/commerceRepository'
+import { liveRepository } from '../repositories/liveRepository'
+import { callAdminAuth } from '../adminApi'
+import { useAdmin } from '../AdminGate.jsx'
+import { useAdminToast, useAdminConfirm, useAdminActivity } from '../AdminFeedback.jsx'
+import { pathFor, PERMISSION_ITEMS } from '../navigation'
+import HealthPulse from '../HealthPulse.jsx'
+import ShopTab from '../tabs/ShopTab.jsx'
+import { useAdminData, useAdminStories, useAdminNews, useAdminPromotions, useAdminSearchLogs, useAdminLiveShows, useAdminShopData, useAdminRoles } from '../../../hooks/queries'
 import { useQueryClient } from '@tanstack/react-query'
 
-import OverviewTab from './tabs/OverviewTab.jsx'
-import VerificationsTab from './tabs/VerificationsTab.jsx'
-import ClaimsTab from './tabs/ClaimsTab.jsx'
-import ReportsTab from './tabs/ReportsTab.jsx'
-import UsersTab from './tabs/UsersTab.jsx'
-import PostsTab from './tabs/PostsTab.jsx'
-import RevenueTab from './tabs/RevenueTab.jsx'
-import DrugsTab from './tabs/DrugsTab.jsx'
-import TasksTab from './tabs/TasksTab.jsx'
-import TeamsTab from './tabs/TeamsTab.jsx'
-import WithdrawalsTab from './tabs/WithdrawalsTab.jsx'
-import BusinessesTab from './tabs/BusinessesTab.jsx'
-import StoriesTab from './tabs/StoriesTab.jsx'
-import NewsTab from './tabs/NewsTab.jsx'
-import PromotionsTab from './tabs/PromotionsTab.jsx'
-import SearchesTab from './tabs/SearchesTab.jsx'
-import GoLiveTab from './tabs/GoLiveTab.jsx'
-import NotificationsTab from './tabs/NotificationsTab.jsx'
-import EmailTemplatesTab from './tabs/EmailTemplatesTab.jsx'
-import ModerationQueue from './tabs/ModerationQueue.jsx'
-import AuditLog from './components/AuditLog.jsx'
-import OrdersTab from './tabs/OrdersTab.jsx'
-import DashboardTab from './tabs/DashboardTab.jsx'
-import ErrorsTab from './tabs/ErrorsTab.jsx'
-import { ModerationProvider } from './stores/moderationStore'
+import OverviewTab from '../tabs/OverviewTab.jsx'
+import VerificationsTab from '../tabs/VerificationsTab.jsx'
+import ClaimsTab from '../tabs/ClaimsTab.jsx'
+import ReportsTab from '../tabs/ReportsTab.jsx'
+import UsersTab from '../tabs/UsersTab.jsx'
+import PostsTab from '../tabs/PostsTab.jsx'
+import RevenueTab from '../tabs/RevenueTab.jsx'
+import DrugsTab from '../tabs/DrugsTab.jsx'
+import TasksTab from '../tabs/TasksTab.jsx'
+import TeamsTab from '../tabs/TeamsTab.jsx'
+import WithdrawalsTab from '../tabs/WithdrawalsTab.jsx'
+import BusinessesTab from '../tabs/BusinessesTab.jsx'
+import StoriesTab from '../tabs/StoriesTab.jsx'
+import NewsTab from '../tabs/NewsTab.jsx'
+import PromotionsTab from '../tabs/PromotionsTab.jsx'
+import SearchesTab from '../tabs/SearchesTab.jsx'
+import GoLiveTab from '../tabs/GoLiveTab.jsx'
+import NotificationsTab from '../tabs/NotificationsTab.jsx'
+import EmailTemplatesTab from '../tabs/EmailTemplatesTab.jsx'
+import ModerationQueue from '../tabs/ModerationQueue.jsx'
+import AuditLog from '../components/AuditLog.jsx'
+import OrdersTab from '../tabs/OrdersTab.jsx'
+import DashboardTab from '../tabs/DashboardTab.jsx'
+import ErrorsTab from '../tabs/ErrorsTab.jsx'
+import { ModerationProvider } from '../stores/moderationStore'
 
-const ALL_TABS = NAV_GROUPS.flatMap(g => g.items)
+// Migration adapter (spec section 5.7): the body of the old AdminPanel with
+// its layout, auth check, toast, confirm dialog and palette removed. Each
+// screen leaves this file when it is rebuilt; the file is deleted in Plan 2.
 
-function clearAdminCache() {
-  localStorage.removeItem('admin_user')
-  localStorage.removeItem('admin_permissions')
-}
-
-export default function AdminPanel() {
+export default function LegacyScreens({ tab }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [adminUser, setAdminUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('overview')
-  const [adminPermissions, setAdminPermissions] = useState({})
-  const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
+  const { adminUser } = useAdmin()
+  const showToast = useAdminToast()
+  const askConfirm = useAdminConfirm()
+  const { recordAction } = useAdminActivity()
+  const setTab = useCallback((key) => navigate(pathFor(key)), [navigate])
 
   // Credential review: which document is being signed, and any failure to
   // report inline against that row.
@@ -136,8 +124,6 @@ export default function AdminPanel() {
   const [postingLive, setPostingLive] = useState(false)
   const [selectedPost, setSelectedPost] = useState(null)
   const [postAuthor, setPostAuthor] = useState(null)
-  const [aiCopilotOpen, setAiCopilotOpen] = useState(false)
-  const [adminActionHistory, setAdminActionHistory] = useState([])
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDesc, setNewRoleDesc] = useState('')
   const [newRoleTabs, setNewRoleTabs] = useState({})
@@ -158,7 +144,7 @@ export default function AdminPanel() {
   const { data: shopData } = useAdminShopData(!!adminUser)
   const { data: adminRoles = [] } = useAdminRoles(!!adminUser)
 
-  const { posts = [], users = [], verifications = [], claims = [], reports = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, notifCount = 0, roleNotifCount = 0, stats = {} } = adminData || {}
+  const { posts = [], users = [], verifications = [], claims = [], reports = [], transactions = [], tasks = [], teams = [], staff = [], businesses = [], withdrawals = [], notifications = [], phoneMap = {}, stats = {} } = adminData || {}
   const newsItems = newsData?.items || []
   const newsPhones = newsData?.phones || {}
   const activeShows = liveShowsData?.active || []
@@ -183,96 +169,6 @@ export default function AdminPanel() {
       })
     } catch { /* non-blocking — audit failure must not block moderation */ }
   }
-  // Generic confirmation-dialog state: { title, consequence, confirmLabel, action }.
-  // `action` is the real, destructive operation — deferred until the admin confirms
-  // (SCREEN_PATTERNS.md pattern 29: never a bare "Are you sure?", state the consequence).
-  const [confirmState, setConfirmState] = useState(null)
-  function askConfirm({ title, consequence, confirmLabel = 'Delete', action }) {
-    setConfirmState({ title, consequence, confirmLabel, action })
-  }
-  const { open: cmdOpen, setOpen: setCmdOpen, addToRecent } = useCommandPalette()
-
-  const handleCmdNavigate = useCallback((tabKey) => {
-    setTab(tabKey)
-    addToRecent(tabKey)
-    setCmdOpen(false)
-  }, [addToRecent, setCmdOpen])
-
-  useRealtimeChannel({
-    channelName: 'admin-notifications',
-    subscription: { schema: 'public', table: 'verification_requests' },
-    onInsert: () => invalidateAdmin(),
-    onUpdate: () => invalidateAdmin(),
-    pollInterval: 30000,
-    pollFn: invalidateAdmin,
-  })
-
-  useRealtimeChannel({
-    channelName: 'admin-posts',
-    subscription: { schema: 'public', table: 'posts' },
-    onInsert: () => invalidateAdmin(),
-    pollInterval: 30000,
-    pollFn: invalidateAdmin,
-  })
-
-  useRealtimeChannel({
-    channelName: 'admin-reports',
-    subscription: { schema: 'public', table: 'reports' },
-    onInsert: () => invalidateAdmin(),
-    onUpdate: () => invalidateAdmin(),
-    pollInterval: 30000,
-    pollFn: invalidateAdmin,
-  })
-
-  useRealtimeChannel({
-    channelName: 'admin-news',
-    subscription: { schema: 'public', table: 'news', filter: 'status=eq.pending' },
-    onInsert: () => invalidateAdmin(),
-    onUpdate: () => invalidateAdmin(),
-    pollInterval: 30000,
-    pollFn: invalidateAdmin,
-  })
-
-  useEffect(() => {
-    const verifySession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession()
-        if (error || !session) {
-          clearAdminCache()
-          navigate('/login')
-          return
-        }
-
-        const verified = await callAdminAuth('verify')
-        const parsedAdmin = verified.admin
-        if (!parsedAdmin?.id) throw new Error('Could not verify admin access.')
-        localStorage.setItem('admin_user', JSON.stringify(parsedAdmin))
-        localStorage.setItem('admin_permissions', JSON.stringify(verified.permissions || {}))
-
-        setAdminUser(parsedAdmin)
-        setAdminPermissions(verified.permissions || {})
-        setLoading(false)
-      } catch {
-        try {
-          await supabase.auth.signOut()
-        } catch {
-          // Access is denied even if local sign-out fails.
-        }
-        clearAdminCache()
-        setAdminUser(null)
-        setAdminPermissions({})
-        setLoading(false)
-        navigate('/login')
-      }
-    }
-
-    verifySession()
-  }, [])
-
-  useEffect(() => {
-    if (adminUser) invalidateAdmin()
-  }, [adminUser])
-
   const loadAll = invalidateAdmin
 
   async function updateEcomApp(id, status) {
@@ -504,7 +400,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_news', {  id: item.id, edits })
       logAuditAction('approve', 'news', item.id, { headline: item.headline })
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'approve', target: 'news', id: item.id, timestamp: new Date().toISOString() })
       showToast('News item approved', { type: 'success' })
       // Optimistic update so UI reflects immediately even before reload
       qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === item.id ? { ...n, ...edits, status: 'approved', published_at: new Date().toISOString() } : n) }))
@@ -521,7 +417,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_news', {  id })
       logAuditAction('reject', 'news', id, {})
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'news', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'reject', target: 'news', id, timestamp: new Date().toISOString() })
       showToast('News item rejected', { type: 'success' })
       qc.setQueryData(['admin', 'news'], prev => ({ ...prev, items: (prev?.items || []).map(n => n.id === id ? { ...n, status: 'rejected' } : n) }))
     } catch (err) {
@@ -676,7 +572,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_verification', {  id, userId, profession })
       logAuditAction('approve', 'verification', id, { userId, profession })
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'approve', target: 'verification', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Verification approved', { type: 'success' })
     } catch (err) {
@@ -688,7 +584,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_verification', {  id })
       logAuditAction('reject', 'verification', id, {})
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'reject', target: 'verification', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Verification rejected', { type: 'success' })
     } catch (err) {
@@ -700,7 +596,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('approve_claim', {  claimId: id, businessId })
       logAuditAction('approve', 'claim', id, { businessId })
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'approve', target: 'claim', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Claim approved', { type: 'success' })
     } catch (err) {
@@ -712,7 +608,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('reject_claim', {  claimId: id })
       logAuditAction('reject', 'claim', id, {})
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'reject', target: 'claim', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Claim rejected', { type: 'success' })
     } catch (err) {
@@ -732,7 +628,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('delete_post', {  id })
       logAuditAction('delete', 'post', id, {})
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'reject', target: 'post', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'reject', target: 'post', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Post deleted', { type: 'success' })
     } catch (err) {
@@ -744,7 +640,7 @@ export default function AdminPanel() {
     try {
       await callAdminAuth('resolve_report', {  id })
       logAuditAction('resolve', 'report', id, {})
-      setAdminActionHistory(prev => [...prev.slice(-49), { action: 'approve', target: 'report', id, timestamp: new Date().toISOString() }])
+      recordAction({ action: 'approve', target: 'report', id, timestamp: new Date().toISOString() })
       invalidateAdmin()
       showToast('Report resolved', { type: 'success' })
     } catch (err) {
@@ -813,37 +709,9 @@ export default function AdminPanel() {
     }
   }
 
-  if (loading) return <Loading fullScreen aria-live="polite" aria-busy="true" />
-
-  const card = { border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--panel)', marginBottom: 10 }
-  const input = { width: '100%', padding: 10, fontSize: 13, border: '1px solid var(--border)', borderRadius: 10, boxSizing: 'border-box', background: 'var(--bg)', color: 'var(--fg)' }
-
-let adminLoggingOut = false
-
-  async function handleSignOut() {
-    if (adminLoggingOut) return
-    adminLoggingOut = true
-    try {
-      await callAdminAuth('logout')
-    } catch { /* best-effort server logout */ }
-    try { await supabase.auth.signOut() } catch {}
-    clearAdminCache()
-    navigate('/login')
-    setTimeout(() => { adminLoggingOut = false }, 1000)
-  }
-
   return (
     <ModerationProvider>
-    <AdminLayout
-      activeTab={tab}
-      onTabChange={setTab}
-      adminUser={adminUser}
-      permissions={adminPermissions}
-      notifCount={roleNotifCount}
-      onSignOut={handleSignOut}
-      onOpenCmdPalette={() => setCmdOpen(true)}
-    >
-      <div aria-live="polite" aria-busy={loading}>
+      <div aria-live="polite">
         {tab === 'overview' && <HealthPulse onNavigate={setTab} />}
         {tab === 'overview' && <DashboardTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} verifications={verifications} reports={reports} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
         {tab === 'overview' && <OverviewTab stats={stats} setTab={setTab} posts={posts} users={users} transactions={transactions} dateFrom={dateFrom} setDateFrom={setDateFrom} dateTo={dateTo} setDateTo={setDateTo} />}
@@ -859,7 +727,7 @@ let adminLoggingOut = false
         {tab === 'orders' && <OrdersTab transactions={transactions} showToast={showToast} loadAll={loadAll} />}
         {tab === 'drugs' && <DrugsTab drugSearch={drugSearch} setDrugSearch={setDrugSearch} drugReviews={drugReviews} drugName={drugName} setDrugName={setDrugName} drugRatingFilter={drugRatingFilter} setDrugRatingFilter={setDrugRatingFilter} drugDateFrom={drugDateFrom} setDrugDateFrom={setDrugDateFrom} drugDateTo={drugDateTo} setDrugDateTo={setDrugDateTo} searchDrugs={searchDrugs} />}
         {tab === 'tasks' && <TasksTab tasks={tasks} taskTitle={taskTitle} setTaskTitle={setTaskTitle} taskDesc={taskDesc} setTaskDesc={setTaskDesc} taskComp={taskComp} setTaskComp={setTaskComp} taskSpec={taskSpec} setTaskSpec={setTaskSpec} savingTask={savingTask} createTask={createTask} />}
-        {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={ALL_TABS} />}
+        {tab === 'teams' && <TeamsTab teams={teams} staff={staff} teamName={teamName} setTeamName={setTeamName} createTeam={createTeam} staffName={staffName} setStaffName={setStaffName} staffEmail={staffEmail} setStaffEmail={setStaffEmail} staffPass={staffPass} setStaffPass={setStaffPass} staffRole={staffRole} setStaffRole={setStaffRole} staffTeam={staffTeam} setStaffTeam={setStaffTeam} savingStaff={savingStaff} staffMsg={staffMsg} setStaffMsg={setStaffMsg} createStaff={createStaff} adminUser={adminUser} adminRoles={adminRoles} newRoleName={newRoleName} setNewRoleName={setNewRoleName} newRoleDesc={newRoleDesc} setNewRoleDesc={setNewRoleDesc} newRoleTabs={newRoleTabs} setNewRoleTabs={setNewRoleTabs} editingRoleId={editingRoleId} setEditingRoleId={setEditingRoleId} editingRoleTabs={editingRoleTabs} setEditingRoleTabs={setEditingRoleTabs} savingRole={savingRole} loadAdminRoles={invalidateAdmin} showToast={showToast} ALL_TABS={PERMISSION_ITEMS} />}
         {tab === 'withdrawals' && <WithdrawalsTab withdrawals={withdrawals} onReject={async (id) => { try { await callAdminAuth('reject_withdrawal', {  id }); invalidateAdmin(); showToast('Withdrawal rejected', { type: 'success' }) } catch (err) { showToast(`Couldn't reject the withdrawal: ${err.message}`, { type: 'error' }) } }} />}
         {tab === 'businesses' && <BusinessesTab businesses={businesses} bizSearch={bizSearch} setBizSearch={setBizSearch} bizTypeFilter={bizTypeFilter} setBizTypeFilter={setBizTypeFilter} bizStateFilter={bizStateFilter} setBizStateFilter={setBizStateFilter} bizStatusFilter={bizStatusFilter} setBizStatusFilter={setBizStatusFilter} selectedBiz={selectedBiz} setSelectedBiz={setSelectedBiz} bizReviews={bizReviews} setBizReviews={setBizReviews} bizProducts={bizProducts} setBizProducts={setBizProducts} supabase={supabase} />}
         {tab === 'stories' && <StoriesTab stories={stories} storyTitle={storyTitle} setStoryTitle={setStoryTitle} storyBody={storyBody} setStoryBody={setStoryBody} storyBg={storyBg} setStoryBg={setStoryBg} storyImageFile={storyImageFile} setStoryImageFile={setStoryImageFile} savingStory={savingStory} createStory={createStory} deleteStory={deleteStory} />}
@@ -871,62 +739,6 @@ let adminLoggingOut = false
         {tab === 'notifications' && <NotificationsTab notifications={notifications} setTab={setTab} />}
         {tab === 'email_templates' && <EmailTemplatesTab showToast={showToast} />}
       </div>
-
-    <ConfirmDialog
-      show={!!confirmState}
-      onClose={() => setConfirmState(null)}
-      onConfirm={() => { const action = confirmState?.action; setConfirmState(null); action && action() }}
-      title={confirmState?.title}
-      consequence={confirmState?.consequence}
-      confirmLabel={confirmState?.confirmLabel || 'Delete'}
-    />
-    <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
-    <CommandPalette
-      open={cmdOpen}
-      onClose={() => setCmdOpen(false)}
-      onNavigate={handleCmdNavigate}
-      onSignOut={handleSignOut}
-      onRefresh={loadAll}
-      permissions={adminPermissions}
-    />
-    
-    {/* AI Copilot Button */}
-    <button
-      onClick={() => setAiCopilotOpen(true)}
-      style={{
-        position: 'fixed',
-        bottom: 20,
-        right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: '50%',
-      background: 'var(--teal-deep)',
-      border: 'none',
-      boxShadow: '0 4px 12px rgba(14, 111, 90, 0.3)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 999,
-        transition: 'transform 0.2s',
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-    >
-      <Sparkles size={24} color="var(--fg)" />
-    </button>
-    
-    {/* AI Copilot */}
-    <AdminAiCopilot
-      isOpen={aiCopilotOpen}
-      onClose={() => setAiCopilotOpen(false)}
-      currentTab={tab}
-      recentActions={adminActionHistory}
-      onFeedback={(suggestionId, accepted) => {
-        setAdminActionHistory(prev => [...prev.slice(-49), { action: accepted ? 'copilot_accept' : 'copilot_reject', target: suggestionId, timestamp: new Date().toISOString() }])
-      }}
-    />
-    </AdminLayout>
     </ModerationProvider>
   )
 }
