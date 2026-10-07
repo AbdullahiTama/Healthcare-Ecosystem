@@ -126,3 +126,18 @@ Tests:
 Deploying: apply `carefind_20261022_shop_vendor_flow.sql` after the part 1 and 2 migrations, then deploy CareHub (the new route, bell and tracking link). The migration does not depend on the app deploy, and the app changes work before it, except the vendor tracking link.
 
 Manual check: pay for an order, then open the vendor's "order paid" notification in CareHub; it should open that order. Move a pickup order to "Collected by Customer". For a home delivery, generate the tracking link and open it in a private window.
+
+## 9. Applying to production (2026-10-07) and the quote form
+
+- **Applied:** `carefind_20261020_shop_flow_fixes`, `carefind_20261021_shop_expiry_and_delivery_quotes` (as two parts, 21 and 21b), and the `generate_tracking_token` part of `carefind_20261022`.
+- **Not yet applied:** the SV-4 / SV-6 lockdown (revokes and the token policy drops). The Supabase connector asks for confirmation of destructive statements, and the confirmation timed out.
+- **Status emails were left as production has them.** Production sends them from a trigger on `shop_order_status_history` through the reliable email system (`enqueue_business_email_event`), which is not in this repository. The status-email section of `carefind_20261021` was written for an older trigger on `shop_orders`. Applied as written, it would have failed every status change, so it was removed from the file. Two improvements now belong in a change to the email catalog: linking the status email to `/orders/<id>`, and a "delivery quoted" email.
+- **Quote form.** CareHub's "Quote Delivery" asked for the fee with a browser `prompt()`. A CareHub tab opened before the deploy still called the removed shortcut (`update_shop_order_status` to `pending_payment`), which the server now refuses ("This status change is not allowed").
+  - The quote is now an inline form in the order drawer (`QuoteDeliveryForm`). It shows:
+    - the delivery address and distance;
+    - the fee field, validated before anything is sent (`deliveryQuote.js`, with the server's own limits);
+    - the total the customer will pay.
+
+    The server's reason is shown next to the field if the quote is refused.
+  - Pickup orders have nothing to quote, so the form says so instead.
+- **Data left to fix.** 26 pickup orders created before SD-7 are still `delivery_quote_pending`. They can never be quoted. They need to be opened for payment, or left to expire after 7 days.

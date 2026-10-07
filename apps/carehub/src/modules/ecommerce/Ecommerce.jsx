@@ -9,6 +9,7 @@ import { theme } from '../../styles/theme'
 import { Card, SectionHead, DataTable, Empty, Pill, Inp, Textarea, Sel, TealBtn, GhostBtn, Loading, useToast, Toast } from '../../components/ui'
 import { resolveEcommerceSegment, SEGMENT_RATES, SEGMENT_LABELS, SEGMENT_COMMISSION_LABELS, SEGMENT_CHECKBOX_LABELS, commissionExample } from '../../lib/ecommerceSegments'
 import VendorTrackingPanel from './VendorTrackingPanel'
+import QuoteDeliveryForm from './QuoteDeliveryForm'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border, danger, success, warning, bg } = theme
 
@@ -105,13 +106,16 @@ export default function Ecommerce({ brand, role }) {
       setOrderDetail(d); setSelectedOrder(d)
     } catch { /* the list refresh above still shows the new status */ }
   }
-  // Delivery outside the approved cities: the quote is added to the order total, then the customer is asked to pay
-  async function handleQuoteDelivery() {
-    const input = prompt('Delivery fee for this order (₦). It is added to the order total and the customer is asked to pay.')
-    if (input == null) return
-    const naira = Number(String(input).replace(/[₦,\s]/g, ''))
-    if (!Number.isFinite(naira) || naira <= 0) { showToast('Enter the delivery fee in naira, for example 2500', { type: 'warning' }); return }
-    await runOrderAction(() => shopVendorRepository.quoteDelivery(orderDetail.id, Math.round(naira * 100)), `Delivery quoted: ₦${naira.toLocaleString()}. The customer has been asked to pay.`)
+  // Delivery outside the approved cities: the quote is added to the order total, then the customer is asked to pay. Called by the
+  // quote form in the order drawer; a refusal is thrown back to the form, which shows the server's reason next to the amount.
+  async function handleQuoteDelivery(deliveryKobo) {
+    await shopVendorRepository.quoteDelivery(orderDetail.id, deliveryKobo)
+    showToast(`Delivery quoted: ₦${(deliveryKobo / 100).toLocaleString()}. The customer has been asked to pay.`, { type: 'success' })
+    loadOrders()
+    try {
+      const d = await shopVendorRepository.getOrder(orderDetail.id)
+      if (d) { setOrderDetail(d); setSelectedOrder(d) }
+    } catch { /* the list refresh above still shows the new status */ }
   }
   async function openOrder(o) {
     setSelectedOrder(o)
@@ -623,7 +627,7 @@ export default function Ecommerce({ brand, role }) {
                     {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference==='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered','Collected by customer'),'Marked as collected')} style={{ padding:'6px 10px', fontSize:11 }}>Collected by Customer</TealBtn>}
                     {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference!=='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'in_transit'),'Marked in transit')} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
                     {orderDetail.status==='in_transit' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered'),'Marked delivered')} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
-                    {orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={handleQuoteDelivery} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
+                    {orderDetail.status==='delivery_quote_pending' && <QuoteDeliveryForm key={orderDetail.id} order={orderDetail} onSubmit={handleQuoteDelivery} />}
                   </div>
                 </div>
                 <VendorTrackingPanel

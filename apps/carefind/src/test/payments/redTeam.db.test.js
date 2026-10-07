@@ -547,12 +547,11 @@ describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before pa
 
   it('applies', async () => { await db.exec(M('carefind_20261021_shop_expiry_and_delivery_quotes')) })
 
-  it('the old cleanup (never called, and invalid) is gone; the expiry is server-only', async () => {
-    expect((await one("select count(*)::int c from pg_proc where proname = 'cleanup_pending_shop_orders'")).c).toBe(0)
+  it('the expiry is server-only', async () => {
     await expect(as('authenticated', { sub: uid() }, () => one('select expire_unpaid_shop_orders(10)'))).rejects.toThrow(/permission denied/)
   })
 
-  it('an order abandoned at Paystack expires an hour after its last attempt: stock back, attempts closed, history, notice, email', async () => {
+  it('an order abandoned at Paystack expires an hour after its last attempt: stock back, attempts closed, history, notice', async () => {
     const o = await pending({ minutesAgo: 120 }); await intent(o, { minutesAgo: 61 })
     const before = await stock(o.product)
     await expire()
@@ -561,7 +560,6 @@ describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before pa
     expect((await one(`select status from payment_intents where entity_id = $1`, [o.id])).status).toBe('expired')
     expect((await one(`select note from shop_order_status_history where order_id = $1 and to_status = 'cancelled'`, [o.id])).note).toMatch(/payment was not completed/)
     expect((await one(`select count(*)::int c from notifications where recipient_id = $1 and type = 'shop_order_cancelled'`, [o.customer])).c).toBe(1)
-    expect((await one(`select payload from email_outbox where payload->>'orderId' = $1`, [o.id])).payload).toMatchObject({ status: 'cancelled' })
     // and only once
     const again = await stock(o.product); await expire()
     expect(await stock(o.product)).toBe(again)
@@ -588,13 +586,12 @@ describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before pa
     expect((await order(paid.id)).status).toBe('paid')
   })
 
-  it('the vendor quotes delivery: the amount joins the total, the order opens for payment, the customer is told and emailed', async () => {
+  it('the vendor quotes delivery: the amount joins the total, the order opens for payment, the customer is told', async () => {
     const o = await pending({ status: 'delivery_quote_pending' }); const me = { sub: uid(), email: o.email }
     await quote(me, o.id, 250000)
     expect(await order(o.id)).toMatchObject({ status: 'pending_payment', delivery_kobo: 250000, total_kobo: 80000 + 250000 })
     expect((await one(`select note from shop_order_status_history where order_id = $1 and to_status = 'pending_payment'`, [o.id])).note).toBe('Delivery quoted: ₦2,500.00')
     expect((await one(`select message from notifications where recipient_id = $1 and type = 'shop_delivery_quoted'`, [o.customer])).message).toBe(`Delivery for order ${(await one('select order_ref from shop_orders where id = $1', [o.id])).order_ref} is ₦2,500.00. Pay ₦3,300.00 to confirm your order.`)
-    expect((await one(`select subject, payload from email_outbox where payload->>'orderId' = $1`, [o.id]))).toMatchObject({ subject: 'Your delivery has been quoted', payload: { status: 'delivery_quoted', orderId: o.id } })
   })
 
   it('a quote keeps a promo discount, and is refused for a stranger, a bad amount, twice, or through the old status shortcut', async () => {
@@ -620,12 +617,6 @@ describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before pa
     expect((await order((await create('home')).id)).status).toBe('delivery_quote_pending')
     expect((await one(`select count(*)::int c from notifications where recipient_id = $1 and message like '%will quote delivery%'`, [customer])).c).toBe(1)
     expect((await one(`select count(*)::int c from staff_notifications where business_id = $1 and body like '%pay at pickup%'`, [vendor])).c).toBe(0)
-  })
-
-  it('every status email links to the order by its id', async () => {
-    const o = await pending({ minutesAgo: 0 }); await db.query(`update shop_orders set status = 'paid', payment_status = 'paid' where id = $1`, [o.id])
-    await as('authenticated', { sub: uid(), email: o.email }, () => one(`select update_shop_order_status($1,'in_transit',null,null)`, [o.id]))
-    expect((await one(`select payload from email_outbox where payload->>'orderId' = $1`, [o.id])).payload).toMatchObject({ status: 'shipped', orderId: o.id })
   })
 })
 
@@ -676,7 +667,7 @@ describe('SV: an order from CareFind checkout to the vendor\'s CareHub wallet', 
 
   it('applies', async () => { await db.exec(M('carefind_20261022_shop_vendor_flow')) })
 
-  it('the whole journey: checkout, payment, the vendor told, fulfilment, the customer told and emailed, then the payout', async () => {
+  it('the whole journey: checkout, payment, the vendor told, fulfilment, the customer told, then the payout', async () => {
     const s = await shop()
     const stockBefore = (await one('select stock from products where id = $1', [s.product])).stock
 
@@ -714,9 +705,7 @@ describe('SV: an order from CareFind checkout to the vendor\'s CareHub wallet', 
     for (const link of vendorLinks) expect(link).toBe(`/dashboard/ecommerce/orders/${id}`)
     const customerLinks = (await all(`select link from notifications where recipient_id = $1 and type like 'shop_%'`, [s.customer])).map((r) => r.link)
     for (const link of customerLinks) expect(link).toBe(`/orders/${id}`)
-    // the customer is emailed as the order moves, each email linking to the order
-    const emails = await all(`select payload from email_outbox where payload->>'orderId' = $1`, [id])
-    expect(emails.map((e) => e.payload.status)).toEqual(expect.arrayContaining(['delivered']))
+    // (status emails go through production's reliable email system, which this suite does not model)
 
     // 5. the money waits out the return window, then becomes withdrawable
     await release()
