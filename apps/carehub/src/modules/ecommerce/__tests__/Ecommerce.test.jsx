@@ -91,6 +91,27 @@ describe('Ecommerce: vendor orders', () => {
     expect(vendor.updateStatus).toHaveBeenCalledWith('o1', 'delivered', 'Collected by customer')
   })
 
+  it('quotes delivery through the form in the drawer (no browser prompt) and shows the order waiting for payment', async () => {
+    const promptSpy = vi.spyOn(window, 'prompt')
+    const waiting = { ...ORDER, status: 'delivery_quote_pending', payment_status: 'pending', delivery_preference: 'home', delivery_city: 'Jalingo' }
+    vendor.getOrder.mockResolvedValueOnce(waiting).mockResolvedValue({ ...waiting, status: 'pending_payment', delivery_kobo: 250000 })
+    vendor.quoteDelivery.mockResolvedValue(null)
+    await render()
+    await act(async () => { host.querySelector('[aria-label="Open order CF-100"]').click() })
+    await flush()
+    await act(async () => { button('Quote Delivery').click() })
+    const input = host.querySelector('form[aria-label="Delivery quote"] input')
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    await act(async () => { setter.call(input, '2500'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+    await act(async () => { host.querySelector('form[aria-label="Delivery quote"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+    await flush()
+    expect(vendor.quoteDelivery).toHaveBeenCalledWith('o1', 250000)
+    expect(promptSpy).not.toHaveBeenCalled()
+    expect(host.querySelector('form[aria-label="Delivery quote"]')).toBeNull()
+    expect(host.querySelector('[role="dialog"]').textContent).toContain('pending_payment')
+    promptSpy.mockRestore()
+  })
+
   it('a home delivery ready to go is sent in transit', async () => {
     vendor.getOrder.mockResolvedValue({ ...ORDER, delivery_preference: 'home' })
     await render()

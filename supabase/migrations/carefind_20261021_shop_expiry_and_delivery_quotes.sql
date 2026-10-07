@@ -20,8 +20,12 @@
 --        never progress. create_shop_order no longer tells vendors "pay at pickup" (it did so for EVERY pickup order of a vendor with
 --        the option on, including orders paid online).
 --
---  Emails: the order status email links to /orders/<id> (it linked to /orders/<order ref>, which the order page cannot open) and
---        tells the customer when delivery has been quoted.
+--  Order status emails are NOT changed here. Production sends them through the reliable email system (trigger
+--        trg_shop_order_status_history_email on shop_order_status_history -> enqueue_business_email_event), which this repository does
+--        not carry; an earlier draft of this file replaced that trigger function with a body written for an older trigger on
+--        shop_orders, which would have failed every status change in production. Linking the email to /orders/<id> and adding a
+--        "delivery quoted" email belong in a change to the reliable email catalog. The unused cleanup_pending_shop_orders() is also
+--        left in place (applied to production on 2026-10-07 without its drop).
 
 do $$
 begin
@@ -86,8 +90,8 @@ grant execute on function public.expire_unpaid_shop_orders(integer) to service_r
 -- like the other cron sweeps: never wait long on a lock, never run away
 alter function public.expire_unpaid_shop_orders(integer) set lock_timeout = '10s' set statement_timeout = '30s';
 
--- superseded by expire_unpaid_shop_orders (never called, and its payment_status 'expired' violates the table's check)
-drop function if exists public.cleanup_pending_shop_orders();
+-- cleanup_pending_shop_orders() is superseded by expire_unpaid_shop_orders (it is never called, and its payment_status 'expired'
+-- violates the table's check); it is left in place.
 
 -- ---------------------------------------------------------------------------------------------
 -- SD-3 quote_shop_order_delivery
@@ -331,68 +335,3 @@ begin
   values (v_vendor, null, true, 'shop_order_status', 'Order ' || v_ref || ' → ' || p_to_status, 'Status changed from ' || coalesce(v_from, '') || ' to ' || p_to_status, '/dashboard/ecommerce/orders/' || p_order_id::text);
 end;
 $$;
-
--- ---------------------------------------------------------------------------------------------
--- Order status email (from carefind_20260919_shop_orders_status_email_trigger; changed: the order id for the link, the quote)
--- ---------------------------------------------------------------------------------------------
-create or replace function public.enqueue_shop_order_status_email()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'public'
-as $function$
-declare
-  v_business_name text;
-  v_template_status text;
-begin
-  if new.status is not distinct from old.status then
-    return new;
-  end if;
-
-  v_template_status := case new.status
-    when 'in_transit' then 'shipped'
-    when 'delivered' then 'delivered'
-    when 'cancelled' then 'cancelled'
-    when 'rejected' then 'cancelled'
-    when 'accepted' then 'processing'
-    when 'processing' then 'processing'
-    when 'packed' then 'processing'
-    when 'at_pickup_station' then 'processing'
-    when 'ready_for_pickup' then 'processing'
-    when 'pending_payment' then case when old.status = 'delivery_quote_pending' then 'delivery_quoted' end
-    else null
-  end;
-
-  if v_template_status is null then
-    return new;
-  end if;
-
-  if new.delivery_email is null or position('@' in new.delivery_email) = 0 then
-    return new;
-  end if;
-
-  select name into v_business_name
-  from public.businesses
-  where id = new.vendor_business_id;
-
-  insert into public.email_outbox (
-    to_email, from_email, subject, template_key, payload,
-    status, next_retry_at
-  ) values (
-    new.delivery_email,
-    'CareFind <support@mail.carefind.app>',
-    case when v_template_status = 'delivery_quoted' then 'Your delivery has been quoted' else 'Your CareFind order has been updated' end,
-    'order_status_update',
-    jsonb_build_object(
-      'fullName', coalesce(new.customer_name, 'Valued Customer'),
-      'orderRef', new.order_ref,
-      'orderId', new.id,
-      'status', v_template_status,
-      'businessName', coalesce(v_business_name, 'CareFind')
-    ),
-    'pending', now()
-  );
-
-  return new;
-end;
-$function$;
