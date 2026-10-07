@@ -130,10 +130,24 @@ export class PaystackProvider {
   async verifyPayment({ reference }) {
     const op = 'verifyPayment'
     assertPattern(op, reference, PAYMENT_REF, 'reference')
-    const { data, correlationId } = await this.#http.request({
-      operation: op,
-      path: `/transaction/verify/${encodeURIComponent(reference)}`,
-    })
+    let data, correlationId
+    try {
+      ;({ data, correlationId } = await this.#http.request({
+        operation: op,
+        path: `/transaction/verify/${encodeURIComponent(reference)}`,
+      }))
+    } catch (err) {
+      // Paystack answers an unknown reference differently by environment/API
+      // version (HTTP 404, HTTP 400 "Transaction reference not found", or a
+      // status:false body). Normalise all of them to NOT_FOUND so callers
+      // can settle the semantic difference from "lookup failed".
+      const notFound = err?.code === 'not_found' || /not found/i.test(String(err?.message || ''))
+      if (notFound) throw new ProviderError({ code: E.NOT_FOUND, message: `Transaction reference not found`, operation: op, correlationId: err?.correlationId ?? null, httpStatus: err?.httpStatus ?? null, cause: err })
+      throw err
+    }
+    if (data?.status === false && /not found/i.test(String(data?.message || ''))) {
+      throw new ProviderError({ code: E.NOT_FOUND, message: 'Transaction reference not found', operation: op, correlationId, httpStatus: 200 })
+    }
     this.#assertOk(op, data, correlationId)
     const d = data.data
     if (!d || typeof d !== 'object') throw badResponse(op, correlationId, 'Provider returned no transaction data')
