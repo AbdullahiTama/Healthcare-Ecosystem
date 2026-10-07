@@ -7,16 +7,48 @@ import { orderRepository } from './orderRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Empty, Loading, Button, Input } from '../../components/ui'
-import { Package, Search, Filter, ChevronRight, RotateCcw } from 'lucide-react'
+import { Package, Search, Filter, ChevronRight, RotateCcw, ArrowLeft } from 'lucide-react'
+import AppShell from '../../components/layout/AppShell.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { STATUS_CONFIG, CUSTOMER_STATUSES, getEstimatedDelivery } from './orderConstants'
 import { useCart } from './CartProvider'
 
 const PAGE_SIZE = 20
+// A shared empty list for "no data yet": a fresh [] on every render made the effect below store a new array on every render,
+// so the page re-rendered without pause while the orders were loading.
+const NO_ORDERS = []
 
+// My Orders sits in the site shell like the other signed-in pages (on a phone: the content and the bottom navigation), so the
+// shopper always has a way out; it rendered bare before, with no back link and no navigation.
 export default function OrderList() {
+  const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  if (isMobile) {
+    return (
+      <>
+        <OrderListContent isMobile />
+        <BottomNav />
+      </>
+    )
+  }
+  return (
+    <AppShell user={user}>
+      <OrderListContent />
+    </AppShell>
+  )
+}
+
+function OrderListContent({ isMobile = false }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { addItem } = useCart()
+
+  // Back to wherever the shopper came from; opened directly (a link, a refresh), there is no in-app history, so go to the shop
+  function goBack() {
+    if ((window.history.state?.idx ?? 0) > 0) navigate(-1)
+    else navigate('/search?tab=shop')
+  }
 
   const [orders, setOrders] = useState([])
   const [loadingMore, setLoadingMore] = useState(false)
@@ -25,7 +57,7 @@ export default function OrderList() {
   const [search, setSearch] = useState('')
   const [hasMore, setHasMore] = useState(true)
 
-  const { data: initialOrders = [], isLoading: loading, refetch } = useQuery({
+  const { data: initialOrders = NO_ORDERS, isLoading: loading, refetch } = useQuery({
     queryKey: ['customer-orders', user?.id, statusFilter],
     queryFn: () => orderRepository.getByCustomer(user.id, { status: statusFilter || undefined, limit: PAGE_SIZE, offset: 0 }),
     enabled: !!user?.id,
@@ -102,8 +134,16 @@ export default function OrderList() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24, color: theme.navy }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '12px 16px calc(90px + env(safe-area-inset-bottom))' : '24px 16px' }}>
+      <button
+        type="button"
+        onClick={goBack}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: 0, marginBottom: isMobile ? 4 : 12, background: 'none', border: 'none', color: theme.tealDeep, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+      >
+        <ArrowLeft size={16} aria-hidden="true" />
+        Back
+      </button>
+      <h1 style={{ fontSize: isMobile ? 22 : 24, fontWeight: 700, marginBottom: isMobile ? 16 : 24, color: theme.navy }}>
         My Orders
       </h1>
 
@@ -134,8 +174,11 @@ export default function OrderList() {
           return (
             <button
               key={s.key}
+              type="button"
+              aria-pressed={isActive}
               onClick={() => setStatusFilter(s.key)}
               style={{
+                minHeight: isMobile ? 44 : undefined,
                 padding: '8px 16px',
                 borderRadius: 20,
                 border: `1px solid ${isActive ? theme.tealDeep : theme.border}`,
@@ -278,11 +321,13 @@ export default function OrderList() {
                     </div>
                     {canReorder && (
                       <button
+                        type="button"
                         onClick={(e) => handleReorder(order, e)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: 4,
+                          minHeight: isMobile ? 44 : undefined,
                           padding: '6px 10px',
                           borderRadius: 6,
                           border: `1px solid ${theme.tealDeep}`,
