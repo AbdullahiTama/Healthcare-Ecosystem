@@ -78,6 +78,16 @@ describe('settleByReference', () => {
     expect(r).toMatchObject({ outcome: 'needs_refund', reason: 'amount_mismatch' })
   })
 
+  it('treats a provider "not found" verify as not_paid and closes the attempt instead of erroring', async () => {
+    const { ProviderError } = await import('../errors.js')
+    const sb = fakeSupabase({ on: () => ({ data: intentRow(), error: null }) })
+    const p = providerWith(new ProviderError({ code: 'not_found', message: 'Transaction reference not found' }))
+    const r = await settleByReference({ supabase: sb, provider: p, reference: REF })
+    expect(r).toMatchObject({ outcome: 'not_paid', providerStatus: 'not_found' })
+    expect(sb.calls.some((c) => c.op === 'update' && c.patch.status === 'failed')).toBe(true)
+    expect(sb.rpc).not.toHaveBeenCalled()
+  })
+
   it('lets a provider failure propagate so the webhook answers 5xx and the provider retries', async () => {
     const sb = fakeSupabase({ on: () => ({ data: intentRow(), error: null }) })
     await expect(settleByReference({ supabase: sb, provider: providerWith(new Error('timeout')), reference: REF })).rejects.toThrow('timeout')

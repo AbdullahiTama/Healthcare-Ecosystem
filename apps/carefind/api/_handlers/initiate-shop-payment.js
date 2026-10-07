@@ -78,8 +78,12 @@ export default async function handler(req, res) {
       let check
       try {
         check = await provider.verifyPayment({ reference: previousRef })
-      } catch {
-        return res.status(502).json({ error: 'Could not check your earlier payment. Please try again in a moment.' })
+      } catch (err) {
+        // A reference Paystack never saw can never be paid: the earlier attempt
+        // is definitively unpaid, so fall through and close it instead of
+        // wedging this order behind a 502 that can never succeed.
+        if (err?.code === 'not_found') check = { status: 'not_found' }
+        else return res.status(502).json({ error: 'Could not check your earlier payment. Please try again in a moment.' })
       }
       if (check?.status === 'success') {
         paymentLogger.error('payment.shop.legacy_attempt_paid', { order: order.id, reference: previousRef })

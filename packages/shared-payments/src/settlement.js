@@ -1,5 +1,6 @@
 import { findIntent, PaymentIntentError } from './intents.js'
 import { rpcWithRetry } from './rpcRetry.js'
+import { isProviderError } from './errors.js'
 
 // The ONE entry point that turns "the customer says they paid" or "the provider says it was paid"
 // into settlement. The redirect handler and the webhook both call it, so there is a single
@@ -30,7 +31,22 @@ export async function settleByReference({ supabase, provider, reference, logger 
     return { outcome: 'already_settled', intent_id: intent.id, purpose: intent.purpose, status: intent.status, intent }
   }
 
-  const verified = await provider.verifyPayment({ reference })
+  let verified
+  try {
+    verified = await provider.verifyPayment({ reference })
+  } catch (err) {
+    // The provider has NEVER heard of this reference: no checkout was ever
+    // completed (or the reference is invalid), so it can never pay out.
+    // Treating this as an error would wedge retries forever; close it like a
+    // provider-final failure instead of propagating.
+    if (isProviderError(err) && err.code === 'not_found') {
+      if (['created', 'pending'].includes(intent.status)) {
+        await supabase.from('payment_intents').update({ status: 'failed' }).eq('id', intent.id).in('status', ['created', 'pending'])
+      }
+      return { outcome: 'not_paid', providerStatus: 'not_found', intent_id: intent.id, purpose: intent.purpose, intent }
+    }
+    throw err
+  }
   if (verified.status !== 'success') {
     // A provider-final failure closes an open attempt; "pending" just means ask again later.
     if ((verified.status === 'failed' || verified.status === 'abandoned') && ['created', 'pending'].includes(intent.status)) {
