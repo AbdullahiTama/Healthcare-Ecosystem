@@ -8,6 +8,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { orderRepository } from './orderRepository'
 import { addressesRepository } from '../account/addressesRepository'
 import { calculateTotalFees } from './pricing'
+import { buildOrderRequest, orderErrorMessage } from './checkoutOrder'
 import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
 import { shopPaymentService } from './shopPaymentService'
 import { shopRepository } from './shopRepository'
@@ -253,130 +254,56 @@ export default function Checkout() {
       setStockErrors(stockIssues)
       return
     }
+    // Pay at Pickup: create the order and skip Paystack (vendor will accept later). Otherwise strict Paystack: create the order
+    // as pending_payment, then redirect to Paystack.
     const usePickup = canUsePickup && payMethod === 'pickup'
-    if (usePickup) {
-      // Pay at Pickup — create order and skip Paystack (vendor will accept later)
-      setLoading(true)
-      setError('')
-      try {
-        if (!formData.street || !formData.city || !formData.state) throw new Error('Street, city and state are required')
-        if (!formData.customer_phone || String(formData.customer_phone).trim().length < 10) throw new Error('Valid phone number is required')
-        if (!formData.customer_email || !formData.customer_email.includes('@')) throw new Error('Valid email is required')
-        if (!pickupStationId) throw new Error('Please select a pickup station')
-        const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
-        if (vendorIds.length === 0) throw new Error('Vendor not found for cart items — please re-add products from Shop')
-        if (vendorIds.length > 1) throw new Error('Multi-vendor checkout is not yet supported — please checkout per vendor')
-        const vendorBusinessId = vendorIds[0]
-        const delivery_address = `${formData.street}, ${formData.city}, ${formData.state}`
-        const orderItems = items.map(item => ({ ecommerce_product_id: item.ecommerce_product_id, quantity: item.quantity, unit_price_kobo: item.unit_price_kobo }))
-        const payment_reference = `CF-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
-        const orderId = await orderRepository.create({
-          customer_id: user.id,
-          vendor_business_id: vendorBusinessId,
-          items: orderItems,
-          subtotal_kobo: total,
-          commission_kobo: fees.commission,
-          fulfilment_kobo: fees.fulfilment,
-          delivery_kobo: 0,
-          total_kobo: grandTotal,
-          delivery_address,
-          delivery_city: formData.city,
-          delivery_state: formData.state,
-          delivery_phone: formData.customer_phone,
-          delivery_email: formData.customer_email,
-          delivery_instructions: formData.delivery_instructions || null,
-          delivery_preference: 'pickup',
-          distance_km: 0,
-          is_approved_city: approved,
-          customer_name: formData.customer_name || user.email,
-          payment_reference,
-          pickup_station_id: pickupStationId
-        })
-        
-        // Apply promo code if valid
-        if (promoValidation?.valid && promoValidation.promo_code_id) {
-          await applyPromoCodeToOrder(orderId, promoValidation.promo_code_id, promoValidation.discount_kobo)
-        }
-        
-        await maybeSaveAddress()
-        clearCart()
-        navigate(`/orders/${orderId}`)
-      } catch (err) {
-        const msg = String(err.message || '')
-        if (msg.includes('INSUFFICIENT_STOCK')) setError('Some items are now out of stock — please review your cart. Inventory was updated after you added items.')
-        else if (msg.includes('PRICE_CHANGED')) setError('A product price changed while you were checking out — please review your cart and try again.')
-        else if (msg.includes('Vendor not approved')) setError('This vendor is not currently approved for Shop sales.')
-        else setError(err.message || 'Failed to create order. Please try again.')
-      } finally {
-        setLoading(false)
-      }
+    setLoading(true)
+    if (!usePickup) setPayLoading(true)
+    setError('')
+
+    let orderId
+    try {
+      orderId = await orderRepository.create(buildOrderRequest({
+        items,
+        subtotalKobo: total,
+        fees,
+        form: formData,
+        deliveryPreference: usePickup ? 'pickup' : formData.delivery_preference,
+        approvedCity: approved,
+        distanceKm,
+        pickupStationId,
+        user,
+        paymentReference: `CF-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`,
+      }))
+    } catch (err) {
+      setError(orderErrorMessage(err))
+      setLoading(false)
+      setPayLoading(false)
       return
     }
 
-    // Strict Paystack flow: create order as pending_payment then redirect to Paystack
-    setLoading(true)
-    setPayLoading(true)
-    setError('')
-    let createdOrderId = null
-    try {
-      if (!formData.street || !formData.city || !formData.state) throw new Error('Street, city and state are required')
-      if (!formData.customer_phone || String(formData.customer_phone).trim().length < 10) throw new Error('Valid phone number is required')
-      if (!formData.customer_email || !formData.customer_email.includes('@')) throw new Error('Valid email is required')
-      if (formData.delivery_preference === 'pickup' && !pickupStationId) throw new Error('Please select a pickup station')
-      const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
-      if (vendorIds.length === 0) throw new Error('Vendor not found for cart items — please re-add products from Shop')
-      if (vendorIds.length > 1) throw new Error('Multi-vendor checkout is not yet supported — please checkout per vendor')
-      const vendorBusinessId = vendorIds[0]
-      const delivery_address = `${formData.street}, ${formData.city}, ${formData.state}`
-      const orderItems = items.map(item => ({ ecommerce_product_id: item.ecommerce_product_id, quantity: item.quantity, unit_price_kobo: item.unit_price_kobo }))
-      const payment_reference = `CF-${Date.now()}-${Math.random().toString(36).slice(2,7).toUpperCase()}`
-      createdOrderId = await orderRepository.create({
-        customer_id: user.id,
-        vendor_business_id: vendorBusinessId,
-        items: orderItems,
-        subtotal_kobo: total,
-        commission_kobo: fees.commission,
-        fulfilment_kobo: fees.fulfilment,
-        delivery_kobo: deliveryFeeDisplay ? 0 : fees.delivery,
-        total_kobo: grandTotal,
-        delivery_address,
-        delivery_city: formData.city,
-        delivery_state: formData.state,
-        delivery_phone: formData.customer_phone,
-        delivery_email: formData.customer_email,
-        delivery_instructions: formData.delivery_instructions || null,
-        delivery_preference: formData.delivery_preference,
-        distance_km: formData.delivery_preference === 'home' ? distanceKm : 0,
-        is_approved_city: approved,
-        customer_name: formData.customer_name || user.email,
-        payment_reference,
-        pickup_station_id: formData.delivery_preference === 'pickup' ? pickupStationId : null
-      })
-      
-      // Apply promo code if valid
-      if (promoValidation?.valid && promoValidation.promo_code_id) {
-        await applyPromoCodeToOrder(createdOrderId, promoValidation.promo_code_id, promoValidation.discount_kobo)
-      }
-      
-      await maybeSaveAddress()
-      await initiatePaystackForOrder(createdOrderId)
-      // Redirected — clear cart optimistically; if user aborts, order remains pending_payment
-      clearCart()
-    } catch (err) {
-      const msg = String(err.message || '')
-      if (msg.includes('INSUFFICIENT_STOCK')) setError('Some items are now out of stock — please review your cart. Inventory was updated after you added items.')
-      else if (msg.includes('PRICE_CHANGED')) setError('A product price changed while you were checking out — please review your cart and try again.')
-      else if (msg.includes('Vendor not approved')) setError('This vendor is not currently approved for Shop sales.')
-      else setError(err.message || 'Failed to create order. Please try again.')
-      // If order was created but Paystack init failed, send customer to order detail to retry
-      if (createdOrderId && msg.toLowerCase().includes('paystack')) {
-        clearCart()
-        navigate(`/orders/${createdOrderId}`)
-      }
-    } finally {
-      setLoading(false)
-      setPayLoading(false)
+    // The order exists (and holds its stock) from here on. Whatever happens next, the customer continues on the order page with
+    // an empty cart: staying on checkout would let a second submit create a duplicate order.
+    clearCart()
+    await maybeSaveAddress()
+
+    let notice = ''
+    if (promoValidation?.valid && promoValidation.promo_code_id) {
+      const applied = await applyPromoCodeToOrder(orderId, promoValidation.promo_code_id, promoValidation.discount_kobo)
+      if (!applied.success) notice = 'Your promo code could not be applied, so this order is at full price. You can pay for it or cancel it here.'
     }
+
+    if (!usePickup && !notice) {
+      try {
+        await initiatePaystackForOrder(orderId)
+        return
+      } catch (err) {
+        notice = `${err.message || 'Could not start payment'} Your order is saved — you can pay for it here.`
+      }
+    }
+    setLoading(false)
+    setPayLoading(false)
+    navigate(`/orders/${orderId}`, notice ? { state: { notice } } : undefined)
   }
 
   return (

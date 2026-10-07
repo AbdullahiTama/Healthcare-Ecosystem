@@ -1,7 +1,7 @@
 // Order detail page - displays order items, status, timeline, and communication
 
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { orderRepository } from './orderRepository'
 import { trackingRepository } from './trackingRepository'
 import { vendorRatingRepository } from './vendorRatingRepository'
@@ -22,6 +22,7 @@ export default function OrderDetail() {
   const { orderId } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { addItem } = useCart()
 
   const [order, setOrder] = useState(null)
@@ -32,7 +33,9 @@ export default function OrderDetail() {
   // `error` is a failed load (replaces the page, with a retry); `actionError` is a failed action on a loaded order
   // (a banner on the order). Neither is "Order not found".
   const [error, setError] = useState('')
-  const [actionError, setActionError] = useState('')
+  // Checkout sends the customer here with a notice when the order was created but the next step failed (payment could not
+  // start, the promo code was not applied).
+  const [actionError, setActionError] = useState(() => location.state?.notice || '')
   const [updating, setUpdating] = useState(false)
   const [station, setStation] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -348,9 +351,9 @@ export default function OrderDetail() {
     } finally { setUpdating(false) }
   }
   async function handleVerifyPayment() {
-    const params = new URLSearchParams(window.location.search)
-    const ref = params.get('reference') || prompt('Enter Paystack reference:')
-    if (!ref || !String(ref).trim()) return
+    // Without a reference in the URL the server checks the order's latest payment attempt, so the customer never has to
+    // find and type a Paystack reference.
+    const ref = new URLSearchParams(window.location.search).get('reference')
     setUpdating(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -358,7 +361,7 @@ export default function OrderDetail() {
       const res = await fetch('/api/verify-shop-payment', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ order_id: orderId, reference: String(ref).trim() }),
+        body: JSON.stringify({ order_id: orderId, ...(ref ? { reference: ref.trim() } : {}) }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Verification failed')
