@@ -1,3 +1,5 @@
+// Must run before App (and with it the Supabase client) is imported: see lib/authLinkErrorRedirect.js.
+import './lib/authLinkErrorRedirect'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

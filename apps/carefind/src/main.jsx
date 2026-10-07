@@ -4,6 +4,7 @@
 // (including providers/AuthContext.jsx). ESM evaluates imports in source order.
 import './modules/account/verifyEmailParams'
 import './modules/account/recoveryRedirect'
+import './modules/account/authLinkErrorRedirect'
 
 import React, { Suspense, lazy } from 'react'
 import ReactDOM from 'react-dom/client'
@@ -75,6 +76,7 @@ const Wishlist = lazy(() => import('./modules/shop/Wishlist.jsx'))
 const Addresses = lazy(() => import('./modules/account/Addresses.jsx'))
 const PublicTracking = lazy(() => import('./modules/shop/PublicTracking.jsx'))
 const NotFound = lazy(() => import('./modules/marketing/NotFound.jsx'))
+const LinkExpired = lazy(() => import('./modules/account/LinkExpired.jsx'))
 
 const AdminPanel = lazy(() => import('./modules/admin/AdminPanel.jsx'))
 const BusinessesHub = lazy(() => import('./modules/businesses-hub/BusinessesHub.jsx'))
@@ -115,6 +117,7 @@ const RoutesWithKey = () => {
       <Route path="/login" element={<SuspenseWrapper><Login /></SuspenseWrapper>} />
       <Route path="/reset-password" element={<SuspenseWrapper><ResetPassword /></SuspenseWrapper>} />
       <Route path="/verify-email" element={<SuspenseWrapper><VerifyEmail /></SuspenseWrapper>} />
+      <Route path="/link-expired" element={<SuspenseWrapper><LinkExpired /></SuspenseWrapper>} />
       <Route path="/u/:id" element={<SuspenseWrapper><PublicProfile /></SuspenseWrapper>} />
       <Route path="/post/:id" element={<SuspenseWrapper><PostPage /></SuspenseWrapper>} />
       <Route path="/drug/:name" element={<SuspenseWrapper><DrugProfile /></SuspenseWrapper>} />
