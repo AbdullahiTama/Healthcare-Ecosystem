@@ -130,7 +130,7 @@ Manual check: pay for an order, then open the vendor's "order paid" notification
 ## 9. Applying to production (2026-10-07) and the quote form
 
 - **Applied:** `carefind_20261020_shop_flow_fixes`, `carefind_20261021_shop_expiry_and_delivery_quotes` (as two parts, 21 and 21b), and the `generate_tracking_token` part of `carefind_20261022`.
-- **Not yet applied:** the SV-4 / SV-6 lockdown (revokes and the token policy drops). The Supabase connector asks for confirmation of destructive statements, and the confirmation timed out.
+- **SV-4 / SV-6 lockdown:** applied later the same day. Verified afterwards: `anon` and `authenticated` can read but not write the five order tables, and have no access to `shop_tracking_tokens`.
 - **Status emails were left as production has them.** Production sends them from a trigger on `shop_order_status_history` through the reliable email system (`enqueue_business_email_event`), which is not in this repository. The status-email section of `carefind_20261021` was written for an older trigger on `shop_orders`. Applied as written, it would have failed every status change, so it was removed from the file. Two improvements now belong in a change to the email catalog: linking the status email to `/orders/<id>`, and a "delivery quoted" email.
 - **Quote form.** CareHub's "Quote Delivery" asked for the fee with a browser `prompt()`. A CareHub tab opened before the deploy still called the removed shortcut (`update_shop_order_status` to `pending_payment`), which the server now refuses ("This status change is not allowed").
   - The quote is now an inline form in the order drawer (`QuoteDeliveryForm`). It shows:
@@ -140,4 +140,6 @@ Manual check: pay for an order, then open the vendor's "order paid" notification
 
     The server's reason is shown next to the field if the quote is refused.
   - Pickup orders have nothing to quote, so the form says so instead.
-- **Data left to fix.** 26 pickup orders created before SD-7 are still `delivery_quote_pending`. They can never be quoted. They need to be opened for payment, or left to expire after 7 days.
+- **Data fix** (`carefind_20261023_release_recent_pickup_quote_orders`). 26 pickup orders created before SD-7 were `delivery_quote_pending` and could never be quoted.
+  - The 16 placed in the last 7 days were opened for payment, each with a history row and a customer notice.
+  - The 10 older ones are left to `expire_unpaid_shop_orders`, which cancels them and returns their stock.
