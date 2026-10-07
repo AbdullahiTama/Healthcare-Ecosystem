@@ -500,3 +500,131 @@ describe('S-1 / S-2: vendor tracking updates and back-in-stock alerts', () => {
     expect((await one('select count(*)::int c from notifications where recipient_id = $1', [r.watcher])).c).toBe(1)
   })
 })
+
+// ---- shop flow review, part 2 (carefind_20261021_shop_expiry_and_delivery_quotes) ----------------------------------------------------------
+describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before payment, order emails', () => {
+  const pending = async ({ status = 'pending_payment', minutesAgo = 0, qty = 2 } = {}) => {
+    const email = `q${++n}@example.com`; const vendor = await business(email); const customer = uid()
+    const product = (await one(`insert into products (name, price, stock, sale_type) values ('Zinc', 100, 10, 'retail') returning id`)).id
+    const ecom = (await one(`insert into ecommerce_products (business_id, product_id, ecommerce_price_kobo) values ($1,$2,10000) returning id`, [vendor, product])).id
+    const o = await one(`insert into shop_orders (order_ref, customer_id, vendor_business_id, status, payment_status, subtotal_kobo, commission_kobo, fulfilment_kobo, total_kobo, delivery_email, customer_name, created_at)
+                         values ($1,$2,$3,$4,'pending',$5,4000,60000,$6,'buyer@example.com','Ada', now() - make_interval(mins => $7)) returning id`, [ref('CF'), customer, vendor, status, qty * 10000, qty * 10000 + 60000, minutesAgo])
+    await db.query('insert into shop_order_items (order_id, ecommerce_product_id, product_id, product_name, quantity, unit_price_kobo, line_total_kobo) values ($1,$2,$3,$4,$5,10000,$6)', [o.id, ecom, product, 'Zinc', qty, qty * 10000])
+    await db.query('update products set stock = stock - $2 where id = $1', [product, qty])          // what create_shop_order reserved
+    return { id: o.id, vendor, customer, product, email }
+  }
+  const intent = async (o, { minutesAgo = 0, status = 'pending' } = {}) => {
+    const i = await one(`insert into payment_intents (reference, application, purpose, customer_id, business_id, entity_type, entity_id, expected_amount)
+                         values ($1,'carefind','shop_order',$2,$3,'shop_order',$4,80000) returning id`, [ref('cf_shop'), o.customer, o.vendor, o.id])
+    // backdating an attempt is test-only: the immutability guard is a trigger, so it is bypassed for this one update
+    await db.exec('set session_replication_role = replica')
+    try {
+      await db.query(`update payment_intents set status = $2, created_at = now() - make_interval(mins => $3), verified_at = case when $2 = 'verified' then now() end where id = $1`, [i.id, status, minutesAgo])
+    } finally { await db.exec('set session_replication_role = origin') }
+  }
+  const expire = () => as('service_role', null, () => one('select expire_unpaid_shop_orders(200) r')).then((x) => x.r)
+  const order = (id) => one('select status, payment_status, total_kobo, delivery_kobo from shop_orders where id = $1', [id])
+  const stock = async (product) => (await one('select stock from products where id = $1', [product])).stock
+  const quote = (who, id, kobo) => as('authenticated', who, () => one('select quote_shop_order_delivery($1,$2)', [id, kobo]))
+
+  beforeAll(async () => {
+    await db.exec(`
+      alter table public.shop_orders add column if not exists discount_kobo integer default 0, add column if not exists promo_code_id uuid;
+      create table if not exists public.email_outbox (id uuid primary key default gen_random_uuid(), to_email text, from_email text, subject text, template_key text, payload jsonb, status text, next_retry_at timestamptz);
+      -- the live inventory restore (the fixture's is a stub): put each line's quantity back
+      create or replace function public.shop_restore_inventory_on_cancel(p_order_id uuid) returns void language sql as $$
+        update public.products p set stock = p.stock + i.quantity from public.shop_order_items i where i.order_id = p_order_id and i.product_id = p.id $$;
+      create function public.cleanup_pending_shop_orders() returns integer language sql as $$ select 0 $$;
+    `)
+    await db.exec(M('carefind_20260919_shop_orders_status_email_trigger'))
+  })
+
+  it('BEFORE: a vendor "quote" moves the order to payment without any delivery charge', async () => {
+    const o = await pending({ status: 'delivery_quote_pending' })
+    await as('authenticated', { sub: uid(), email: o.email }, () => one(`select update_shop_order_status($1,'pending_payment',null,'Delivery quoted ₦5000')`, [o.id]))
+    expect(await order(o.id)).toMatchObject({ status: 'pending_payment', delivery_kobo: 0, total_kobo: 80000 })
+  })
+
+  it('applies', async () => { await db.exec(M('carefind_20261021_shop_expiry_and_delivery_quotes')) })
+
+  it('the old cleanup (never called, and invalid) is gone; the expiry is server-only', async () => {
+    expect((await one("select count(*)::int c from pg_proc where proname = 'cleanup_pending_shop_orders'")).c).toBe(0)
+    await expect(as('authenticated', { sub: uid() }, () => one('select expire_unpaid_shop_orders(10)'))).rejects.toThrow(/permission denied/)
+  })
+
+  it('an order abandoned at Paystack expires an hour after its last attempt: stock back, attempts closed, history, notice, email', async () => {
+    const o = await pending({ minutesAgo: 120 }); await intent(o, { minutesAgo: 61 })
+    const before = await stock(o.product)
+    await expire()
+    expect(await order(o.id)).toMatchObject({ status: 'cancelled', payment_status: 'failed' })
+    expect(await stock(o.product)).toBe(before + 2)
+    expect((await one(`select status from payment_intents where entity_id = $1`, [o.id])).status).toBe('expired')
+    expect((await one(`select note from shop_order_status_history where order_id = $1 and to_status = 'cancelled'`, [o.id])).note).toMatch(/payment was not completed/)
+    expect((await one(`select count(*)::int c from notifications where recipient_id = $1 and type = 'shop_order_cancelled'`, [o.customer])).c).toBe(1)
+    expect((await one(`select payload from email_outbox where payload->>'orderId' = $1`, [o.id])).payload).toMatchObject({ status: 'cancelled' })
+    // and only once
+    const again = await stock(o.product); await expire()
+    expect(await stock(o.product)).toBe(again)
+  })
+
+  it('keeps an order whose customer is still paying, one that was never sent to checkout (72h), and one being settled', async () => {
+    const paying = await pending({ minutesAgo: 120 }); await intent(paying, { minutesAgo: 20 })
+    const placed = await pending({ minutesAgo: 600 })                                  // no attempt yet: 72 hours
+    const settling = await pending({ minutesAgo: 600 }); await intent(settling, { minutesAgo: 300, status: 'verified' })
+    await expire()
+    for (const o of [paying, placed, settling]) expect((await order(o.id)).status).toBe('pending_payment')
+    const old = await pending({ minutesAgo: 73 * 60 })
+    await expire()
+    expect((await order(old.id)).status).toBe('cancelled')
+  })
+
+  it('an order waiting for a delivery quote expires after 7 days without one; a paid order is never touched', async () => {
+    const waiting = await pending({ status: 'delivery_quote_pending', minutesAgo: 6 * 24 * 60 })
+    const stale = await pending({ status: 'delivery_quote_pending', minutesAgo: 8 * 24 * 60 })
+    const paid = await pending({ minutesAgo: 9 * 24 * 60 }); await db.query(`update shop_orders set status = 'paid', payment_status = 'paid' where id = $1`, [paid.id])
+    await expire()
+    expect((await order(waiting.id)).status).toBe('delivery_quote_pending')
+    expect((await order(stale.id)).status).toBe('cancelled')
+    expect((await order(paid.id)).status).toBe('paid')
+  })
+
+  it('the vendor quotes delivery: the amount joins the total, the order opens for payment, the customer is told and emailed', async () => {
+    const o = await pending({ status: 'delivery_quote_pending' }); const me = { sub: uid(), email: o.email }
+    await quote(me, o.id, 250000)
+    expect(await order(o.id)).toMatchObject({ status: 'pending_payment', delivery_kobo: 250000, total_kobo: 80000 + 250000 })
+    expect((await one(`select note from shop_order_status_history where order_id = $1 and to_status = 'pending_payment'`, [o.id])).note).toBe('Delivery quoted: ₦2,500.00')
+    expect((await one(`select message from notifications where recipient_id = $1 and type = 'shop_delivery_quoted'`, [o.customer])).message).toBe(`Delivery for order ${(await one('select order_ref from shop_orders where id = $1', [o.id])).order_ref} is ₦2,500.00. Pay ₦3,300.00 to confirm your order.`)
+    expect((await one(`select subject, payload from email_outbox where payload->>'orderId' = $1`, [o.id]))).toMatchObject({ subject: 'Your delivery has been quoted', payload: { status: 'delivery_quoted', orderId: o.id } })
+  })
+
+  it('a quote keeps a promo discount, and is refused for a stranger, a bad amount, twice, or through the old status shortcut', async () => {
+    const o = await pending({ status: 'delivery_quote_pending' }); const me = { sub: uid(), email: o.email }
+    await db.query('update shop_orders set discount_kobo = 10000, total_kobo = total_kobo - 10000 where id = $1', [o.id])
+    await expect(quote({ sub: uid(), email: 'stranger@example.com' }, o.id, 1000)).rejects.toThrow(/Not authorized/)
+    await expect(quote({ sub: o.customer, email: 'buyer@example.com' }, o.id, 1000)).rejects.toThrow(/Not authorized/)
+    for (const bad of [0, -5, 100000001]) await expect(quote(me, o.id, bad), String(bad)).rejects.toThrow(/delivery quote must be/)
+    await expect(as('authenticated', me, () => one(`select update_shop_order_status($1,'pending_payment',null,null)`, [o.id]))).rejects.toThrow(/not allowed/)
+    await quote(me, o.id, 50000)
+    expect(await order(o.id)).toMatchObject({ total_kobo: 80000 - 10000 + 50000, delivery_kobo: 50000 })
+    await expect(quote(me, o.id, 60000)).rejects.toThrow(/not waiting for a delivery quote/)
+  })
+
+  it('a pickup order outside the approved cities is payable at once (nothing to quote); home delivery there waits for a quote', async () => {
+    const vendor = await business(`p${++n}@example.com`); const customer = uid()
+    const product = (await one(`insert into products (name, price, stock, sale_type) values ('Iron', 100, 50, 'retail') returning id`)).id
+    const ecom = (await one(`insert into ecommerce_products (business_id, product_id, ecommerce_price_kobo) values ($1,$2,10000) returning id`, [vendor, product])).id
+    const create = (pref) => as('authenticated', { sub: customer, email: 'c@example.com' }, () => one(
+      `select create_shop_order($1,$2,$3::jsonb,20000,4000,50000,0,70000,'addr','Jalingo','Taraba','0801','c@example.com',null,$4,null,false,'Cust',$5,null) id`,
+      [customer, vendor, JSON.stringify([{ ecommerce_product_id: ecom, quantity: 2 }]), pref, ref('cfpay')]))
+    expect((await order((await create('pickup')).id)).status).toBe('pending_payment')
+    expect((await order((await create('home')).id)).status).toBe('delivery_quote_pending')
+    expect((await one(`select count(*)::int c from notifications where recipient_id = $1 and message like '%will quote delivery%'`, [customer])).c).toBe(1)
+    expect((await one(`select count(*)::int c from staff_notifications where business_id = $1 and body like '%pay at pickup%'`, [vendor])).c).toBe(0)
+  })
+
+  it('every status email links to the order by its id', async () => {
+    const o = await pending({ minutesAgo: 0 }); await db.query(`update shop_orders set status = 'paid', payment_status = 'paid' where id = $1`, [o.id])
+    await as('authenticated', { sub: uid(), email: o.email }, () => one(`select update_shop_order_status($1,'in_transit',null,null)`, [o.id]))
+    expect((await one(`select payload from email_outbox where payload->>'orderId' = $1`, [o.id])).payload).toMatchObject({ status: 'shipped', orderId: o.id })
+  })
+})

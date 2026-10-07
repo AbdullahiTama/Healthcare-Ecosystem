@@ -49,7 +49,10 @@ export function emailVerification({ fullName, verifyLink } = {}) {
 }
 
 // ── Orders ───────────────────────────────────────────────────────────────────────────────────────────────────────────
-export function orderConfirmation({ fullName, orderRef, items, totalNaira, businessName, deliveryAddress } = {}) {
+// The order page is /orders/<order id>; the order reference (CF-123456) is for people, the page cannot be opened with it.
+const orderLink = (orderId) => siteLink(APP, orderId ? `/orders/${encodeURIComponent(orderId)}` : '/orders')
+
+export function orderConfirmation({ fullName, orderId, orderRef, items, totalNaira, businessName, deliveryAddress } = {}) {
   return email({
     title: 'Your order is confirmed',
     preheader: `We have received your payment${businessName ? ` for your order from ${businessName}` : ''}.`,
@@ -58,6 +61,7 @@ export function orderConfirmation({ fullName, orderRef, items, totalNaira, busin
       detailsTable([['Order reference', orderRef], ['Date', fmtDate(new Date().toISOString())], ['Delivery address', deliveryAddress]]),
       itemsTable(items, { totalLabel: 'Total paid', total: totalNaira == null ? null : Number(totalNaira) }),
     ],
+    cta: { href: orderLink(orderId), label: 'Track your order' },
   })
 }
 
@@ -78,9 +82,10 @@ const ORDER_STATUS = {
   delivered: { title: 'Your order has been delivered', tone: 'success', text: 'Your order has been delivered.' },
   cancelled: { title: 'Your order has been cancelled', tone: 'danger', text: 'Your order has been cancelled.' },
   processing: { title: 'Your order is being prepared', tone: 'warn', text: 'Your order is being prepared.' },
+  delivery_quoted: { title: 'Your delivery has been quoted', tone: 'info', text: 'The seller has quoted delivery for your order. Pay now to confirm it.' },
 }
 
-export function orderStatusUpdate({ fullName, orderRef, status, businessName } = {}) {
+export function orderStatusUpdate({ fullName, orderId, orderRef, status, businessName } = {}) {
   const state = ORDER_STATUS[status] || { title: 'An update on your order', tone: 'info', text: 'There is an update on your order.' }
   return email({
     title: state.title,
@@ -90,7 +95,7 @@ export function orderStatusUpdate({ fullName, orderRef, status, businessName } =
       notice(state.tone, state.text),
       detailsTable([['Order reference', orderRef], ['Seller', businessName]]),
     ],
-    cta: orderRef ? { href: siteLink(APP, `/orders/${encodeURIComponent(orderRef)}`), label: 'View order' } : undefined,
+    cta: { href: orderLink(orderId), label: status === 'delivery_quoted' ? 'Pay for your order' : 'View order' },
   })
 }
 

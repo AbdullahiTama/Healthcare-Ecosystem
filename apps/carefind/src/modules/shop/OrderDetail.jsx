@@ -33,9 +33,10 @@ export default function OrderDetail() {
   // `error` is a failed load (replaces the page, with a retry); `actionError` is a failed action on a loaded order
   // (a banner on the order). Neither is "Order not found".
   const [error, setError] = useState('')
-  // Checkout sends the customer here with a notice when the order was created but the next step failed (payment could not
-  // start, the promo code was not applied).
-  const [actionError, setActionError] = useState(() => location.state?.notice || '')
+  // Checkout sends the customer here with a notice: an error when the order was created but the next step failed (payment could not
+  // start, the promo code was not applied), or information (the order waits for a delivery quote).
+  const [actionError, setActionError] = useState(() => (location.state?.tone !== 'info' && location.state?.notice) || '')
+  const [info, setInfo] = useState(() => (location.state?.tone === 'info' && location.state?.notice) || '')
   const [updating, setUpdating] = useState(false)
   const [station, setStation] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -464,6 +465,12 @@ export default function OrderDetail() {
           <button type="button" onClick={() => setActionError('')} aria-label="Dismiss error" style={{ background: 'none', border: 'none', color: theme.danger, fontWeight: 800, fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 4 }}>×</button>
         </div>
       )}
+      {info && (
+        <div role="status" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12, background: theme.tealMist, border: `1px solid ${theme.tealDeep}30`, color: theme.tealDeep, fontSize: 14 }}>
+          <span>{info}</span>
+          <button type="button" onClick={() => setInfo('')} aria-label="Dismiss message" style={{ background: 'none', border: 'none', color: theme.tealDeep, fontWeight: 800, fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 4 }}>×</button>
+        </div>
+      )}
       {paymentJustConfirmed && (
         <div style={{
           display: 'flex',
@@ -844,9 +851,14 @@ export default function OrderDetail() {
             </div>
           )}
           {order.status==='delivery_quote_pending' && isCustomer && (
-            <div style={{ padding:10, borderRadius:8, background:theme.amberBg || '#FFF7ED', border:`1px solid ${theme.warning}30`, color:theme.warning, fontSize:12, marginTop:12 }}>
-              Outside standard zone — our team will quote delivery within 24h via WhatsApp/Email. You have paid for products + fulfilment. Delivery will be added before dispatch.
-            </div>
+            <>
+              <div style={{ padding:10, borderRadius:8, background:theme.amberBg || '#FFF7ED', border:`1px solid ${theme.warning}30`, color:theme.warning, fontSize:12, marginTop:12 }}>
+                Your address is outside our standard delivery zone, so the seller quotes delivery first. We will notify you and email you when it is quoted; you can then pay the full amount here. If it is not quoted within 7 days, the order is cancelled.
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                <Button variant="secondary" onClick={() => setShowCancelModal(true)} disabled={updating}>Cancel Order</Button>
+              </div>
+            </>
           )}
         </Card>
 

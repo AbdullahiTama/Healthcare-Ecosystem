@@ -45,8 +45,6 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false)
   const [payLoading, setPayLoading] = useState(false)
   const [error, setError] = useState('')
-  const [allowPayOnDelivery, setAllowPayOnDelivery] = useState(false)
-  const [payMethod, setPayMethod] = useState('paystack')
   const [savedAddresses, setSavedAddresses] = useState([])
   const [selectedAddressId, setSelectedAddressId] = useState('')
   const [saveAddress, setSaveAddress] = useState(false)
@@ -113,20 +111,6 @@ export default function Checkout() {
     loadStations()
   }, [])
 
-  // Load vendor pay-on-delivery flag (strict Paystack by default, vendor opt-in)
-  useEffect(() => {
-    const vendorIds = [...new Set(items.map(i => i.vendor_id || i.vendor_business_id).filter(Boolean))]
-    if (vendorIds.length !== 1) { setAllowPayOnDelivery(false); return }
-    let live = true
-    shopRepository.getVendorPayOnDelivery(vendorIds[0]).then((allowed) => {
-      if (live) {
-        setAllowPayOnDelivery(allowed)
-        if (!allowed) setPayMethod('paystack')
-      }
-    }).catch(() => { if (live) setAllowPayOnDelivery(false) })
-    return () => { live = false }
-  }, [items])
-
   if (items.length === 0) {
     return (
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
@@ -167,8 +151,8 @@ export default function Checkout() {
   const discountKobo = promoValidation?.valid ? promoValidation.discount_kobo : 0
   const grandTotal = total + fees.fulfilment + (deliveryFeeDisplay ? 0 : fees.delivery) - discountKobo
 
-  // Strict Paystack default; pay-at-pickup only when vendor allows + pickup selected
-  const canUsePickup = allowPayOnDelivery && formData.delivery_preference === 'pickup'
+  // Every order is paid online with Paystack. Pay at Pickup is paused: nothing can record a cash payment yet, so such an order could
+  // never be accepted (docs/architecture/Shop-Flow-Review.md, SD-2).
 
   async function handleValidatePromoCode() {
     if (!promoCode.trim() || !user) return
@@ -254,11 +238,11 @@ export default function Checkout() {
       setStockErrors(stockIssues)
       return
     }
-    // Pay at Pickup: create the order and skip Paystack (vendor will accept later). Otherwise strict Paystack: create the order
-    // as pending_payment, then redirect to Paystack.
-    const usePickup = canUsePickup && payMethod === 'pickup'
+    // Create the order, then pay for it with Paystack. Home delivery outside the approved cities cannot be paid yet: the seller
+    // quotes delivery first, and the customer pays the full amount from the order page.
+    const awaitingQuote = deliveryFeeDisplay
     setLoading(true)
-    if (!usePickup) setPayLoading(true)
+    if (!awaitingQuote) setPayLoading(true)
     setError('')
 
     let orderId
@@ -268,7 +252,7 @@ export default function Checkout() {
         subtotalKobo: total,
         fees,
         form: formData,
-        deliveryPreference: usePickup ? 'pickup' : formData.delivery_preference,
+        deliveryPreference: formData.delivery_preference,
         approvedCity: approved,
         distanceKm,
         pickupStationId,
@@ -293,7 +277,11 @@ export default function Checkout() {
       if (!applied.success) notice = 'Your promo code could not be applied, so this order is at full price. You can pay for it or cancel it here.'
     }
 
-    if (!usePickup && !notice) {
+    let tone = 'error'
+    if (awaitingQuote && !notice) {
+      notice = 'Your order is placed. The seller will quote delivery, and we will let you know when you can pay.'
+      tone = 'info'
+    } else if (!notice) {
       try {
         await initiatePaystackForOrder(orderId)
         return
@@ -303,7 +291,7 @@ export default function Checkout() {
     }
     setLoading(false)
     setPayLoading(false)
-    navigate(`/orders/${orderId}`, notice ? { state: { notice } } : undefined)
+    navigate(`/orders/${orderId}`, notice ? { state: { notice, tone } } : undefined)
   }
 
   return (
@@ -636,22 +624,11 @@ export default function Checkout() {
             </div>
           </Card>
 
-          {/* Payment method selector — strict Paystack default */}
-          {canUsePickup && (
-            <Card style={{ padding: 16, border: `1px solid ${theme.tealDeep}20`, background: theme.tealMist }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>Payment Method</p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => setPayMethod('paystack')} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${payMethod==='paystack'? theme.tealDeep : theme.border}`, background: payMethod==='paystack'? theme.tealDeep : '#fff', color: payMethod==='paystack'? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Pay with Paystack (Card/Bank)</button>
-                <button type="button" onClick={() => setPayMethod('pickup')} style={{ flex: 1, padding: '10px 12px', borderRadius: 10, border: `1px solid ${payMethod==='pickup'? theme.tealDeep : theme.border}`, background: payMethod==='pickup'? theme.tealDeep : '#fff', color: payMethod==='pickup'? '#fff' : theme.textMid, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Pay at Pickup</button>
-              </div>
-              <p style={{ margin: '8px 0 0 0', fontSize: 11, color: theme.textLight }}>{payMethod==='pickup' ? 'Order created as unpaid — vendor will confirm and you pay when you collect.' : 'You will be redirected to Paystack to pay securely. Order is held as pending_payment until verified.'}</p>
-            </Card>
-          )}
-          {!canUsePickup && (
-            <div role="note" style={{ padding: 12, borderRadius: 8, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20`, fontSize: 12, color: theme.textMid, textAlign: 'center' }}>
-              Payment is via <b>Paystack</b> (cards, bank, USSD, mobile). Your order is created as <b>pending_payment</b> until Paystack confirms.
-            </div>
-          )}
+          <div role="note" style={{ padding: 12, borderRadius: 8, background: theme.tealMist, border: `1px solid ${theme.tealDeep}20`, fontSize: 12, color: theme.textMid, textAlign: 'center' }}>
+            {deliveryFeeDisplay
+              ? <>Delivery to your area is quoted by the seller. Place your order now — you pay once delivery is quoted.</>
+              : <>You pay securely with <b>Paystack</b> (card, bank transfer, USSD). Your order is confirmed once Paystack confirms the payment.</>}
+          </div>
 
           {stockErrors.length > 0 && (
             <div role="alert" style={{
@@ -722,9 +699,9 @@ export default function Checkout() {
               opacity: (loading||payLoading) ? 0.7 : 1
             }}
           >
-            {payLoading ? 'Redirecting to Paystack...' : loading ? 'Creating Order...' : canUsePickup && payMethod==='pickup' ? 'Place Order — Pay at Pickup' : deliveryFeeDisplay ? 'Proceed to Pay with Paystack' : `Pay ₦${(grandTotal/100).toLocaleString()} with Paystack`}
+            {payLoading ? 'Redirecting to Paystack...' : loading ? 'Creating Order...' : deliveryFeeDisplay ? 'Place Order — Get Delivery Quote' : `Pay ₦${(grandTotal/100).toLocaleString()} with Paystack`}
           </Button>
-          <p style={{ fontSize: 11, color: theme.textLight, textAlign:'center' }}>Secure by Paystack · 256-bit SSL · Ref {payMethod} · Idempotency via payment_reference</p>
+          <p style={{ fontSize: 11, color: theme.textLight, textAlign:'center' }}>Payments secured by Paystack</p>
         </div>
       </form>
     </div>

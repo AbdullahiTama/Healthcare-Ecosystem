@@ -8,7 +8,7 @@ vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({ ...(awai
 import { createBudget } from '@care-ecosystem/shared-payments'
 import { runFinanceJobs, FINANCE_STEPS_EVERY_MINUTES } from '../financeJobs.js'
 
-const client = ({ due = () => true, release = { data: { released: 2, released_kobo: 100, partial: 0 }, error: null } } = {}) => {
+const client = ({ due = () => true, release = { data: { released: 2, released_kobo: 100, partial: 0 }, error: null }, expiry = { data: { expired: 3 }, error: null } } = {}) => {
   const calls = []
   return {
     calls,
@@ -16,6 +16,7 @@ const client = ({ due = () => true, release = { data: { released: 2, released_ko
       calls.push([name, args])
       if (name === 'claim_job_slot') return { data: due(args.p_job), error: null }
       if (name === 'release_shop_vendor_credits') return release
+      if (name === 'expire_unpaid_shop_orders') return expiry
       return { data: null, error: { message: `unexpected rpc ${name}` } }
     },
   }
@@ -28,15 +29,17 @@ beforeEach(() => {
 })
 
 describe('runFinanceJobs', () => {
-  it('runs vendor release, withdrawals, refunds and reconciliation, each behind its own slot and interval', async () => {
+  it('runs vendor release, order expiry, withdrawals, refunds and reconciliation, each behind its own slot and interval', async () => {
     const s = client()
     const { report, failed } = await runFinanceJobs(s, { budget: createBudget(50_000) })
     expect(failed).toEqual([])
-    expect(Object.keys(report)).toEqual(['vendor_release', 'withdrawals', 'refunds', 'reconciliation'])
+    expect(Object.keys(report)).toEqual(['vendor_release', 'shop_order_expiry', 'withdrawals', 'refunds', 'reconciliation'])
     expect(report.vendor_release).toEqual({ released: 2, released_kobo: 100, partial: 0 })
+    expect(report.shop_order_expiry).toEqual({ expired: 3 })
+    expect(s.calls).toContainEqual(['expire_unpaid_shop_orders', { p_limit: 200 }])
     const asked = Object.fromEntries(s.calls.filter(([n]) => n === 'claim_job_slot').map(([, a]) => [a.p_job, a.p_min_minutes]))
     expect(asked).toEqual({
-      job_vendor_release: FINANCE_STEPS_EVERY_MINUTES.vendor_release, job_withdrawals: FINANCE_STEPS_EVERY_MINUTES.withdrawals,
+      job_vendor_release: FINANCE_STEPS_EVERY_MINUTES.vendor_release, job_shop_order_expiry: FINANCE_STEPS_EVERY_MINUTES.shop_order_expiry, job_withdrawals: FINANCE_STEPS_EVERY_MINUTES.withdrawals,
       job_refunds: FINANCE_STEPS_EVERY_MINUTES.refunds, job_reconciliation: FINANCE_STEPS_EVERY_MINUTES.reconciliation,
     })
     expect(FINANCE_STEPS_EVERY_MINUTES.reconciliation).toBe(1)           // its own sub-steps are gated inside (replay 5, provider 30, ...)
@@ -76,12 +79,19 @@ describe('runFinanceJobs', () => {
     expect(report.vendor_release).toEqual({ error: 'relation missing' })
   })
 
+  it('a database error from the order expiry is a failed step, and the other steps still run', async () => {
+    const { report, failed } = await runFinanceJobs(client({ expiry: { data: null, error: { message: 'function missing' } } }), { budget: createBudget(50_000) })
+    expect(failed).toEqual(['shop_order_expiry'])
+    expect(report.shop_order_expiry).toEqual({ error: 'function missing' })
+    expect(h.sweepWithdrawals).toHaveBeenCalled()
+  })
+
   it('with the budget spent, nothing starts', async () => {
     let t = 0
     const budget = createBudget(1000, { now: () => t })
     t = 5000
     const { report } = await runFinanceJobs(client(), { budget })
-    for (const name of ['vendor_release', 'withdrawals', 'refunds', 'reconciliation']) expect(report[name]).toEqual({ skipped: 'out_of_time' })
+    for (const name of ['vendor_release', 'shop_order_expiry', 'withdrawals', 'refunds', 'reconciliation']) expect(report[name]).toEqual({ skipped: 'out_of_time' })
     expect(h.sweepWithdrawals).not.toHaveBeenCalled()
   })
 

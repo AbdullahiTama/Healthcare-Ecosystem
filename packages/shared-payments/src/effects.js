@@ -182,6 +182,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           toEmail: email,
           payload: {
             fullName: order.customer_name || 'Valued Customer',
+            orderId: order.id,
             orderRef: order.order_ref,
             items: (items || []).map((it) => ({ name: it.product_name, quantity: it.quantity, price: Math.round((it.unit_price_kobo || 0) / 100) })),
             totalNaira: Math.round((order.total_kobo || 0) / 100),

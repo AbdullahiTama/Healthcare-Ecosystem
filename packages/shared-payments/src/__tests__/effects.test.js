@@ -103,6 +103,17 @@ describe('effects: the paths around the happy ones', () => {
     expect(none.sent).toEqual([]); expect(missing.sent).toEqual([])
   })
 
+  it('shop order: the vendor is told and the customer confirmation carries the order id (its "Track your order" link)', async () => {
+    const order = { id: 'o1', order_ref: 'CF-123456', total_kobo: 560000, delivery_address: '1 Marina, Lagos', delivery_email: 'ada@example.com', customer_name: 'Ada' }
+    const { run, sent, sb } = setup({ tables: { shop_orders: [order] } })
+    await run({ outcome: 'settled', purpose: 'shop_order', order_id: 'o1', order_ref: 'CF-123456', vendor_business_id: 'b1', total_kobo: 560000 })
+    expect(sb.inserts).toContainEqual(['staff_notifications', expect.objectContaining({ business_id: 'b1', kind: 'shop_order_paid' })])
+    expect(sent).toEqual([expect.objectContaining({
+      templateKey: 'order_confirmation', toEmail: 'ada@example.com', idempotencyKey: 'order-confirmation:o1',
+      payload: expect.objectContaining({ orderId: 'o1', orderRef: 'CF-123456', totalNaira: 5600 }),
+    })])
+  })
+
   it('a send that throws is logged with the template and never propagates (the settlement stands)', async () => {
     const { run, logger } = setup({ users: { u1: { email: 'a@b.com' } } }, async () => { throw new Error('smtp down') })
     await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
