@@ -181,7 +181,7 @@ describe('createSettlementEffects (shared by both apps)', () => {
     it('notifies the vendor and sends the order confirmation once, keyed by the order', async () => {
       const { run, sent, sb } = setup({ shop_orders: [order()], shop_order_items: [], staff_notifications: [] })
       await run(shopResult)
-      expect(sb.data.staff_notifications[0]).toMatchObject({ business_id: 'b1', kind: 'shop_order_paid', is_owner: true, link: '/dashboard/ecommerce' })
+      expect(sb.data.staff_notifications[0]).toMatchObject({ business_id: 'b1', kind: 'shop_order_paid', is_owner: true, link: '/dashboard/ecommerce/orders/o1' })
       expect(sent).toHaveLength(1)
       expect(sent[0]).toMatchObject({ templateKey: 'order_confirmation', toEmail: 'buyer@x.com', idempotencyKey: 'order-confirmation:o1' })
       expect(sent[0].payload).toMatchObject({ orderRef: 'CF-1', totalNaira: 25000, fullName: 'Ada' })

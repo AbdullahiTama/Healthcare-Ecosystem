@@ -11,7 +11,7 @@ import { runFinanceReconciliation } from './financeReconcile.js'
 //     loops inside the steps stop at the deadline;
 //   * a failing step is reported and never blocks the others.
 // Every step is idempotent, so being stopped half way, or running in two places, is safe.
-export const FINANCE_STEPS_EVERY_MINUTES = Object.freeze({ vendor_release: 5, withdrawals: 5, refunds: 5, reconciliation: 1 })
+export const FINANCE_STEPS_EVERY_MINUTES = Object.freeze({ vendor_release: 5, shop_order_expiry: 5, withdrawals: 5, refunds: 5, reconciliation: 1 })
 
 export async function runFinanceJobs(supabase, { budget, force = false } = {}) {
   const provider = getPaystackProvider()
@@ -23,6 +23,17 @@ export async function runFinanceJobs(supabase, { budget, force = false } = {}) {
         const { data, error } = await supabase.rpc('release_shop_vendor_credits', { p_limit: 200 })
         if (error) throw new Error(error.message)
         if (data?.partial > 0) paymentLogger.warn('shop.vendor_release_partial', { partial: data.partial })
+        return data
+      },
+    },
+    {
+      // unpaid shop orders past their window: cancelled, stock back (database only, no provider). A late Paystack payment for one
+      // is refunded by the settlement engine.
+      name: 'shop_order_expiry', everyMinutes: FINANCE_STEPS_EVERY_MINUTES.shop_order_expiry,
+      run: async () => {
+        const { data, error } = await supabase.rpc('expire_unpaid_shop_orders', { p_limit: 200 })
+        if (error) throw new Error(error.message)
+        if (data?.expired > 0) paymentLogger.info('shop.orders_expired', { expired: data.expired })
         return data
       },
     },

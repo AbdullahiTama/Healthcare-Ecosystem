@@ -26,3 +26,18 @@ const KIND_TO_CATEGORY = {
 export function categoryForKind(kind) {
   return KIND_TO_CATEGORY[kind] || 'general'
 }
+
+/**
+ * The in-app path a notification opens. Links come in two shapes: a dashboard
+ * section ('inventory', 'orders') written by CareHub itself, and a full path
+ * ('/dashboard/ecommerce/orders/<id>') written by the database functions and
+ * the payment effects. Prefixing the full ones again produced
+ * '/dashboard//dashboard/...', which matched no route and dropped the vendor
+ * on the dashboard home instead of the order.
+ */
+export function notificationPath(link) {
+  const value = String(link || '').trim()
+  if (!value) return null
+  if (value.startsWith('/') && !value.startsWith('//')) return value
+  return '/dashboard/' + value.replace(/^\/+/, '')
+}

@@ -643,3 +643,12 @@ body {
     animation: none !important;
   }
 }
+/* iOS Safari zooms the whole page in when a field with text under 16px is focused, and does not zoom back out: on touch
+   screens every text field, select and textarea uses 16px (inline 13px styles from the shared form components included). */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

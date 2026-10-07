@@ -42,8 +42,12 @@ export default async function handler(req, res) {
   if (!Number.isSafeInteger(order.total_kobo) || order.total_kobo <= 0) {
     return res.status(400).json({ error: 'No amount to pay' })
   }
-  // Only pending_payment orders can be paid (strict Paystack)
-  if (order.status !== 'pending_payment' && order.status !== 'delivery_quote_pending') {
+  // Only pending_payment orders can be paid (strict Paystack). An order waiting for its delivery quote is not payable yet: its total
+  // does not include delivery until quote_shop_order_delivery() sets it.
+  if (order.status === 'delivery_quote_pending') {
+    return res.status(409).json({ error: 'The seller has not quoted delivery for this order yet. You can pay once it is quoted.' })
+  }
+  if (order.status !== 'pending_payment') {
     return res.status(400).json({ error: `Order status ${order.status} cannot be paid` })
   }
 

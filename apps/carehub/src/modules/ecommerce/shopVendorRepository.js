@@ -35,6 +35,13 @@ export function createShopVendorRepository({ request = sbFetch } = {}) {
         body: JSON.stringify({ p_order_id: orderId, p_to_status: toStatus, p_changed_by: null, p_note: note || null })
       })
     },
+    // Out-of-zone home delivery: the quote sets the delivery fee and the order total, then the customer can pay
+    async quoteDelivery(orderId, deliveryKobo) {
+      return request('rpc/quote_shop_order_delivery', {
+        method: 'POST',
+        body: JSON.stringify({ p_order_id: orderId, p_delivery_kobo: deliveryKobo })
+      })
+    },
     async sendMessage(orderId, message) {
       return request('rpc/shop_add_message', {
         method: 'POST',

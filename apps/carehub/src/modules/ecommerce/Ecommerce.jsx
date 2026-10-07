@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Upload, Trash2, ShieldCheck } from 'lucide-react'
 import { createEcommerceRepository } from './repositories'
 import { createShopVendorRepository } from './shopVendorRepository'
@@ -16,6 +17,9 @@ const shopVendorRepository = createShopVendorRepository({ request: sbFetch })
 
 export default function Ecommerce({ brand, role }) {
   const isOwner = role === 'Owner'
+  // /dashboard/ecommerce/orders/:orderId (the link in every shop order notification) opens that order's drawer
+  const { orderId: routeOrderId } = useParams()
+  const navigate = useNavigate()
   const [app, setApp] = useState(null)
   const [appLoading, setAppLoading] = useState(true)
   const [appError, setAppError] = useState('')
@@ -46,43 +50,12 @@ export default function Ecommerce({ brand, role }) {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderDetail, setOrderDetail] = useState(null)
   const [orderMsg, setOrderMsg] = useState('')
+  // Pay at Pickup is paused (Shop-Flow-Review SD-2); the vendor's saved choice is only shown
   const [allowPayOnDelivery, setAllowPayOnDelivery] = useState(!!brand?.shop_allow_pay_on_delivery)
-  const [togglingPayOnDelivery, setTogglingPayOnDelivery] = useState(false)
 
   const { msg, type, show: showToast } = useToast()
 
   useEffect(() => { setAllowPayOnDelivery(!!brand?.shop_allow_pay_on_delivery) }, [brand?.shop_allow_pay_on_delivery])
-
-  async function handleTogglePayOnDelivery(checked) {
-    if (!isOwner) { showToast('Only Owner can change Shop payment settings', { type: 'warning' }); return }
-    setTogglingPayOnDelivery(true)
-    try {
-      const { error } = await sbFetch(`businesses?id=eq.${brand.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ shop_allow_pay_on_delivery: checked }),
-        prefer: 'return=minimal',
-      }).then(() => ({ error: null })).catch(e => ({ error: e }))
-      // sbFetch returns rows, not error object — try direct fetch via supabase-like helper
-      // Fallback: use supabase client if available
-      if (error) throw error
-      // Verify via direct RLS read
-      const updated = await sbFetch(`businesses?id=eq.${brand.id}&select=shop_allow_pay_on_delivery`)
-      const flag = Array.isArray(updated) && updated[0]?.shop_allow_pay_on_delivery
-      setAllowPayOnDelivery(!!flag)
-      showToast(checked ? 'Pay at Pickup enabled — customers can pay when they collect' : 'Pay at Pickup disabled — strict Paystack only', { type: 'success' })
-    } catch (e) {
-      // Try via authClient supabase as fallback
-      try {
-        const { data } = await (await import('../../lib/authClient')).authClient.from?.('businesses').select('shop_allow_pay_on_delivery').eq('id', brand.id).maybeSingle?.() ?? { data: null }
-        // If still fails, just optimistically set UI and toast
-        setAllowPayOnDelivery(checked)
-        showToast('Setting updated (local) — will sync on reload', { type: 'info' })
-      } catch {
-        showToast(e.message || 'Could not update setting', { type: 'error' })
-      }
-    }
-    setTogglingPayOnDelivery(false)
-  }
 
   const segment = resolveEcommerceSegment(brand?.business_type, brand?.ecommerce_segment)
   const segmentLabel = SEGMENT_LABELS[segment] || segment
@@ -106,22 +79,73 @@ export default function Ecommerce({ brand, role }) {
     setTermsLoading(false)
   }
 
-  async function loadOrders() {
+  // statusFilter is passed when the filter has just changed: the state update has not reached this closure yet
+  async function loadOrders(statusFilter = orderStatus) {
     if (!brand?.id) return
     setOrdersLoading(true); setOrdersError('')
     try {
-      const rows = await shopVendorRepository.listOrders(brand.id, { status: orderStatus !== 'all' ? orderStatus : undefined, search: orderSearch || undefined })
+      const rows = await shopVendorRepository.listOrders(brand.id, { status: statusFilter !== 'all' ? statusFilter : undefined, search: orderSearch || undefined })
       setOrders(rows || [])
     } catch (e) { setOrdersError('Could not load orders'); setOrders([]) }
     setOrdersLoading(false)
+  }
+  // Every order action: on success refresh the list and the open order; on failure (the server refuses a change that is not
+  // allowed) tell the vendor why instead of failing silently.
+  async function runOrderAction(action, successMessage) {
+    try {
+      await action()
+      showToast(successMessage, { type: 'success' })
+    } catch (e) {
+      showToast(e.message || 'Could not update this order', { type: 'error' })
+      return
+    }
+    loadOrders()
+    try {
+      const d = await shopVendorRepository.getOrder(orderDetail.id)
+      setOrderDetail(d); setSelectedOrder(d)
+    } catch { /* the list refresh above still shows the new status */ }
+  }
+  // Delivery outside the approved cities: the quote is added to the order total, then the customer is asked to pay
+  async function handleQuoteDelivery() {
+    const input = prompt('Delivery fee for this order (₦). It is added to the order total and the customer is asked to pay.')
+    if (input == null) return
+    const naira = Number(String(input).replace(/[₦,\s]/g, ''))
+    if (!Number.isFinite(naira) || naira <= 0) { showToast('Enter the delivery fee in naira, for example 2500', { type: 'warning' }); return }
+    await runOrderAction(() => shopVendorRepository.quoteDelivery(orderDetail.id, Math.round(naira * 100)), `Delivery quoted: ₦${naira.toLocaleString()}. The customer has been asked to pay.`)
   }
   async function openOrder(o) {
     setSelectedOrder(o)
     try {
       const d = await shopVendorRepository.getOrder(o.id)
-      setOrderDetail(d)
-    } catch { setOrderDetail(null) }
+      if (!d) {
+        // not this business's order (or no longer visible): say so instead of leaving the drawer loading
+        setSelectedOrder(null); setOrderDetail(null)
+        showToast('This order could not be found for your business', { type: 'error' })
+        return
+      }
+      setOrderDetail(d); setSelectedOrder(d)
+    } catch (e) {
+      setSelectedOrder(null); setOrderDetail(null)
+      showToast('Could not load this order. Please try again.', { type: 'error' })
+    }
   }
+  async function handleSendOrderMessage() {
+    const text = orderMsg.trim()
+    if (!text) return
+    try {
+      await shopVendorRepository.sendMessage(orderDetail.id, text)
+    } catch (e) {
+      showToast(e.message || 'Could not send the message', { type: 'error' })
+      return
+    }
+    setOrderMsg('')
+    try { setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) } catch { /* the message is sent; it shows on the next open */ }
+  }
+  function closeOrder() {
+    setSelectedOrder(null); setOrderDetail(null)
+    if (routeOrderId) navigate('/dashboard/ecommerce', { replace: true })
+  }
+  useEffect(() => { if (routeOrderId) openOrder({ id: routeOrderId, order_ref: '' }) }, [routeOrderId])
 
   async function loadApp() {
     setAppLoading(true); setAppError('')
@@ -385,12 +409,14 @@ export default function Ecommerce({ brand, role }) {
             <div style={{ marginTop: 10, padding: 12, borderRadius: 8, border: `1px solid ${border}`, background: bg }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontWeight: 800, color: navy, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>Shop Payment Mode {allowPayOnDelivery ? <Pill label="Pay at Pickup enabled" type="green" /> : <Pill label="Strict Paystack" type="teal" />}</div>
-                  <div style={{ fontSize: 11, color: gray500, marginTop: 2 }}>{allowPayOnDelivery ? 'Customers can choose Pay at Pickup (pickup only) — you collect cash/POS on collection. Otherwise strict Paystack.' : 'All Shop orders are strict Paystack — customers pay online before you prepare.'}</div>
+                  <div style={{ fontWeight: 800, color: navy, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>Shop Payment Mode <Pill label="Paystack" type="teal" /></div>
+                  {/* Pay at Pickup is paused: there is no way yet to record a cash payment, so such orders could never be accepted.
+                      The vendor's saved choice is kept for when it returns. */}
+                  <div style={{ fontSize: 11, color: gray500, marginTop: 2 }}>Customers pay online with Paystack before you prepare an order. Pay at Pickup is paused for now{allowPayOnDelivery ? ' — your choice to offer it is saved for when it returns' : ''}.</div>
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: navy, cursor: togglingPayOnDelivery ? 'wait' : 'pointer', opacity: togglingPayOnDelivery ? 0.6 : 1 }}>
-                  <input type="checkbox" checked={allowPayOnDelivery} onChange={e => handleTogglePayOnDelivery(e.target.checked)} disabled={togglingPayOnDelivery} aria-label="Allow pay at pickup" style={{ width: 18, height: 18 }} />
-                  Allow Pay at Pickup
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: gray500, cursor: 'not-allowed', opacity: 0.6 }}>
+                  <input type="checkbox" checked={allowPayOnDelivery} disabled aria-label="Allow pay at pickup (paused)" style={{ width: 18, height: 18 }} />
+                  Allow Pay at Pickup (paused)
                 </label>
               </div>
             </div>
@@ -528,18 +554,18 @@ export default function Ecommerce({ brand, role }) {
               <Search size={14} color={gray400} />
               <input aria-label="Search orders" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') loadOrders() }} placeholder="Order ref, customer, product..." style={{ border:'none', outline:'none', padding:'6px 0', fontSize: 12, minWidth: 140 }} />
             </div>
-            <Sel value={orderStatus} onChange={v=>{ setOrderStatus(v); setTimeout(loadOrders,0) }} options={[{value:'all',label:'All'},{value:'pending_payment',label:'Pending Payment'},{value:'delivery_quote_pending',label:'Quote Pending'},{value:'paid',label:'Paid'},{value:'accepted',label:'Accepted'},{value:'processing',label:'Processing'},{value:'ready_for_pickup',label:'Ready for Pickup'},{value:'in_transit',label:'In Transit'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
-            <button onClick={loadOrders} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${border}`, background:'#fff', cursor:'pointer', fontSize:11, fontWeight:700 }}>Search</button>
+            <Sel value={orderStatus} onChange={v=>{ setOrderStatus(v); loadOrders(v) }} options={[{value:'all',label:'All'},{value:'pending_payment',label:'Pending Payment'},{value:'delivery_quote_pending',label:'Quote Pending'},{value:'paid',label:'Paid'},{value:'accepted',label:'Accepted'},{value:'processing',label:'Processing'},{value:'ready_for_pickup',label:'Ready for Pickup'},{value:'in_transit',label:'In Transit'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
+            <button onClick={() => loadOrders()} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${border}`, background:'#fff', cursor:'pointer', fontSize:11, fontWeight:700 }}>Search</button>
           </div>
         </div>
         {ordersLoading ? <Loading text="Loading orders..." /> : ordersError ? (
-          <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={loadOrders} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
+          <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={() => loadOrders()} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
         ) : orders.length === 0 ? (
           <Empty icon={<ShoppingBag size={32} />} message={orderSearch||orderStatus!=='all' ? 'No orders match this filter' : 'No Shop orders yet — activate products and share your Shop.'} />
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
             {orders.map(o=>(
-              <div key={o.id} onClick={()=>openOrder(o)} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:`1px solid ${border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>
+              <div key={o.id} role="button" tabIndex={0} aria-label={`Open order ${o.order_ref}`} onClick={()=>openOrder(o)} onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openOrder(o) } }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:`1px solid ${border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>
                 <div>
                   <div style={{ fontWeight:800, color:navy, fontSize:13 }}>{o.order_ref}</div>
                   <div style={{ fontSize:11, color:gray500 }}>{o.customer_name || o.customer_id?.slice(0,8)} · {new Date(o.created_at).toLocaleDateString()} · {o.delivery_preference==='pickup'?'Pickup':'Home'} {o.is_approved_city===false && <span style={{ color:warning }}>(quote pending)</span>}</div>
@@ -561,7 +587,7 @@ export default function Ecommerce({ brand, role }) {
           <Card style={{ maxWidth: 640, width:'100%', maxHeight:'90vh', overflowY:'auto', padding:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <div style={{ fontWeight:800, color:navy }}>{selectedOrder.order_ref} <span style={{ fontWeight:400, color:gray500, fontSize:11 }}>{selectedOrder.status}</span></div>
-              <button onClick={()=>{ setSelectedOrder(null); setOrderDetail(null) }} aria-label="Close" style={{ background:'none', border:`1px solid ${border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer' }}>×</button>
+              <button onClick={closeOrder} aria-label="Close" style={{ background:'none', border:`1px solid ${border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer' }}>×</button>
             </div>
             {orderDetail ? (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -590,20 +616,25 @@ export default function Ecommerce({ brand, role }) {
                     <div key={h.id} style={{ fontSize:11, color:gray600, padding:'2px 0' }}>{new Date(h.created_at).toLocaleString()} — {h.from_status||'—'} → <b>{h.to_status}</b> {h.note?`· ${h.note}`:''}</div>
                   ))}
                   <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
-                    {orderDetail.status==='paid' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'accepted','Accepted by vendor'); loadOrders(); const d=await shopVendorRepository.getOrder(orderDetail.id); setOrderDetail(d); setSelectedOrder(d) }} style={{ padding:'6px 10px', fontSize:11 }}>Accept</TealBtn>}
-                    {orderDetail.status==='accepted' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'processing'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Processing</TealBtn>}
-                    {orderDetail.status==='processing' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'ready_for_pickup'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Ready for Pickup</TealBtn>}
-                    {orderDetail.status==='ready_for_pickup' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'in_transit'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
-                    {orderDetail.status==='in_transit' && <TealBtn onClick={async()=>{ await shopVendorRepository.updateStatus(orderDetail.id,'delivered'); loadOrders(); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
-                    {orderDetail.is_approved_city===false && orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={async()=>{ const q=prompt('Enter delivery quote (₦)'); if(q==null) return; await shopVendorRepository.updateStatus(orderDetail.id,'pending_payment',`Delivery quoted ₦${q}`); loadOrders(); }} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
+                    {orderDetail.status==='paid' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'accepted','Accepted by vendor'),'Order accepted')} style={{ padding:'6px 10px', fontSize:11 }}>Accept</TealBtn>}
+                    {orderDetail.status==='accepted' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'processing'),'Marked as processing')} style={{ padding:'6px 10px', fontSize:11 }}>Processing</TealBtn>}
+                    {orderDetail.status==='processing' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'ready_for_pickup'),'Marked ready for pickup')} style={{ padding:'6px 10px', fontSize:11 }}>Ready for Pickup</TealBtn>}
+                    {/* a pickup order is finished when the customer collects it; only home delivery goes in transit */}
+                    {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference==='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered','Collected by customer'),'Marked as collected')} style={{ padding:'6px 10px', fontSize:11 }}>Collected by Customer</TealBtn>}
+                    {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference!=='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'in_transit'),'Marked in transit')} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
+                    {orderDetail.status==='in_transit' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered'),'Marked delivered')} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
+                    {orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={handleQuoteDelivery} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
                   </div>
                 </div>
                 <VendorTrackingPanel
                   order={orderDetail}
+                  showToast={showToast}
                   onStatusUpdate={async () => {
                     loadOrders()
-                    const d = await shopVendorRepository.getOrder(orderDetail.id)
-                    setOrderDetail(d)
+                    try {
+                      const d = await shopVendorRepository.getOrder(orderDetail.id)
+                      if (d) { setOrderDetail(d); setSelectedOrder(d) }
+                    } catch { /* the list refresh above still shows the new status */ }
                   }}
                 />
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
@@ -614,8 +645,8 @@ export default function Ecommerce({ brand, role }) {
                     ))}
                   </div>
                   <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                    <input value={orderMsg} onChange={e=>setOrderMsg(e.target.value)} placeholder="Reply with fulfilment info..." style={{ flex:1, border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }} />
-                    <TealBtn onClick={async()=>{ if(!orderMsg.trim()) return; await shopVendorRepository.sendMessage(orderDetail.id,orderMsg.trim()); setOrderMsg(''); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 12px', fontSize:11 }}>Send</TealBtn>
+                    <input aria-label="Message to CareFind about this order" value={orderMsg} onChange={e=>setOrderMsg(e.target.value)} placeholder="Reply with fulfilment info..." style={{ flex:1, border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }} />
+                    <TealBtn onClick={handleSendOrderMessage} style={{ padding:'6px 12px', fontSize:11 }}>Send</TealBtn>
                   </div>
                 </div>
               </div>

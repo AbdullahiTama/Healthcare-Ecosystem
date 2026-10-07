@@ -163,7 +163,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           kind: 'shop_order_paid',
           title: `Shop order paid - ${order_ref}`,
           body: `Order ${order_ref} - ${'\u20a6'}${(total_kobo / 100).toLocaleString()} via Paystack`,
-          link: '/dashboard/ecommerce',
+          link: `/dashboard/ecommerce/orders/${order_id}`,
           read_at: null,
         })
       })
@@ -182,6 +182,7 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
           toEmail: email,
           payload: {
             fullName: order.customer_name || 'Valued Customer',
+            orderId: order.id,
             orderRef: order.order_ref,
             items: (items || []).map((it) => ({ name: it.product_name, quantity: it.quantity, price: Math.round((it.unit_price_kobo || 0) / 100) })),
             totalNaira: Math.round((order.total_kobo || 0) / 100),

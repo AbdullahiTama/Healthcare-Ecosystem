@@ -24,6 +24,7 @@ const tx = await paystack.verifyPayment({ reference })   // -> { status, amountK
 | 429 | retried for every method (the provider did not process it); honours `Retry-After`, capped |
 | 401/403 | `auth`, generic message, never retried |
 | 404 | `not_found` (unknown reference — distinct from "failed") |
+| `verifyPayment`: "Transaction reference not found" (Paystack sends it as 400 or 200 + `status:false`) | `not_found` — the checkout never opened, so settlement treats it as not paid instead of blocking the next attempt |
 | "duplicate reference" | `duplicate_reference` (callers verify, they do not re-send) |
 | HTTP 200 with `status:false` | `provider_rejected` |
 

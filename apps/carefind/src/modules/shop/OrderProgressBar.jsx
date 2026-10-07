@@ -1,8 +1,11 @@
 import { theme } from '../../styles/theme'
 import { CheckCircle, Package, Truck, MapPin, Check } from 'lucide-react'
 import { STATUS_CONFIG, TRACKING_STEPS } from './orderConstants'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import OrderStepsVertical from './OrderStepsVertical'
 
 export default function OrderProgressBar({ order }) {
+  const { isMobile } = useBreakpoint()
   if (!order || ['cancelled', 'pending_payment', 'disputed'].includes(order.status)) {
     return null
   }
@@ -26,6 +29,7 @@ export default function OrderProgressBar({ order }) {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: 12,
         marginBottom: 16,
       }}>
         <div style={{
@@ -79,7 +83,8 @@ export default function OrderProgressBar({ order }) {
         }} />
       </div>
 
-      {/* Step Indicators */}
+      {/* Step Indicators: a vertical list on a phone, where eight steps cannot fit side by side */}
+      {isMobile ? <OrderStepsVertical order={order} /> : (
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -155,6 +160,7 @@ export default function OrderProgressBar({ order }) {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

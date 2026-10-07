@@ -72,6 +72,17 @@ describe('NotificationBell', () => {
     expect(bellButton().textContent).not.toContain('2')
   })
 
+  it('opens a shop order notification on that order (its link is a full path, not a section name)', async () => {
+    notificationRepository.getAll.mockResolvedValue([
+      { id: 'n3', kind: 'shop_order_status', title: 'Order CF-1 → paid', body: 'Status changed', link: '/dashboard/ecommerce/orders/o1', read_at: null, created_at: NOW, staff_id: null },
+    ])
+    await renderBell()
+    await act(async () => { bellButton().click() })
+    await act(async () => { buttonByText('Order CF-1').click() })
+    await act(async () => {})
+    expect(navigate).toHaveBeenCalledWith('/dashboard/ecommerce/orders/o1')
+  })
+
   it('reverts the optimistic read state when the PATCH fails', async () => {
     notificationRepository.markRead.mockRejectedValueOnce(new Error('network down'))
     await renderBell()

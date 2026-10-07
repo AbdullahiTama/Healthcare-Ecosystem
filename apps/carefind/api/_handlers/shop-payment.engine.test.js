@@ -8,6 +8,7 @@ vi.mock('../_lib/emailService.js', () => ({ enqueue: (...a) => h.enqueue(...a), 
 vi.mock('../_lib/payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error: (...a) => h.log(...a) } }))
 
 import { createFakeSupabase, createFakeProvider, verifiedPayment, createRes } from '@care-ecosystem/shared-payments/testing'
+import { ProviderError } from '@care-ecosystem/shared-payments'
 import initiate from './initiate-shop-payment.js'
 import verify from './verify-shop-payment.js'
 
@@ -63,6 +64,11 @@ describe('initiate-shop-payment', () => {
     expect((await call(initiate, { order_id: ORDER })).statusCode).toBe(400)
     Object.assign(h.db.data.shop_orders[0], { status: 'pending_payment', total_kobo: 0 })
     expect((await call(initiate, { order_id: ORDER })).statusCode).toBe(400)
+    // waiting for the delivery quote: the total has no delivery in it yet
+    Object.assign(h.db.data.shop_orders[0], { status: 'delivery_quote_pending', total_kobo: TOTAL })
+    const quote = await call(initiate, { order_id: ORDER })
+    expect(quote.statusCode).toBe(409)
+    expect(quote.body.error).toMatch(/not quoted delivery/)
     expect((await call(initiate, { order_id: 'nope' })).statusCode).toBe(404)
     expect((await call(initiate, {})).statusCode).toBe(400)
     expect(h.db.data.payment_intents).toHaveLength(0)
@@ -122,6 +128,18 @@ describe('initiate-shop-payment', () => {
       expect(res.statusCode).toBe(409)
       expect(h.log).toHaveBeenCalledWith('payment.shop.legacy_attempt_paid', { order: ORDER, reference: 'legacy_ref_000001' })
       expect(h.provider.initializePayment).not.toHaveBeenCalled()
+    })
+
+    // Checkout records a placeholder reference that is never sent to Paystack, so this is EVERY order's first payment. Paystack
+    // answers "Transaction reference not found" (not_found): the placeholder is closed and the real attempt starts. Before the
+    // provider classified that answer, every first payment failed with "Could not check your earlier payment".
+    it('a placeholder attempt Paystack never saw is closed and a fresh attempt starts', async () => {
+      withPrevious(null)
+      h.provider.verifyPayment.mockRejectedValue(new ProviderError({ code: 'not_found', message: 'Transaction reference not found.' }))
+      const res = await call(initiate, { order_id: ORDER })
+      expect(res.statusCode).toBe(200)
+      expect(h.db.data.shop_payments.find((p) => p.id === 'sp1').status).toBe('failed')
+      expect(h.provider.initializePayment).toHaveBeenCalledTimes(1)
     })
 
     it('a pre-intent attempt that was NOT paid is closed and a fresh attempt starts', async () => {
