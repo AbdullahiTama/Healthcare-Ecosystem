@@ -128,6 +128,23 @@ describe('PaystackProvider: verifyPayment', () => {
     expect((await provider.verifyPayment({ reference: PAY_REF }).catch((e) => e)).code).toBe('not_found')
   })
 
+  // Paystack's real reply for a reference it never saw (a checkout that never opened) is a 400, sometimes a 200 + status:false.
+  it.each([
+    ['HTTP 400', 400],
+    ['HTTP 200 + status:false', 200],
+  ])('reports Paystack\'s "Transaction reference not found" (%s) as not_found, once, without retrying', async (_, status) => {
+    const { provider, fetchImpl } = make(() => reply(status, { status: false, message: 'Transaction reference not found.' }))
+    const err = await provider.verifyPayment({ reference: PAY_REF }).catch((e) => e)
+    expect(err).toBeInstanceOf(ProviderError)
+    expect(err).toMatchObject({ code: 'not_found', operation: 'verifyPayment', retryable: false, ambiguous: false })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps any other 400 refusal as invalid_request', async () => {
+    const { provider } = make(() => reply(400, { status: false, message: 'Invalid key' }))
+    expect((await provider.verifyPayment({ reference: PAY_REF }).catch((e) => e)).code).toBe('invalid_request')
+  })
+
   it('retries a read through a transient 503', async () => {
     let n = 0
     const { provider, fetchImpl } = make(() => (++n === 1 ? reply(503, {}) : reply(200, txn())))
