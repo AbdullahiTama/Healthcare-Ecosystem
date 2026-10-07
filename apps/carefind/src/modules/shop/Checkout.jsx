@@ -12,6 +12,7 @@ import { buildOrderRequest, orderErrorMessage } from './checkoutOrder'
 import { validatePromoCode, applyPromoCodeToOrder } from './promoCodeRepository'
 import { shopPaymentService } from './shopPaymentService'
 import { shopRepository } from './shopRepository'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Textarea, Empty } from '../../components/ui'
 import { ArrowLeft, MapPin, Truck, Package, AlertTriangle, Plus, Star, Tag, CheckCircle, X, ShoppingCart } from 'lucide-react'
@@ -27,6 +28,7 @@ export default function Checkout() {
   const { items, total, clearCart } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
   const isGuest = !user
 
   const [formData, setFormData] = useState({
@@ -111,20 +113,6 @@ export default function Checkout() {
     loadStations()
   }, [])
 
-  if (items.length === 0) {
-    return (
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
-        <Empty
-          icon={<Package size={48} />}
-          title="Your cart is empty"
-          description="Add products to your cart before checkout"
-          action="Continue Shopping"
-          onAction={() => navigate('/search?tab=shop')}
-        />
-      </div>
-    )
-  }
-
   // Derive segment from cart — if any wholesale/distributor item present, use highest tier
   const segment = useMemo(() => {
     const types = items.map(i => String(i.sale_type || '').toLowerCase()).filter(Boolean)
@@ -150,6 +138,19 @@ export default function Checkout() {
   const deliveryFeeDisplay = !approved && formData.delivery_preference === 'home'
   const discountKobo = promoValidation?.valid ? promoValidation.discount_kobo : 0
   const grandTotal = total + fees.fulfilment + (deliveryFeeDisplay ? 0 : fees.delivery) - discountKobo
+
+  // A phone gets one column, tighter cards, and delivery options as full-width tappable rows
+  const cardPadding = isMobile ? 16 : 24
+  const twoUp = isMobile ? '1fr' : '1fr 1fr'
+  const summaryRow = { display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14 }
+  const radioStyle = { width: 20, height: 20, margin: '2px 0 0', flexShrink: 0, accentColor: theme.tealDeep }
+  const optionStyle = (selected) => ({
+    display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer', minHeight: 44, padding: 12, borderRadius: 12,
+    border: `1px solid ${selected ? theme.tealDeep : theme.border}`, background: selected ? `${theme.tealDeep}0D` : '#fff',
+  })
+  // the out-of-zone note is shown once city and state are filled in; before that nothing is "pending"
+  const outsideZone = !approved && Boolean(formData.city && formData.state)
+  const selectedStation = stations.find(st => st.id === pickupStationId)
 
   // Every order is paid online with Paystack. Pay at Pickup is paused: nothing can record a cash payment yet, so such an order could
   // never be accepted (docs/architecture/Shop-Flow-Review.md, SD-2).
@@ -266,9 +267,9 @@ export default function Checkout() {
       return
     }
 
-    // The order exists (and holds its stock) from here on. Whatever happens next, the customer continues on the order page with
-    // an empty cart: staying on checkout would let a second submit create a duplicate order.
-    clearCart()
+    // The order exists (and holds its stock) from here on. Whatever happens next, the customer leaves checkout (to Paystack or to
+    // the order page) with an empty cart: staying here would let a second submit create a duplicate order. The cart is cleared at
+    // the moment of leaving, so the page never flashes "Your cart is empty" in between.
     await maybeSaveAddress()
 
     let notice = ''
@@ -284,38 +285,60 @@ export default function Checkout() {
     } else if (!notice) {
       try {
         await initiatePaystackForOrder(orderId)
+        clearCart()
         return
       } catch (err) {
         notice = `${err.message || 'Could not start payment'} Your order is saved — you can pay for it here.`
       }
     }
+    clearCart()
     setLoading(false)
     setPayLoading(false)
     navigate(`/orders/${orderId}`, notice ? { state: { notice, tone } } : undefined)
   }
 
+
+  // Only after every hook: returning before useMemo above made the hook count change when the cart loaded (the cart is read
+  // after the first render), which crashed the page ("Rendered more hooks than during the previous render") on a refresh.
+  if (items.length === 0) {
+    return (
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+        <Empty
+          icon={<Package size={48} />}
+          title="Your cart is empty"
+          description="Add products to your cart before checkout"
+          action="Continue Shopping"
+          onAction={() => navigate('/search?tab=shop')}
+        />
+      </div>
+    )
+  }
+
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '12px 16px 32px' : '24px 16px' }}>
       <button
+        type="button"
         onClick={() => navigate('/cart')}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
+          minHeight: 44,
+          padding: 0,
           background: 'none',
           border: 'none',
           color: theme.tealDeep,
           fontSize: 14,
           fontWeight: 600,
           cursor: 'pointer',
-          marginBottom: 24
+          marginBottom: isMobile ? 4 : 16
         }}
       >
         <ArrowLeft size={16} />
         Back to Cart
       </button>
 
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: theme.navy }}>
+      <h1 style={{ fontSize: isMobile ? 22 : 24, fontWeight: 700, marginBottom: isMobile ? 12 : 16, color: theme.navy }}>
         Checkout
       </h1>
       {segment !== 'retail' && (
@@ -323,8 +346,8 @@ export default function Checkout() {
       )}
 
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <Card style={{ padding: 24 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 16 : 24 }}>
+          <Card style={{ padding: cardPadding }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: theme.navy, display: 'flex', alignItems: 'center', gap: 8 }}>
               <MapPin size={20} />
               Delivery Address
@@ -350,7 +373,7 @@ export default function Checkout() {
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: twoUp, gap: 12 }}>
                 <Input label="Customer Name" value={formData.customer_name} onChange={(v) => setFormData({ ...formData, customer_name: v })} placeholder="Full name" required />
                 <Input label="Phone" value={formData.customer_phone} onChange={(v) => setFormData({ ...formData, customer_phone: v })} placeholder="080..." required />
               </div>
@@ -362,7 +385,7 @@ export default function Checkout() {
                 placeholder="123 Main Street"
                 required
               />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: twoUp, gap: 12 }}>
                 <Input
                   label="City"
                   value={formData.city}
@@ -379,80 +402,88 @@ export default function Checkout() {
                 />
               </div>
               <Textarea label="Delivery Instructions" value={formData.delivery_instructions} onChange={(v) => setFormData({ ...formData, delivery_instructions: v })} placeholder="Landmark, gate code..." rows={2} />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={saveAddress}
                   onChange={(e) => setSaveAddress(e.target.checked)}
-                  style={{ width: 18, height: 18 }}
+                  style={{ width: 20, height: 20, flexShrink: 0, accentColor: theme.tealDeep }}
                 />
                 <span style={{ fontSize: 13, fontWeight: 600, color: theme.textMid }}>Save this address for future orders</span>
               </label>
-              {!approved && formData.city && formData.state && (
+              {outsideZone && (
                 <div role="status" style={{ padding: 12, borderRadius: 8, background: theme.amberBg || '#FFF7ED', border: `1px solid ${theme.warning}30`, color: theme.warning, fontSize: 13, display:'flex', gap:8 }}>
                   <AlertTriangle size={16} style={{ flexShrink:0, marginTop:2 }} />
-                  <span>Your delivery location is outside our standard automatic service zone. Our Customer Care team will contact you within 24 hours with a delivery quote. You can proceed to pay for your products now. Delivery charges will be confirmed via WhatsApp/Email.</span>
+                  <span>Your address is outside our standard delivery zone. Place your order and the seller will quote delivery, usually within 24 hours. We will notify and email you, and you then pay for the products and delivery together. Pickup from a station needs no quote.</span>
                 </div>
               )}
             </div>
           </Card>
 
-          <Card style={{ padding: 24 }}>
+          <Card style={{ padding: cardPadding }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: theme.navy, display: 'flex', alignItems: 'center', gap: 8 }}>
               <Truck size={20} />
               Delivery Preference
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+              <label style={optionStyle(formData.delivery_preference === 'pickup')}>
                 <input
                   type="radio"
                   name="delivery_preference"
                   value="pickup"
                   checked={formData.delivery_preference === 'pickup'}
                   onChange={(e) => setFormData({ ...formData, delivery_preference: e.target.value })}
-                  style={{ width: 20, height: 20 }}
+                  style={radioStyle}
                 />
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: theme.navy }}>
-                    Pickup from Station {approved ? '(FREE within 3km)' : '(FREE)'}
+                    Pickup from a station <span style={{ color: theme.success }}>· Free</span>
                   </div>
                   <div style={{ fontSize: 14, color: theme.textMid }}>
-                    Collect your order from the nearest pickup station — you will receive an SMS when ready
+                    Collect your order from a pickup station. We text you when it is ready.
                   </div>
                 </div>
               </label>
               {formData.delivery_preference === 'pickup' && (
-                <div style={{ marginLeft: 32, marginTop: 8 }}>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display:'block', marginBottom:4 }}>Pickup Station *</label>
-                  <select value={pickupStationId} onChange={e=>setPickupStationId(e.target.value)} required style={{ width:'100%', padding:'10px 12px', borderRadius:10, border:`1px solid ${theme.border}`, background:'#fff', fontSize:13, fontFamily:'inherit' }}>
+                <div style={{ marginLeft: isMobile ? 0 : 32 }}>
+                  <label htmlFor="checkout-pickup-station" style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display:'block', marginBottom:4 }}>Pickup station *</label>
+                  {/* the option shows the station's name only: name + address did not fit a phone-width select and was cut off */}
+                  <select id="checkout-pickup-station" value={pickupStationId} onChange={e=>setPickupStationId(e.target.value)} required style={{ width:'100%', minHeight: 44, padding:'10px 12px', borderRadius:10, border:`1px solid ${theme.border}`, background:'#fff', fontSize:14, fontFamily:'inherit' }}>
                     {stations.length===0 ? <option value="">Loading stations...</option> : stations.map(s=>(
-                      <option key={s.id} value={s.id}>{s.name} — {s.address}, {s.city}</option>
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
-                  <p style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Orders are moved to your chosen station. Free pickup ≤3km, home delivery beyond.</p>
+                  {selectedStation && (
+                    <p style={{ fontSize: 13, color: theme.textMid, marginTop: 6, display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                      <MapPin size={14} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+                      <span>{[selectedStation.address, selectedStation.city].filter(Boolean).join(', ')}</span>
+                    </p>
+                  )}
                 </div>
               )}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+              <label style={optionStyle(formData.delivery_preference === 'home')}>
                 <input
                   type="radio"
                   name="delivery_preference"
                   value="home"
                   checked={formData.delivery_preference === 'home'}
                   onChange={(e) => setFormData({ ...formData, delivery_preference: e.target.value })}
-                  style={{ width: 20, height: 20 }}
+                  style={radioStyle}
                 />
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 600, color: theme.navy }}>
-                    Home Delivery
+                    Home delivery
                   </div>
                   <div style={{ fontSize: 14, color: theme.textMid }}>
-                    Delivered to your address {approved ? '(₦600 per 3km beyond 3km)' : '(quote pending — see notice above)'}
+                    {outsideZone
+                      ? 'Delivered to your address. The seller quotes delivery for your area before you pay.'
+                      : 'Delivered to your address. First 3km free, then ₦600 for every 3km.'}
                   </div>
                 </div>
               </label>
 
               {formData.delivery_preference === 'home' && approved && (
-                <div style={{ marginTop: 12 }}>
+                <div style={{ marginLeft: isMobile ? 0 : 32 }}>
                   <Input
                     label="Distance from vendor (km)"
                     type="number"
@@ -464,50 +495,63 @@ export default function Checkout() {
                     required
                   />
                   <p style={{ fontSize: 12, color: theme.textMid, marginTop: 4 }}>
-                    0–3km = FREE, 4–6km = ₦600, 7–9km = ₦1,200, 10–12km = ₦1,800 (MAX bracket formula)
+                    Up to 3km free · 4–6km ₦600 · 7–9km ₦1,200 · 10–12km ₦1,800
                   </p>
                 </div>
               )}
             </div>
           </Card>
 
-          <Card style={{ padding: 24 }}>
+          <Card style={{ padding: cardPadding }}>
             <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16, color: theme.navy }}>
               Order Summary
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: theme.textMid }}>Subtotal ({items.length} items)</span>
-                <span style={{ fontWeight: 600 }}>₦{(total / 100).toLocaleString()}</span>
+              {/* what is being bought, line by line, before the fees */}
+              <ul aria-label="Items in this order" style={{ listStyle: 'none', margin: 0, padding: '0 0 12px', borderBottom: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {items.map(item => (
+                  <li key={item.ecommerce_product_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 14 }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ color: theme.navy, fontWeight: 600, overflowWrap: 'anywhere' }}>{item.product_name}</span>
+                      <span style={{ display: 'block', fontSize: 12, color: theme.textMid }}>{item.quantity} × ₦{(item.unit_price_kobo / 100).toLocaleString()}</span>
+                    </span>
+                    <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>₦{((item.unit_price_kobo * item.quantity) / 100).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+              <div style={summaryRow}>
+                <span style={{ color: theme.textMid }}>Items subtotal ({totalQty} {totalQty === 1 ? 'item' : 'items'})</span>
+                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>₦{(total / 100).toLocaleString()}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: theme.textMid }}>Fulfilment Fee {segment==='retail'?'MAX(₦600,3%)':segment==='wholesale'?'MAX(₦1,500,2%)':'MAX(₦350/carton,1%)'}</span>
-                <span style={{ fontWeight: 600 }}>₦{(fees.fulfilment / 100).toLocaleString()}</span>
+              <div style={summaryRow}>
+                <span style={{ color: theme.textMid }}>Fulfilment fee</span>
+                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>₦{(fees.fulfilment / 100).toLocaleString()}</span>
               </div>
               {formData.delivery_preference === 'home' && !deliveryFeeDisplay && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <span style={{ color: theme.textMid }}>Delivery Fee</span>
-                  <span style={{ fontWeight: 600 }}>
-                    {fees.delivery === 0 ? 'FREE' : `₦${(fees.delivery / 100).toLocaleString()}`}
+                <div style={summaryRow}>
+                  <span style={{ color: theme.textMid }}>Delivery</span>
+                  <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {fees.delivery === 0 ? 'Free' : `₦${(fees.delivery / 100).toLocaleString()}`}
                   </span>
                 </div>
               )}
               {deliveryFeeDisplay && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <span style={{ color: theme.textMid }}>Delivery Fee</span>
-                  <span style={{ fontWeight: 600, color: theme.warning }}>PENDING (quoted within 24h)</span>
+                <div style={summaryRow}>
+                  <span style={{ color: theme.textMid }}>Delivery</span>
+                  <span style={{ fontWeight: 600, color: theme.warning, textAlign: 'right' }}>To be quoted</span>
                 </div>
               )}
               
               {/* Promo Code Section */}
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, marginTop: 12 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'block', marginBottom: 4 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <label htmlFor="checkout-promo" style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'block', marginBottom: 4 }}>
                       <Tag size={12} style={{ display: 'inline', marginRight: 4 }} />
                       Promo Code
                     </label>
                     <input
+                      id="checkout-promo"
                       type="text"
                       value={promoCode}
                       onChange={(e) => {
@@ -521,6 +565,7 @@ export default function Checkout() {
                       disabled={promoApplied}
                       style={{
                         width: '100%',
+                        minHeight: 44,
                         padding: '10px 12px',
                         borderRadius: 8,
                         border: `1px solid ${promoValidation?.valid ? theme.success : promoValidation?.error ? theme.danger : theme.border}`,
@@ -530,12 +575,13 @@ export default function Checkout() {
                       }}
                     />
                   </div>
-                  <div style={{ paddingTop: 20 }}>
+                  <div style={{ flexShrink: 0 }}>
                     {promoApplied ? (
                       <button
                         type="button"
                         onClick={handleRemovePromoCode}
                         style={{
+                          minHeight: 44,
                           padding: '10px 12px',
                           borderRadius: 8,
                           border: `1px solid ${theme.border}`,
@@ -558,6 +604,7 @@ export default function Checkout() {
                         onClick={handleValidatePromoCode}
                         disabled={promoLoading || !promoCode.trim()}
                         style={{
+                          minHeight: 44,
                           padding: '10px 16px',
                           borderRadius: 8,
                           border: 'none',
@@ -608,15 +655,15 @@ export default function Checkout() {
               
               {/* Discount display */}
               {promoValidation?.valid && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: theme.success }}>
+                <div style={{ ...summaryRow, color: theme.success }}>
                   <span>Discount</span>
                   <span style={{ fontWeight: 600 }}>-₦{(discountKobo / 100).toLocaleString()}</span>
                 </div>
               )}
               
               <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 12, marginTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700 }}>
-                  <span style={{ color: theme.navy }}>{deliveryFeeDisplay ? 'Subtotal' : 'Total'}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 18, fontWeight: 700 }}>
+                  <span style={{ color: theme.navy }}>{deliveryFeeDisplay ? 'Total before delivery' : 'Total'}</span>
                   <span style={{ color: theme.tealDeep }}>₦{(grandTotal / 100).toLocaleString()}</span>
                 </div>
                 {deliveryFeeDisplay && <div style={{ fontSize: 11, color: theme.textLight, textAlign:'right', marginTop: 4 }}>Plus delivery (to be quoted)</div>}
@@ -658,12 +705,13 @@ export default function Checkout() {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => {
                       removeItem(se.ecommerce_product_id)
                       setStockErrors(prev => prev.filter(e => e.ecommerce_product_id !== se.ecommerce_product_id))
                     }}
                     style={{
-                      marginLeft:12, flexShrink:0,
+                      marginLeft:12, flexShrink:0, minHeight: 44,
                       padding:'6px 14px', borderRadius:8,
                       border:`1px solid ${theme.danger}`, background:'#fff',
                       color: theme.danger, fontWeight:700, fontSize:12, cursor:'pointer'
@@ -693,6 +741,7 @@ export default function Checkout() {
             type="submit"
             disabled={loading || payLoading}
             style={{
+              width: '100%',
               padding: '16px 24px',
               fontSize: 16,
               fontWeight: 600,
