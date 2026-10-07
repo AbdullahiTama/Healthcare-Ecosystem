@@ -82,10 +82,19 @@ const ORDER_STATUS = {
   delivered: { title: 'Your order has been delivered', tone: 'success', text: 'Your order has been delivered.' },
   cancelled: { title: 'Your order has been cancelled', tone: 'danger', text: 'Your order has been cancelled.' },
   processing: { title: 'Your order is being prepared', tone: 'warn', text: 'Your order is being prepared.' },
+  packed: { title: 'Your order is packed', tone: 'info', text: 'Your order has been packed and will be on its way soon.' },
   delivery_quoted: { title: 'Your delivery has been quoted', tone: 'info', text: 'The seller has quoted delivery for your order. Pay now to confirm it.' },
 }
 
-export function orderStatusUpdate({ fullName, orderId, orderRef, status, businessName } = {}) {
+// The status email is queued two ways: by the app (camelCase: fullName, orderRef, orderId, businessName) and by the database trigger on
+// shop_order_status_history through the reliable email catalog, whose payload schema is snake_case (recipient_name, order_reference,
+// order_id, business_name). Both must render; the catalog shape used to reach this template as "Hi undefined".
+export function orderStatusUpdate(payload = {}) {
+  const fullName = payload.fullName ?? payload.recipient_name
+  const orderId = payload.orderId ?? payload.order_id
+  const orderRef = payload.orderRef ?? payload.order_reference
+  const businessName = payload.businessName ?? payload.business_name
+  const { status } = payload
   const state = ORDER_STATUS[status] || { title: 'An update on your order', tone: 'info', text: 'There is an update on your order.' }
   return email({
     title: state.title,

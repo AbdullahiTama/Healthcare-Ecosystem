@@ -33,4 +33,19 @@ describe('CareFind order emails', () => {
     expect(html).toContain(`/orders/${ORDER_ID}`)
     expect(html).toContain('Track your order')
   })
+
+  it('renders the database trigger\'s catalog payload (snake_case), not "Hi undefined"', () => {
+    const html = render('order_status_update', { recipient_name: 'Ada Obi', order_reference: 'CF-000040', order_id: ORDER_ID, business_name: 'MediCare', status: 'delivery_quoted' })
+    expect(html).toContain('Ada Obi')
+    expect(html).toContain('CF-000040')
+    expect(html).toContain('MediCare')
+    expect(html).toContain(`/orders/${ORDER_ID}`)
+    expect(html).toContain('Pay for your order')
+    expect(html).not.toContain('undefined')
+  })
+
+  it('a packed order has its own message', () => {
+    const html = render('order_status_update', { recipient_name: 'Ada', order_reference: 'CF-1', business_name: 'MediCare', status: 'packed' })
+    expect(html).toContain('Your order is packed')
+  })
 })
