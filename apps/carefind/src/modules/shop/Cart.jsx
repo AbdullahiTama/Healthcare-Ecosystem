@@ -8,6 +8,7 @@ import { theme } from '../../styles/theme'
 import { Card, Button, Empty, Loading } from '../../components/ui'
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ChevronLeft } from 'lucide-react'
 import AppShell from '../../components/layout/AppShell.jsx'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 function SwipeToDelete({ onDelete, children }) {
   const [offsetX, setOffsetX] = useState(0)
@@ -55,6 +56,7 @@ function CartContent() {
   const { items, count, total, updateQuantity, removeItem } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useBreakpoint()
 
   if (items.length === 0) {
     return (
@@ -90,8 +92,8 @@ function CartContent() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {items.map(item => (
           <SwipeToDelete key={item.ecommerce_product_id} onDelete={() => removeItem(item.ecommerce_product_id)}>
-          <Card style={{ padding: 16 }}>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <Card style={{ padding: 16 }}>
+            <div style={{ display: 'flex', gap: 16, alignItems: isMobile ? 'flex-start' : 'center', flexWrap: 'wrap' }}>
               {/* Product image */}
               <div style={{
                 width: 80,
@@ -103,7 +105,7 @@ function CartContent() {
 
               {/* Product details */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: theme.navy }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, color: theme.navy, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                   {item.product_name}
                 </h3>
                 <p style={{ fontSize: 14, color: theme.textMid, marginBottom: 8 }}>
@@ -153,8 +155,16 @@ function CartContent() {
               </div>
 
               {/* Price and remove */}
-              <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: 18, fontWeight: 700, color: theme.tealDeep, marginBottom: 8 }}>
+              <div style={{
+                textAlign: isMobile ? 'left' : 'right',
+                width: isMobile ? '100%' : 'auto',
+                display: isMobile ? 'flex' : 'block',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 12,
+                paddingLeft: isMobile ? 96 : 0,
+              }}>
+                <p style={{ fontSize: 18, fontWeight: 700, color: theme.tealDeep, marginBottom: isMobile ? 0 : 8 }}>
                   ₦{((item.unit_price_kobo * item.quantity) / 100).toLocaleString()}
                 </p>
                 <button

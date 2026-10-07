@@ -17,6 +17,11 @@ export const authClient = createClient(SB_URL, SB_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    // PKCE recovery links carry a single-use ?code= (marked consumed server-
+    // side on first exchange and short-lived). The default implicit flow
+    // instead embeds a reusable access_token in the hash that keeps working
+    // until the JWT expires, so emailed reset links could be replayed.
+    flowType: 'pkce',
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
 })

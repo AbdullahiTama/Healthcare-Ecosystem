@@ -71,6 +71,10 @@ export default function ResetPassword() {
         return
       }
       setSuccess(true)
+      // A password change does not invalidate existing sessions on its own.
+      // Sign out globally so the recovery session (and any stolen/old tokens)
+      // die immediately; the user signs in fresh with the new password.
+      try { await authClient.auth.signOut({ scope: 'global' }) } catch (e) { console.warn('[reset] global sign-out failed', e?.message) }
       setTimeout(() => navigate('/login', { replace: true }), 1500)
     } catch (e2) {
       setErr('Connection error. Please try again.')
