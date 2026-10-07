@@ -69,15 +69,6 @@ function badResponse(operation, correlationId, message, ambiguous = false) {
   return new ProviderError({ code: E.INVALID_RESPONSE, message, operation, correlationId, ambiguous })
 }
 
-// Paystack answers "verify" for a reference it never saw with HTTP 400 (or 200 + status:false) and the message "Transaction
-// reference not found", not a 404. Callers treat `not_found` as "never paid", so that definite answer must not surface as a
-// generic refusal: an attempt whose checkout never opened would otherwise block every later attempt for the same order.
-function asUnknownReference(err) {
-  if (!(err instanceof ProviderError) || err.ambiguous) return null
-  if (![E.INVALID_REQUEST, E.REJECTED].includes(err.code) || !/not found/i.test(err.message)) return null
-  return new ProviderError({ ...err.toJSON(), code: E.NOT_FOUND, retryable: false, cause: err })
-}
-
 export class PaystackProvider {
   name = 'paystack'
   #getSecret // never exposed: not enumerable, not serialised, not logged
@@ -145,10 +136,19 @@ export class PaystackProvider {
         operation: op,
         path: `/transaction/verify/${encodeURIComponent(reference)}`,
       }))
-      this.#assertOk(op, data, correlationId)
     } catch (err) {
-      throw asUnknownReference(err) || err
+      // Paystack answers an unknown reference differently by environment/API
+      // version (HTTP 404, HTTP 400 "Transaction reference not found", or a
+      // status:false body). Normalise all of them to NOT_FOUND so callers
+      // can settle the semantic difference from "lookup failed".
+      const notFound = err?.code === 'not_found' || /not found/i.test(String(err?.message || ''))
+      if (notFound) throw new ProviderError({ code: E.NOT_FOUND, message: `Transaction reference not found`, operation: op, correlationId: err?.correlationId ?? null, httpStatus: err?.httpStatus ?? null, cause: err })
+      throw err
     }
+    if (data?.status === false && /not found/i.test(String(data?.message || ''))) {
+      throw new ProviderError({ code: E.NOT_FOUND, message: 'Transaction reference not found', operation: op, correlationId, httpStatus: 200 })
+    }
+    this.#assertOk(op, data, correlationId)
     const d = data.data
     if (!d || typeof d !== 'object') throw badResponse(op, correlationId, 'Provider returned no transaction data')
     // The provider must be describing the transaction we asked about.
