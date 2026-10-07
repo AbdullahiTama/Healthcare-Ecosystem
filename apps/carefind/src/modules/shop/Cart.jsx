@@ -8,6 +8,7 @@ import { theme } from '../../styles/theme'
 import { Card, Button, Empty, Loading } from '../../components/ui'
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, ChevronLeft } from 'lucide-react'
 import AppShell from '../../components/layout/AppShell.jsx'
+import BottomNav from '../../components/BottomNav.jsx'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 function SwipeToDelete({ onDelete, children }) {
@@ -42,15 +43,39 @@ function SwipeToDelete({ onDelete, children }) {
 }
 
 // The cart page sits inside the site shell like every other signed-in page, so the header and navigation stay
-// available instead of leaving the shopper on a bare form.
+// available instead of leaving the shopper on a bare form. On a phone the shell's desktop sidebar would squeeze the cart
+// into a sliver, so (like every other page) the phone gets the content and the bottom navigation instead.
 export default function Cart() {
   const { user } = useAuth()
+  const { isMobile } = useBreakpoint()
+  if (isMobile) {
+    return (
+      <>
+        <CartContent />
+        <BottomNav />
+      </>
+    )
+  }
   return (
     <AppShell user={user}>
       <CartContent />
     </AppShell>
   )
 }
+
+// Phone tap targets are at least 44px (WCAG 2.5.5)
+const qtyButton = (size) => ({
+  width: size,
+  height: size,
+  borderRadius: 8,
+  border: `1px solid ${theme.border}`,
+  background: 'white',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
+})
 
 function CartContent() {
   const { items, count, total, updateQuantity, removeItem } = useCart()
@@ -60,7 +85,7 @@ function CartContent() {
 
   if (items.length === 0) {
     return (
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '16px 16px calc(90px + env(safe-area-inset-bottom))' : '24px 16px' }}>
         <Empty
           icon={<ShoppingCart size={48} />}
           title="Your cart is empty"
@@ -81,23 +106,23 @@ function CartContent() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: isMobile ? '16px 16px calc(90px + env(safe-area-inset-bottom))' : '24px 16px' }}>
       <Link to="/search?tab=shop" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 12, minHeight: 44, color: theme.tealDeep, fontSize: 14, fontWeight: 700, textDecoration: 'none' }}>
         <ChevronLeft size={16} aria-hidden="true" /> Continue shopping
       </Link>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24, color: theme.navy }}>
+      <h1 style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, marginBottom: isMobile ? 16 : 24, color: theme.navy }}>
         Shopping Cart ({count} {count === 1 ? 'item' : 'items'})
       </h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {items.map(item => (
           <SwipeToDelete key={item.ecommerce_product_id} onDelete={() => removeItem(item.ecommerce_product_id)}>
-            <Card style={{ padding: 16 }}>
-            <div style={{ display: 'flex', gap: 16, alignItems: isMobile ? 'flex-start' : 'center', flexWrap: 'wrap' }}>
+            <Card style={{ padding: isMobile ? 12 : 16 }}>
+            <div style={{ display: 'flex', gap: isMobile ? 12 : 16, alignItems: isMobile ? 'flex-start' : 'center', flexWrap: 'wrap' }}>
               {/* Product image */}
               <div style={{
-                width: 80,
-                height: 80,
+                width: isMobile ? 64 : 80,
+                height: isMobile ? 64 : 80,
                 borderRadius: 8,
                 background: item.image_url ? `url(${item.image_url}) center/cover` : theme.gray200,
                 flexShrink: 0
@@ -116,38 +141,18 @@ function CartContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => updateQuantity(item.ecommerce_product_id, item.quantity - 1)}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      border: `1px solid ${theme.border}`,
-                      background: 'white',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    aria-label="Decrease quantity"
+                    style={qtyButton(isMobile ? 44 : 32)}
+                    aria-label={`Decrease quantity of ${item.product_name}`}
                   >
                     <Minus size={16} />
                   </button>
-                  <span style={{ fontSize: 16, fontWeight: 600, minWidth: 32, textAlign: 'center' }}>
+                  <span aria-live="polite" style={{ fontSize: 16, fontWeight: 600, minWidth: 32, textAlign: 'center' }}>
                     {item.quantity}
                   </span>
                   <button
                     onClick={() => updateQuantity(item.ecommerce_product_id, item.quantity + 1)}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      border: `1px solid ${theme.border}`,
-                      background: 'white',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                    aria-label="Increase quantity"
+                    style={qtyButton(isMobile ? 44 : 32)}
+                    aria-label={`Increase quantity of ${item.product_name}`}
                   >
                     <Plus size={16} />
                   </button>
@@ -162,15 +167,17 @@ function CartContent() {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 gap: 12,
-                paddingLeft: isMobile ? 96 : 0,
+                boxSizing: 'border-box',
               }}>
-                <p style={{ fontSize: 18, fontWeight: 700, color: theme.tealDeep, marginBottom: isMobile ? 0 : 8 }}>
+                <p style={{ fontSize: 18, fontWeight: 700, color: theme.tealDeep, margin: 0, marginBottom: isMobile ? 0 : 8, whiteSpace: 'nowrap' }}>
                   ₦{((item.unit_price_kobo * item.quantity) / 100).toLocaleString()}
                 </p>
                 <button
                   onClick={() => removeItem(item.ecommerce_product_id)}
                   style={{
                     padding: '8px 12px',
+                    minHeight: isMobile ? 44 : undefined,
+                    flexShrink: 0,
                     borderRadius: 6,
                     border: `1px solid ${theme.danger}`,
                     background: 'white',
@@ -181,7 +188,7 @@ function CartContent() {
                     gap: 4,
                     fontSize: 14
                   }}
-                  aria-label="Remove item"
+                  aria-label={`Remove ${item.product_name}`}
                 >
                   <Trash2 size={14} />
                   Remove
@@ -194,12 +201,12 @@ function CartContent() {
       </div>
 
       {/* Cart summary */}
-      <Card style={{ padding: 24, marginTop: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <span style={{ fontSize: 18, fontWeight: 600, color: theme.navy }}>
+      <Card style={{ padding: isMobile ? 16 : 24, marginTop: isMobile ? 16 : 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600, color: theme.navy }}>
             Subtotal ({count} {count === 1 ? 'item' : 'items'})
           </span>
-          <span style={{ fontSize: 24, fontWeight: 700, color: theme.tealDeep }}>
+          <span style={{ fontSize: isMobile ? 20 : 24, fontWeight: 700, color: theme.tealDeep }}>
             ₦{(total / 100).toLocaleString()}
           </span>
         </div>

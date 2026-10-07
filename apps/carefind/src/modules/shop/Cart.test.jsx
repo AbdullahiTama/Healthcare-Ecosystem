@@ -6,6 +6,9 @@ vi.mock('../../components/layout/AppShell.jsx', () => ({
   default: ({ children }) => <div data-testid="app-shell">{children}</div>,
 }))
 vi.mock('../../providers/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }))
+vi.mock('../../components/BottomNav.jsx', () => ({ default: () => <nav data-testid="bottom-nav" /> }))
+const viewport = vi.hoisted(() => ({ isMobile: false }))
+vi.mock('../../hooks/useBreakpoint', () => ({ useBreakpoint: () => ({ isMobile: viewport.isMobile, isTablet: false }) }))
 
 import Cart from './Cart'
 import { CartProvider } from './CartProvider'
@@ -24,7 +27,7 @@ function mount() {
 }
 
 describe('Cart page', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => { localStorage.clear(); viewport.isMobile = false })
 
   it('renders inside the site shell when the cart has items', () => {
     seed([item])
@@ -45,5 +48,22 @@ describe('Cart page', () => {
 
     const back = screen.getByRole('link', { name: /continue shopping/i })
     expect(back.getAttribute('href')).toBe('/search?tab=shop')
+  })
+
+  // On a phone the shell's desktop sidebar squeezed the cart into a sliver: the phone gets the cart and the bottom navigation.
+  it('on a phone renders without the desktop shell, with the bottom navigation and finger-sized controls', () => {
+    viewport.isMobile = true
+    seed([item])
+    mount()
+
+    expect(screen.queryByTestId('app-shell')).toBeNull()
+    expect(screen.getByTestId('bottom-nav')).toBeTruthy()
+    expect(screen.getByText(/Shopping Cart/)).toBeTruthy()
+    for (const name of [/decrease quantity of paracetamol/i, /increase quantity of paracetamol/i]) {
+      const button = screen.getByRole('button', { name })
+      expect(button.style.width).toBe('44px')
+      expect(button.style.height).toBe('44px')
+    }
+    expect(screen.getByRole('button', { name: /remove paracetamol/i }).style.minHeight).toBe('44px')
   })
 })
