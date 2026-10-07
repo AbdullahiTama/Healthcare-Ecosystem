@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ShoppingBag, Package, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Upload, Trash2, ShieldCheck } from 'lucide-react'
 import { createEcommerceRepository } from './repositories'
 import { createShopVendorRepository } from './shopVendorRepository'
@@ -16,6 +17,9 @@ const shopVendorRepository = createShopVendorRepository({ request: sbFetch })
 
 export default function Ecommerce({ brand, role }) {
   const isOwner = role === 'Owner'
+  // /dashboard/ecommerce/orders/:orderId (the link in every shop order notification) opens that order's drawer
+  const { orderId: routeOrderId } = useParams()
+  const navigate = useNavigate()
   const [app, setApp] = useState(null)
   const [appLoading, setAppLoading] = useState(true)
   const [appError, setAppError] = useState('')
@@ -75,11 +79,12 @@ export default function Ecommerce({ brand, role }) {
     setTermsLoading(false)
   }
 
-  async function loadOrders() {
+  // statusFilter is passed when the filter has just changed: the state update has not reached this closure yet
+  async function loadOrders(statusFilter = orderStatus) {
     if (!brand?.id) return
     setOrdersLoading(true); setOrdersError('')
     try {
-      const rows = await shopVendorRepository.listOrders(brand.id, { status: orderStatus !== 'all' ? orderStatus : undefined, search: orderSearch || undefined })
+      const rows = await shopVendorRepository.listOrders(brand.id, { status: statusFilter !== 'all' ? statusFilter : undefined, search: orderSearch || undefined })
       setOrders(rows || [])
     } catch (e) { setOrdersError('Could not load orders'); setOrders([]) }
     setOrdersLoading(false)
@@ -112,9 +117,35 @@ export default function Ecommerce({ brand, role }) {
     setSelectedOrder(o)
     try {
       const d = await shopVendorRepository.getOrder(o.id)
-      setOrderDetail(d)
-    } catch { setOrderDetail(null) }
+      if (!d) {
+        // not this business's order (or no longer visible): say so instead of leaving the drawer loading
+        setSelectedOrder(null); setOrderDetail(null)
+        showToast('This order could not be found for your business', { type: 'error' })
+        return
+      }
+      setOrderDetail(d); setSelectedOrder(d)
+    } catch (e) {
+      setSelectedOrder(null); setOrderDetail(null)
+      showToast('Could not load this order. Please try again.', { type: 'error' })
+    }
   }
+  async function handleSendOrderMessage() {
+    const text = orderMsg.trim()
+    if (!text) return
+    try {
+      await shopVendorRepository.sendMessage(orderDetail.id, text)
+    } catch (e) {
+      showToast(e.message || 'Could not send the message', { type: 'error' })
+      return
+    }
+    setOrderMsg('')
+    try { setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) } catch { /* the message is sent; it shows on the next open */ }
+  }
+  function closeOrder() {
+    setSelectedOrder(null); setOrderDetail(null)
+    if (routeOrderId) navigate('/dashboard/ecommerce', { replace: true })
+  }
+  useEffect(() => { if (routeOrderId) openOrder({ id: routeOrderId, order_ref: '' }) }, [routeOrderId])
 
   async function loadApp() {
     setAppLoading(true); setAppError('')
@@ -523,18 +554,18 @@ export default function Ecommerce({ brand, role }) {
               <Search size={14} color={gray400} />
               <input aria-label="Search orders" value={orderSearch} onChange={e=>setOrderSearch(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') loadOrders() }} placeholder="Order ref, customer, product..." style={{ border:'none', outline:'none', padding:'6px 0', fontSize: 12, minWidth: 140 }} />
             </div>
-            <Sel value={orderStatus} onChange={v=>{ setOrderStatus(v); setTimeout(loadOrders,0) }} options={[{value:'all',label:'All'},{value:'pending_payment',label:'Pending Payment'},{value:'delivery_quote_pending',label:'Quote Pending'},{value:'paid',label:'Paid'},{value:'accepted',label:'Accepted'},{value:'processing',label:'Processing'},{value:'ready_for_pickup',label:'Ready for Pickup'},{value:'in_transit',label:'In Transit'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
-            <button onClick={loadOrders} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${border}`, background:'#fff', cursor:'pointer', fontSize:11, fontWeight:700 }}>Search</button>
+            <Sel value={orderStatus} onChange={v=>{ setOrderStatus(v); loadOrders(v) }} options={[{value:'all',label:'All'},{value:'pending_payment',label:'Pending Payment'},{value:'delivery_quote_pending',label:'Quote Pending'},{value:'paid',label:'Paid'},{value:'accepted',label:'Accepted'},{value:'processing',label:'Processing'},{value:'ready_for_pickup',label:'Ready for Pickup'},{value:'in_transit',label:'In Transit'},{value:'delivered',label:'Delivered'},{value:'cancelled',label:'Cancelled'}]} />
+            <button onClick={() => loadOrders()} style={{ padding:'6px 10px', borderRadius:8, border:`1px solid ${border}`, background:'#fff', cursor:'pointer', fontSize:11, fontWeight:700 }}>Search</button>
           </div>
         </div>
         {ordersLoading ? <Loading text="Loading orders..." /> : ordersError ? (
-          <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={loadOrders} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
+          <div role="alert" style={{ padding:10, borderRadius:8, background:danger+'10', border:`1px solid ${danger}30`, color:danger, fontSize:12 }}>{ordersError} <button onClick={() => loadOrders()} style={{ marginLeft:8, background:'none', border:`1px solid ${danger}`, color:danger, borderRadius:6, padding:'2px 8px', cursor:'pointer' }}>Retry</button></div>
         ) : orders.length === 0 ? (
           <Empty icon={<ShoppingBag size={32} />} message={orderSearch||orderStatus!=='all' ? 'No orders match this filter' : 'No Shop orders yet — activate products and share your Shop.'} />
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap: 8 }}>
             {orders.map(o=>(
-              <div key={o.id} onClick={()=>openOrder(o)} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:`1px solid ${border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>
+              <div key={o.id} role="button" tabIndex={0} aria-label={`Open order ${o.order_ref}`} onClick={()=>openOrder(o)} onKeyDown={e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openOrder(o) } }} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:10, border:`1px solid ${border}`, borderRadius:8, background:'#fff', cursor:'pointer' }}>
                 <div>
                   <div style={{ fontWeight:800, color:navy, fontSize:13 }}>{o.order_ref}</div>
                   <div style={{ fontSize:11, color:gray500 }}>{o.customer_name || o.customer_id?.slice(0,8)} · {new Date(o.created_at).toLocaleDateString()} · {o.delivery_preference==='pickup'?'Pickup':'Home'} {o.is_approved_city===false && <span style={{ color:warning }}>(quote pending)</span>}</div>
@@ -556,7 +587,7 @@ export default function Ecommerce({ brand, role }) {
           <Card style={{ maxWidth: 640, width:'100%', maxHeight:'90vh', overflowY:'auto', padding:20 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
               <div style={{ fontWeight:800, color:navy }}>{selectedOrder.order_ref} <span style={{ fontWeight:400, color:gray500, fontSize:11 }}>{selectedOrder.status}</span></div>
-              <button onClick={()=>{ setSelectedOrder(null); setOrderDetail(null) }} aria-label="Close" style={{ background:'none', border:`1px solid ${border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer' }}>×</button>
+              <button onClick={closeOrder} aria-label="Close" style={{ background:'none', border:`1px solid ${border}`, borderRadius:6, padding:'4px 8px', cursor:'pointer' }}>×</button>
             </div>
             {orderDetail ? (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -588,17 +619,22 @@ export default function Ecommerce({ brand, role }) {
                     {orderDetail.status==='paid' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'accepted','Accepted by vendor'),'Order accepted')} style={{ padding:'6px 10px', fontSize:11 }}>Accept</TealBtn>}
                     {orderDetail.status==='accepted' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'processing'),'Marked as processing')} style={{ padding:'6px 10px', fontSize:11 }}>Processing</TealBtn>}
                     {orderDetail.status==='processing' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'ready_for_pickup'),'Marked ready for pickup')} style={{ padding:'6px 10px', fontSize:11 }}>Ready for Pickup</TealBtn>}
-                    {orderDetail.status==='ready_for_pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'in_transit'),'Marked in transit')} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
+                    {/* a pickup order is finished when the customer collects it; only home delivery goes in transit */}
+                    {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference==='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered','Collected by customer'),'Marked as collected')} style={{ padding:'6px 10px', fontSize:11 }}>Collected by Customer</TealBtn>}
+                    {orderDetail.status==='ready_for_pickup' && orderDetail.delivery_preference!=='pickup' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'in_transit'),'Marked in transit')} style={{ padding:'6px 10px', fontSize:11 }}>In Transit</TealBtn>}
                     {orderDetail.status==='in_transit' && <TealBtn onClick={()=>runOrderAction(()=>shopVendorRepository.updateStatus(orderDetail.id,'delivered'),'Marked delivered')} style={{ padding:'6px 10px', fontSize:11 }}>Delivered</TealBtn>}
                     {orderDetail.status==='delivery_quote_pending' && <TealBtn onClick={handleQuoteDelivery} style={{ padding:'6px 10px', fontSize:11 }}>Quote Delivery</TealBtn>}
                   </div>
                 </div>
                 <VendorTrackingPanel
                   order={orderDetail}
+                  showToast={showToast}
                   onStatusUpdate={async () => {
                     loadOrders()
-                    const d = await shopVendorRepository.getOrder(orderDetail.id)
-                    setOrderDetail(d)
+                    try {
+                      const d = await shopVendorRepository.getOrder(orderDetail.id)
+                      if (d) { setOrderDetail(d); setSelectedOrder(d) }
+                    } catch { /* the list refresh above still shows the new status */ }
                   }}
                 />
                 <div style={{ borderTop:`1px solid ${border}`, paddingTop:10 }}>
@@ -609,8 +645,8 @@ export default function Ecommerce({ brand, role }) {
                     ))}
                   </div>
                   <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                    <input value={orderMsg} onChange={e=>setOrderMsg(e.target.value)} placeholder="Reply with fulfilment info..." style={{ flex:1, border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }} />
-                    <TealBtn onClick={async()=>{ if(!orderMsg.trim()) return; await shopVendorRepository.sendMessage(orderDetail.id,orderMsg.trim()); setOrderMsg(''); setOrderDetail(await shopVendorRepository.getOrder(orderDetail.id)) }} style={{ padding:'6px 12px', fontSize:11 }}>Send</TealBtn>
+                    <input aria-label="Message to CareFind about this order" value={orderMsg} onChange={e=>setOrderMsg(e.target.value)} placeholder="Reply with fulfilment info..." style={{ flex:1, border:`1px solid ${border}`, borderRadius:6, padding:'6px 8px', fontSize:12 }} />
+                    <TealBtn onClick={handleSendOrderMessage} style={{ padding:'6px 12px', fontSize:11 }}>Send</TealBtn>
                   </div>
                 </div>
               </div>

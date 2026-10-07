@@ -90,3 +90,39 @@ Manual check after deploying:
 2. Deploy CareFind and CareHub (both use the shared-payments and shared-email packages) **together with** step 1. The new checkout places out-of-zone orders without payment, and the CareHub "Quote Delivery" button calls the new function.
 3. From the first cron run after deploying, existing unpaid orders past their window are cancelled and their stock returned. Expect a one-off batch (at most 200 per run).
 4. Rollback: re-apply the previous bodies of `add_tracking_event`, `create_shop_order` and `update_shop_order_status` (from `carefind_20261019_red_team_fixes.sql`), `notify_stock_alerts_on_restock` (from `carehub_20260906_shop_stock_alerts.sql`) and `enqueue_shop_order_status_email` (from `carefind_20260919_shop_orders_status_email_trigger.sql`). Remove the `shop_order_expiry` step and revert the front-end commits.
+
+## 8. Part 3: from CareFind to CareHub (the vendor's side)
+
+The whole journey was traced from the CareFind checkout to the money reaching the vendor's CareHub wallet: order → payment → vendor notified → fulfilment → customer notified and emailed → return window → payout. It is now covered by one end-to-end database test (below). Findings:
+
+| ID | Severity | Finding | Fix |
+|----|----------|---------|-----|
+| SV-1 | High | Every shop notification in CareHub went nowhere. Database functions write full links (`/dashboard/ecommerce/orders/<id>`), but the notification bell prefixed `/dashboard/` again, producing `/dashboard//dashboard/...`. That matched no route, so the vendor landed on the dashboard home. There was also no route for a single order. | The bell keeps full paths as they are (`notificationPath`). New route `/dashboard/ecommerce/orders/:orderId` opens that order's drawer; closing it returns to E-commerce. An order that is not the business's shows an error instead of loading forever. The "order paid" notice now links to the order. |
+| SV-2 | Medium | The order status filter in E-commerce applied the previous choice (a stale closure through `setTimeout`). | `loadOrders` takes the status just chosen. |
+| SV-3 | Medium | A pickup order at "Ready for Pickup" offered only "In Transit". The tracking panel's errors (for example a refused status change) were never shown, because its toast was never rendered. | Pickup orders finish with "Collected by Customer" (→ delivered). The panel reports through the page's toast, and offers status changes only on a paid order still in fulfilment. Order rows are keyboard-operable; sending a message reports failures. |
+| SV-4 | High (defence in depth) | The order, its items, status history, payment attempts and tracking events are written only by SECURITY DEFINER functions and the service role, but clients still held table write grants. Any surviving permissive policy in production would let a vendor insert a backdated `delivered` history row (which starts the return-window clock and releases its money early), or edit the status or amounts. | Write grants on those five tables are revoked from `anon` and `authenticated`. The end-to-end test runs the whole flow after the revoke, which proves nothing depends on direct writes. |
+| SV-5 | Medium | The vendor's "Generate tracking link" always failed: only the customer could create a token. The link was also built on the CareHub domain, which has no `/track` page. The token used pgcrypto's `gen_random_bytes`, which a `search_path` of `public` does not reach on Supabase. | The order's vendor may create the token. It now comes from `gen_random_uuid()` (128-bit, core Postgres). The link uses the CareFind origin (`VITE_CAREFIND_URL`, default `https://carefind.app`). |
+| SV-6 | High (privacy) | `shop_tracking_tokens` was readable by `anon` with `USING (true)`. The public anon key alone listed every token, and each token opens that order's tracking page: status, vendor notes and recorded GPS locations. | Policies dropped and table grants revoked from clients. Tokens are created and read only through `generate_tracking_token` and `get_tracking_by_token`. |
+
+Verified sound along the way:
+- Vendors read their orders, items and history under RLS.
+- Status changes are forward-only and need a paid order.
+- Settlement credits `subtotal − commission` into `held_balance` exactly once, even when the redirect verify and the webhook both arrive.
+- The credit is released to `available_balance` only after the return window, counted from the first delivery.
+- The CareHub wallet shows held and available balances and labels `shop_credit` / `shop_release`.
+
+Still open (not changed here):
+- The vendor tracking-events read policy matches business owners only (`owner_id = auth.uid()`). Non-owner staff see an empty tracking history.
+- The "order paid" notice goes to the owner only.
+
+Security implications: nothing is widened except `generate_tracking_token`, which now also serves the order's own vendor (who already sees everything the public page shows). Everything else removes access. Migration: `supabase/migrations/carefind_20261022_shop_vendor_flow.sql`; it checks its own grants and fails if a client can still write those tables or read tokens.
+
+Tests:
+- `redTeam.db.test.js`, block "SV". BEFORE: the vendor cannot create a link; anon lists tokens. Then the whole journey on real migrations: checkout, refused unpaid fulfilment, settlement and idempotent re-settlement, vendor fulfilment, notification links on both sides, status email, release only after the window, wallet available. Also direct-write attacks by vendor and customer, vendor tracking and the public link, and token listing refused.
+- CareHub `modules/ecommerce/__tests__/Ecommerce.test.jsx`: deep link opens and closes the order, unknown order, the status filter, pickup vs home buttons. All five fail on the previous code.
+- CareHub `NotificationBell.test.jsx` (a shop notification opens its order) and `lib/notificationCategories.test.js` (`notificationPath`).
+- `packages/shared-payments`: the paid notice links to the order.
+
+Deploying: apply `carefind_20261022_shop_vendor_flow.sql` after the part 1 and 2 migrations, then deploy CareHub (the new route, bell and tracking link). The migration does not depend on the app deploy, and the app changes work before it, except the vendor tracking link.
+
+Manual check: pay for an order, then open the vendor's "order paid" notification in CareHub; it should open that order. Move a pickup order to "Collected by Customer". For a home delivery, generate the tracking link and open it in a private window.

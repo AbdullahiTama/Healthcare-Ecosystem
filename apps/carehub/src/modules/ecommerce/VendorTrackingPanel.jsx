@@ -4,6 +4,10 @@ import { theme } from '../../styles/theme'
 import { Card, TealBtn, GhostBtn, Inp, useToast } from '../../components/ui'
 import { sbFetch } from '../../services/supabase'
 
+// The public tracking page is CareFind's (/track/:token), not CareHub's: a link built on window.location.origin opened the vendor
+// dashboard's own domain, where no such page exists.
+const CAREFIND_ORIGIN = (import.meta.env.VITE_CAREFIND_URL || 'https://carefind.app').replace(/\/+$/, '')
+
 const STATUS_OPTIONS = [
   { value: 'accepted', label: 'Accepted', icon: CheckCircle },
   { value: 'processing', label: 'Processing', icon: Package },
@@ -26,8 +30,11 @@ function fmtStamp(d) {
   return new Date(d).toLocaleString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export default function VendorTrackingPanel({ order, onStatusUpdate }) {
-  const { show: showToast } = useToast()
+// showToast comes from the page: this panel renders inside the order drawer and has no toast of its own on screen, so its
+// messages (above all the server refusing a status change) were never seen.
+export default function VendorTrackingPanel({ order, onStatusUpdate, showToast: pageToast }) {
+  const { show: ownToast } = useToast()
+  const showToast = pageToast || ownToast
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [newStatus, setNewStatus] = useState('')
@@ -127,14 +134,13 @@ export default function VendorTrackingPanel({ order, onStatusUpdate }) {
   }
 
   function handleCopyLink() {
-    const url = `${window.location.origin}/track/${trackingToken}`
-    navigator.clipboard.writeText(url).then(() => {
+    navigator.clipboard.writeText(trackingUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    }, () => showToast('Could not copy the link. Select it and copy it instead.', { type: 'warning' }))
   }
 
-  const trackingUrl = trackingToken ? `${window.location.origin}/track/${trackingToken}` : null
+  const trackingUrl = trackingToken ? `${CAREFIND_ORIGIN}/track/${encodeURIComponent(trackingToken)}` : null
   const nextStatuses = STATUS_OPTIONS.filter(opt => {
     const currentIdx = STATUS_OPTIONS.findIndex(s => s.value === order?.status)
     const optIdx = STATUS_OPTIONS.findIndex(s => s.value === opt.value)
@@ -142,6 +148,9 @@ export default function VendorTrackingPanel({ order, onStatusUpdate }) {
   })
 
   if (!order || order.delivery_preference === 'pickup') return null
+  // the server moves only a paid order forward through fulfilment; once it is delivered, cancelled or refunded the panel keeps
+  // the tracking history and link but offers no status changes
+  const canUpdate = order.payment_status === 'paid' && ['paid', 'accepted', 'processing', 'ready_for_pickup', 'in_transit'].includes(order.status)
 
   return (
     <Card style={{ padding: 20 }}>
@@ -150,7 +159,7 @@ export default function VendorTrackingPanel({ order, onStatusUpdate }) {
       </h3>
 
       {/* Add Tracking Event */}
-      <div style={{ marginBottom: 20 }}>
+      {canUpdate && <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: theme.navy, marginBottom: 8 }}>Update Status</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
           {nextStatuses.map(opt => {
@@ -212,7 +221,7 @@ export default function VendorTrackingPanel({ order, onStatusUpdate }) {
             </TealBtn>
           </>
         )}
-      </div>
+      </div>}
 
       {/* Tracking Link */}
       <div style={{ marginBottom: 20, padding: 12, borderRadius: 8, background: theme.bg || '#f9fafb' }}>

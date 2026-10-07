@@ -628,3 +628,135 @@ describe('SD-1 / SD-3 / SD-7: unpaid orders expire, delivery is quoted before pa
     expect((await one(`select payload from email_outbox where payload->>'orderId' = $1`, [o.id])).payload).toMatchObject({ status: 'shipped', orderId: o.id })
   })
 })
+
+// ---- shop flow review, part 3 (carefind_20261022_shop_vendor_flow): the whole journey, CareFind purchase to CareHub payout --------------
+describe('SV: an order from CareFind checkout to the vendor\'s CareHub wallet', () => {
+  const live = read('../../../../../supabase/migrations/carehub_20260906_shop_delivery_tracking.sql')
+  const fn = (name) => live.slice(live.indexOf(`CREATE OR REPLACE FUNCTION public.${name}`), live.indexOf('$$;', live.indexOf(`CREATE OR REPLACE FUNCTION public.${name}`)) + 3)
+  const shop = async () => {
+    const email = `sv${++n}@example.com`; const vendor = await business(email); const customer = uid()
+    const product = (await one(`insert into products (name, price, stock, sale_type) values ('Amoxicillin', 100, 50, 'retail') returning id`)).id
+    const ecom = (await one(`insert into ecommerce_products (business_id, product_id, ecommerce_price_kobo) values ($1,$2,10000) returning id`, [vendor, product])).id
+    return { vendor, customer, product, ecom, seller: { sub: uid(), email }, buyer: { sub: customer, email: 'buyer@example.com' } }
+  }
+  const checkout = (s, pref = 'pickup') => as('authenticated', s.buyer, () => one(
+    `select create_shop_order($1,$2,$3::jsonb,20000,4000,50000,0,70000,'12 Allen Ave','Lagos','Lagos','0801','buyer@example.com',null,$4,1,true,'Ada',$5,null) id`,
+    [s.customer, s.vendor, JSON.stringify([{ ecommerce_product_id: s.ecom, quantity: 2 }]), pref, ref('cfpay')])).then((r) => r.id)
+  // what /api/initiate-shop-payment records, then what the Paystack webhook / redirect verify settles
+  const settle = async (reference, amount = 70000) => (await as('service_role', null, () => one('select settle_payment_intent($1,$2,$3,$4,$5) r', [reference, 'paystack', 'TX' + reference, amount, 'NGN']))).r
+  const pay = async (s, orderId, amount = 70000) => {
+    const reference = ref('cf_shop')
+    await db.query(`insert into payment_intents (reference, application, purpose, customer_id, business_id, entity_type, entity_id, expected_amount) values ($1,'carefind','shop_order',$2,$3,'shop_order',$4,$5)`, [reference, s.customer, s.vendor, orderId, amount])
+    return { ...(await settle(reference, amount)), reference }
+  }
+  const move = (s, orderId, to, note = null) => as('authenticated', s.seller, () => one('select update_shop_order_status($1,$2,null,$3)', [orderId, to, note]))
+  const wallet = async (b) => (await one('select coalesce(held_balance,0)::int held, coalesce(available_balance,0)::int available from business_wallets where business_id = $1', [b])) || { held: 0, available: 0 }
+  const release = () => as('service_role', null, () => one('select release_shop_vendor_credits(200) r')).then((x) => x.r)
+
+  beforeAll(async () => {
+    await db.exec(`
+      alter table public.shop_order_tracking_events add column if not exists created_at timestamptz not null default now();
+      create table if not exists public.shop_tracking_tokens (id uuid primary key default gen_random_uuid(), order_id uuid not null references public.shop_orders(id) on delete cascade,
+        token text unique not null, expires_at timestamptz not null default (now() + interval '30 days'), created_at timestamptz not null default now());
+      alter table public.shop_tracking_tokens enable row level security;
+      create policy "shop_tracking_tokens_select" on public.shop_tracking_tokens for select to anon, authenticated using (true);
+      create table if not exists public.shop_order_messages (id uuid primary key default gen_random_uuid(), order_id uuid, sender_id uuid, sender_role text, message text, created_at timestamptz default now());
+    `)
+    // the live token functions; gen_random_bytes needs pgcrypto, which this database does not have (like a search_path of public on Supabase)
+    await db.exec(fn('generate_tracking_token'))
+    await db.exec(fn('get_tracking_by_token'))
+  })
+
+  it('BEFORE: the vendor cannot create a tracking link, and anyone can list every order\'s tracking token', async () => {
+    const s = await shop(); const id = await checkout(s)
+    await expect(as('authenticated', s.seller, () => one('select generate_tracking_token($1) t', [id]))).rejects.toThrow(/Not authorized/)
+    await db.query(`insert into shop_tracking_tokens (order_id, token) values ($1, $2)`, [id, `TRK-leak${n}`])
+    expect((await as('anon', null, () => all('select token from shop_tracking_tokens'))).length).toBeGreaterThan(0)
+  })
+
+  it('applies', async () => { await db.exec(M('carefind_20261022_shop_vendor_flow')) })
+
+  it('the whole journey: checkout, payment, the vendor told, fulfilment, the customer told and emailed, then the payout', async () => {
+    const s = await shop()
+    const stockBefore = (await one('select stock from products where id = $1', [s.product])).stock
+
+    // 1. CareFind checkout: the order waits for payment, stock is reserved, the customer is told
+    const id = await checkout(s)
+    expect(await one('select status, payment_status, subtotal_kobo::int s, commission_kobo::int c, total_kobo::int t from shop_orders where id = $1', [id]))
+      .toEqual({ status: 'pending_payment', payment_status: 'pending', s: 20000, c: 4000, t: 70000 })
+    expect((await one('select stock from products where id = $1', [s.product])).stock).toBe(stockBefore - 2)
+    expect((await one(`select link from notifications where recipient_id = $1 and type = 'shop_order_pending'`, [s.customer])).link).toBe(`/orders/${id}`)
+
+    // 2. the vendor cannot start on an unpaid order
+    await expect(move(s, id, 'accepted')).rejects.toThrow(/not allowed/)
+
+    // 3. Paystack confirms: the order is paid and the vendor's share (subtotal - commission) is held
+    const paid = await pay(s, id)
+    expect(paid.outcome).toBe('settled')
+    expect(await one('select status, payment_status from shop_orders where id = $1', [id])).toEqual({ status: 'paid', payment_status: 'paid' })
+    expect(await one('select amount_kobo::int a, status from shop_vendor_credits where order_id = $1', [id])).toEqual({ a: 16000, status: 'held' })
+    expect(await wallet(s.vendor)).toEqual({ held: 16000, available: 0 })
+    // the redirect verify and the webhook both settle the same payment: the second changes nothing
+    expect((await settle(paid.reference)).outcome).toBe('already_settled')
+    expect(await wallet(s.vendor)).toEqual({ held: 16000, available: 0 })
+    expect((await one('select count(*)::int c from staff_notifications where business_id = $1', [s.vendor])).c).toBe(0)   // the paid notice is an effect (API), not SQL
+
+    // 4. CareHub: the vendor sees the order and moves it through fulfilment; a pickup order ends when the customer collects it
+    expect((await as('authenticated', s.seller, () => all('select id from shop_orders where id = $1', [id]))).length).toBe(1)
+    for (const to of ['accepted', 'processing', 'ready_for_pickup']) await move(s, id, to)
+    await move(s, id, 'delivered', 'Collected by customer')
+    expect((await all('select to_status from shop_order_status_history where order_id = $1 order by created_at, to_status', [id])).map((h) => h.to_status))
+      .toEqual(expect.arrayContaining(['pending_payment', 'paid', 'accepted', 'processing', 'ready_for_pickup', 'delivered']))
+
+    // every vendor notice opens this order in CareHub; every customer notice opens it in CareFind
+    const vendorLinks = (await all('select link from staff_notifications where business_id = $1', [s.vendor])).map((r) => r.link)
+    expect(vendorLinks.length).toBeGreaterThan(0)
+    for (const link of vendorLinks) expect(link).toBe(`/dashboard/ecommerce/orders/${id}`)
+    const customerLinks = (await all(`select link from notifications where recipient_id = $1 and type like 'shop_%'`, [s.customer])).map((r) => r.link)
+    for (const link of customerLinks) expect(link).toBe(`/orders/${id}`)
+    // the customer is emailed as the order moves, each email linking to the order
+    const emails = await all(`select payload from email_outbox where payload->>'orderId' = $1`, [id])
+    expect(emails.map((e) => e.payload.status)).toEqual(expect.arrayContaining(['delivered']))
+
+    // 5. the money waits out the return window, then becomes withdrawable
+    await release()
+    expect(await wallet(s.vendor)).toEqual({ held: 16000, available: 0 })
+    await db.query(`update shop_order_status_history set created_at = now() - interval '30 days' where order_id = $1 and to_status = 'delivered'`, [id])
+    await release()
+    expect(await one('select status, released_kobo::int r from shop_vendor_credits where order_id = $1', [id])).toEqual({ status: 'released', r: 16000 })
+    expect(await wallet(s.vendor)).toEqual({ held: 0, available: 16000 })
+    expect((await one(`select count(*)::int c from business_wallet_transactions where business_id = $1 and type = 'shop_release'`, [s.vendor])).c).toBe(1)
+  })
+
+  it('ATTACK: a vendor cannot shortcut the flow by writing the order tables directly (backdated delivery, status, amounts, items)', async () => {
+    const s = await shop(); const id = await checkout(s); await pay(s, id)
+    const vendorTries = (sql, p) => as('authenticated', s.seller, () => db.query(sql, p))
+    await expect(vendorTries(`insert into shop_order_status_history (order_id, from_status, to_status, created_at) values ($1,'paid','delivered', now() - interval '60 days')`, [id])).rejects.toThrow(/permission denied/)
+    await expect(vendorTries(`update shop_orders set status = 'delivered' where id = $1`, [id])).rejects.toThrow(/permission denied/)
+    await expect(vendorTries(`update shop_orders set subtotal_kobo = 9999999 where id = $1`, [id])).rejects.toThrow(/permission denied/)
+    await expect(vendorTries(`insert into shop_order_items (order_id, product_name, quantity, unit_price_kobo, line_total_kobo) values ($1,'Extra',1,1,1)`, [id])).rejects.toThrow(/permission denied/)
+    await expect(vendorTries(`update shop_payments set status = 'success' where order_id = $1`, [id])).rejects.toThrow(/permission denied/)
+    await expect(vendorTries(`insert into shop_order_tracking_events (order_id, status) values ($1,'delivered')`, [id])).rejects.toThrow(/permission denied/)
+    // nor can the customer mark their own order paid
+    await expect(as('authenticated', s.buyer, () => db.query(`update shop_orders set payment_status = 'paid' where id = $1`, [id]))).rejects.toThrow(/permission denied/)
+    expect(await one('select status from shop_orders where id = $1', [id])).toEqual({ status: 'paid' })
+  })
+
+  it('home delivery: the vendor records tracking, creates the public tracking link, and the link shows the journey to anyone holding it', async () => {
+    const s = await shop(); const id = await checkout(s, 'home'); await pay(s, id)
+    await as('authenticated', s.seller, () => one(`select add_tracking_event($1,'in_transit','Left the pharmacy','{"lat":6.6,"lng":3.35}'::jsonb)`, [id]))
+    const token = (await as('authenticated', s.seller, () => one('select generate_tracking_token($1) t', [id]))).t
+    expect(token).toMatch(/^TRK-[0-9a-f]{32}$/)
+    expect((await as('authenticated', s.buyer, () => one('select generate_tracking_token($1) t', [id]))).t).toBe(token)   // the same link for both
+    const page = (await as('anon', null, () => one('select get_tracking_by_token($1) p', [token]))).p
+    expect(page).toMatchObject({ status: 'in_transit', tracking_events: [expect.objectContaining({ status: 'in_transit', notes: 'Left the pharmacy' })] })
+    await expect(as('authenticated', { sub: uid(), email: 'stranger@example.com' }, () => one('select generate_tracking_token($1) t', [id]))).rejects.toThrow(/Not authorized/)
+  })
+
+  it('ATTACK: tracking tokens cannot be listed (each one opens an order\'s tracking notes and locations)', async () => {
+    for (const role of ['anon', 'authenticated']) {
+      await expect(as(role, { sub: uid() }, () => all('select token from shop_tracking_tokens')), role).rejects.toThrow(/permission denied/)
+      await expect(as(role, { sub: uid() }, () => db.query(`insert into shop_tracking_tokens (order_id, token) select id, 'TRK-forged' from shop_orders limit 1`)), role).rejects.toThrow(/permission denied/)
+    }
+  })
+})

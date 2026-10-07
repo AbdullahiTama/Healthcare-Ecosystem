@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { notificationRepository } from '../../modules/notifications/repositories'
 import { watchTable } from '../../lib/realtime'
-import { categoryForKind, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
+import { categoryForKind, notificationPath, NOTIFICATION_CATEGORIES } from '../../lib/notificationCategories'
 import { theme } from '../../styles/theme'
 import { useToast, Toast } from '../ui'
 
@@ -96,7 +96,8 @@ export default function NotificationBell({ brand }) {
       }
     }
     setOpen(false)
-    if (n.link) navigate('/dashboard/' + n.link)
+    const path = notificationPath(n.link)
+    if (path) navigate(path)
   }
 
   async function clearAll() {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { categoryForKind, NOTIFICATION_CATEGORIES } from './notificationCategories.js'
+import { categoryForKind, notificationPath, NOTIFICATION_CATEGORIES } from './notificationCategories.js'
 
 describe('categoryForKind', () => {
   it('routes appointment kinds to appointments', () => {
@@ -34,5 +34,25 @@ describe('categoryForKind', () => {
 
   it('exposes exactly the four tab categories', () => {
     expect(NOTIFICATION_CATEGORIES).toEqual(['appointments', 'inventory', 'social', 'general'])
+  })
+})
+
+describe('notificationPath', () => {
+  it('opens a dashboard section by name', () => {
+    expect(notificationPath('inventory')).toBe('/dashboard/inventory')
+  })
+
+  it('keeps a full path as it is, so shop order links reach the order', () => {
+    expect(notificationPath('/dashboard/ecommerce/orders/abc')).toBe('/dashboard/ecommerce/orders/abc')
+    expect(notificationPath('/dashboard/inventory?stock=low')).toBe('/dashboard/inventory?stock=low')
+  })
+
+  it('never builds a protocol-relative URL', () => {
+    expect(notificationPath('//evil.example/x')).toBe('/dashboard/evil.example/x')
+  })
+
+  it('opens nothing for an empty link', () => {
+    expect(notificationPath(null)).toBeNull()
+    expect(notificationPath('  ')).toBeNull()
   })
 })

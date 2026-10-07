@@ -239,6 +239,8 @@ export default function BusinessDashboard() {
               <Route path='locations' element={guard('locations', <><TopBar title='Locations' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Locations {...pageProps} /></div></>)} />
               <Route path='mastercatalog' element={guard('mastercatalog', <><TopBar title='Master Catalog' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><MasterCatalog {...pageProps} /></div></>)} />
               <Route path='ecommerce' element={guard('ecommerce', <><TopBar title='E-commerce' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
+              {/* a shop order opened from a notification: the same page, with that order's drawer open */}
+              <Route path='ecommerce/orders/:orderId' element={guard('ecommerce', <><TopBar title='E-commerce' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Ecommerce {...pageProps} /></div></>)} />
               <Route path='warehouses' element={bareGuard('warehouses', <Warehouses {...pageProps} />)} />
               <Route path='territories' element={bareGuard('territories', <Territories {...pageProps} />)} />
               <Route path='messages' element={bareGuard('messages', <Messages {...pageProps} />)} />
