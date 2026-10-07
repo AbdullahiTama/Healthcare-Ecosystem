@@ -159,3 +159,13 @@ export function getEstimatedDelivery(order) {
   }
   return null
 }
+
+// One line for the delivery address. Checkout stores "street, city, state" in delivery_address AND city/state in their own
+// columns, so appending them again printed "Lagos, Lagos, Lagos, Lagos".
+export function formatOrderAddress(order) {
+  const address = String(order?.delivery_address || '').trim()
+  const extra = [order?.delivery_city, order?.delivery_state]
+    .map(part => String(part || '').trim())
+    .filter(part => part && !address.toLowerCase().includes(part.toLowerCase()))
+  return [address, ...extra].filter(Boolean).join(', ')
+}

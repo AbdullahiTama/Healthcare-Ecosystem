@@ -12,7 +12,10 @@ import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Card, Button, Input, Empty, Loading } from '../../components/ui'
 import { ArrowLeft, Package, Clock, CheckCircle, Truck, MapPin, MessageSquare, Send, RotateCcw, Calendar, Download, Link, Copy, Star } from 'lucide-react'
-import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery } from './orderConstants'
+import { STATUS_CONFIG, TRACKING_STEPS, getEstimatedDelivery, formatOrderAddress } from './orderConstants'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+import OrderStepsVertical from './OrderStepsVertical'
+import { buildInvoiceHtml } from './invoice'
 import { useCart } from './CartProvider'
 import DeliveryTrackingMap from '../../components/shop/DeliveryTrackingMap'
 import VendorRating from './VendorRating'
@@ -23,6 +26,7 @@ export default function OrderDetail() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const { isMobile } = useBreakpoint()
   const { addItem } = useCart()
 
   const [order, setOrder] = useState(null)
@@ -72,124 +76,8 @@ export default function OrderDetail() {
 
   function handleDownloadInvoice() {
     if (!order) return
-    
-    const invoiceHtml = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice - ${order.order_ref || order.id.slice(0, 8).toUpperCase()}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-          .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .header h1 { margin: 0; color: #0E6F5A; }
-          .header .invoice-info { text-align: right; }
-          .section { margin-bottom: 24px; }
-          .section h2 { color: #0E6F5A; border-bottom: 2px solid #0E6F5A; padding-bottom: 8px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background: #f5f5f5; font-weight: 600; }
-          .total { font-size: 18px; font-weight: 700; color: #0E6F5A; }
-          .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
-          @media print { body { padding: 20px; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <h1>CareFind</h1>
-            <p>Healthcare Marketplace</p>
-          </div>
-          <div class="invoice-info">
-            <h2>INVOICE</h2>
-            <p><strong>Order:</strong> ${order.order_ref || order.id.slice(0, 8).toUpperCase()}</p>
-            <p><strong>Date:</strong> ${new Date(order.created_at).toLocaleDateString()}</p>
-            <p><strong>Status:</strong> ${order.status}</p>
-          </div>
-        </div>
-
-        <div class="section">
-          <h2>Customer Details</h2>
-          <p><strong>Name:</strong> ${order.customer_name || 'N/A'}</p>
-          <p><strong>Email:</strong> ${order.delivery_email || 'N/A'}</p>
-          <p><strong>Phone:</strong> ${order.delivery_phone || 'N/A'}</p>
-          <p><strong>Address:</strong> ${order.delivery_address}, ${order.delivery_city || ''}, ${order.delivery_state || ''}</p>
-        </div>
-
-        <div class="section">
-          <h2>Order Items</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>Quantity</th>
-                <th>Unit Price</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.order_items.map(item => `
-                <tr>
-                  <td>${item.product_name}</td>
-                  <td>${item.quantity}</td>
-                  <td>₦${(item.unit_price_kobo / 100).toLocaleString()}</td>
-                  <td>₦${((item.quantity * item.unit_price_kobo) / 100).toLocaleString()}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="section">
-          <h2>Order Summary</h2>
-          <table>
-            <tbody>
-              <tr>
-                <td>Subtotal</td>
-                <td>₦${((order.subtotal_kobo || order.total_kobo - order.fulfilment_kobo - order.delivery_kobo) / 100).toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>Fulfilment Fee</td>
-                <td>₦${(order.fulfilment_kobo / 100).toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>Delivery Fee</td>
-                <td>${order.delivery_kobo > 0 ? `₦${(order.delivery_kobo / 100).toLocaleString()}` : 'PENDING'}</td>
-              </tr>
-              <tr class="total">
-                <td><strong>Total</strong></td>
-                <td><strong>₦${(order.total_kobo / 100).toLocaleString()}</strong></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        ${order.payment_reference ? `
-          <div class="section">
-            <h2>Payment Information</h2>
-            <p><strong>Payment Reference:</strong> ${order.payment_reference}</p>
-            ${order.paystack_reference ? `<p><strong>Paystack Reference:</strong> ${order.paystack_reference}</p>` : ''}
-            <p><strong>Payment Status:</strong> ${order.payment_status}</p>
-          </div>
-        ` : ''}
-
-        <div class="footer">
-          <p>Thank you for shopping with CareFind!</p>
-          <p>For support, contact: support@carefind.ng</p>
-          <p>This is a computer-generated invoice. No signature required.</p>
-        </div>
-
-        <script>
-          window.onload = function() {
-            if (window.location.search.includes('print=1')) {
-              window.print();
-            }
-          }
-        </script>
-      </body>
-      </html>
-    `
-
-    const blob = new Blob([invoiceHtml], { type: 'text/html' })
+    const invoiceHtml = buildInvoiceHtml(order)
+    const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const newWindow = window.open(url, '_blank')
     if (newWindow) {
@@ -493,16 +381,17 @@ export default function OrderDetail() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Order Header */}
         <Card style={{ padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-            <div>
-              <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.navy, marginBottom: 8 }}>
+          {/* wraps on a phone: the order number on its own line, then the invoice button and the status */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+            <div style={{ minWidth: 0, flex: '1 1 220px' }}>
+              <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.navy, marginBottom: 8, overflowWrap: 'anywhere' }}>
                 Order #{order.order_ref || order.id.slice(0, 8).toUpperCase()}
               </h1>
-              <p style={{ fontSize: 14, color: theme.textMid }}>
+              <p style={{ fontSize: 14, color: theme.textMid, overflowWrap: 'anywhere' }}>
                 {new Date(order.created_at).toLocaleString()} {order.payment_reference && <span>· Ref {order.payment_reference}</span>}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <Button
                 onClick={handleDownloadInvoice}
                 variant="secondary"
@@ -553,7 +442,7 @@ export default function OrderDetail() {
           <div style={{ display: 'flex', gap: 16, paddingTop: 16, borderTop: `1px solid ${theme.border}`, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 180 }}>
               <div style={{ fontSize: 12, color: theme.textMid, marginBottom: 4 }}>Delivery Address</div>
-              <div style={{ fontSize: 14, color: theme.navy }}>{order.delivery_address} {order.delivery_city ? `, ${order.delivery_city}` : ''} {order.delivery_state ? `, ${order.delivery_state}` : ''}</div>
+              <div style={{ fontSize: 14, color: theme.navy, overflowWrap: 'anywhere' }}>{formatOrderAddress(order)}</div>
               {order.delivery_phone && <div style={{ fontSize: 12, color: theme.textMid }}>Phone: {order.delivery_phone}</div>}
               {order.delivery_email && <div style={{ fontSize: 12, color: theme.textMid }}>Email: {order.delivery_email}</div>}
               {order.customer_name && <div style={{ fontSize: 12, color: theme.textMid }}>Customer: {order.customer_name}</div>}
@@ -619,7 +508,7 @@ export default function OrderDetail() {
         {/* Tracking Timeline */}
         {!['cancelled', 'pending_payment', 'disputed'].includes(order.status) && (
           <Card style={{ padding: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, color: theme.navy, margin: 0 }}>
                 Order Tracking
               </h2>
@@ -630,6 +519,7 @@ export default function OrderDetail() {
                 </div>
               )}
             </div>
+            {isMobile ? <OrderStepsVertical order={order} showDates /> : (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, position: 'relative' }}>
               {TRACKING_STEPS.map((step, idx) => {
                 const currentStepIndex = TRACKING_STEPS.findIndex(s => s.key === order.status)
@@ -692,6 +582,7 @@ export default function OrderDetail() {
                 )
               })}
             </div>
+            )}
           </Card>
         )}
 
@@ -795,11 +686,18 @@ export default function OrderDetail() {
                 <span style={{ color: theme.warning, fontWeight:600 }}>PENDING</span>
               </div>
             ) : null}
+            {order.discount_kobo > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 8 }}>
+                <span style={{ color: theme.textMid }}>Discount</span>
+                <span style={{ color: theme.success }}>−₦{(order.discount_kobo / 100).toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, paddingTop: 12, borderTop: `1px solid ${theme.border}` }}>
               <span style={{ color: theme.navy }}>Total</span>
               <span style={{ color: theme.tealDeep }}>₦{(order.total_kobo / 100).toLocaleString()}</span>
             </div>
-            <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>
+            {/* the vendor's commission is between CareFind and the vendor: not shown to the customer */}
+            {!isCustomer && <div style={{ fontSize:11, color:theme.textLight, marginTop:4 }}>Commission ₦{(order.commission_kobo/100).toLocaleString()} deducted from vendor payout</div>}
           </div>
           {/* Reorder button for delivered orders */}
           {order.status === 'delivered' && isCustomer && !returnData && (
