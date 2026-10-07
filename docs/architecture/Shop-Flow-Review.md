@@ -143,3 +143,10 @@ Manual check: pay for an order, then open the vendor's "order paid" notification
 - **Data fix** (`carefind_20261023_release_recent_pickup_quote_orders`). 26 pickup orders created before SD-7 were `delivery_quote_pending` and could never be quoted.
   - The 16 placed in the last 7 days were opened for payment, each with a history row and a customer notice.
   - The 10 older ones are left to `expire_unpaid_shop_orders`, which cancels them and returns their stock.
+
+## 10. Order status emails
+
+- **Production does not send order status emails.** They go through the reliable email catalog, and the CareFind events `order_status_update` and `order_confirmation` are disabled there (`enabled = false`). Until they are enabled, customers get in-app notices only. The payment confirmation is queued straight to the outbox by the API (`settlementEffects`) and does not consult the catalog.
+- **Latent rendering bug.** The catalog's payload is snake_case (`recipient_name`, `order_reference`, `business_name`), but the CareFind `orderStatusUpdate` template read camelCase only. Enabling the event would have sent "Hi undefined" emails with no order reference. The template now reads both shapes (`packages/shared-email`, tested).
+- **`carefind_20261024_order_status_email_link_and_quote`** (applied 2026-10-07). It is based on production's trigger body. The payload now carries `order_id`, so the button opens `/orders/<id>`. A vendor's delivery quote (`delivery_quote_pending` → `pending_payment`) now sends a "Your delivery has been quoted — Pay for your order" email. The catalog schema accepts the optional `order_id` (a uuid) and the status `delivery_quoted`. The schema was checked against production's validator before applying.
+- **To turn the emails on** (a product decision), after this template is deployed: `update email_event_catalog set enabled = true where app = 'carefind' and event_key = 'order_status_update';`
