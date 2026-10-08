@@ -10,6 +10,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../../config/supabaseClient'
+import { feedConfigRepository } from './repositories/feedConfigRepository'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 
@@ -25,35 +26,38 @@ export default function DistributionExperiments() {
   useEffect(() => {
     let mounted = true
     async function load() {
-      const { data: rows } = await supabase
-        .from('content_distribution_experiments')
-        .select('key, label, description, enabled, rollout_pct, variant, config, start_at, end_at')
-        .order('key', { ascending: true })
+      try {
+        const rows = await feedConfigRepository.getExperiments()
 
-      let admin = false
-      const { data: me } = await supabase.auth.getUser().then(({ data }) =>
-        data.user ? supabase.from('profiles').select('is_admin').eq('id', data.user.id).maybeSingle() : null,
-      )
-      admin = me?.data?.is_admin === true
+        let admin = false
+        const me = await supabase.auth.getUser().then(({ data }) =>
+          data.user ? feedConfigRepository.getProfileAdmin(data.user.id) : null,
+        )
+        admin = me?.is_admin === true
 
-      const draftsFor = {}
-      ;(rows || []).forEach((e) => { draftsFor[e.key] = { enabled: e.enabled, rollout_pct: Number(e.rollout_pct) } })
+        const draftsFor = {}
+        ;(rows || []).forEach((e) => { draftsFor[e.key] = { enabled: e.enabled, rollout_pct: Number(e.rollout_pct) } })
 
-      // Stats are an admin-only RPC; a non-admin gets not_authorized, which we
-      // swallow — the card just renders without counts.
-      const statMap = {}
-      if (admin && rows) {
-        await Promise.all(rows.map(async (e) => {
-          const { data, error } = await supabase.rpc('distribution_experiment_stats', { p_experiment_key: e.key })
-          if (!error) statMap[e.key] = data || []
-        }))
+        const statMap = {}
+        if (admin && rows) {
+          await Promise.all(rows.map(async (e) => {
+            try {
+              const data = await feedConfigRepository.getExperimentStats(e.key)
+              statMap[e.key] = data || []
+            } catch (err) {
+              // Stats are admin-only; non-admin gets not_authorized
+            }
+          }))
+        }
+
+        if (!mounted) return
+        setIsAdmin(admin)
+        setExperiments(rows || [])
+        setDrafts(draftsFor)
+        setStats(statMap)
+      } catch (e) {
+        console.warn('load failed:', e)
       }
-
-      if (!mounted) return
-      setIsAdmin(admin)
-      setExperiments(rows || [])
-      setDrafts(draftsFor)
-      setStats(statMap)
       setLoading(false)
     }
     load().catch(() => { if (mounted) setLoading(false) })
@@ -63,11 +67,7 @@ export default function DistributionExperiments() {
   async function save(key) {
     setSaving(true)
     try {
-      const { error } = await supabase.rpc('set_distribution_experiment', {
-        p_key: key,
-        p_updates: drafts[key],
-      })
-      if (error) throw error
+      await feedConfigRepository.setExperiment(key, drafts[key])
       toast.show('Experiment updated', { type: 'success' })
       setExperiments((prev) => prev.map((e) => (e.key === key ? { ...e, ...drafts[key] } : e)))
     } catch (err) {

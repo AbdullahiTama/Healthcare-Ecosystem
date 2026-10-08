@@ -1,14 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
-import { NOTIFICATION_TYPES, DEFAULT_MESSAGES } from '../index'
+import { NOTIFICATION_TYPES, DEFAULT_MESSAGES } from '../index.js'
 
 // Credentials come from env/config — the consuming app's Vite build inlines
 // VITE_* vars, so staging/prod can differ and the key can rotate without a
-// code deploy. The client itself is created lazily on first use so merely
-// constructing the repository (e.g. to map rows) never requires live keys.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
+// code deploy. Nothing here touches import.meta.env at module scope:
+// that object is injected by Vite and is undefined under plain Node/ESM
+// (serverless, scripts, non-Vite test runners), so a module-scope read made
+// this file unimportable outside a Vite build. The read happens on first use,
+// so merely importing the module or constructing the repository never
+// requires live keys or a build context.
 function createSupabaseClient() {
+  const env = import.meta.env || {}
+  const supabaseUrl = env.VITE_SUPABASE_URL
+  const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY
+
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
       'Supabase credentials missing: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY ' +
@@ -152,5 +157,6 @@ export const careFindMessages = {
   [NOTIFICATION_TYPES.NEWS_LIKE]: 'liked your article',
   [NOTIFICATION_TYPES.NEWS_COMMENT]: 'commented on your article',
   [NOTIFICATION_TYPES.PRODUCT_AVAILABLE]: 'a product you wanted is now available',
+  [NOTIFICATION_TYPES.PRODUCT_EXPIRING_SOON]: 'product is approaching its expiry date',
   [NOTIFICATION_TYPES.PROFILE_VIEW]: 'viewed your profile',
 }

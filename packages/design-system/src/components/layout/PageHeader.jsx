@@ -22,6 +22,11 @@ export const PageHeader = forwardRef(function PageHeader(
     description,
     breadcrumb,
     compact = false,
+    // Landmark role for the header element. `banner` (default) is correct for a
+    // page's top bar rendered outside `main`; pass `landmark="none"` when the
+    // header is composed INSIDE `<main>` (banner is not a valid descendant of
+    // main) — e.g. a route header under DashboardShell's `main#ds-main-content`.
+    landmark = 'banner',
     rightSlot,
     primaryAction,
     secondaryActions,
@@ -38,7 +43,7 @@ export const PageHeader = forwardRef(function PageHeader(
     return (
       <header
         ref={ref}
-        role="banner"
+        role={landmark === 'none' ? undefined : landmark}
         className={className}
         style={{
           background: theme.cardBg,
@@ -83,7 +88,7 @@ export const PageHeader = forwardRef(function PageHeader(
   return (
     <header
       ref={ref}
-      role="banner"
+      role={landmark === 'none' ? undefined : landmark}
       className={className}
       style={{
         padding: '16px 24px',

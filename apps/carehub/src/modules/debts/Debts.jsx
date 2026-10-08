@@ -5,7 +5,7 @@ import { debtRepository } from './repositories'
 // exposes it through its own repository. `getClients` is still the shared
 // services/supabase read used by POS too — repoint it when that call is
 // consolidated; it is unrelated to this module's own aggregate.
-import { getClients } from '../../services/supabase'
+import { clientRepository } from '../clients/repositories'
 import { fmt, todayDate } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
@@ -37,7 +37,7 @@ export default function Debts({ brand, role, perms }) {
   useEffect(() => { load() }, [brand?.id])
   useEffect(() => {
     let live = true
-    getClients(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
+    clientRepository.getAll(brand.id).then(c => { if (live) setClients(c || []) }).catch(() => {})
     return () => { live = false }
   }, [brand?.id])
 

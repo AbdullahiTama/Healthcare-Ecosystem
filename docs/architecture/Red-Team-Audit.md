@@ -1,0 +1,43 @@
+# Red-team audit (Phase 14)
+
+Status: findings confirmed and fixed in `supabase/migrations/carefind_20261019_red_team_fixes.sql`, **APPLIED to production 2026-10-06** and verified against the catalog (section 5).
+
+## 1. Method
+
+Attacker's view: enumerate every SECURITY DEFINER function executable by `anon`/`authenticated`, read the live bodies of the money- and PII-adjacent ones, dump DML grants and write policies on money tables, and chain what an unauthenticated visitor can do (register a business, sign up, call RPCs). Each finding below was reproduced as a test against real Postgres (`apps/carefind/src/test/payments/redTeam.db.test.js`: the attack is first run against the vulnerable bodies, then the migration is applied and the same attack must fail).
+
+## 2. Findings
+
+| ID | Severity | Attack | Fix |
+|---|---|---|---|
+| F-37 | CRITICAL | Anyone can register a business (anon) and so becomes a business member; members can insert staff rows with any email (RLS); `provision_staff_auth` then **reset the password** of the existing account with that email. Account takeover of any user, including platform admins and wallet holders. | An existing account's password and confirmation are never changed; staff rows link to it. A business must be `active` to mint accounts; a staff row already linked elsewhere is refused. |
+| F-38 | CRITICAL | `create_shop_order` stored the client's `p_subtotal_kobo` without comparing it with the items (only the total was checked). The vendor credit is `subtotal - commission`, so a vendor with a colluding buyer could mint arbitrary vendor credit. | Subtotal must equal the items' sum. Defence in depth: `_settle_shop_order` refuses (`needs_refund`, `subtotal_mismatch`) an order with no items or whose items do not sum to the subtotal; reconciliation gains `credit_not_backed_by_items`. |
+| F-39 | HIGH | `update_shop_order_status`: any signed-in user could change any order's status by passing their own id as `p_changed_by`. | Only admin/service role may name an actor. A vendor member may only move a PAID order forward through fulfilment (or quote delivery); never payment, refund, cancel or dispute states. `add_tracking_event` follows the same rules. |
+| F-40 | HIGH | `complete_appointment_and_release` released the full fee from the held balance a second time (the `appointments_after_update` trigger already releases the booking credit), and for an appointment not paid through the platform released OTHER customers' held money: a business could drain its own hold with dummy appointments. | The function no longer moves money; the trigger releases exactly that appointment's booking credit, once. |
+| F-41 | HIGH | `get_purchase_totals` / `get_purchases_page`: executable by anon, no ownership check: any business's supplier and balance data readable with just a business id. | Ownership check; anon revoked. |
+| F-42 | MEDIUM | Expense readers, `get_customer_purchase_summary`, `get_order_notification_history` had no ownership check. | Service role / admin / own business / own customer only. |
+| F-43 | MEDIUM | Client write policies on `shop_order_items` and `shop_order_returns` (a customer could insert items or an `approved` return for any order, blocking its real return); `record_shop_notification` let anyone post a fake "payment confirmed" to any user; `validate_promo_code` (anon) answered for any user id. | Policies dropped; function revoked; promo check answers for the caller only, anon revoked. |
+| F-44 | LOW | `cleanup_old_sequences` (deletes rows) and `book_appointment_slot` (caller-chosen fee) callable by users. | Revoked from public/anon/authenticated. |
+
+## 3. Tests
+
+`redTeam.db.test.js`: 30 tests. All pass. The full PGlite payments suite (33 files, 621 tests) passes with the new fixture. The fixture (`liveSchemaSubset.sql`) gained the production tables the fix touches.
+
+Migration 19 is now in the chain of every suite that settles shop orders (vendor payouts, invariants, reconciliation, refunds, timeouts, both concurrency suites, bench). Five mutants guard the new code (M26 subtotal check, M27 vendor forward-only, M28 actor spoofing, M29 items back the subtotal, M30 business ownership of completion) and M02/M17 were retargeted to it: 7 of 7 killed. Not re-run since the chain change: the full PGlite suite and `test:finance:pg` (a memory-pressure stop interrupted the session).
+
+## 4. Residual risks (not fixed)
+
+* **Vendor-controlled "delivered"**: a vendor may still mark a paid order delivered, which starts the 7-day release clock. Accepted design risk; mitigated by the return window, refund recovery and reconciliation.
+* `mint_confirmed_auth_user` allows pre-registering (squatting) an address before its owner signs up (medium).
+* `lookup-appointment` (unauthenticated PII by phone + business id) and `resolve-account` (unauthenticated account-name oracle) remain open.
+* Legacy `wallet_transactions` and `withdrawal_history_log` own-row write policies are still writable (trust level is computed server-side, so no money impact found).
+* Promo-code enumeration needs rate limiting.
+* **Not reviewed in this phase**: Node endpoint auth and rate limits (initiate-payment, charge-*, withdrawal PIN set), webhook forgery/replay, CORS and secret exposure, CareHub handlers, agent/referral abuse (self-referral, own-ALL policies), storage buckets.
+
+## 5. Applied to production
+
+The first apply attempt rolled back on production's real signatures (`cannot remove parameter defaults from existing function`): the live `create_shop_order`, `update_shop_order_status`, `add_tracking_event`, `validate_promo_code` and the expense/purchase readers carry parameter defaults that the PGlite fixture did not have. The migration now declares the same defaults (read from `pg_get_function_arguments`) and the second apply succeeded; nothing was half-applied. Lesson: the fixture's signatures must be copied from the live catalog, defaults included.
+
+Catalog after apply: `create_shop_order` has exactly the 20-argument function and the 19-argument wrapper; `_settle_shop_order` keeps `lock_timeout=10s`, `statement_timeout=30s`; anon cannot execute `get_purchase_totals` or `validate_promo_code`; signed-in users cannot execute `record_shop_notification` or `cleanup_old_sequences`; the three client write policies are gone; the subtotal guard is present and `provision_staff_auth` no longer touches `encrypted_password`; open reconciliation findings are the known 9 info and 3 warning, none critical. CareHub callers keep working (signatures unchanged), except that `provision_staff_auth` now links an existing account instead of resetting its password.
+
+Original checklist, for reference: verify ACLs on the revoked functions, the three dropped policies, `_settle_shop_order` proconfig timeouts, one `create_shop_order` 20-arg, and run `run_db_reconciliation`. Then check the callers still work: CareHub `complete_appointment_and_release`, `provision_staff_auth`, vendor `update_shop_order_status`, `get_expense_*` and `get_purchase*`. Note for callers: a CareHub flow that relied on `provision_staff_auth` resetting an existing user's password will now link the staff row to the existing account instead.

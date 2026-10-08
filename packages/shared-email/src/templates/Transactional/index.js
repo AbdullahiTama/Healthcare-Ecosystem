@@ -1,0 +1,25 @@
+// CareHub templates under the names the registry (../index.js) maps to template keys. The templates themselves live in
+// ../CareHub/index.js; this file only keeps the older export names working.
+export {
+  registrationOwner as customerRegistration,
+  adminNewRegistration,
+  businessApproved,
+  businessRejected,
+  businessSuspended,
+  businessStatusUpdate,
+  staffWelcome,
+  subscriptionCreated,
+  subscriptionExpiry,
+  purchaseConfirmed,
+  orderStatusUpdate,
+  appointmentConfirmed,
+  passwordReset,
+  emailVerification,
+  creditReminder,
+  agentApproved,
+  agentRejected,
+  withdrawalRequested,
+  withdrawalCompleted,
+  withdrawalFailed,
+  withdrawalPinOtp,
+} from '../CareHub/index.js'

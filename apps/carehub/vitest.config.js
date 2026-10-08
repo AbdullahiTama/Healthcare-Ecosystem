@@ -1,11 +1,43 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify('http://127.0.0.1:54321'),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify('test-anon-key'),
+  },
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{js,jsx}'],
+    include: ['src/**/*.test.{js,jsx}', 'api/**/*.test.js'],
     globals: true,
+    // Vitest's 5s/10s defaults are wall-clock, so on a loaded machine they
+    // fail tests that pass in isolation — several suites here mount full React
+    // trees, and jsdom does none of the work a browser would offload. These are
+    // generous enough for a busy CI box while still catching a genuine hang.
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{js,jsx}', 'api/**/*.{js,jsx}'],
+      exclude: ['**/*.test.{js,jsx}', '**/node_modules/**', '**/dist/**'],
+    },
+  },
+  // Mirrors vite.config.js so tests resolve the shared design-system package
+  // the same way the build does (Vitest does not read Vite's resolve.alias).
+  // lucide-react is aliased to the package dir so the shared components (which
+  // live outside apps/carehub and have no local node_modules) resolve it via
+  // its ESM entry — the same entry existing tests already exercise.
+  resolve: {
+    alias: {
+      'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
+      '@supabase/supabase-js': path.resolve(__dirname, 'node_modules/@supabase/supabase-js'),
+      'resend': path.resolve(__dirname, 'node_modules/resend'),
+      '@care-ecosystem/design-system/components': path.resolve(__dirname, '../../packages/design-system/src/components'),
+      '@care-ecosystem/design-system': path.resolve(__dirname, '../../packages/design-system/src/theme.js'),
+    },
   },
 })

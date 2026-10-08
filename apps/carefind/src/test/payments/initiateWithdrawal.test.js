@@ -10,7 +10,6 @@ const { mockSupabase, mockVerifyUser, mockPaystack } = vi.hoisted(() => ({
     checkBalance: vi.fn(),
     resolveAccount: vi.fn(),
     normalizeAccountName: (n) => (n || '').trim().toLowerCase().replace(/\s+/g, ' '),
-    transferReference: (userId) => `cf_wd_${userId.slice(0, 8)}_testref`,
   },
 }))
 
@@ -55,9 +54,12 @@ describe('initiate-withdrawal PIN gate', () => {
     pinRow = []
     verifyResult = true
     mockSupabase.rpc.mockImplementation(async (fn) => {
+      if (fn === 'get_withdrawal_trust') return { data: [{ trust_level: 'new', total_withdrawals: 0, total_amount: 0, instant_threshold: 0, device_trust_enabled: false, biometric_enabled: false, consecutive_success: 0 }], error: null }
       if (fn === 'get_withdrawal_pin') return { data: pinRow, error: null }
       if (fn === 'verify_withdrawal_pin') return { data: verifyResult, error: null }
-      if (fn === 'request_withdrawal') return { data: 'ok', error: null }
+      if (fn === 'create_withdrawal') return { data: { outcome: 'ok', id: 'wd-1', reference: 'cf_wd_00112233445566778899aabbccddeeff', coins: 10, payout_kobo: 160000 }, error: null }
+      if (fn === 'attach_withdrawal_transfer') return { data: 'ok', error: null }
+      if (fn === 'update_withdrawal_trust_after_withdrawal') return { data: 'new', error: null }
       return { data: null, error: null }
     })
 
@@ -65,11 +67,12 @@ describe('initiate-withdrawal PIN gate', () => {
       const result = table === 'wallets'
         ? Promise.resolve({ data: { balance: 100 }, error: null })
         : table === 'withdrawal_requests'
-          ? Promise.resolve({ data: [{ id: 'wr-1' }], error: null })
+          ? Promise.resolve({ data: [{ id: 'wr-1', paystack_reference: null, paystack_transfer_code: null, created_at: new Date().toISOString() }], error: null })
           : Promise.resolve({ data: null, error: null })
       const chain = Object.assign(result, {
         select: () => chain,
         eq: () => chain,
+        is: () => chain,
         order: () => chain,
         limit: () => chain,
         maybeSingle: () => chain,
@@ -91,7 +94,7 @@ describe('initiate-withdrawal PIN gate', () => {
     expect(res.statusCode).toBe(400)
     expect(res.body.error).toContain('Set a withdrawal PIN first')
     // The existing flow must NOT run — nothing after the gate executes.
-    expect(mockSupabase.rpc).not.toHaveBeenCalledWith('request_withdrawal', expect.anything())
+    expect(mockSupabase.rpc).not.toHaveBeenCalledWith('create_withdrawal', expect.anything())
     expect(mockPaystack.checkBalance).not.toHaveBeenCalled()
   })
 
@@ -99,7 +102,7 @@ describe('initiate-withdrawal PIN gate', () => {
     pinRow = [{ pin_hash: 'h'.repeat(128), pin_salt: 's'.repeat(32), failed_attempts: 0, locked_until: null }]
     const res = await handler(makeReq({ ...VALID_BODY, pin: undefined }), makeRes())
     expect(res.statusCode).toBe(400)
-    expect(res.body.error).toContain('Withdrawal PIN is required')
+    expect(res.body.error).toContain('Authentication required')
   })
 
   it('rejects a malformed pin with 400', async () => {
@@ -114,7 +117,7 @@ describe('initiate-withdrawal PIN gate', () => {
     const res = await handler(makeReq({ ...VALID_BODY, pin: '9999' }), makeRes())
     expect(res.statusCode).toBe(403)
     expect(res.body.error).toContain('Incorrect withdrawal PIN')
-    expect(mockSupabase.rpc).not.toHaveBeenCalledWith('request_withdrawal', expect.anything())
+    expect(mockSupabase.rpc).not.toHaveBeenCalledWith('create_withdrawal', expect.anything())
   })
 
   it('rejects while the PIN is locked out with 403 and the remaining time', async () => {
@@ -148,8 +151,7 @@ describe('initiate-withdrawal PIN gate', () => {
       p_pin_salt: salt,
     })
 
-    // The entire pre-existing flow still executes, unchanged.
-    expect(mockSupabase.from).toHaveBeenCalledWith('wallets')
+    // The withdrawal engine runs: verify the account, reserve in the database, then send.
     expect(mockPaystack.checkBalance).toHaveBeenCalled()
     expect(mockPaystack.resolveAccount).toHaveBeenCalledWith({ bankCode: '001', accountNumber: '0123456789' })
     expect(mockPaystack.createTransferRecipient).toHaveBeenCalledWith({
@@ -158,27 +160,31 @@ describe('initiate-withdrawal PIN gate', () => {
       accountName: 'Test User',
       userId: 'user-1',
     })
-    expect(mockSupabase.rpc).toHaveBeenCalledWith('request_withdrawal', {
+    // The reservation is one database step; the reference and payout come BACK from it (never from the client).
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('create_withdrawal', expect.objectContaining({
       p_user_id: 'user-1',
-      p_amount: 10,
+      p_coins: 10,
       p_bank_name: 'Bank A',
+      p_bank_code: '001',
       p_account_number: '0123456789',
       p_account_name: 'Test User',
-    })
+    }))
+    expect(mockSupabase.rpc.mock.calls.find(([fn]) => fn === 'create_withdrawal')[1]).not.toHaveProperty('p_reference')
     expect(mockPaystack.initiateTransfer).toHaveBeenCalledWith(expect.objectContaining({
       recipientCode: 'RCP_TEST',
       amountKobo: 160000,
+      reference: 'cf_wd_00112233445566778899aabbccddeeff',
     }))
-    expect(mockSupabase.from).toHaveBeenCalledWith('withdrawal_requests')
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('attach_withdrawal_transfer', { p_request_id: 'wd-1', p_transfer_code: 'TRF_TEST', p_recipient_code: 'RCP_TEST' })
   })
 
-  it('does not include the pin in the request_withdrawal payload', async () => {
+  it('does not include the pin in the create_withdrawal payload', async () => {
     const salt = randomPinSalt()
     pinRow = [{ pin_hash: hashPin('1234', salt), pin_salt: salt, failed_attempts: 0, locked_until: null }]
     verifyResult = true
     await handler(makeReq(VALID_BODY), makeRes())
 
-    const requestCall = mockSupabase.rpc.mock.calls.find(([fn]) => fn === 'request_withdrawal')
+    const requestCall = mockSupabase.rpc.mock.calls.find(([fn]) => fn === 'create_withdrawal')
     expect(requestCall[1]).not.toHaveProperty('pin')
   })
 })

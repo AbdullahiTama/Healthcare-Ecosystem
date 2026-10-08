@@ -44,4 +44,26 @@ describe('VideoPlayer', () => {
     const video = container.querySelector('video')
     expect(video.hasAttribute('poster')).toBe(false)
   })
+
+  it('renders muted then unmute toggles video.muted and icon', () => {
+    const { container } = render(<VideoPlayer src="clip.mp4" />)
+    const video = container.querySelector('video')
+    expect(video.muted).toBe(true)
+    fireEvent.canPlay(video)
+    const unmuteBtn = screen.getByRole('button', { name: /unmute/i })
+    expect(unmuteBtn).toBeInTheDocument()
+    fireEvent.click(unmuteBtn)
+    expect(video.muted).toBe(false)
+    expect(screen.getByRole('button', { name: /mute video/i })).toBeInTheDocument()
+    // toggle back
+    fireEvent.click(screen.getByRole('button', { name: /mute video/i }))
+    expect(video.muted).toBe(true)
+    expect(screen.getByRole('button', { name: /unmute/i })).toBeInTheDocument()
+  })
+
+  it('unmute button is available in controls mode', () => {
+    const { container } = render(<VideoPlayer src="clip.mp4" controls />)
+    fireEvent.canPlay(container.querySelector('video'))
+    expect(screen.getByRole('button', { name: /unmute/i })).toBeInTheDocument()
+  })
 })

@@ -42,12 +42,11 @@ export async function checkAccess(viewerId, creatorId) {
 // Charge the wallet and grant/extend 30 days. Atomic — handled in the DB.
 // Returns { ok, insufficient, error }
 export async function subscribe(subscriberId, creatorId, priceCoins) {
-  if (!subscriberId || !creatorId) return { error: 'Missing user' }
+  if (!creatorId) return { error: 'Missing creator' }
   const price = Number(priceCoins) || 0
   if (price <= 0) return { error: 'Invalid price' }
 
   const { data, error } = await supabase.rpc('pay_creator_subscription', {
-    p_subscriber: subscriberId,
     p_creator: creatorId,
     p_price: price,
   })
@@ -55,6 +54,11 @@ export async function subscribe(subscriberId, creatorId, priceCoins) {
   if (error) return { error: error.message }
   if (data === 'insufficient') return { insufficient: true }
   if (data === 'ok') return { ok: true }
+  if (data === 'not_signed_in') return { error: 'Please log in again' }
+  // The price is the creator's listed price, decided by the server (financial audit F-04).
+  if (data === 'price_mismatch') return { error: "This creator's price has changed. Please reload and review it before subscribing." }
+  if (data === 'not_for_sale') return { error: 'This creator is not offering subscriptions right now.' }
+  if (data === 'self_subscription') return { error: 'You cannot subscribe to yourself.' }
   return { error: 'Could not complete subscription' }
 }
 
@@ -78,8 +82,8 @@ export async function subscribeWithPaystackFallback(subscriberId, creatorId, pri
         Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
+        // The server prices the subscription from the creator's profile; only the creator is named.
         creatorId,
-        priceCoins,
         callback_url: callbackUrl,
       }),
     })

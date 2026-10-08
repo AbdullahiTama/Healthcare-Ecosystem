@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { showRepository } from './repositories/showRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { ensureProfile } from '../../services/ensureProfile.js'
 import {
   Eye, FileText, Film, Gift, Heart, Lightbulb, MessageSquare, Play,
-  Radio, Repeat2, Share2, X,
+  Radio, Repeat2, Share2, X, Calendar,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -18,6 +19,7 @@ import SupportPrompt from '../../components/SupportPrompt.jsx'
 import { Loading, Toast, useToast } from '../../components/ui'
 import { shareOrCopy } from '../../utils/share.js'
 import { toShareText } from '../../utils/formatShare.js'
+import { generateCalendarUrl, downloadIcs } from '../../utils/calendar.js'
 
 function LiveShow() {
   const { id } = useParams()
@@ -73,42 +75,43 @@ function LiveShow() {
   }, [id])
 
   async function loadStats() {
-    const [likeRes, shareRes, giftRes, recentLikes, viewRes] = await Promise.all([
-      supabase.from('live_reactions').select('id').eq('show_id', id),
-      supabase.from('live_shares').select('id').eq('show_id', id),
-      supabase.from('gifts').select('coins, sender_id, created_at, profiles:sender_id(full_name, display_name)').eq('post_id', id),
-      supabase.from('live_reactions').select('created_at, profiles(full_name, display_name)').eq('show_id', id).order('created_at', { ascending: false }).limit(8),
-      supabase.from('live_views').select('id').eq('show_id', id),
-    ])
-    // Real row counts (array length is reliable; head:true count can return null right after login)
-    const likeN = (likeRes.data || []).length
-    const shareN = (shareRes.data || []).length
-    const viewN = (viewRes.data || []).length
-    // Only update if we actually got data (don't overwrite a good number with 0 on a failed read)
-    if (!likeRes.error) setLikeCount(c => Math.max(c, likeN))
-    if (!shareRes.error) setShareCount(c => Math.max(c, shareN))
-    if (!viewRes.error) setViewCount(c => Math.max(c, viewN))
-    const gifts = giftRes.data || []
-    setGiftTotal(gifts.reduce((sum, g) => sum + (g.coins || 0), 0))
-    const byUser = {}
-    gifts.forEach(g => {
-      if (!g.sender_id) return
-      const name = g.profiles?.full_name || g.profiles?.display_name || 'Someone'
-      byUser[g.sender_id] = byUser[g.sender_id] || { name, total: 0 }
-      byUser[g.sender_id].total += (g.coins || 0)
-    })
-    setTopGifters(Object.values(byUser).sort((a, b) => b.total - a.total).slice(0, 3))
-    // Live activity feed: recent likers + gifters
-    const acts = []
-    ;(recentLikes.data || []).forEach(r => {
-      acts.push({ type: 'like', name: r.profiles?.full_name || r.profiles?.display_name || 'Someone', at: r.created_at })
-    })
-    gifts.slice(-5).forEach(g => {
-      acts.push({ type: 'gift', name: g.profiles?.full_name || g.profiles?.display_name || 'Someone', at: g.created_at, amount: g.coins })
-    })
-    acts.sort((a, b) => new Date(b.at) - new Date(a.at))
-    setActivity(acts.slice(0, 6))
-    if (!likeRes.error) setStatsLoaded(true)
+    try {
+      const [likeRows, shareRows, giftData, recentLikes, viewRows] = await Promise.all([
+        showRepository.getReactionRows(id),
+        showRepository.getShareCount(id),
+        showRepository.getGiftStats(id),
+        showRepository.getRecentReactions(id),
+        showRepository.getViewCount(id),
+      ])
+      const likeN = (likeRows || []).length
+      const shareN = shareRows || 0
+      const viewN = viewRows || 0
+      setLikeCount(c => Math.max(c, likeN))
+      setShareCount(c => Math.max(c, shareN))
+      setViewCount(c => Math.max(c, viewN))
+      const gifts = giftData || []
+      setGiftTotal(gifts.reduce((sum, g) => sum + (g.coins || 0), 0))
+      const byUser = {}
+      gifts.forEach(g => {
+        if (!g.sender_id) return
+        const name = g.profiles?.full_name || g.profiles?.display_name || 'Someone'
+        byUser[g.sender_id] = byUser[g.sender_id] || { name, total: 0 }
+        byUser[g.sender_id].total += (g.coins || 0)
+      })
+      setTopGifters(Object.values(byUser).sort((a, b) => b.total - a.total).slice(0, 3))
+      const acts = []
+      ;(recentLikes || []).forEach(r => {
+        acts.push({ type: 'like', name: r.profiles?.full_name || r.profiles?.display_name || 'Someone', at: r.created_at })
+      })
+      gifts.slice(-5).forEach(g => {
+        acts.push({ type: 'gift', name: g.profiles?.full_name || g.profiles?.display_name || 'Someone', at: g.created_at, amount: g.coins })
+      })
+      acts.sort((a, b) => new Date(b.at) - new Date(a.at))
+      setActivity(acts.slice(0, 6))
+      setStatsLoaded(true)
+    } catch (e) {
+      console.warn('loadStats failed:', e)
+    }
   }
 
   async function loadLikes() { loadStats() }
@@ -117,20 +120,23 @@ function LiveShow() {
     setWhoOpen(kind)
     setWhoList([])
     let data = []
-    if (kind === 'likes') {
-      const r = await supabase.from('live_reactions').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'shares') {
-      const r = await supabase.from('live_shares').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'views') {
-      const r = await supabase.from('live_views').select('user_id, created_at, profiles(id, full_name, display_name, is_verified, specialty, verification_label)').eq('show_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, when: x.created_at }))
-    } else if (kind === 'gifts') {
-      const r = await supabase.from('gifts').select('sender_id, coins, created_at, profiles:sender_id(id, full_name, display_name, is_verified, specialty, verification_label)').eq('post_id', id).order('created_at', { ascending: false }).limit(100)
-      data = (r.data || []).map(x => ({ ...x.profiles, amount: x.coins, when: x.created_at }))
+    try {
+      if (kind === 'likes') {
+        const r = await showRepository.getWhoReactions(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'shares') {
+        const r = await showRepository.getWhoShares(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'views') {
+        const r = await showRepository.getWhoViews(id)
+        data = (r || []).map(x => ({ ...x.profiles, when: x.created_at }))
+      } else if (kind === 'gifts') {
+        const r = await showRepository.getWhoGifts(id)
+        data = (r || []).map(x => ({ ...x.profiles, amount: x.coins, when: x.created_at }))
+      }
+    } catch (e) {
+      console.warn('openWho failed:', e)
     }
-    // Filter out null profiles (guests/anon), keep unique
     setWhoList(data.filter(d => d && d.id))
   }
 
@@ -156,7 +162,7 @@ function LiveShow() {
   async function tapLike() {
     spawnHeart()
     setLikeCount(c => c + 1)
-    supabase.from('live_reactions').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addReaction(id, user?.id || null).catch(() => {})
   }
 
   async function tapAnywhere(e) {
@@ -164,12 +170,12 @@ function LiveShow() {
     const xPct = ((e.clientX - rect.left) / rect.width) * 100
     spawnHeart(Math.max(10, Math.min(85, xPct)))
     setLikeCount(c => c + 1)
-    supabase.from('live_reactions').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addReaction(id, user?.id || null).catch(() => {})
   }
 
   async function shareLive() {
     setShareCount(c => c + 1)
-    supabase.from('live_shares').insert({ show_id: id, user_id: user?.id || null })
+    showRepository.addShare(id, user?.id || null).catch(() => {})
     const text = toShareText(show?.title ? `Watch ${show.title} live on CareFind` : 'Watch this live on CareFind')
     const result = await shareOrCopy({ title: show?.title || 'CareFind Live', text, url: window.location.href })
     if (result === 'copied') showToast('Live link copied! Share it anywhere.', { type: 'success' })
@@ -180,61 +186,62 @@ function LiveShow() {
     if (!user) { window.location.href = '/login'; return }
     if (reposted) return
     setReposted(true)
-    // Repost counts as a share too
     setShareCount(c => c + 1)
-    supabase.from('live_shares').insert({ show_id: id, user_id: user.id })
+    showRepository.addShare(id, user.id).catch(() => {})
     await ensureProfile(user)
-    await supabase.from('posts').insert({
-      user_id: user.id,
-      content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
-      post_type: 'text',
-    })
+    try {
+      const { postRepository } = await import('../social-feed/repositories/postRepository')
+      await postRepository.createPost({
+        user_id: user.id,
+        content: `🔁 Reposted a live show: ${show?.title || 'CareFind Live'}\n${window.location.href}`,
+        post_type: 'text',
+      })
+    } catch (e) {
+      console.warn('repostLive failed:', e)
+    }
   }
 
   async function loadShow() {
     setLoading(true)
-    const { data } = await supabase
-      .from('live_shows')
-      .select('*, host:profiles!live_shows_host_id_fkey(full_name, display_name, is_verified, specialty, verification_label), guest:profiles!live_shows_guest_id_fkey(full_name, display_name)')
-      .eq('id', id)
-      .maybeSingle()
-    setShow(data || null)
+    try {
+      const data = await showRepository.getShowById(id)
+      setShow(data || null)
+    } catch (e) {
+      console.warn('loadShow failed:', e)
+    }
     await loadItems()
     await loadComments()
     await loadStats()
     setLoading(false)
-    // Count a view each time someone opens the show
     recordView()
   }
 
   async function recordView() {
-    const { error } = await supabase.from('live_views').insert({ show_id: id, user_id: user?.id || null })
-    if (error) {
-      // View insert failure is non-critical — silently ignored
-    } else {
-      // Optimistically bump the visible count so the creator sees it immediately
+    try {
+      await showRepository.addView(id, user?.id || null)
       setViewCount(c => c + 1)
       loadStats()
+    } catch (e) {
+      // View insert failure is non-critical
     }
   }
 
   async function loadItems() {
-    const { data } = await supabase
-      .from('live_items')
-      .select('id, kind, content, created_at, sender_id, profiles(full_name, display_name)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-    setItems(data || [])
+    try {
+      const data = await showRepository.getItems(id)
+      setItems(data || [])
+    } catch (e) {
+      console.warn('loadItems failed:', e)
+    }
   }
 
   async function loadComments() {
-    const { data } = await supabase
-      .from('live_comments')
-      .select('id, content, hidden, created_at, user_id, profiles(full_name, display_name, is_verified, specialty, verification_label)')
-      .eq('show_id', id)
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setComments(data || [])
+    try {
+      const data = await showRepository.getComments(id, 100)
+      setComments(data || [])
+    } catch (e) {
+      console.warn('loadComments failed:', e)
+    }
   }
 
   async function postComment() {
@@ -242,12 +249,12 @@ function LiveShow() {
     if (!text) return
     if (!user) { window.location.href = '/login'; return }
     setCommentDraft('')
-    await supabase.from('live_comments').insert({ show_id: id, user_id: user.id, content: text })
+    await showRepository.addComment(id, user.id, text)
     loadComments()
   }
 
   async function hideComment(cid) {
-    await supabase.from('live_comments').update({ hidden: true }).eq('id', cid)
+    await showRepository.hideComment(cid)
     loadComments()
   }
 
@@ -278,7 +285,7 @@ function LiveShow() {
     )
     if (isMobile) return notFoundContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {notFoundContent}
       </AppShell>
     )
@@ -287,10 +294,11 @@ function LiveShow() {
   const isLive = show.status === 'live'
   const visibleComments = comments.filter(c => !c.hidden || isHost)
 
-  // Scheduled/upcoming show — show countdown + trailer
+  // Scheduled/upcoming show — show countdown + trailer, respect expiry (spec lifecycle)
   if (show.status === 'scheduled') {
     const target = show.scheduled_at ? new Date(show.scheduled_at) : null
     const diff = target ? target - now : 0
+    const expired = target ? target.getTime() <= Date.now() : false
     const days = Math.max(0, Math.floor(diff / 86400000))
     const hrs = Math.max(0, Math.floor((diff % 86400000) / 3600000))
     const mins = Math.max(0, Math.floor((diff % 3600000) / 60000))
@@ -301,13 +309,18 @@ function LiveShow() {
           <Link to="/" style={{ color: 'rgba(255,255,255,0.7)', textDecoration: 'none', fontSize: 13, fontWeight: 700 }}>← Feed</Link>
         </div>
         <div style={{ textAlign: 'center', padding: '20px 20px 30px' }}>
-          <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>⏳ UPCOMING LIVE</div>
+          <div style={{ display: 'inline-block', background: expired ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.15)', padding: '5px 16px', borderRadius: 20, fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', marginBottom: 16 }}>{expired ? '⚠ TIME PASSED' : '⏳ UPCOMING LIVE'}</div>
           <h1 style={{ fontSize: 26, fontWeight: 900, margin: '0 0 8px 0' }}>{show.title}</h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', margin: '0 0 24px 0' }}>
             {target ? target.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
           </p>
 
-          {/* Countdown */}
+          {expired && (
+            <p role="alert" style={{ margin: '0 0 16px 0', fontSize: 12.5, color: '#fde68a', fontWeight: 700, background: 'rgba(255,255,255,0.08)', padding: '8px 12px', borderRadius: 10 }}>This scheduled time has passed. The host can reschedule from their profile or dashboard.</p>
+          )}
+
+          {/* Countdown — hidden when expired, expiry respected in Upcoming filter */}
+          {!expired && (
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 28 }}>
             {[['Days', days], ['Hrs', hrs], ['Min', mins], ['Sec', secs]].map(([label, val]) => (
               <div key={label} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 14, padding: '14px 12px', minWidth: 62 }}>
@@ -316,12 +329,74 @@ function LiveShow() {
               </div>
             ))}
           </div>
+          )}
 
           {/* Trailer */}
           {show.trailer_url && (
             <div style={{ marginBottom: 24 }}>
               <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}><Film size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />WATCH THE TRAILER</p>
               <video src={show.trailer_url} controls playsInline style={{ width: '100%', borderRadius: 14, display: 'block' }} />
+            </div>
+          )}
+
+          {/* Add to Calendar */}
+          {!expired && (
+            <div style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.7)', marginBottom: 12 }}>
+                <Calendar size={13} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />REMIND ME
+              </p>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                {(() => {
+                  const calData = generateCalendarUrl({
+                    title: show.title,
+                    scheduled_at: show.scheduled_at,
+                    description: `Live show hosted by ${show.host?.full_name || show.host?.display_name || 'CareFind creator'}`,
+                    host_name: show.host?.full_name || show.host?.display_name,
+                  })
+                  if (!calData) return null
+                  return (
+                    <>
+                      <a
+                        href={calData.gcalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '10px 18px',
+                          background: 'rgba(255,255,255,0.15)',
+                          borderRadius: 20,
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                        }}
+                      >
+                        Google Calendar
+                      </a>
+                      <button
+                        onClick={() => downloadIcs(calData.icsContent, `${show.title || 'live-show'}.ics`)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '10px 18px',
+                          background: 'rgba(255,255,255,0.15)',
+                          borderRadius: 20,
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Apple/Outlook
+                      </button>
+                    </>
+                  )
+                })()}
+              </div>
             </div>
           )}
 
@@ -580,7 +655,7 @@ function LiveShow() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

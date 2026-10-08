@@ -1,0 +1,50 @@
+-- ============================================================================
+-- 2026-08-11 — Requisition lines: `quantity` must be TEXT, not NUMERIC
+--
+-- WHY THIS EXISTS
+-- ---------------
+-- "Save Requisition" failed in production with
+--   POST /rest/v1/rpc/create_requisition 400
+--   "quantity is of type numeric but received the expression type of text"
+--
+-- The live `requisition_items.quantity` column is NUMERIC, but the app and the
+-- `create_requisition` RPC treat quantity as free text — the same contract as
+-- `out_of_stock.quantity_needed` (fixed to text in the align migration) and the
+-- tracked definition in `20260805_requisition_lines_normalized.sql`
+-- (`quantity text`). Free-text quantities like "20 packs" flow from an
+-- out-of-stock entry into a requisition line via Demand's "generate
+-- requisition" flow, so the column — not the app — is wrong.
+--
+-- Verified live by type probes (anonymous REST catalog, non-destructive):
+--   requisition_items?quantity=gt."x"  -> 400 invalid input syntax for numeric
+--   requisition_items?cost=gt."abc"    -> 400 invalid input syntax for numeric
+--   requisition_items?unit=gt."z"      -> 200  (text)
+--   requisition_items?product_name=eq.1 -> 200  (text)
+-- `cost` is numeric and the RPC casts `::numeric` explicitly — no change.
+--
+-- SCOPE
+-- -----
+-- One idempotent ALTER, mirroring the `out_of_stock.quantity_needed` type fix
+-- from `20260811_align_out_of_stock_schema.sql`. Existing numeric rows are
+-- cast to their text form; there are none today (no requisition has ever
+-- saved), so the change is zero-risk either way.
+-- ============================================================================
+
+alter table requisition_items
+  alter column quantity type text using quantity::text;
+
+-- ============================================================================
+-- VERIFY AFTER APPLYING:
+--
+--   1. Column type is now text:
+--        select data_type from information_schema.columns
+--        where table_name = 'requisition_items' and column_name = 'quantity';
+--   2. Behavioural probe (owner session, inside a rolled-back block):
+--        select create_requisition(<own business id>, 'Test Supplier', 'note',
+--          '[{"product_name":"Paracetamol","quantity":"10 packs","cost":500,"unit":"pack"}]');
+--      then read back the requisition's lines and confirm "10 packs" is stored
+--      verbatim.
+--   3. Demand.jsx end-to-end: log an out-of-stock item with quantity "20 packs",
+--      generate the requisition from it, save — the requisition must appear in
+--      the list with its lines.
+-- ============================================================================

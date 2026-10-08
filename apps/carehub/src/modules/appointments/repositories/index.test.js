@@ -80,8 +80,33 @@ describe('appointmentRepository', () => {
     expect(created.fee_amount).toBe(50000)
   })
 
+  it('confirm tries RPC first then falls back to PATCH when RPC missing', async () => {
+    const calls = []
+    const fakeClient = async (path, options) => {
+      calls.push({ path, method: options?.method, body: options.body ? JSON.parse(options.body) : null })
+      if (path.startsWith('rpc/confirm_appointment')) throw new Error('function confirm_appointment does not exist')
+      return []
+    }
+    const repo = createAppointmentRepository(fakeClient)
+    await repo.confirm('1', A)
+    // First call is RPC, second is fallback PATCH
+    expect(calls[0].path).toBe('rpc/confirm_appointment')
+    expect(calls[1].path).toContain('appointments')
+    expect(calls[1].method).toBe('PATCH')
+  })
+
+  it('create stores service_id and timeslot_id for spec compliance', async () => {
+    const { repo, client } = seeded()
+    await repo.create(A, { client_name: 'SrvTest', date: '2026-09-01', time: '11:00', status: 'pending', service_id: 'svc1', timeslot_id: 'slot1', fee_amount: 25000, amount: 25000 })
+    const created = client.rows('appointments').find((r) => r.client_name === 'SrvTest')
+    expect(created.service_id).toBe('svc1')
+    expect(created.timeslot_id).toBe('slot1')
+    expect(created.fee_amount).toBe(25000)
+    expect(created.amount).toBe(25000)
+  })
+
   it('exports a default appointmentRepository instance', () => {
-    for (const m of ['getAll', 'create', 'update', 'delete']) {
+    for (const m of ['getAll', 'create', 'update', 'delete', 'confirm']) {
       expect(typeof appointmentRepository[m]).toBe('function')
     }
   })

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, MapPin } from 'lucide-react'
 import { useAuth } from '../../providers/AuthProvider'
-import { getAllLocations } from '../../services/supabase'
+import { locationsRepository } from '../../modules/locations/repositories'
 import { theme } from '../../styles/theme'
 
 const { tealDeep, tealMist, navy, gray600, gray500, gray400, border } = theme
@@ -23,7 +23,7 @@ export default function BranchSwitcher() {
   useEffect(() => {
     if (role !== 'Owner' || !brand?.id) { setLoading(false); return }
     let live = true
-    getAllLocations(brand.id).then(list => {
+    locationsRepository.getAll(brand.id).then(list => {
       if (!live) return
       setBranches(list || [])
       setLoading(false)

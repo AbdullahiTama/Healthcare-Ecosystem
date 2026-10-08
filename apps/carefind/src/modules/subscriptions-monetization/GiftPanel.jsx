@@ -1,10 +1,24 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { subscriptionRepository } from './repositories'
 import { useAuth } from '../../providers/AuthContext'
 import { notify } from '../../services/notify.js'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
+
+// The server decides whether a gift is allowed; these are its refusals in words a person can act on.
+const GIFT_REFUSALS = {
+  insufficient: 'Not enough CareCoins. Top up your wallet first.',
+  self: 'You cannot send a gift to yourself.',
+  invalid_coins: 'Choose a gift of at least one CareCoin.',
+  recipient_not_found: 'This person can no longer receive gifts.',
+  unauthorized: 'Please log in again to send a gift.',
+}
+function giftFailureMessage(result, error) {
+  return GIFT_REFUSALS[result] || 'Could not send gift: ' + (error?.message || result)
+}
+
 
 const GIFTS = [
   { emoji: '💊', name: 'Pill', coins: 1 },
@@ -74,15 +88,15 @@ function GiftPanel({ postId, recipientId, onClose }) {
   useEffect(() => {
     async function loadWallet() {
       if (!user) return
-      let { data } = await supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle()
-      if (!data) {
-        const { data: newW } = await supabase.from('wallets').insert({ user_id: user.id, balance: 0 }).select().single()
-        data = newW
+      let balance = await subscriptionRepository.getWalletBalance(user.id)
+      if (balance === 0) {
+        await subscriptionRepository.ensureWallet(user.id)
+        balance = 0
       }
-      setWallet(data)
+      setWallet({ balance })
     }
     loadWallet()
-  }, [user])
+  }, [user?.id])
 
   async function sendGift() {
     if (!user || sending) return
@@ -101,7 +115,7 @@ function GiftPanel({ postId, recipientId, onClose }) {
     })
 
     if (error || result !== 'ok') {
-      showToast(result === 'insufficient' ? 'Not enough CareCoins. Top up your wallet first.' : 'Could not send gift: ' + (error?.message || result), { type: result === 'insufficient' ? 'warning' : 'error' })
+      showToast(giftFailureMessage(result, error), { type: result === 'insufficient' ? 'warning' : 'error' })
       setSending(false)
       return
     }

@@ -1,0 +1,194 @@
+import { FileText, Search, Trash2, Eye, Clock, Download, X, Image, Film, Music } from 'lucide-react'
+import { Card, Button, Empty, Input } from '@care-ecosystem/design-system/components/ui'
+import { theme } from '../../../styles/theme'
+import { AdminPageHeader, AdminFilterBar, FilterPills, DateRange, timeAgo, exportCSV } from '../ui'
+import { useModerationStore } from '../stores/moderationStore'
+
+const TYPE_OPTIONS = ['all', 'text', 'question', 'review', 'article', 'visual', 'premium']
+
+export default function PostsTab({
+  posts, selectedPost, setSelectedPost, postAuthor, setPostAuthor,
+  postSearch, setPostSearch, postTypeFilter, setPostTypeFilter,
+  postDateFrom, setPostDateFrom, postDateTo, setPostDateTo,
+  viewPostDetails, deletePost,
+}) {
+  const { selectedIds, toggleSelect } = useModerationStore()
+  const filtered = posts.filter(p => {
+    const matchSearch = !postSearch || p.content?.toLowerCase().includes(postSearch.toLowerCase())
+    const matchType = postTypeFilter === 'all' || p.post_type === postTypeFilter
+    const matchFrom = !postDateFrom || p.created_at >= postDateFrom
+    const matchTo = !postDateTo || p.created_at <= postDateTo + 'T23:59:59'
+    return matchSearch && matchType && matchFrom && matchTo
+  })
+
+  return (
+    <div>
+      <AdminPageHeader title="Posts" subtitle={`${posts.length} total posts`} />
+
+      {selectedPost && (
+        <Card style={{ padding: theme.space[6], marginBottom: theme.space[6], border: `1px solid ${theme.tealBright}`, background: theme.tealMist }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.space[5] }}>
+            <div style={{ fontSize: theme.type.h3.size, fontWeight: theme.type.h3.weight, color: theme.textDark, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FileText size={16} /> Post Detail
+            </div>
+            <button onClick={() => { setSelectedPost(null); setPostAuthor(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: theme.textLight }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          {postAuthor && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: postAuthor.cover_url ? `url(${postAuthor.cover_url})` : 'var(--teal)', backgroundSize: 'cover', backgroundPosition: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 16, fontWeight: 800, flexShrink: 0 }}>
+                  {!postAuthor.cover_url && (postAuthor.full_name || postAuthor.display_name || '?')[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: theme.navy }}>{postAuthor.full_name || postAuthor.display_name || 'Unknown user'}</div>
+                  {postAuthor.display_name && postAuthor.full_name && <div style={{ fontSize: 11, color: theme.textLight }}>@{postAuthor.display_name}</div>}
+                  {postAuthor.verification_label && <div style={{ fontSize: 11, color: theme.tealDeep, fontWeight: 700 }}>{postAuthor.verification_label}</div>}
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: theme.space[4], alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--teal)', textTransform: 'uppercase', background: 'var(--teal-mist)', padding: '3px 9px', borderRadius: 9999 }}>{selectedPost.post_type}</span>
+            <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(selectedPost.created_at)}</span>
+          </div>
+
+          <Card style={{ padding: theme.space[5], marginBottom: theme.space[4] }}>
+            <p style={{ margin: 0, fontSize: 14, color: theme.textMid, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selectedPost.content}</p>
+          </Card>
+
+          {selectedPost.image_urls && selectedPost.image_urls.filter(Boolean).length > 0 && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Image size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Images ({selectedPost.image_urls.filter(Boolean).length})</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                {selectedPost.image_urls.filter(Boolean).map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                    <img src={url} alt={`Post image ${i + 1}`} loading="lazy" style={{ width: '100%', height: 100, objectFit: 'cover', display: 'block' }} />
+                  </a>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {selectedPost.image_url && (!selectedPost.image_urls || selectedPost.image_urls.length === 0) && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Image size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Image</span>
+              </div>
+              <a href={selectedPost.image_url} target="_blank" rel="noreferrer" style={{ display: 'block', borderRadius: theme.radius.md, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                <img src={selectedPost.image_url} alt="Post image" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', display: 'block', background: theme.gray100 }} />
+              </a>
+            </Card>
+          )}
+
+          {selectedPost.video_url && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Film size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Video</span>
+              </div>
+              <video src={selectedPost.video_url} controls preload="metadata" aria-label="Post video" style={{ width: '100%', maxHeight: 400, borderRadius: theme.radius.md, background: 'var(--color-gray-900)' }} />
+            </Card>
+          )}
+
+          {selectedPost.audio_url && (
+            <Card style={{ padding: theme.space[4], marginBottom: theme.space[4] }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: theme.space[3] }}>
+                <Music size={14} color="var(--teal)" />
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--teal)', textTransform: 'uppercase' }}>Audio</span>
+              </div>
+              <audio src={selectedPost.audio_url} controls preload="metadata" aria-label="Post audio" style={{ width: '100%' }} />
+            </Card>
+          )}
+
+          <Button variant="danger" fullWidth onClick={() => { deletePost(selectedPost.id); setSelectedPost(null); setPostAuthor(null) }} leftIcon={<Trash2 size={14} />}>
+            Delete This Post
+          </Button>
+        </Card>
+      )}
+
+      <AdminFilterBar search={postSearch} onSearch={setPostSearch} searchPlaceholder="Search by keyword...">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.space[4] }}>
+          <FilterPills options={TYPE_OPTIONS} value={postTypeFilter} onChange={setPostTypeFilter} />
+          <DateRange from={postDateFrom} to={postDateTo} onFrom={setPostDateFrom} onTo={setPostDateTo} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="primary" size="sm" fullWidth onClick={() => exportCSV(filtered, 'filtered_posts.csv')} leftIcon={<Download size={14} />}>
+              Export Filtered CSV
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setPostSearch(''); setPostTypeFilter('all'); setPostDateFrom(''); setPostDateTo('') }}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      </AdminFilterBar>
+
+      <div style={{ fontSize: 12, color: theme.gray500, marginBottom: theme.space[4], fontWeight: 600 }}>
+        {filtered.length} post{filtered.length !== 1 ? 's' : ''} found
+      </div>
+
+      {filtered.length === 0 && <Empty icon={<FileText size={40} strokeWidth={1.5} />} message="No posts match your filters" />}
+
+      {filtered.map(p => (
+        <Card key={p.id} style={{ padding: theme.space[5], marginBottom: theme.space[4], borderColor: selectedIds.has(p.id) ? theme.tealBright : theme.border, background: selectedIds.has(p.id) ? theme.tealMist : theme.cardBg }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: theme.space[3] }}>
+            <button
+              onClick={() => toggleSelect(p.id)}
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 3,
+                border: `2px solid ${selectedIds.has(p.id) ? theme.tealDeep : theme.gray300}`,
+                background: selectedIds.has(p.id) ? theme.tealDeep : 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              {selectedIds.has(p.id) && (
+                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </button>
+            <div onClick={() => viewPostDetails(p)} style={{ cursor: 'pointer', flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: theme.space[2] }}>
+                <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--teal)', textTransform: 'uppercase', background: 'var(--teal-mist)', padding: '2px 7px', borderRadius: 9999 }}>{p.post_type}</span>
+                <span style={{ fontSize: 11, color: theme.textLight, display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={11} /> {timeAgo(p.created_at)}</span>
+              </div>
+              <p style={{ margin: `0 0 ${theme.space[3]}px 0`, fontSize: 13, color: theme.textMid }}>{p.content?.slice(0, 150)}{p.content?.length > 150 ? '...' : ''}</p>
+              {((p.image_urls && p.image_urls.filter(Boolean).length > 0) || p.video_url || p.audio_url) && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: theme.space[2], flexWrap: 'wrap' }}>
+                  {p.image_urls && p.image_urls.filter(Boolean).slice(0, 3).map((url, i) => (
+                    <img key={i} src={url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                  ))}
+                  {p.image_url && (!p.image_urls || p.image_urls.length === 0) && (
+                    <img src={p.image_url} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: theme.radius.sm, border: `1px solid ${theme.border}` }} />
+                  )}
+                  {p.video_url && <Film size={16} color="var(--teal)" style={{ alignSelf: 'center' }} />}
+                  {p.audio_url && <Music size={16} color="var(--teal)" style={{ alignSelf: 'center' }} />}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--teal)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Eye size={12} /> Tap to read full post
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: theme.space[3], paddingTop: theme.space[3], borderTop: `1px solid ${theme.gray100}` }}>
+            <Button variant="danger" size="sm" onClick={() => deletePost(p.id)} leftIcon={<Trash2 size={12} />}>Delete</Button>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}

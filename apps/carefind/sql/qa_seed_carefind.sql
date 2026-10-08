@@ -1,9 +1,8 @@
 -- QA/test dummy data for CareFind — applied to production 2026-07-19,
 -- companion to apps/carehub/sql/qa_seed_carehub.sql (same request: dummy
 -- data across both apps for end-to-end manual testing). Every account
--- uses a *.carefind.test email and the password Test1234! (admin_users
--- uses admin-auth.js's own — fake but matching — hash scheme, since that
--- table isn't Supabase Auth at all). Cleanup template at the bottom.
+-- uses a *.carefind.test email and the password Test1234!. Apply
+-- 20260926_admin_users_auth_only.sql before running this seed.
 --
 -- profiles rows are created automatically by the existing
 -- on_auth_user_created -> handle_new_user() trigger the moment each
@@ -50,22 +49,20 @@ begin
     (v_instance_id, v_consumer_uid, 'authenticated', 'authenticated', 'testconsumer@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''),
     (v_instance_id, v_pro_uid, 'authenticated', 'authenticated', 'testprofessional@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''),
     (v_instance_id, v_pro_pending_uid, 'authenticated', 'authenticated', 'testprofessional.pending@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''),
-    (v_instance_id, v_bizowner_uid, 'authenticated', 'authenticated', 'testbizowner@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '');
+    (v_instance_id, v_bizowner_uid, 'authenticated', 'authenticated', 'testbizowner@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''),
+    (v_instance_id, v_admin_id, 'authenticated', 'authenticated', 'testadmin@carefind.test', crypt('Test1234!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '');
 
   insert into auth.identities (id, user_id, provider_id, identity_data, provider, created_at, updated_at, last_sign_in_at)
   select gen_random_uuid(), u.id, u.id::text, jsonb_build_object('sub', u.id::text, 'email', u.email), 'email', now(), now(), now()
   from auth.users u
-  where u.email in ('testconsumer@carefind.test','testprofessional@carefind.test','testprofessional.pending@carefind.test','testbizowner@carefind.test');
+  where u.email in ('testconsumer@carefind.test','testprofessional@carefind.test','testprofessional.pending@carefind.test','testbizowner@carefind.test','testadmin@carefind.test');
 
   ------------------------------------------------------------------
-  -- Admin account — NOT Supabase Auth. api/admin-auth.js's own login
-  -- checks admin_users.password_hash directly against hashPassword(),
-  -- which is `cf_hashed_${password}` (a known, tracked weakness — C3 in
-  -- Technical-Debt.md — reproduced here deliberately since seeding has
-  -- to match production's actual, current check to be useful for testing).
+  -- Admin account — use the matching Supabase Auth identity, as required
+  -- by the server-side admin authorization gate.
   ------------------------------------------------------------------
-  insert into admin_users (id, email, password_hash, full_name, role, is_active)
-  values (v_admin_id, 'testadmin@carefind.test', 'cf_hashed_Test1234!', 'Test Admin', 'super_admin', true);
+  insert into admin_users (id, auth_user_id, email, full_name, role, is_active)
+  values (v_admin_id, v_admin_id, 'testadmin@carefind.test', 'Test Admin', 'super_admin', true);
 
   ------------------------------------------------------------------
   -- profiles — handle_new_user() already created a bare row per account
@@ -169,11 +166,10 @@ begin
   ------------------------------------------------------------------
   -- Tasks (professional gig marketplace)
   ------------------------------------------------------------------
-  -- created_by FKs to auth.users, not admin_users (admin accounts aren't
-  -- Supabase Auth at all — see C3) — left null, same as any task an admin
-  -- account actually posts today.
+  -- created_by references auth.users; attribute the sample task to the
+  -- seeded admin identity.
   insert into tasks (id, title, description, compensation, specialty, deadline, status, created_by)
-  values (v_task_id, 'Write a health-tip article', 'Write a 300-word article on seasonal allergies for the CareFind blog.', 2000, 'General Practice', now() + interval '10 days', 'open', null);
+  values (v_task_id, 'Write a health-tip article', 'Write a 300-word article on seasonal allergies for the CareFind blog.', 2000, 'General Practice', now() + interval '10 days', 'open', v_admin_id);
 
   insert into task_submissions (task_id, professional_id, response, status)
   values (v_task_id, v_pro_uid, 'I''d like to take this on — draft attached.', 'pending');

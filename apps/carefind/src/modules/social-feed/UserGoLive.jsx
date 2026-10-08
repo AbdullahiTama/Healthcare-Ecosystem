@@ -5,6 +5,7 @@ import { useAuth } from '../../providers/AuthContext'
 import { theme } from '../../styles/theme'
 import { Toast, useToast } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+import { postRepository } from './repositories'
 
 // Full user Go Live: go live now, invite co-hosts, or schedule an upcoming
 // show with an optional trailer. Mirrors the admin's Go Live features.
@@ -40,8 +41,8 @@ function UserGoLive({ onClose }) {
 
   async function inviteGuests(showId, showTitle) {
     for (const g of guests) {
-      await supabase.from('live_participants').insert({ show_id: showId, user_id: g.id, role: 'guest' })
-      await supabase.from('notifications').insert({
+      await postRepository.addLiveParticipant({ show_id: showId, user_id: g.id, role: 'guest' })
+      await postRepository.insertNotification({
         recipient_id: g.id, type: 'live_invite',
         message: `invited you to co-host a live: "${showTitle}"`,
         link: `/live-dashboard/${showId}`,
@@ -62,38 +63,48 @@ function UserGoLive({ onClose }) {
   async function goLiveNow() {
     if (!title.trim()) { setError('Give your show a title.'); return }
     setCreating(true); setError('')
-    const { data: show, error: insErr } = await supabase.from('live_shows').insert({
-      title: title.trim(), status: 'live', host_id: user.id, is_platform: false,
-      started_at: new Date().toISOString(),
-    }).select().maybeSingle()
-    if (insErr || !show) { setError('Could not start: ' + (insErr?.message || 'unknown')); setCreating(false); return }
-    await supabase.from('live_participants').insert({ show_id: show.id, user_id: user.id, role: 'host', joined: true })
-    await inviteGuests(show.id, show.title)
-    setCreating(false)
-    onClose && onClose()
-    navigate(`/live-dashboard/${show.id}`)
+    try {
+      const show = await postRepository.createLiveShow({
+        title: title.trim(), status: 'live', host_id: user.id, is_platform: false,
+        started_at: new Date().toISOString(),
+      })
+      if (!show) { setError('Could not start: unknown'); setCreating(false); return }
+      await postRepository.addLiveParticipant({ show_id: show.id, user_id: user.id, role: 'host', joined: true })
+      await inviteGuests(show.id, show.title)
+      setCreating(false)
+      onClose && onClose()
+      navigate(`/live-dashboard/${show.id}`)
+    } catch (err) {
+      setError('Could not start: ' + (err.message || 'unknown'))
+      setCreating(false)
+    }
   }
 
   async function scheduleShow() {
     if (!title.trim()) { setError('Give your show a title.'); return }
     if (!scheduledAt) { setError('Pick a date & time.'); return }
     setCreating(true); setError('')
-    const trailerUrl = await uploadTrailer()
-    const { data: show, error: insErr } = await supabase.from('live_shows').insert({
-      title: title.trim(), status: 'scheduled', host_id: user.id, is_platform: false,
-      scheduled_at: new Date(scheduledAt).toISOString(), trailer_url: trailerUrl,
-    }).select().maybeSingle()
-    if (insErr || !show) { setError('Could not schedule: ' + (insErr?.message || 'unknown')); setCreating(false); return }
-    await inviteGuests(show.id, show.title)
-    setCreating(false)
-    // Show the confirmation toast before navigating away — a toast tied to
-    // this component's state would otherwise vanish the instant onClose()
-    // unmounts it, so give the user a moment to actually read it first.
-    showToast('Show scheduled! Your audience will see a countdown. Start it from your live dashboard when ready.', { type: 'success' })
-    setTimeout(() => {
-      onClose && onClose()
-      navigate(`/live-dashboard/${show.id}`)
-    }, 1200)
+    try {
+      const trailerUrl = await uploadTrailer()
+      const show = await postRepository.createLiveShow({
+        title: title.trim(), status: 'scheduled', host_id: user.id, is_platform: false,
+        scheduled_at: new Date(scheduledAt).toISOString(), trailer_url: trailerUrl,
+      })
+      if (!show) { setError('Could not schedule: unknown'); setCreating(false); return }
+      await inviteGuests(show.id, show.title)
+      setCreating(false)
+      // Show the confirmation toast before navigating away — a toast tied to
+      // this component's state would otherwise vanish the instant onClose()
+      // unmounts it, so give the user a moment to actually read it first.
+      showToast('Show scheduled! Your audience will see a countdown. Start it from your live dashboard when ready.', { type: 'success' })
+      setTimeout(() => {
+        onClose && onClose()
+        navigate(`/live-dashboard/${show.id}`)
+      }, 1200)
+    } catch (err) {
+      setError('Could not schedule: ' + (err.message || 'unknown'))
+      setCreating(false)
+    }
   }
 
   const inputStyle = { width: '100%', padding: '12px 14px', fontSize: 15, border: `1px solid ${theme.border}`, borderRadius: 12, boxSizing: 'border-box', fontFamily: 'inherit' }

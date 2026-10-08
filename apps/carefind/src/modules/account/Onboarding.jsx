@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
 import { Check, X } from 'lucide-react'
 import { theme } from '../../styles/theme'
@@ -95,23 +96,17 @@ function Onboarding() {
 
     setSaving(true)
 
-    const { error: saveError } = await supabase.from('profiles').upsert({
-      id: user.id,
-      full_name: fullName.trim(),
-      display_name: username,
-      phone: phone.trim(),
-      location: location.trim() || null,
-    }, { onConflict: 'id' })
-
-    if (saveError) {
-      // Unique violation on username index
-      if (saveError.code === '23505' || /duplicate|unique/i.test(saveError.message)) {
-        setError('That username is taken. Try another.')
-        setAvailable(false)
-      } else {
-        setError('Could not save: ' + saveError.message)
-      }
+    try {
+      await profileRepository.upsertProfile({
+        id: user.id,
+        full_name: fullName.trim(),
+        display_name: username,
+        phone: phone.trim(),
+        location: location.trim() || null,
+      })
+    } catch (saveError) {
       setSaving(false)
+      setError('Could not save: ' + (saveError.message || 'unknown error'))
       return
     }
 

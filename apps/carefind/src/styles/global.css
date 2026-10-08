@@ -289,9 +289,310 @@ body {
   animation: cf-backdrop-in var(--motion-base) var(--ease-out);
 }
 
+/* ── Right sidebar scroll ───────────────────────────────────────────────────
+   The desktop right sidebar is sticky and scrolls independently of the feed.
+   A slim, rounded, on-brand scrollbar keeps that internal scroll discoverable
+   without the heavy default Windows/Linux chrome. */
+.cf-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-300) transparent;
+}
+.cf-sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.cf-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cf-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-page);
+}
+.cf-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
+/* ── Left sidebar (premium nav rail) ──────────────────────────────────────── */
+
+.cf-left-sidebar {
+  box-shadow: var(--elevation-1);
+  border-right: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-300) transparent;
+}
+
+.cf-left-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.cf-left-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cf-left-sidebar::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--bg-page);
+}
+.cf-left-sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
+.cf-nav-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  padding: 6px 14px 4px;
+  user-select: none;
+}
+
+.cf-nav-row {
+  position: relative;
+  transition:
+    background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.cf-nav-row:hover {
+  background: var(--gray-50);
+}
+
+.cf-nav-row--active {
+  background: var(--teal-mist);
+}
+
+.cf-nav-row--active:hover {
+  background: #d6e6dc;
+}
+
+.cf-nav-row--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  background: var(--teal-600);
+}
+
+.cf-nav-row:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: -2px;
+}
+
+.cf-create-btn {
+  background: linear-gradient(135deg, var(--teal-600), var(--navy-900));
+  border-radius: var(--radius-full);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.cf-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(14, 111, 90, 0.25);
+}
+
+.cf-create-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.cf-create-btn:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: 2px;
+}
+
+.cf-profile-link {
+  transition: background var(--motion-fast) var(--ease-out);
+  border-radius: var(--radius-md);
+}
+
+.cf-profile-link:hover {
+  background: var(--gray-50);
+}
+
+.cf-profile-link:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: -2px;
+}
+
+.cf-notif-badge {
+  box-shadow: 0 0 0 2px var(--bg-page);
+}
+
+.cf-collapsed-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--gray-900);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out);
+  z-index: 50;
+}
+
+.cf-collapsed-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--gray-900);
+}
+
+.cf-nav-row:hover .cf-collapsed-tooltip {
+  opacity: 1;
+}
+
+/* ── Press feedback — every interactive surface should feel that it heard the tap
+    (Emil Kowalski: scale(0.97) on :active). Applied via .cf-press on buttons and
+    cards that are tappable. Respects reduced-motion. ─────────────────────────── */
+.cf-press {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    opacity var(--motion-fast) var(--ease-out);
+}
+
+.cf-press:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cf-press:hover {
+    transform: translateY(-1px);
+  }
+  .cf-press:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Subtle hover lift for cards — never intercept the press scale */
+.cf-card-press {
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cf-card-press:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--elevation-2);
+  }
+  .cf-card-press:active {
+    transform: scale(0.98);
+    box-shadow: var(--elevation-1);
+  }
+}
+
+/* ── Marketplace grid — moved from ProductGrid inline <style> to avoid per-render CSSOM churn.
+   Columns follow the width the grid actually gets (container query), not the viewport: on desktop the page sits in
+   AppShell's capped main column beside a sidebar, so a 1280px window can still mean a ~700px grid. Browsers without
+   container queries keep the stacked two-column layout. The container is a dedicated wrapper (not a page root) because
+   container-type makes it the containing block for fixed-position descendants. */
+.cf-mp-container { container-type: inline-size; container-name: cfmp; }
+.mp-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.mp-grid > * { min-width: 0; }
+@container cfmp (min-width: 640px) { .mp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container cfmp (min-width: 800px) { .mp-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container cfmp (min-width: 1000px) { .mp-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* "Featured" view of the shop grid: show one tidy row (two on phones) until the buyer taps View all. Hidden cards stay
+   in the DOM but display:none removes them from layout, tab order and the accessibility tree. The cut-off follows the
+   column count above so the last row is never ragged. The ranges don't overlap and the hide is !important because the
+   list-item wrappers set display:flex inline, which would otherwise win. */
+@container cfmp (max-width: 639.98px) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@supports not (container-type: inline-size) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@container cfmp (min-width: 640px) and (max-width: 799.98px) { .mp-grid--collapsed > :nth-child(n+4) { display: none !important; } }
+@container cfmp (min-width: 800px) and (max-width: 999.98px) { .mp-grid--collapsed > :nth-child(n+5) { display: none !important; } }
+@container cfmp (min-width: 1000px) { .mp-grid--collapsed > :nth-child(n+6) { display: none !important; } }
+
+/* ── Shop hero banner (modules/shop/ShopHero.jsx) — stacked on phones, copy + portrait beside it on mid widths, and
+   copy + portrait + trust points in one row once there is room. Sized by its own container, like the grid. */
+.cf-shop-hero-wrap { container-type: inline-size; container-name: cfhero; margin: 0 0 12px; }
+.cf-shop-hero {
+  display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr);
+  padding: 18px; border-radius: 20px; overflow: hidden;
+  background: var(--teal-mist);
+}
+.cf-shop-hero__img { display: none; border-radius: 16px; object-fit: cover; object-position: center 20%; width: 100%; height: 100%; max-height: 190px; }
+.cf-shop-hero__points { list-style: none; margin: 0; padding: 0; display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+.cf-shop-hero__points::-webkit-scrollbar { display: none; }
+.cf-shop-hero__point { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: 8px 12px 8px 8px; border-radius: 999px; background: rgba(255,255,255,0.7); }
+.cf-shop-hero__icon { width: 34px; height: 34px; border-radius: 999px; background: #fff; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.cf-shop-hero__point-title { display: block; font-size: 13px; font-weight: 700; color: var(--color-navy); white-space: nowrap; }
+.cf-shop-hero__point-text { display: none; font-size: 12px; color: var(--color-text-mid); }
+@container cfhero (min-width: 520px) {
+  .cf-shop-hero { grid-template-columns: minmax(0, 1fr) 170px; align-items: center; padding: 20px 22px; }
+  .cf-shop-hero__img { display: block; grid-column: 2; grid-row: 1; }
+  .cf-shop-hero__points { grid-column: 1 / -1; grid-row: 2; }
+}
+@container cfhero (min-width: 820px) {
+  .cf-shop-hero { grid-template-columns: minmax(0, 1.25fr) 220px minmax(0, 0.95fr); gap: 24px; padding: 22px 28px; }
+  .cf-shop-hero__img { grid-column: 2; grid-row: 1; max-height: 176px; }
+  .cf-shop-hero__points { grid-column: 3; grid-row: 1; flex-direction: column; overflow: visible; gap: 12px; }
+  .cf-shop-hero__point { padding: 0; background: none; border-radius: 0; gap: 12px; }
+  .cf-shop-hero__icon { width: 40px; height: 40px; background: rgba(255,255,255,0.75); }
+  .cf-shop-hero__point-title { font-size: 13.5px; }
+  .cf-shop-hero__point-text { display: block; }
+}
+
+/* ── Marketplace search card: query + Search on the first row, location + Filters on the second; one row when the card
+   is wide enough. Container-sized for the same AppShell reason as the grid. */
+.cf-search-card-wrap { container-type: inline-size; container-name: cfsearch; }
+.cf-search-card {
+  display: grid; gap: 8px; align-items: center; padding: 8px;
+  grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "q go" "loc filt";
+  background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--elevation-1);
+}
+.cf-search-card__q { grid-area: q; }
+.cf-search-card__loc { grid-area: loc; }
+.cf-search-card__go { grid-area: go; }
+.cf-search-card__filt { grid-area: filt; }
+@container cfsearch (min-width: 720px) {
+  .cf-search-card { grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) auto auto; grid-template-areas: "q loc go filt"; }
+}
+
+/* Market marquee — CSS only, GPU via transform, respects reduced motion */
+@keyframes cf-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.cf-marquee-track {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+  will-change: transform;
+  animation: cf-marquee 30s linear infinite;
+}
+
+.cf-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-marquee-track {
+    animation: none;
+  }
+}
+
 /* ── Respect reduced motion (ACCESSIBILITY.md — required, not optional) ───── */
 @media (prefers-reduced-motion: reduce) {
-  .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter {
+  .cf-skeleton, .cf-spinner, .cf-toast, .cf-sheet-enter, .cf-dialog-enter, .cf-backdrop-enter,
+  .cf-marquee-track {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
@@ -301,7 +602,53 @@ body {
   .cf-eng-item:active {
     transform: none;
   }
+  .cf-nav-row,
+  .cf-create-btn,
+  .cf-profile-link,
+  .cf-collapsed-tooltip,
+  .cf-press,
+  .cf-card-press {
+    transition: none;
+  }
+  .cf-press:active,
+  .cf-card-press:active,
+  .cf-press:hover,
+  .cf-card-press:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  .cf-create-btn:hover {
+    transform: none;
+    box-shadow: none;
+  }
   * {
     scroll-behavior: auto !important;
+  }
+
+  /* The rules above reach transitions declared through the .cf-* classes.
+     Surfaces that declare `transition` as an inline style — which is most of
+     this app, and all of the marketing pages — cannot be reached by a class
+     selector, so they opt in by attribute instead. `[data-section]` covers the
+     landing sections; `[data-surface]` covers the discovery surfaces.
+     `transition: none` matches how .cf-press is already handled above.
+     Only transition and animation are touched: a blanket `transform: none`
+     would also flatten elements that use a transform for centring.
+     docs/design/MOTION.md:49 makes this a requirement, not polish. */
+  [data-section] *,
+  [data-surface] * {
+    transition: none !important;
+  }
+  [data-surface] [style*="animation"],
+  [data-surface] [style*="animation-name"] {
+    animation: none !important;
+  }
+}
+/* iOS Safari zooms the whole page in when a field with text under 16px is focused, and does not zoom back out: on touch
+   screens every text field, select and textarea uses 16px (inline 13px styles from the shared form components included). */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }

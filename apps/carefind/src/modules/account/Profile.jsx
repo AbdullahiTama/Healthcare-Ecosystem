@@ -1,12 +1,14 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient'
+import { profileRepository } from './repositories/profileRepository'
 import { useAuth } from '../../providers/AuthContext'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Award, BadgeCheck, BookOpen, Bookmark, Building2, CalendarClock, Camera,
-  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Link2, Lock, MapPin, Menu,
-  MessageSquare, Repeat2,
-  Plus, Radio, ShoppingCart, Star, Stethoscope, Wallet as WalletIcon, X,
+  Check, ChevronDown, ChevronRight, ChevronUp, Coins, Film, Flag, Link2, Lock, MapPin, Menu,
+  MessageSquare, Package, Repeat2,
+  Pencil, Plus, Radio, ShoppingCart, Star, Stethoscope, Trash2, Wallet as WalletIcon, X,
 } from 'lucide-react'
 import { theme } from '../../styles/theme'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -20,23 +22,56 @@ import FollowersSheet from '../social-feed/FollowersSheet.jsx'
 import { resizeImage } from '../../utils/imageResize.js'
 import { MAX_PRICE_COINS, coinsToNaira } from '../subscriptions-monetization/subscriptions.js'
 import { getActiveBusiness, setActiveBusiness, clearActiveBusiness, getActiveStaffIdentity, setActiveStaffIdentity, clearActiveStaffIdentity, getActiveIdentity } from '../../lib/activeIdentity'
-import { Card, CardSkeleton, Empty, Stars, Toast, useToast } from '../../components/ui'
+import { Card, CardSkeleton, Empty, Modal, ConfirmDialog, Stars, Toast, useToast } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
-import { PostTileGrid, isRepost, withoutRepostMark } from '../social-feed/postDisplay.jsx'
+import { isRepost } from '../social-feed/postDisplay.jsx'
+import PostCard from '../social-feed/PostCard.jsx'
+import GiftPanel from '../subscriptions-monetization/GiftPanel.jsx'
+import { usePostEngagement } from '../social-feed/usePostEngagement'
+import { formatCount } from '../social-feed/postSelectors'
 import StoryViewer from '../social-feed/components/StoryViewer.jsx'
+import {
+  useProfile, useMyPosts, useSavedPosts, useMyPlaylists, useMyReviews,
+  useMyStories, useMyShows, useFollowerCount, useFollowingCount,
+  useWalletBalance, useOwnedBusinesses, useApprovedClaims, usePostCount,
+  keys,
+} from '../../hooks/queries'
 
 function Profile() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const { isMobile } = useBreakpoint()
   const { myUsername, myAvatar, unreadNotifs } = useHeaderIdentity(user)
-  const [profile, setProfile] = useState(null)
-  const [ownedBusinesses, setOwnedBusinesses] = useState([])
-  const [approvedClaims, setApprovedClaims] = useState([])
-  const [postCount, setPostCount] = useState(0)
-  const [followerCount, setFollowerCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [walletBalance, setWalletBalance] = useState(0)
+  const qc = useQueryClient()
+
+  // ── React Query data ──────────────────────────────────────────────────────
+  const { data: profile, isLoading: profileLoading } = useProfile(user?.id)
+  const { data: ownedBusinesses = [] } = useOwnedBusinesses(user?.id)
+  const { data: approvedClaims = [] } = useApprovedClaims(user?.id)
+  const { data: postCount = 0 } = usePostCount(user?.id)
+  const { data: followerCount = 0 } = useFollowerCount(user?.id)
+  const { data: followingCount = 0 } = useFollowingCount(user?.id)
+  const { data: walletBalance = 0 } = useWalletBalance(user?.id)
+  const { data: myPostsData } = useMyPosts(user?.id)
+  const myPosts = myPostsData?.posts || []
+  const myPostsSourceAuthors = myPostsData?.sourceAuthors || {}
+  const { data: savedPostsData } = useSavedPosts(user?.id)
+  const savedPosts = savedPostsData?.posts || []
+  const savedPostsSourceAuthors = savedPostsData?.sourceAuthors || {}
+  const { data: myPlaylists = [] } = useMyPlaylists(user?.id)
+  const { data: myReviewsData } = useMyReviews(user?.id)
+  const myReviews = myReviewsData?.reviews || []
+  const reviewers = myReviewsData?.reviewers || {}
+  const { data: myStories = [] } = useMyStories(user?.id)
+  const { data: myShows = [] } = useMyShows(user?.id)
+
+  // ── Source authors (accumulated from posts queries) ────────────────────────
+  const sourceAuthors = useMemo(() => ({
+    ...myPostsSourceAuthors,
+    ...savedPostsSourceAuthors,
+  }), [myPostsSourceAuthors, savedPostsSourceAuthors])
+
+  // ── Form / UI state ────────────────────────────────────────────────────────
   const [editing, setEditing] = useState(false)
   const [fullName, setFullName] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -44,7 +79,6 @@ function Profile() {
   const [bio, setBio] = useState('')
   const [website, setWebsite] = useState('')
   const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [uploadingCover, setUploadingCover] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [subPrice, setSubPrice] = useState(0)
@@ -52,154 +86,132 @@ function Profile() {
   const [activeBiz, setActiveBiz] = useState(getActiveBusiness())
   const [activeStaff, setActiveStaff] = useState(getActiveStaffIdentity())
   const [activeTab, setActiveTab] = useState('posts')
-  const [myPosts, setMyPosts] = useState([])
-  const [savedPosts, setSavedPosts] = useState([])
-  const [myPlaylists, setMyPlaylists] = useState([])
-  const [myReviews, setMyReviews] = useState([])
-  const [reviewers, setReviewers] = useState({})
-  const [tabLoading, setTabLoading] = useState(false)
-  const [openPost, setOpenPost] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [myStories, setMyStories] = useState([])
-  const [myShows, setMyShows] = useState([])
-  const [now, setNow] = useState(Date.now())
+  const [productUpload, setProductUpload] = useState(false)
+  const [sheetKind, setSheetKind] = useState(null)
+  const [viewerIndex, setViewerIndex] = useState(null)
   const [storyComposer, setStoryComposer] = useState(false)
   const [sTitle, setSTitle] = useState('')
   const [sBody, setSBody] = useState('')
   const [sBg, setSBg] = useState('#0E6F5A')
   const [sImage, setSImage] = useState(null)
   const [postingStory, setPostingStory] = useState(false)
-  // Sequential story viewer over myStories (Phase 5): progress bars + tap
-  // zones instead of the old one-story-at-a-time viewer.
-  const [viewerIndex, setViewerIndex] = useState(null)
-  const [productUpload, setProductUpload] = useState(false)
-  const [sheetKind, setSheetKind] = useState(null)
+  const [now, setNow] = useState(Date.now())
+  const [editingShow, setEditingShow] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editScheduledAt, setEditScheduledAt] = useState('')
+  const [editTrailerFile, setEditTrailerFile] = useState(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [cancelConfirmId, setCancelConfirmId] = useState(null)
+  const [cancellingId, setCancellingId] = useState(null)
+  const [giftingPost, setGiftingPost] = useState(null)
+  const REPORT_REASONS = ['Spam', 'False medical information', 'Harassment', 'Inappropriate content']
+  const [sharingId, setSharingId] = useState(null)
+  const [reportPostId, setReportPostId] = useState(null)
+  const [reportingId, setReportingId] = useState(null)
+  const [editingPost, setEditingPost] = useState(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const { msg: toastMsg, type: toastType, actionLabel: toastActionLabel, onAction: toastOnAction, show: showToast } = useToast()
 
+  // ── Initialize form fields from profile data ───────────────────────────────
   useEffect(() => {
-    if (!user) { navigate('/login'); return }
-    loadProfile()
-    loadMyPosts()
-    loadSavedPosts()
-    loadMyPlaylists()
-    loadMyReviews()
-    loadMyStories()
-    loadMyShows()
-    loadApprovedClaims()
+    if (profile) {
+      setFullName(profile.full_name || '')
+      setDisplayName(profile.display_name || '')
+      setLocation(profile.location || '')
+      setBio(profile.bio || '')
+      setWebsite(profile.website || '')
+      setSubPrice(profile.subscription_price || 0)
+    }
+  }, [profile])
+
+  // ── Redirect if not logged in ──────────────────────────────────────────────
+  useEffect(() => {
+    if (user === null) navigate('/login')
   }, [user])
 
+  // ── Timer for countdown ────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
   }, [])
 
-  async function loadApprovedClaims() {
-    if (!user) return
-    const { data: claims, error } = await supabase
-      .from('staff_claims')
-      .select('id, staff_id, status, staff:staff_id(id, full_name, public_title, business_id)')
-      .eq('user_id', user.id)
-      .eq('status', 'approved')
+  // ── Post index + engagement ────────────────────────────────────────────────
+  const postIndex = useMemo(() => {
+    const idx = []
+    const seen = new Set()
+    for (const p of [...savedPosts, ...myPosts]) {
+      if (p && !seen.has(p.id)) { seen.add(p.id); idx.push(p) }
+      if (p?.source && !seen.has(p.source.id)) { seen.add(p.source.id); idx.push(p.source) }
+    }
+    return idx
+  }, [myPosts, savedPosts])
+  const postKey = postIndex.map((p) => p.id).join(',')
 
-    if (error) {
-      console.error('Approved claims load error:', error)
-      setApprovedClaims([])
+  const engagement = usePostEngagement({
+    user,
+    navigate,
+    toast: { show: showToast },
+    logEngagement: () => {},
+    onSharingChange: setSharingId,
+    onReportPost: setReportPostId,
+    onEditingPostChange: setEditingPost,
+    reloadFeed: () => {
+      qc.invalidateQueries({ queryKey: keys.myPosts(user?.id) })
+      qc.invalidateQueries({ queryKey: keys.savedPosts(user?.id) })
+    },
+    onPostDeleted: () => {
+      qc.invalidateQueries({ queryKey: keys.myPosts(user?.id) })
+      qc.invalidateQueries({ queryKey: keys.savedPosts(user?.id) })
+    },
+  })
+
+  useEffect(() => {
+    if (!postKey || !user) return undefined
+    engagement.hydrate(postIndex).catch(() => {})
+    return undefined
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postKey])
+
+  function authorName(post) {
+    if (post.posted_as_type) return post.posted_as_name || 'Business'
+    const profiles = { ...sourceAuthors, ...engagement.state.profiles }
+    const p = profiles[post.user_id]
+    return p?.full_name || p?.display_name || 'CareFind user'
+  }
+
+  const cardProps = {
+    ...engagement.engagementProps,
+    user,
+    navigate,
+    authorName,
+    myUsername,
+    myAvatar,
+    sharingId,
+    editingPost,
+    setEditingPost,
+    setConfirmDeleteId,
+    onGift: (p) => setGiftingPost({ postId: p.id, authorId: p.user_id }),
+    onOpenDetail: (p) => navigate(`/post/${p.id}`),
+    resolveSource: (id) => postIndex.find((p) => p.id === id) || null,
+  }
+
+  async function submitReport(reason) {
+    const postId = reportPostId
+    if (!user || !postId) return
+    setReportingId(postId)
+    try {
+      await profileRepository.reportPost(user.id, postId, reason)
+    } catch (err) {
+      setReportingId(null)
+      setReportPostId(null)
+      showToast('Could not send the report: ' + (err.message || 'unknown error'), { type: 'error' })
       return
     }
-
-    const list = claims || []
-    const bizIds = [...new Set(list.map((c) => c.staff?.business_id).filter(Boolean))]
-    let bizMap = {}
-    if (bizIds.length > 0) {
-      const { data: bizzes } = await supabase.from('businesses').select('id, name').in('id', bizIds)
-      ;(bizzes || []).forEach((b) => { bizMap[b.id] = b.name })
-    }
-
-    setApprovedClaims(list.map((c) => ({
-      ...c,
-      businessName: c.staff?.business_id ? (bizMap[c.staff.business_id] || 'Company') : 'Company',
-    })))
-  }
-
-  async function loadMyPosts() {
-    if (!user) return
-    const { data } = await supabase
-      .from('posts')
-      .select('id, content, created_at, post_type, image_url')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(60)
-    setMyPosts(data || [])
-  }
-
-  async function loadSavedPosts() {
-    if (!user) return
-    const { data } = await supabase
-      .from('saved_posts')
-      .select('post_id, posts(id, content, created_at, post_type, image_url)')
-      .eq('user_id', user.id)
-      .limit(60)
-    setSavedPosts((data || []).map(s => s.posts).filter(Boolean))
-  }
-
-  async function loadMyPlaylists() {
-    if (!user) return
-    const { data } = await supabase
-      .from('playlists')
-      .select('id, title, description, created_at')
-      .eq('owner_id', user.id)
-      .order('created_at', { ascending: false })
-    setMyPlaylists(data || [])
-  }
-
-  async function loadMyReviews() {
-    if (!user) return
-    const { data } = await supabase
-      .from('user_reviews')
-      .select('id, rating, comment, created_at, user_id')
-      .eq('subject_id', user.id)
-      .order('created_at', { ascending: false })
-    const rv = data || []
-    setMyReviews(rv)
-
-    const userIds = [...new Set(rv.map((r) => r.user_id).filter(Boolean))]
-    if (userIds.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, full_name, display_name, is_verified, specialty, verification_label')
-        .in('id', userIds)
-      const map = {}
-      ;(profs || []).forEach((pr) => { map[pr.id] = pr })
-      setReviewers(map)
-    } else {
-      setReviewers({})
-    }
-  }
-
-  async function loadMyStories() {
-    if (!user) return
-    const { data } = await supabase
-      .from('stories')
-      .select('id, title, body, image_url, bg_color, created_at')
-      .eq('user_id', user.id)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-    setMyStories(data || [])
-  }
-
-  // Sequential story viewer: progress bar, auto-advance, tap zones. Mirrors
-  // the PublicProfile viewer so the same interaction works everywhere.
-  useEffect(() => {
-    if (viewerIndex === null) return
-    const st = myStories[viewerIndex]
-    if (st) supabase.rpc('increment_story_view', { story_id: st.id }).then(() => {}).catch(() => {})
-  }, [viewerIndex])
-
-  function closeStoryViewer() {
-    setViewerIndex(null)
-  }
-  function navigateMyStory(next) {
-    setViewerIndex(next === null || next < 0 || next >= myStories.length ? null : next)
+    setReportingId(null)
+    setReportPostId(null)
+    showToast('Thanks: our team will review this post.', { type: 'success' })
   }
 
   function timeAgo(dateStr) {
@@ -210,98 +222,52 @@ function Profile() {
     return `${Math.floor(diff / 86400)}d ago`
   }
 
-  async function loadMyShows() {
-    if (!user) return
-    const { data } = await supabase
-      .from('live_shows')
-      .select('id, title, status, scheduled_at')
-      .eq('host_id', user.id)
-      .in('status', ['live', 'scheduled'])
-      .order('scheduled_at', { ascending: true })
-    setMyShows(data || [])
+  function toLocalDatetimeValue(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   }
 
-  async function postStory() {
-    if (!sTitle.trim() && !sBody.trim() && !sImage) return
-    setPostingStory(true)
-    let imageUrl = null
-    if (sImage) {
-      const ext = sImage.name.split('.').pop()
-      const path = `user-${user.id}-${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('story-images').upload(path, sImage)
-      if (!upErr) {
-        const { data: urlData } = supabase.storage.from('story-images').getPublicUrl(path)
-        imageUrl = urlData.publicUrl
-      }
-    }
-    const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
-    const { error } = await supabase.from('stories').insert({
-      title: sTitle.trim() || null, body: sBody.trim() || null,
-      image_url: imageUrl, bg_color: sBg, is_platform: false,
-      user_id: user.id, expires_at: expiresAt,
-    })
-    setPostingStory(false)
-    if (!error) {
-      setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
-      loadMyStories()
-    } else {
-      showToast('Could not post story: ' + error.message, { type: 'error' })
-    }
+  // ── Story viewer ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (viewerIndex === null) return
+    const st = myStories[viewerIndex]
+    if (st) profileRepository.incrementStoryView(st.id)
+  }, [viewerIndex])
+
+  function closeStoryViewer() {
+    setViewerIndex(null)
+  }
+  function navigateMyStory(next) {
+    setViewerIndex(next === null || next < 0 || next >= myStories.length ? null : next)
   }
 
-  async function loadProfile() {
-    setLoading(true)
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id, full_name, display_name, is_verified, verification_label, location, website, cover_url, avatar_url, subscription_price, bio')
-      .eq('id', user.id)
-      .maybeSingle()
+  // ── Live shows derived data ────────────────────────────────────────────────
+  const nowDate = new Date(now)
+  const liveShows = myShows.filter((s) => s.status === 'live')
+  const upcomingShows = myShows.filter((s) => s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) > nowDate)
+  const pastShows = myShows.filter((s) => s.status === 'ended' || (s.status === 'scheduled' && s.scheduled_at && new Date(s.scheduled_at) <= nowDate))
 
-    if (profileData) {
-      setProfile(profileData)
-      setFullName(profileData.full_name || '')
-      setDisplayName(profileData.display_name || '')
-      setLocation(profileData.location || '')
-      setSubPrice(profileData.subscription_price || 0)
-      setBio(profileData.bio || '')
-      setWebsite(profileData.website || '')
-    }
-
-    const [bizRes, postRes, followerRes, followingRes, walletRes] = await Promise.all([
-      supabase.from('businesses').select('id, name, business_type, cover_url, visible_on_carefind').eq('owner_id', user.id),
-      supabase.from('posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', user.id),
-      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', user.id),
-      supabase.from('wallets').select('balance').eq('user_id', user.id).maybeSingle(),
-    ])
-
-    setOwnedBusinesses(bizRes.data || [])
-    setPostCount(postRes.count || 0)
-    setFollowerCount(followerRes.count || 0)
-    setFollowingCount(followingRes.count || 0)
-    setWalletBalance(walletRes.data?.balance || 0)
-    setLoading(false)
-  }
-
+  // ── Mutations ──────────────────────────────────────────────────────────────
   async function saveProfile() {
     setSaving(true)
-    await supabase.from('profiles').update({
+    await profileRepository.updateProfile(user.id, {
       full_name: fullName.trim(),
       display_name: displayName.trim(),
       location: location.trim() || null,
       website: website.trim() || null,
       bio: bio.trim() || null,
-    }).eq('id', user.id)
+    })
     setEditing(false)
     setSaving(false)
-    loadProfile()
+    qc.invalidateQueries({ queryKey: keys.profile(user.id) })
   }
 
   async function handleCoverUpload(e) {
     const file = e.target.files[0]
     if (!file) return
     setUploadingCover(true)
-    // Shrink before upload: covers are wide, so allow a bigger max
     const resized = await resizeImage(file, 1400, 0.82)
     const path = `cover-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -309,8 +275,8 @@ function Profile() {
       .upload(path, resized, { contentType: 'image/jpeg' })
     if (!upErr) {
       const { data: urlData } = supabase.storage.from('covers').getPublicUrl(path)
-      await supabase.from('profiles').update({ cover_url: urlData.publicUrl }).eq('id', user.id)
-      loadProfile()
+      await profileRepository.updateProfile(user.id, { cover_url: urlData.publicUrl })
+      qc.invalidateQueries({ queryKey: keys.profile(user.id) })
     } else {
       showToast('Could not upload cover: ' + upErr.message, { type: 'error' })
     }
@@ -320,10 +286,15 @@ function Profile() {
   async function savePrice() {
     const price = Math.max(0, Math.min(MAX_PRICE_COINS, Number(subPrice) || 0))
     setSavingPrice(true)
-    const { error } = await supabase.from('profiles').update({ subscription_price: price }).eq('id', user.id)
+    try {
+      await profileRepository.updateProfile(user.id, { subscription_price: price })
+    } catch (error) {
+      setSavingPrice(false)
+      showToast('Could not save price: ' + error.message, { type: 'error' })
+      return
+    }
     setSavingPrice(false)
-    if (error) { showToast('Could not save price: ' + error.message, { type: 'error' }); return }
-    loadProfile()
+    qc.invalidateQueries({ queryKey: keys.profile(user.id) })
     showToast(price > 0
       ? `Subscriptions on at ${price} CareCoin${price === 1 ? '' : 's'} (₦${coinsToNaira(price).toLocaleString()}) per month.`
       : 'Subscriptions turned off.', { type: 'success' })
@@ -333,7 +304,6 @@ function Profile() {
     const file = e.target.files[0]
     if (!file) return
     setUploadingAvatar(true)
-    // Avatars display small: 600px is plenty and keeps the upload tiny
     const resized = await resizeImage(file, 600, 0.85)
     const path = `avatar-${user.id}-${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
@@ -341,8 +311,8 @@ function Profile() {
       .upload(path, resized, { contentType: 'image/jpeg' })
     if (!upErr) {
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
-      await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', user.id)
-      loadProfile()
+      await profileRepository.updateProfile(user.id, { avatar_url: urlData.publicUrl })
+      qc.invalidateQueries({ queryKey: keys.profile(user.id) })
     } else {
       showToast('Could not upload photo: ' + upErr.message, { type: 'error' })
     }
@@ -382,7 +352,105 @@ function Profile() {
     navigate('/login')
   }
 
-  if (loading) {
+  async function postStory() {
+    if (!sTitle.trim() && !sBody.trim() && !sImage) return
+    setPostingStory(true)
+    let imageUrl = null
+    if (sImage) {
+      const ext = sImage.name.split('.').pop()
+      const path = `user-${user.id}-${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('story-images').upload(path, sImage)
+      if (!upErr) {
+        const { data: urlData } = supabase.storage.from('story-images').getPublicUrl(path)
+        imageUrl = urlData.publicUrl
+      }
+    }
+    const expiresAt = new Date(Date.now() + 24 * 3600000).toISOString()
+    try {
+      await profileRepository.createStory({
+        title: sTitle.trim() || null, body: sBody.trim() || null,
+        image_url: imageUrl, bg_color: sBg, is_platform: false,
+        user_id: user.id, expires_at: expiresAt,
+      })
+    } catch (error) {
+      setPostingStory(false)
+      showToast('Could not post story: ' + error.message, { type: 'error' })
+      return
+    }
+    setPostingStory(false)
+    setSTitle(''); setSBody(''); setSBg('#0E6F5A'); setSImage(null); setStoryComposer(false)
+    qc.invalidateQueries({ queryKey: keys.myStories(user.id) })
+  }
+
+  function openEditShow(s) {
+    setEditError('')
+    setEditTitle(s.title || '')
+    setEditScheduledAt(toLocalDatetimeValue(s.scheduled_at))
+    setEditTrailerFile(null)
+    setEditingShow(s)
+  }
+
+  async function uploadEditTrailer() {
+    if (!editTrailerFile) return null
+    const ext = editTrailerFile.name.split('.').pop() || 'mp4'
+    const path = `trailer-${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('live-media').upload(path, editTrailerFile, { contentType: editTrailerFile.type || 'video/mp4' })
+    if (upErr) return null
+    const { data: urlData } = supabase.storage.from('live-media').getPublicUrl(path)
+    return urlData.publicUrl
+  }
+
+  async function saveEditedShow() {
+    if (!editingShow) return
+    if (!editTitle.trim()) { setEditError('Give your show a title.'); return }
+    if (!editScheduledAt) { setEditError('Pick a date & time.'); return }
+    const newDate = new Date(editScheduledAt)
+    if (isNaN(newDate.getTime())) { setEditError('Invalid date.'); return }
+    if (newDate.getTime() <= Date.now() + 5 * 60 * 1000) { setEditError('Pick a time at least 5 minutes in the future.'); return }
+    if (editingShow.status !== 'scheduled') { setEditError('Only scheduled shows can be edited.'); return }
+    setEditSaving(true); setEditError('')
+    let trailerUrl = editingShow.trailer_url || null
+    if (editTrailerFile) {
+      const uploaded = await uploadEditTrailer()
+      if (uploaded) trailerUrl = uploaded
+    }
+    const patch = { title: editTitle.trim(), scheduled_at: newDate.toISOString() }
+    if (trailerUrl !== editingShow.trailer_url) patch.trailer_url = trailerUrl
+    try {
+      await profileRepository.updateLiveShow(editingShow.id, user.id, patch)
+    } catch (error) {
+      setEditSaving(false)
+      setEditError(error.message || 'Could not save.')
+      return
+    }
+    setEditSaving(false)
+    setEditingShow(null)
+    showToast('Show updated.', { type: 'success' })
+    qc.invalidateQueries({ queryKey: keys.myShows(user.id) })
+  }
+
+  async function confirmCancelShow() {
+    if (!cancelConfirmId) return
+    setCancellingId(cancelConfirmId)
+    const targetId = cancelConfirmId
+    try {
+      await profileRepository.cancelLiveShow(targetId, user.id)
+    } catch (delErr) {
+      try {
+        await profileRepository.cancelLiveShowFallback(targetId, user.id)
+      } catch (updErr) {
+        showToast('Could not cancel: ' + (updErr.message || delErr.message), { type: 'error' })
+        setCancellingId(null)
+        return
+      }
+    }
+    setCancelConfirmId(null)
+    setCancellingId(null)
+    showToast('Scheduled show cancelled.', { type: 'success' })
+    qc.invalidateQueries({ queryKey: keys.myShows(user.id) })
+  }
+
+  if (profileLoading) {
     const loadingContent = (
       <div role="status" aria-live="polite" style={{ maxWidth: isMobile ? 480 : 640, margin: '0 auto', padding: isMobile ? '20px 16px 90px' : 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>Loading your profile</span>
@@ -392,7 +460,7 @@ function Profile() {
     )
     if (isMobile) return loadingContent
     return (
-      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+      <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
         {loadingContent}
       </AppShell>
     )
@@ -434,15 +502,40 @@ function Profile() {
         </div>
         <div style={{ position: 'absolute', bottom: -46, left: 16 }}>
           <div style={{ position: 'relative', width: 88, height: 88 }}>
-            <div style={{
-              width: 88, height: 88, borderRadius: '50%',
-              background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
-              border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 30, fontWeight: 800,
-            }}>
-              {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
-            </div>
+            {myStories.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setViewerIndex(0)}
+                aria-label="View your story"
+                style={{
+                  width: 88, height: 88, borderRadius: '50%', padding: 3,
+                  background: theme.tealDeep, border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', boxSizing: 'border-box',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                }}
+              >
+                <div style={{
+                  width: 82, height: 82, borderRadius: '50%',
+                  background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                  border: '3px solid #fff', boxSizing: 'border-box',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 30, fontWeight: 800,
+                }}>
+                  {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+                </div>
+              </button>
+            ) : (
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%',
+                background: profile?.avatar_url ? `url(${profile.avatar_url}) center/cover` : theme.tealDeep,
+                border: '4px solid #fff', boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 30, fontWeight: 800,
+              }}>
+                {!profile?.avatar_url && (displayLabel[0]?.toUpperCase() || '?')}
+              </div>
+            )}
 
             {/* Change photo */}
             <label style={{
@@ -457,6 +550,11 @@ function Profile() {
               <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
             </label>
           </div>
+          {myStories.length > 0 && (
+            <span style={{ display: 'block', textAlign: 'center', fontSize: 10, fontWeight: 800, color: theme.tealDeep, marginTop: 2 }}>
+              Tap to view story
+            </span>
+          )}
         </div>
       </div>
 
@@ -493,8 +591,6 @@ function Profile() {
                     fontSize: 11, fontWeight: 800, color: theme.tealDeep,
                     background: theme.tealMist, padding: '3px 10px', borderRadius: theme.radius.full,
                   }}>
-                    {/* The stored label usually already reads "Verified Doctor" : 
-                        prefixing it printed "Verified Verified Doctor". */}
                     <BadgeCheck size={13} aria-hidden="true" /> {profile.verification_label || profile.specialty || 'Verified'}
                   </span>
                 )}
@@ -521,27 +617,24 @@ function Profile() {
           </div>
         )}
 
-        {/* My Stories — at the top of the profile, Instagram-style (Phase 5).
-            Add-story first, then live/upcoming shows, then your stories. */}
+        {/* Live & Upcoming row */}
+        {(liveShows.length > 0 || upcomingShows.length > 0) ? (
         <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, marginBottom: 12 }}>
-          <button onClick={() => setStoryComposer(true)} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => setStoryComposer(true)} aria-label="Add to story" style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
             <div style={{ width: 58, height: 58, borderRadius: '50%', background: theme.bg, border: `2px dashed ${theme.tealDeep}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.tealDeep }}><Plus size={24} aria-hidden="true" /></div>
             <span style={{ fontSize: 10, fontWeight: 700, color: theme.textMid }}>Add story</span>
           </button>
 
-          {/* Live / upcoming shows */}
-          {myShows.map((s) => {
-            if (s.status === 'live') {
-              return (
-                <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                  <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Radio size={20} aria-hidden="true" /></div>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
-                </Link>
-              )
-            }
-            // scheduled
+          {liveShows.map((s) => (
+            <Link key={s.id} to={`/live-show/${s.id}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+              <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: '#dc2626' }}>
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: theme.navy, border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Radio size={20} aria-hidden="true" /></div>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#dc2626' }}>● LIVE</span>
+            </Link>
+          ))}
+
+          {upcomingShows.map((s) => {
             const diff = s.scheduled_at ? new Date(s.scheduled_at) - now : 0
             const d = Math.max(0, Math.floor(diff / 86400000))
             const h = Math.max(0, Math.floor((diff % 86400000) / 3600000))
@@ -557,16 +650,63 @@ function Profile() {
               </Link>
             )
           })}
-
-          {myStories.map((s, i) => (
-            <button key={s.id} onClick={() => setViewerIndex(i)} aria-label={`View story${s.title ? `: ${s.title}` : ''}`} style={{ flexShrink: 0, width: 62, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer' }}>
-              <div style={{ width: 58, height: 58, borderRadius: '50%', padding: 2, background: theme.tealDeep }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: s.image_url ? `url(${s.image_url}) center/cover` : (s.bg_color || theme.tealDeep), border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 18, fontWeight: 800 }}>{!s.image_url && (s.title?.[0]?.toUpperCase() || <BookOpen size={18} aria-hidden="true" />)}</div>
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: theme.textMid, maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Story'}</span>
-            </button>
-          ))}
         </div>
+        ) : myShows.length === 0 ? (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 6, marginBottom: 12 }}>
+            <button onClick={() => setStoryComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: theme.tealDeep, cursor: 'pointer' }}>
+              <Plus size={16} aria-hidden="true" /> Add to story
+            </button>
+            {myStories.length > 0 && (
+              <span style={{ fontSize: 11, color: theme.textLight, alignSelf: 'center' }}>Tap your photo to view {myStories.length} stor{myStories.length === 1 ? 'y' : 'ies'}</span>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 10, paddingBottom: 6, marginBottom: 12, alignItems: 'center' }}>
+            <button onClick={() => setStoryComposer(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 20, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, color: theme.tealDeep, cursor: 'pointer' }}>
+              <Plus size={16} aria-hidden="true" /> Add to story
+            </button>
+            <span style={{ fontSize: 11, color: theme.textLight }}>No upcoming lives</span>
+          </div>
+        )}
+
+        {/* Manage upcoming scheduled shows */}
+        {upcomingShows.length > 0 && (
+          <div style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.cardBg }}>
+            <p style={{ margin: '0 0 10px 0', fontSize: 11, fontWeight: 800, color: theme.navy, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Upcoming lives — manage</p>
+            {upcomingShows.map((s) => {
+              const target = s.scheduled_at ? new Date(s.scheduled_at) : null
+              const when = target ? target.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', weekday: 'short' }) : ''
+              return (
+                <div key={s.id} data-testid={`upcoming-manage-${s.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: theme.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Untitled live'}</p>
+                    <p style={{ margin: '2px 0 0 0', fontSize: 11.5, color: theme.textLight }}>{when}</p>
+                  </div>
+                  <Link to={`/live-dashboard/${s.id}`} style={{ fontSize: 12, fontWeight: 700, color: theme.tealDeep, textDecoration: 'none' }}>View</Link>
+                  <button onClick={() => openEditShow(s)} aria-label={`Edit ${s.title || 'show'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', border: `1px solid ${theme.border}`, background: '#fff', borderRadius: 20, fontSize: 12, fontWeight: 700, color: theme.navy, cursor: 'pointer' }}><Pencil size={12} aria-hidden="true" /> Edit</button>
+                  <button onClick={() => setCancelConfirmId(s.id)} aria-label={`Cancel ${s.title || 'show'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: theme.dangerBg || '#fef2f2', color: theme.alert || '#dc2626', border: `1px solid ${theme.alert || '#dc2626'}`, borderRadius: 20, fontSize: 12, fontWeight: 800, cursor: 'pointer' }}><Trash2 size={12} aria-hidden="true" /> Cancel</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Past / Ended */}
+        {pastShows.length > 0 && (
+          <div data-testid="past-shows-section" style={{ border: `1px solid ${theme.border}`, borderRadius: 12, padding: 12, marginBottom: 12, background: theme.bg }}>
+            <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 800, color: theme.textLight, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Past / Ended</p>
+            {pastShows.map((s) => {
+              const when = s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : ''
+              const label = s.status === 'ended' ? 'Ended' : (s.scheduled_at && new Date(s.scheduled_at) <= nowDate ? 'Expired' : s.status)
+              return (
+                <div key={s.id} data-testid={`past-show-${s.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: `1px solid ${theme.border}` }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.gray300 || '#ccc', flexShrink: 0, display: 'inline-block' }} />
+                  <span style={{ flex: 1, fontSize: 12.5, color: theme.textMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || 'Untitled'} · {when} · {label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display: 'flex', gap: 20, borderTop: `1px solid ${theme.border}`, borderBottom: `1px solid ${theme.border}`, padding: '12px 0', marginBottom: 16 }}>
@@ -649,8 +789,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Sell on MedMarket: verified sellers, or anyone with an approved
-            position at a company (listings are tagged with that company) */}
+        {/* Sell on MedMarket */}
         {(profile?.is_verified || approvedClaims.length > 0 || ownedBusinesses.length > 0) ? (
           <button onClick={() => setProductUpload(true)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 14px', background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 12, marginBottom: 16, cursor: 'pointer' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800 }}>
@@ -801,7 +940,7 @@ function Profile() {
           </div>
         )}
 
-        {/* Reviews tab: what people say about you (read-only) */}
+        {/* Reviews tab */}
         {activeTab === 'reviews' && (() => {
           const total = myReviews.length
           const avg = avgMyRating
@@ -885,8 +1024,10 @@ function Profile() {
           }
 
           return (
-            <div style={{ marginBottom: 16 }}>
-              <PostTileGrid posts={list} onOpen={setOpenPost} isMobile={isMobile} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              {list.map((p) => (
+                <PostCard key={p.id} post={p} preview {...cardProps} />
+              ))}
             </div>
           )
         })()}
@@ -897,6 +1038,18 @@ function Profile() {
           <Link to="/saved" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
               <Bookmark size={17} color={theme.gray500} aria-hidden="true" /> Saved posts
+            </span>
+            <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
+          </Link>
+          <Link to="/account/addresses" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
+              <MapPin size={17} color={theme.gray500} aria-hidden="true" /> Saved addresses
+            </span>
+            <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
+          </Link>
+          <Link to="/orders" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 4px', textDecoration: 'none', color: theme.navy, borderBottom: `1px solid ${theme.border}` }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 600 }}>
+              <Package size={17} color={theme.gray500} aria-hidden="true" /> My orders
             </span>
             <ChevronRight size={17} color={theme.gray400} aria-hidden="true" />
           </Link>
@@ -922,19 +1075,60 @@ function Profile() {
         </button>
       </div>
 
-      {openPost && (
-        <div onClick={() => setOpenPost(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto', padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setOpenPost(null)} aria-label="Close" style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
-            </div>
-            {openPost.image_url && <img src={openPost.image_url} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12, display: 'block' }} />}
-            {openPost.post_type && openPost.post_type !== 'text' && <span style={{ fontSize: 11, fontWeight: 800, color: theme.tealDeep, textTransform: 'uppercase' }}>{openPost.post_type}</span>}
-            <div style={{ margin: '6px 0 0 0', fontSize: 15, color: theme.navy, lineHeight: 1.55 }}>{renderMarkdown(previewText(withoutRepostMark(openPost.content)))}</div>
-            <p style={{ margin: '12px 0 0 0', fontSize: 11, color: theme.textLight }}>{openPost.created_at ? new Date(openPost.created_at).toLocaleDateString() : ''}</p>
-          </div>
-        </div>
+      {giftingPost && (
+        <GiftPanel
+          postId={giftingPost.postId}
+          recipientId={giftingPost.authorId}
+          onClose={() => {
+            const { postId } = giftingPost
+            setGiftingPost(null)
+            supabase
+              .rpc('post_gift_stats', { p_post_id: postId })
+              .then(({ data }) => {
+                if (data?.gift_count != null) {
+                  engagement.state.setGiftStats((prev) => ({ ...prev, [postId]: { gift_count: data.gift_count, total_coins: data.total_coins } }))
+                }
+              })
+              .catch(() => {})
+          }}
+        />
       )}
+
+      <ConfirmDialog
+        show={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { engagement.engagementProps.handleDeletePost(confirmDeleteId); setConfirmDeleteId(null) }}
+        title="Delete this post?"
+        consequence="This cannot be undone. The post, along with its likes and comments, will be permanently removed."
+        confirmLabel="Delete"
+      />
+
+      {/* Report reasons */}
+      <Modal show={!!reportPostId} onClose={() => setReportPostId(null)} title="Report this post" sheet={isMobile}>
+        <p style={{ margin: '0 0 14px 0', fontSize: 13, color: theme.gray600, lineHeight: 1.6 }}>
+          Tell us what's wrong with it. Our moderation team reviews every report: the author isn't told who reported them.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {REPORT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => submitReport(reason)}
+              disabled={!!reportingId}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44,
+                padding: '11px 14px', borderRadius: theme.radius.md,
+                border: `1px solid ${theme.gray200}`, background: '#fff',
+                fontSize: 13, fontWeight: 700, color: theme.navy, fontFamily: theme.fontFamily,
+                cursor: reportingId ? 'wait' : 'pointer', textAlign: 'left',
+              }}
+            >
+              <Flag size={16} color={theme.gray400} aria-hidden="true" />
+              {reason}
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       {/* Story composer */}
       {storyComposer && (
@@ -964,7 +1158,7 @@ function Profile() {
         </div>
       )}
 
-      {/* Story viewer — sequential playback with progress bars (Phase 5) */}
+      {/* Story viewer */}
       {viewerIndex !== null && myStories[viewerIndex] && (
         <StoryViewer
           stories={myStories}
@@ -990,7 +1184,7 @@ function Profile() {
           businesses={ownedBusinesses}
           claimBusinesses={approvedClaims.map((c) => ({ id: c.staff?.business_id, name: c.businessName })).filter((b) => b.id)}
           onClose={() => setProductUpload(false)}
-          onAdded={() => { loadProfile() }}
+          onAdded={() => { qc.invalidateQueries({ queryKey: keys.profile(user.id) }) }}
         />
       )}
 
@@ -1001,11 +1195,46 @@ function Profile() {
           count={sheetKind === 'followers' ? followerCount : followingCount}
           onClose={() => setSheetKind(null)}
           onCountChange={(delta) => {
-            if (sheetKind === 'followers') setFollowerCount((n) => Math.max(0, n + delta))
-            else setFollowingCount((n) => Math.max(0, n + delta))
+            if (sheetKind === 'followers') qc.invalidateQueries({ queryKey: keys.followerCount(user.id) })
+            else qc.invalidateQueries({ queryKey: keys.followingCount(user.id) })
           }}
         />
       )}
+
+      {/* Edit scheduled live modal */}
+      {editingShow && (
+        <div onClick={() => setEditingShow(null)} style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 480, padding: 20, boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: theme.navy }}>Edit scheduled live</h3>
+              <button onClick={() => setEditingShow(null)} aria-label="Close" style={{ width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', color: theme.gray400, cursor: 'pointer' }}><X size={20} aria-hidden="true" /></button>
+            </div>
+            {editError && <p role="alert" style={{ margin: '0 0 10px 0', fontSize: 12.5, color: theme.alert, fontWeight: 600 }}>{editError}</p>}
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Title</label>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Show title" style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit' }} />
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: theme.textMid, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date & time</label>
+            <input type="datetime-local" value={editScheduledAt} onChange={(e) => setEditScheduledAt(e.target.value)} style={{ width: '100%', padding: '11px 12px', fontSize: 14, border: `1px solid ${theme.border}`, borderRadius: 10, boxSizing: 'border-box', marginBottom: 12, fontFamily: 'inherit' }} />
+            <p style={{ margin: '-8px 0 12px 0', fontSize: 10.5, color: theme.textLight }}>Must be at least 5 minutes in the future.</p>
+            <label style={{ display: 'block', fontSize: 12.5, color: theme.tealDeep, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+              🎬 {editTrailerFile ? editTrailerFile.name.slice(0, 26) : (editingShow.trailer_url ? 'Change trailer video' : 'Add trailer video (optional)')}
+              <input type="file" accept="video/*" onChange={(e) => setEditTrailerFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={saveEditedShow} disabled={editSaving} style={{ flex: 1, padding: 12, background: theme.tealDeep, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14 }}>{editSaving ? 'Saving…' : 'Save changes'}</button>
+              <button onClick={() => setEditingShow(null)} style={{ flex: 1, padding: 12, background: theme.bg, color: theme.textMid, border: `1px solid ${theme.border}`, borderRadius: 10, fontWeight: 700, fontSize: 14 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        show={!!cancelConfirmId}
+        onClose={() => setCancelConfirmId(null)}
+        onConfirm={confirmCancelShow}
+        title="Cancel this scheduled live?"
+        consequence="It will disappear from Upcoming immediately and be moved to Past/Ended. This cannot be undone."
+        confirmLabel={cancellingId ? 'Cancelling…' : 'Cancel show'}
+      />
 
       <Toast msg={toastMsg} type={toastType} actionLabel={toastActionLabel} onAction={toastOnAction} />
 
@@ -1016,7 +1245,7 @@ function Profile() {
   if (isMobile) return bodyContent
 
   return (
-    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs} onCompose={() => navigate('/feed')}>
+    <AppShell user={user} myUsername={myUsername} myAvatar={myAvatar} unreadNotifs={unreadNotifs}>
       {bodyContent}
     </AppShell>
   )

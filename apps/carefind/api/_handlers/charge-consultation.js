@@ -1,13 +1,13 @@
-﻿import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
+import { createPaymentIntent, markIntentPending, markIntentFailed, newReference } from '@care-ecosystem/shared-payments'
 import { verifyUser } from '../_lib/verifyUser.js'
-import { paystackFetch } from '../_lib/paystack.js'
+import { getPaystackProvider, paymentLogger } from '../_lib/payments.js'
 
-// Initializes a Paystack transaction for a professional consultation.
-// Called when a patient wants to book a consultation but doesn't have enough
-// CareCoins in their wallet ΓÇö this lets them pay directly via card/transfer.
-// Settlement happens atomically in settle_consultation_payment() via the
-// webhook (or verify-consultation-payment.js on redirect).
+// Starts a professional consultation paid by CARD (used when the patient has not enough CareCoins).
+//
+// The fee is the professional's own offer (professional_consultations, status 'setup'), read here on
+// the server; the client names only the professional. The amount is recorded as a payment intent before
+// Paystack is contacted. A card payment never touches the patient's CareCoin wallet.
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -19,9 +19,12 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  const { professionalId, callback_url } = req.body
-  if (!professionalId || !callback_url) {
+  const { professionalId, callback_url } = req.body || {}
+  if (typeof professionalId !== 'string' || !professionalId || !callback_url) {
     return res.status(400).json({ error: 'Missing required fields' })
+  }
+  if (professionalId === user.id) {
+    return res.status(400).json({ error: 'You cannot book a consultation with yourself' })
   }
 
   // The professional's offer is the source of truth for the fee.
@@ -32,48 +35,54 @@ export default async function handler(req, res) {
     .eq('status', 'setup')
     .maybeSingle()
 
-  if (!offer || !offer.fee || offer.fee <= 0) {
+  const amountKobo = Math.round(Number(offer?.fee) * 100)
+  if (!offer || !Number.isSafeInteger(amountKobo) || amountKobo <= 0) {
     return res.status(400).json({ error: 'Professional has no consultation offer' })
   }
 
-  const nairaAmount = Math.round(Number(offer.fee))
-  const reference = `cf_consult_${user.id.slice(0, 8)}_${crypto.randomBytes(6).toString('hex')}`
+  // Do not take money for a booking that already exists (settlement would only have to refund it).
+  const { data: existing } = await supabase
+    .from('professional_consultations')
+    .select('id')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', user.id)
+    .eq('status', 'paid')
+    .maybeSingle()
+  if (existing) return res.status(409).json({ error: 'You already have a booking with this professional', alreadyBooked: true })
+
+  const reference = newReference('cf_consult', user.id)
+  let intent
+  try {
+    intent = await createPaymentIntent(supabase, {
+      reference,
+      application: 'carefind',
+      purpose: 'consultation',
+      customerId: user.id,
+      entityType: 'professional',
+      entityId: professionalId,
+      expectedAmountKobo: amountKobo,
+      metadata: { consultation_type: offer.type || 'text' },
+    })
+  } catch (err) {
+    paymentLogger.error('payment.intent.create_failed', { purpose: 'consultation', code: err.code, message: err.message })
+    return res.status(500).json({ error: 'Could not start payment' })
+  }
 
   try {
-    const body = {
-      email: user.email,
-      amount: nairaAmount * 100,
+    // Deliberately NO Paystack subaccount split. The whole charge settles to the platform account and
+    // settle_payment_intent() credits the professional's CareCoin wallet (80%), which is how they are
+    // paid. Splitting at Paystack as well would pay the professional twice.
+    const init = await getPaystackProvider().initializePayment({
       reference,
-      callback_url,
-      currency: 'NGN',
-      metadata: {
-        user_id: user.id,
-        professional_id: professionalId,
-        fee: nairaAmount,
-        purpose: 'consultation',
-      },
-    }
-
-    // If the professional has a Paystack subaccount, split the payment
-    const { data: proProfile } = await supabase
-      .from('profiles')
-      .select('paystack_subaccount_code')
-      .eq('id', professionalId)
-      .maybeSingle()
-
-    if (proProfile?.paystack_subaccount_code) {
-      body.subaccount = proProfile.paystack_subaccount_code
-      body.transaction_charge = Math.floor(nairaAmount * 100 * 0.15) // 15% platform fee
-    }
-
-    const data = await paystackFetch('/transaction/initialize', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      amountKobo: intent.expected_amount,
+      email: user.email,
+      callbackUrl: callback_url,
+      metadata: { intent_id: intent.id, purpose: 'consultation' },
     })
-    if (!data.status) return res.status(400).json({ error: data.message || 'Paystack error' })
-
-    return res.status(200).json({ authorization_url: data.data.authorization_url, reference })
+    await markIntentPending(supabase, intent.id)
+    return res.status(200).json({ authorization_url: init.authorizationUrl, reference })
   } catch (err) {
-    return res.status(500).json({ error: err.message || 'Server error' })
+    if (!err.ambiguous) await markIntentFailed(supabase, intent.id).catch(() => {})
+    return res.status(err.code === 'config' ? 500 : 502).json({ error: err.message || 'Could not start payment' })
   }
 }
