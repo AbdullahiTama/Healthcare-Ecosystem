@@ -1,6 +1,7 @@
 import { hashPin, randomPinSalt, isValidPin, checkWithdrawalPin } from '@care-ecosystem/shared-payments'
 import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { verifyWithdrawalOtp } from '../_lib/emailOtp.js'
 
 // The router folds every /api/<route> into one catch-all and dispatches on the FIRST path segment, so this
 // handler resolves the second segment itself.
@@ -35,11 +36,15 @@ export default async function handler(req, res) {
   if (action === 'status') return res.status(200).json({ hasPin })
 
   if (action === 'set') {
-    const { pin, currentPin } = req.body || {}
+    const { pin, currentPin, otp } = req.body || {}
     if (!isValidPin(pin)) return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
 
     // A PIN is a step-up credential, so the account must already prove it owns its email before it can arm one.
     if (!user.email_confirmed_at) return res.status(403).json({ error: 'Confirm your email before setting a withdrawal PIN' })
+
+    // Every arm/replace requires a fresh email OTP.
+    const otpCheck = await verifyWithdrawalOtp(supabase, user.id, otp)
+    if (otpCheck.error) return res.status(otpCheck.status).json({ error: otpCheck.error })
 
     if (hasPin) {
       const check = await checkWithdrawalPin(supabase, user.id, currentPin)

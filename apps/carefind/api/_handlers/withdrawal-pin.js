@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { hashPin, randomPinSalt, isValidPin } from '../_lib/pinCrypto.js'
+import { verifyWithdrawalOtp } from '../_lib/emailOtp.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
   const action = subPath(req)
-  const { pin } = req.body || {}
+  const { pin, otp, currentPin } = req.body || {}
 
   if (!isValidPin(pin)) {
     return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
@@ -44,6 +45,25 @@ export default async function handler(req, res) {
     // its email before it can arm one.
     if (!user.email_confirmed_at) {
       return res.status(403).json({ error: 'Confirm your email before setting a withdrawal PIN' })
+    }
+
+    // Every arm/replace requires a fresh email OTP.
+    const otpCheck = await verifyWithdrawalOtp(supabase, user.id, otp)
+    if (otpCheck.error) return res.status(otpCheck.status).json({ error: otpCheck.error })
+
+    // Replacing an existing PIN additionally requires the current PIN (closes F-32).
+    const { data: storedRows } = await supabase.rpc('get_withdrawal_pin', { p_user_id: user.id })
+    const stored = Array.isArray(storedRows) ? storedRows[0] : storedRows
+    if (stored && stored.pin_hash) {
+      if (!currentPin || !isValidPin(currentPin)) {
+        return res.status(400).json({ error: 'Enter your current withdrawal PIN to change it' })
+      }
+      const { data: ok } = await supabase.rpc('verify_withdrawal_pin', {
+        p_user_id: user.id,
+        p_pin_hash: hashPin(currentPin, stored.pin_salt),
+        p_pin_salt: stored.pin_salt,
+      })
+      if (ok !== true) return res.status(403).json({ error: 'Incorrect current withdrawal PIN' })
     }
 
     const salt = randomPinSalt()

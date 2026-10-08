@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
+import { initiateWalletTopup, verifyWalletTopup, goToPaystack, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -25,13 +27,49 @@ export default function Wallet({ brand, role }) {
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawPin, setWithdrawPin] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
+  const [showTopup, setShowTopup] = useState(false)
+  const [topupAmount, setTopupAmount] = useState('')
+  const [topupStarting, setTopupStarting] = useState(false)
   const [banks, setBanks] = useState([])
   const [accountResolving, setAccountResolving] = useState(false)
   const [accountResolved, setAccountResolved] = useState(false)
   const resolveTimer = useRef(null)
+  const [searchParams] = useSearchParams()
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
 
   useEffect(() => { load() }, [brand?.id])
+
+  // Return from Paystack. Confirm the opaque reference server-side before
+  // showing any credit — the same "never trust the URL, ask Paystack" shape
+  // as Settings.jsx's plan renewal and CareFind's wallet. The verify handler
+  // settles the intent; the engine credits the wallet only for a payment
+  // that matches it exactly.
+  useEffect(() => {
+    async function handleTopupReturn() {
+      const ref = searchParams.get('reference') || searchParams.get('trxref')
+      if (!ref || role !== 'Owner') return
+      try {
+        const out = await verifyWalletTopup(ref)
+        window.history.replaceState({}, '', '/dashboard/wallet')
+        if (out.sessionExpired) return
+        if (out.networkError) {
+          showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
+          return
+        }
+        if (!out.ok) {
+          showToast(`Could not confirm payment: ${out.data.error || 'unknown error'}`, { type: 'error' })
+          return
+        }
+        load()
+        if (!out.data.alreadyProcessed) showToast(`Top-up received! New balance: ${naira(out.data.newAvailable)}`, { type: 'success' })
+      } catch {
+        window.history.replaceState({}, '', '/dashboard/wallet')
+        showToast('Could not confirm payment. If you were charged, contact support with your reference.', { type: 'error' })
+      }
+    }
+    handleTopupReturn()
+    // eslint-disable-next-line
+  }, [searchParams])
 
   useEffect(() => {
     async function loadBanks() {
@@ -140,6 +178,22 @@ export default function Wallet({ brand, role }) {
     setWithdrawing(false)
   }
 
+  async function handleTopup() {
+    const amountKobo = Math.round(parseFloat(topupAmount) * 100)
+    if (!Number.isSafeInteger(amountKobo) || amountKobo < MIN_TOPUP_KOBO || amountKobo > MAX_TOPUP_KOBO) {
+      showToast('Enter an amount between ₦100 and ₦100,000.', { type: 'warning' }); return
+    }
+    setTopupStarting(true)
+    const out = await initiateWalletTopup({ amountKobo, callbackUrl: `${window.location.origin}/dashboard/wallet` })
+    if (out.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setTopupStarting(false); return }
+    if (out.networkError) { showToast('Network error. Please check your connection.', { type: 'error' }); setTopupStarting(false); return }
+    if (!out.ok || !out.data.authorization_url) {
+      showToast(out.data.error || 'Could not start payment.', { type: 'error' })
+      setTopupStarting(false); return
+    }
+    goToPaystack(out.data.authorization_url)
+  }
+
   function exportCsv() {
     const rows = [['Date', 'Type', 'Amount', 'Reference']]
     txs.forEach(tx => rows.push([tx.created_at?.split('T')[0] || '', tx.type || '', naira(tx.amount), tx.reference || '']))
@@ -154,6 +208,12 @@ export default function Wallet({ brand, role }) {
   const filtered = filter === 'all' ? txs : txs.filter(t => (filter === 'booking_credit' ? t.type === 'booking_credit' || t.type === 'shop_credit' : t.type === filter))
   const totalReceived = txs.filter(t => t.type === 'booking_credit' || t.type === 'shop_credit' || t.type === 'release').reduce((s, t) => s + (t.amount || 0), 0)
   const isOwner = role === 'Owner'
+  // Guidance while the owner types (validation on submit, not keystroke —
+  // UX_PATTERNS): the Continue button stays disabled until the amount is
+  // inside the server's bounds.
+  const topupKobo = Math.round((parseFloat(topupAmount) || 0) * 100)
+  const topupValid = topupAmount !== '' && Number.isSafeInteger(topupKobo) && topupKobo >= MIN_TOPUP_KOBO && topupKobo <= MAX_TOPUP_KOBO
+  const topupHint = topupAmount !== '' && !topupValid ? 'Enter an amount between ₦100 and ₦100,000.' : undefined
 
   if (loading) return <Loading text="Loading wallet..." />
   if (!isOwner) return (
@@ -187,6 +247,17 @@ export default function Wallet({ brand, role }) {
           <TealBtn onClick={() => setShowWithdraw(true)}><Banknote size={14} style={{ marginRight: 6 }} />Withdraw</TealBtn>
         </Card>
       )}
+
+      <Card style={{ marginBottom: '16px', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: 40, height: 40, borderRadius: theme.radius.md, background: tealMist, color: tealDeep, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><PlusCircle size={18} /></div>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: '800', color: navy }}>Add funds</div>
+            <div style={{ fontSize: '12px', color: gray500 }}>Top up your wallet by card — min ₦100</div>
+          </div>
+        </div>
+        <TealBtn onClick={() => { setTopupAmount(''); setShowTopup(true) }}><PlusCircle size={14} style={{ marginRight: 6 }} />Top Up</TealBtn>
+      </Card>
 
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {['all', 'booking_credit', 'release', 'refund', 'withdrawal'].map(s => {
@@ -284,6 +355,34 @@ export default function Wallet({ brand, role }) {
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
                 <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showTopup && (
+        <div role="dialog" aria-modal="true" aria-label="Top up wallet" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <Card style={{ maxWidth: '420px', width: '100%', padding: '24px' }}>
+            <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Top Up Wallet</div>
+            <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Pay with your card via Paystack. The wallet is credited only after Paystack confirms the exact amount.</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Inp
+                id="topup-amount"
+                label="Amount (₦)"
+                type="number"
+                inputMode="decimal"
+                value={topupAmount}
+                onChange={setTopupAmount}
+                placeholder="e.g. 5000"
+                min={MIN_TOPUP_KOBO / 100}
+                max={MAX_TOPUP_KOBO / 100}
+                helperText={topupHint}
+                required
+              />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <GhostBtn onClick={() => { setShowTopup(false); setTopupAmount(''); setTopupStarting(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleTopup} disabled={!topupValid || topupStarting} style={{ flex: 1, padding: '12px', opacity: (!topupValid || topupStarting) ? 0.6 : 1 }}>{topupStarting ? 'Opening Paystack...' : 'Continue'}</TealBtn>
               </div>
             </div>
           </Card>

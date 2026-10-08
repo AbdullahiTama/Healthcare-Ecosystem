@@ -16,6 +16,7 @@ const h = vi.hoisted(() => {
 
 vi.mock('../_lib/supabase.js', () => ({ supabase: h.client }))
 vi.mock('../_lib/verifyBusiness.js', () => ({ verifyBusiness: async () => h.auth }))
+vi.mock('../_lib/emailOtp.js', () => ({ verifyWithdrawalOtp: async () => ({ ok: true }) }))
 
 import { hashPin } from '@care-ecosystem/shared-payments'
 import handler from '../_handlers/withdrawal-pin.js'

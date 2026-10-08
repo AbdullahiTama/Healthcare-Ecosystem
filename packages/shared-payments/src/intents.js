@@ -12,7 +12,7 @@ export class PaymentIntentError extends Error {
   }
 }
 
-const PURPOSES = ['wallet_topup', 'creator_subscription', 'consultation', 'booking', 'appointment', 'plan_renewal', 'shop_order']
+const PURPOSES = ['wallet_topup', 'creator_subscription', 'consultation', 'booking', 'appointment', 'plan_renewal', 'shop_order', 'business_wallet_topup', 'booking_wallet', 'subscription_wallet', 'consultation_wallet', 'shop_order_wallet', 'plan_renewal_wallet', 'appointment_fee_wallet']
 const APPLICATIONS = ['carefind', 'carehub']
 
 /** A fresh, unguessable payment reference: `<prefix>_<owner8>_<12 hex>`; satisfies the table's format check. */
@@ -27,10 +27,11 @@ export function newReference(prefix, ownerId = '') {
  */
 export async function createPaymentIntent(supabase, {
   reference, application, purpose, customerId = null, businessId = null, entityType = null, entityId = null,
-  expectedAmountKobo, metadata = {}, expiresInMinutes,
+  expectedAmountKobo, metadata = {}, expiresInMinutes, provider = 'paystack',
 }) {
   if (!APPLICATIONS.includes(application)) throw new PaymentIntentError('invalid_intent', 'unknown application')
   if (!PURPOSES.includes(purpose)) throw new PaymentIntentError('invalid_intent', 'unknown purpose')
+  if (!/^[a-z][a-z0-9_]{1,30}$/.test(provider)) throw new PaymentIntentError('invalid_intent', 'unknown provider')
   if (!Number.isSafeInteger(expectedAmountKobo) || expectedAmountKobo <= 0) {
     throw new PaymentIntentError('invalid_intent', 'expectedAmountKobo must be a positive integer number of kobo')
   }
@@ -38,7 +39,7 @@ export async function createPaymentIntent(supabase, {
 
   const row = {
     reference,
-    provider: 'paystack',
+    provider,
     application,
     purpose,
     customer_id: customerId,

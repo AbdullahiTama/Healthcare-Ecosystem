@@ -82,6 +82,10 @@ const KNOWN_SUBJECT_OFFENDERS = {
   'apps/carefind/api/_handlers/cancel-appointment.js': 'batch 3: move onto the catalog',
   'apps/carefind/api/_handlers/initiate-withdrawal.js': 'batch 3: move onto the catalog',
   'apps/carehub/api/_handlers/initiate-business-withdrawal.js': 'batch 3: move onto the catalog',
+  // Phase 16 (2026-10-08): the withdrawal PIN email OTP endpoints, same literal-subject pattern
+  // as every other producer; recorded as they landed so the ratchet keeps watching them.
+  'apps/carefind/api/_handlers/withdrawal-pin-otp.js': 'batch 3: move onto the catalog',
+  'apps/carehub/api/_handlers/withdrawal-pin-otp.js': 'batch 3: move onto the catalog',
   // Added 2026-10-04. The finance refactor moved the settlement confirmations out of six verify-* handlers (which
   // left this list) into one shared module. Its five literal subjects are the same ones those handlers carried, so
   // this is six offenders becoming one, not six being fixed.

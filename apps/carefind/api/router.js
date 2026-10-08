@@ -32,6 +32,8 @@ import verifyConsultationPaymentHandler from './_handlers/verify-consultation-pa
 import verifyPaymentHandler from './_handlers/verify-payment.js'
 import verifySubscriptionPaymentHandler from './_handlers/verify-subscription-payment.js'
 import withdrawalPinHandler from './_handlers/withdrawal-pin.js'
+import withdrawalPinOtpHandler from './_handlers/withdrawal-pin-otp.js'
+import payoutAccountsHandler from './_handlers/payout-accounts.js'
 import resolveAccountHandler from './_handlers/resolve-account.js'
 import lookupAppointmentHandler from './_handlers/lookup-appointment.js'
 import cancelAppointmentHandler from './_handlers/cancel-appointment.js'
@@ -63,6 +65,8 @@ const ROUTES = {
   'verify-payment': verifyPaymentHandler,
   'verify-subscription-payment': verifySubscriptionPaymentHandler,
   'withdrawal-pin': withdrawalPinHandler,
+  'withdrawal-pin-otp': withdrawalPinOtpHandler,
+  'payout-accounts': payoutAccountsHandler,
   'resolve-account': resolveAccountHandler,
   'lookup-appointment': lookupAppointmentHandler,
   'cancel-appointment': cancelAppointmentHandler,

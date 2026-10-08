@@ -289,6 +289,19 @@ export function withdrawalCompleted(payload = {}) {
   })
 }
 
+export function withdrawalPinOtp(payload = {}) {
+  return email({
+    title: 'Your withdrawal PIN code',
+    preheader: 'Use this code to set or change your withdrawal PIN.',
+    body: [
+      paragraph('Here is the one-time code for your withdrawal PIN:'),
+      paragraph(`<strong style="font-size:20px;letter-spacing:2px">${payload.code || ''}</strong>`),
+      notice('warn', `This code expires in ${payload.minutes || 10} minutes. Never share it.`),
+      paragraph('If you did not ask for this, you can safely ignore this email.'),
+    ],
+  })
+}
+
 export function withdrawalFailed(payload = {}) {
   return email({
     title: 'Your withdrawal could not be completed',

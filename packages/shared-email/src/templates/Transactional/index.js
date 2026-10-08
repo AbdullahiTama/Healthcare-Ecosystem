@@ -21,4 +21,5 @@ export {
   withdrawalRequested,
   withdrawalCompleted,
   withdrawalFailed,
+  withdrawalPinOtp,
 } from '../CareHub/index.js'

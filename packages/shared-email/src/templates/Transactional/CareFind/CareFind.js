@@ -244,6 +244,19 @@ export function withdrawalRequested({ fullName, amount, reference, bankName, acc
   })
 }
 
+export function withdrawalPinOtp({ fullName, code, minutes } = {}) {
+  return email({
+    title: 'Your withdrawal PIN code',
+    preheader: 'Use this code to set or change your withdrawal PIN.',
+    body: [
+      paragraph(html`${hi(fullName)} here is the one-time code for your withdrawal PIN:`),
+      paragraph(html`<strong style="font-size:20px;letter-spacing:2px">${code}</strong>`),
+      notice('warn', `This code expires in ${minutes || 10} minutes. Never share it.`),
+      smallPrint(IGNORE),
+    ],
+  })
+}
+
 export function withdrawalCompleted({ fullName, amount, reference, bankName, accountNumber } = {}) {
   return email({
     title: 'Your withdrawal has been sent',
@@ -263,6 +276,20 @@ export function withdrawalFailed({ fullName, amount, reference } = {}) {
       paragraph(html`${hi(fullName)} your withdrawal could not be completed. If the amount was taken from your wallet, it has been returned.`),
       detailsTable([['Amount', amount], ['Reference', reference]]),
       paragraph('Please check your bank details and try again. If the problem continues, reply to this email and our team will help.'),
+    ],
+  })
+}
+
+// Plan D1: a credit on the user's ledger does not trace to a confirmed payment, so the
+// withdrawal reservation refuses the untraceable portion. Flat numbers only - no reason codes.
+export function walletNeedsAttention({ fullName, heldCoins, withdrawableCoins } = {}) {
+  return email({
+    title: 'Your CareCoin wallet needs attention',
+    preheader: 'Part of your balance is on hold while we review it.',
+    body: [
+      paragraph(html`${hi(fullName)} part of your CareCoin balance cannot be traced to a confirmed payment, so it is on hold and cannot be withdrawn right now.`),
+      detailsTable([['On hold', heldCoins], ['Available to withdraw', withdrawableCoins]]),
+      paragraph('No money has left your wallet. If you believe this is wrong, reply to this email and our finance team will review it.'),
     ],
   })
 }

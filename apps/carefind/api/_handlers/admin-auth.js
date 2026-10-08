@@ -232,6 +232,19 @@ async function handleRequest(req, res) {
     return res.status(200).json({ success: true })
   }
 
+  if (action === 'payout_account_review') {
+    if (!token) return res.status(401).json({ error: 'Unauthorized' })
+    const payload = await verifyToken(token)
+    if (!payload) return res.status(401).json({ error: 'Invalid or expired token' })
+    const { id, decision } = req.body
+    if (!id) return res.status(400).json({ error: 'id required' })
+    if (decision !== 'verified' && decision !== 'failed') return res.status(400).json({ error: "decision must be 'verified' or 'failed'" })
+    const { error } = await supabase.from('payout_accounts').update({ status: decision, verified_at: decision === 'verified' ? new Date().toISOString() : null }).eq('id', id)
+    if (error) return res.status(400).json({ error: error.message })
+    await supabase.from('payout_account_events').insert({ payout_account_id: id, actor: payload.adminId ?? null, action: `reviewed:${decision}` })
+    return res.status(200).json({ success: true })
+  }
+
   if (action === 'manual_verify') {
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const payload = await verifyToken(token)
