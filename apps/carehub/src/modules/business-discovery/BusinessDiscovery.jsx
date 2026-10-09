@@ -64,6 +64,8 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
   const [customRadius, setCustomRadius] = useState('')
   const [quantity, setQuantity] = useState('')
   const [state, setState] = useState('')
+  const [lga, setLga] = useState('')
+  const [businessType, setBusinessType] = useState('')
   const [verification, setVerification] = useState('')
   const [source, setSource] = useState('')
   const [sort, setSort] = useState('nearest')
@@ -134,7 +136,8 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
       const result = await searchBusinesses(repo, businessId, {
         center, radiusKm: radius, placeName: center ? null : place || null,
         categoryId: catId || undefined, subcategoryId: (params.subcategoryId ?? subcategoryId) || undefined,
-        state: (params.state ?? state) || undefined, verification: (params.verification ?? verification) || undefined,
+        state: (params.state ?? state) || undefined, lga: (params.lga ?? lga).trim() || undefined,
+        businessType: (params.businessType ?? businessType).trim() || undefined, verification: (params.verification ?? verification) || undefined,
         source: (params.source ?? source) || undefined, quantity: qty,
         sort: center ? sort : (sort === 'nearest' || sort === 'farthest' ? 'alpha' : sort),
       })
@@ -150,7 +153,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
       setError(e.message || 'Search failed')
       setStatus('error')
     }
-  }, [repo, businessId, useMyLocation, placeText, categoryId, subcategoryId, radiusKm, quantity, state, verification, source, sort])
+  }, [repo, businessId, useMyLocation, placeText, categoryId, subcategoryId, radiusKm, quantity, state, lga, businessType, verification, source, sort])
 
   function submitText(e) {
     e && e.preventDefault()
@@ -204,7 +207,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
     await repo.reportIncorrect(businessId, b.id, message, actor)
   }
 
-  const noDirectory = status === 'done' && out && out.total === 0 && !categoryId && !placeText && !useMyLocation && !state && !verification && !source
+  const noDirectory = status === 'done' && out && out.total === 0 && !categoryId && !placeText && !useMyLocation && !state && !lga.trim() && !businessType.trim() && !verification && !source
   const busy = status === 'locating' || status === 'loading'
 
   return (
@@ -245,6 +248,8 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
           {subsForCategory.length > 0 && <Sel label='Subcategory' value={subcategoryId} onChange={setSubcategoryId} options={subsForCategory.map((s) => ({ value: s.id, label: s.name }))} placeholder='Any' id='disc-sub' />}
           <Inp label='Search around (place or address)' value={placeText} onChange={(v) => { setPlaceText(v); if (v) setUseMyLocation(false) }} placeholder='e.g. Yaba, Ikeja, Surulere' id='disc-place' />
           <Sel label='State' value={state} onChange={setState} options={NIGERIA_STATES} placeholder='Any state' id='disc-state' />
+          <Inp label='LGA' value={lga} onChange={(v) => setLga(v.slice(0, 80))} placeholder='e.g. Ikeja' id='disc-lga' />
+          <Inp label='Business type' value={businessType} onChange={(v) => setBusinessType(v.slice(0, 80))} placeholder='e.g. Private, Chain' id='disc-btype' />
           <Sel label='Verification' value={verification} onChange={setVerification} options={[{ value: 'verified', label: 'Verified only' }, { value: 'unverified', label: 'Unverified' }]} placeholder='Any' id='disc-ver' />
           <Sel label='Source' value={source} onChange={setSource} options={[{ value: 'manual', label: 'Manual entry' }, { value: 'import', label: 'Imported' }, { value: 'external', label: 'External source' }, { value: 'demo', label: 'DEMO DATA' }]} placeholder='Any' id='disc-src' />
           <Inp label='Show up to' value={quantity} onChange={(v) => setQuantity(v.replace(/\D/g, '').slice(0, 4))} placeholder='All' inputMode='numeric' id='disc-qty' />
