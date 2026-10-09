@@ -40,7 +40,7 @@ function Tile({ label, value, tone, active, onClick }) {
  * Upload -> preview/review -> import. Nothing touches the database until the
  * administrator presses Import in step 2; every step is cancellable.
  */
-export default function ImportWizard({ businessId, repo, categories, subcategories, loadExisting, createdBy, onImported, showToast }) {
+export default function ImportWizard({ businessId, scope, repo, categories, subcategories, loadExisting, createdBy, onImported, showToast }) {
   const [step, setStep] = useState('upload') // upload | working | review | importing | done
   const [fileName, setFileName] = useState('')
   const [notes, setNotes] = useState([])
@@ -148,7 +148,7 @@ export default function ImportWizard({ businessId, repo, categories, subcategori
     setProgress({ phase: 'importing', done: 0, total: plan.inserts.length + plan.merges.length })
     try {
       const r = await commitImport({
-        items, repo, businessId, createdBy, fileName,
+        items, repo, businessId, scope, createdBy, fileName,
         onProgress: (phase, done, total) => setProgress({ phase, done, total }),
         shouldCancel: () => cancelRef.current,
       })

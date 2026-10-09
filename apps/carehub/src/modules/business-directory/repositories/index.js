@@ -2,6 +2,7 @@ import { sbFetch } from '../../../services/supabase'
 import { pagedQuery } from '../../../lib/pagedQuery'
 import { boundingBox } from '../services/distance'
 import { deriveNormalized } from '../services/normalize'
+import { PLATFORM } from '../services/constants'
 
 // ── Business Directory repository ─────────────────────────────────────────────
 // Deep module over directory_categories, directory_subcategories,
@@ -22,6 +23,14 @@ const INDEX_COLUMNS = 'id,name,name_normalized,category_id,address_normalized,ph
 const q = encodeURIComponent
 const PAGE = 1000
 
+// Two scopes share the same tables (sql/20261012): a company's private directory
+// (business_id = its id) and the PLATFORM registry (business_id IS NULL), curated
+// by platform admins and readable by every company when verified. Pass PLATFORM
+// where a business id is expected to address the platform registry.
+export { PLATFORM }
+const scope = (id) => (id === PLATFORM ? 'business_id=is.null' : `business_id=eq.${id}`)
+const ownerOf = (id) => (id === PLATFORM ? null : id)
+
 // PostgREST filter values are comma/paren delimited. Stripping those (and the
 // wildcard `*`) from user text keeps a search box from injecting extra filters.
 const clean = (s) => String(s ?? '').replace(/[(),*%\\]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -31,7 +40,8 @@ export function createDirectoryRepository(request = sbFetch) {
     // ── Categories ──────────────────────────────────────────────────────────
     async getCategories(businessId, { includeInactive = false } = {}) {
       const active = includeInactive ? '' : '&is_active=eq.true'
-      return request(`directory_categories?or=(business_id.is.null,business_id.eq.${businessId})${active}&order=sort_order.asc,name.asc&select=*`)
+      const who = businessId === PLATFORM ? 'business_id.is.null' : `business_id.is.null,business_id.eq.${businessId}`
+      return request(`directory_categories?or=(${who})${active}&order=sort_order.asc,name.asc&select=*`)
     },
 
     async addCategory(businessId, { name, kind = 'other', sort_order = 1000 }) {
@@ -49,20 +59,21 @@ export function createDirectoryRepository(request = sbFetch) {
     },
 
     async getSubcategories(businessId) {
-      return request(`directory_subcategories?or=(business_id.is.null,business_id.eq.${businessId})&is_active=eq.true&order=name.asc&select=*`)
+      const who = businessId === PLATFORM ? 'business_id.is.null' : `business_id.is.null,business_id.eq.${businessId}`
+      return request(`directory_subcategories?or=(${who})&is_active=eq.true&order=name.asc&select=*`)
     },
 
     async addSubcategory(businessId, categoryId, name) {
       const rows = await request('directory_subcategories', {
         method: 'POST',
-        body: JSON.stringify({ business_id: businessId, category_id: categoryId, name: clean(name) }),
+        body: JSON.stringify({ business_id: ownerOf(businessId), category_id: categoryId, name: clean(name) }),
       })
       return rows[0]
     },
 
     // Find-or-create by (category, name) — used by the importer.
     async ensureSubcategory(businessId, categoryId, name) {
-      const existing = await request(`directory_subcategories?category_id=eq.${categoryId}&business_id=eq.${businessId}&select=*`)
+      const existing = await request(`directory_subcategories?category_id=eq.${categoryId}&${scope(businessId)}&select=*`)
       const hit = (existing || []).find((s) => s.name.trim().toLowerCase() === clean(name).toLowerCase())
       if (hit && hit.is_active === false) {
         await this.updateSubcategory(hit.id, businessId, { is_active: true })
@@ -81,11 +92,11 @@ export function createDirectoryRepository(request = sbFetch) {
     // Lean snapshot for duplicate detection. Includes inactive rows on purpose:
     // re-importing a deactivated business must not silently create a twin.
     async getDedupIndexRows(businessId) {
-      return pagedQuery(request, `directory_businesses?business_id=eq.${businessId}&order=id.asc&select=${INDEX_COLUMNS}`, { pageSize: PAGE })
+      return pagedQuery(request, `directory_businesses?${scope(businessId)}&order=id.asc&select=${INDEX_COLUMNS}`, { pageSize: PAGE })
     },
 
     async getById(id, businessId) {
-      const rows = await request(`directory_businesses?id=eq.${id}&business_id=eq.${businessId}&select=*`)
+      const rows = await request(`directory_businesses?id=eq.${id}&${scope(businessId)}&select=*`)
       return rows[0] || null
     },
 
@@ -97,14 +108,14 @@ export function createDirectoryRepository(request = sbFetch) {
     // `probe` fetches one row past the page so the caller can tell whether a
     // next page exists without a COUNT query (the offset stride stays pageSize).
     async list(businessId, filters = {}, { page = 0, pageSize = 50, order = 'created_at.desc', probe = false } = {}) {
-      const p = [`business_id=eq.${businessId}`]
+      const p = [scope(businessId)]
       applyFilters(p, filters)
       return request(`directory_businesses?${p.join('&')}&order=${order},id.asc&limit=${pageSize + (probe ? 1 : 0)}&offset=${page * pageSize}&select=*`)
     },
 
     /** Everything matching (for export) — pages through PostgREST's row cap. */
     async listAll(businessId, filters = {}) {
-      const p = [`business_id=eq.${businessId}`]
+      const p = [scope(businessId)]
       applyFilters(p, filters)
       return pagedQuery(request, `directory_businesses?${p.join('&')}&order=name_normalized.asc,id.asc&select=*`, { pageSize: PAGE })
     },
@@ -116,7 +127,7 @@ export function createDirectoryRepository(request = sbFetch) {
     async searchWithinBox(businessId, { lat, lng, radiusKm }, filters = {}, { limit = 2000 } = {}) {
       const b = boundingBox(lat, lng, radiusKm)
       const p = [
-        `business_id=eq.${businessId}`,
+        scope(businessId),
         `latitude=gte.${b.minLat}`, `latitude=lte.${b.maxLat}`,
         `longitude=gte.${b.minLng}`, `longitude=lte.${b.maxLng}`,
       ]
@@ -127,7 +138,7 @@ export function createDirectoryRepository(request = sbFetch) {
     /** Text-only fallback when a place cannot be geocoded: match state/LGA/city by name. */
     async searchByPlaceName(businessId, place, filters = {}, { limit = 500 } = {}) {
       const t = clean(place)
-      const p = [`business_id=eq.${businessId}`]
+      const p = [scope(businessId)]
       if (t) p.push(`or=(state.ilike.*${q(t)}*,lga.ilike.*${q(t)}*,city.ilike.*${q(t)}*,address.ilike.*${q(t)}*)`)
       applyFilters(p, { ...filters, active: filters.active || 'active' })
       return request(`directory_businesses?${p.join('&')}&order=name_normalized.asc,id.asc&limit=${limit}&select=*`)
@@ -136,7 +147,7 @@ export function createDirectoryRepository(request = sbFetch) {
     async create(businessId, rec, createdBy) {
       const rows = await request('directory_businesses', {
         method: 'POST',
-        body: JSON.stringify(shape(businessId, rec, { created_by: createdBy || null })),
+        body: JSON.stringify(shape(ownerOf(businessId), rec, { created_by: createdBy || null })),
       })
       return rows[0]
     },
@@ -146,7 +157,7 @@ export function createDirectoryRepository(request = sbFetch) {
       return request('directory_businesses', {
         method: 'POST',
         prefer: 'return=minimal',
-        body: JSON.stringify(recs.map((r) => shape(businessId, r, { import_batch_id: batchId, data_source: r.data_source || 'import' }))),
+        body: JSON.stringify(recs.map((r) => shape(ownerOf(businessId), r, { import_batch_id: batchId, data_source: r.data_source || 'import' }))),
       })
     },
 
@@ -160,7 +171,7 @@ export function createDirectoryRepository(request = sbFetch) {
         if ('phone' in next) next.phone_normalized = d.phone_normalized
         if ('website' in next) next.website_host = d.website_host
       }
-      return request(`directory_businesses?id=eq.${id}&business_id=eq.${businessId}`, {
+      return request(`directory_businesses?id=eq.${id}&${scope(businessId)}`, {
         method: 'PATCH', body: JSON.stringify(next), prefer: 'return=minimal',
       })
     },
@@ -172,6 +183,34 @@ export function createDirectoryRepository(request = sbFetch) {
 
     async setVerification(id, businessId, status) {
       return this.update(id, businessId, { verification_status: status })
+    },
+
+    // ── Platform registry → my directory ───────────────────────────────────
+    // Provenance: a copy carries source_detail = 'platform:<platform id>', so the
+    // same platform business is never copied twice and Discovery can hide the
+    // platform duplicate of something the company already has.
+    async findPlatformCopy(businessId, platformId) {
+      const rows = await request(`directory_businesses?business_id=eq.${businessId}&source_detail=eq.${q('platform:' + platformId)}&select=id,name,is_active&limit=1`)
+      return rows[0] || null
+    },
+
+    /** Ids of the platform businesses this company has already copied (active or not, whatever the search filters). */
+    async getPlatformCopyIds(businessId) {
+      const rows = await pagedQuery(request, `directory_businesses?business_id=eq.${businessId}&source_detail=ilike.${q('platform:')}*&order=id.asc&select=source_detail`, { pageSize: PAGE })
+      return new Set(rows.map((r) => String(r.source_detail).slice('platform:'.length)))
+    },
+
+    /** Copy a platform business into this company's own directory as a separate, private, UNVERIFIED record. */
+    async copyFromPlatform(businessId, platformRow, createdBy) {
+      const existing = await this.findPlatformCopy(businessId, platformRow.id)
+      if (existing) return { copy: existing, alreadyHad: true }
+      const f = ['name', 'name_normalized', 'category_id', 'subcategory_id', 'business_type', 'address', 'address_normalized', 'state', 'lga', 'city',
+        'latitude', 'longitude', 'phone', 'phone_normalized', 'email', 'website', 'website_host', 'contact_person', 'opening_hours', 'description']
+      const rec = {}
+      f.forEach((k) => { if (platformRow[k] !== undefined && platformRow[k] !== null) rec[k] = platformRow[k] })
+      // Verification belongs to the platform record; the company's copy starts unverified.
+      const created = await this.create(businessId, { ...rec, data_source: 'external', source_detail: 'platform:' + platformRow.id, verification_status: 'unverified' }, createdBy)
+      return { copy: created, alreadyHad: false }
     },
 
     // ── Import batches ─────────────────────────────────────────────────────

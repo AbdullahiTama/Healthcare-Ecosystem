@@ -40,7 +40,7 @@ export function toExportRow(r, categoryName, subcategoryName) {
     latitude: r.latitude ?? '',
     longitude: r.longitude ?? '',
     verification: r.verification_status || '',
-    source: r.data_source === 'demo' ? 'DEMO DATA' : (r.data_source || ''),
+    source: r.origin === 'platform' ? 'Platform registry' : r.data_source === 'demo' ? 'DEMO DATA' : (r.data_source || ''),
   }
 }
 

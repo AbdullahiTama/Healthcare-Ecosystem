@@ -5,6 +5,7 @@
 // attendance. That is the non-negotiable separation rule (spec §5/§24).
 
 import { withDistance } from './distance'
+import { PLATFORM } from './constants'
 
 export const SORTS = [
   ['nearest', 'Nearest'],
@@ -40,34 +41,54 @@ export function sortResults(rows, sort) {
  * @param params {
  *   center?: {lat,lng}, radiusKm?: number, placeName?: string (text fallback),
  *   categoryId?, subcategoryId?, state?, lga?, verification?, source?, businessType?,
- *   quantity?: number, sort?: string }
- * @returns {{ results, total, truncated, mode: 'radius'|'place_text'|'filters' }}
+ *   quantity?: number, sort?: string, includePlatform?: boolean }
+ * @returns {{ results, total, truncated, mode: 'radius'|'place_text'|'filters', platformUnavailable: boolean }}
+ *
+ * With `includePlatform`, the platform registry (verified businesses curated by
+ * platform admins) is searched as well. Every row is tagged `origin: 'own' |
+ * 'platform'`, and a platform business the company has already copied into its
+ * own directory is shown once, as the company's own record.
  */
 export async function searchBusinesses(repo, businessId, params) {
   const filters = {
     categoryId: params.categoryId, subcategoryId: params.subcategoryId, state: params.state, lga: params.lga,
     verification: params.verification, source: params.source, businessType: params.businessType, active: 'active',
   }
-  let rows
-  let mode
-  if (params.center && Number.isFinite(params.center.lat) && Number.isFinite(params.center.lng)) {
-    const radiusKm = params.radiusKm > 0 ? params.radiusKm : 5
-    const box = await repo.searchWithinBox(businessId, { ...params.center, radiusKm }, filters)
-    rows = withDistance(box, params.center.lat, params.center.lng).filter((r) => r.distance_km !== null && r.distance_km <= radiusKm)
-    mode = 'radius'
-  } else if (params.placeName) {
-    rows = (await repo.searchByPlaceName(businessId, params.placeName, filters)).map((r) => ({ ...r, distance_km: null }))
-    mode = 'place_text'
-  } else {
-    rows = (await repo.list(businessId, filters, { page: 0, pageSize: 500, order: 'name_normalized.asc' })).map((r) => ({ ...r, distance_km: null }))
-    mode = 'filters'
+  const hasCenter = params.center && Number.isFinite(params.center.lat) && Number.isFinite(params.center.lng)
+  const radiusKm = params.radiusKm > 0 ? params.radiusKm : 5
+  const mode = hasCenter ? 'radius' : params.placeName ? 'place_text' : 'filters'
+
+  const fetchScope = async (id) => {
+    if (mode === 'radius') {
+      const box = await repo.searchWithinBox(id, { ...params.center, radiusKm }, filters)
+      return withDistance(box, params.center.lat, params.center.lng).filter((r) => r.distance_km !== null && r.distance_km <= radiusKm)
+    }
+    if (mode === 'place_text') return (await repo.searchByPlaceName(id, params.placeName, filters)).map((r) => ({ ...r, distance_km: null }))
+    return (await repo.list(id, filters, { page: 0, pageSize: 500, order: 'name_normalized.asc' })).map((r) => ({ ...r, distance_km: null }))
   }
+
+  const own = (await fetchScope(businessId)).map((r) => ({ ...r, origin: 'own' }))
+  let platform = []
+  let platformUnavailable = false
+  if (params.includePlatform) {
+    try {
+      // Looked up directly (not inferred from the filtered results) so an inactive or
+      // edited copy that a filter hides still suppresses its platform duplicate.
+      const [copied, shared] = await Promise.all([repo.getPlatformCopyIds(businessId), fetchScope(PLATFORM)])
+      platform = shared.filter((r) => !copied.has(String(r.id))).map((r) => ({ ...r, origin: 'platform' }))
+    } catch (e) {
+      // The registry is a bonus source: its failure must not take the company's own results down with it.
+      platformUnavailable = true
+    }
+  }
+  const rows = own.concat(platform)
+
   // "Show me 20 …" means the 20 NEAREST (or, without a location, the first 20 by name);
   // the requested display sort is then applied to that selection.
   const ranked = sortResults(rows, mode === 'radius' ? 'nearest' : 'alpha')
   const cap = params.quantity > 0 ? params.quantity : ranked.length
   const picked = ranked.slice(0, cap)
-  return { results: sortResults(picked, params.sort || (mode === 'radius' ? 'nearest' : 'alpha')), total: ranked.length, truncated: ranked.length > cap, mode }
+  return { results: sortResults(picked, params.sort || (mode === 'radius' ? 'nearest' : 'alpha')), total: ranked.length, truncated: ranked.length > cap, mode, platformUnavailable }
 }
 
 // ── BusinessMatcher (Live Field Report) ───────────────────────────────────────

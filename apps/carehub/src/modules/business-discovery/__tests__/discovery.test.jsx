@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 const calls = []
 const CATS = [{ id: 'c-ph', name: 'Pharmacy', business_id: null }, { id: 'c-hosp', name: 'Hospital', business_id: null }]
 let boxRows = []
+let platformRows = []
 let listRows = []
 
 vi.mock('../../business-directory/repositories', () => {
@@ -14,8 +15,10 @@ vi.mock('../../business-directory/repositories', () => {
   const repo = {
     getCategories: async () => CATS,
     getSubcategories: async () => [],
-    searchWithinBox: async (...a) => { calls.push(['searchWithinBox', ...a]); return boxRows },
+    searchWithinBox: async (...a) => { calls.push(['searchWithinBox', ...a]); return a[0] === 'platform' ? platformRows : boxRows },
     searchByPlaceName: async (...a) => { calls.push(['searchByPlaceName', ...a]); return [] },
+    getPlatformCopyIds: async () => new Set(),
+    copyFromPlatform: async (...a) => { calls.push(['copyFromPlatform', ...a]); return { copy: { id: 'copy1' }, alreadyHad: false } },
     list: async (...a) => { calls.push(['list', ...a]); return listRows },
     reportIncorrect: rec('reportIncorrect'),
   }
@@ -34,6 +37,7 @@ let root
 beforeEach(() => {
   calls.length = 0
   boxRows = []
+  platformRows = []
   listRows = []
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -156,6 +160,53 @@ describe('BusinessDiscovery — LGA and business-type filters', () => {
     await flush()
     expect(host.textContent).toContain('No matching business was found')
     expect(host.textContent).not.toContain('has no businesses yet')
+  })
+})
+
+describe('BusinessDiscovery — platform registry', () => {
+  const searchNear = async () => {
+    await type(host.querySelector('#disc-q'), 'pharmacies near me')
+    await act(async () => { host.querySelector('form[role="search"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
+    await flush()
+  }
+  it('includes platform results by default, labelled "Platform registry"', async () => {
+    boxRows = [biz({ id: 'o1', name: 'Own Pharmacy', name_normalized: 'own pharmacy', category_id: 'c-ph' })]
+    platformRows = [biz({ id: 'p1', business_id: null, name: 'Shared Pharmacy', name_normalized: 'shared pharmacy', category_id: 'c-ph', latitude: 6.505 })]
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await searchNear()
+    const items = [...host.querySelectorAll('li')].map((li) => li.textContent)
+    expect(items).toHaveLength(2)
+    expect(items.find((t) => t.includes('Shared Pharmacy'))).toContain('Platform registry')
+    expect(items.find((t) => t.includes('Own Pharmacy'))).not.toContain('Platform registry')
+  })
+  it('the checkbox turns the platform registry off', async () => {
+    boxRows = [biz({ id: 'o1', name: 'Own Pharmacy', name_normalized: 'own pharmacy', category_id: 'c-ph' })]
+    platformRows = [biz({ id: 'p1', business_id: null, name: 'Shared Pharmacy', name_normalized: 'shared pharmacy', category_id: 'c-ph' })]
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await act(async () => { host.querySelector('input[type=checkbox]').click() })
+    await searchNear()
+    expect([...host.querySelectorAll('li')].map((li) => li.textContent).join('')).not.toContain('Shared Pharmacy')
+    expect(calls.some((c) => c[0] === 'searchWithinBox' && c[1] === 'platform')).toBe(false)
+  })
+  it('"Add to my directory" is offered to directory managers only, and copies via the repository', async () => {
+    platformRows = [biz({ id: 'p1', business_id: null, name: 'Shared Pharmacy', name_normalized: 'shared pharmacy', category_id: 'c-ph' })]
+    await mount(<BusinessDiscovery brand={brand} perms={{ canManageDirectory: true }} allowedModules={[]} />)
+    await searchNear()
+    await act(async () => { [...host.querySelectorAll('li button')].find((b) => b.textContent === 'Details').click() })
+    const add = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Add to my directory'))
+    expect(add).toBeTruthy()
+    await act(async () => { add.click() })
+    await flush()
+    const copy = calls.find((c) => c[0] === 'copyFromPlatform')
+    expect(copy[1]).toBe('B1')
+    expect(copy[2]).toMatchObject({ id: 'p1' })
+  })
+  it('a rep without the manage flag can view a platform business but not add it', async () => {
+    platformRows = [biz({ id: 'p1', business_id: null, name: 'Shared Pharmacy', name_normalized: 'shared pharmacy', category_id: 'c-ph' })]
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await searchNear()
+    await act(async () => { [...host.querySelectorAll('li button')].find((b) => b.textContent === 'Details').click() })
+    expect([...document.querySelectorAll('button')].some((b) => b.textContent.includes('Add to my directory'))).toBe(false)
   })
 })
 

@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Crosshair, Search, List, Map as MapIcon, Download } from 'lucide-react'
-import { Card, TealBtn, GhostBtn, Inp, Sel, Empty, ErrorState, Loading, useToast, Toast } from '../../components/ui'
+import { Card, TealBtn, GhostBtn, Inp, Sel, Pill, Empty, ErrorState, Loading, useToast, Toast } from '../../components/ui'
 import { theme } from '../../styles/theme'
 import { directoryRepository } from '../business-directory/repositories'
 import { useDirectoryLookups } from '../business-directory/components/useDirectoryLookups'
@@ -69,6 +69,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
   const [verification, setVerification] = useState('')
   const [source, setSource] = useState('')
   const [sort, setSort] = useState('nearest')
+  const [includePlatform, setIncludePlatform] = useState(true)
 
   const [status, setStatus] = useState('idle') // idle | locating | loading | done | error
   const [error, setError] = useState('')
@@ -138,10 +139,11 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
         categoryId: catId || undefined, subcategoryId: (params.subcategoryId ?? subcategoryId) || undefined,
         state: (params.state ?? state) || undefined, lga: (params.lga ?? lga).trim() || undefined,
         businessType: (params.businessType ?? businessType).trim() || undefined, verification: (params.verification ?? verification) || undefined,
-        source: (params.source ?? source) || undefined, quantity: qty,
+        source: (params.source ?? source) || undefined, quantity: qty, includePlatform,
         sort: center ? sort : (sort === 'nearest' || sort === 'farthest' ? 'alpha' : sort),
       })
       if (mine !== seq.current) return
+      if (result.platformUnavailable) notes.push('The platform registry could not be reached, so only your own directory is shown.')
       if (!center && !place && (sort === 'nearest' || sort === 'farthest')) notes.push('No location was given, so results are listed alphabetically.')
       setNotices(notes)
       setOut(result)
@@ -153,7 +155,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
       setError(e.message || 'Search failed')
       setStatus('error')
     }
-  }, [repo, businessId, useMyLocation, placeText, categoryId, subcategoryId, radiusKm, quantity, state, lga, businessType, verification, source, sort])
+  }, [repo, businessId, useMyLocation, placeText, categoryId, subcategoryId, radiusKm, quantity, state, lga, businessType, verification, source, sort, includePlatform])
 
   function submitText(e) {
     e && e.preventDefault()
@@ -201,6 +203,16 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
         { baseName: 'business-discovery', title: 'Business Discovery results', subtitle: searchedAt?.label ? 'Near ' + searchedAt.label : brand?.name })
     } catch (e) { showToast('Could not export: ' + e.message, { type: 'error' }) }
     setExporting(false)
+  }
+
+  // Copy a platform business into this company's own (private, unverified) directory.
+  async function adopt(b) {
+    try {
+      const { alreadyHad } = await repo.copyFromPlatform(businessId, b, actor)
+      showToast(alreadyHad ? 'It is already in your directory.' : 'Added to your directory as an unverified record.', { type: 'success' })
+      setProfile(null)
+      runSearch() // the platform duplicate now shows as your own record
+    } catch (e) { showToast('Could not add it: ' + e.message, { type: 'error' }) }
   }
 
   async function report(b, message) {
@@ -255,6 +267,10 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
           <Inp label='Show up to' value={quantity} onChange={(v) => setQuantity(v.replace(/\D/g, '').slice(0, 4))} placeholder='All' inputMode='numeric' id='disc-qty' />
         </div>
 
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, color: gray600, marginTop: 12 }}>
+          <input type='checkbox' checked={includePlatform} onChange={(e) => setIncludePlatform(e.target.checked)} style={{ accentColor: tealDeep }} />
+          Include the platform registry (verified businesses shared with every company)
+        </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
           <GhostBtn onClick={() => { setUseMyLocation(true); setPlaceText(''); runSearch({ useMyLocation: true, placeText: '' }) }} disabled={busy}
             style={{ display: 'inline-flex', gap: 6, alignItems: 'center', ...(useMyLocation ? { borderColor: tealDeep, background: tealMist, color: tealDeep } : {}) }}>
@@ -339,7 +355,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
                           <div style={{ fontSize: 12, color: gray600 }}>{[lookups.categoryName(r.category_id), lookups.subcategoryName(r.subcategory_id)].filter(Boolean).join(' · ') || 'Uncategorised'}</div>
                           <div style={{ fontSize: 12.5, color: gray600, marginTop: 2 }}>{[r.address, r.city, r.state].filter(Boolean).join(', ')}</div>
                           <div style={{ fontSize: 12.5, color: gray500, marginTop: 2 }}>{[r.phone, r.email].filter(Boolean).join(' · ')}</div>
-                          <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}><VerificationBadge status={r.verification_status} /><SourceBadge source={r.data_source} /></div>
+                          <div style={{ display: 'flex', gap: 5, marginTop: 6, flexWrap: 'wrap' }}><VerificationBadge status={r.verification_status} />{r.origin === 'platform' ? <Pill label='Platform registry' type='purple' /> : <SourceBadge source={r.data_source} />}</div>
                         </button>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           {r.distance_km != null && <div style={{ fontWeight: 800, color: tealDeep, fontSize: 14 }}>{formatDistance(r.distance_km)}</div>}
@@ -368,7 +384,7 @@ export default function BusinessDiscovery({ brand, perms, allowedModules = [] })
 
       {profile && (
         <BusinessProfile business={profile} categoryName={lookups.categoryName(profile.category_id)} subcategoryName={lookups.subcategoryName(profile.subcategory_id)}
-          onClose={() => setProfile(null)} onToast={showToast} onReport={report}
+          onClose={() => setProfile(null)} onToast={showToast} onReport={report} onAdopt={perms?.canManageDirectory ? adopt : undefined}
           onViewOnMap={(b) => { setProfile(null); setView('map'); select(b.id) }} />
       )}
     </div>
