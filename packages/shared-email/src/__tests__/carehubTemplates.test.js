@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { getTemplate } from '../templates/index.js'
 import { htmlToText } from '../utils/htmlToText.js'
 
-const TEMPLATE_KEYS = ['registration_owner', 'admin_new_registration', 'business_approved', 'business_rejected', 'appointment_confirmed', 'credit_reminder', 'staff_welcome', 'agent_approved', 'agent_rejected']
+const TEMPLATE_KEYS = ['registration_owner', 'admin_new_registration', 'business_approved', 'business_rejected', 'appointment_confirmed', 'credit_reminder', 'staff_welcome', 'agent_approved', 'agent_rejected', 'business_wallet_topup', 'refund_completed', 'payout_account_review']
 
 const PAYLOADS = {
   registration_owner: { businessName: 'HealthPlus Pharmacy', ownerName: 'Chidi Okafor' },
@@ -14,6 +14,9 @@ const PAYLOADS = {
   staff_welcome: { fullName: 'Sade', role: 'Pharmacist', businessName: 'HealthPlus', setupLink: 'https://carefindhub.com/setup?token=abc' },
   agent_approved: { agentName: 'Kola', agentEmail: 'kola@agency.ng', referralCode: 'REF-1', city: 'Abuja', area: 'Garki' },
   agent_rejected: { agentName: 'Kemi', reason: 'Incomplete documents' },
+  business_wallet_topup: { businessName: 'Lifeline Pharmacy', amount: '₦5,000.00', reference: 'CF-TOPUP-8H2K', newBalance: '₦15,000.00' },
+  refund_completed: { fullName: 'Tunde Bakare', amount: '₦12,500', reference: 'CF-ORD-7781' },
+  payout_account_review: { fullName: 'Lifeline Pharmacy', outcome: 'verified', bankName: 'GTBank', accountNumber: '******6789' },
 }
 
 describe('CareHub templates — structural guarantees', () => {

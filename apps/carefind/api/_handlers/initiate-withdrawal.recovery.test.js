@@ -35,11 +35,17 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   normalizeAccountName: (n) => String(n).trim().toLowerCase(),
   resolveAccount: async () => ({ accountName: 'Ada Obi' }),
 }))
+vi.mock('../_lib/emailOtp.js', () => ({
+  verifyWithdrawalOtp: vi.fn(async (_s, _u, code) =>
+    (!code || typeof code !== 'string' || !/^\d{6}$/.test(code))
+      ? { error: 'Enter the 6-digit code we emailed you', status: 400 }
+      : { ok: true }),
+}))
 
 import handler from './initiate-withdrawal.js'
 
 const REF = 'cf_wd_0123456789abcdef0123456789abcdef'
-const req = { method: 'POST', body: { amount: 10, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234' } }
+const req = { method: 'POST', body: { amount: 10, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234', otp: '123456' } }
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; r.setHeader = () => {}; return r }
 const calls = (name) => h.rpcCalls.filter(([n]) => n === name)
 const settles = () => calls('settle_withdrawal').map(([, a]) => a)

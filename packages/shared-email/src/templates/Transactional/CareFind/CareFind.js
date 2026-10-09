@@ -232,6 +232,18 @@ export function paymentFailed({ fullName, amount, reference, purpose } = {}) {
   })
 }
 
+export function refundCompleted({ fullName, amount, reference } = {}) {
+  return email({
+    title: 'Your refund is complete',
+    preheader: 'Your refund is on its way back to your payment method.',
+    body: [
+      paragraph(html`${hi(fullName)} your refund has been completed and is on its way back to your original payment method. Depending on your bank, it may take a few days to appear.`),
+      detailsTable([['Amount', amount], ['Reference', reference]]),
+      paragraph('If you have any questions about this refund, reply to this email and our team will help.'),
+    ],
+  })
+}
+
 export function withdrawalRequested({ fullName, amount, reference, bankName, accountNumber } = {}) {
   return email({
     title: 'Withdrawal requested',
@@ -246,10 +258,10 @@ export function withdrawalRequested({ fullName, amount, reference, bankName, acc
 
 export function withdrawalPinOtp({ fullName, code, minutes } = {}) {
   return email({
-    title: 'Your withdrawal PIN code',
-    preheader: 'Use this code to set or change your withdrawal PIN.',
+    title: 'Your withdrawal security code',
+    preheader: 'Use this one-time code to continue.',
     body: [
-      paragraph(html`${hi(fullName)} here is the one-time code for your withdrawal PIN:`),
+      paragraph(html`${hi(fullName)} here is the one-time code you asked for:`),
       paragraph(html`<strong style="font-size:20px;letter-spacing:2px">${code}</strong>`),
       notice('warn', `This code expires in ${minutes || 10} minutes. Never share it.`),
       smallPrint(IGNORE),
@@ -290,6 +302,22 @@ export function walletNeedsAttention({ fullName, heldCoins, withdrawableCoins } 
       paragraph(html`${hi(fullName)} part of your CareCoin balance cannot be traced to a confirmed payment, so it is on hold and cannot be withdrawn right now.`),
       detailsTable([['On hold', heldCoins], ['Available to withdraw', withdrawableCoins]]),
       paragraph('No money has left your wallet. If you believe this is wrong, reply to this email and our finance team will review it.'),
+    ],
+  })
+}
+
+// An admin reviewed the owner's saved payout account (approve or reject).
+export function payoutAccountReview({ fullName, outcome, bankName, accountNumber } = {}) {
+  const verified = outcome === 'verified'
+  return email({
+    title: verified ? 'Your payout account is verified' : 'Your payout account was not verified',
+    preheader: verified ? 'Your payout account passed review.' : 'Your payout account did not pass review.',
+    body: [
+      paragraph(verified
+        ? html`${hi(fullName)} your payout account has been reviewed and verified. Future withdrawals can be sent to it.`
+        : html`${hi(fullName)} your payout account could not be verified. You can update your payout details and submit them for review again.`),
+      detailsTable([['Bank', bankName], ['Account', accountNumber]]),
+      paragraph('If you believe this is wrong, reply to this email and our team will help.'),
     ],
   })
 }

@@ -11,6 +11,7 @@ import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Inp, Toast, useToast, CardSkeleton, Modal, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
+import WithdrawalOtpField from './WithdrawalOtpField.jsx'
 import { useWalletData, useTransactions, useBanks, keys } from '../../hooks/queries.js'
 
 const WITHDRAWAL_FEE_RATE = 0.2
@@ -52,12 +53,14 @@ function Wallet() {
   const [wdAccountNumber, setWdAccountNumber] = useState('')
   const [wdAccountName, setWdAccountName] = useState('')
   const [wdPin, setWdPin] = useState('')
+  const [wdOtp, setWdOtp] = useState('')
   const [wdSubmitting, setWdSubmitting] = useState(false)
   const [wdAccountResolving, setWdAccountResolving] = useState(false)
   const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
   const [newPin, setNewPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
+  const [pinOtp, setPinOtp] = useState('')
   const [pinSubmitting, setPinSubmitting] = useState(false)
   const [pinError, setPinError] = useState('')
 
@@ -177,6 +180,10 @@ function Wallet() {
       showToast("You don't have enough CareCoins for that amount.", { type: 'error' })
       return
     }
+    if (!/^\d{6}$/.test(wdOtp)) {
+      showToast('Enter the 6-digit code we emailed you.', { type: 'error' })
+      return
+    }
     setWdSubmitting(true)
 
     try {
@@ -193,6 +200,7 @@ function Wallet() {
           accountNumber: wdAccountNumber,
           accountName: wdAccountName,
           pin: wdPin,
+          otp: wdOtp,
         }),
       })
       const data = await response.json()
@@ -210,7 +218,7 @@ function Wallet() {
         return
       }
 
-      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdAccountResolved(false)
+      setWdAmount(''); setWdBankCode(''); setWdBankName(''); setWdAccountNumber(''); setWdAccountName(''); setWdPin(''); setWdOtp(''); setWdAccountResolved(false)
       qc.invalidateQueries({ queryKey: keys.walletData(user.id) })
       qc.invalidateQueries({ queryKey: keys.walletBalance(user.id) })
       qc.invalidateQueries({ queryKey: keys.transactions(user.id) })
@@ -226,6 +234,7 @@ function Wallet() {
     setPinError('')
     if (!/^\d{4,6}$/.test(newPin)) { setPinError('PIN must be 4-6 digits.'); return }
     if (newPin !== confirmPin) { setPinError('PINs do not match.'); return }
+    if (!/^\d{6}$/.test(pinOtp)) { setPinError('Request a code and enter the 6-digit code we emailed you.'); return }
     setPinSubmitting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -233,7 +242,7 @@ function Wallet() {
       const response = await fetch('/api/withdrawal-pin/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ pin: newPin }),
+        body: JSON.stringify({ pin: newPin, otp: pinOtp }),
       })
       const data = await response.json()
       setPinSubmitting(false)
@@ -241,7 +250,7 @@ function Wallet() {
         setPinError(data.error || 'Could not set your withdrawal PIN.')
         return
       }
-      setNewPin(''); setConfirmPin(''); setPinModalOpen(false)
+      setNewPin(''); setConfirmPin(''); setPinOtp(''); setPinModalOpen(false)
       showToast('Withdrawal PIN set.', { type: 'success' })
     } catch (err) {
       setPinSubmitting(false)
@@ -513,13 +522,14 @@ function Wallet() {
                   autoComplete="current-password"
                   required
                 />
+                <WithdrawalOtpField action="withdrawal" value={wdOtp} onChange={setWdOtp} disabled={wdSubmitting} />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin || !/^\d{6}$/.test(wdOtp)}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin || !/^\d{6}$/.test(wdOtp)) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}
@@ -541,7 +551,7 @@ function Wallet() {
           <GhostBtn onClick={() => setPinModalOpen(false)} style={{ flex: 1 }}>Cancel</GhostBtn>
           <TealBtn
             onClick={handleSetPin}
-            disabled={pinSubmitting || !newPin || !confirmPin || newPin !== confirmPin || !/^\d{4,6}$/.test(newPin)}
+            disabled={pinSubmitting || !newPin || !confirmPin || newPin !== confirmPin || !/^\d{4,6}$/.test(newPin) || !/^\d{6}$/.test(pinOtp)}
             style={{ flex: 1 }}
           >
             {pinSubmitting ? 'Saving…' : 'Save PIN'}
@@ -555,6 +565,7 @@ function Wallet() {
           </p>
           <Inp label="New PIN" type="password" inputMode="numeric" pattern="[0-9]{4,6}" maxLength={6} value={newPin} onChange={setNewPin} placeholder="4-6 digits" autoComplete="new-password" required />
           <Inp label="Confirm PIN" type="password" inputMode="numeric" pattern="[0-9]{4,6}" maxLength={6} value={confirmPin} onChange={setConfirmPin} placeholder="Repeat your PIN" autoComplete="new-password" required />
+          <WithdrawalOtpField action="set_pin" value={pinOtp} onChange={setPinOtp} disabled={pinSubmitting} />
           {pinError && <p role="alert" style={{ margin: 0, fontSize: 12, color: theme.danger, fontWeight: 700 }}>{pinError}</p>}
         </div>
       </Modal>

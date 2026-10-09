@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { enqueue as enqueueOutbox, processBatch as flushOutbox } from '../_lib/emailService.js'
 import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
+import { verifyWithdrawalOtp } from '../_lib/emailOtp.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  const { amount, bankCode, bankName, accountNumber, accountName, pin } = req.body
+  const { amount, bankCode, bankName, accountNumber, accountName, pin, otp } = req.body
   const coins = Number(amount)
 
   if (!Number.isInteger(coins) || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
@@ -30,9 +31,10 @@ export default async function handler(req, res) {
   const trustLevel = trust?.trust_level || 'new'
   const requiredAuth = getRequiredAuth(trustLevel, coins)
 
-  // The PIN is the only second factor. Device trust used to stand in for it, but the client's
-  // `deviceToken` was never compared with a stored device, so any non-empty string passed
-  // (financial audit F-02). Re-introduce it only with a server-stored, hashed, expiring token.
+  // The PIN is the second factor; the email OTP below is the third. Device trust used to stand in
+  // for the PIN, but the client's `deviceToken` was never compared with a stored device, so any
+  // non-empty string passed (financial audit F-02). Re-introduce it only with a server-stored,
+  // hashed, expiring token.
   const hasPin = !!pin
 
   if (!hasPin) {
@@ -74,6 +76,12 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Incorrect withdrawal PIN.' })
     }
   }
+
+  // Third factor (E): a fresh email OTP, verified LAST - after the PIN and before the account is
+  // resolved or any money is reserved. The PIN alone is a static secret a shoulder-surfer can read;
+  // the code proves the person is also in control of the account's email.
+  const otpCheck = await verifyWithdrawalOtp(supabase, user.id, otp)
+  if (otpCheck.error) return res.status(otpCheck.status).json({ error: otpCheck.error })
 
   // Verify the typed account name actually belongs to the account number BEFORE any money is reserved.
   // If Paystack reports the bank does not support / cannot resolve the account, allow the manually-entered

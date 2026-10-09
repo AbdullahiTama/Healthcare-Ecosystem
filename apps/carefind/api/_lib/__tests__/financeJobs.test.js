@@ -1,8 +1,9 @@
 // The cron endpoint's financial work: named steps with intervals, one shared deadline, one failing step never blocks the others.
-const h = vi.hoisted(() => ({ sweepWithdrawals: vi.fn(), runRefundSweeps: vi.fn(), runFinanceReconciliation: vi.fn(), provider: { name: 'paystack' } }))
+const h = vi.hoisted(() => ({ sweepWithdrawals: vi.fn(), runRefundSweeps: vi.fn(), runFinanceReconciliation: vi.fn(), provider: { name: 'paystack' }, refundApplied: [] }))
 vi.mock('../withdrawalRecovery.js', () => ({ sweepWithdrawals: h.sweepWithdrawals }))
 vi.mock('../payments.js', () => ({ getPaystackProvider: () => h.provider, paymentLogger: { info() {}, warn() {}, error() {} } }))
 vi.mock('../financeReconcile.js', () => ({ runFinanceReconciliation: h.runFinanceReconciliation }))
+vi.mock('../refundEffects.js', () => ({ applyRefundResult: async (_s, result) => { h.refundApplied.push(result) } }))
 vi.mock('@care-ecosystem/shared-payments', async (importOriginal) => ({ ...(await importOriginal()), runRefundSweeps: h.runRefundSweeps }))
 
 import { createBudget } from '@care-ecosystem/shared-payments'
@@ -62,6 +63,14 @@ describe('runFinanceJobs', () => {
     expect(h.sweepWithdrawals).toHaveBeenCalledWith(expect.anything(), { deadline: budget.deadline })
     expect(h.runRefundSweeps.mock.calls[0][2]).toMatchObject({ deadline: budget.deadline })
     expect(h.runFinanceReconciliation).toHaveBeenCalledWith(expect.anything(), { deadline: budget.deadline })
+  })
+
+  it('hands the refund effect seam to the refund sweep so a completed refund can email the payer', async () => {
+    await runFinanceJobs(client(), { budget: createBudget(50_000) })
+    const opts = h.runRefundSweeps.mock.calls[0][2]
+    expect(typeof opts.onSettled).toBe('function')
+    await opts.onSettled({ result: 'completed', id: 'rf1' })
+    expect(h.refundApplied).toEqual([{ result: 'completed', id: 'rf1' }])
   })
 
   it('a failing step is reported and the others still run', async () => {

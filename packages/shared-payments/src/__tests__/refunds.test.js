@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { ProviderError } from '../errors.js'
-import { requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, REFUND_GRACE_MS } from '../refunds.js'
+import { requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps, REFUND_GRACE_MS } from '../refunds.js'
 
 const NOW = Date.parse('2026-10-05T12:00:00Z')
 const old = new Date(NOW - 30 * 60 * 1000).toISOString()
@@ -180,6 +180,86 @@ describe('refundUnappliedPayments', () => {
     let i = 0
     const s = fake({ request_refund: () => (i++ === 0 ? { error: { message: 'x' } } : { outcome: 'already_requested' }) }, { payment_intents: [{ id: 'a', reference: 'r' }, { id: 'b', reference: 'r' }] })
     expect(await refundUnappliedPayments(s, provider, { logger: quiet })).toMatchObject({ checked: 2, errors: 1, alreadyRequested: 1 })
+  })
+})
+
+describe('onSettled: the seam that emails the payer after a refund flips to completed', () => {
+  const row = (over = {}) => ({ id: 'rf1', reference: 'rf_a', status: 'requested', kind: 'card', amount_kobo: 100000, provider_transaction_reference: 'chapp_1_abcdefgh', created_at: old, ...over })
+
+  it('executeCardRefund fires it exactly when the settle flips completed - not on already_completed, failed, or processing', async () => {
+    const fired = []
+    const onSettled = vi.fn((r) => { fired.push(r) })
+    const provider = { refundPayment: vi.fn(async ({ ...o }) => ({ providerRefundId: '9', status: 'completed', amountKobo: 1000000 })) }
+
+    await executeCardRefund(fake({ settle_refund: { result: 'completed' } }), provider, refund, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(onSettled.mock.calls[0][0]).toMatchObject({ result: 'completed' })
+
+    await executeCardRefund(fake({ settle_refund: { result: 'already_completed' } }), provider, refund, { logger: quiet, onSettled })
+    await executeCardRefund(fake({ settle_refund: { result: 'failed' } }), { refundPayment: async () => ({ providerRefundId: '9', status: 'failed' }) }, refund, { logger: quiet, onSettled })
+    await executeCardRefund(fake(), { refundPayment: async () => ({ providerRefundId: '9', status: 'processing' }) }, refund, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('executeCardRefund: a throwing onSettled is logged and never fails the settle that already committed', async () => {
+    const logger = { error: vi.fn(), warn() {} }
+    const r = await executeCardRefund(fake({ settle_refund: { result: 'completed' } }),
+      { refundPayment: async () => ({ providerRefundId: '9', status: 'completed', amountKobo: 1000000 }) },
+      refund, { logger, onSettled: async () => { throw new Error('mailer down') } })
+    expect(r.state).toBe('completed')
+    expect(logger.error).toHaveBeenCalledWith('refund.on_settled_failed', expect.objectContaining({ message: 'mailer down' }))
+  })
+
+  it('settleRefundWebhook fires it only when refund.processed flips the row completed', async () => {
+    const onSettled = vi.fn()
+    const event = { event: 'refund.processed', data: { id: 77, transaction_reference: 'chapp_1_abcdefgh', amount: 1000000 } }
+    await settleRefundWebhook(fake({ settle_refund: { result: 'completed' } }), event, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    await settleRefundWebhook(fake({ settle_refund: { result: 'already_completed' } }), event, { logger: quiet, onSettled })
+    await settleRefundWebhook(fake({ settle_refund: { result: 'failed' } }), { event: 'refund.failed', data: { transaction_reference: 'chapp_1_abcdefgh' } }, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('sweepRefunds fires it for the direct settle AND for a re-send that completes in this pass; a provider still thinking does not fire', async () => {
+    const onSettled = vi.fn()
+    const direct = { verifyRefund: vi.fn(async () => ({ providerRefundId: '1', status: 'completed', amountKobo: 100000 })), refundPayment: vi.fn() }
+    await sweepRefunds(fake({ settle_refund: { result: 'completed' } }, { refunds: [row()] }), direct, { now: NOW, logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+
+    const resend = { verifyRefund: vi.fn(async () => { throw perr({ code: 'not_found' }) }), refundPayment: vi.fn(async () => ({ providerRefundId: '6', status: 'completed', amountKobo: 100000 })) }
+    await sweepRefunds(fake({ settle_refund: { result: 'completed' } }, { refunds: [row()] }), resend, { now: NOW, logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(2)
+
+    const thinking = { verifyRefund: vi.fn(async () => ({ providerRefundId: '1', status: 'processing', amountKobo: 100000 })), refundPayment: vi.fn() }
+    await sweepRefunds(fake({ mark_refund_processing: 'ok' }, { refunds: [row()] }), thinking, { now: NOW, logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(2)
+  })
+
+  it('refundCancelledAppointments forwards it into the card refund; a refund that was already completed at request time does not re-fire', async () => {
+    const onSettled = vi.fn()
+    const provider = { refundPayment: vi.fn(async () => ({ providerRefundId: '1', status: 'completed', amountKobo: 5 })) }
+    const answers = [
+      { outcome: 'completed', id: 'r1' },
+      { outcome: 'requested', id: 'r2', reference: 'rf_2', amount_kobo: 5, provider_transaction_reference: 'chapp_1_abcdefgh' },
+    ]
+    let i = 0
+    const s = fake({ request_refund: () => answers[i++], mark_refund_processing: 'ok', settle_refund: { result: 'completed', id: 'r2' } }, { appointments: [{ id: 'a1' }, { id: 'a2' }] })
+    await refundCancelledAppointments(s, provider, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(onSettled.mock.calls[0][0]).toMatchObject({ id: 'r2', result: 'completed' })
+  })
+
+  it('refundUnappliedPayments forwards it; runRefundSweeps passes it to every job', async () => {
+    const onSettled = vi.fn()
+    const provider = { verifyRefund: vi.fn(), refundPayment: vi.fn(async () => ({ providerRefundId: '1', status: 'completed', amountKobo: 5 })) }
+    let i = 0
+    const s = fake({
+      request_refund: () => (i++ === 0 ? { outcome: 'requested', id: 'rf1', reference: 'rf_1', amount_kobo: 5, provider_transaction_reference: 'chapp_1_abcdefgh' } : { outcome: 'already_requested', id: 'rf2' }),
+      mark_refund_processing: 'ok', settle_refund: { result: 'completed', id: 'rf1' },
+    }, { payment_intents: [{ id: 'i1', reference: 'r1' }, { id: 'i2', reference: 'r2' }] })
+    await runRefundSweeps(s, provider, { logger: quiet, onSettled })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(onSettled.mock.calls[0][0]).toMatchObject({ id: 'rf1', result: 'completed' })
   })
 })
 

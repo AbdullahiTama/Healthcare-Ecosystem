@@ -2,7 +2,7 @@
 import crypto from 'crypto'
 import { EventEmitter } from 'events'
 
-const h = vi.hoisted(() => ({ rpcCalls: [], touched: [], rpcImpl: null, updateRows: null }))
+const h = vi.hoisted(() => ({ rpcCalls: [], touched: [], rpcImpl: null, updateRows: null, businessApplied: [], refundApplied: [] }))
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
@@ -22,6 +22,8 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }))
 vi.mock('../_lib/paystack.js', () => ({ getPaystackSecretKey: () => 'sk_test_secret' }))
+vi.mock('../_lib/businessWithdrawalEffects.js', () => ({ applyBusinessWithdrawalResult: async (_s, result) => { h.businessApplied.push(result) } }))
+vi.mock('../_lib/refundEffects.js', () => ({ applyRefundResult: async (_s, result) => { h.refundApplied.push(result) } }))
 vi.mock('../_lib/paystackCredit.js', () => ({ creditTopup: vi.fn() }))
 vi.mock('../_lib/consultationSettle.js', () => ({ settleConsultationPayment: vi.fn() }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
@@ -53,6 +55,8 @@ const rpc = (name) => h.rpcCalls.find(([n]) => n === name)?.[1]
 beforeEach(() => {
   h.rpcCalls.length = 0
   h.touched.length = 0
+  h.businessApplied.length = 0
+  h.refundApplied.length = 0
   h.maybeSingle = {}
   h.updateRows = null
   h.rpcImpl = async () => ({ data: [{ already_processed: true }], error: null })
@@ -72,6 +76,7 @@ describe('transfer webhooks settle through the withdrawal engine', () => {
     await post({ event: 'transfer.success', data: { reference: 'cf_wd_1', amount: 160000 } })
     expect(settles()[0]).toEqual(['settle_withdrawal', { p_outcome: 'success', p_reference: 'cf_wd_1', p_request_id: null, p_amount_kobo: 160000, p_detail: 'transfer.success' }])
     expect(trust()).toEqual([{ p_user_id: 'u1', p_amount: 10, p_status: 'completed' }])
+    expect(h.businessApplied).toEqual([]) // CareHub's effect never runs for a CareFind request
   })
 
   it('a redelivery (already completed) records nothing', async () => {
@@ -108,7 +113,7 @@ describe('transfer webhooks settle through the withdrawal engine', () => {
     expect(trust()).toHaveLength(0)
   })
 
-  it('a CareHub business reference is settled by the business function and runs no CareFind effects', async () => {
+  it('a CareHub business reference is settled by the business function and runs only CareHub effects', async () => {
     h.rpcImpl = async (name) => (name === 'settle_withdrawal' ? { data: { result: 'not_found' }, error: null }
       : name === 'settle_business_withdrawal' ? { data: { result: 'refunded', id: 'b1', business_id: 'biz', amount: 500000, from_status: 'processing', reference: 'ch_wd_1' }, error: null }
       : { data: null, error: null })
@@ -116,6 +121,8 @@ describe('transfer webhooks settle through the withdrawal engine', () => {
     expect(res.statusCode).toBe(200)
     expect(settles().map(([n]) => n)).toEqual(['settle_withdrawal', 'settle_business_withdrawal'])
     expect(trust()).toHaveLength(0)
+    expect(h.businessApplied).toHaveLength(1)
+    expect(h.businessApplied[0]).toMatchObject({ result: 'refunded', id: 'b1', reference: 'ch_wd_1' })
   })
 
   it('a reference nobody knows is acknowledged (200) and changes nothing', async () => {
@@ -137,6 +144,16 @@ describe('refund webhooks settle through the refund engine', () => {
     const res = await post(ev('refund.processed'))
     expect(res.statusCode).toBe(200)
     expect(settles()[0]).toEqual({ p_outcome: 'processed', p_refund_id: null, p_reference: null, p_provider_refund_id: '77', p_transaction_reference: 'chapp_1_abcdefgh', p_amount_kobo: 1000000, p_detail: 'refund.processed' })
+    expect(h.refundApplied).toHaveLength(1)
+    expect(h.refundApplied[0]).toMatchObject({ result: 'completed', id: 'rf1', reference: 'rf_1' })
+  })
+
+  it('only THIS delivery flipping the refund completed notifies the payer; replays and failures notify nobody', async () => {
+    for (const result of ['already_completed', 'failed', 'not_found']) {
+      h.rpcImpl = answer(result)
+      await post(ev('refund.processed'))
+    }
+    expect(h.refundApplied).toEqual([])
   })
 
   it('refund.failed fails it (the business is restored by the database); pending/processing only mark it in flight', async () => {

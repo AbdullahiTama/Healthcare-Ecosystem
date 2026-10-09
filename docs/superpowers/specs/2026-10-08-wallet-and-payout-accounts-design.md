@@ -1,7 +1,7 @@
 # Wallet Top-Up, Ecosystem Spend, Saved Payout Accounts & PIN-OTP — Design
 
 Date: 2026-10-08
-Status: DRAFT for owner review (spec self-reviewed 2026-10-08)
+Status: DRAFT for owner review (spec self-reviewed 2026-10-08). Implemented and fully tested 2026-10-09 (workstream items A–E); not deployed to production.
 Related: `docs/architecture/{Withdrawal-Engine,CareCoin-Wallet,CareHub-Payment-Flows,Refund-Engine}.md`, `planning/financial-system/00-master-plan.md` (Phase 16 candidate)
 
 ## 1. Goals
@@ -9,7 +9,7 @@ Related: `docs/architecture/{Withdrawal-Engine,CareCoin-Wallet,CareHub-Payment-F
 1. Businesses on CareHub and users on CareFind can **top up** their wallets by card (Paystack).
 2. Both sides can **spend wallet balance inside the ecosystem**: CareFind bookings / subscriptions / consultations / shop orders; CareHub plan renewals / per-appointment platform fees.
 3. Users and businesses can **save multiple verified payout accounts**, one marked default.
-4. Withdrawal **PIN set/change is gated by an emailed OTP**; change additionally needs the current PIN.
+4. Withdrawal **PIN set/change and every withdrawal initiation are gated by an emailed OTP** (PIN checked first, then the 6-digit code); changing a PIN additionally needs the current PIN.
 5. Verification today is **free**: Paystack account-name resolution + BVN/NIN format validation + storage for later provider review. No billed KYC API yet (see §6).
 6. Every CareCoin that is withdrawable must carry **provenance**: traceable to a settled payment or an allowed internal source, never a client-supplied number (see §5).
 
@@ -17,12 +17,12 @@ Related: `docs/architecture/{Withdrawal-Engine,CareCoin-Wallet,CareHub-Payment-F
 
 | Capability | Today |
 |---|---|
-| Bank directory (UBA, Zenith, GTBank, Sterling, Jaiz, PalmPay, OPay, Moniepoint MFB…) | `/api/banks` — Paystack paginated list merged with curated majors (`apps/carefind/api/_handlers/banks.js:10`) |
+| Bank directory (thirty banks: the owner's ten — Zenith, OPay, PalmPay, FirstBank, UBA, Jaiz, Diamond, Kuda, Sterling, GTBank — plus tier-1 commercial and digital banks added 2026-10-08) | `/api/banks` — fixed list of thirty, Paystack codes, in `packages/shared-payments/src/banks.js` (owner decision; previously Paystack's full paginated list) |
 | Account-name resolution | `/api/resolve-account` via Paystack (`apps/carefind/api/_lib/paystackTransfer.js:67`) |
 | CareFind CareCoin wallet | integer balance, append-only `coin_ledger`, posting primitive `_post_coin_entry`, card top-up path, gift/booking/subscription/consultation spend |
 | Business wallets (CareHub) | `business_wallets` (held/available kobo), credited from card settlements, withdrawn via `create_business_withdrawal` |
 | Withdrawal engine | atomic reservation, rolling caps, states `reserved→processing→completed→reversed→failed→refunded`, `/api/withdrawal-pin/{status,set}`, `initiate-business-withdrawal` |
-| Email outbox | shared `finance_alert` / email cron — OTP delivery reuses it |
+| Email outbox | shared `finance_alert` / email cron — OTP delivery reuses it. Added with this workstream: CareHub withdrawal settled/failed (`withdrawal_completed`/`withdrawal_failed`), business wallet top-up (`business_wallet_topup`), refund completed (`refund_completed`), payout-account review outcome (`payout_account_review`) |
 
 ## 3. Payout accounts (new)
 
@@ -38,13 +38,18 @@ Rules:
 * Editing bank/account number resets the row to `pending_review` and keeps the old default until re-verified.
 * Shared across CareFind and CareHub by owner (one person, one set of saved accounts — same as the one-PIN-per-person rule).
 * Replacing details requires the current PIN as well, so a stolen session alone cannot redirect withdrawals.
+* Admin approve/fail in the admin console emails the owner (`payout_account_review`: verified / not verified), best-effort through the outbox (`admin-auth.js` fire-and-forget after the audit insert; an email failure never fails the review action).
 
 ## 4. PIN + email OTP
 
-* `POST /api/withdrawal-pin/otp/request` — rate-limited (3/hour), emails a 6-digit code to the confirmed account email (shared outbox), stores hash + 10-minute expiry + attempt counter server-side.
+* `POST /api/withdrawal-pin-otp` — body `{ action: 'set_pin' | 'withdrawal' }` (absent action defaults to `set_pin`; unknown action → 400). Rate-limited 3/hour **shared across both actions** (one `withdrawal_email_otps` purpose), emails a 6-digit code to the confirmed account email via the shared outbox (enqueue + inline `processBatch()` flush; the cron is the backstop), stores hash + 10-minute expiry. Verification is single-use, 5 attempts, then burn.
+* Wording is **action-neutral** so one template serves both actions: title "Your withdrawal security code", subjects `CareFind: your withdrawal security code` / `CareHub: your withdrawal security code`.
 * `POST /api/withdrawal-pin/set` — body `{ pin, otp }`; if a PIN already exists, `currentPin` is also required; forgot-PIN = OTP only.
+* **Every withdrawal initiation** — `/api/initiate-withdrawal` (CareFind) and `/api/initiate-business-withdrawal` (CareHub) — verifies `otp` server-side **immediately after the PIN check** and before any reservation work. Reconciliation/sweep paths never require an OTP (they are not user-initiated).
+* Both apps render a `WithdrawalOtpField` in the withdrawal form (`action: 'withdrawal'`) and in the set-PIN modal/panel (`action: 'set_pin'`); the submit button stays disabled until the 6-digit code is entered. Before this workstream the set-PIN UI had no code input although the server already required one — that broken flow is fixed here.
 * Effects: CareFind's set endpoint gains the current-PIN check (closes F-32); CareHub's forgot-PIN path is now OTP instead of "not possible".
-* OTP verification is single-use, 5 attempts, then burn.
+* Accepted trade-off: the shared 3/hour rate limit caps a user at roughly 3 withdrawals per hour (a single OTP purpose serves set-PIN and withdrawal).
+* OTP and PIN failures are attempt-capped and logged.
 
 ## 5. Wallet spend & provenance hardening
 
@@ -72,7 +77,7 @@ Spend paths (new intent purposes on the existing settlement engine, same invaria
 ## 7. Migrations, tests, reconciliation
 
 * New migrations (PGlite-tested, production-shaped fixtures, ACLs asserted): `payout_accounts` + events, OTP table, `paid_by_wallet` intent purposes + provenance check in the reservation, `wallet_topup` for businesses, provenance reconcile (`reconcile_coin_provenance()`).
-* Concurrency tests for wallet debits (overlapping spends, cap races), provenance-block tests (a forged credit cannot withdraw), OTP rate-limit/lockout tests, default-flip-requires-PIN+OTP tests.
+* Concurrency tests for wallet debits (overlapping spends, cap races), provenance-block tests (a forged credit cannot withdraw), OTP rate-limit/lockout tests, OTP-required-on-initiation tests in both apps (handler red→green plus UI component tests), default-flip-requires-PIN+OTP tests.
 * Reconciliation findings integrated with `run_db_reconciliation()`; any quarantined coin or review-stuck account appears as a finding.
 
 ## 8. Open decisions for the owner

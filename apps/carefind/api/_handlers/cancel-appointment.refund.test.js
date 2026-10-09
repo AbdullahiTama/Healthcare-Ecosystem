@@ -2,7 +2,7 @@
 // time, a patient 24h or more ahead; the platform absorbs the provider's fee). Node moves no money: it asks the database for
 // the refund, sends a card refund to Paystack AFTER that request committed, and the cron finishes anything that did not.
 const h = vi.hoisted(() => {
-  const s = { rpcCalls: [], routes: {}, tables: [], appt: null, refundPayment: vi.fn() }
+  const s = { rpcCalls: [], routes: {}, tables: [], appt: null, refundPayment: vi.fn(), refundApplied: [] }
   const builderFor = (table) => {
     const b = {
       select: () => b, eq: () => b,
@@ -22,6 +22,7 @@ vi.mock('../_lib/verifyUser.js', () => ({ verifyUser: async () => ({ id: 'owner-
 vi.mock('../_lib/businessOwnership.js', () => ({ userOwnsBusiness: async () => true }))
 vi.mock('../_lib/emailService.js', () => ({ enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) }))
 vi.mock('../_lib/payments.js', () => ({ getPaystackProvider: () => ({ refundPayment: h.refundPayment }), paymentLogger: { info() {}, warn() {}, error() {} } }))
+vi.mock('../_lib/refundEffects.js', () => ({ applyRefundResult: async (_s, result) => { h.refundApplied.push(result) } }))
 
 import { ProviderError } from '@care-ecosystem/shared-payments'
 import handler from './cancel-appointment.js'
@@ -37,6 +38,7 @@ const rpcs = (n) => h.rpcCalls.filter(([name]) => name === n).map(([, a]) => a)
 beforeEach(() => {
   h.rpcCalls.length = 0
   h.tables.length = 0
+  h.refundApplied.length = 0
   h.routes = { request_refund: requested, mark_refund_processing: { data: 'ok' }, settle_refund: { data: { result: 'completed' } } }
   h.refundPayment.mockReset().mockResolvedValue({ providerRefundId: '77', status: 'processing', amountKobo: 1000000 })
   const d = soon()
@@ -61,9 +63,20 @@ describe('cancel-appointment refunds through the refund engine', () => {
 
   it('the provider confirms at once: the refund is settled as processed and reported completed', async () => {
     h.refundPayment.mockResolvedValue({ providerRefundId: '77', status: 'completed', amountKobo: 1000000 })
+    h.routes.settle_refund = { data: { result: 'completed', id: 'rf1', entity_type: 'appointment', entity_id: 'a1', amount_kobo: 1000000 } }
     const res = await call()
     expect(rpcs('settle_refund')[0]).toMatchObject({ p_outcome: 'processed', p_refund_id: 'rf1', p_amount_kobo: 1000000 })
     expect(res.body.refund).toEqual({ status: 'completed' })
+    expect(h.refundApplied).toHaveLength(1)
+    expect(h.refundApplied[0]).toMatchObject({ result: 'completed', id: 'rf1' })
+  })
+
+  it('nobody is notified while the refund is only in flight, and a CareCoin refund (completed in the database) notifies nobody', async () => {
+    await call()
+    expect(h.refundApplied).toEqual([])
+    h.routes.request_refund = { data: { outcome: 'completed', id: 'rf2', kind: 'carecoin', coins: 5 } }
+    await call()
+    expect(h.refundApplied).toEqual([])
   })
 
   it('a CareCoin booking is refunded entirely inside the database: Paystack is never called', async () => {

@@ -2,6 +2,8 @@
 
 Status: audit and runbook written 2026-10-06. This phase changed no code and no database object; it checked what production actually looks like and what a go-live needs. Findings are in section 1; the deploy runbook, rollback, monitoring and owner decisions follow.
 
+Update 2026-10-09: the wallet/PIN-OTP design workstream (`docs/superpowers/specs/2026-10-08-wallet-and-payout-accounts-design.md`) is implemented and fully tested — shared-email 328, shared-payments 372, carefind 2,383, carehub 1,298 tests green (two carefind timeouts under load pass in isolation) — but **not deployed**; every row below still describes production. It adds one availability dependency on section 2: once deployed, every withdrawal requires an emailed OTP, delivered by `RESEND_API_KEY`/`RESEND_FROM_EMAIL` through an inline outbox flush at request time, with the (currently broken) cron from 1.1 as backstop — if both fail, withdrawals fail closed until mail flows.
+
 ## 1. What production looks like today (read from the live database)
 
 | Check | Result |
@@ -24,7 +26,7 @@ The function `dispatch_email_outbox_cron` is correct: it refuses to run, loudly,
 * `email_outbox_cron_carehub_url` and `email_outbox_cron_carefind_url`: the full URL of each app's `/api/cron/process-email-outbox`
 * `email_outbox_cron_secret`: must equal the apps' `CRON_SECRET`
 
-Consequence today: no queued email is sent by either app (transactional mail, plan/payment notices, and the Phase 11 `finance_alert` mail for critical findings), and the finance steps that ride on the same cron (webhook replay, open-payment sweep, vendor credit release, reconciliation, alerting) never run. Because the Phase 04-14 code is not deployed, the deployed endpoint is the old one: pointing the cron at it now would start draining email but would not run the finance steps. **So the order matters (section 2).** Setting the secrets is an owner action (it needs the production URLs and the secret value); I did not touch Vault.
+Consequence today: no queued email is sent by either app (transactional mail, plan/payment notices, and the Phase 11 `finance_alert` mail for critical findings), and the finance steps that ride on the same cron (webhook replay, open-payment sweep, vendor credit release, reconciliation, alerting) never run. Because the Phase 04-14 code is not deployed, the deployed endpoint is the old one: pointing the cron at it now would start draining email but would not run the finance steps. **So the order matters (section 2).** Setting the secrets is an owner action (it needs the production URLs and the secret value); I did not touch Vault. Once the 2026-10-09 wallet workstream deploys, this cron is also the backstop for withdrawal OTP delivery (see the status note): the primary path is the inline flush on each request, so `RESEND_API_KEY`/`RESEND_FROM_EMAIL` become withdrawal availability dependencies, not just notification ones.
 
 ### 1.2 Security advisor summary (after migration 19)
 

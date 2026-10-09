@@ -2,16 +2,17 @@ import { authClient } from '../../lib/authClient'
 
 // One place for the business-withdrawal request, shared by the Wallet and Appointments screens (they used to carry
 // two copies of the fetch). The server decides everything that matters (the bank account name is verified, the
-// reference and the limits are the database's); the client sends only what the owner typed, including the PIN.
+// reference and the limits are the database's); the client sends only what the owner typed, including the PIN
+// and the email OTP that the server verifies after the PIN.
 // -> { ok, data, sessionExpired?, networkError? }
-export async function startBusinessWithdrawal({ businessId, amountKobo, bankCode, bankName, accountNumber, accountName, pin }) {
+export async function startBusinessWithdrawal({ businessId, amountKobo, bankCode, bankName, accountNumber, accountName, pin, otp }) {
   const { data: { session } } = await authClient.auth.getSession()
   if (!session) return { ok: false, sessionExpired: true, data: {} }
   try {
     const res = await fetch('/api/initiate-business-withdrawal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ business_id: businessId, amount: amountKobo, bankCode, bankName, accountNumber, accountName, pin }),
+      body: JSON.stringify({ business_id: businessId, amount: amountKobo, bankCode, bankName, accountNumber, accountName, pin, otp }),
     })
     const data = await res.json().catch(() => ({}))
     return { ok: res.ok, data }

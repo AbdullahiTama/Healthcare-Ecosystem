@@ -8,15 +8,23 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-// POST /api/withdrawal-pin-otp — email a 6-digit code used to arm/change the withdrawal PIN.
+// POST /api/withdrawal-pin-otp — email a 6-digit code for the withdrawal step-up. The same
+// action-neutral code serves both flows: arming/changing the withdrawal PIN (action 'set_pin',
+// the default) and confirming a withdrawal (action 'withdrawal'). The action is recorded in the
+// outbox payload for audit; it never changes the wording of the email.
+const OTP_ACTIONS = new Set(['set_pin', 'withdrawal'])
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
   if (!user.email_confirmed_at) {
-    return res.status(403).json({ error: 'Confirm your email before requesting a PIN code' })
+    return res.status(403).json({ error: 'Confirm your email before requesting a code' })
   }
+
+  const action = req.body?.action ?? 'set_pin'
+  if (!OTP_ACTIONS.has(action)) return res.status(400).json({ error: 'Unknown OTP action' })
 
   const result = await requestWithdrawalOtp(supabase, user)
   if (result.error) return res.status(result.status).json({ error: result.error })
@@ -25,8 +33,8 @@ export default async function handler(req, res) {
     await enqueueOutbox({
       templateKey: 'withdrawal_pin_otp',
       toEmail: user.email,
-      payload: { fullName: user.user_metadata?.full_name, code: result.code, minutes: 10 },
-      subject: 'CareFind: your withdrawal PIN code',
+      payload: { fullName: user.user_metadata?.full_name, code: result.code, minutes: 10, action },
+      subject: 'CareFind: your withdrawal security code',
       idempotencyKey: 'pin-otp:' + user.id + ':' + Date.now(),
     })
     flushOutbox().catch((e) => console.error('[withdrawal-pin-otp] outbox flush error:', e))
