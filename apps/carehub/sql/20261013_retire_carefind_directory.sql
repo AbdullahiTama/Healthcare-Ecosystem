@@ -40,14 +40,20 @@ begin
   end loop;
 end $$;
 
--- Children before parents. Their triggers go with them.
-drop table if exists public.business_import_errors;
-drop table if exists public.business_import_batches;
-drop table if exists public.business_verification;
-drop table if exists public.business_sources;
-drop table if exists public.business_directory;
-drop table if exists public.business_subcategories;
-drop table if exists public.business_categories;
+-- ONE statement, so PostgreSQL orders the drops itself. The tables reference each other
+-- (verification -> directory -> categories / subcategories / import_batches, and
+-- import_errors -> import_batches); dropping them one by one in a hand-written order
+-- fails on whichever dependency was missed. Still NO CASCADE: a dependent object outside
+-- this set (a view, another table's foreign key) makes the statement fail instead of being
+-- silently dropped. The tables' triggers go with them.
+drop table if exists
+  public.business_verification,
+  public.business_import_errors,
+  public.business_sources,
+  public.business_directory,
+  public.business_import_batches,
+  public.business_subcategories,
+  public.business_categories;
 
 -- The helper functions that only served those tables.
 drop function if exists public.search_nearby_businesses(double precision, double precision, integer, uuid, text, text, text, text, integer, integer);
