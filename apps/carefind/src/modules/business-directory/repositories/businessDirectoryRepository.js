@@ -212,7 +212,7 @@ export function createBusinessDirectoryRepository({ client = supabase } = {}) {
      * Search businesses by category and location
      */
     async searchByCategory(categoryId, location = {}, radiusKm = 5) {
-      let query = client
+      const query = client
         .from('business_directory')
         .select(`
           *,

@@ -96,7 +96,7 @@ export function createInMemoryClient(seed = {}) {
     const { table, params } = parse(path)
     db[table] = db[table] || []
     if (method === 'GET') {
-      let rows = db[table].filter((r) => matches(r, params))
+      const rows = db[table].filter((r) => matches(r, params))
       // offset/limit ARE applied here — that is what makes the pagedQuery
       // loop in repositories testable. Without them, a getAll that pages
       // until a short page would get every row on every call and never stop.

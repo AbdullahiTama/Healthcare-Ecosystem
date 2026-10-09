@@ -207,7 +207,7 @@ export async function resolveLocation({ mode, state, lga, city, area, coords } =
   }
   // Current / Nearby / default — GPS centred
   if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
-    let label = null
+    const label = null
     // Do not block — attempt reverse but return quickly
     // Caller can use label if resolved; if not, fallback to coordinates string
     return {

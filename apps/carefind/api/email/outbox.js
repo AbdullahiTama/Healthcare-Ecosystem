@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     if (count > 0) {
       // Get status breakdown
       const statuses = ['pending', 'processing', 'sent', 'failed', 'bounced', 'complained', 'dead']
-      let statusBreakdown = {}
+      const statusBreakdown = {}
       for (const s of statuses) {
         const { count: c } = await supabase.from('email_outbox').select('*', { count: 'exact' }).eq('status', s)
         statusBreakdown[s] = c || 0

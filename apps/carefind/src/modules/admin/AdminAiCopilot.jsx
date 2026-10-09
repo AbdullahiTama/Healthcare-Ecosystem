@@ -90,7 +90,7 @@ export default function AdminAiCopilot({ isOpen, onClose, currentTab, recentActi
     try {
       // Check if this is a sentiment analysis request — extract post content if referenced
       const isSentiment = /analyze|sentiment|toxic|harassment|spam/i.test(currentQuery)
-      let extra = { currentTab, recentActions: recentActions || [] }
+      const extra = { currentTab, recentActions: recentActions || [] }
 
       if (isSentiment) {
         // Try to extract text from the query (e.g., "analyze this post: <content>")

@@ -89,7 +89,7 @@ export function createMoneyRepository({ request = sbFetch } = {}) {
 
     // ── Invoices ─────────────────────────────────────────────────────────
     async getInvoices(businessId, { limit = 20 } = {}) {
-      let q = `invoices?business_id=eq.${businessId}&order=created_at.desc&limit=${limit}&select=*`
+      const q = `invoices?business_id=eq.${businessId}&order=created_at.desc&limit=${limit}&select=*`
       return request(q)
     },
     async getAllInvoices({ business_id, type, limit = 50 } = {}) {

@@ -131,7 +131,6 @@ export default function DashboardHome({ brand, products, role, perms }) {
       }
     }
     raiseAlerts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, brand?.id, loading, products, allSales])
 
   const attentionCount = outCount + lowCount + creditSales.length + (showApptItem ? 1 : 0)

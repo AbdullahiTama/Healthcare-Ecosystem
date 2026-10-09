@@ -343,7 +343,7 @@ export async function discoverFacilities(params = {}) {
   const boundary = resolved.boundary || null
 
   // 2. Fetch sources (partition large areas per provider limits inside fetchSources)
-  let rawSources = await fetchSources({ centre, boundary, state: normalizeState(state) || resolved.state, lga: lga || resolved.lga, city: city || area || resolved.city, category, keyword, businessId, mode })
+  const rawSources = await fetchSources({ centre, boundary, state: normalizeState(state) || resolved.state, lga: lga || resolved.lga, city: city || area || resolved.city, category, keyword, businessId, mode })
 
   // For Nigeria-wide mode without boundary, partition state-by-state if we got limited results
   // The initial fetchSources for nigeria was single; if pageSize suggests we need more, fetch per state chunk

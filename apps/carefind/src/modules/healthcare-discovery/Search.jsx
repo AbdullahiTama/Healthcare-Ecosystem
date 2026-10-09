@@ -388,7 +388,11 @@ function Search() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px 6px', borderBottom: `1px solid ${theme.border}` }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: theme.textLight, textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent</span>
-              <button onClick={() => { setRecentSearches([]); try { localStorage.removeItem(RECENT_KEY) } catch {}; setShowRecent(false) }} style={{ fontSize: 11, color: theme.danger, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Clear all</button>
+              <button onClick={() => {
+                setRecentSearches([])
+                try { localStorage.removeItem(RECENT_KEY) } catch { /* storage unavailable: nothing to clear */ }
+                setShowRecent(false)
+              }} style={{ fontSize: 11, color: theme.danger, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Clear all</button>
             </div>
             {recentSearches.map((term, i) => (
               <div key={i} role="option" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', borderBottom: i < recentSearches.length - 1 ? `1px solid ${theme.border}` : 'none' }}

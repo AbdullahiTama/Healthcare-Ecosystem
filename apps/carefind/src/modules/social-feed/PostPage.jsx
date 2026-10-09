@@ -147,7 +147,6 @@ export default function PostPage() {
     if (post && !engagement.state.openComments[post.id]) {
       engagement.engagementProps.toggleComments(post.id)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post?.id])
 
   function authorName(p) {
