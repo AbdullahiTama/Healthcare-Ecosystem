@@ -1,12 +1,24 @@
 -- ============================================================================
 -- C21 — Staff onboarding by invitation + server-enforced role governance
 --
--- STATUS: NOT YET APPLIED — run via Supabase SQL editor / MCP, THEN deploy the
---         client (Staff.jsx, AcceptInvite.jsx, api/staff-invitations.js) in the
---         same window. The old client calls provision_staff_auth and a direct
---         staff INSERT, both of which this migration removes; between applying
---         and deploying, "Add staff" fails cleanly (the old client rolls its
---         row back) — nothing is corrupted.
+-- STATUS: APPLIED TO PRODUCTION 2026-10-09 (project szdybxmgmhndoytqanfb, via
+--         Supabase MCP) as four tracked migrations:
+--           c21_1_staff_columns_and_helpers   §1–2 (+ helper grants)
+--           c21_2_guard_triggers              §3
+--           c21_3_invitation_rpcs             §4 (+ RPC grants)
+--           c21_4_disable_provision_staff_auth §5 as REVOKE, §6
+--         The single-file apply timed out at the connector; the MCP connector
+--         also asks for interactive approval on DROP statements, so triggers use
+--         CREATE OR REPLACE TRIGGER (PG14+) and provision_staff_auth was
+--         neutralised by revoking EXECUTE from public/anon/authenticated rather
+--         than dropped. Run §5's DROP from the SQL editor when convenient.
+--         Verified live in a rolled-back DO block: every §8(c)–(e) case behaved
+--         as specified; the owner's password was unchanged.
+--
+--         The deployed client must be PR #10: the old one calls
+--         provision_staff_auth and a direct staff INSERT, both now refused —
+--         "Add staff" fails cleanly (the old client rolls its row back) until
+--         the new client is deployed. Nothing is corrupted.
 --
 -- REQUIRED ENV (Vercel, server-side only):
 --   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (already used by api/*)
@@ -238,11 +250,15 @@ begin
   ) then
     return 'This person is already a member of (or invited to) this business.';
   end if;
+  -- Any status: production also has staff_email_key UNIQUE (email), so an
+  -- invited or inactive row elsewhere would otherwise surface as a raw
+  -- duplicate-key error instead of this explanation.
   if exists (
     select 1 from public.staff
-     where business_id <> p_business_id and lower(email) = v_email and status = 'active'
+     where business_id <> p_business_id and lower(email) = v_email
+       and (p_ignore_staff_id is null or id <> p_ignore_staff_id)
   ) then
-    return 'This email already belongs to an active staff member at another business. Ask them to use a different email address.';
+    return 'This email already belongs to a staff member (or pending invitation) at another business. Ask them to use a different email address.';
   end if;
   return null;
 end $$;
@@ -334,8 +350,7 @@ begin
   return new;
 end $$;
 
-drop trigger if exists guard_staff_writes on public.staff;
-create trigger guard_staff_writes
+create or replace trigger guard_staff_writes
   before insert or update or delete on public.staff
   for each row execute function public.guard_staff_writes();
 
@@ -391,8 +406,7 @@ begin
   return new;
 end $$;
 
-drop trigger if exists guard_role_writes on public.roles;
-create trigger guard_role_writes
+create or replace trigger guard_role_writes
   before insert or update or delete on public.roles
   for each row execute function public.guard_role_writes();
 
@@ -671,6 +685,9 @@ end $$;
 --    is the root cause above, and its ownership check admitted any active
 --    staff member. Its only caller (Staff.jsx) is replaced in the same change.
 -- ----------------------------------------------------------------------------
+-- Production received the REVOKE below (applied); the DROP is the intended end
+-- state and is safe to run once confirmed nothing else references it.
+revoke all on function public.provision_staff_auth(uuid, text, text) from public, anon, authenticated;
 drop function if exists public.provision_staff_auth(uuid, text, text);
 
 
