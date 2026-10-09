@@ -26,6 +26,7 @@ Verified on a scratch Postgres 16 with a Supabase-like stub: re-runnable; 50 beh
 ## Decisions worth knowing
 - Excel uses lazy-loaded `exceljs`, not SheetJS `xlsx@0.18.5` (known prototype-pollution/ReDoS advisories on npm). Limits: 15 MB, 20,000 rows per file.
 - Radius search = lat/lng rectangle in SQL + exact haversine in the browser. Adequate to ~100k rows per tenant; move to PostGIS/`earthdistance` beyond that.
+- Discovery filters: category, subcategory, place/GPS + radius, state, **LGA** and **business type** (free text, case-insensitive "contains" match because the data is free text), verification, source, quantity, sort.
 - "Open/closed now" filter is not offered: `opening_hours` is free text and not reliable. Add structured hours first.
 - PDF export uses the browser print dialog, like the project's other print templates.
 - Map: Leaflet + OpenStreetMap tiles, lazy-loaded, behind an error boundary so the list survives a map failure.

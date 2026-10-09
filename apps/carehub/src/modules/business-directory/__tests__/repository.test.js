@@ -149,3 +149,34 @@ describe('directoryRepository — paging', () => {
     expect((await repo.list(A, {}, { page: 2, pageSize: 2, probe: true })).map((r) => r.id)).toEqual(['r4'])
   })
 })
+
+describe('directoryRepository — LGA and business-type filters', () => {
+  const rows = [
+    { id: 'a', business_id: A, name: 'A', lga: 'Ikeja', business_type: 'Private hospital', is_active: true },
+    { id: 'b', business_id: A, name: 'B', lga: 'Surulere', business_type: 'Public', is_active: true },
+    { id: 'c', business_id: A, name: 'C', lga: null, business_type: null, is_active: true },
+    { id: 'x', business_id: B, name: 'X', lga: 'Ikeja', business_type: 'Private hospital', is_active: true },
+  ]
+  const repo = () => createDirectoryRepository(createInMemoryClient({ directory_businesses: rows }))
+
+  it('LGA matches case-insensitively and by contains, within the tenant', async () => {
+    expect((await repo().list(A, { lga: 'ikeja' })).map((r) => r.id)).toEqual(['a'])
+    expect((await repo().list(A, { lga: 'IKE' })).map((r) => r.id)).toEqual(['a'])
+  })
+  it('business type matches by contains', async () => {
+    expect((await repo().list(A, { businessType: 'private' })).map((r) => r.id)).toEqual(['a'])
+  })
+  it('both combine, and blank values add no filter', async () => {
+    expect((await repo().list(A, { lga: 'surulere', businessType: 'public' })).map((r) => r.id)).toEqual(['b'])
+    expect((await repo().list(A, { lga: '  ', businessType: '' })).map((r) => r.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+  it('delimiters and wildcards in the text cannot inject extra filters', async () => {
+    const paths = []
+    const r = createDirectoryRepository(async (p) => { paths.push(p); return [] })
+    await r.list(A, { lga: 'x&business_id=neq.' + A + ')*', businessType: 'a,b(c)' })
+    const path = paths[0]
+    expect(path.match(/business_id=/g)).toHaveLength(1) // only the tenant filter
+    expect(path).toMatch(/lga=ilike\.\*[^&,()*]*\*&/)
+    expect(path).toMatch(/business_type=ilike\.\*[^&,()*]*\*&/)
+  })
+})
