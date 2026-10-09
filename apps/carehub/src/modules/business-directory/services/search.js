@@ -62,15 +62,19 @@ export async function searchBusinesses(repo, businessId, params) {
     rows = (await repo.list(businessId, filters, { page: 0, pageSize: 500, order: 'name_normalized.asc' })).map((r) => ({ ...r, distance_km: null }))
     mode = 'filters'
   }
-  const sorted = sortResults(rows, params.sort || (mode === 'radius' ? 'nearest' : 'alpha'))
-  const cap = params.quantity > 0 ? params.quantity : sorted.length
-  return { results: sorted.slice(0, cap), total: sorted.length, truncated: sorted.length > cap, mode }
+  // "Show me 20 …" means the 20 NEAREST (or, without a location, the first 20 by name);
+  // the requested display sort is then applied to that selection.
+  const ranked = sortResults(rows, mode === 'radius' ? 'nearest' : 'alpha')
+  const cap = params.quantity > 0 ? params.quantity : ranked.length
+  const picked = ranked.slice(0, cap)
+  return { results: sortResults(picked, params.sort || (mode === 'radius' ? 'nearest' : 'alpha')), total: ranked.length, truncated: ranked.length > cap, mode }
 }
 
 // ── BusinessMatcher (Live Field Report) ───────────────────────────────────────
 // Wording is part of the contract: GPS proximity is a hint, never proof of a visit.
 export const NEARBY_LABELS = {
   candidate: 'Possible nearby business',
+  candidates: 'Possible nearby businesses',
   detected: 'Detected nearby',
   captured: 'Location captured',
   selected: 'Selected business',

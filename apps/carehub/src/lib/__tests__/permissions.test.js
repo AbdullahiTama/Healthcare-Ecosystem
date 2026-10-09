@@ -211,7 +211,7 @@ describe('module registry (business type → modules)', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
     expect(ALL_NAV_DEFAULT.length).toBe(17)
     expect(ALL_NAV_HOSPITAL.length).toBe(21)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(13)
+    expect(ALL_NAV_ENTERPRISE.length).toBe(15) // 13 + Business Discovery + Business Directory
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
@@ -243,5 +243,37 @@ describe('module registry (business type → modules)', () => {
     expect(isReservedRoleName('Co-owner')).toBe(false)
     expect(isReservedRoleName('')).toBe(false)
     expect(isReservedRoleName(undefined)).toBe(false)
+  })
+})
+
+describe('Business Discovery / Directory modules', () => {
+  const nav = (role, type, custom) => getNavItems(role, type, custom).map(([id]) => id)
+
+  it('are enterprise-only', () => {
+    ;['discovery', 'directory'].forEach((m) => {
+      expect(nav('Owner', 'manufacturer_importer')).toContain(m)
+      expect(nav('Owner', 'wholesale')).toContain(m)
+      expect(nav('Owner', 'pharmacy')).not.toContain(m)
+      expect(nav('Owner', 'hospital')).not.toContain(m)
+    })
+  })
+
+  it('Live Field Activity stays available alongside them', () => {
+    expect(nav('Owner', 'manufacturer_importer')).toContain('activity')
+  })
+
+  it('reps and managers can search, but only the Owner manages the directory by default', () => {
+    expect(nav('Manager', 'manufacturer_importer')).toContain('discovery')
+    expect(nav('Manager', 'manufacturer_importer')).not.toContain('directory')
+    expect(nav('Regional Rep', 'manufacturer_importer')).toContain('discovery')
+    expect(nav('Regional Rep', 'manufacturer_importer')).not.toContain('directory')
+    expect(getPerms('Owner').canManageDirectory).toBe(true)
+    expect(getPerms('Manager').canManageDirectory).toBeFalsy()
+    expect(getPerms('Regional Rep').canManageDirectory).toBe(false)
+  })
+
+  it('a custom role only manages the directory when the Owner says so', () => {
+    expect(buildCustomPerms({ nav: ['directory'] }).canManageDirectory).toBe(false)
+    expect(buildCustomPerms({ nav: ['directory'], canManageDirectory: true }).canManageDirectory).toBe(true)
   })
 })

@@ -113,3 +113,21 @@ describe('buildMergePatch', () => {
     expect(buildMergePatch({ latitude: null, longitude: null }, { latitude: 7, longitude: 3 })).toMatchObject({ latitude: 7, longitude: 3 })
   })
 })
+
+describe('findDuplicatePairs (reviewing an existing directory)', () => {
+  const dir = [
+    rec('a', { name: 'Alpha Pharmacy', address: '12 Rd Yaba', phone: '08031112222', latitude: 6.5095, longitude: 3.3711 }),
+    rec('b', { name: 'ALPHA PHARMACY LTD', address: '12 Road, Yaba', phone: '+234 803 111 2222', latitude: 6.5096, longitude: 3.3712 }),
+    rec('c', { name: 'Totally Different Labs', address: '5 Marina', phone: '09012345678', latitude: 6.45, longitude: 3.39 }),
+  ]
+  it('reports the later record against the earlier one, best first', async () => {
+    const { findDuplicatePairs } = await import('../services/deduplication')
+    const pairs = await findDuplicatePairs(dir)
+    expect(pairs).toHaveLength(1)
+    expect(pairs[0]).toMatchObject({ keep: { id: 'a' }, other: { id: 'b' }, status: DUP_STATUS.CONFIRMED })
+  })
+  it('does not report dismissed pairs again', async () => {
+    const { findDuplicatePairs, pairKey } = await import('../services/deduplication')
+    expect(await findDuplicatePairs(dir, { dismissed: new Set([pairKey('b', 'a')]) })).toEqual([])
+  })
+})

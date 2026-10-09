@@ -10,6 +10,9 @@ import {
 import { territoryRepository } from '../territories/repositories'
 import { staffRepository } from '../staff/repositories'
 import { watchTable } from '../../lib/realtime'
+// Business Directory: optional nearby-business suggestion + the Field Work switcher.
+import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
+import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
 import { Card, Inp, TealBtn, GhostBtn, Modal, useToast, Toast, ConfirmDialog, Loading } from '../../components/ui'
 import { theme } from '../../styles/theme'
 const { tealDeep, tealMist, tealBright, navy, gray600, gray500, gray400, gray200, gray100, gray50, border, danger, dangerBg, success, successBg, warning, warningBg, info, infoBg, purple, bg } = theme
@@ -72,7 +75,7 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand }) {
+export default function LiveActivity({ brand, allowedModules = [] }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -112,6 +115,8 @@ export default function LiveActivity({ brand }) {
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
+  // The directory business the rep explicitly confirmed (never auto-selected).
+  const [confirmedBiz, setConfirmedBiz] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -349,6 +354,7 @@ export default function LiveActivity({ brand }) {
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
+    setConfirmedBiz(null)
     setPlaceName('')
     setLogging(true)
 
@@ -356,7 +362,7 @@ export default function LiveActivity({ brand }) {
       setFindingPlace(true)
       navigator.geolocation.getCurrentPosition(
         async function (pos) {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }
           setGps(coords)
           const name = await reverseGeocode(coords.lat, coords.lng)
           if (name) setPlaceName(name)
@@ -403,6 +409,8 @@ export default function LiveActivity({ brand }) {
         lat: gps ? gps.lat : null,
         lng: gps ? gps.lng : null,
         location_label: placeName || null,
+        // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
+        ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -529,6 +537,7 @@ export default function LiveActivity({ brand }) {
     { key: 'rep', label: 'Rep' },
     { key: 'territory', label: 'Territory' },
     { key: 'place', label: 'Location' },
+    { key: 'business', label: 'Business' },
   ].concat(fields.map(function (f) {
     return { key: 'f_' + f.id, label: f.label, fieldId: f.id }
   })).concat([
@@ -543,6 +552,7 @@ export default function LiveActivity({ brand }) {
     if (col.key === 'rep') return a.rep_name
     if (col.key === 'territory') return terrName(a.territory_id) || ''
     if (col.key === 'place') return a.location_label || ''
+    if (col.key === 'business') return a.directory_business_name || ''
     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
     if (col.fieldId) {
@@ -600,6 +610,7 @@ export default function LiveActivity({ brand }) {
   return (
     <div style={{ padding: '24px', maxWidth: '1100px' }}>
       <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+      <FieldWorkSwitch current='activity' allowed={allowedModules} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px', gap: '12px', flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -821,6 +832,11 @@ export default function LiveActivity({ brand }) {
                         {a.location_label}
                       </div>
                     )}
+                    {a.directory_business_name && (
+                      <div style={{ fontSize: '12px', color: navy, fontWeight: '700', marginTop: '3px' }}>
+                        Business: {a.directory_business_name}
+                      </div>
+                    )}
                   </div>
                   {a.lat && a.lng && (
                     <a href={'https://www.google.com/maps?q=' + a.lat + ',' + a.lng} target='_blank' rel='noreferrer'
@@ -969,6 +985,8 @@ export default function LiveActivity({ brand }) {
                       : 'Location not available'}
               </div>
             </div>
+
+            <NearbyBusinessPicker businessId={brand?.id} gps={gps} selected={confirmedBiz} onSelect={setConfirmedBiz} />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>

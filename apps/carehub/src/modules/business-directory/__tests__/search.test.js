@@ -43,6 +43,12 @@ describe('searchBusinesses', () => {
     expect(out.truncated).toBe(true)
   })
 
+  it('quantity picks the nearest N even when displayed alphabetically', async () => {
+    const { repo } = repoWith([mk('zulu', 6.5, 3.4), mk('alpha', 6.52, 3.4), mk('mike', 6.54, 3.4)])
+    const out = await searchBusinesses(repo, A, { center: { lat: 6.5, lng: 3.4 }, radiusKm: 10, quantity: 2, sort: 'alpha' })
+    expect(out.results.map((r) => r.id)).toEqual(['alpha', 'zulu']) // nearest two, then A–Z
+  })
+
   it('says nothing was found rather than inventing results', async () => {
     const { repo } = repoWith(rows)
     const out = await searchBusinesses(repo, A, { center: { lat: 9, lng: 9 }, radiusKm: 1 })

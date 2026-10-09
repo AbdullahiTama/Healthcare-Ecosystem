@@ -182,6 +182,34 @@ export async function classifyBatch(candidates, index, { chunkSize = 200, onProg
   return out
 }
 
+export const pairKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a)
+
+/**
+ * Find duplicate pairs inside an existing directory (the admin "review
+ * duplicates" screen). Each record is compared with those before it; the
+ * earlier record is `keep`, the later one `other`. Pairs in `dismissed`
+ * (Set of pairKey) are not reported again.
+ */
+export async function findDuplicatePairs(records, { dismissed = new Set(), chunkSize = 300, onProgress, shouldCancel } = {}) {
+  const index = createDedupIndex([])
+  const pairs = []
+  for (let i = 0; i < records.length; i++) {
+    if (shouldCancel && shouldCancel()) throw new Error('cancelled')
+    const r = records[i]
+    const res = classify(r, index)
+    if (res.status !== DUP_STATUS.NEW && !dismissed.has(pairKey(res.match.id, r.id))) {
+      pairs.push({ keep: res.match, other: r, status: res.status, score: res.score, reasons: res.reasons })
+    }
+    addToIndex(index, r)
+    if ((i + 1) % chunkSize === 0) {
+      if (onProgress) onProgress(i + 1, records.length)
+      await yieldToUi()
+    }
+  }
+  if (onProgress) onProgress(records.length, records.length)
+  return pairs.sort((a, b) => b.score - a.score)
+}
+
 const MERGEABLE = [
   'category_id', 'subcategory_id', 'business_type', 'address', 'state', 'lga', 'city',
   'latitude', 'longitude', 'phone', 'email', 'website', 'contact_person', 'opening_hours', 'description',
