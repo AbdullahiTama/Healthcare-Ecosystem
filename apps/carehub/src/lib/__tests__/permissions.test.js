@@ -8,6 +8,7 @@ import {
   getNavItems,
   getModulesForType,
   rolesForType,
+  isReservedRoleName,
   ALL_NAV_DEFAULT,
   ALL_NAV_HOSPITAL,
   ALL_NAV_ENTERPRISE,
@@ -227,5 +228,20 @@ describe('module registry (business type → modules)', () => {
     expect(rolesForType('hospital')).toContain('Lab Technician')
     expect(rolesForType('wholesale')).toEqual([])
     expect(rolesForType('manufacturer_importer')).toEqual([])
+  })
+
+  it('never offers Owner as a staff role — the Owner is the business account', () => {
+    for (const type of ['pharmacy', 'skincare', 'hospital', 'wholesale', 'manufacturer_importer']) {
+      expect(rolesForType(type)).not.toContain('Owner')
+    }
+  })
+
+  it('reserves the Owner name in any casing', () => {
+    expect(isReservedRoleName('Owner')).toBe(true)
+    expect(isReservedRoleName('  owner ')).toBe(true)
+    expect(isReservedRoleName('OWNER')).toBe(true)
+    expect(isReservedRoleName('Co-owner')).toBe(false)
+    expect(isReservedRoleName('')).toBe(false)
+    expect(isReservedRoleName(undefined)).toBe(false)
   })
 })

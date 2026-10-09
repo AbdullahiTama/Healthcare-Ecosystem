@@ -40,10 +40,9 @@ describe('staffRepository', () => {
       expect(rows.some((r) => r.business_id === B)).toBe(false)
     })
 
-    it('create injects business_id', async () => {
-      const { repo, client } = seeded()
-      await repo.create(A, { full_name: 'Chidi', email: 'chidi@a.test', status: 'active' })
-      expect(client.rows('staff').find((r) => r.full_name === 'Chidi').business_id).toBe(A)
+    it('has no direct create — staff join by invitation only', () => {
+      const { repo } = seeded()
+      expect(repo.create).toBeUndefined()
     })
 
     it('update scopes by id and business', async () => {
@@ -178,7 +177,7 @@ describe('staffRepository', () => {
   })
 
   it('exports a default staffRepository instance', () => {
-    for (const m of ['getAll', 'create', 'update', 'delete', 'getRoles', 'createRole', 'updateRole', 'deleteRole', 'getPendingClaims', 'decideClaim']) {
+    for (const m of ['getAll', 'update', 'delete', 'getRoles', 'createRole', 'updateRole', 'deleteRole', 'getPendingClaims', 'decideClaim']) {
       expect(typeof staffRepository[m]).toBe('function')
     }
   })

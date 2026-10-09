@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Landing from './pages/Landing'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import AcceptInvite from './pages/auth/AcceptInvite'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import BusinessDashboard from './pages/dashboard/BusinessDashboard'
 import AgentLogin from './pages/agent/AgentLogin'
@@ -88,6 +89,9 @@ export default function App() {
           <Route path='/login' element={auth && !auth.isAdmin ? <Navigate to='/dashboard' /> : <Login />} />
           <Route path='/register' element={<Register />} />
           <Route path='/apply-agent' element={<ApplyAgent />} />
+          {/* Public: staff invitation links. Deliberately not redirected when
+              signed in — the page handles a session for someone else. */}
+          <Route path='/accept-invite' element={<AcceptInvite />} />
           <Route path='/agent/login' element={agent ? <Navigate to='/agent' /> : <AgentLogin />} />
           <Route path='/agent/*' element={agent ? <AgentDashboard /> : <Navigate to='/agent/login' />} />
           <Route path='/admin' element={auth?.isAdmin ? <AdminDashboard /> : <Navigate to='/login' />} />

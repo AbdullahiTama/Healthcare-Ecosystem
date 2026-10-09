@@ -85,20 +85,11 @@ export async function getStaffByEmail(email) {
   const r = await sbFetch('staff?email=eq.' + encodeURIComponent(email) + '&status=eq.active&select=*')
   return r[0] || null
 }
-// Staff.jsx's "add member" auth half, since staff.password was dropped (C2):
-// the provision_staff_auth RPC (SECURITY DEFINER, authenticated-only) verifies
-// the caller owns the business, then mints a CONFIRMED Supabase Auth user for
-// the staff member (or links + confirms an existing account, never overwriting
-// its password) and stamps staff.auth_user_id. Returns the auth user id —
-// unwrapped the same way as the other scalar RPCs below (activate/deactivate/
-// push_master_product), because PostgREST may return a bare value or an array.
-export async function provisionStaffAuth(businessId, email, password) {
-  const rows = await sbFetch('rpc/provision_staff_auth', {
-    method: 'POST',
-    body: JSON.stringify({ p_business_id: businessId, p_email: email.toLowerCase(), p_password: password }),
-  })
-  return Array.isArray(rows) ? rows[0] : rows
-}
+// provisionStaffAuth is gone (C21, sql/20261009_staff_invitations_and_role_governance.sql).
+// It linked a staff row to ANY existing auth account with that email — the
+// owner's own included — which is how an "added staff member" ended up
+// resetting the owner's password. Staff now join by invitation:
+// modules/staff/services/invitations.js.
 // Looks up which business/staff row a given email belongs to, once we already
 // know (via a real session) that the email is legitimate.
 export async function resolveAccountByEmail(email) {
@@ -180,7 +171,7 @@ export async function getAllLocations(mainBusinessId) {
 // stays: it resolves the session's email to a staff row after authentication,
 // which is a lookup, not a credential check, and cannot use a business-scoped
 // repository because Login.jsx calls it before any business context exists.
-// `provisionStaffAuth` above covers the new-staff auth half of the Staff page.
+// New staff join by invitation — see modules/staff/services/invitations.js.
 
 // CUSTOM ROLES (the `roles` table — business-defined roles with a
 // permissions.jsonb matching lib/permissions.js's preset shapes)
