@@ -3,7 +3,7 @@
 // reference; Paystack is called with no lock held; and when the transfer does not start the money comes back -
 // at once if nothing was ever sent, only after Paystack confirms if the transfer call itself failed.
 const h = vi.hoisted(() => {
-  const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), paystackFetch: vi.fn(), rpcCalls: [], owned: true, auth: null }
+  const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), paystackFetch: vi.fn(), rpcCalls: [], owned: true, auth: null, applied: [] }
   const builderFor = (table) => {
     const b = {
       select: () => b, eq: () => b, or: () => b, in: () => b, is: () => b, order: () => b, limit: () => b,
@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
 vi.mock('../_lib/supabase.js', () => ({ supabase: h.client }))
 vi.mock('../_lib/verifyBusiness.js', () => ({ verifyBusiness: async () => h.auth }))
 vi.mock('../_lib/paystack.js', () => ({ paystackFetch: h.paystackFetch }))
+vi.mock('../_lib/businessWithdrawalEffects.js', () => ({ applyBusinessWithdrawalResult: async (_s, result) => { h.applied.push(result) } }))
 vi.mock('../../src/lib/emailService.js', () => ({ emailService: { enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) } }))
 vi.mock('../_lib/paystackTransfer.js', () => ({
   createTransferRecipient: h.createTransferRecipient,
@@ -26,13 +27,19 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   checkBalance: h.checkBalance,
   resolveAccount: h.resolveAccount,
 }))
+vi.mock('../_lib/emailOtp.js', () => ({
+  verifyWithdrawalOtp: vi.fn(async (_s, _u, code) =>
+    (!code || typeof code !== 'string' || !/^\d{6}$/.test(code))
+      ? { error: 'Enter the 6-digit code we emailed you', status: 400 }
+      : { ok: true }),
+}))
 
 import { hashPin } from '@care-ecosystem/shared-payments'
 import handler from '../_handlers/initiate-business-withdrawal.js'
 
 const REF = 'ch_wd_0123456789abcdef0123456789abcdef'
 const SALT = '00112233445566778899aabbccddeeff'
-const body = { business_id: 'biz-1', amount: 500000, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Clinic Ltd', pin: '1234' }
+const body = { business_id: 'biz-1', amount: 500000, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Clinic Ltd', pin: '1234', otp: '123456' }
 const req = { method: 'POST', body }
 const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
 const calls = (n) => h.rpcCalls.filter(([name]) => name === n)
@@ -41,6 +48,7 @@ const created = { data: { outcome: 'ok', id: 'bw-1', reference: REF, amount_kobo
 
 beforeEach(() => {
   h.rpcCalls.length = 0
+  h.applied.length = 0
   h.owned = true
   h.auth = { business: { id: 'biz-1', email: 'b@example.com' }, user: { id: 'user-1', email: 'b@example.com', email_confirmed_at: '2026-01-01' } }
   h.routes.get_withdrawal_pin = { data: [{ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null }] }
@@ -183,6 +191,7 @@ describe('initiate-business-withdrawal: recovery after the balance is reserved',
     expect(r.body.refunded).toBe(true)
     expect(settles()).toEqual([{ p_outcome: 'failed', p_reference: null, p_request_id: 'bw-1', p_amount_kobo: null, p_detail: 'provider_balance_low' }])
     expect(h.paystackFetch).not.toHaveBeenCalled()
+    expect(h.applied).toEqual([]) // the owner is watching the response; no email for a synchronous release
   })
 
   it('nothing was sent (recipient creation failed): released at once', async () => {
@@ -202,6 +211,8 @@ describe('initiate-business-withdrawal: recovery after the balance is reserved',
     expect(settles()[0]).toMatchObject({ p_outcome: 'failed', p_request_id: 'bw-1', p_reference: null })
     expect(r.statusCode).toBe(502)
     expect(r.body.refunded).toBe(true)
+    expect(h.applied).toHaveLength(1)
+    expect(h.applied[0]).toMatchObject({ result: 'refunded', id: 'bw-1' })
   })
 
   it('duplicate-reference rejection where the transfer exists and succeeded: completed, NEVER refunded', async () => {
@@ -210,6 +221,8 @@ describe('initiate-business-withdrawal: recovery after the balance is reserved',
     const r = res(); await handler(req, r)
     expect(settles().map((s) => s.p_outcome)).toEqual(['success'])
     expect(r.body.refunded).toBeUndefined()
+    expect(h.applied).toHaveLength(1)
+    expect(h.applied[0]).toMatchObject({ result: 'completed', id: 'bw-1' })
   })
 
   it('ambiguous failure (timeout): left for the cron, never refunded on a guess, Paystack not even asked yet', async () => {
@@ -217,6 +230,7 @@ describe('initiate-business-withdrawal: recovery after the balance is reserved',
     const r = res(); await handler(req, r)
     expect(settles()).toHaveLength(0)
     expect(h.paystackFetch).not.toHaveBeenCalled()
+    expect(h.applied).toEqual([])
     expect(r.statusCode).toBe(502)
     expect(r.body.pending).toBe(true)
   })

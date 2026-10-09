@@ -127,6 +127,34 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
       })
     },
 
+    // A CareHub business wallet top-up (the carehub verify-wallet-topup handler settles it): tell the owner the
+    // money landed, with the balance as it now stands. A wallet row that cannot be read only costs the balance line.
+    async business_wallet_topup({ intent }) {
+      const { data: biz } = await supabase.from('businesses').select('name, owner_name, owner_email, email').eq('id', intent.business_id).maybeSingle()
+      const ownerEmail = biz?.owner_email || biz?.email
+      if (!biz || !ownerEmail) return
+      let newBalance = ''
+      try {
+        const { data: wallet } = await supabase.from('business_wallets').select('available_balance').eq('business_id', intent.business_id).maybeSingle()
+        if (wallet?.available_balance != null) newBalance = (wallet.available_balance / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })
+      } catch {
+        // best-effort: the confirmation still goes out without the balance line
+      }
+      await safeSend({
+        templateKey: 'business_wallet_topup',
+        toEmail: ownerEmail,
+        payload: {
+          fullName: biz.owner_name || 'Business Owner',
+          businessName: biz.name || '',
+          amount: ((intent.expected_amount || 0) / 100).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' }),
+          reference: intent.reference,
+          newBalance,
+        },
+        subject: 'CareHub: wallet topped up',
+        idempotencyKey: `wallet-topped-up:${intent.reference}`,
+      })
+    },
+
     async plan_renewal({ intent }) {
       const { data: biz } = await supabase
         .from('businesses')

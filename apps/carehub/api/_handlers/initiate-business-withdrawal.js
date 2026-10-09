@@ -1,8 +1,10 @@
 import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal } from '@care-ecosystem/shared-payments'
+import { verifyWithdrawalOtp } from '../_lib/emailOtp.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
 import { reconcileBusinessWithdrawal } from '../_lib/withdrawalRecovery.js'
+import { applyBusinessWithdrawalResult } from '../_lib/businessWithdrawalEffects.js'
 import { emailService } from '../../src/lib/emailService.js'
 
 const MAX_AMOUNT_KOBO = 2_000_000_000 // business_withdrawal_requests.amount is a 32-bit integer
@@ -21,7 +23,7 @@ export default async function handler(req, res) {
   const { business, user, error: authError } = await verifyBusiness(supabase, req)
   if (authError) return res.status(401).json({ error: authError })
 
-  const { business_id: businessId, amount, bankCode, bankName, accountNumber, accountName, pin } = req.body || {}
+  const { business_id: businessId, amount, bankCode, bankName, accountNumber, accountName, pin, otp } = req.body || {}
   const amountKobo = Number(amount)
   if (!businessId || !Number.isInteger(amountKobo) || amountKobo <= 0 || amountKobo > MAX_AMOUNT_KOBO
       || !bankCode || !bankName || !/^\d{10}$/.test(String(accountNumber || '')) || !accountName) {
@@ -42,6 +44,12 @@ export default async function handler(req, res) {
   if (!pinCheck.ok) {
     return res.status(pinCheck.status).json({ error: pinCheck.error, code: pinCheck.code, ...(pinCheck.code === 'pin_not_set' ? { needsPin: true } : {}) })
   }
+
+  // Third factor (E): a fresh email OTP, verified LAST - after the PIN and before the account is
+  // resolved or any money is reserved. The PIN alone is a static secret a shoulder-surfer can read;
+  // the code proves the person is also in control of the owner's email.
+  const otpCheck = await verifyWithdrawalOtp(supabase, user.id, otp)
+  if (otpCheck.error) return res.status(otpCheck.status).json({ error: otpCheck.error })
 
   const account = await verifyBankAccount(resolveAccount, { bankCode, accountNumber, accountName })
   if (!account.ok) return res.status(account.status).json({ error: account.error })
@@ -144,6 +152,10 @@ export default async function handler(req, res) {
     try {
       const row = { id: requestId, paystack_reference: reference, paystack_transfer_code: null, created_at: new Date().toISOString() }
       const recovery = await reconcileBusinessWithdrawal(supabase, row, err.paystackRejected ? { graceMs: 0 } : {})
+      // An outcome the reconciliation actually changed tells the owner; 'waiting' changed nothing and says nothing.
+      if (recovery.outcome === 'completed' || recovery.outcome === 'refunded') {
+        await applyBusinessWithdrawalResult(supabase, recovery.result)
+      }
       if (recovery.outcome === 'refunded') {
         return res.status(502).json({ error: `${err.message || 'Payment provider error'}. The amount has been returned to your wallet.`, refunded: true })
       }

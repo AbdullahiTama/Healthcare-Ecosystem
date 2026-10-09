@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download, PlusCircle } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
+import WithdrawalOtpField from './WithdrawalOtpField'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
 import { initiateWalletTopup, verifyWalletTopup, goToPaystack, MIN_TOPUP_KOBO, MAX_TOPUP_KOBO } from './topupApi'
 import { theme } from '../../styles/theme'
@@ -26,6 +27,7 @@ export default function Wallet({ brand, role }) {
   const [withdrawForm, setWithdrawForm] = useState({})
   const [withdrawing, setWithdrawing] = useState(false)
   const [withdrawPin, setWithdrawPin] = useState('')
+  const [withdrawOtp, setWithdrawOtp] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
   const [showTopup, setShowTopup] = useState(false)
   const [topupAmount, setTopupAmount] = useState('')
@@ -156,12 +158,15 @@ export default function Wallet({ brand, role }) {
     if (!/^\d{4,6}$/.test(withdrawPin)) {
       showToast('Enter your 4-6 digit withdrawal PIN.', { type: 'warning' }); return
     }
+    if (!/^\d{6}$/.test(withdrawOtp)) {
+      showToast('Enter the 6-digit code we emailed you.', { type: 'warning' }); return
+    }
     setWithdrawing(true)
     try {
       const r = await startBusinessWithdrawal({
         businessId: brand.id, amountKobo,
         bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName,
-        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin,
+        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin, otp: withdrawOtp,
       })
       if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       if (r.networkError) { showToast('Network error.', { type: 'error' }); setWithdrawing(false); return }
@@ -171,7 +176,7 @@ export default function Wallet({ brand, role }) {
         setWithdrawPin('')
         setWithdrawing(false); return
       }
-      setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
+      setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false); setShowWithdraw(false); setAccountResolved(false)
       load()
       showToast('Withdrawal started — will arrive shortly.', { type: 'success' })
     } catch (e) { showToast('Network error.', { type: 'error' }) }
@@ -352,9 +357,10 @@ export default function Wallet({ brand, role }) {
                 )}
               </div>
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
+              <WithdrawalOtpField action="withdrawal" value={withdrawOtp} onChange={setWithdrawOtp} disabled={withdrawing} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setWithdrawOtp(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !/^\d{6}$/.test(withdrawOtp) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>

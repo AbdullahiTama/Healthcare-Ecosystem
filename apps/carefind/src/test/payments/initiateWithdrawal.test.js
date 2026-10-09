@@ -16,6 +16,12 @@ const { mockSupabase, mockVerifyUser, mockPaystack } = vi.hoisted(() => ({
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => mockSupabase) }))
 vi.mock('../../../api/_lib/verifyUser.js', () => ({ verifyUser: mockVerifyUser }))
 vi.mock('../../../api/_lib/paystackTransfer.js', () => mockPaystack)
+vi.mock('../../../api/_lib/emailOtp.js', () => ({
+  verifyWithdrawalOtp: vi.fn(async (_s, _u, code) =>
+    (!code || typeof code !== 'string' || !/^\d{6}$/.test(code))
+      ? { error: 'Enter the 6-digit code we emailed you', status: 400 }
+      : { ok: true }),
+}))
 
 import handler from '../../../api/_handlers/initiate-withdrawal.js'
 
@@ -40,6 +46,7 @@ const VALID_BODY = {
   accountNumber: '0123456789',
   accountName: 'Test User',
   pin: '1234',
+  otp: '123456',
 }
 
 describe('initiate-withdrawal PIN gate', () => {

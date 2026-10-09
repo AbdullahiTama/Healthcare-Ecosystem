@@ -291,10 +291,10 @@ export function withdrawalCompleted(payload = {}) {
 
 export function withdrawalPinOtp(payload = {}) {
   return email({
-    title: 'Your withdrawal PIN code',
-    preheader: 'Use this code to set or change your withdrawal PIN.',
+    title: 'Your withdrawal security code',
+    preheader: 'Use this one-time code to continue.',
     body: [
-      paragraph('Here is the one-time code for your withdrawal PIN:'),
+      paragraph('Here is the one-time code you asked for:'),
       paragraph(`<strong style="font-size:20px;letter-spacing:2px">${payload.code || ''}</strong>`),
       notice('warn', `This code expires in ${payload.minutes || 10} minutes. Never share it.`),
       paragraph('If you did not ask for this, you can safely ignore this email.'),
@@ -310,6 +310,45 @@ export function withdrawalFailed(payload = {}) {
       notice('danger', 'Your withdrawal could not be completed.'),
       detailsTable(withdrawalRows(payload)),
       paragraph('Please check your bank details and try again. If the problem continues, reply to this email and our team will help.'),
+    ],
+  })
+}
+
+export function businessWalletTopup(payload = {}) {
+  return email({
+    title: 'Your wallet was topped up',
+    preheader: 'Your CareHub business wallet received a payment.',
+    body: [
+      paragraph('A payment was confirmed and your CareHub business wallet has been credited.'),
+      detailsTable([['Business', payload.businessName], ['Amount', payload.amount], ['Reference', payload.reference], ['New balance', payload.newBalance]]),
+      paragraph('The balance above already includes this top-up.'),
+    ],
+  })
+}
+
+export function refundCompleted(payload = {}) {
+  return email({
+    title: 'Your refund is complete',
+    preheader: 'Your CareHub refund is on its way back to your payment method.',
+    body: [
+      paragraph('A refund on your CareHub payment has been completed and is on its way back to your original payment method. Depending on your bank, it may take a few days to appear.'),
+      detailsTable([['Amount', payload.amount], ['Reference', payload.reference]]),
+      paragraph('If you have any questions about this refund, reply to this email and our team will help.'),
+    ],
+  })
+}
+
+export function payoutAccountReview(payload = {}) {
+  const verified = payload.outcome === 'verified'
+  return email({
+    title: verified ? 'Your payout account is verified' : 'Your payout account was not verified',
+    preheader: verified ? 'Your payout account passed review.' : 'Your payout account did not pass review.',
+    body: [
+      paragraph(verified
+        ? 'Your payout account has been reviewed and verified. Future withdrawals can be sent to it.'
+        : 'Your payout account could not be verified. You can update your payout details and submit them for review again.'),
+      detailsTable([['Bank', payload.bankName], ['Account', payload.accountNumber]]),
+      paragraph('If you believe this is wrong, reply to this email and our team will help.'),
     ],
   })
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Inp, GhostBtn, TealBtn } from '../../components/ui'
+import WithdrawalOtpField from './WithdrawalOtpField'
 
 const { gray500, danger, success, border } = theme
 
@@ -30,6 +31,7 @@ export default function WithdrawalPinField({ pin, onPinChange, needsPin = false,
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [otp, setOtp] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -38,7 +40,7 @@ export default function WithdrawalPinField({ pin, onPinChange, needsPin = false,
   useEffect(() => { if (needsPin) openSetting() }, [needsPin])
 
   async function openSetting() {
-    setSetting(true); setError(''); setSaved(false)
+    setSetting(true); setError(''); setSaved(false); setOtp('')
     if (hasPin === null) {
       const r = await pinRequest('status')
       setHasPin(r.ok ? Boolean(r.data.hasPin) : needsPin ? false : null)
@@ -50,12 +52,13 @@ export default function WithdrawalPinField({ pin, onPinChange, needsPin = false,
     if (!isPin(next)) { setError('Your PIN must be 4 to 6 digits.'); return }
     if (next !== confirm) { setError('The two PINs do not match.'); return }
     if (hasPin && !isPin(current)) { setError('Enter your current PIN to change it.'); return }
+    if (!/^\d{6}$/.test(otp)) { setError('Request a code and enter the 6-digit code we emailed you.'); return }
     setSaving(true)
     try {
-      const r = await pinRequest('set', { pin: next, currentPin: hasPin ? current : undefined })
+      const r = await pinRequest('set', { pin: next, currentPin: hasPin ? current : undefined, otp })
       if (!r.ok) { setError(r.data.error || 'Could not save your PIN.'); return }
       setHasPin(true); setSaved(true); setSetting(false)
-      setCurrent(''); setNext(''); setConfirm('')
+      setCurrent(''); setNext(''); setConfirm(''); setOtp('')
       onPinChange?.(next)
     } catch {
       setError('Network error. Please try again.')
@@ -96,6 +99,7 @@ export default function WithdrawalPinField({ pin, onPinChange, needsPin = false,
           {hasPin && <Inp label="Current PIN" type="password" value={current} onChange={(v) => setCurrent(digits(v))} inputMode="numeric" autoComplete="off" maxLength={6} />}
           <Inp label="New PIN" type="password" value={next} onChange={(v) => setNext(digits(v))} placeholder="4-6 digits" inputMode="numeric" autoComplete="new-password" maxLength={6} />
           <Inp label="Confirm new PIN" type="password" value={confirm} onChange={(v) => setConfirm(digits(v))} inputMode="numeric" autoComplete="new-password" maxLength={6} />
+          <WithdrawalOtpField action="set_pin" value={otp} onChange={setOtp} disabled={saving} />
           {error && <span role="alert" style={{ fontSize: '12px', color: danger, fontWeight: 700 }}>{error}</span>}
           <div style={{ display: 'flex', gap: '8px' }}>
             <GhostBtn type="button" onClick={() => { setSetting(false); setError('') }} disabled={saving} style={{ flex: 1, padding: '10px' }}>Cancel</GhostBtn>

@@ -38,6 +38,12 @@ vi.mock('../_lib/paystackTransfer.js', () => ({
   normalizeAccountName: (n) => String(n), resolveAccount: vi.fn(async () => ({ accountName: 'Ada Obi' })),
 }))
 vi.mock('../_lib/withdrawalRecovery.js', () => ({ reconcileWithdrawal: vi.fn() }))
+vi.mock('../_lib/emailOtp.js', () => ({
+  verifyWithdrawalOtp: vi.fn(async (_s, _u, code) =>
+    (!code || typeof code !== 'string' || !/^\d{6}$/.test(code))
+      ? { error: 'Enter the 6-digit code we emailed you', status: 400 }
+      : { ok: true }),
+}))
 
 import handler from './initiate-withdrawal.js'
 import { enqueue, processBatch } from '../_lib/emailService.js'
@@ -48,7 +54,7 @@ function call(body) {
   return handler({ method: 'POST', body, headers: {} }, res).then(() => res)
 }
 
-const base = { amount: 15, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234' }
+const base = { amount: 15, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'Ada Obi', pin: '1234', otp: '123456' }
 
 describe('initiate-withdrawal untraceable credits', () => {
   beforeEach(() => { enqueue.mockClear(); processBatch.mockClear(); checkBalance.mockClear(); createTransferRecipient.mockClear(); initiateTransfer.mockClear() })

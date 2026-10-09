@@ -5,6 +5,7 @@ import { runFinanceReconciliation } from '../_lib/financeReconcile.js'
 import { decideAdminApprove, decideAdminReject } from '../_lib/withdrawalAdmin.js'
 import { settleWithdrawal } from '@care-ecosystem/shared-payments'
 import { applyWithdrawalResult } from '../_lib/withdrawalEffects.js'
+import { notifyPayoutAccountReview } from '../_lib/payoutReviewNotify.js'
 
 export default async function handler(req, res) {
   try {
@@ -242,6 +243,8 @@ async function handleRequest(req, res) {
     const { error } = await supabase.from('payout_accounts').update({ status: decision, verified_at: decision === 'verified' ? new Date().toISOString() : null }).eq('id', id)
     if (error) return res.status(400).json({ error: error.message })
     await supabase.from('payout_account_events').insert({ payout_account_id: id, actor: payload.adminId ?? null, action: `reviewed:${decision}` })
+    // Best-effort owner email (the effect swallows its own errors; the review itself already committed).
+    await notifyPayoutAccountReview(supabase, id)
     return res.status(200).json({ success: true })
   }
 

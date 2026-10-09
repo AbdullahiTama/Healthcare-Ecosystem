@@ -18,9 +18,9 @@ import handler from './withdrawal-pin-otp.js'
 import { requestWithdrawalOtp } from '../_lib/emailOtp.js'
 import { enqueue, processBatch } from '../_lib/emailService.js'
 
-function call(method = 'POST') {
+function call(method = 'POST', body = {}) {
   const res = { statusCode: 0, body: null, status(c) { this.statusCode = c; return this }, json(b) { this.body = b; return this } }
-  return handler({ method, body: {}, headers: {} }, res).then(() => res)
+  return handler({ method, body, headers: {} }, res).then(() => res)
 }
 
 beforeEach(() => {
@@ -73,5 +73,30 @@ describe('/api/withdrawal-pin-otp', () => {
     enqueue.mockImplementationOnce(async () => { throw new Error('outbox down') })
     const res = await call()
     expect(res.statusCode).toBe(500)
+  })
+
+  it('defaults the action to set_pin when the client sends none', async () => {
+    const res = await call()
+    expect(res.statusCode).toBe(200)
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ action: 'set_pin' }),
+    }))
+  })
+
+  it("carries action 'withdrawal' through to the outbox payload", async () => {
+    const res = await call('POST', { action: 'withdrawal' })
+    expect(res.statusCode).toBe(200)
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      templateKey: 'withdrawal_pin_otp',
+      payload: expect.objectContaining({ code: '654321', action: 'withdrawal' }),
+    }))
+  })
+
+  it('rejects an unknown action before any work', async () => {
+    const res = await call('POST', { action: 'transfer_everything' })
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toMatch(/action/)
+    expect(requestWithdrawalOtp).not.toHaveBeenCalled()
+    expect(enqueue).not.toHaveBeenCalled()
   })
 })

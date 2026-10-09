@@ -114,6 +114,42 @@ describe('effects: the paths around the happy ones', () => {
     })])
   })
 
+  it('business wallet top-up: the owner is told the wallet was credited, with the new balance, keyed by the reference', async () => {
+    const { run, sent } = setup({
+      tables: {
+        businesses: [{ id: 'b1', name: 'Sunrise Clinic', owner_name: 'Ada', owner_email: 'ada@example.com', email: 'biz@example.com' }],
+        business_wallets: [{ business_id: 'b1', available_balance: 1500000 }],
+      },
+    })
+    await run(settled('business_wallet_topup', intent({ reference: 'ref_topup_1' })))
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({
+      templateKey: 'business_wallet_topup', toEmail: 'ada@example.com',
+      subject: 'CareHub: wallet topped up', idempotencyKey: 'wallet-topped-up:ref_topup_1',
+    })
+    expect(sent[0].payload).toMatchObject({ fullName: 'Ada', businessName: 'Sunrise Clinic', reference: 'ref_topup_1' })
+    expect(sent[0].payload.amount).toContain('5,000')
+    expect(sent[0].payload.newBalance).toContain('15,000')
+  })
+
+  it('business wallet top-up: falls back to the business email; no address anywhere sends nothing; a wallet not yet visible still sends', async () => {
+    const fallback = setup({ tables: { businesses: [{ id: 'b1', owner_name: 'Ada', owner_email: null, email: 'biz@example.com' }] } })
+    await fallback.run(settled('business_wallet_topup', intent()))
+    expect(fallback.sent[0]).toMatchObject({ templateKey: 'business_wallet_topup', toEmail: 'biz@example.com' })
+    expect(fallback.sent[0].payload.newBalance).toBe('')
+
+    const noWallet = setup({ tables: { businesses: [{ id: 'b1', owner_email: 'ada@example.com' }] } })
+    await noWallet.run(settled('business_wallet_topup', intent()))
+    expect(noWallet.sent).toHaveLength(1)
+
+    const none = setup({ tables: { businesses: [{ id: 'b1', owner_email: null, email: null }] } })
+    await none.run(settled('business_wallet_topup', intent()))
+    expect(none.sent).toEqual([])
+    const missing = setup({})
+    await missing.run(settled('business_wallet_topup', intent()))
+    expect(missing.sent).toEqual([])
+  })
+
   it('a send that throws is logged with the template and never propagates (the settlement stands)', async () => {
     const { run, logger } = setup({ users: { u1: { email: 'a@b.com' } } }, async () => { throw new Error('smtp down') })
     await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()

@@ -1,10 +1,12 @@
 const harness = vi.hoisted(() => ({
   createClient: vi.fn(),
   emailFlush: vi.fn(),
+  notifyPayoutReview: vi.fn(),
 }))
 
 vi.mock('@supabase/supabase-js', () => ({ createClient: harness.createClient }))
 vi.mock('../_lib/emailService.js', () => ({ processBatch: harness.emailFlush }))
+vi.mock('../_lib/payoutReviewNotify.js', () => ({ notifyPayoutAccountReview: harness.notifyPayoutReview }))
 
 import handler from './admin-auth.js'
 
@@ -355,6 +357,33 @@ describe('admin-auth handler', () => {
 
     expect(res.statusCode).toBe(403)
     expect(res.body.error).toBe('Only super admin can create staff')
+  })
+
+  it('payout_account_review: updates the account, records the event, then notifies the owner', async () => {
+    const mock = makeHarness()
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'payout_account_review', id: 'pa-1', decision: 'verified', adminId: 'admin-1' },
+    })
+    expect(res.statusCode).toBe(200)
+    const update = mock.fromCalls.find((c) => c.table === 'payout_accounts')
+    expect(update).toBeTruthy()
+    expect(update.builder.update).toHaveBeenCalledWith({ status: 'verified', verified_at: expect.any(String) })
+    const events = mock.fromCalls.find((c) => c.table === 'payout_account_events')
+    expect(events.insertData).toMatchObject({ payout_account_id: 'pa-1', actor: 'admin-1', action: 'reviewed:verified' })
+    expect(harness.notifyPayoutReview).toHaveBeenCalledTimes(1)
+    expect(harness.notifyPayoutReview.mock.calls[0][1]).toBe('pa-1')
+  })
+
+  it('payout_account_review: an invalid decision is refused before any update or notification', async () => {
+    const mock = makeHarness()
+    const res = await invoke({
+      token: 'valid-jwt-token',
+      body: { action: 'payout_account_review', id: 'pa-1', decision: 'pending_review' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(mock.fromCalls.some((c) => c.table === 'payout_accounts')).toBe(false)
+    expect(harness.notifyPayoutReview).not.toHaveBeenCalled()
   })
 
   it('handles logout action', async () => {
