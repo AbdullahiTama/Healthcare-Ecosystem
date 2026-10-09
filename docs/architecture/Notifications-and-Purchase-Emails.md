@@ -95,6 +95,7 @@ order by created_at desc limit 50;
 
 ## 7. Not done here (found, deliberately left)
 
+- **The same fire-and-forget flush is used in about 19 other places** (`flushOutbox().catch(...)` / `emailService.processBatch().catch(...)` in both apps: the withdrawal, refund, payout-review and business-withdrawal effects, `initiate-withdrawal`, `withdrawal-pin-otp`, `booking`, `cancel-appointment`, `admin-auth`, the email test/send endpoints). In a serverless function that has already responded, the flush may never run and the email then waits for the next cron (daily today). Only the payment and booking confirmations (`settlementEffects`) were fixed here. The clean fix is one shared helper used everywhere, ideally built on Vercel's `waitUntil`, with the bounded await (`flushBounded`) as the fallback. Withdrawal OTP emails are the most time-sensitive of the rest.
 - CareCoin consultation, subscription and auto-renew events produce no notification or email.
 - The unread badge is not refreshed live and the list is not paginated.
 - `record_shop_notification` is dead code (execute revoked in F-43); remove it in a cleanup migration.
