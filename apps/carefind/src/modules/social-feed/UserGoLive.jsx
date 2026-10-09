@@ -42,8 +42,10 @@ function UserGoLive({ onClose }) {
   async function inviteGuests(showId, showTitle) {
     for (const g of guests) {
       await postRepository.addLiveParticipant({ show_id: showId, user_id: g.id, role: 'guest' })
+      // actor_id is the host: it is what lets the invitation say WHO invited you (it used to read "Someone invited
+      // you"), and the notifications INSERT policy only accepts a row whose actor is the signed-in user.
       await postRepository.insertNotification({
-        recipient_id: g.id, type: 'live_invite',
+        recipient_id: g.id, actor_id: user.id, type: 'live_invite',
         message: `invited you to co-host a live: "${showTitle}"`,
         link: `/live-dashboard/${showId}`,
       })

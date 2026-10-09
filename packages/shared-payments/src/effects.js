@@ -8,6 +8,31 @@
 // module depends on neither app's email wiring.
 
 /**
+ * Drain the outbox NOW, but only for as long as a customer should wait for it.
+ *
+ * A serverless function is frozen the moment it returns its response, so a fire-and-forget flush does not
+ * run: the email sits in the outbox until the next cron, and in production that is once a day (packages/
+ * shared-email authEmail.js documents the same trap). So the effects wait for the flush - bounded, so a slow
+ * provider cannot hold the "payment confirmed" screen hostage - and never throw: a row that misses the
+ * deadline is simply picked up by the next drain.
+ *
+ * @param {() => Promise<unknown>} flush   e.g. () => emailService.processBatch()
+ * @param {{timeoutMs?: number, logger?: {error: Function}}} [opts]
+ */
+export async function flushBounded(flush, { timeoutMs = 4000, logger = { error() {} } } = {}) {
+  let timer
+  try {
+    const flushing = Promise.resolve().then(flush)
+    flushing.catch(() => {}) // a rejection that lands after the deadline must not become an unhandled one
+    await Promise.race([flushing, new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })])
+  } catch (err) {
+    logger.error('settlement.flush.failed', { message: err?.message })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * @param {object} deps
  * @param {object} deps.supabase                       service-role client
  * @param {(message: object) => Promise<void>} deps.send   enqueue + flush one email; may throw
@@ -28,6 +53,28 @@ export function createSettlementEffects({ supabase, send, logger = { error() {} 
       await send(message)
     } catch (err) {
       logger.error('settlement.email.failed', { template: message.templateKey, message: err.message })
+      await recordEnqueueFailure(message, err)
+    }
+  }
+
+  // A confirmation that could not even be QUEUED used to leave a trace only in the serverless function's log,
+  // which is gone in hours: payments settled, no confirmation went out, and nothing in the database said so.
+  // Writing it to email_logs (event_type 'failed', no outbox row, stage 'enqueue') makes
+  // "settled but never queued" a query instead of a mystery. email_logs.event_type is CHECK-constrained, which
+  // is why this reuses 'failed' rather than inventing a value. Best effort: it must never throw into a
+  // settlement that already committed, and it never records the recipient's address.
+  async function recordEnqueueFailure(message, err) {
+    try {
+      // supabase-js reports a rejected insert in `error` instead of throwing, so both outcomes are handled.
+      const { error } = await supabase.from('email_logs').insert({
+        outbox_id: null,
+        event_type: 'failed',
+        detail: `Could not queue ${message.templateKey}: ${String(err?.message || err).slice(0, 200)}`,
+        metadata: { stage: 'enqueue', template_key: message.templateKey, idempotency_key: message.idempotencyKey || null },
+      }) || {}
+      if (error) logger.error('settlement.email.failure_not_recorded', { template: message.templateKey, message: error.message })
+    } catch (logErr) {
+      logger.error('settlement.email.failure_not_recorded', { template: message.templateKey, message: logErr?.message })
     }
   }
 

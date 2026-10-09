@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createSettlementEffects } from '../index.js'
+import { createSettlementEffects, flushBounded } from '../index.js'
 
 // The best-effort effects after a settlement: every branch must either send exactly the right email or quietly do nothing, and none may
 // ever throw into the settlement that already committed.
@@ -154,5 +154,78 @@ describe('effects: the paths around the happy ones', () => {
     const { run, logger } = setup({ users: { u1: { email: 'a@b.com' } } }, async () => { throw new Error('smtp down') })
     await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
     expect(logger.error).toHaveBeenCalledWith('settlement.email.failed', { template: 'payment_success', message: 'smtp down' })
+  })
+})
+
+describe('effects: a confirmation that cannot be queued leaves a trace in the database', () => {
+  // A confirmation that failed to queue used to leave only a line in a serverless log that no longer exists. The failure is
+  // now an email_logs row, so "settled but never queued" is a query.
+  it('records the failure in email_logs (no outbox row, stage enqueue) without the recipient address, and still never throws', async () => {
+    const { run, sb } = setup({ users: { u1: { email: 'ada@example.com' } } }, async () => { throw new Error('EMAIL_FROM is not configured') })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+
+    const logged = sb.inserts.filter(([table]) => table === 'email_logs')
+    expect(logged).toHaveLength(1)
+    expect(logged[0][1]).toMatchObject({
+      outbox_id: null,
+      // email_logs.event_type is CHECK-constrained to a fixed list that has no 'enqueue_failed'
+      event_type: 'failed',
+      metadata: { stage: 'enqueue', template_key: 'payment_success', idempotency_key: 'payment-success:ref_00000001' },
+    })
+    expect(logged[0][1].detail).toContain('EMAIL_FROM is not configured')
+    expect(JSON.stringify(logged)).not.toContain('ada@example.com')
+  })
+
+  it('a failure to record the failure changes nothing: the settlement still stands', async () => {
+    const sb = { ...fake({ users: { u1: { email: 'a@b.com' } } }) }
+    const from = sb.from
+    sb.from = (table) => (table === 'email_logs' ? { insert: async () => { throw new Error('db down') } } : from(table))
+    const logger = { error: vi.fn() }
+    const run = createSettlementEffects({ supabase: sb, send: async () => { throw new Error('queue down') }, logger })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.email.failed', { template: 'payment_success', message: 'queue down' })
+  })
+
+  it('says so when the failure could not be recorded either (supabase-js returns { error }, it does not throw)', async () => {
+    const sb = { ...fake({ users: { u1: { email: 'a@b.com' } } }) }
+    const from = sb.from
+    sb.from = (table) => (table === 'email_logs' ? { insert: async () => ({ error: { message: 'permission denied' } }) } : from(table))
+    const logger = { error: vi.fn() }
+    const run = createSettlementEffects({ supabase: sb, send: async () => { throw new Error('queue down') }, logger })
+    await expect(run(settled('wallet_topup', intent()))).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.email.failure_not_recorded', { template: 'payment_success', message: 'permission denied' })
+  })
+
+  it('a send that succeeds records nothing', async () => {
+    const { run, sb } = setup({ users: { u1: { email: 'a@b.com' } } })
+    await run(settled('wallet_topup', intent()))
+    expect(sb.inserts.filter(([table]) => table === 'email_logs')).toEqual([])
+  })
+})
+
+describe('flushBounded', () => {
+  it('waits for a flush that finishes in time', async () => {
+    let done = false
+    await flushBounded(async () => { await new Promise((r) => setTimeout(r, 10)); done = true }, { timeoutMs: 500 })
+    expect(done).toBe(true)
+  })
+
+  it('gives up on a flush that hangs, so a slow provider cannot hold the payment response', async () => {
+    const started = Date.now()
+    await flushBounded(() => new Promise(() => {}), { timeoutMs: 30 })
+    expect(Date.now() - started).toBeLessThan(400)
+  })
+
+  it('logs and swallows a flush that fails, and a rejection after the deadline is not left unhandled', async () => {
+    const logger = { error: vi.fn() }
+    await expect(flushBounded(async () => { throw new Error('provider 500') }, { logger })).resolves.toBeUndefined()
+    expect(logger.error).toHaveBeenCalledWith('settlement.flush.failed', { message: 'provider 500' })
+
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
+    await flushBounded(() => new Promise((_, reject) => setTimeout(() => reject(new Error('late')), 40)), { timeoutMs: 10 })
+    await new Promise((r) => setTimeout(r, 80))
+    process.off('unhandledRejection', unhandled)
+    expect(unhandled).not.toHaveBeenCalled()
   })
 })

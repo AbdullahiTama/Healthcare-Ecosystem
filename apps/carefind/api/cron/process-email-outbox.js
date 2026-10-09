@@ -38,9 +38,14 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
+  // One service-role client for the whole invocation, INJECTED into the email service: left to itself the shared
+  // package resolves '@supabase/supabase-js' from its own directory, which on Vercel has no node_modules (see
+  // EmailService.loadCreateClient), so a drain that built its own client could die with "Cannot find package".
+  let supabase
   let result
   try {
-    const emailService = new EmailService()
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+    const emailService = new EmailService({ supabase })
     // drain(), not processBatch(): this endpoint is the minute worker behind
     // Supabase Cron (see supabase/migrations/carefind_20260928_email_outbox_cron.sql),
     // and a single batch per tick cannot clear a backlog. It is bounded by
@@ -57,7 +62,6 @@ export default async function handler(req, res) {
   // one deadline (a step that no longer fits runs next minute), and a failing step never blocks the others or the email delivery above.
   let finance
   try {
-    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     finance = await runFinanceJobs(supabase, { budget })
   } catch (e) {
     console.error('[cron/process-email-outbox] finance jobs failed', e)
