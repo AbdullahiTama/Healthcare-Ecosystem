@@ -1,10 +1,13 @@
 -- ============================================================================
 -- Retire the separate CareFind-side business directory
 --
--- Status: WRITTEN AND TESTED, NOT YET APPLIED TO PRODUCTION. Every DROP statement times out
--- through the Supabase MCP connector (even DROP TABLE on a throwaway table; the transaction
--- rolls back, so nothing is ever half-dropped). Run this file in the Supabase SQL editor.
--- It is safe to run: it aborts without changes if any data table has a row.
+-- Status: APPLIED to production 2026-10-09 by running this file in the Supabase SQL editor
+-- (DROP statements time out through the MCP connector). An earlier revision dropped the tables
+-- one by one in a hand-picked order and failed on business_directory's foreign key to
+-- business_import_batches (rolled back, nothing lost); this revision drops them in ONE
+-- statement, tested against production's real foreign-key structure. Verified afterwards:
+-- 0 CareFind tables/functions left, directory_* intact.
+-- It is safe to re-run: it aborts without changes if any data table has a row.
 -- Run AFTER 20261012_directory_platform_scope.sql
 -- (which carries the 21 subcategories into the shared directory_subcategories).
 --
