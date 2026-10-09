@@ -1,7 +1,7 @@
 // CareFind single catch-all serverless function.
 //
 // Vercel's Hobby plan caps a deployment at 12 serverless functions; CareFind
-// has 14 API routes, so the deploy was failing with "No more than 12 Serverless
+// has 16 API routes, so the deploy was failing with "No more than 12 Serverless
 // Functions can be added to a Deployment." This router folds all of them into
 // one function; vercel.json rewrites every /api/* path here and we dispatch on
 // the original path Vercel preserves in req.url. No client URL changes.
@@ -26,6 +26,7 @@ import createSubaccountHandler from './_handlers/create-subaccount.js'
 import initiatePaymentHandler from './_handlers/initiate-payment.js'
 import initiateWithdrawalHandler from './_handlers/initiate-withdrawal.js'
 import paystackWebhookHandler from './_handlers/paystack-webhook.js'
+import purchaseReceiptHandler from './_handlers/purchase-receipt.js'
 import verifyBookingPaymentHandler from './_handlers/verify-booking-payment.js'
 import verifyConsultationPaymentHandler from './_handlers/verify-consultation-payment.js'
 import verifyPaymentHandler from './_handlers/verify-payment.js'
@@ -43,6 +44,7 @@ const ROUTES = {
   'initiate-payment': initiatePaymentHandler,
   'initiate-withdrawal': initiateWithdrawalHandler,
   'paystack-webhook': paystackWebhookHandler,
+  'purchase-receipt': purchaseReceiptHandler,
   'verify-booking-payment': verifyBookingPaymentHandler,
   'verify-consultation-payment': verifyConsultationPaymentHandler,
   'verify-payment': verifyPaymentHandler,

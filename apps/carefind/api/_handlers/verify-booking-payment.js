@@ -1,5 +1,7 @@
-﻿import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { paystackFetch } from '../_lib/paystack.js'
+import { announceBookingPaid } from '../_lib/bookingPaid.js'
+import { appUrlFor } from '../_lib/purchaseAnnouncements.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -8,7 +10,7 @@ const supabase = createClient(
 
 // Verifies a Paystack payment for a consultation booking and marks the
 // appointment as paid. Called when the client is redirected back from Paystack
-// (so the dashboard updates immediately) ΓÇö the paystack-webhook.js handler is
+// (so the dashboard updates immediately) — the paystack-webhook.js handler is
 // the async backup.
 //
 // Nothing is trusted from the client except which reference to look up. The
@@ -20,7 +22,7 @@ export default async function handler(req, res) {
   const { reference } = req.body || {}
   if (!reference) return res.status(400).json({ error: 'Missing reference' })
 
-  // Find the appointment by its stored payment reference first ΓÇö this is the
+  // Find the appointment by its stored payment reference first — this is the
   // lookup key the client is allowed to supply.
   const { data: appt, error: apptErr } = await supabase
     .from('appointments')
@@ -32,7 +34,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, id: appt.id, alreadyPaid: true })
   }
 
-  // Verify with Paystack ΓÇö the source of truth for whether money moved.
+  // Verify with Paystack — the source of truth for whether money moved.
   let paystackData
   try {
     paystackData = await paystackFetch(`/transaction/verify/${encodeURIComponent(reference)}`)
@@ -61,17 +63,20 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: settleResult || 'Could not settle payment' })
   }
 
-  // Notify the business that payment landed.
-  await supabase.from('staff_notifications').insert({
-    business_id: appt.business_id,
-    staff_id: null,
-    is_owner: true,
-    kind: 'booking_paid',
-    title: `Payment received ΓÇö ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} ΓÇö Γéª${(appt.fee_amount / 100).toLocaleString()}`,
-    link: '/dashboard/appointments',
-    read_at: null,
-  })
+  // Only the caller that actually settled the booking announces it. The RPC
+  // returns 'already_paid' to the loser of a race with the webhook, which
+  // already told the business and emailed the patient.
+  if (settleResult === 'ok') {
+    await announceBookingPaid(supabase, {
+      appt,
+      method: 'card',
+      reference,
+      // Booking is anonymous; the patient may have left an address for their
+      // receipt when they booked (stored in the Paystack metadata at create).
+      buyerEmail: paystackData.data.metadata?.client_email,
+      appUrl: appUrlFor(req),
+    })
+  }
 
   return res.status(200).json({ success: true, id: appt.id, paid: true })
 }

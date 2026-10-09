@@ -5,6 +5,32 @@ Do not erase previous history.
 
 ---
 
+## 2026-10-09 — Structured notifications and purchase confirmations (C22)
+
+**What:** Notifications now say specifically what happened, and every payment
+is confirmed in-app and by email.
+- Notifications page renders through one catalog (`src/services/notificationCatalog.js`):
+  payments show a headline, detail and facts (amount, CareCoins, reference);
+  activity reads "<name> <action>" and, with no resolvable actor, a complete
+  sentence — "Someone" is gone. `live_invite` now records who invited you.
+- New: receipt email + in-app confirmation for CareCoin top-ups, consultations,
+  subscriptions (including silent auto-renewals) and appointment payments, by
+  card or CareCoins; the professional/creator/business is told they were paid.
+  Booking form has an optional receipt-email field.
+- Security: browsers can no longer write actor-less or `payment_*` notifications
+  (`sql/20261009_notifications_structured.sql`); notification links are
+  followed only if they are in-app paths.
+- Fixed: the business's "Payment received" notice contained corrupted characters
+  and could be sent twice when the webhook and redirect raced.
+
+**Deploy order:** apply the migration → set `RESEND_API_KEY` + `EMAIL_FROM`
+(verified domain) in the CareFind Vercel project → deploy. See `planning/CODE_AUDIT.md` C22.
+
+**Tests performed:** see C22 (unit suites for catalog, email, announcer,
+receipt endpoint, webhook, booking, page; migration run on scratch Postgres 16).
+
+---
+
 ## 2026-08-14 — Production hotfix: ambiguous news→profiles embed (PGRST201)
 
 **What:** News article load failed with `PGRST201` — "Could not embed because

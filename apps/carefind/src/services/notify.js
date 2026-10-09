@@ -1,15 +1,24 @@
 import { supabase } from '../config/supabaseClient'
+import { isPaymentType } from './notificationCatalog.js'
 
-// Central helper to create a notification for any platform activity.
+// Central helper to create an ACTIVITY notification (like, follow, reply…).
 // recipientId: who receives it. actorId: who did the action. type: activity kind.
 // Never notify yourself. Fails silently so it never blocks the main action.
+//
+// Two things this deliberately cannot do, because the database refuses them too
+// (sql/20261009_notifications_structured.sql):
+//   * write without an actor — an activity notification always says WHO did it;
+//   * write a payment notification — those say "money moved" and are trusted
+//     precisely because only the server, which verified the payment, writes them.
+// Payment notices are created by the API (api/_lib/purchaseAnnouncements.js).
 export async function notify({ recipientId, actorId, type, message, link = null, postId = null }) {
   try {
-    if (!recipientId) return
+    if (!recipientId || !actorId) return
+    if (isPaymentType(type)) return
     if (recipientId === actorId) return // don't notify your own actions
     await supabase.from('notifications').insert({
       recipient_id: recipientId,
-      actor_id: actorId || null,
+      actor_id: actorId,
       type,
       message,
       link,

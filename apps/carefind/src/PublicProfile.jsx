@@ -154,7 +154,8 @@ function PublicProfile() {
               const settleRes = await settleConsultationCardPayment(user.id, id, pending.reference)
               if (settleRes.ok && !settleRes.alreadyProcessed && !settleRes.alreadyBooked) {
                 booked = await hasBookedConsultation(user.id, id)
-                notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
+                // The server told the professional (and emailed the receipt)
+                // when it settled the card payment — nothing to send from here.
                 showToast('Consultation booked! The professional has been notified.', { type: 'success' })
               }
             }
@@ -197,7 +198,9 @@ function PublicProfile() {
     }
     if (res.error) { showToast('Could not subscribe: ' + res.error, { type: 'error' }); return }
     await refreshAccess()
-    notify({ recipientId: id, actorId: user.id, type: 'gift', message: 'subscribed to your content \ud83d\udd13', link: `/u/${user.id}` })
+    // subscribe() asks the server to confirm the purchase: receipt to the
+    // subscriber, "paid" notice to the creator. A client-written "subscribed"
+    // notice (it used the gift type) could be forged, so none is sent here.
     showToast('Subscribed! You can now read all their subscriber-only content.', { type: 'success' })
   }
 
@@ -221,7 +224,8 @@ function PublicProfile() {
       res = await bookConsultation(user.id, id)
       if (res.ok) {
         setConsultBooked(true)
-        notify({ recipientId: id, actorId: user.id, type: 'consultation', message: 'booked a consultation with you', link: `/u/${user.id}` })
+        // bookConsultation() asks the server to confirm the purchase (receipt
+        // to the patient, "you were booked" to the professional).
         showToast('Consultation booked with CareCoins! The professional has been notified.', { type: 'success' })
       } else if (res.insufficient) {
         showToast('Not enough CareCoins to book. Top up your wallet or choose card payment.', { type: 'warning', actionLabel: 'Top up', onAction: () => navigate('/wallet') })

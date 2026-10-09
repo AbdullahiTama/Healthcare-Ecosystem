@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, AtSign, Bell, Gift, Heart, MessageCircle, Pill, Reply, UserPlus,
+  ArrowLeft, AtSign, Bell, CalendarCheck, Gift, Heart, LockOpen, MessageCircle, Pill,
+  Radio, Repeat2, Reply, Stethoscope, UserPlus, Wallet,
 } from 'lucide-react'
 import { supabase } from '../../config/supabaseClient'
 import { useAuth } from '../../providers/AuthContext'
@@ -12,32 +13,131 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Card, CardSkeleton, Empty } from '../../components/ui'
 import VerifiedBadge from '../../components/VerifiedBadge.jsx'
+import { describeNotification, safeInternalLink } from '../../services/notificationCatalog.js'
 
-// Each notification type gets its own icon and semantic colour — the icon is
-// what a user actually scans for when catching up, so it has to distinguish
-// "someone liked this" from "someone paid you" at a glance (ICONS.md: an
-// icon's colour always communicates something).
-const NOTIFICATION_KIND = {
-  like:              { Icon: Heart,         tint: theme.danger },
-  news_like:         { Icon: Heart,         tint: theme.danger },
-  comment:           { Icon: MessageCircle, tint: theme.info },
-  news_comment:      { Icon: MessageCircle, tint: theme.info },
-  comment_like:      { Icon: Heart,         tint: theme.danger },
-  reply:             { Icon: Reply,         tint: theme.info },
-  mention:           { Icon: AtSign,        tint: theme.tealDeep },
-  gift:              { Icon: Gift,          tint: theme.tealDeep },
-  follow:            { Icon: UserPlus,      tint: theme.tealDeep },
-  profile_view:      { Icon: UserPlus,      tint: theme.gray500 },
-  product_available: { Icon: Pill,          tint: theme.success },
+// What a notification SAYS is decided by services/notificationCatalog.js (shared
+// with the API that writes payment notices and receipt emails). This page only
+// maps the catalog's icon/tone keys onto lucide components and theme colours —
+// the icon is what a user scans for when catching up, so its colour always
+// communicates something (ICONS.md).
+const ICONS = {
+  heart: Heart, message: MessageCircle, reply: Reply, mention: AtSign, gift: Gift,
+  follow: UserPlus, repost: Repeat2, live: Radio, stethoscope: Stethoscope, pill: Pill,
+  wallet: Wallet, unlock: LockOpen, calendar: CalendarCheck, bell: Bell,
 }
 
-const DEFAULT_KIND = { Icon: Bell, tint: theme.gray500 }
+const TONES = {
+  danger: theme.danger,
+  info: theme.info,
+  brand: theme.tealDeep,
+  success: theme.success,
+  muted: theme.gray500,
+}
 
 // Notification types whose target is a single feed post. When the row carries
 // a post_id, these deep-link to the post itself (/feed?post=<id>) instead of
 // the bare '/'-'/feed' fallback stored on the row. Everything else (news,
 // follows, payments, product alerts) keeps its own link.
 const POST_LINK_TYPES = new Set(['like', 'comment', 'reply', 'repost', 'gift'])
+
+function actorNameOf(n) {
+  return n.profiles?.full_name || n.profiles?.display_name || ''
+}
+
+function timeAgo(dateStr) {
+  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
+function Facts({ facts }) {
+  if (!facts.length) return null
+  return (
+    <dl style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '8px 0 0 0' }}>
+      {facts.map((f) => (
+        <div key={f.label} style={{ display: 'flex', gap: 5, minWidth: 0, fontSize: 12 }}>
+          <dt style={{ color: theme.gray500, fontWeight: 600 }}>{f.label}</dt>
+          <dd style={{
+            margin: 0, color: theme.navy, fontWeight: 700, minWidth: 0, wordBreak: 'break-all',
+            ...(f.mono ? { fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 11.5 } : {}),
+          }}>
+            {f.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function NotificationItem({ n }) {
+  const d = describeNotification(n, { actorName: actorNameOf(n) })
+  const Icon = ICONS[d.iconKey] || Bell
+  const tint = TONES[d.tone] || theme.gray500
+  const isPayment = d.category === 'payment'
+  const rawLink = n.post_id && POST_LINK_TYPES.has(n.type) ? `/feed?post=${n.post_id}` : n.link
+  const to = safeInternalLink(rawLink)
+
+  const inner = (
+    <Card style={{
+      display: 'flex', gap: 12, alignItems: 'flex-start', padding: 14, marginBottom: 8,
+      background: n.read ? theme.cardBg : theme.tealMist,
+      border: `1px solid ${n.read ? theme.border : theme.tealBright}`,
+    }}>
+      <span style={{
+        width: 36, height: 36, borderRadius: theme.radius.md, flexShrink: 0,
+        background: n.read ? theme.gray50 : '#fff', color: tint,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={18} aria-hidden="true" />
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {isPayment && (
+          <p style={{ margin: '0 0 2px 0', fontSize: 10.5, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: tint }}>
+            Payment
+          </p>
+        )}
+        <p style={{
+          margin: '0 0 3px 0', lineHeight: 1.45,
+          ...(isPayment
+            ? { fontSize: 14, fontWeight: 800, color: theme.navy }
+            : { fontSize: 13.5, color: theme.textMid }),
+        }}>
+          {d.lead ? (
+            <>
+              <strong style={{ color: theme.navy, fontWeight: 800 }}>{d.lead}</strong>
+              <VerifiedBadge profile={n.profiles} size={13} style={{ marginLeft: 3 }} />
+              {' '}{d.title.slice(d.lead.length).trim()}
+            </>
+          ) : d.title}
+        </p>
+        {d.body && (
+          <p style={{ margin: '0 0 2px 0', fontSize: 13, color: theme.textMid, lineHeight: 1.5 }}>{d.body}</p>
+        )}
+        <Facts facts={d.facts} />
+        <p style={{ margin: '6px 0 0 0', fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
+          <time dateTime={n.created_at}>{timeAgo(n.created_at)}</time>
+        </p>
+      </div>
+      {!n.read && (
+        <span
+          role="img"
+          aria-label="Unread"
+          style={{ width: 8, height: 8, borderRadius: '50%', background: theme.tealDeep, flexShrink: 0, marginTop: 8 }}
+        />
+      )}
+    </Card>
+  )
+
+  return (
+    <li>
+      {to
+        ? <Link to={to} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>{inner}</Link>
+        : inner}
+    </li>
+  )
+}
 
 function Notifications() {
   const { user } = useAuth()
@@ -58,7 +158,7 @@ function Notifications() {
     setError('')
     const { data, error: loadError } = await supabase
       .from('notifications')
-      .select('id, type, message, link, post_id, read, created_at, actor_id, profiles!notifications_actor_id_fkey(full_name, display_name, is_verified, specialty, verification_label)')
+      .select('id, type, title, message, metadata, link, post_id, read, created_at, actor_id, profiles!notifications_actor_id_fkey(full_name, display_name, is_verified, specialty, verification_label)')
       .eq('recipient_id', user.id)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -77,18 +177,6 @@ function Notifications() {
     if ((data || []).some(n => !n.read)) {
       await supabase.from('notifications').update({ read: true }).eq('recipient_id', user.id).eq('read', false)
     }
-  }
-
-  function actorName(n) {
-    return n.profiles?.full_name || n.profiles?.display_name || 'Someone'
-  }
-
-  function timeAgo(dateStr) {
-    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
   }
 
   const bodyContent = (
@@ -139,51 +227,17 @@ function Notifications() {
             message={
               <>
                 <div style={{ fontSize: 15, fontWeight: 800, color: theme.navy, marginBottom: 4 }}>No notifications yet</div>
-                <div style={{ fontSize: 13, color: theme.gray500 }}>When people interact with you, it shows up here.</div>
+                <div style={{ fontSize: 13, color: theme.gray500 }}>Payment confirmations, bookings and activity on your posts show up here.</div>
               </>
             }
           />
         )}
 
-        {items.map((n) => {
-          const { Icon, tint } = NOTIFICATION_KIND[n.type] || DEFAULT_KIND
-          const to = n.post_id && POST_LINK_TYPES.has(n.type) ? `/feed?post=${n.post_id}` : n.link
-          const inner = (
-            <Card style={{
-              display: 'flex', gap: 12, alignItems: 'flex-start', padding: 14, marginBottom: 8,
-              background: n.read ? theme.cardBg : theme.tealMist,
-              border: `1px solid ${n.read ? theme.border : theme.tealBright}`,
-            }}>
-              <span style={{
-                width: 36, height: 36, borderRadius: theme.radius.md, flexShrink: 0,
-                background: n.read ? theme.gray50 : '#fff', color: tint,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Icon size={18} aria-hidden="true" />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: '0 0 3px 0', fontSize: 13.5, color: theme.textMid, lineHeight: 1.45 }}>
-                  <strong style={{ color: theme.navy, fontWeight: 800 }}>{actorName(n)}</strong>
-                  {<VerifiedBadge profile={n.profiles} size={13} style={{ marginLeft: 3 }} />}
-                  {' '}{n.message}
-                </p>
-                <p style={{ margin: 0, fontSize: 11.5, color: theme.gray400, fontWeight: 600 }}>
-                  <time dateTime={n.created_at}>{timeAgo(n.created_at)}</time>
-                </p>
-              </div>
-              {!n.read && (
-                <span
-                  role="img"
-                  aria-label="Unread"
-                  style={{ width: 8, height: 8, borderRadius: '50%', background: theme.tealDeep, flexShrink: 0, marginTop: 8 }}
-                />
-              )}
-            </Card>
-          )
-          return to
-            ? <Link key={n.id} to={to} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>{inner}</Link>
-            : <div key={n.id}>{inner}</div>
-        })}
+        {!loading && !error && items.length > 0 && (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {items.map((n) => <NotificationItem key={n.id} n={n} />)}
+          </ul>
+        )}
       </div>
 
       {isMobile && <BottomNav />}

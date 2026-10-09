@@ -1,6 +1,7 @@
 ﻿import { createClient } from '@supabase/supabase-js'
 import { verifyUser } from '../_lib/verifyUser.js'
 import { paystackFetch } from '../_lib/paystack.js'
+import { announcePurchase, appUrlFor, subscriptionExpiry } from '../_lib/purchaseAnnouncements.js'
 
 // Called when the user is redirected back from Paystack after subscribing
 // directly via card. Verifies the payment with Paystack, then creates the
@@ -61,6 +62,18 @@ export default async function handler(req, res) {
     reference,
     status: 'success',
   }).select().maybeSingle()
+
+  // Keyed on the Paystack reference, so if the webhook (which also handles this
+  // reference) announces first, this call is a recorded no-op.
+  await announcePurchase('subscription', {
+    buyerId: metadata.user_id,
+    creatorId: metadata.creator_id,
+    coins: parseInt(metadata.coins),
+    amountKobo: paystackData.data.amount,
+    method: 'card',
+    reference,
+    expiresAt: await subscriptionExpiry(supabase, metadata.user_id, metadata.creator_id),
+  }, { supabase, appUrl: appUrlFor(req), buyerEmail: user.email })
 
   return res.status(200).json({ success: true, coins: parseInt(metadata.coins) })
 }

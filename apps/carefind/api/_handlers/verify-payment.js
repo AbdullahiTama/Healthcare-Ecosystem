@@ -2,6 +2,7 @@
 import { verifyUser } from '../_lib/verifyUser.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
+import { announcePurchase, appUrlFor } from '../_lib/purchaseAnnouncements.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -55,5 +56,17 @@ export default async function handler(req, res) {
   })
 
   if (result.alreadyProcessed) return res.status(200).json({ alreadyProcessed: true })
+
+  // credit_wallet_topup returns already_processed to the loser of a race with
+  // the webhook, so only the request that actually credited the wallet gets
+  // here: it confirms the purchase (in-app + receipt email). Never throws.
+  await announcePurchase('topup', {
+    buyerId: user.id,
+    reference,
+    amountKobo: amount, // Paystack reports kobo
+    coins: parseInt(metadata.coins),
+    newBalance: result.newBalance,
+  }, { supabase, appUrl: appUrlFor(req), buyerEmail: user.email })
+
   return res.status(200).json({ credited: parseInt(metadata.coins), newBalance: result.newBalance })
 }

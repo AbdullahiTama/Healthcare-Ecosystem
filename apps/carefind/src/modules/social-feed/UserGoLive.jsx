@@ -41,8 +41,11 @@ function UserGoLive({ onClose }) {
   async function inviteGuests(showId, showTitle) {
     for (const g of guests) {
       await supabase.from('live_participants').insert({ show_id: showId, user_id: g.id, role: 'guest' })
+      // actor_id is required: it is what lets the invite say WHO invited you
+      // (and the notifications INSERT policy only accepts rows whose actor is
+      // the signed-in user).
       await supabase.from('notifications').insert({
-        recipient_id: g.id, type: 'live_invite',
+        recipient_id: g.id, actor_id: user.id, type: 'live_invite',
         message: `invited you to co-host a live: "${showTitle}"`,
         link: `/live-dashboard/${showId}`,
       })

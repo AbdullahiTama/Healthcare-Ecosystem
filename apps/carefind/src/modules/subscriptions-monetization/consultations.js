@@ -1,4 +1,5 @@
 import { supabase } from '../../config/supabaseClient'
+import { requestPurchaseReceipt } from '../../services/purchaseReceipt.js'
 
 // 1 CareCoin = ₦200
 export const NAIRA_PER_COIN = 200
@@ -48,7 +49,13 @@ export async function bookConsultation(patientId, professionalId) {
   })
 
   if (error) return { error: error.message }
-  if (data === 'ok') return { ok: true }
+  if (data === 'ok') {
+    // The RPC runs in the browser, so the server has not seen this purchase.
+    // Ask it to confirm: receipt to the patient, "you were booked" to the
+    // professional. Fire-and-forget — it never throws.
+    void requestPurchaseReceipt({ kind: 'consultation', professionalId })
+    return { ok: true }
+  }
   if (data === 'insufficient') return { insufficient: true }
   if (data === 'already_booked') return { alreadyBooked: true }
   return { error: 'Could not complete booking' }

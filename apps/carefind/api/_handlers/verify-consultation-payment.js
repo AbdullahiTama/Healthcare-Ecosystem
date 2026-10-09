@@ -2,6 +2,7 @@
 import { verifyUser } from '../_lib/verifyUser.js'
 import { paystackFetch } from '../_lib/paystack.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
+import { announcePurchase, appUrlFor } from '../_lib/purchaseAnnouncements.js'
 
 // Called when the user is redirected back from Paystack after booking a
 // consultation by card. Verifies the payment with Paystack, then settles the
@@ -48,6 +49,20 @@ export default async function handler(req, res) {
       nairaAmount: Math.round(paystackData.data.amount / 100),
       reference,
     })
+
+    // Only the caller that claimed the reference AND created the booking
+    // announces it; the loser of a race with the webhook, or a patient who was
+    // already booked, must not be told (or emailed) a second time.
+    if (!result.alreadyProcessed && !result.alreadyBooked) {
+      await announcePurchase('consultation', {
+        buyerId: metadata.user_id,
+        professionalId: metadata.professional_id,
+        amountKobo: paystackData.data.amount,
+        method: 'card',
+        reference,
+      }, { supabase, appUrl: appUrlFor(req), buyerEmail: user.email })
+    }
+
     return res.status(200).json({ success: true, ...result })
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Could not settle payment' })

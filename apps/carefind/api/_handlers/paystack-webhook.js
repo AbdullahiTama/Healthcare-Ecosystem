@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { getPaystackSecretKey } from '../_lib/paystack.js'
 import { creditTopup } from '../_lib/paystackCredit.js'
 import { settleConsultationPayment } from '../_lib/consultationSettle.js'
+import { announcePurchase, appUrlFor, subscriptionExpiry } from '../_lib/purchaseAnnouncements.js'
+import { announceBookingPaid } from '../_lib/bookingPaid.js'
 
 // Single Paystack webhook for all apps ΓÇö register this URL in the Paystack
 // dashboard. Dispatches by event metadata: top-ups, subscriptions, transfers,
@@ -24,18 +26,28 @@ function readRawBody(req) {
 }
 
 // ΓöÇΓöÇ Top-up handler (CareFind wallet credit) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-async function handleTopup(metadata, reference, amount) {
+async function handleTopup(metadata, reference, amount, ctx) {
   if (!metadata?.user_id || !metadata?.coins) return null
-  return creditTopup(supabase, {
+  const coins = parseInt(metadata.coins)
+  const result = await creditTopup(supabase, {
     userId: metadata.user_id,
-    coins: parseInt(metadata.coins),
+    coins,
     nairaAmount: amount,
     reference,
   })
+  // Only the caller that actually credited the wallet confirms the purchase;
+  // verify-payment.js (the redirect path) is the other contender for this
+  // reference and gets alreadyProcessed when the webhook wins.
+  if (!result.alreadyProcessed) {
+    await announcePurchase('topup', {
+      buyerId: metadata.user_id, reference, amountKobo: amount, coins, newBalance: result.newBalance,
+    }, { supabase, appUrl: ctx.appUrl })
+  }
+  return result
 }
 
 // ΓöÇΓöÇ Subscription handler (CareFind Paystack card payment) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-async function handleSubscription(metadata, reference, amount) {
+async function handleSubscription(metadata, reference, amount, ctx) {
   if (metadata?.purpose !== 'subscription') return null
 
   const { data: existing } = await supabase
@@ -59,6 +71,18 @@ async function handleSubscription(metadata, reference, amount) {
     reference,
     status: 'success',
   }).select().maybeSingle()
+
+  // Keyed on the Paystack reference: if verify-subscription-payment.js got
+  // here first (or second), the duplicate announcement is a recorded no-op.
+  await announcePurchase('subscription', {
+    buyerId: metadata.user_id,
+    creatorId: metadata.creator_id,
+    coins: parseInt(metadata.coins),
+    amountKobo: amount,
+    method: 'card',
+    reference,
+    expiresAt: await subscriptionExpiry(supabase, metadata.user_id, metadata.creator_id),
+  }, { supabase, appUrl: ctx.appUrl })
 
   return { credited: true }
 }
@@ -90,15 +114,26 @@ async function handleTransferFailed(reference) {
 // ΓöÇΓöÇ Consultation handler (CareFind professional consultation booking) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // Races verify-consultation-payment.js on the same reference; the RPC claims
 // the reference atomically so only one caller can ever settle the booking.
-async function handleConsultation(metadata, reference, amount) {
+async function handleConsultation(metadata, reference, amount, ctx) {
   if (metadata?.purpose !== 'consultation') return null
 
-  return settleConsultationPayment(supabase, {
+  const result = await settleConsultationPayment(supabase, {
     patientId: metadata.user_id,
     professionalId: metadata.professional_id,
     nairaAmount: Math.round(amount / 100),
     reference,
-  }).then((result) => ({ settled: true, ...result }))
+  })
+  // Announce only if this call claimed the reference and created the booking.
+  if (!result.alreadyProcessed && !result.alreadyBooked) {
+    await announcePurchase('consultation', {
+      buyerId: metadata.user_id,
+      professionalId: metadata.professional_id,
+      amountKobo: amount,
+      method: 'card',
+      reference,
+    }, { supabase, appUrl: ctx.appUrl })
+  }
+  return { settled: true, ...result }
 }
 
 // ΓöÇΓöÇ CareHub plan renewal handler ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -107,7 +142,7 @@ async function handleConsultation(metadata, reference, amount) {
 // is SECURITY DEFINER and idempotent (returns 'already_paid' for a repeat), so
 // whichever caller arrives first settles, and the other is a safe no-op. This
 // is the async backup for clients who pay but abandon the Paystack return URL.
-async function handleBooking(metadata, reference, amount) {
+async function handleBooking(metadata, reference, amount, ctx) {
   if (!metadata?.appointment_id) return null
 
   const { data: appt } = await supabase
@@ -128,16 +163,14 @@ async function handleBooking(metadata, reference, amount) {
   if (result !== 'ok' && result !== 'already_paid') return null
   if (result === 'already_paid') return { alreadyProcessed: true }
 
-  // Notify the business that payment landed (mirror of verify-booking-payment.js).
-  await supabase.from('staff_notifications').insert({
-    business_id: appt.business_id,
-    staff_id: null,
-    is_owner: true,
-    kind: 'booking_paid',
-    title: `Payment received — ${appt.client_name}`,
-    body: `${appt.date} at ${appt.time} — ₦${(appt.fee_amount / 100).toLocaleString()}`,
-    link: '/dashboard/appointments',
-    read_at: null,
+  // 'ok' means this call settled it (the 'already_paid' loser returned above),
+  // so it alone tells the business and sends the patient's receipt.
+  await announceBookingPaid(supabase, {
+    appt,
+    method: 'card',
+    reference,
+    buyerEmail: metadata.client_email,
+    appUrl: ctx.appUrl,
   })
 
   return { settled: true }
@@ -197,15 +230,17 @@ export default async function handler(req, res) {
     const { reference, metadata, amount } = event.data
 
     // Try subscription first (has explicit purpose flag)
-    let result = await handleSubscription(metadata, reference, amount)
+    const ctx = { appUrl: appUrlFor(req) }
+
+    let result = await handleSubscription(metadata, reference, amount, ctx)
     if (result) return res.status(200).json(result)
 
     // Try consultation booking (has its own purpose flag)
-    result = await handleConsultation(metadata, reference, amount)
+    result = await handleConsultation(metadata, reference, amount, ctx)
     if (result) return res.status(200).json(result)
 
     // Try CareFind appointment booking (has appointment_id in metadata)
-    result = await handleBooking(metadata, reference, amount)
+    result = await handleBooking(metadata, reference, amount, ctx)
     if (result) return res.status(200).json(result)
 
     // Try CareHub plan payment (has business_id)
@@ -213,7 +248,7 @@ export default async function handler(req, res) {
     if (result) return res.status(200).json(result)
 
     // Fall through to top-up (has user_id + coins)
-    result = await handleTopup(metadata, reference, amount)
+    result = await handleTopup(metadata, reference, amount, ctx)
     if (result) return res.status(200).json(result)
 
     return res.status(200).json({ received: true })

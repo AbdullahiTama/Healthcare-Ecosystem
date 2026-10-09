@@ -2,6 +2,9 @@
 import crypto from 'crypto'
 import { paystackFetch } from '../_lib/paystack.js'
 import { verifyUser } from '../_lib/verifyUser.js'
+import { isValidEmail } from '../_lib/email.js'
+import { announceBookingPaid } from '../_lib/bookingPaid.js'
+import { appUrlFor } from '../_lib/purchaseAnnouncements.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -38,6 +41,7 @@ export default async function handler(req, res) {
       time,
       booking_type: bookingType,
       concern,
+      email: clientEmail,
     } = req.body || {}
     if (!businessId || !clientName || !phone || !date || !time) {
       return res.status(400).json({ error: 'Name, phone, date and time are required' })
@@ -144,7 +148,15 @@ export default async function handler(req, res) {
             reference,
             currency: 'NGN',
             callback_url: `${origin}/business/${businessId}?reference=${reference}`,
-            metadata: { appointment_id: appointment.id, business_id: businessId, booking_type: wantType },
+            metadata: {
+              appointment_id: appointment.id,
+              business_id: businessId,
+              booking_type: wantType,
+              // Optional address for the payment receipt. The Paystack customer
+              // email above stays synthetic (it identifies the booking, not a
+              // person); this is only read back when the payment settles.
+              ...(isValidEmail(clientEmail) ? { client_email: clientEmail.trim() } : {}),
+            },
           }),
         })
         if (!data.status) {
@@ -214,7 +226,19 @@ export default async function handler(req, res) {
       })
     }
 
-    await notifyBusiness(appt.business_id, appt.id, appt.client_name, appt.booking_type, appt.date, appt.time)
+    // The RPC returned 'ok' — this request is the one that settled the booking
+    // (it is row-locked and returns 'already_paid' to any other caller), so it
+    // alone tells the business and confirms to the patient. The account email
+    // is used; a different one typed on the form is not needed for a signed-in
+    // payer.
+    await announceBookingPaid(supabase, {
+      appt,
+      method: 'coins',
+      reference: appt.payment_reference,
+      buyerId: user.id,
+      buyerEmail: user.email,
+      appUrl: appUrlFor(req),
+    })
     return res.status(200).json({ success: true, id: appt.id, coins })
   }
 

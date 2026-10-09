@@ -27,6 +27,11 @@ function BookingCard({ biz }) {
   const [payMethod, setPayMethod] = useState(user ? 'coins' : 'card')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  // Where the payment receipt goes. Optional: a booking is anonymous, so
+  // without an address there is nobody to email. Signed-in users get theirs
+  // filled in (the auth user may arrive after first render, hence the effect).
+  const [email, setEmail] = useState(user?.email || '')
+  useEffect(() => { if (user?.email) setEmail((current) => current || user.email) }, [user])
   const [booking, setBooking] = useState(false)
   const [done, setDone] = useState(false)
 
@@ -119,6 +124,8 @@ function BookingCard({ biz }) {
           booking_type: apptType,
           name: name.trim(),
           phone: phone.trim(),
+          // Only meaningful for a paid booking; the server validates it.
+          ...(feeKobo > 0 && email.trim() ? { email: email.trim() } : {}),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -198,6 +205,17 @@ function BookingCard({ biz }) {
             required
             style={{ marginBottom: 10 }}
           />
+
+          {feeKobo > 0 && (
+            <Inp
+              label="Email for your receipt (optional)"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@example.com"
+              style={{ marginBottom: 10 }}
+            />
+          )}
 
           {biz.booking_type === 'both' && (
             <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>

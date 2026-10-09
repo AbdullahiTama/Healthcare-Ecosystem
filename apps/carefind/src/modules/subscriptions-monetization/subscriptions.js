@@ -1,4 +1,5 @@
 import { supabase } from '../../config/supabaseClient'
+import { requestPurchaseReceipt } from '../../services/purchaseReceipt.js'
 
 // 1 CareCoin = ₦200
 export const NAIRA_PER_COIN = 200
@@ -31,7 +32,7 @@ export async function checkAccess(viewerId, creatorId) {
 
   // Lapsed. Auto-renew if they asked us to.
   if (sub.auto_renew) {
-    const result = await subscribe(viewerId, creatorId, sub.price)
+    const result = await subscribe(viewerId, creatorId, sub.price, { renewal: true })
     if (result.ok) return { active: true, sub, renewed: true }
     if (result.insufficient) return { active: false, sub, insufficient: true }
   }
@@ -41,7 +42,9 @@ export async function checkAccess(viewerId, creatorId) {
 
 // Charge the wallet and grant/extend 30 days. Atomic — handled in the DB.
 // Returns { ok, insufficient, error }
-export async function subscribe(subscriberId, creatorId, priceCoins) {
+// `renewal` only changes the wording of the confirmation: an auto-renewal
+// charges the wallet without the user doing anything, so it must say so.
+export async function subscribe(subscriberId, creatorId, priceCoins, { renewal = false } = {}) {
   if (!subscriberId || !creatorId) return { error: 'Missing user' }
   const price = Number(priceCoins) || 0
   if (price <= 0) return { error: 'Invalid price' }
@@ -54,7 +57,13 @@ export async function subscribe(subscriberId, creatorId, priceCoins) {
 
   if (error) return { error: error.message }
   if (data === 'insufficient') return { insufficient: true }
-  if (data === 'ok') return { ok: true }
+  if (data === 'ok') {
+    // The RPC runs in the browser, so the server has not seen this charge.
+    // Ask it to confirm (receipt to the subscriber, "paid" notice to the
+    // creator). Fire-and-forget — it never throws.
+    void requestPurchaseReceipt({ kind: 'subscription', creatorId, renewal })
+    return { ok: true }
+  }
   return { error: 'Could not complete subscription' }
 }
 
