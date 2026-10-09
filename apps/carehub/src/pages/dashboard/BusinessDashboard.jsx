@@ -47,6 +47,7 @@ const LiveActivity = lazy(() => import('../../modules/live-activity/LiveActivity
 const FacilityDiscovery = lazy(() => import('../../modules/facility-discovery/FacilityDiscovery'))
 const BusinessDiscovery = lazy(() => import('../../modules/business-discovery/BusinessDiscovery'))
 const BusinessDirectory = lazy(() => import('../../modules/business-directory/BusinessDirectory'))
+const TerritoryIntelligence = lazy(() => import('../../modules/territory-intelligence/TerritoryIntelligence'))
 const Reception = lazy(() => import('./hospital/Reception'))
 const Triage = lazy(() => import('./hospital/Triage'))
 const Doctor = lazy(() => import('./hospital/Doctor'))
@@ -67,7 +68,7 @@ const PAGE_TITLES = {
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
   overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'Online Store',
   discovery: 'Facility Discovery', activity: 'Live Field Activity',
-  'business-discovery': 'Business Discovery', directory: 'Business Directory',
+  'business-discovery': 'Business Discovery', directory: 'Business Directory', intelligence: 'Territory Intelligence',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -257,6 +258,7 @@ export default function BusinessDashboard() {
               <Route path='discovery' element={bareGuard('discovery', <FacilityDiscovery {...pageProps} />)} />
               <Route path='business-discovery' element={bareGuard('business-discovery', <BusinessDiscovery {...pageProps} allowedModules={allowedRouteKeys} />)} />
               <Route path='directory' element={bareGuard('directory', <BusinessDirectory {...pageProps} />)} />
+              <Route path='intelligence' element={bareGuard('intelligence', <TerritoryIntelligence {...pageProps} />)} />
               <Route path='reception' element={guard('reception', <><TopBar title='Reception' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reception {...pageProps} /></div></>)} />
               <Route path='triage' element={guard('triage', <><TopBar title='Triage' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Triage {...pageProps} /></div></>)} />
               <Route path='doctor' element={guard('doctor', <><TopBar title='Doctor Consultation' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Doctor {...pageProps} /></div></>)} />

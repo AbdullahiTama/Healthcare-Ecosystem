@@ -37,5 +37,13 @@ Modules `discovery` (Owner, Manager, default staff) and `directory` (Owner; cust
 ## Test plan
 `npm test` (carehub): 130 new tests — normalisation, dedup (incl. 3,000×3,000 timing), import end-to-end, XLSX round-trip, NL examples from the spec, repository tenancy and PostgREST-injection guard, search/sort, geocoding, export, discovery/picker/switch components. Manual after applying the migration: import a real 1,000-row file; verify a rep without the flag cannot write; log a field report with and without a confirmed business; confirm managers see "Business: …" in feed/table.
 
-## Phase 4 (designed for, not built)
-`territory_id`, `state`, `lga` on directory rows and `field_activities.directory_business_id` give the join for: businesses per territory, coverage = directory businesses with ≥1 linked activity in a window, "not visited recently" = directory businesses with none, segmentation by category, rep assignment via `rep_territories`. Needs a manager dashboard and (at scale) a SQL view/RPC for the aggregation.
+## Phase 4 — Territory Intelligence (`modules/territory-intelligence`, `/dashboard/intelligence`)
+Read-only analytics for Owner and Manager (module `intelligence`); applied in `sql/20261011_territory_intelligence.sql`.
+
+**What "covered" means:** a directory business is covered in a period only when a *submitted* field activity carries its `directory_business_id`, which the Live Field Report sets only when the rep explicitly confirmed that business. GPS proximity never counts. Reports logged without choosing a business are invisible to coverage, so coverage is a **lower bound**; the page shows "Reports with a business %" and a warning when it is under 50% (with ≥5 reports).
+
+**Screens:** headline tiles (registered / covered / not covered / coverage % / reports with a business); *Coverage* grouped by territory (with assigned reps), state, LGA or category, weakest first; *Not visited* prospect list (never-visited first, then longest since last visit; filter by territory/unassigned; export CSV/Excel/PDF/JSON of the full set); *Representatives* (reports, with confirmed business, businesses reached); *Assign territories* (owner/directory managers: bulk-assign a territory to active businesses that have none, optionally per state — never overwrites).
+
+**Database:** four SECURITY INVOKER read-only functions (`directory_coverage_summary`, `directory_unvisited`, `directory_visit_totals`, `directory_rep_activity`) so the caller's RLS decides what they see; EXECUTE for `authenticated` only; supporting partial index on `field_activities`. Verified on scratch Postgres 16 (19 checks incl. tenant isolation, window edges, inactive exclusion, paging) and on production in rolled-back blocks.
+
+**Not built (future):** representative assignment to individual businesses (`rep_territories` already assigns reps to territories and is shown on the coverage table); visit-frequency targets and alerts; trend-over-time charts; a structured "visit target per territory". Coverage of activities that never confirmed a business can only improve by getting reps to confirm.

@@ -120,11 +120,11 @@ export function printAsPdf(html) {
   setTimeout(() => w.print(), 300)
 }
 
-export async function exportRows(format, rows, { baseName = 'businesses', title, subtitle } = {}) {
+export async function exportRows(format, rows, { baseName = 'businesses', title, subtitle, columns = EXPORT_COLUMNS } = {}) {
   const stamp = new Date().toISOString().slice(0, 10)
-  if (format === 'csv') downloadBlob(buildCsv(rows), `${baseName}-${stamp}.csv`, 'text/csv;charset=utf-8')
+  if (format === 'csv') downloadBlob(buildCsv(rows, columns), `${baseName}-${stamp}.csv`, 'text/csv;charset=utf-8')
   else if (format === 'json') downloadBlob(buildJson(rows), `${baseName}-${stamp}.json`, 'application/json')
-  else if (format === 'xlsx') downloadBlob(await buildXlsx(rows), `${baseName}-${stamp}.xlsx`)
+  else if (format === 'xlsx') downloadBlob(await buildXlsx(rows, columns), `${baseName}-${stamp}.xlsx`)
   else if (format === 'pdf') printAsPdf(buildPrintHtml(rows, { title, subtitle }))
   else throw new Error('Unknown export format: ' + format)
 }

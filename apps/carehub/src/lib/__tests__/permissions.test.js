@@ -248,7 +248,7 @@ describe('module registry (business type → modules)', () => {
     // Counts reflect wallet + mastercatalog + ecommerce being ALL_TYPES (added after initial registry) + discovery for enterprise + pv-tracker for enterprise.
     expect(ALL_NAV_DEFAULT.length).toBe(20)
     expect(ALL_NAV_HOSPITAL.length).toBe(24)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(20) // 18 + Business Discovery + Business Directory
+    expect(ALL_NAV_ENTERPRISE.length).toBe(21) // 18 + Business Discovery + Business Directory + Territory Intelligence
     expect(ALL_NAV_ENTERPRISE.map(([id]) => id)).toContain('pv-tracker')
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
@@ -273,7 +273,7 @@ describe('signup taxonomy (config/constants.js BUSINESS_TYPES)', () => {
   const ids = (type) => getModulesForType(type).map(([id]) => id)
   const ownerNav = (type) => getNavItems('Owner', type).map(([id]) => id)
   const CLINICAL = ['reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging']
-  const ENTERPRISE = ['activity', 'discovery', 'business-discovery', 'directory', 'orders', 'warehouses', 'stock', 'territories', 'messages', 'pv-tracker']
+  const ENTERPRISE = ['activity', 'discovery', 'business-discovery', 'directory', 'intelligence', 'orders', 'warehouses', 'stock', 'territories', 'messages', 'pv-tracker']
 
   it('resolves every registered signup type to a working owner nav', () => {
     for (const { id } of BUSINESS_TYPES) {
@@ -469,5 +469,16 @@ describe('Business Discovery / Directory modules', () => {
   it('a custom role only manages the directory when the Owner says so', () => {
     expect(buildCustomPerms({ nav: ['directory'] }).canManageDirectory).toBe(false)
     expect(buildCustomPerms({ nav: ['directory'], canManageDirectory: true }).canManageDirectory).toBe(true)
+  })
+})
+
+describe('Territory Intelligence module', () => {
+  const nav = (role, type) => getNavItems(role, type).map(([id]) => id)
+  it('is enterprise-only and available to Owner and Manager, not to a plain rep', () => {
+    expect(nav('Owner', 'manufacturer_importer')).toContain('intelligence')
+    expect(nav('Owner', 'wholesale')).toContain('intelligence')
+    expect(nav('Owner', 'pharmacy')).not.toContain('intelligence')
+    expect(nav('Manager', 'manufacturer_importer')).toContain('intelligence')
+    expect(nav('Regional Rep', 'manufacturer_importer')).not.toContain('intelligence')
   })
 })
