@@ -21,4 +21,13 @@ export {
   REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
   requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps,
 } from './refunds.js'
-export { FALLBACK_NIGERIAN_BANKS, fetchAllBanks, createBanksHandler } from './banks.js'
+export { FALLBACK_NIGERIAN_BANKS, fetchAllBanks, createBanksHandler, createBankDirectory } from './banks.js'
+export { DojahProvider, DOJAH_BASE_URLS, createDojahFromEnv } from './kyc/DojahProvider.js'
+export { nameTokens, matchPersonName, matchBusinessName } from './kyc/nameMatch.js'
+export { hashIdentifier, kycStatus, verifyIdentity, verifySelfie } from './kyc/identity.js'
+export {
+  listPayoutAccounts, getPayoutAccountForWithdrawal, payoutAccountRequired, sendPayoutAccountOtp,
+  addPayoutAccount, setDefaultPayoutAccount, removePayoutAccount,
+} from './payoutAccounts.js'
+export { createKycHandler, createPayoutAccountsHandler } from './payoutHandlers.js'
+export { createRateLimiter } from './rateLimit.js'

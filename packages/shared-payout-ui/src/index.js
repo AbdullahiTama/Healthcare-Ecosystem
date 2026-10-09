@@ -1,3 +1,5 @@
 export { rankBanks, searchBanks, isValidAccountNumber, normalizeBankName } from './banks.js'
-export { fetchBanks, resolveAccountName, sendPinOtp, setWithdrawalPin } from './client.js'
-export { createAccountResolver, createPinSetup } from './stores.js'
+export {
+  kycStatus, kycVerify, kycSelfie, listPayoutAccounts, sendPayoutAccountOtp, addPayoutAccount, setDefaultPayoutAccount, removePayoutAccount,
+  fetchBanks, resolveAccountName, sendPinOtp, setWithdrawalPin } from './client.js'
+export { createAccountResolver, createPinSetup, createPayoutManager } from './stores.js'

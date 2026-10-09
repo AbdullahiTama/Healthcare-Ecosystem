@@ -1,0 +1,110 @@
+// CareHub: a saved, identity-verified payout account (owned by the PARENT business) decides where a business
+// withdrawal goes; the browser's bank details are ignored. financial_config.payout_account_required = 1 refuses a
+// typed-in destination.
+const h = vi.hoisted(() => {
+  const s = { initiateTransfer: vi.fn(), createTransferRecipient: vi.fn(), checkBalance: vi.fn(), resolveAccount: vi.fn(), rpcCalls: [], tables: {}, routes: {}, auth: null }
+  const builderFor = (table) => {
+    let rows = s.tables[table] || []
+    const b = {
+      select: () => b, or: () => b, in: () => b, is: () => b, order: () => b, limit: () => b,
+      eq: (col, val) => { rows = rows.filter((r) => r[col] === val); return b },
+      maybeSingle: async () => ({ data: rows[0] ?? null }),
+    }
+    return b
+  }
+  s.client = { from: builderFor, rpc: async (n, a) => { s.rpcCalls.push([n, a]); const r = s.routes[n]; return typeof r === 'function' ? r(a) : r || { data: null } } }
+  return s
+})
+
+vi.mock('../_lib/supabase.js', () => ({ supabase: h.client }))
+vi.mock('../_lib/verifyBusiness.js', () => ({ verifyBusiness: async () => h.auth }))
+vi.mock('../_lib/paystack.js', () => ({ paystackFetch: vi.fn() }))
+vi.mock('../../src/lib/emailService.js', () => ({ emailService: { enqueue: vi.fn(async () => {}), processBatch: vi.fn(async () => {}) } }))
+vi.mock('../_lib/paystackTransfer.js', () => ({
+  createTransferRecipient: h.createTransferRecipient, initiateTransfer: h.initiateTransfer, checkBalance: h.checkBalance, resolveAccount: h.resolveAccount,
+}))
+
+import { hashPin } from '@care-ecosystem/shared-payments'
+import handler from '../_handlers/initiate-business-withdrawal.js'
+
+const REF = 'ch_wd_0123456789abcdef0123456789abcdef'
+const SALT = '00112233445566778899aabbccddeeff'
+const SAVED = { id: 'pa-1', owner_type: 'business', owner_id: 'biz-1', status: 'verified', bank_code: '058', bank_name: 'Guaranty Trust Bank', account_number: '0123456789', account_name: 'GRACE PHARMACY LIMITED' }
+const res = () => { const r = { statusCode: 0, body: null }; r.status = (c) => { r.statusCode = c; return r }; r.json = (b) => { r.body = b; return r }; return r }
+const calls = (n) => h.rpcCalls.filter(([name]) => name === n)
+
+beforeEach(() => {
+  h.rpcCalls.length = 0
+  h.tables = { businesses: [{ id: 'biz-1' }], payout_accounts: [SAVED], financial_config: [{ key: 'payout_account_required', value: 0 }] }
+  h.auth = { business: { id: 'biz-1', name: 'Grace Pharmacy' }, user: { id: 'user-1', email: 'b@example.com', email_confirmed_at: '2026-01-01' } }
+  h.routes.get_withdrawal_pin = { data: [{ pin_hash: hashPin('1234', SALT), pin_salt: SALT, locked_until: null }] }
+  h.routes.verify_withdrawal_pin = { data: true }
+  h.routes.create_business_withdrawal = { data: { outcome: 'ok', id: 'bw-1', reference: REF, amount_kobo: 500000 } }
+  h.routes.attach_business_withdrawal_transfer = { data: 'ok' }
+  h.initiateTransfer.mockReset().mockResolvedValue({ transferCode: 'TRF_1' })
+  h.createTransferRecipient.mockReset().mockResolvedValue('RCP_1')
+  h.checkBalance.mockReset().mockResolvedValue(10_000_000_00)
+  h.resolveAccount.mockReset().mockResolvedValue({ accountName: 'GRACE PHARMACY LIMITED' })
+})
+
+const base = { business_id: 'biz-1', amount: 500000, pin: '1234' }
+
+describe('initiate-business-withdrawal with a saved payout account', () => {
+  it('sends the money to the saved account and ignores the browser\'s destination', async () => {
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1', bankCode: '999', bankName: 'Evil', accountNumber: '9999999999', accountName: 'Mallory' } }, r)
+    expect(r.statusCode).toBe(200)
+    expect(calls('create_business_withdrawal')[0][1]).toMatchObject({
+      p_bank_code: '058', p_bank_name: 'Guaranty Trust Bank', p_account_number: '0123456789', p_account_name: 'GRACE PHARMACY LIMITED',
+    })
+  })
+
+  it('a branch withdrawal uses the PARENT business\'s account', async () => {
+    h.tables.businesses = [{ id: 'branch-1' }]
+    const r = res()
+    await handler({ method: 'POST', body: { ...base, business_id: 'branch-1', payoutAccountId: 'pa-1' } }, r)
+    expect(r.statusCode).toBe(200)
+  })
+
+  it('refuses another business\'s, a disabled, or an unknown account before reserving anything', async () => {
+    for (const rows of [[{ ...SAVED, owner_id: 'biz-other' }], [{ ...SAVED, status: 'disabled' }], [], [{ ...SAVED, owner_type: 'user' }]]) {
+      h.tables.payout_accounts = rows
+      h.rpcCalls.length = 0
+      const r = res()
+      await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
+      expect(r.statusCode).toBe(400)
+      expect(r.body.code).toBe('payout_account_not_found')
+      expect(calls('create_business_withdrawal')).toHaveLength(0)
+    }
+  })
+
+  it('still needs the PIN, and the bank re-check still applies', async () => {
+    h.routes.verify_withdrawal_pin = { data: false }
+    let r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1', pin: '0000' } }, r)
+    expect(r.statusCode).toBe(403)
+    h.routes.verify_withdrawal_pin = { data: true }
+    h.resolveAccount.mockResolvedValue({ accountName: 'SOMEONE ELSE' })
+    r = res()
+    await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
+    expect(r.statusCode).toBe(400)
+    expect(calls('create_business_withdrawal')).toHaveLength(0)
+  })
+})
+
+describe('payout_account_required (CareHub)', () => {
+  const typed = { ...base, bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'GRACE PHARMACY LIMITED' }
+  it('off: a typed destination still works', async () => {
+    const r = res(); await handler({ method: 'POST', body: typed }, r)
+    expect(r.statusCode).toBe(200)
+  })
+  it('on: a typed destination is refused, a saved account works', async () => {
+    h.tables.financial_config = [{ key: 'payout_account_required', value: 1 }]
+    let r = res(); await handler({ method: 'POST', body: typed }, r)
+    expect(r.statusCode).toBe(400)
+    expect(r.body.code).toBe('payout_account_required')
+    expect(calls('create_business_withdrawal')).toHaveLength(0)
+    r = res(); await handler({ method: 'POST', body: { ...base, payoutAccountId: 'pa-1' } }, r)
+    expect(r.statusCode).toBe(200)
+  })
+})

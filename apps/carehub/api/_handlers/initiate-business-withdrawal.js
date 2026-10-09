@@ -1,4 +1,4 @@
-import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal } from '@care-ecosystem/shared-payments'
+import { checkWithdrawalPin, verifyBankAccount, settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired } from '@care-ecosystem/shared-payments'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
 import { supabase } from '../_lib/supabase.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, resolveAccount } from '../_lib/paystackTransfer.js'
@@ -21,8 +21,20 @@ export default async function handler(req, res) {
   const { business, user, error: authError } = await verifyBusiness(supabase, req)
   if (authError) return res.status(401).json({ error: authError })
 
-  const { business_id: businessId, amount, bankCode, bankName, accountNumber, accountName, pin } = req.body || {}
+  let { bankCode, bankName, accountNumber, accountName } = req.body || {}
+  const { business_id: businessId, amount, pin, payoutAccountId } = req.body || {}
   const amountKobo = Number(amount)
+
+  // A saved, identity-verified payout account (owned by the parent business) decides WHERE the money goes: its
+  // details come from the database and any bank details the browser sent are ignored. When the platform requires
+  // saved accounts (financial_config.payout_account_required) a typed-in destination is refused.
+  if (payoutAccountId) {
+    const saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'business', ownerId: business.id, id: payoutAccountId })
+    if (!saved) return res.status(400).json({ error: 'That payout account is not available. Choose another or add a new one.', code: 'payout_account_not_found' })
+    ;({ bank_code: bankCode, bank_name: bankName, account_number: accountNumber, account_name: accountName } = saved)
+  } else if (await payoutAccountRequired(supabase)) {
+    return res.status(400).json({ error: 'Add and verify a payout account before withdrawing.', code: 'payout_account_required' })
+  }
   if (!businessId || !Number.isInteger(amountKobo) || amountKobo <= 0 || amountKobo > MAX_AMOUNT_KOBO
       || !bankCode || !bankName || !/^\d{10}$/.test(String(accountNumber || '')) || !accountName) {
     return res.status(400).json({ error: 'Missing or invalid withdrawal details' })

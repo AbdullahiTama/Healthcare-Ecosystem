@@ -136,3 +136,100 @@ describe('createPinSetup', () => {
     expect(p.getState()).toMatchObject({ done: false, submitting: false, error: 'Incorrect code. Check the email and try again.' })
   })
 })
+
+import { createPayoutManager } from './stores.js'
+
+describe('createPayoutManager', () => {
+  const make = () => createPayoutManager({ getToken: async () => 'tok' })
+  // route table: path -> {status, body}; records calls
+  function routes(table) {
+    const log = []
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      log.push([url, init.body ? JSON.parse(init.body) : null, init.headers.Authorization])
+      const r = typeof table[url] === 'function' ? table[url](init.body ? JSON.parse(init.body) : {}) : table[url]
+      return { ok: r.status < 400, status: r.status, json: async () => r.body }
+    }))
+    return log
+  }
+  const KYC = { status: 200, body: { verified: true, tier: 1, legalName: 'ADA OBI', bvnLast4: '1234', ninLast4: '5678' } }
+  const LIST = { status: 200, body: { accounts: [{ id: 'a1', bankName: 'GTBank', accountLast4: '6789', accountName: 'ADA OBI', isDefault: true }], required: true } }
+
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it('loads identity and accounts together, with the bearer token', async () => {
+    const log = routes({ '/api/kyc/status': KYC, '/api/payout-accounts/list': LIST })
+    const m = make()
+    expect(m.getState().loading).toBe(true)
+    await m.load()
+    expect(m.getState()).toMatchObject({ loading: false, loadError: '', required: true })
+    expect(m.getState().kyc.verified).toBe(true)
+    expect(m.getState().accounts).toHaveLength(1)
+    expect(log.every(([, , auth]) => auth === 'Bearer tok')).toBe(true)
+  })
+
+  it('shows a load error when either call fails', async () => {
+    routes({ '/api/kyc/status': KYC, '/api/payout-accounts/list': { status: 500, body: {} } })
+    const m = make()
+    await m.load()
+    expect(m.getState().loadError).toMatch(/Could not load/)
+  })
+
+  it('verifyIdentity validates locally, sends once, and stores the result', async () => {
+    const log = routes({ '/api/kyc/verify': { status: 200, body: { verified: true, tier: 1, legalName: 'ADA OBI' } } })
+    const m = make()
+    expect(await m.verifyIdentity({ bvn: '123', nin: '456' })).toBe(false)
+    expect(m.getState().error).toMatch(/11-digit/)
+    expect(log).toHaveLength(0)
+    expect(await m.verifyIdentity({ bvn: '22222222222', nin: '11111111111' })).toBe(true)
+    expect(m.getState().kyc.verified).toBe(true)
+    expect(m.getState().busy).toBe('')
+  })
+
+  it('surfaces a server refusal with its code', async () => {
+    routes({ '/api/kyc/verify': { status: 422, body: { error: 'The BVN and NIN do not belong to the same person.', code: 'identity_mismatch' } } })
+    const m = make()
+    expect(await m.verifyIdentity({ bvn: '22222222222', nin: '11111111111' })).toBe(false)
+    expect(m.getState()).toMatchObject({ error: 'The BVN and NIN do not belong to the same person.', code: 'identity_mismatch', busy: '' })
+  })
+
+  it('sendCode then addAccount: validates the code locally, then refreshes the list', async () => {
+    const log = routes({
+      '/api/payout-accounts/otp': { status: 200, body: { ok: true, sentTo: 'a**@x.com' } },
+      '/api/payout-accounts/add': { status: 201, body: { ok: true } },
+      '/api/kyc/status': KYC, '/api/payout-accounts/list': LIST,
+    })
+    const m = make()
+    await m.sendCode()
+    expect(m.getState()).toMatchObject({ codeSent: true, sentTo: 'a**@x.com' })
+    expect(await m.addAccount({ bankCode: '058', accountNumber: '0123456789', otp: '12' })).toBe(false)
+    expect(m.getState().code).toBe('otp_invalid')
+    expect(await m.addAccount({ bankCode: '058', accountNumber: '0123456789', otp: '123456' })).toBe(true)
+    expect(log.find(([u]) => u === '/api/payout-accounts/add')[1]).toEqual({ bankCode: '058', accountNumber: '0123456789', otp: '123456' })
+    expect(m.getState()).toMatchObject({ codeSent: false, busy: '' })
+    expect(m.getState().accounts).toHaveLength(1)
+  })
+
+  it('a name mismatch is shown with the bank\'s name', async () => {
+    routes({ '/api/payout-accounts/add': { status: 422, body: { error: 'The account name must match the name on your verified BVN.', code: 'name_mismatch', accountName: 'TUNDE BELLO' } } })
+    const m = make()
+    expect(await m.addAccount({ bankCode: '058', accountNumber: '0123456789', otp: '123456' })).toBe(false)
+    expect(m.getState().code).toBe('name_mismatch')
+  })
+
+  it('remove needs a PIN; setDefault reloads', async () => {
+    const log = routes({ '/api/payout-accounts/remove': { status: 200, body: { ok: true } }, '/api/payout-accounts/default': { status: 200, body: { ok: true } }, '/api/kyc/status': KYC, '/api/payout-accounts/list': LIST })
+    const m = make()
+    expect(await m.remove({ id: 'a1', pin: '' })).toBe(false)
+    expect(log).toHaveLength(0)
+    expect(await m.remove({ id: 'a1', pin: '1234' })).toBe(true)
+    expect(log.find(([u]) => u === '/api/payout-accounts/remove')[1]).toEqual({ id: 'a1', pin: '1234' })
+    expect(await m.setDefault('a1')).toBe(true)
+  })
+
+  it('reports a network failure and clears busy', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
+    const m = make()
+    expect(await m.sendCode()).toBe(false)
+    expect(m.getState()).toMatchObject({ busy: '', code: 'network' })
+  })
+})

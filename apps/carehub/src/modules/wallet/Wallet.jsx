@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { Wallet as WalletIcon, Banknote, ArrowUpCircle, ArrowDownCircle, Clock, CheckCircle, AlertTriangle, Download } from 'lucide-react'
 import { walletRepository } from './repositories'
 import WithdrawalPinField from './WithdrawalPinField'
+import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
+import BankPicker from './BankPicker.jsx'
+import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { startBusinessWithdrawal, withdrawalErrorMessage } from './withdrawalApi'
+import { authClient } from '../../lib/authClient'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Pill, Inp, GhostBtn, TealBtn, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 
@@ -26,6 +30,12 @@ export default function Wallet({ brand, role }) {
   const [withdrawPin, setWithdrawPin] = useState('')
   const [needsPin, setNeedsPin] = useState(false)
   const [banks, setBanks] = useState([])
+  const [banksStatus, setBanksStatus] = useState('loading')
+  // Saved, identity-verified payout accounts (the safe way to say where the money goes).
+  const payouts = useMemo(() => createPayoutManager({ getToken: async () => (await authClient.auth.getSession()).data.session?.access_token }), [])
+  const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [useTyped, setUseTyped] = useState(false)
   const [accountResolving, setAccountResolving] = useState(false)
   const [accountResolved, setAccountResolved] = useState(false)
   const resolveTimer = useRef(null)
@@ -33,18 +43,31 @@ export default function Wallet({ brand, role }) {
 
   useEffect(() => { load() }, [brand?.id])
 
-  useEffect(() => {
-    async function loadBanks() {
-      try {
-        const res = await fetch('/api/banks')
-        if (res.ok) {
-          const data = await res.json()
-          setBanks(data)
-        }
-      } catch (err) {}
+  async function loadBanks() {
+    setBanksStatus('loading')
+    try {
+      const res = await fetch('/api/banks')
+      if (!res.ok) throw new Error('banks')
+      // Popular banks first (Access, GTBank, UBA, Zenith, Sterling, Jaiz, OPay, PalmPay, Moniepoint...), then A-Z.
+      setBanks(rankBanks(await res.json()))
+      setBanksStatus('ready')
+    } catch {
+      setBanksStatus('error')
     }
-    loadBanks()
-  }, [])
+  }
+  useEffect(() => { loadBanks() }, [])
+
+  // Load identity + accounts when the withdraw dialog opens.
+  useEffect(() => { if (showWithdraw) payouts.load() }, [showWithdraw, payouts])
+  // Keep a valid account selected: the one already chosen, else the default, else the first.
+  useEffect(() => {
+    const list = payoutState.accounts
+    if (list.length === 0) { setSelectedAccountId(''); return }
+    if (!list.some((a) => a.id === selectedAccountId)) setSelectedAccountId((list.find((a) => a.isDefault) || list[0]).id)
+  }, [payoutState.accounts, selectedAccountId])
+  const savedAccount = payoutState.accounts.find((a) => a.id === selectedAccountId) || null
+  const typedAllowed = !payoutState.required
+  const typedMode = !savedAccount || useTyped
 
   // Resolve account name when bank code and 10-digit account number are both set.
   // Debounced to avoid firing on every keystroke.
@@ -63,9 +86,10 @@ export default function Wallet({ brand, role }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
+        const { data: { session } } = await authClient.auth.getSession()
         const res = await fetch('/api/resolve-account', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({ bankCode, accountNumber: acctNum }),
         })
         const data = await res.json()
@@ -108,7 +132,7 @@ export default function Wallet({ brand, role }) {
   const naira = (kobo) => `₦${((kobo || 0) / 100).toLocaleString()}`
 
   async function handleWithdraw() {
-    if (!withdrawForm.amount || !withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName) {
+    if (!withdrawForm.amount || (typedMode && (!withdrawForm.bankName || !withdrawForm.bankCode || !withdrawForm.accountNumber || !withdrawForm.accountName))) {
       showToast('Fill in amount and bank details.', { type: 'warning' }); return
     }
     const amountKobo = Math.round(parseFloat(withdrawForm.amount) * 100)
@@ -120,15 +144,14 @@ export default function Wallet({ brand, role }) {
     }
     setWithdrawing(true)
     try {
-      const r = await startBusinessWithdrawal({
-        businessId: brand.id, amountKobo,
-        bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName,
-        accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin,
-      })
+      const r = await startBusinessWithdrawal(typedMode
+        ? { businessId: brand.id, amountKobo, bankCode: withdrawForm.bankCode, bankName: withdrawForm.bankName, accountNumber: withdrawForm.accountNumber, accountName: withdrawForm.accountName, pin: withdrawPin }
+        : { businessId: brand.id, amountKobo, payoutAccountId: savedAccount.id, pin: withdrawPin })
       if (r.sessionExpired) { showToast('Please log in again.', { type: 'warning' }); setWithdrawing(false); return }
       if (r.networkError) { showToast('Network error.', { type: 'error' }); setWithdrawing(false); return }
       if (!r.ok) {
         if (r.data.needsPin) setNeedsPin(true)
+        if (r.data.code === 'payout_account_required') payouts.load()
         showToast(withdrawalErrorMessage(r.data), { type: 'error' })
         setWithdrawPin('')
         setWithdrawing(false); return
@@ -227,7 +250,7 @@ export default function Wallet({ brand, role }) {
 
       {showWithdraw && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <Card style={{ maxWidth: '480px', width: '100%', padding: '24px' }}>
+          <Card style={{ maxWidth: '480px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: '16px', fontWeight: '800', color: navy, marginBottom: '12px' }}>Withdraw to Bank</div>
             <div style={{ fontSize: '12px', color: gray500, marginBottom: '16px' }}>Available: <strong style={{ color: success }}>{naira(wallet?.available_balance)}</strong></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -235,55 +258,63 @@ export default function Wallet({ brand, role }) {
               {withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0) && (
                 <span style={{ fontSize: '11px', color: danger, fontWeight: '700' }}>Amount exceeds available balance of {naira(wallet?.available_balance)}</span>
               )}
-              <label style={{ fontSize: '12px', fontWeight: '700', color: gray600, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                Bank *
-                <select
-                  value={withdrawForm.bankCode || ''}
-                  onChange={e => {
-                    const bank = banks.find(b => b.code === e.target.value)
-                    setWithdrawForm(p => ({ ...p, bankCode: e.target.value, bankName: bank ? bank.name : '' }))
-                  }}
-                  required
-                  style={{
-                    padding: '10px 12px', fontSize: '13px', borderRadius: '8px',
-                    border: `1px solid ${border}`, background: '#fff',
-                    color: navy, fontFamily: 'inherit',
-                  }}
-                >
-                  <option value="">Select your bank</option>
-                  {banks.map((b) => (
-                    <option key={b.code} value={b.code}>{b.name}</option>
-                  ))}
-                </select>
-                {banks.length === 0 && (
-                  <span style={{ fontSize: '11px', color: gray400 }}>Loading banks...</span>
-                )}
-              </label>
-              <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
-              <div>
-                <Inp
-                  label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
-                  value={withdrawForm.accountName || ''}
-                  onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
-                  placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
-                  readOnly={accountResolved || accountResolving}
-                  required
-                  style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+              <PayoutAccountsPanel
+                manager={payouts}
+                selectedId={selectedAccountId}
+                onSelect={(id) => { setSelectedAccountId(id); setUseTyped(false) }}
+                banks={banks}
+                banksStatus={banksStatus}
+                onRetryBanks={loadBanks}
+              />
+              {savedAccount && (
+                <div style={{ fontSize: '12.5px', color: gray600, padding: '8px 12px', borderRadius: '12px', background: tealMist }}>
+                  Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> — {savedAccount.accountName}
+                  {typedAllowed && (
+                    <button type="button" onClick={() => setUseTyped((v) => !v)} style={{ marginLeft: '8px', background: 'none', border: 'none', padding: 0, color: theme.tealDeep, fontWeight: 800, fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {useTyped ? 'Use saved account' : 'Use a different account'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {!savedAccount && !typedAllowed && (
+                <span role="status" style={{ fontSize: '12.5px', color: danger, fontWeight: 700 }}>Add and verify a payout account above before you can withdraw.</span>
+              )}
+              {typedMode && typedAllowed && (
+                <>
+                <BankPicker
+                  banks={banks}
+                  status={banksStatus}
+                  selectedCode={withdrawForm.bankCode || ''}
+                  onSelect={(bank) => setWithdrawForm(p => ({ ...p, bankCode: bank ? bank.code : '', bankName: bank ? bank.name : '' }))}
+                  onRetry={loadBanks}
                 />
-                {accountResolving && (
-                  <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
-                )}
-                {accountResolved && withdrawForm.accountName && (
-                  <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
-                )}
-                {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
-                  <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
-                )}
-              </div>
+                <Inp label="Account number" value={withdrawForm.accountNumber || ''} onChange={v => setWithdrawForm(p => ({ ...p, accountNumber: String(v || '').replace(/\D/g, '').slice(0, 10) }))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
+                <div>
+                  <Inp
+                    label={accountResolving ? 'Account name (verifying...)' : 'Account name'}
+                    value={withdrawForm.accountName || ''}
+                    onChange={v => setWithdrawForm(p => ({ ...p, accountName: v }))}
+                    placeholder={accountResolving ? 'Verifying account...' : 'Select bank and enter account number'}
+                    readOnly={accountResolved || accountResolving}
+                    required
+                    style={accountResolved ? { background: success + '10', borderColor: success } : undefined}
+                  />
+                  {accountResolving && (
+                    <span style={{ fontSize: '11px', color: gray400 }}>Verifying account name with your bank...</span>
+                  )}
+                  {accountResolved && withdrawForm.accountName && (
+                    <span style={{ fontSize: '11px', color: success, fontWeight: '700' }}>✓ Account name verified</span>
+                  )}
+                  {!accountResolved && !accountResolving && withdrawForm.bankCode && (withdrawForm.accountNumber || '').length === 10 && (
+                    <span style={{ fontSize: '11px', color: warning, fontWeight: '700' }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                  )}
+                </div>
+                </>
+              )}
               <WithdrawalPinField pin={withdrawPin} onPinChange={setWithdrawPin} needsPin={needsPin} disabled={withdrawing} />
               <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
                 <GhostBtn onClick={() => { setShowWithdraw(false); setAccountResolved(false); setWithdrawForm({}); setWithdrawPin(''); setNeedsPin(false) }} style={{ flex: 1, padding: '12px' }}>Cancel</GhostBtn>
-                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || (!accountResolved && !withdrawForm.accountName) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
+                <TealBtn onClick={handleWithdraw} disabled={withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))} style={{ flex: 1, padding: '12px', opacity: (withdrawing || !/^\d{4,6}$/.test(withdrawPin) || !(typedMode ? (typedAllowed && (accountResolved || withdrawForm.accountName)) : savedAccount) || (withdrawForm.amount && Math.round(parseFloat(withdrawForm.amount) * 100) > (wallet?.available_balance || 0))) ? 0.6 : 1 }}>{withdrawing ? 'Withdrawing...' : 'Withdraw'}</TealBtn>
               </div>
             </div>
           </Card>

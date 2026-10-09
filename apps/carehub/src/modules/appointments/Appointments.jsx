@@ -115,9 +115,10 @@ export default function Appointments({ brand, role, perms }) {
     resolveTimer.current = setTimeout(async () => {
       setAccountResolving(true)
       try {
+        const { data: { session } } = await authClient.auth.getSession()
         const res = await fetch('/api/resolve-account', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({ bankCode, accountNumber: acctNum }),
         })
         const data = await res.json()

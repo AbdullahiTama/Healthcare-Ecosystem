@@ -76,3 +76,10 @@ Contradictory provider signals are **reported, never auto-fixed**: `conflict_pai
 * **F-32 (CareFind)**: `/api/withdrawal-pin/set` lets any session replace an existing PIN (only email confirmation is required), which defeats the PIN as a stolen-session control. CareHub's new endpoint requires the current PIN; fixing CareFind needs a "forgot PIN" flow (emailed one-time code), a product decision.
 * **F-33**: `cancel-appointment` marks a card-paid appointment `refunded` and writes a wallet ledger row but moves no money to the client and does not reduce the business wallet (the fake-withdrawal trick it relied on is gone). Phase 09.
 * **Production data**: 3 `withdrawal_requests` from July/September are `pending` with coins debited and **no transfer** (two have no reference at all, one has a reference but no code): 41 coins. They become `reserved`; the sweep refunds the one with a reference after Paystack says not found; the two without references need an admin reject (which refunds). Decide before applying.
+
+
+## 9. Update 2026-10-12: F-32 closed; saved payout accounts + KYC
+
+* **F-32 is fixed.** Setting or replacing the withdrawal PIN (CareFind and CareHub) needs a fresh emailed 6-digit code, and replacing also needs the current PIN unless the person chose "forgot PIN" (the code is then the only proof). A PIN change sends an alert email. See `Payout-Accounts-and-KYC.md`.
+* **Saved payout accounts.** A withdrawal may name a `payoutAccountId`; the destination then comes from the database (a bank account the owner proved is theirs), and any bank details in the request are ignored. `financial_config.payout_account_required` (default 0) makes this mandatory.
+* **`/api/resolve-account`** (a paid Paystack call made with our secret key) is now for signed-in users only, 10 lookups a minute per user.

@@ -35,3 +35,18 @@ export function setWithdrawalPin({ basePath = '/api', token, pin, otp, currentPi
   return request(`${basePath}/withdrawal-pin/set`, { method: 'POST', token, body: { pin, otp, currentPin, forgot } })
 }
 
+
+// ---- Identity verification and saved payout accounts ------------------------------------------------------------------
+// All POST + bearer token; the server decides who the owner is (never the body).
+const post = (path, token, body = {}) => request(path, { method: 'POST', token, body })
+
+export const kycStatus = ({ basePath = '/api', token }) => post(`${basePath}/kyc/status`, token)
+/** BVN + NIN -> verified identity. The numbers are sent once and never kept by the app. */
+export const kycVerify = ({ basePath = '/api', token, bvn, nin }) => post(`${basePath}/kyc/verify`, token, { bvn, nin })
+export const kycSelfie = ({ basePath = '/api', token, bvn, selfieImage }) => post(`${basePath}/kyc/selfie`, token, { bvn, selfieImage })
+
+export const listPayoutAccounts = ({ basePath = '/api', token }) => post(`${basePath}/payout-accounts/list`, token)
+export const sendPayoutAccountOtp = ({ basePath = '/api', token }) => post(`${basePath}/payout-accounts/otp`, token)
+export const addPayoutAccount = ({ basePath = '/api', token, bankCode, accountNumber, otp }) => post(`${basePath}/payout-accounts/add`, token, { bankCode, accountNumber, otp })
+export const setDefaultPayoutAccount = ({ basePath = '/api', token, id }) => post(`${basePath}/payout-accounts/default`, token, { id })
+export const removePayoutAccount = ({ basePath = '/api', token, id, pin }) => post(`${basePath}/payout-accounts/remove`, token, { id, pin })

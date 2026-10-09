@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useSyncExternalStore } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabaseClient.js'
 import { walletRepository } from './repositories/index.js'
@@ -12,6 +12,9 @@ import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
 import { Inp, Toast, useToast, CardSkeleton } from '../../components/ui/index.jsx'
 import WithdrawalPinModal from './WithdrawalPinModal.jsx'
+import PayoutAccountsPanel from './PayoutAccountsPanel.jsx'
+import BankPicker from './BankPicker.jsx'
+import { createPayoutManager, rankBanks } from '@care-ecosystem/shared-payout-ui'
 import { useWalletData, useTransactions, useBanks, keys } from '../../hooks/queries.js'
 
 const WITHDRAWAL_FEE_RATE = 0.2
@@ -42,7 +45,10 @@ function Wallet() {
   // ── React Query data ──────────────────────────────────────────────────────
   const { data: wallet, isLoading: walletLoading } = useWalletData(user?.id)
   const { data: transactions = [], isLoading: txLoading } = useTransactions(user?.id)
-  const { data: banks = [] } = useBanks()
+  const { data: rawBanks = [], isLoading: banksLoading, isError: banksError, refetch: refetchBanks } = useBanks()
+  // Popular banks first (Access, GTBank, UBA, Zenith, Sterling, Jaiz, OPay, PalmPay, Moniepoint...), then A-Z.
+  const banks = useMemo(() => rankBanks(rawBanks), [rawBanks])
+  const banksStatus = banksLoading ? 'loading' : banksError ? 'error' : 'ready'
 
   // ── Form / UI state ────────────────────────────────────────────────────────
   const [tab, setTab] = useState('wallet')
@@ -53,6 +59,11 @@ function Wallet() {
   const [wdAccountNumber, setWdAccountNumber] = useState('')
   const [wdAccountName, setWdAccountName] = useState('')
   const [wdPin, setWdPin] = useState('')
+  // Saved, identity-verified payout accounts (the safe way to say where the money goes).
+  const payouts = useMemo(() => createPayoutManager({ getToken: async () => (await supabase.auth.getSession()).data.session?.access_token }), [])
+  const payoutState = useSyncExternalStore(payouts.subscribe, payouts.getState)
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [useTyped, setUseTyped] = useState(false)
   const [wdSubmitting, setWdSubmitting] = useState(false)
   const [wdAccountResolving, setWdAccountResolving] = useState(false)
   const [wdAccountResolved, setWdAccountResolved] = useState(false)
@@ -101,6 +112,18 @@ function Wallet() {
     if (!authLoading && user) handlePaystackReturn()
   }, [searchParams, user, authLoading])
 
+  // Load identity + accounts the first time the Withdraw tab opens.
+  useEffect(() => { if (tab === 'withdraw' && user) payouts.load() }, [tab, user, payouts])
+  // Keep a valid account selected: prefer the one already chosen, else the default, else the first.
+  useEffect(() => {
+    const list = payoutState.accounts
+    if (list.length === 0) { setSelectedAccountId(''); return }
+    if (!list.some((a) => a.id === selectedAccountId)) setSelectedAccountId((list.find((a) => a.isDefault) || list[0]).id)
+  }, [payoutState.accounts, selectedAccountId])
+  const savedAccount = payoutState.accounts.find((a) => a.id === selectedAccountId) || null
+  const typedMode = !savedAccount || useTyped
+  const typedAllowed = !payoutState.required
+
   // Resolve account name when bank code and 10-digit account number are both set.
   const resolveTimer = useRef(null)
   useEffect(() => {
@@ -114,9 +137,10 @@ function Wallet() {
     resolveTimer.current = setTimeout(async () => {
       setWdAccountResolving(true)
       try {
+        const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch('/api/resolve-account', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
           body: JSON.stringify({ bankCode: wdBankCode, accountNumber: wdAccountNumber }),
         })
         const data = await res.json()
@@ -183,14 +207,9 @@ function Wallet() {
       const response = await fetch('/api/initiate-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          amount: wdAmount,
-          bankCode: wdBankCode,
-          bankName: wdBankName,
-          accountNumber: wdAccountNumber,
-          accountName: wdAccountName,
-          pin: wdPin,
-        }),
+        body: JSON.stringify(typedMode
+          ? { amount: wdAmount, bankCode: wdBankCode, bankName: wdBankName, accountNumber: wdAccountNumber, accountName: wdAccountName, pin: wdPin }
+          : { amount: wdAmount, payoutAccountId: savedAccount.id, pin: wdPin }),
       })
       const data = await response.json()
       setWdSubmitting(false)
@@ -199,7 +218,10 @@ function Wallet() {
         const msg = data.error === 'insufficient' ? "You don't have enough CareCoins for that amount."
           : data.error === 'Payment provider balance low' ? 'Payment provider balance low. Try again later.'
           : data.error || 'Could not process withdrawal.'
-        if (data.error === 'Set a withdrawal PIN first') {
+        if (data.code === 'payout_account_required') {
+          payouts.load()
+          showToast(msg, { type: 'error' })
+        } else if (data.error === 'Set a withdrawal PIN first') {
           showToast(msg, { type: 'error', actionLabel: 'Set PIN', onAction: () => setPinModalOpen(true) })
         } else {
           showToast(msg, { type: 'error' })
@@ -403,6 +425,15 @@ function Wallet() {
                 Set or change PIN
               </button>
             </div>
+            <PayoutAccountsPanel
+              manager={payouts}
+              selectedId={selectedAccountId}
+              onSelect={(id) => { setSelectedAccountId(id); setUseTyped(false) }}
+              banks={banks}
+              banksStatus={banksStatus}
+              onRetryBanks={refetchBanks}
+              isMobile={isMobile}
+            />
             {(wallet?.balance || 0) >= 5 ? (
               <form onSubmit={handleWithdraw} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <Inp
@@ -425,52 +456,53 @@ function Wallet() {
                     You'll receive ≈ ₦{Math.floor(Number(wdAmount) * COIN_VALUE_NAIRA * (1 - WITHDRAWAL_FEE_RATE)).toLocaleString()} after the 20% platform fee
                   </p>
                 )}
-                <label style={{ fontSize: 12, fontWeight: 700, color: theme.textMid, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  Bank
-                  <select
-                    value={wdBankCode}
-                    onChange={(e) => {
-                      const bank = banks.find(b => b.code === e.target.value)
-                      setWdBankCode(e.target.value)
-                      setWdBankName(bank ? bank.name : '')
-                    }}
-                    required
-                    style={{
-                      padding: '10px 12px', fontSize: 13, borderRadius: 12,
-                      border: `1px solid ${theme.border}`, background: '#fff',
-                      color: theme.textDark, fontFamily: 'inherit',
-                    }}
-                  >
-                    <option value="">Select your bank</option>
-                    {banks.map((b) => (
-                      <option key={b.code} value={b.code}>{b.name}</option>
-                    ))}
-                  </select>
-                  {banks.length === 0 && (
-                    <span style={{ fontSize: 11, color: theme.textLight }}>Loading banks…</span>
-                  )}
-                </label>
-                <Inp label="Account number" value={wdAccountNumber} onChange={v => setWdAccountNumber(String(v || '').replace(/\D/g, '').slice(0, 10))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
-                <div>
-                  <Inp
-                    label={wdAccountResolving ? 'Account name (resolving…)' : 'Account name'}
-                    value={wdAccountName}
-                    onChange={setWdAccountName}
-                    placeholder={wdAccountResolving ? 'Verifying account…' : 'Enter bank and account number first'}
-                    readOnly={wdAccountResolved || wdAccountResolving}
-                    required
-                    style={wdAccountResolved ? { background: '#f0fdf4', borderColor: '#22c55e' } : undefined}
+                {savedAccount && (
+                  <div style={{ fontSize: 12.5, color: theme.textMid, padding: '8px 12px', borderRadius: 12, background: theme.tealMist }}>
+                    Paying to <strong>{savedAccount.bankName} ••••{savedAccount.accountLast4}</strong> — {savedAccount.accountName}
+                    {typedAllowed && (
+                      <button type="button" onClick={() => setUseTyped((v) => !v)} style={{ marginLeft: 8, background: 'none', border: 'none', padding: 0, color: theme.tealDeep, fontWeight: 800, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {useTyped ? 'Use saved account' : 'Use a different account'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!savedAccount && !typedAllowed && (
+                  <p role="status" style={{ margin: 0, fontSize: 12.5, color: theme.danger, fontWeight: 700 }}>
+                    Add and verify a payout account above before you can withdraw.
+                  </p>
+                )}
+                {typedMode && typedAllowed && (
+                  <>
+                  <BankPicker
+                    banks={banks}
+                    status={banksStatus}
+                    selectedCode={wdBankCode}
+                    onSelect={(bank) => { setWdBankCode(bank ? bank.code : ''); setWdBankName(bank ? bank.name : '') }}
+                    onRetry={refetchBanks}
                   />
-                  {wdAccountResolving && (
-                    <span style={{ fontSize: 11, color: theme.textLight }}>Verifying account name with your bank…</span>
-                  )}
-                  {wdAccountResolved && wdAccountName && (
-                    <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Account name verified</span>
-                  )}
-                  {!wdAccountResolved && !wdAccountResolving && wdBankCode && wdAccountNumber.length === 10 && (
-                    <span style={{ fontSize: 11, color: theme.warning }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
-                  )}
-                </div>
+                  <Inp label="Account number" value={wdAccountNumber} onChange={v => setWdAccountNumber(String(v || '').replace(/\D/g, '').slice(0, 10))} placeholder="10 digits" inputMode="numeric" pattern="[0-9]*" required />
+                  <div>
+                    <Inp
+                      label={wdAccountResolving ? 'Account name (resolving…)' : 'Account name'}
+                      value={wdAccountName}
+                      onChange={setWdAccountName}
+                      placeholder={wdAccountResolving ? 'Verifying account…' : 'Enter bank and account number first'}
+                      readOnly={wdAccountResolved || wdAccountResolving}
+                      required
+                      style={wdAccountResolved ? { background: '#f0fdf4', borderColor: '#22c55e' } : undefined}
+                    />
+                    {wdAccountResolving && (
+                      <span style={{ fontSize: 11, color: theme.textLight }}>Verifying account name with your bank…</span>
+                    )}
+                    {wdAccountResolved && wdAccountName && (
+                      <span style={{ fontSize: 11, color: '#16a34a' }}>✓ Account name verified</span>
+                    )}
+                    {!wdAccountResolved && !wdAccountResolving && wdBankCode && wdAccountNumber.length === 10 && (
+                      <span style={{ fontSize: 11, color: theme.warning }}>Automatic verification unavailable for this bank. Please enter your account name manually.</span>
+                    )}
+                  </div>
+                  </>
+                )}
                 <Inp
                   label="Withdrawal PIN"
                   type="password"
@@ -485,11 +517,11 @@ function Wallet() {
                 />
                 <button
                   type="submit"
-                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin}
+                  disabled={wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin}
                   style={{
                     width: '100%', padding: 13, background: theme.tealDeep, color: '#fff',
                     border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14,
-                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !wdBankCode || (!wdAccountResolved && !wdAccountName) || !wdPin) ? 0.6 : 1,
+                    opacity: (wdSubmitting || !wdAmount || Number(wdAmount) < 5 || Number(wdAmount) > (wallet?.balance || 0) || !(typedMode ? (typedAllowed && wdBankCode && (wdAccountResolved || wdAccountName)) : savedAccount) || !wdPin) ? 0.6 : 1,
                   }}
                 >
                   {wdSubmitting ? 'Submitting…' : 'Request Withdrawal'}

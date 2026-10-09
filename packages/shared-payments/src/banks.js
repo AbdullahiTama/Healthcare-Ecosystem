@@ -89,3 +89,21 @@ export function createBanksHandler({ fetchFn, ttlMs = 300_000, now = () => Date.
     }
   }
 }
+
+// A cached directory for server-side lookups (the saved-payout-account flow needs the bank's NAME for a CODE and must
+// never trust a name from the browser). Serves the last good list when Paystack is down; throws only with none.
+export function createBankDirectory({ fetchFn, ttlMs = 300_000, now = () => Date.now() } = {}) {
+  let cached = null
+  let cachedAt = 0
+  async function list() {
+    if (cached && now() - cachedAt < ttlMs) return cached
+    try {
+      cached = await fetchAllBanks(fetchFn)
+      cachedAt = now()
+    } catch (err) {
+      if (!cached) throw err
+    }
+    return cached
+  }
+  return { list, nameFor: async (code) => (await list()).find((b) => b.code === String(code))?.name || null }
+}

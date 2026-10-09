@@ -8,6 +8,9 @@ const { mockSupabase, mockVerifyUser } = vi.hoisted(() => ({
 vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn(() => mockSupabase) }))
 vi.mock('../../../api/_lib/verifyUser.js', () => ({ verifyUser: mockVerifyUser }))
 
+process.env.OTP_HMAC_SECRET = 'test-secret'
+vi.mock('../../../api/_lib/securityMailer.js', () => ({ getSecurityMailer: async () => ({ sendOtp: async () => ({ ok: true }), sendPinChanged: async () => ({ ok: true }) }) }))
+
 import handler from '../../../api/_handlers/withdrawal-pin.js'
 
 let pinRow = []
@@ -33,6 +36,7 @@ describe('withdrawal-pin handler', () => {
     mockSupabase.rpc.mockImplementation(async (fn) => {
       if (fn === 'get_withdrawal_pin') return { data: pinRow, error: null }
       if (fn === 'verify_withdrawal_pin') return { data: verifyResult, error: null }
+      if (fn === 'verify_otp') return { data: 'ok', error: null }
       return { data: null, error: null }
     })
   })
@@ -70,11 +74,10 @@ describe('withdrawal-pin handler', () => {
 
     it('sets the PIN for a confirmed email', async () => {
       mockVerifyUser.mockResolvedValue(confirmedUser)
-      const res = await handler(makeReq('/api/withdrawal-pin/set', { pin: '4821' }), makeRes())
+      const res = await handler(makeReq('/api/withdrawal-pin/set', { pin: '4821', otp: '123456' }), makeRes())
       expect(res.statusCode).toBe(200)
-      expect(res.body).toEqual({ ok: true })
-      expect(mockSupabase.rpc).toHaveBeenCalledTimes(1)
-      const [fn, args] = mockSupabase.rpc.mock.calls[0]
+      expect(res.body).toMatchObject({ ok: true })
+      const [fn, args] = mockSupabase.rpc.mock.calls.find(([n]) => n === 'set_withdrawal_pin')
       expect(fn).toBe('set_withdrawal_pin')
       expect(args.p_user_id).toBe('user-1')
       expect(args.p_pin_hash).toMatch(/^[0-9a-f]{128}$/)

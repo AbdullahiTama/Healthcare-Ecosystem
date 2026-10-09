@@ -5,7 +5,7 @@ import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, getPayoutAccountForWithdrawal, payoutAccountRequired } from '@care-ecosystem/shared-payments'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -18,8 +18,20 @@ export default async function handler(req, res) {
   const user = await verifyUser(supabase, req)
   if (!user) return res.status(401).json({ error: 'Not signed in' })
 
-  const { amount, bankCode, bankName, accountNumber, accountName, pin } = req.body
+  let { amount, bankCode, bankName, accountNumber, accountName } = req.body
+  const { pin, payoutAccountId } = req.body
   const coins = Number(amount)
+
+  // A saved, identity-verified payout account decides WHERE the money goes: its details come from the database and
+  // whatever bank details the browser sent are ignored. When the platform requires saved accounts
+  // (financial_config.payout_account_required) a typed-in destination is refused.
+  if (payoutAccountId) {
+    const saved = await getPayoutAccountForWithdrawal(supabase, { ownerType: 'user', ownerId: user.id, id: payoutAccountId })
+    if (!saved) return res.status(400).json({ error: 'That payout account is not available. Choose another or add a new one.', code: 'payout_account_not_found' })
+    ;({ bank_code: bankCode, bank_name: bankName, account_number: accountNumber, account_name: accountName } = saved)
+  } else if (await payoutAccountRequired(supabase)) {
+    return res.status(400).json({ error: 'Add and verify a payout account before withdrawing.', code: 'payout_account_required' })
+  }
 
   if (!Number.isInteger(coins) || coins < 5 || !bankCode || !bankName || !accountNumber || !accountName) {
     return res.status(400).json({ error: 'Missing or invalid withdrawal details' })

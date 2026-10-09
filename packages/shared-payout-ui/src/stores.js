@@ -3,6 +3,7 @@
 // and subscribes with React's useSyncExternalStore — no React import here, so
 // the package never ships a second copy of React.
 import { isValidAccountNumber } from './banks.js'
+import * as api from './client.js'
 import { resolveAccountName, sendPinOtp, setWithdrawalPin } from './client.js'
 
 function createStore(initial) {
@@ -105,5 +106,75 @@ export function createPinSetup({ getToken, basePath = '/api' }) {
       }
     },
     reset() { store.set({ sending: false, codeSent: false, sentTo: '', submitting: false, error: '', done: false }) },
+  }
+}
+
+// Identity + saved payout accounts for one signed-in owner. One store so the screen is a simple render of its state:
+//   loading | loadError | kyc ({ verified, legalName, bvnLast4, ninLast4, tier } | null) | accounts [] | required
+//   busy ('' | 'verify' | 'otp' | 'add' | 'default' | 'remove') | error | code (server error code) | codeSent / sentTo
+export function createPayoutManager({ getToken, basePath = '/api' }) {
+  const store = createStore({
+    loading: true, loadError: '', kyc: null, accounts: [], required: false,
+    busy: '', error: '', code: '', codeSent: false, sentTo: '',
+  })
+
+  async function authed(fn, args = {}) {
+    return fn({ basePath, token: await getToken(), ...args })
+  }
+  const fail = (r, fallback) => store.set({ busy: '', error: r.data?.error || fallback, code: r.data?.code || '' })
+  const network = () => store.set({ busy: '', error: 'Network error. Check your connection and try again.', code: 'network' })
+
+  async function load() {
+    store.set({ loading: true, loadError: '' })
+    try {
+      const [k, a] = await Promise.all([authed(api.kycStatus), authed(api.listPayoutAccounts)])
+      if (!k.ok || !a.ok) throw new Error('load')
+      store.set({ loading: false, kyc: k.data, accounts: a.data.accounts || [], required: Boolean(a.data.required) })
+    } catch {
+      store.set({ loading: false, loadError: 'Could not load your payout details. Try again.' })
+    }
+  }
+
+  async function run(busy, fn, onOk, fallback) {
+    store.set({ busy, error: '', code: '' })
+    try {
+      const r = await fn()
+      if (r.ok) { await onOk(r); return true }
+      fail(r, fallback)
+      return false
+    } catch {
+      network()
+      return false
+    }
+  }
+
+  return {
+    getState: store.getState,
+    subscribe: store.subscribe,
+    load,
+    clearError: () => store.set({ error: '', code: '' }),
+
+    verifyIdentity: ({ bvn, nin }) => {
+      if (!/^\d{11}$/.test(bvn || '') || !/^\d{11}$/.test(nin || '')) {
+        store.set({ error: 'Enter your 11-digit BVN and your 11-digit NIN.', code: 'invalid_id' })
+        return Promise.resolve(false)
+      }
+      return run('verify', () => authed(api.kycVerify, { bvn, nin }), (r) => store.set({ busy: '', kyc: r.data }), 'Could not verify your identity.')
+    },
+
+    sendCode: () => run('otp', () => authed(api.sendPayoutAccountOtp), (r) => store.set({ busy: '', codeSent: true, sentTo: r.data.sentTo || '' }), 'Could not send the code.'),
+
+    addAccount: ({ bankCode, accountNumber, otp }) => {
+      if (!/^\d{6}$/.test(otp || '')) { store.set({ error: 'Enter the 6-digit code from your email.', code: 'otp_invalid' }); return Promise.resolve(false) }
+      return run('add', () => authed(api.addPayoutAccount, { bankCode, accountNumber, otp }),
+        async () => { store.set({ codeSent: false, sentTo: '' }); await load(); store.set({ busy: '' }) }, 'Could not save the account.')
+    },
+
+    setDefault: (id) => run('default', () => authed(api.setDefaultPayoutAccount, { id }), async () => { await load(); store.set({ busy: '' }) }, 'Could not change the default account.'),
+
+    remove: ({ id, pin }) => {
+      if (!/^\d{4,6}$/.test(pin || '')) { store.set({ error: 'Enter your withdrawal PIN to remove an account.', code: 'invalid_pin' }); return Promise.resolve(false) }
+      return run('remove', () => authed(api.removePayoutAccount, { id, pin }), async () => { await load(); store.set({ busy: '' }) }, 'Could not remove the account.')
+    },
   }
 }
