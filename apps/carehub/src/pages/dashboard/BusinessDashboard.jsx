@@ -45,6 +45,8 @@ const Stock = lazy(() => import('../../modules/stock/Stock'))
 const Orders = lazy(() => import('../../modules/orders/Orders'))
 const LiveActivity = lazy(() => import('../../modules/live-activity/LiveActivity'))
 const FacilityDiscovery = lazy(() => import('../../modules/facility-discovery/FacilityDiscovery'))
+const BusinessDiscovery = lazy(() => import('../../modules/business-discovery/BusinessDiscovery'))
+const BusinessDirectory = lazy(() => import('../../modules/business-directory/BusinessDirectory'))
 const Reception = lazy(() => import('./hospital/Reception'))
 const Triage = lazy(() => import('./hospital/Triage'))
 const Doctor = lazy(() => import('./hospital/Doctor'))
@@ -65,6 +67,7 @@ const PAGE_TITLES = {
   reception: 'Reception', triage: 'Triage', doctor: 'Doctor Consultation', rx_inbox: 'Prescription Inbox',
   overview: 'Overview', 'adr-reports': 'Pharmacovigilance (ADR)', ecommerce: 'Online Store',
   discovery: 'Facility Discovery', activity: 'Live Field Activity',
+  'business-discovery': 'Business Discovery', directory: 'Business Directory',
 }
 
 const shortReason = (msg) => String(msg || '').replace(/^Supabase error \(\d{3}\):\s*/, '')
@@ -250,8 +253,10 @@ export default function BusinessDashboard() {
               <Route path='messages' element={bareGuard('messages', <Messages {...pageProps} />)} />
               <Route path='stock' element={bareGuard('stock', <Stock {...pageProps} />)} />
               <Route path='orders' element={bareGuard('orders', <Orders {...pageProps} />)} />
-              <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} />)} />
+              <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} allowedModules={allowedRouteKeys} />)} />
               <Route path='discovery' element={bareGuard('discovery', <FacilityDiscovery {...pageProps} />)} />
+              <Route path='business-discovery' element={bareGuard('business-discovery', <BusinessDiscovery {...pageProps} allowedModules={allowedRouteKeys} />)} />
+              <Route path='directory' element={bareGuard('directory', <BusinessDirectory {...pageProps} />)} />
               <Route path='reception' element={guard('reception', <><TopBar title='Reception' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reception {...pageProps} /></div></>)} />
               <Route path='triage' element={guard('triage', <><TopBar title='Triage' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Triage {...pageProps} /></div></>)} />
               <Route path='doctor' element={guard('doctor', <><TopBar title='Doctor Consultation' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Doctor {...pageProps} /></div></>)} />

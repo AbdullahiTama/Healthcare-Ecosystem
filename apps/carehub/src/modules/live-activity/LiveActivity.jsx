@@ -12,6 +12,9 @@ import {
 } from '../../lib/places.js'
 import { discoverFacilities } from '../../lib/facilityDiscovery.js'
 import FacilityPicker from './FacilityPicker.jsx'
+// Business Directory: optional nearby-business suggestion + the Field Work switcher.
+import FieldWorkSwitch from '../field-work/FieldWorkSwitch'
+import NearbyBusinessPicker from '../business-directory/components/NearbyBusinessPicker'
 import { isManagerRole } from '../../lib/permissions'
 // Cross-aggregate reads: activity is logged by staff, against a territory.
 import { territoryRepository } from '../territories/repositories'
@@ -80,7 +83,7 @@ function csvCell(v) {
   return '"' + s.replace(/"/g, '""') + '"'
 }
 
-export default function LiveActivity({ brand }) {
+export default function LiveActivity({ brand, allowedModules = [] }) {
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
   const authData = readAuth()
   const meStaffId = (authData && authData.staff && authData.staff.id) ? authData.staff.id : null
@@ -129,6 +132,8 @@ export default function LiveActivity({ brand }) {
   const [voicePreview, setVoicePreview] = useState(null)
   const [recording, setRecording] = useState(false)
   const [gps, setGps] = useState(null)
+  // The directory business the rep explicitly confirmed (never auto-selected).
+  const [confirmedBiz, setConfirmedBiz] = useState(null)
   const [gpsAddress, setGpsAddress] = useState(null)
   const [placeName, setPlaceName] = useState('')
   const [findingPlace, setFindingPlace] = useState(false)
@@ -432,6 +437,7 @@ export default function LiveActivity({ brand }) {
     setVoiceBlob(null)
     setVoicePreview(null)
     setGps(null)
+    setConfirmedBiz(null)
     setGpsAddress(null)
     setPlaceName('')
     setFacility(null)
@@ -443,7 +449,7 @@ export default function LiveActivity({ brand }) {
       setFindingPlace(true)
       navigator.geolocation.getCurrentPosition(
         async function (pos) {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }
           setGps(coords)
           // Best-effort area label (reverse geocode) for the location caption;
           // the precise place now comes from the auto-detected facility.
@@ -554,6 +560,8 @@ export default function LiveActivity({ brand }) {
         facility_source: facility ? (facility.source || 'detected') : null,
         facility_verified: verified,
         facility_pending_review: pendingReview,
+        // Only present when the rep confirmed a business; the name is a snapshot for the audit record.
+        ...(confirmedBiz ? { directory_business_id: confirmedBiz.id, directory_business_name: confirmedBiz.name } : {}),
       }, viewers)
 
       showToast('Activity logged', { type: 'success' })
@@ -681,6 +689,7 @@ export default function LiveActivity({ brand }) {
     { key: 'rep', label: 'Rep' },
     { key: 'territory', label: 'Territory' },
     { key: 'place', label: 'Location' },
+    { key: 'business', label: 'Business' },
   ].concat(fields.map(function (f) {
     return { key: 'f_' + f.id, label: f.label, fieldId: f.id }
   })).concat([
@@ -695,6 +704,7 @@ export default function LiveActivity({ brand }) {
     if (col.key === 'rep') return a.rep_name
     if (col.key === 'territory') return terrName(a.territory_id) || ''
     if (col.key === 'place') return a.facility_name || a.place_of_visit || a.location_label || ''
+    if (col.key === 'business') return a.directory_business_name || ''
     if (col.key === 'voice') return a.voice_url ? 'Yes' : ''
     if (col.key === 'coords') return (a.lat && a.lng) ? (a.lat.toFixed(5) + ', ' + a.lng.toFixed(5)) : ''
     if (col.fieldId) {
@@ -772,6 +782,7 @@ export default function LiveActivity({ brand }) {
       />
       <div style={{ padding: '24px', maxWidth: '1100px' }}>
         <Toast msg={msg} type={type} actionLabel={actionLabel} onAction={onAction} />
+        <FieldWorkSwitch current='activity' allowed={allowedModules} />
 
       {!isOwner && myViewers.length === 0 && (
         <div style={{ padding: '12px 14px', borderRadius: '10px', background: warningBg, border: `1px solid ${warning}`, marginBottom: '18px' }}>
@@ -992,6 +1003,11 @@ export default function LiveActivity({ brand }) {
                          {a.location_label}
                        </div>
                      )}
+                    {a.directory_business_name && (
+                      <div style={{ fontSize: '12px', color: navy, fontWeight: '700', marginTop: '3px' }}>
+                        Business: {a.directory_business_name}
+                      </div>
+                    )}
                     {(a.facility_name || a.facility_category || a.place_verified != null) && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', marginTop: a.location_label ? '2px' : '4px' }}>
                         <span style={{ fontSize: '12px', fontWeight: '700', color: navy }}>
@@ -1210,6 +1226,8 @@ export default function LiveActivity({ brand }) {
                 />
               )}
             </div>
+
+            <NearbyBusinessPicker businessId={brand?.id} gps={gps} selected={confirmedBiz} onSelect={setConfirmedBiz} />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>

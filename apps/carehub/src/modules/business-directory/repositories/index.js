@@ -64,6 +64,10 @@ export function createDirectoryRepository(request = sbFetch) {
     async ensureSubcategory(businessId, categoryId, name) {
       const existing = await request(`directory_subcategories?category_id=eq.${categoryId}&business_id=eq.${businessId}&select=*`)
       const hit = (existing || []).find((s) => s.name.trim().toLowerCase() === clean(name).toLowerCase())
+      if (hit && hit.is_active === false) {
+        await this.updateSubcategory(hit.id, businessId, { is_active: true })
+        return { ...hit, is_active: true }
+      }
       return hit || this.addSubcategory(businessId, categoryId, name)
     },
 
@@ -90,10 +94,12 @@ export function createDirectoryRepository(request = sbFetch) {
      * filters: {search, categoryId, subcategoryId, state, lga, verification, source, active ('active'|'inactive'|'all')}
      * Returns {rows} (the caller pages with page/pageSize).
      */
-    async list(businessId, filters = {}, { page = 0, pageSize = 50, order = 'created_at.desc' } = {}) {
+    // `probe` fetches one row past the page so the caller can tell whether a
+    // next page exists without a COUNT query (the offset stride stays pageSize).
+    async list(businessId, filters = {}, { page = 0, pageSize = 50, order = 'created_at.desc', probe = false } = {}) {
       const p = [`business_id=eq.${businessId}`]
       applyFilters(p, filters)
-      return request(`directory_businesses?${p.join('&')}&order=${order},id.asc&limit=${pageSize}&offset=${page * pageSize}&select=*`)
+      return request(`directory_businesses?${p.join('&')}&order=${order},id.asc&limit=${pageSize + (probe ? 1 : 0)}&offset=${page * pageSize}&select=*`)
     },
 
     /** Everything matching (for export) — pages through PostgREST's row cap. */
@@ -191,6 +197,19 @@ export function createDirectoryRepository(request = sbFetch) {
       return request('directory_import_errors', {
         method: 'POST', prefer: 'return=minimal',
         body: JSON.stringify(errors.map((e) => ({ ...e, batch_id: batchId, business_id: businessId }))),
+      })
+    },
+
+    // ── Duplicate review ───────────────────────────────────────────────────
+    async getDismissedPairs(businessId) {
+      return pagedQuery(request, `directory_duplicate_dismissals?business_id=eq.${businessId}&order=a_id.asc,b_id.asc&select=a_id,b_id`, { pageSize: PAGE })
+    },
+
+    async dismissPair(businessId, idA, idB, by) {
+      const [a, b] = idA < idB ? [idA, idB] : [idB, idA]
+      return request('directory_duplicate_dismissals', {
+        method: 'POST', prefer: 'return=minimal',
+        body: JSON.stringify({ business_id: businessId, a_id: a, b_id: b, dismissed_by: by || null }),
       })
     },
 

@@ -5,25 +5,26 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map as MapIcon, Mail,
-  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store,
+  ClipboardList, LayoutDashboard, Layers, AlertTriangle, FileCheck, CalendarClock, Store, Compass, BookUser,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','wallet','reports','adr-reports','pv-tracker','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','business-discovery','directory','reception','triage','doctor','rx_inbox','lab','imaging','ecommerce'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
     canViewReports: true,
     canExportReports: true,
     canManageStaff: true,
+    canManageDirectory: true,
     canViewFinance: true,
     canMakeSales: true,
     canViewSettings: true,
     label: 'Owner (full access)',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','adr-reports','pv-tracker','carefind','messages','stock','orders','activity','business-discovery'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -132,13 +133,14 @@ export const ROLES = {
 // (Manufacturer/Importer and Wholesale let companies type their own role names,
 // so "Regional Manager", "Business Development Manager" etc won't be in the list above).
 export const DEFAULT_STAFF_PERMS = {
-  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'adr-reports', 'pv-tracker', 'carefind'],
+  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'business-discovery', 'reports', 'adr-reports', 'pv-tracker', 'carefind'],
   canEditPrice: false,
   canEditStock: false,
   canDelete: false,
   canViewReports: true,
   canExportReports: false,
   canManageStaff: false,
+  canManageDirectory: false,
   canViewFinance: false,
   canMakeSales: false,
   canViewSettings: false,
@@ -159,6 +161,7 @@ export function buildCustomPerms(permissions) {
     canViewReports: !!p.canViewReports,
     canExportReports: !!p.canExportReports,
     canManageStaff: !!p.canManageStaff,
+    canManageDirectory: !!p.canManageDirectory,
     canViewFinance: !!p.canViewFinance,
     canMakeSales: !!p.canMakeSales,
     canViewSettings: !!p.canViewSettings,
@@ -262,6 +265,8 @@ export const MODULES = {
   imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES, section: 'clinical' },
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   discovery: { label: 'Facility Discovery', icon: Search, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  'business-discovery': { label: 'Business Discovery', icon: Compass, types: ENTERPRISE_TYPES, section: 'ecosystem' },
+  directory: { label: 'Business Directory', icon: BookUser, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES, section: 'ecosystem' },
   stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES, section: 'ecosystem' },
@@ -297,7 +302,7 @@ const NAV_ORDER = {
     // Clinics lead with the appointment book and consultation notes.
     clinic: ['overview', 'dashboard', 'appointments', 'consultation', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
     hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'wallet', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'adr-reports', 'ecommerce', 'settings'],
-    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
+    enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'business-discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'directory', 'messages', 'wallet', 'reports', 'adr-reports', 'pv-tracker', 'carefind', 'ecommerce', 'settings'],
 }
 
 function familyOf(businessType) {

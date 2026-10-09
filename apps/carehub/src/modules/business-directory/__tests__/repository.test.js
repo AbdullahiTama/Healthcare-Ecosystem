@@ -140,3 +140,12 @@ describe('directoryRepository — writes', () => {
     expect(client.rows('directory_subcategories')).toHaveLength(1)
   })
 })
+
+describe('directoryRepository — paging', () => {
+  it('probe fetches one extra row so callers can detect a next page', async () => {
+    const rows = Array.from({ length: 5 }, (_, i) => ({ id: 'r' + i, business_id: A, name: 'n' + i, is_active: true }))
+    const repo = createDirectoryRepository(createInMemoryClient({ directory_businesses: rows }))
+    expect((await repo.list(A, {}, { page: 0, pageSize: 2, probe: true })).map((r) => r.id)).toEqual(['r0', 'r1', 'r2'])
+    expect((await repo.list(A, {}, { page: 2, pageSize: 2, probe: true })).map((r) => r.id)).toEqual(['r4'])
+  })
+})

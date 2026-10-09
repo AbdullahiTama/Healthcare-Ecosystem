@@ -77,6 +77,7 @@ export default function Staff({ brand, role, perms }) {
     ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can add, remove or change staff members and roles.'],
+    ['canManageDirectory', 'Manage business directory', 'Can add, import, verify and deactivate businesses in the Business Directory. Needs the Business Directory module as well.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
@@ -559,7 +560,7 @@ export default function Staff({ brand, role, perms }) {
           <div>
             <div style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px' }}>Actions</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {FLAG_META.map(([key, label, desc]) => (
+              {FLAG_META.filter(([key]) => key !== 'canManageDirectory' || typeModuleIds.includes('directory')).map(([key, label, desc]) => (
                 <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
                   <input type='checkbox' checked={!!roleForm.flags[key]} onChange={e => setRoleForm(p => ({ ...p, flags: { ...p.flags, [key]: e.target.checked } }))} style={{ marginTop: '2px', accentColor: tealDeep }} />
                   <span>

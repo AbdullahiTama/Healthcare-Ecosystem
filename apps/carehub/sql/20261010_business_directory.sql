@@ -215,6 +215,7 @@ create index if not exists idx_dirbiz_name_norm       on public.directory_busine
 create index if not exists idx_dirbiz_phone_norm      on public.directory_businesses (business_id, phone_normalized) where phone_normalized is not null;
 create index if not exists idx_dirbiz_website_host    on public.directory_businesses (business_id, website_host) where website_host is not null;
 create index if not exists idx_dirbiz_geo             on public.directory_businesses (business_id, latitude, longitude) where latitude is not null;
+create index if not exists idx_dirbiz_recent         on public.directory_businesses (business_id, created_at desc, id);
 create index if not exists idx_dirbiz_category        on public.directory_businesses (business_id, category_id);
 create index if not exists idx_dirbiz_state_lga       on public.directory_businesses (business_id, state, lga);
 create index if not exists idx_dirbiz_territory       on public.directory_businesses (territory_id) where territory_id is not null;
@@ -232,6 +233,20 @@ create table if not exists public.directory_reports (
   resolved_at timestamptz
 );
 create index if not exists idx_directory_reports_business on public.directory_reports (business_id, status);
+
+-- Pairs an administrator has reviewed and decided are NOT the same business, so
+-- the duplicate review does not offer them again. Ids are stored ordered
+-- (a_id < b_id) so a pair has exactly one row.
+create table if not exists public.directory_duplicate_dismissals (
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  a_id uuid not null references public.directory_businesses(id) on delete cascade,
+  b_id uuid not null references public.directory_businesses(id) on delete cascade,
+  dismissed_by text,
+  created_at timestamptz not null default now(),
+  primary key (a_id, b_id),
+  check (a_id < b_id)
+);
+create index if not exists idx_directory_dismissals_business on public.directory_duplicate_dismissals (business_id);
 
 -- ----------------------------------------------------------------------------
 -- 5. Integrity triggers
@@ -295,9 +310,11 @@ alter table public.directory_businesses     enable row level security;
 alter table public.directory_import_batches enable row level security;
 alter table public.directory_import_errors  enable row level security;
 alter table public.directory_reports        enable row level security;
+alter table public.directory_duplicate_dismissals enable row level security;
 
 revoke all on public.directory_categories, public.directory_subcategories, public.directory_businesses,
-              public.directory_import_batches, public.directory_import_errors, public.directory_reports
+              public.directory_import_batches, public.directory_import_errors, public.directory_reports,
+              public.directory_duplicate_dismissals
   from anon;
 
 do $$
@@ -345,6 +362,12 @@ create policy dir_import_batches_manage on public.directory_import_batches for a
 create policy dir_import_errors_manage on public.directory_import_errors for all to authenticated
   using (public.can_manage_directory(business_id))
   with check (public.can_manage_directory(business_id));
+
+create policy dir_dismissals_manage on public.directory_duplicate_dismissals for all to authenticated
+  using (public.can_manage_directory(business_id))
+  with check (public.can_manage_directory(business_id)
+              and exists (select 1 from public.directory_businesses d where d.id = a_id and d.business_id = directory_duplicate_dismissals.business_id)
+              and exists (select 1 from public.directory_businesses d where d.id = b_id and d.business_id = directory_duplicate_dismissals.business_id));
 
 -- Any member may flag incorrect information; only managers triage.
 create policy dir_reports_insert on public.directory_reports for insert to authenticated
