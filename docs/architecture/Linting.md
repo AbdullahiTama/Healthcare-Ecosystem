@@ -53,3 +53,17 @@ Regression tests: `PublicProfile.subscribe.test.jsx`, `Clients.import.test.jsx`,
 - **Dead code**, reachable by nothing: `PostComposer.jsx` (the real composer is inline in `Feed.jsx`), four panels in `AdminReferralPanels.jsx`, the `business-discovery/index.js` barrel, and the legacy `logActivity` in CareHub `services/supabase.js`. Delete or wire up.
 - `cancelAutoRenew` returns `{ ok, error }` and the caller ignores it, so the "Auto-renew turned off" toast shows even when the update failed.
 - Five `// eslint-disable react-hooks/exhaustive-deps` comments referred to a plugin that is not installed, so they did nothing and were removed. They mark effects whose dependency arrays are deliberately incomplete (CareFind `Profile`, `ArticleEditor`, `PostPage`; CareHub `DashboardHome`, `FacilityPicker`). If `eslint-plugin-react-hooks` is added later, those five need a fresh look.
+
+## 6. What this unmasked: the security audit step is red
+
+"Test & build" runs `npm audit --audit-level=high` straight after Lint, so while Lint failed the audit **never ran**. With Lint green it runs for the first time in a long while and fails in both apps (CareFind 13 findings: 4 high, 3 critical; CareHub 12: 4 high, 3 critical). None of it comes from this change (`eslint-plugin-react`'s tree has no advisories). Until it is dealt with, the audit step keeps the later steps (unit tests, coverage, build) from running in CI, even though they pass locally.
+
+| Package | Where | Severity | Fix |
+|---|---|---|---|
+| `xlsx` 0.18.5 | **CareFind runtime dependency**, used by `api/_handlers/excel-import.js` (any signed-in user can POST a workbook that the server parses with `XLSX.read`) and the business-directory import/export | high: prototype pollution (CVE-2023-30533) and ReDoS (CVE-2024-22363) | none on npm: SheetJS publishes fixed versions (0.19.3 / 0.20.2 and later) only from its own CDN. Install the CDN tarball, or replace the library, and restrict who may call the endpoint. |
+| `vitest`, `@vitest/coverage-v8`, `tinypool`, `vite` | dev tooling in both apps (the test runner and bundler; not shipped to users) | critical / high | major upgrades (vitest 5, vite 8), so a planned migration, not a drive-by |
+| `brace-expansion`, `source-map-js` | transitive dev dependencies | high | `npm audit fix` (no breaking change) |
+| `undici` | CareHub, transitive | high | `npm audit fix` (no breaking change) |
+
+Options for CI, to be decided by the owner (none is done here, because they change what the pipeline enforces): (1) fix the findings (`npm audit fix` clears three at no cost; `xlsx` and the vitest/vite majors need real work); (2) move the audit to the end of the job or to its own job, so tests and the build always run and the audit is still reported; (3) audit production dependencies only (`--omit=dev`), which still fails on `xlsx` until that is fixed.
+
