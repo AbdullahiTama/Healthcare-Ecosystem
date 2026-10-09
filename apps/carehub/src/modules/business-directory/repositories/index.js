@@ -301,10 +301,14 @@ function applyFilters(p, f) {
   if (f.categoryId) p.push(`category_id=eq.${f.categoryId}`)
   if (f.subcategoryId) p.push(`subcategory_id=eq.${f.subcategoryId}`)
   if (f.state) p.push(`state=eq.${q(f.state)}`)
-  if (f.lga) p.push(`lga=eq.${q(f.lga)}`)
+  // LGA and business type are free text in the data (imports, manual entry), so match
+  // case-insensitively on "contains": typing "ikeja" finds "Ikeja".
+  const lga = clean(f.lga)
+  if (lga) p.push(`lga=ilike.*${q(lga)}*`)
   if (f.verification) p.push(`verification_status=eq.${f.verification}`)
   if (f.source) p.push(`data_source=eq.${f.source}`)
-  if (f.businessType) p.push(`business_type=eq.${q(f.businessType)}`)
+  const bt = clean(f.businessType)
+  if (bt) p.push(`business_type=ilike.*${q(bt)}*`)
   if (f.territoryId) p.push(`territory_id=eq.${f.territoryId}`)
   const active = f.active || 'active'
   if (active === 'active') p.push('is_active=eq.true')

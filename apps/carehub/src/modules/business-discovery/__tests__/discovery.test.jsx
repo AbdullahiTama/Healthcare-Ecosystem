@@ -127,6 +127,38 @@ describe('BusinessDiscovery', () => {
   })
 })
 
+describe('BusinessDiscovery — LGA and business-type filters', () => {
+  it('passes both to the search and keeps the results honest', async () => {
+    boxRows = [biz({ id: 'i1', name: 'Ikeja Pharmacy', name_normalized: 'ikeja pharmacy', category_id: 'c-ph' })]
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await type(host.querySelector('#disc-lga'), 'Ikeja')
+    await type(host.querySelector('#disc-btype'), 'Private')
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Use my current location').click() })
+    await flush()
+    const search = calls.find((c) => c[0] === 'searchWithinBox')
+    expect(search[3]).toMatchObject({ lga: 'Ikeja', businessType: 'Private' })
+    expect(host.querySelectorAll('li').length).toBe(1)
+  })
+
+  it('sends no LGA/type filter when the boxes are empty', async () => {
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Use my current location').click() })
+    await flush()
+    const f = calls.find((c) => c[0] === 'searchWithinBox')[3]
+    expect(f.lga).toBeUndefined()
+    expect(f.businessType).toBeUndefined()
+  })
+
+  it('an LGA filter that matches nothing says so instead of claiming the directory is empty', async () => {
+    await mount(<BusinessDiscovery brand={brand} perms={{}} allowedModules={[]} />)
+    await type(host.querySelector('#disc-lga'), 'Nowhere')
+    await act(async () => { [...host.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Search with these filters').click() })
+    await flush()
+    expect(host.textContent).toContain('No matching business was found')
+    expect(host.textContent).not.toContain('has no businesses yet')
+  })
+})
+
 describe('FieldWorkSwitch', () => {
   it('presents the two options with their purpose, and marks the current one', async () => {
     await mount(<FieldWorkSwitch current='discovery' allowed={['activity', 'discovery']} />)
