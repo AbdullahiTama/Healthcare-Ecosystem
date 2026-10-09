@@ -13,6 +13,18 @@ Enterprise (manufacturer/importer, wholesale) feature. Three layers, deliberatel
 ## Non-negotiable separation
 Discovery imports no field-activity, notification, attendance or visit function; a test asserts a search issues only reads, and a real-browser run confirmed zero write requests. Live Field Report only *suggests* nearby directory businesses (`NearbyBusinessPicker`): nothing is pre-selected, wording is "Possible nearby business / Detected nearby / Location captured / Selected business", and `directory_business_id` is written only when the rep explicitly picks one and submits. GPS proximity is never treated as proof of a visit.
 
+## One schema, two scopes (`sql/20261012_directory_platform_scope.sql` — applied 2026-10-09)
+Production also carried an empty, unused CareFind-side directory (`business_directory`, `business_categories`, …). It is unified into this schema instead of kept as a second one:
+
+| Scope | `business_id` | Who writes | Who reads |
+|---|---|---|---|
+| **Company directory** | the company | Owner / `canManageDirectory` | that company only |
+| **Platform registry** | `NULL` | platform admins only (Admin → **registry** tab) | every signed-in company, **only** when `is_active` AND `verified` AND not demo; platform admins see all |
+
+Companies' Business Discovery searches their own list plus the platform registry (checkbox, on by default); platform results are badged "Platform registry". A manager can **Add to my directory**: a separate private, *unverified* copy with `source_detail = 'platform:<id>'`; it never changes the platform record, is never copied twice, and hides the platform duplicate in search (looked up directly, so an inactive or filtered copy still suppresses it). Platform rows carry no territory and use built-in categories only (database-enforced). Field-activity links stay company-only: to log against a platform business, a manager copies it first. Reports of incorrect information are allowed on visible platform records. The 21 CareFind subcategories were carried into the shared built-in subcategories.
+
+**Retiring the old tables:** `sql/20261013_retire_carefind_directory.sql` (guarded: aborts if any row exists; no CASCADE) is written and tested but **not applied** — `DROP` statements time out through the Supabase MCP connector, so run it in the Supabase SQL editor. Definitions are archived in `sql/archive/carefind_directory_retired.md`. Until then the 7 empty tables are inert: no code uses them.
+
 ## Data model (`sql/20261010_business_directory.sql` — applied to production 2026-10-09)
 Tables are `directory_*` because `businesses` is the CareHub tenant/login table. Spec tables map: `businesses`→`directory_businesses`; locations/contacts/verification are 1:1 column groups on it; sources = `data_source` + `import_batch_id`; plus `directory_categories`, `directory_subcategories`, `directory_import_batches`, `directory_import_errors`, `directory_reports`, `directory_duplicate_dismissals`. `field_activities` gains nullable `directory_business_id` + `directory_business_name` (snapshot; link nulls out if the directory row is deleted).
 

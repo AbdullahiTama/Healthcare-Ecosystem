@@ -400,7 +400,10 @@ export function planCommit(items) {
  * reports how far it got. Re-running the same file is safe — rows that did
  * land are then classified as confirmed duplicates and skipped.
  */
-export async function commitImport({ items, repo, businessId, createdBy, fileName, onProgress, shouldCancel }) {
+export async function commitImport({ items, repo, businessId, scope, createdBy, fileName, onProgress, shouldCancel }) {
+  // `businessId` owns the batch record (always a real company); `scope` says where
+  // the rows land — the company's own directory (default) or the PLATFORM registry.
+  const owner = scope ?? businessId
   const plan = planCommit(items)
   if (plan.unresolved > 0) throw new Error(plan.unresolved + ' possible duplicate(s) still need a decision.')
 
@@ -419,7 +422,7 @@ export async function commitImport({ items, repo, businessId, createdBy, fileNam
     const subIds = new Map()
     const cats = [...new Map(plan.inserts.filter((it) => it.pendingSubcategory).map((it) => [it.pendingSubcategory.category_id + '|' + lookupKey(it.pendingSubcategory.name), it.pendingSubcategory])).values()]
     for (const p of cats) {
-      const row = await repo.ensureSubcategory(businessId, p.category_id, p.name)
+      const row = await repo.ensureSubcategory(owner, p.category_id, p.name)
       subIds.set(p.category_id + '|' + lookupKey(p.name), row.id)
     }
 
@@ -427,7 +430,7 @@ export async function commitImport({ items, repo, businessId, createdBy, fileNam
     for (let i = 0; i < plan.inserts.length; i += COMMIT_CHUNK) {
       if (shouldCancel && shouldCancel()) throw new Error('cancelled')
       const slice = plan.inserts.slice(i, i + COMMIT_CHUNK)
-      await repo.insertMany(businessId, batch.id, slice.map((it) => ({
+      await repo.insertMany(owner, batch.id, slice.map((it) => ({
         ...it.record,
         subcategory_id: it.record.subcategory_id || (it.pendingSubcategory ? subIds.get(it.pendingSubcategory.category_id + '|' + lookupKey(it.pendingSubcategory.name)) || null : null),
         created_by: createdBy || null,
@@ -438,7 +441,7 @@ export async function commitImport({ items, repo, businessId, createdBy, fileNam
     }
     for (const m of plan.merges) {
       if (shouldCancel && shouldCancel()) throw new Error('cancelled')
-      await repo.update(m.id, businessId, m.patch)
+      await repo.update(m.id, owner, m.patch)
       merged++
       onProgress && onProgress('importing', imported + merged, total)
     }

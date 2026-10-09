@@ -34,6 +34,9 @@ const TrustPanel = lazy(() => import('./trust/TrustPanel'))
 const GrowthPanel = lazy(() => import('./growth/GrowthPanel'))
 const SupportInbox = lazy(() => import('./ops/SupportInbox'))
 const Compliance = lazy(() => import('./compliance/Compliance'))
+// Platform-wide business directory (rows with no company). Gated by the 'Directory' permission here
+// and by is_platform_admin() in the database.
+const BusinessDirectory = lazy(() => import('../../modules/business-directory/BusinessDirectory'))
 
 // Loading fallback for admin panels
 const PanelLoading = () => (
@@ -1367,6 +1370,7 @@ function SidebarRail({ collapsed, setCollapsed, active, setActive, counts, perms
     { id: 'growth', label: 'Growth', icon: TrendingUp, perm: 'Growth', count: null },
     { id: 'ops', label: 'Ops', icon: Inbox, perm: 'Ops', count: null },
     { id: 'compliance', label: 'Compliance', icon: ShieldAlert, perm: 'Compliance', count: null },
+    { id: 'directory', label: 'Directory', icon: Building2, perm: 'Directory', count: null },
   ].filter(it => can(it.perm) || it.id==='dashboard')
 
   const width = collapsed ? 64 : 256
@@ -1745,7 +1749,8 @@ export default function AdminDashboard() {
               {tab==='trust' && (isPermitted('Trust') ? <Suspense fallback={<PanelLoading />}><TrustPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Trust" />)}
               {tab==='growth' && (isPermitted('Growth') ? <Suspense fallback={<PanelLoading />}><GrowthPanel /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Growth" />)}
               {tab==='ops' && (isPermitted('Ops') ? <Suspense fallback={<PanelLoading />}><SupportInbox /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Ops" />)}
-              {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='compliance' && (isPermitted('Compliance') ? <Suspense fallback={<PanelLoading />}><Compliance /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Compliance" />)}
+              {tab==='directory' && (isPermitted('Directory') ? <Suspense fallback={<PanelLoading />}><BusinessDirectory brand={null} perms={{ canManageDirectory: true }} platformMode /></Suspense> : <Empty icon={<Shield size={28} />} message="No access to Directory" />)}
             </>
           )}
         </div>

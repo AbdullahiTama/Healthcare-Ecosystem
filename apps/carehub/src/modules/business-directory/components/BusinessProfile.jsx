@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Phone, Navigation, MapPin, Share2, Flag, Mail, Globe, User, Clock } from 'lucide-react'
-import { Modal, GhostBtn, TealBtn, Textarea } from '../../../components/ui'
+import { Phone, Navigation, MapPin, Share2, Flag, Mail, Globe, User, Clock, Plus } from 'lucide-react'
+import { Modal, GhostBtn, TealBtn, Textarea, Pill } from '../../../components/ui'
 import { theme } from '../../../styles/theme'
 import { VerificationBadge, SourceBadge } from './BusinessBadges'
 import { formatDistance } from '../services/distance'
@@ -24,10 +24,11 @@ function Row({ icon: Icon, label, children }) {
 // One profile for Directory and Discovery. `onViewOnMap` is optional (the
 // Discovery map passes it). `onReport` is optional too — when present the
 // "Report incorrect information" action is offered.
-export default function BusinessProfile({ business, categoryName, subcategoryName, onClose, onViewOnMap, onReport, onToast }) {
+export default function BusinessProfile({ business, categoryName, subcategoryName, onClose, onViewOnMap, onReport, onAdopt, onToast }) {
   const [reporting, setReporting] = useState(false)
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
+  const [adopting, setAdopting] = useState(false)
   if (!business) return null
   const b = business
   const hasCoords = b.latitude != null && b.longitude != null
@@ -65,7 +66,7 @@ export default function BusinessProfile({ business, categoryName, subcategoryNam
       footer={<GhostBtn onClick={onClose}>Close</GhostBtn>}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         <VerificationBadge status={b.verification_status} />
-        <SourceBadge source={b.data_source} />
+        {b.origin === 'platform' ? <Pill label='Platform registry' type='purple' /> : <SourceBadge source={b.data_source} />}
         {!b.is_active && <span style={{ fontSize: 11, fontWeight: 700, color: theme.danger }}>Inactive</span>}
       </div>
       <div style={{ fontSize: 13, color: gray600, marginBottom: 6 }}>
@@ -91,6 +92,11 @@ export default function BusinessProfile({ business, categoryName, subcategoryNam
         {b.phone && <a href={`tel:${b.phone.replace(/[^+\d]/g, '')}`} style={{ ...actionStyle, borderRadius: 10, border: `1px solid ${border}`, color: navy, fontWeight: 700, fontSize: 13 }}><Phone size={14} aria-hidden='true' /> Call</a>}
         {directions && <a href={directions} target='_blank' rel='noopener noreferrer' style={{ ...actionStyle, borderRadius: 10, border: `1px solid ${border}`, color: navy, fontWeight: 700, fontSize: 13 }}><Navigation size={14} aria-hidden='true' /> Directions</a>}
         {hasCoords && onViewOnMap && <GhostBtn onClick={() => onViewOnMap(b)} style={actionStyle}><MapPin size={14} aria-hidden='true' /> View on map</GhostBtn>}
+        {onAdopt && b.origin === 'platform' && (
+          <TealBtn disabled={adopting} style={actionStyle} onClick={async () => { setAdopting(true); try { await onAdopt(b) } finally { setAdopting(false) } }}>
+            <Plus size={14} aria-hidden='true' /> {adopting ? 'Adding…' : 'Add to my directory'}
+          </TealBtn>
+        )}
         <GhostBtn onClick={share} style={actionStyle}><Share2 size={14} aria-hidden='true' /> Share</GhostBtn>
         {onReport && <GhostBtn onClick={() => setReporting(true)} style={actionStyle}><Flag size={14} aria-hidden='true' /> Report incorrect information</GhostBtn>}
       </div>

@@ -42,3 +42,8 @@ export const DATA_SOURCE = {
 }
 
 export const RADIUS_PRESETS_KM = [1, 3, 5, 10, 25]
+
+// Addresses the PLATFORM registry (business_id IS NULL) wherever a business id is
+// expected. The platform registry is curated by platform admins and readable by
+// every company when verified; a company's own directory is addressed by its id.
+export const PLATFORM = 'platform'

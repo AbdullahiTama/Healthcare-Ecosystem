@@ -6,6 +6,7 @@ import {
 import { theme } from '../../styles/theme'
 import { territoryRepository } from '../territories/repositories'
 import { directoryRepository } from './repositories'
+import { PLATFORM } from './services/constants'
 import { useDirectoryLookups } from './components/useDirectoryLookups'
 import { VerificationBadge, SourceBadge } from './components/BusinessBadges'
 import BusinessForm from './components/BusinessForm'
@@ -30,14 +31,18 @@ function readAuth() {
  * Reading is open to anyone who can reach the page; writes need
  * `perms.canManageDirectory`, enforced again by the database (RLS).
  */
-export default function BusinessDirectory({ brand, perms }) {
+export default function BusinessDirectory({ brand, perms, platformMode = false }) {
   const repo = directoryRepository
   const businessId = brand?.id
+  // platformMode (mounted in the admin area, which only platform admins reach) manages the
+  // shared PLATFORM registry (business_id IS NULL) instead of a company's own directory.
+  const platformScope = !!platformMode
+  const scopeId = platformScope ? PLATFORM : businessId
   const canManage = !!perms?.canManageDirectory
   const auth = readAuth()
   const actor = auth?.staff?.email || auth?.brand?.email || brand?.email || null
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
-  const lookups = useDirectoryLookups(businessId, repo)
+  const lookups = useDirectoryLookups(scopeId, repo)
 
   const [tab, setTab] = useState('businesses')
   const [filters, setFilters] = useState({ search: '', categoryId: '', state: '', verification: '', source: '', active: 'active' })
@@ -62,11 +67,11 @@ export default function BusinessDirectory({ brand, perms }) {
   // The duplicate index is expensive (every record); build it once per visit and keep it current incrementally.
   const indexRef = useRef(null)
   const ensureIndex = useCallback(async () => {
-    if (!indexRef.current) indexRef.current = createDedupIndex(await repo.getDedupIndexRows(businessId))
+    if (!indexRef.current) indexRef.current = createDedupIndex(await repo.getDedupIndexRows(scopeId))
     return indexRef.current
-  }, [repo, businessId])
+  }, [repo, scopeId])
 
-  useEffect(() => { indexRef.current = null }, [businessId])
+  useEffect(() => { indexRef.current = null; setPage(0); if (platformScope) setTab((t) => (t === 'businesses' || t === 'import' ? t : 'businesses')) }, [scopeId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const t = setTimeout(() => { setDebounced(filters); setPage(0) }, 300); return () => clearTimeout(t) }, [filters])
 
   const load = useCallback(async () => {
@@ -74,14 +79,14 @@ export default function BusinessDirectory({ brand, perms }) {
     setLoading(true)
     setError('')
     try {
-      const r = await repo.list(businessId, debounced, { page, pageSize: PAGE_SIZE, probe: true })
+      const r = await repo.list(scopeId, debounced, { page, pageSize: PAGE_SIZE, probe: true })
       setRows(r.slice(0, PAGE_SIZE))
       setHasMore(r.length > PAGE_SIZE)
     } catch (e) {
       setError(e.message || 'Could not load the directory')
     }
     setLoading(false)
-  }, [repo, businessId, debounced, page])
+  }, [repo, businessId, scopeId, debounced, page])
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -96,13 +101,13 @@ export default function BusinessDirectory({ brand, perms }) {
   async function saveBusiness(record, pendingSub) {
     if (!canManage) throw new Error('You do not have permission to change the directory.')
     const rec = { ...record }
-    if (pendingSub) rec.subcategory_id = (await repo.ensureSubcategory(businessId, pendingSub.category_id, pendingSub.name)).id
+    if (pendingSub) rec.subcategory_id = (await repo.ensureSubcategory(scopeId, pendingSub.category_id, pendingSub.name)).id
     if (editing?.id) {
-      await repo.update(editing.id, businessId, rec)
+      await repo.update(editing.id, scopeId, rec)
       indexRef.current = null
       showToast('Business updated', { type: 'success' })
     } else {
-      const created = await repo.create(businessId, rec, actor)
+      const created = await repo.create(scopeId, rec, actor)
       if (indexRef.current && created) addToIndex(indexRef.current, created)
       showToast('Business added', { type: 'success' })
     }
@@ -118,7 +123,7 @@ export default function BusinessDirectory({ brand, perms }) {
   async function doExport(format) {
     setExporting(true)
     try {
-      const all = await repo.listAll(businessId, debounced)
+      const all = await repo.listAll(scopeId, debounced)
       if (!all.length) { showToast('Nothing to export for these filters.', { type: 'warning' }); setExporting(false); return }
       await exportRows(format, all.map((r) => toExportRow(r, lookups.categoryName(r.category_id), lookups.subcategoryName(r.subcategory_id))),
         { baseName: 'business-directory', title: 'Business Directory', subtitle: brand?.name })
@@ -145,11 +150,11 @@ export default function BusinessDirectory({ brand, perms }) {
       if (how === 'dismiss') await repo.dismissPair(businessId, pair.keep.id, pair.other.id, actor)
       else {
         if (how === 'merge') {
-          const [keep, other] = await Promise.all([repo.getById(pair.keep.id, businessId), repo.getById(pair.other.id, businessId)])
+          const [keep, other] = await Promise.all([repo.getById(pair.keep.id, scopeId), repo.getById(pair.other.id, scopeId)])
           const patch = keep && other ? buildMergePatch(keep, other) : null
-          if (patch) await repo.update(keep.id, businessId, patch)
+          if (patch) await repo.update(keep.id, scopeId, patch)
         }
-        await repo.setActive(pair.other.id, businessId, false)
+        await repo.setActive(pair.other.id, scopeId, false)
       }
       indexRef.current = null
       setDupPairs((prev) => prev.filter((p) => p !== pair))
@@ -198,6 +203,11 @@ export default function BusinessDirectory({ brand, perms }) {
         </div>
         {canManage && tab === 'businesses' && <TealBtn onClick={() => setEditing({})}>+ Add business</TealBtn>}
       </div>
+      {platformScope && (
+        <div role='note' style={{ padding: '10px 14px', borderRadius: 10, background: theme.warningBg, color: theme.warning, fontSize: 12.5, marginBottom: 14 }}>
+          You are editing the <strong>platform registry</strong>. Only <strong>verified</strong>, active, non-demo records are visible to other companies, who can search them and copy them into their own directory. Territories, reports and duplicate review are company-specific and are not available here.
+        </div>
+      )}
       {!canManage && (
         <div role='note' style={{ padding: '10px 14px', borderRadius: 10, background: theme.infoBg, color: theme.info, fontSize: 12.5, marginBottom: 14 }}>
           You can view the directory. Only the Owner, or a role with “Manage business directory”, can add, import or change records.
@@ -205,7 +215,7 @@ export default function BusinessDirectory({ brand, perms }) {
       )}
 
       <div role='tablist' aria-label='Directory sections' style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {TABS.filter(([id]) => canManage || id === 'businesses' || id === 'categories').map(([id, label]) => (
+        {TABS.filter(([id]) => (canManage || id === 'businesses' || id === 'categories') && !(platformScope && !['businesses', 'import'].includes(id))).map(([id, label]) => (
           <button key={id} role='tab' aria-selected={tab === id} onClick={() => setTab(id)}
             style={{ fontSize: 12.5, fontWeight: 800, padding: '9px 16px', borderRadius: 10, cursor: 'pointer', border: `1px solid ${tab === id ? tealDeep : border}`, background: tab === id ? navy : 'white', color: tab === id ? 'white' : gray500 }}>
             {label}
@@ -243,11 +253,11 @@ export default function BusinessDirectory({ brand, perms }) {
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
                 <GhostBtn onClick={() => setEditing(r)}>Edit</GhostBtn>
                 {r.verification_status !== 'verified'
-                  ? <GhostBtn onClick={() => act(() => repo.setVerification(r.id, businessId, 'verified'), 'Marked as verified')}>Verify</GhostBtn>
-                  : <GhostBtn onClick={() => act(() => repo.setVerification(r.id, businessId, 'unverified'), 'Verification removed')}>Unverify</GhostBtn>}
+                  ? <GhostBtn onClick={() => act(() => repo.setVerification(r.id, scopeId, 'verified'), 'Marked as verified')}>Verify</GhostBtn>
+                  : <GhostBtn onClick={() => act(() => repo.setVerification(r.id, scopeId, 'unverified'), 'Verification removed')}>Unverify</GhostBtn>}
                 {r.is_active
                   ? <RedBtn onClick={() => setConfirm(r)}>Deactivate</RedBtn>
-                  : <GhostBtn onClick={() => act(() => repo.setActive(r.id, businessId, true), 'Reactivated')}>Reactivate</GhostBtn>}
+                  : <GhostBtn onClick={() => act(() => repo.setActive(r.id, scopeId, true), 'Reactivated')}>Reactivate</GhostBtn>}
               </div>) : undefined}
           />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '12px 0', fontSize: 12.5, color: gray600 }}>
@@ -260,8 +270,8 @@ export default function BusinessDirectory({ brand, perms }) {
 
       {tab === 'import' && canManage && (
         <>
-          <ImportWizard businessId={businessId} repo={repo} categories={lookups.categories} subcategories={lookups.subcategories}
-            loadExisting={() => repo.getDedupIndexRows(businessId)} createdBy={actor} showToast={showToast}
+          <ImportWizard businessId={businessId} scope={scopeId} repo={repo} categories={lookups.categories} subcategories={lookups.subcategories}
+            loadExisting={() => repo.getDedupIndexRows(scopeId)} createdBy={actor} showToast={showToast}
             onImported={() => { indexRef.current = null; load(); lookups.reload(); repo.getBatches(businessId, 10).then(setBatches).catch(() => {}) }} />
           {batches.length > 0 && (
             <Card style={{ padding: 14, marginTop: 16 }}>
@@ -337,7 +347,7 @@ export default function BusinessDirectory({ brand, perms }) {
 
       {editing && (
         <BusinessForm key={editing.id || 'new'} show initial={editing.id ? editing : null}
-          categories={lookups.categories} subcategories={lookups.subcategories} territories={territories}
+          categories={lookups.categories} subcategories={lookups.subcategories} territories={platformScope ? [] : territories}
           onClose={() => setEditing(null)} onSave={saveBusiness}
           checkDuplicate={(rec, ignoreId) => {
             // The index may still be loading on first save; treat that as "no signal" rather than blocking.
@@ -354,7 +364,7 @@ export default function BusinessDirectory({ brand, perms }) {
       <ConfirmDialog show={!!confirm} onClose={() => setConfirm(null)} title={`Deactivate ${confirm?.name || ''}?`}
         consequence='It will stop appearing in Business Discovery. Field activity already logged against it is kept. You can reactivate it at any time.'
         confirmLabel='Deactivate'
-        onConfirm={() => { const r = confirm; setConfirm(null); act(() => repo.setActive(r.id, businessId, false), 'Deactivated') }} />
+        onConfirm={() => { const r = confirm; setConfirm(null); act(() => repo.setActive(r.id, scopeId, false), 'Deactivated') }} />
     </div>
   )
 }
