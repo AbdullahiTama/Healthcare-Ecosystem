@@ -40,6 +40,7 @@ import Orders from '../../modules/orders/Orders'
 import LiveActivity from '../../modules/live-activity/LiveActivity'
 import BusinessDiscovery from '../../modules/business-discovery/BusinessDiscovery'
 import BusinessDirectory from '../../modules/business-directory/BusinessDirectory'
+import TerritoryIntelligence from '../../modules/territory-intelligence/TerritoryIntelligence'
 import Reception from './hospital/Reception'
 import Triage from './hospital/Triage'
 import Doctor from './hospital/Doctor'
@@ -206,6 +207,7 @@ export default function BusinessDashboard() {
             <Route path='activity' element={bareGuard('activity', <LiveActivity {...pageProps} allowedModules={allowedRouteKeys} />)} />
             <Route path='discovery' element={bareGuard('discovery', <BusinessDiscovery {...pageProps} allowedModules={allowedRouteKeys} />)} />
             <Route path='directory' element={bareGuard('directory', <BusinessDirectory {...pageProps} />)} />
+            <Route path='intelligence' element={bareGuard('intelligence', <TerritoryIntelligence {...pageProps} />)} />
             <Route path='reception' element={guard('reception', <><TopBar title='Reception' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Reception {...pageProps} /></div></>)} />
             <Route path='triage' element={guard('triage', <><TopBar title='Triage' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Triage {...pageProps} /></div></>)} />
             <Route path='doctor' element={guard('doctor', <><TopBar title='Doctor Consultation' brand={brand} role={role} /><div style={{ padding: isMobile ? '16px' : '24px' }}><Doctor {...pageProps} /></div></>)} />
