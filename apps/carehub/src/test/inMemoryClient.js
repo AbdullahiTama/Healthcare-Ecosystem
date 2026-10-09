@@ -8,7 +8,7 @@
 //
 // It understands exactly the PostgREST path shapes the repositories emit:
 // `eq.` / `neq.` / `is.null`, the range operators `gte.` `lte.` `gt.` `lt.`,
-// `in.(...)` lists, flat `or=(a.eq.1,b.eq.2)`, `select`/`order`/`limit`/`offset`
+// `in.(...)` lists, `ilike.` with `*` wildcards, flat `or=(a.eq.1,b.eq.2)`, `select`/`order`/`limit`/`offset`
 // (ignored for matching; `limit`/`offset` ARE applied to GET results so
 // offset-paging repositories behave like they do against real PostgREST), and
 // the GET / POST / PATCH / DELETE verbs. It is intentionally NOT a full
@@ -41,12 +41,23 @@ export function createInMemoryClient(seed = {}) {
   // make every test using it look stronger than it is.
   // ISO timestamps and dates compare correctly as strings, which is all the
   // repositories use these for (today's sales, expiry cutoffs).
-  const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+  // Numbers compare as numbers ("6.5" < "10.2"); everything else as strings.
+  const compare = (a, b) => {
+    const na = Number(a)
+    const nb = Number(b)
+    if (a !== '' && b !== '' && Number.isFinite(na) && Number.isFinite(nb)) return na < nb ? -1 : na > nb ? 1 : 0
+    return a < b ? -1 : a > b ? 1 : 0
+  }
 
   const condition = (row, key, val) => {
     if (val.startsWith('eq.')) return String(row[key]) === val.slice(3)
     if (val.startsWith('neq.')) return String(row[key]) !== val.slice(4)
     if (val.startsWith('is.null')) return row[key] === null || row[key] === undefined
+    // ilike: case-insensitive, `*` is the wildcard (PostgREST's spelling of %).
+    if (val.startsWith('ilike.')) {
+      const pattern = val.slice(6).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+      return row[key] != null && new RegExp('^' + pattern + '$', 'i').test(String(row[key]))
+    }
     if (val.startsWith('in.(')) return val.slice(4, -1).split(',').includes(String(row[key]))
     if (val.startsWith('gte.')) return row[key] != null && compare(String(row[key]), val.slice(4)) >= 0
     if (val.startsWith('lte.')) return row[key] != null && compare(String(row[key]), val.slice(4)) <= 0

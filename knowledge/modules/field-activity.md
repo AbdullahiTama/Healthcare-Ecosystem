@@ -23,3 +23,6 @@ Custom-field configuration, activity logging with GPS reverse-geocoding, voice n
 
 ## Missing Documentation
 No document specifies rate limits or caching expectations for the third-party geocoding dependency — this domain's reliance on it was discovered by reading the code, not documented as an external dependency anywhere in the project's stated architecture.
+
+## Business Directory link (added 2026-10)
+The logger now suggests nearby Business Directory entries from the captured GPS fix and lets the rep confirm one (optional, never pre-selected). The confirmed business is stored on `field_activities.directory_business_id`/`directory_business_name` and shown in the feed and table. Everything else is unchanged. A "Field Work" switcher links this page to Business Discovery. See `business-directory.md`.

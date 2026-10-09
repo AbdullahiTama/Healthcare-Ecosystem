@@ -102,6 +102,7 @@ export default function Staff({ brand, role, perms }) {
     ['canViewReports', 'View reports', 'Can open the Reports page and see business analytics.'],
     ['canExportReports', 'Export reports', 'Can download/export report data.'],
     ['canManageStaff', 'Manage staff', 'Can invite, remove or change staff members and roles. Only the Owner can grant this.'],
+    ['canManageDirectory', 'Manage business directory', 'Can add, import, verify and deactivate businesses in the Business Directory. Needs the Business Directory module as well.'],
     ['canViewFinance', 'View finance', 'Can see expenses, debts and financial figures.'],
     ['canMakeSales', 'Make sales', 'Can record sales at the POS / counter.'],
     ['canViewSettings', 'View settings', 'Can open Settings and change business configuration.'],
@@ -523,7 +524,7 @@ export default function Staff({ brand, role, perms }) {
           <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
             <legend style={{ fontSize: '11px', fontWeight: '700', color: gray600, marginBottom: '6px', padding: 0 }}>Actions</legend>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {FLAG_META.map(([key, label, desc]) => {
+              {FLAG_META.filter(([key]) => key !== 'canManageDirectory' || typeModuleIds.includes('directory')).map(([key, label, desc]) => {
                 const disabled = key === 'canManageStaff' && !isOwnerLevel
                 return (
                   <label key={key} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}>

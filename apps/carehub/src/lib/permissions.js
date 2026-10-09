@@ -5,25 +5,26 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
-  ClipboardList, LayoutDashboard, Layers,
+  ClipboardList, LayoutDashboard, Layers, Compass, BookUser,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','discovery','directory','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
     canViewReports: true,
     canExportReports: true,
     canManageStaff: true,
+    canManageDirectory: true,
     canViewFinance: true,
     canMakeSales: true,
     canViewSettings: true,
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity','discovery'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -132,13 +133,14 @@ export const ROLES = {
 // (Manufacturer/Importer and Wholesale let companies type their own role names,
 // so "Regional Manager", "Business Development Manager" etc won't be in the list above).
 export const DEFAULT_STAFF_PERMS = {
-  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'reports', 'carefind'],
+  nav: ['dashboard', 'warehouses', 'territories', 'messages', 'stock', 'orders', 'activity', 'discovery', 'reports', 'carefind'],
   canEditPrice: false,
   canEditStock: false,
   canDelete: false,
   canViewReports: true,
   canExportReports: false,
   canManageStaff: false,
+  canManageDirectory: false,
   canViewFinance: false,
   canMakeSales: false,
   canViewSettings: false,
@@ -159,6 +161,7 @@ export function buildCustomPerms(permissions) {
     canViewReports: !!p.canViewReports,
     canExportReports: !!p.canExportReports,
     canManageStaff: !!p.canManageStaff,
+    canManageDirectory: !!p.canManageDirectory,
     canViewFinance: !!p.canViewFinance,
     canMakeSales: !!p.canMakeSales,
     canViewSettings: !!p.canViewSettings,
@@ -225,6 +228,8 @@ export const MODULES = {
   lab: { label: 'Laboratory', icon: Microscope, types: HOSPITAL_TYPES },
   imaging: { label: 'Imaging', icon: Scan, types: HOSPITAL_TYPES },
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES },
+  discovery: { label: 'Business Discovery', icon: Compass, types: ENTERPRISE_TYPES },
+  directory: { label: 'Business Directory', icon: BookUser, types: ENTERPRISE_TYPES },
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES },
   stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES },
@@ -238,7 +243,7 @@ export const MODULES = {
 const NAV_ORDER = {
    default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'messages', 'reports', 'carefind', 'settings'],
+   enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'directory', 'messages', 'reports', 'carefind', 'settings'],
 }
 
 function familyOf(businessType) {

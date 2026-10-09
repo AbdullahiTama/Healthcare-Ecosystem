@@ -2,6 +2,15 @@
 
 This document tracks architecture issues discovered during review.
 
+
+## Feature log
+
+- [ ] **F1 — Business Directory + Business Discovery + Live Field Activity link (Phases 1–3) — CODE COMPLETE, DATABASE APPLIED TO PRODUCTION 2026-10-09; CLIENT NOT YET DEPLOYED.** See `knowledge/modules/business-directory.md`. Migration `apps/carehub/sql/20261010_business_directory.sql` verified on scratch Postgres 16 (re-runnable, 50 RLS/trigger checks, index use at 50k rows); client: 472-test suite (342 before; 130 new), production build, real-browser check of Discovery and Directory (zero writes during search, no console errors, no mobile overflow).
+  **Applied** to `carehub` in parts. Verified live in rolled-back blocks as a real owner under RLS: insert + triggers, cross-tenant insert denied, built-ins not editable, anon denied, server-stamped verification; 28 built-in categories, 15 policies, RLS on all 7 tables; no leftover rows; advisors' two WARNs on the new functions fixed by revoking direct EXECUTE grants. Part 1 is in `schema_migrations`; later parts ran via execute_sql, so they are not in the migration history.
+  **Overlap to resolve:** production already has CareFind-side `business_directory`, `business_categories`, `business_subcategories`, `business_import_batches/_errors`, `business_sources`, `business_verification` tables (migrations `carefind_20261001_business_directory_*`, `carefind_20261002_directory_spec_*`). The CareHub `directory_*` tables are separate (tenant-scoped); decide whether to unify.
+  **Before release:** deploy the client; import a real file to smoke-test at scale; decide on external data sources; add structured opening hours before an "open now" filter. **Phase 4** (territory coverage / visited-vs-unvisited dashboards) is designed for but not built.
+  **Known limits:** radius search is bounding-box + haversine (fine to ~100k rows/tenant); PDF export is print-to-PDF; geocoding depends on public Nominatim (rate-limited, cached; falls back to place-name text matching).
+
 ## Critical
 
 - [ ] **C21 — DATABASE APPLIED TO PRODUCTION 2026-10-09; CLIENT SHIPS WITH PR #10. Adding a staff member could hijack the owner's login, and any staff member could escalate their own role.** Reported: "when the new staff added his password it changed the password of the business owner". Root cause: Supabase Auth has one account per email, and `provision_staff_auth` *linked* a staff row to any existing account with that email — nothing stopped it being the owner's own. The welcome email mailed a password that was never applied, so the only way in was a reset of the one shared account. Same path: the owner chose and saw staff passwords (mailed in plaintext); `Owner` was an assignable staff role; and because `current_business_ids()` includes every active staff member's business, any Cashier could INSERT staff, PATCH their own role, create a custom role overriding a preset, or call `provision_staff_auth` directly — the UI's `isOwner` was the only barrier.
