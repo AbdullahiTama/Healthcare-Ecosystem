@@ -1,7 +1,10 @@
 -- ============================================================================
 -- Business Directory (Phase 1) + field-activity business link (Phase 3 hook)
 --
--- Status: NOT YET APPLIED — run via Supabase SQL editor / psql / MCP.
+-- Status: APPLIED to production project `carehub` (szdybxmgmhndoytqanfb) 2026-10-09,
+-- in parts (the MCP migration call timed out on CREATE/DROP TRIGGER; the statements
+-- were run individually and verified). Part 1 is recorded as
+-- `carehub_business_directory_1_tables`; the rest ran via execute_sql.
 -- Depends on: sql/20261009_staff_invitations_and_role_governance.sql
 --             (is_staff_owner_level) and phase2_rls_pilot.sql
 --             (current_business_ids, is_platform_admin). Re-runnable.
@@ -68,7 +71,10 @@ as $$
       )
 $$;
 
-revoke all on function public.role_grants_directory_management(uuid, text) from public, anon;
+-- Supabase grants EXECUTE directly to anon/authenticated on new functions, which
+-- REVOKE FROM PUBLIC does not remove. Only can_manage_directory must stay callable
+-- by authenticated (RLS policies evaluate it as the signed-in user).
+revoke all on function public.role_grants_directory_management(uuid, text) from public, anon, authenticated;
 revoke all on function public.can_manage_directory(uuid) from public, anon;
 grant execute on function public.can_manage_directory(uuid) to authenticated;
 
@@ -412,3 +418,8 @@ drop trigger if exists trg_field_activities_directory_link on public.field_activ
 create trigger trg_field_activities_directory_link
   before insert or update of directory_business_id on public.field_activities
   for each row execute function public.field_activities_directory_link_guard();
+
+-- Trigger functions are never called directly; remove the default direct grants.
+revoke all on function public.directory_businesses_guard() from public, anon, authenticated;
+revoke all on function public.directory_touch_updated_at() from public, anon, authenticated;
+revoke all on function public.field_activities_directory_link_guard() from public, anon, authenticated;
