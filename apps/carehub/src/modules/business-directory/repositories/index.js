@@ -213,6 +213,49 @@ export function createDirectoryRepository(request = sbFetch) {
       })
     },
 
+    // ── Territory intelligence (read-only RPCs; see sql/20261011) ───────────
+    // SECURITY INVOKER functions: the caller's RLS decides what they can see.
+    async coverageSummary(businessId, since, group, { categoryId = null, state = null, unassignedOnly = false } = {}) {
+      return request('rpc/directory_coverage_summary', {
+        method: 'POST',
+        body: JSON.stringify({ p_business_id: businessId, p_since: since, p_group: group, p_category_id: categoryId, p_state: state, p_unassigned_only: unassignedOnly }),
+      })
+    },
+
+    // total_count rides on every row (window function), so one call pages and counts.
+    async unvisited(businessId, since, { territoryId = null, unassignedOnly = false, state = null, categoryId = null, limit = 50, offset = 0 } = {}) {
+      return request('rpc/directory_unvisited', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_business_id: businessId, p_since: since, p_territory_id: territoryId, p_unassigned_only: unassignedOnly,
+          p_state: state, p_category_id: categoryId, p_limit: limit, p_offset: offset,
+        }),
+      })
+    },
+
+    async visitTotals(businessId, since) {
+      const rows = await request('rpc/directory_visit_totals', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_since: since }) })
+      return rows[0] || null
+    },
+
+    async repActivity(businessId, since) {
+      return request('rpc/directory_rep_activity', { method: 'POST', body: JSON.stringify({ p_business_id: businessId, p_since: since }) })
+    },
+
+    /**
+     * Bulk-assign a territory to ACTIVE businesses that have none yet, optionally
+     * limited to a state. Never overwrites an existing assignment. Returns the
+     * number of rows changed. (RLS limits this to directory managers.)
+     */
+    async assignTerritoryToUnassigned(businessId, territoryId, { state = null } = {}) {
+      const p = [`business_id=eq.${businessId}`, 'is_active=eq.true', 'territory_id=is.null']
+      if (state) p.push(`state=eq.${q(state)}`)
+      const rows = await request(`directory_businesses?${p.join('&')}&select=id`, {
+        method: 'PATCH', body: JSON.stringify({ territory_id: territoryId }),
+      })
+      return Array.isArray(rows) ? rows.length : 0
+    },
+
     // ── Reports of incorrect information ───────────────────────────────────
     async reportIncorrect(businessId, directoryBusinessId, message, reportedBy) {
       return request('directory_reports', {

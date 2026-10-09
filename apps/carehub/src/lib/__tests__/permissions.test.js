@@ -211,7 +211,7 @@ describe('module registry (business type → modules)', () => {
     // Spot-check that the derived exports still match the pre-registry shapes.
     expect(ALL_NAV_DEFAULT.length).toBe(17)
     expect(ALL_NAV_HOSPITAL.length).toBe(21)
-    expect(ALL_NAV_ENTERPRISE.length).toBe(15) // 13 + Business Discovery + Business Directory
+    expect(ALL_NAV_ENTERPRISE.length).toBe(16) // 13 + Business Discovery + Business Directory + Territory Intelligence
     expect(ALL_NAV_DEFAULT[0]).toEqual(['overview', expect.anything(), 'Overview'])
     expect(ALL_NAV_DEFAULT[2]).toEqual(['pos', expect.anything(), 'POS / Sales'])
   })
@@ -275,5 +275,16 @@ describe('Business Discovery / Directory modules', () => {
   it('a custom role only manages the directory when the Owner says so', () => {
     expect(buildCustomPerms({ nav: ['directory'] }).canManageDirectory).toBe(false)
     expect(buildCustomPerms({ nav: ['directory'], canManageDirectory: true }).canManageDirectory).toBe(true)
+  })
+})
+
+describe('Territory Intelligence module', () => {
+  const nav = (role, type) => getNavItems(role, type).map(([id]) => id)
+  it('is enterprise-only and available to Owner and Manager, not to a plain rep', () => {
+    expect(nav('Owner', 'manufacturer_importer')).toContain('intelligence')
+    expect(nav('Owner', 'wholesale')).toContain('intelligence')
+    expect(nav('Owner', 'pharmacy')).not.toContain('intelligence')
+    expect(nav('Manager', 'manufacturer_importer')).toContain('intelligence')
+    expect(nav('Regional Rep', 'manufacturer_importer')).not.toContain('intelligence')
   })
 })

@@ -5,12 +5,12 @@ import {
   Home, ShoppingCart, Package, Users, Calendar, Clipboard, Receipt, Landmark,
   Truck, Search, Building2, User, BarChart2, Settings, UserCheck, Activity,
   Stethoscope, Pill, Microscope, Scan, Radio, FileText, Factory, Boxes, Map, Mail,
-  ClipboardList, LayoutDashboard, Layers, Compass, BookUser,
+  ClipboardList, LayoutDashboard, Layers, Compass, BookUser, Radar,
 } from 'lucide-react'
 
 export const ROLES = {
   Owner: {
-    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','discovery','directory','reception','triage','doctor','rx_inbox','lab','imaging'],
+    nav: ['overview','dashboard','pos','inventory','mastercatalog','clients','appointments','consultation','expenses','debts','purchases','demand','staff','reports','settings','carefind','locations','warehouses','territories','messages','stock','orders','activity','discovery','directory','intelligence','reception','triage','doctor','rx_inbox','lab','imaging'],
     canEditPrice: true,
     canEditStock: true,
     canDelete: true,
@@ -24,7 +24,7 @@ export const ROLES = {
     label: 'Owner — Full Access',
   },
   Manager: {
-    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity','discovery'],
+    nav: ['dashboard','pos','inventory','clients','appointments','consultation','expenses','debts','purchases','demand','reports','carefind','messages','stock','orders','activity','discovery','intelligence'],
     canEditPrice: false,
     canEditStock: false,
     canDelete: false,
@@ -230,6 +230,7 @@ export const MODULES = {
   activity: { label: 'Live Field Activity', icon: Radio, types: ENTERPRISE_TYPES },
   discovery: { label: 'Business Discovery', icon: Compass, types: ENTERPRISE_TYPES },
   directory: { label: 'Business Directory', icon: BookUser, types: ENTERPRISE_TYPES },
+  intelligence: { label: 'Territory Intelligence', icon: Radar, types: ENTERPRISE_TYPES },
   orders: { label: 'Orders & LPO', icon: FileText, types: ENTERPRISE_TYPES },
   warehouses: { label: 'Warehouses & Branches', icon: Factory, types: ENTERPRISE_TYPES },
   stock: { label: 'Stock & Batches', icon: Boxes, types: ENTERPRISE_TYPES },
@@ -243,7 +244,7 @@ export const MODULES = {
 const NAV_ORDER = {
    default: ['overview', 'dashboard', 'pos', 'inventory', 'mastercatalog', 'clients', 'appointments', 'consultation', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
    hospital: ['overview', 'dashboard', 'reception', 'triage', 'doctor', 'rx_inbox', 'lab', 'imaging', 'pos', 'inventory', 'mastercatalog', 'clients', 'expenses', 'debts', 'purchases', 'demand', 'carefind', 'locations', 'staff', 'reports', 'settings'],
-   enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'directory', 'messages', 'reports', 'carefind', 'settings'],
+   enterprise: ['overview', 'dashboard', 'activity', 'discovery', 'orders', 'warehouses', 'stock', 'mastercatalog', 'staff', 'territories', 'directory', 'intelligence', 'messages', 'reports', 'carefind', 'settings'],
 }
 
 function familyOf(businessType) {
