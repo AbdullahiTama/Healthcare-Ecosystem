@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EmailService } from '@care-ecosystem/shared-email'
 import { enqueue } from '../_lib/emailService.js'
 
@@ -7,7 +7,14 @@ import { enqueue } from '../_lib/emailService.js'
 // from enqueueing duplicates, and that failures cannot be confused for success.
 
 describe('carefind emailService.enqueue', () => {
-  beforeEach(() => vi.restoreAllMocks())
+  // The wrapper builds the service-role client itself (see api/_lib/emailService.js); the client is never used here
+  // because EmailService.prototype.enqueue is mocked, but creating it needs a URL and key.
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.stubEnv('SUPABASE_URL', 'http://localhost:54321')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key')
+  })
+  afterEach(() => vi.unstubAllEnvs())
 
   it('forwards idempotencyKey and sourceId to the outbox insert', async () => {
     const spy = vi.spyOn(EmailService.prototype, 'enqueue').mockResolvedValue({ id: 'x' })

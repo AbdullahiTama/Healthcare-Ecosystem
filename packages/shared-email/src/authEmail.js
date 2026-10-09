@@ -3,6 +3,8 @@
 // Server-side-only: link generation requires the service-role client, which
 // must never be exposed to the browser.
 
+import { APP_SENDERS } from './branding.js'
+
 let _createClient = null
 async function deps() {
   if (!_createClient) {
@@ -31,13 +33,13 @@ const APP_BRANDING = {
   carefind: {
     app: 'carefind',
     label: 'CareFind',
-    fromEmail: 'CareFind <support@mail.carefind.app>',
+    fromEmail: APP_SENDERS.carefind,
     defaultRedirect: process.env.APP_URL || 'https://carefind.app',
   },
   carehub: {
     app: 'carehub',
     label: 'CareHub',
-    fromEmail: 'CareHub <support@mail.carefindhub.com>',
+    fromEmail: APP_SENDERS.carehub,
     defaultRedirect: process.env.APP_URL || 'https://carefindhub.com',
   },
 }
