@@ -10,7 +10,8 @@ import { useBreakpoint } from '../../hooks/useBreakpoint.js'
 import { useHeaderIdentity } from '../../hooks/useHeaderIdentity.js'
 import AppShell from '../../components/layout/AppShell.jsx'
 import BottomNav from '../../components/BottomNav.jsx'
-import { Inp, Toast, useToast, CardSkeleton, Modal, TealBtn, GhostBtn } from '../../components/ui/index.jsx'
+import { Inp, Toast, useToast, CardSkeleton } from '../../components/ui/index.jsx'
+import WithdrawalPinModal from './WithdrawalPinModal.jsx'
 import { useWalletData, useTransactions, useBanks, keys } from '../../hooks/queries.js'
 
 const WITHDRAWAL_FEE_RATE = 0.2
@@ -56,10 +57,6 @@ function Wallet() {
   const [wdAccountResolving, setWdAccountResolving] = useState(false)
   const [wdAccountResolved, setWdAccountResolved] = useState(false)
   const [pinModalOpen, setPinModalOpen] = useState(false)
-  const [newPin, setNewPin] = useState('')
-  const [confirmPin, setConfirmPin] = useState('')
-  const [pinSubmitting, setPinSubmitting] = useState(false)
-  const [pinError, setPinError] = useState('')
 
   // Handle return from Paystack redirect. The wallet is credited server-side
   // in /api/verify-payment, which asks Paystack to confirm the charge before
@@ -218,33 +215,6 @@ function Wallet() {
       showToast(`₦${data.payoutNaira.toLocaleString()} sent to your bank!`, { type: 'success' })
     } catch (err) {
       setWdSubmitting(false)
-      showToast('Network error. Please check your connection and try again.', { type: 'error' })
-    }
-  }
-
-  async function handleSetPin() {
-    setPinError('')
-    if (!/^\d{4,6}$/.test(newPin)) { setPinError('PIN must be 4-6 digits.'); return }
-    if (newPin !== confirmPin) { setPinError('PINs do not match.'); return }
-    setPinSubmitting(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { showToast('Please log in again.', { type: 'error' }); setPinSubmitting(false); return }
-      const response = await fetch('/api/withdrawal-pin/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ pin: newPin }),
-      })
-      const data = await response.json()
-      setPinSubmitting(false)
-      if (!response.ok) {
-        setPinError(data.error || 'Could not set your withdrawal PIN.')
-        return
-      }
-      setNewPin(''); setConfirmPin(''); setPinModalOpen(false)
-      showToast('Withdrawal PIN set.', { type: 'success' })
-    } catch (err) {
-      setPinSubmitting(false)
       showToast('Network error. Please check your connection and try again.', { type: 'error' })
     }
   }
@@ -423,14 +393,14 @@ function Wallet() {
               </div>
               <button
                 type="button"
-                onClick={() => { setPinError(''); setPinModalOpen(true) }}
+                onClick={() => setPinModalOpen(true)}
                 style={{
                   padding: '7px 12px', borderRadius: 10, border: `1px solid ${theme.tealDeep}`,
                   background: '#fff', color: theme.tealDeep, fontWeight: 800, fontSize: 12, cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
               >
-                Set withdrawal PIN
+                Set or change PIN
               </button>
             </div>
             {(wallet?.balance || 0) >= 5 ? (
@@ -536,28 +506,12 @@ function Wallet() {
           </div>
         )}
       </div>
-      <Modal show={pinModalOpen} onClose={() => setPinModalOpen(false)} title="Set withdrawal PIN" sheet={isMobile} footer={
-        <>
-          <GhostBtn onClick={() => setPinModalOpen(false)} style={{ flex: 1 }}>Cancel</GhostBtn>
-          <TealBtn
-            onClick={handleSetPin}
-            disabled={pinSubmitting || !newPin || !confirmPin || newPin !== confirmPin || !/^\d{4,6}$/.test(newPin)}
-            style={{ flex: 1 }}
-          >
-            {pinSubmitting ? 'Saving…' : 'Save PIN'}
-          </TealBtn>
-        </>
-      }>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <p style={{ margin: 0, fontSize: 12.5, color: theme.textMid, lineHeight: 1.6 }}>
-            You'll enter this 4-6 digit PIN every time you withdraw. It is stored
-            only as a hashed secret and never shared.
-          </p>
-          <Inp label="New PIN" type="password" inputMode="numeric" pattern="[0-9]{4,6}" maxLength={6} value={newPin} onChange={setNewPin} placeholder="4-6 digits" autoComplete="new-password" required />
-          <Inp label="Confirm PIN" type="password" inputMode="numeric" pattern="[0-9]{4,6}" maxLength={6} value={confirmPin} onChange={setConfirmPin} placeholder="Repeat your PIN" autoComplete="new-password" required />
-          {pinError && <p role="alert" style={{ margin: 0, fontSize: 12, color: theme.danger, fontWeight: 700 }}>{pinError}</p>}
-        </div>
-      </Modal>
+      <WithdrawalPinModal
+        show={pinModalOpen}
+        onClose={() => setPinModalOpen(false)}
+        onDone={() => { setPinModalOpen(false); showToast('Withdrawal PIN saved.', { type: 'success' }) }}
+        isMobile={isMobile}
+      />
       {isMobile && <BottomNav />}
     </div>
   )

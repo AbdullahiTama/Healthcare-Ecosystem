@@ -55,15 +55,19 @@ describe('WithdrawalPinField', () => {
   })
 
   it('creating a first PIN: asks the server whether one exists, validates, then saves and fills the field', async () => {
-    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: false }) : reply(200, { ok: true })))
+    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: false }) : url.endsWith('/otp') ? reply(200, { ok: true, sentTo: 'o**@x.com' }) : reply(200, { ok: true })))
     const seen = []
     await mount({ onPin: (v) => seen.push(v) })
     await click('Set or change PIN')
     expect(host.querySelector('#current-pin')).toBeNull()           // nothing to confirm on a first PIN
+    expect(host.querySelector('#new-pin')).toBeNull()               // the form only appears once a code was emailed
+    await click('Email me a code')
+    expect(host.textContent).toContain('o**@x.com')
+    await type('pin-code', '123456')
     await type('new-pin', '4321'); await type('confirm-new-pin', '4321')
     await click('Save PIN')
     const set = fetchMock.mock.calls.find(([u]) => u.endsWith('/set'))
-    expect(JSON.parse(set[1].body)).toEqual({ pin: '4321' })
+    expect(JSON.parse(set[1].body)).toEqual({ pin: '4321', otp: '123456' })
     expect(set[1].headers.Authorization).toBe('Bearer tok-test')
     expect(seen.at(-1)).toBe('4321')
     expect(host.textContent).toContain('PIN saved')
@@ -71,44 +75,74 @@ describe('WithdrawalPinField', () => {
   })
 
   it('refuses locally: not 4-6 digits, or the two entries differ; nothing is sent', async () => {
-    fetchMock.mockImplementation(async () => reply(200, { hasPin: false }))
+    fetchMock.mockImplementation(async (url) => (url.endsWith('/otp') ? reply(200, { ok: true }) : reply(200, { hasPin: false })))
     await mount()
     await click('Set or change PIN')
+    await click('Email me a code')
     await type('new-pin', '12'); await type('confirm-new-pin', '12')
     await click('Save PIN')
     expect(host.querySelector('[role="alert"]').textContent).toMatch(/4 to 6 digits/)
     await type('new-pin', '1234'); await type('confirm-new-pin', '4321')
     await click('Save PIN')
     expect(host.querySelector('[role="alert"]').textContent).toMatch(/do not match/)
+    await type('confirm-new-pin', '1234')
+    await click('Save PIN')
+    expect(host.querySelector('[role="alert"]').textContent).toMatch(/6-digit code/)
     expect(fetchMock.mock.calls.some(([u]) => u.endsWith('/set'))).toBe(false)
   })
 
   it('changing an existing PIN requires the current one, and a server refusal is shown (error state)', async () => {
-    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: true }) : reply(403, { error: 'Incorrect withdrawal PIN.' })))
+    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: true }) : url.endsWith('/otp') ? reply(200, { ok: true }) : reply(403, { error: 'Incorrect withdrawal PIN.' })))
     await mount()
     await click('Set or change PIN')
+    await click('Email me a code')
     expect(host.querySelector('#current-pin')).toBeTruthy()
+    await type('pin-code', '123456')
     await type('new-pin', '9999'); await type('confirm-new-pin', '9999')
     await click('Save PIN')
     expect(host.querySelector('[role="alert"]').textContent).toMatch(/current PIN/)
     await type('current-pin', '0000')
     await click('Save PIN')
-    expect(JSON.parse(fetchMock.mock.calls.at(-1)[1].body)).toEqual({ pin: '9999', currentPin: '0000' })
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)[1].body)).toEqual({ pin: '9999', otp: '123456', currentPin: '0000' })
     expect(host.querySelector('[role="alert"]').textContent).toBe('Incorrect withdrawal PIN.')
     expect(host.querySelector('#new-pin')).toBeTruthy()             // stays open so the owner can retry
+  })
+
+  it('"I forgot my PIN" drops the current-PIN field and sends forgot instead', async () => {
+    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: true }) : reply(200, { ok: true })))
+    await mount()
+    await click('Set or change PIN')
+    await click('Email me a code')
+    await act(async () => { host.querySelector('input[type="checkbox"]').click() })
+    expect(host.querySelector('#current-pin')).toBeNull()
+    await type('pin-code', '654321')
+    await type('new-pin', '2468'); await type('confirm-new-pin', '2468')
+    await click('Save PIN')
+    expect(JSON.parse(fetchMock.mock.calls.at(-1)[1].body)).toEqual({ pin: '2468', otp: '654321', forgot: true })
+  })
+
+  it('a refused code request (cooldown) is shown and the form stays on step 1', async () => {
+    fetchMock.mockImplementation(async (url) => (url.endsWith('/status') ? reply(200, { hasPin: false }) : reply(429, { error: 'Please wait a minute before requesting another code.' })))
+    await mount()
+    await click('Set or change PIN')
+    await click('Email me a code')
+    expect(host.querySelector('[role="alert"]').textContent).toMatch(/wait a minute/)
+    expect(host.querySelector('#new-pin')).toBeNull()
   })
 
   it('the server saying "no PIN yet" (needsPin) opens the create step straight away', async () => {
     fetchMock.mockImplementation(async () => reply(200, { hasPin: false }))
     await mount({ needsPin: true })
-    expect(host.querySelector('#new-pin')).toBeTruthy()
     expect(host.textContent).toContain('Withdrawals need a PIN')
+    expect(host.textContent).toContain('Email me a code')
   })
 
   it('a network failure while saving is shown, and the button is usable again', async () => {
-    fetchMock.mockImplementation(async (url) => { if (url.endsWith('/status')) return reply(200, { hasPin: false }); throw new Error('offline') })
+    fetchMock.mockImplementation(async (url) => { if (url.endsWith('/status')) return reply(200, { hasPin: false }); if (url.endsWith('/otp')) return reply(200, { ok: true }); throw new Error('offline') })
     await mount()
     await click('Set or change PIN')
+    await click('Email me a code')
+    await type('pin-code', '123456')
     await type('new-pin', '1234'); await type('confirm-new-pin', '1234')
     await click('Save PIN')
     expect(host.querySelector('[role="alert"]').textContent).toMatch(/Network error/)

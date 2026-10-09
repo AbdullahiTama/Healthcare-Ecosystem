@@ -15,7 +15,8 @@ export {
   IN_FLIGHT_GRACE_MS, WITHDRAWAL_KINDS, TRANSFER_EVENT_OUTCOMES, ATTENTION_RESULTS,
   getTransferStatus, normalizeAccountName, verifyBankAccount, decideTransferAction, settleWithdrawal, settleTransferWebhook, reconcileWithdrawal, sweepWithdrawals,
 } from './withdrawals.js'
-export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin } from './pin.js'
+export { isValidPin, randomPinSalt, hashPin, verifyPin, checkWithdrawalPin, setWithdrawalPin, withdrawalPinStatus } from './pin.js'
+export { OTP_TTL_SECONDS, OTP_PURPOSES, generateOtp, isValidOtp, hashOtp, maskEmail, sendOtp, checkOtp } from './otp.js'
 export {
   REFUND_GRACE_MS, REFUND_EVENT_OUTCOMES, REFUND_ATTENTION_RESULTS,
   requestRefund, settleRefund, executeCardRefund, settleRefundWebhook, sweepRefunds, refundUnappliedPayments, refundCancelledAppointments, runRefundSweeps,

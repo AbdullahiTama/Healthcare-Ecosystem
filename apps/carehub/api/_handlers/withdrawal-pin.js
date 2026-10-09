@@ -1,6 +1,7 @@
-import { hashPin, randomPinSalt, isValidPin, checkWithdrawalPin } from '@care-ecosystem/shared-payments'
+import { OTP_PURPOSES, sendOtp, setWithdrawalPin, withdrawalPinStatus } from '@care-ecosystem/shared-payments'
 import { supabase } from '../_lib/supabase.js'
 import { verifyBusiness } from '../_lib/verifyBusiness.js'
+import { getSecurityMailer } from '../_lib/securityMailer.js'
 
 // The router folds every /api/<route> into one catch-all and dispatches on the FIRST path segment, so this
 // handler resolves the second segment itself.
@@ -12,13 +13,14 @@ function subPath(req) {
 }
 
 // POST /api/withdrawal-pin/status  - { hasPin }
-// POST /api/withdrawal-pin/set     - { pin, currentPin? } create the owner's PIN, or replace it
+// POST /api/withdrawal-pin/otp     - email a 6-digit code to the owner (needed to set or replace the PIN)
+// POST /api/withdrawal-pin/set     - { pin, otp, currentPin? | forgot: true } create the owner's PIN, or replace it
 //
-// The PIN is the second factor against a stolen owner session (audit F-08): without it, a session alone cannot
-// move the wallet to a bank account. So REPLACING a PIN requires the current PIN - otherwise a thief would simply
-// set their own and withdraw. (There is no "forgot PIN" flow yet; that needs an emailed one-time code and is a
-// product decision.) The raw PIN travels only over HTTPS and is never logged or stored: this derives
-// scrypt(pin, salt) and the database sees only the hash.
+// The PIN is the second factor against a stolen owner session (audit F-08): without it, a session alone cannot move
+// the wallet to a bank account. So setting or replacing one needs (1) a fresh emailed code - otherwise a thief would
+// just set their own PIN first - and (2) when REPLACING, the current PIN, unless the owner chose "forgot PIN" (then the
+// code is the only proof). The raw PIN travels only over HTTPS and is never logged or stored: the database sees only
+// the scrypt hash. Rules live in @care-ecosystem/shared-payments, shared with CareFind (one PIN per person).
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -27,31 +29,20 @@ export default async function handler(req, res) {
 
   const action = subPath(req)
 
-  const { data: rows, error: readError } = await supabase.rpc('get_withdrawal_pin', { p_user_id: user.id })
-  if (readError) return res.status(500).json({ error: 'Could not read your withdrawal PIN settings' })
-  const stored = Array.isArray(rows) ? rows[0] : rows
-  const hasPin = Boolean(stored?.pin_hash)
+  if (action === 'status') {
+    const r = await withdrawalPinStatus(supabase, user.id)
+    return res.status(r.status).json(r.body)
+  }
 
-  if (action === 'status') return res.status(200).json({ hasPin })
+  if (action === 'otp') {
+    const r = await sendOtp({ supabase, user, purpose: OTP_PURPOSES.PIN_SET, mailer: await getSecurityMailer() })
+    return res.status(r.status).json(r.body)
+  }
 
   if (action === 'set') {
-    const { pin, currentPin } = req.body || {}
-    if (!isValidPin(pin)) return res.status(400).json({ error: 'Withdrawal PIN must be 4-6 digits' })
-
-    // A PIN is a step-up credential, so the account must already prove it owns its email before it can arm one.
-    if (!user.email_confirmed_at) return res.status(403).json({ error: 'Confirm your email before setting a withdrawal PIN' })
-
-    if (hasPin) {
-      const check = await checkWithdrawalPin(supabase, user.id, currentPin)
-      if (!check.ok) {
-        return res.status(check.status).json({ error: check.code === 'invalid_pin' ? 'Enter your current withdrawal PIN to change it' : check.error, code: check.code })
-      }
-    }
-
-    const salt = randomPinSalt()
-    const { error } = await supabase.rpc('set_withdrawal_pin', { p_user_id: user.id, p_pin_hash: hashPin(pin, salt), p_pin_salt: salt })
-    if (error) return res.status(500).json({ error: 'Could not set withdrawal PIN' })
-    return res.status(200).json({ ok: true })
+    const { pin, otp, currentPin, forgot } = req.body || {}
+    const r = await setWithdrawalPin(supabase, user, { pin, otp, currentPin, forgot: forgot === true, mailer: await getSecurityMailer() })
+    return res.status(r.status).json(r.body)
   }
 
   return res.status(404).json({ error: 'Unknown withdrawal PIN action' })
