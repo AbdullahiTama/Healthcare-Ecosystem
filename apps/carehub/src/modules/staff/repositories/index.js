@@ -45,26 +45,20 @@ const DELETE_BLOCKERS = [
 //                   the boundary. Documented at the method rather than left to
 //                   look like an oversight.
 //
-// NOT here on purpose: staff *authentication*. Since C2 dropped staff.password
-// (20260813_purge_plaintext_password_columns.sql) there is no credential check
-// left — login goes through Supabase Auth, and the only auth-adjacent reads
-// are `getStaffByEmail` (resolve the session's email to a row, post-login) and
-// `provisionStaffAuth` (Staff.jsx mints the new member's auth account), both of
-// which stay in services/supabase.js. Neither can use a business-scoped
-// repository: the former runs from Login.jsx before any business context
-// exists, and the latter is a single server-side RPC.
+// NOT here on purpose: staff *authentication* and *onboarding*. Login goes
+// through Supabase Auth; `getStaffByEmail` (services/supabase.js) resolves the
+// session's email to a row post-login, before any business context exists.
+// New members are never INSERTed from the client — they join by invitation
+// (../services/invitations.js), and the guard_staff_writes trigger rejects a
+// direct insert. Updates and deletes here are policed by that same trigger:
+// only the Owner or a staff admin may make them, nobody may edit their own
+// row, and the "Owner" role can never be assigned
+// (sql/20261009_staff_invitations_and_role_governance.sql).
 export function createStaffRepository(request = sbFetch) {
   return {
     // ── Staff ────────────────────────────────────────────────────────────────
     async getAll(businessId) {
       return request(`staff?business_id=eq.${businessId}&order=created_at.desc&select=*`)
-    },
-
-    async create(businessId, staff) {
-      return request('staff', {
-        method: 'POST',
-        body: JSON.stringify({ ...staff, business_id: businessId }),
-      })
     },
 
     // Previously an id-only PATCH. Drives the active/inactive toggle and the

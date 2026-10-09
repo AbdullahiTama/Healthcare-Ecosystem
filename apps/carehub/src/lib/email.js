@@ -1,5 +1,11 @@
 // CareHub Email Service using Resend
-const RESEND_API_KEY = process.env.RESEND_API_KEY || ''
+//
+// Only works server-side (api/*): the key is a server secret, and Resend does
+// not accept browser calls. In a browser bundle `process` does not exist under
+// `vite dev` (a production build substitutes `process.env` with `{}`), so the
+// guard keeps importing this module from client code from crashing the app —
+// the client-side senders simply fail and are swallowed by their callers.
+const RESEND_API_KEY = (typeof process !== 'undefined' && process.env?.RESEND_API_KEY) || ''
 const FROM_EMAIL = 'CareHub <onboarding@resend.dev>'
 const ADMIN_EMAIL = 'admin@carehub.ng'
 
@@ -300,49 +306,38 @@ export async function emailCreditReminder({ clientName, clientEmail, businessNam
   })
 }
 
-// ── 6. STAFF WELCOME EMAIL ────────────────────────────────────────────────────
-export async function emailStaffWelcome({ staffName, staffEmail, businessName, role, password }) {
+// ── 6. STAFF INVITATION ───────────────────────────────────────────────────────
+// Sent server-side only (api/staff-invitations.js). Carries a single-use link —
+// never a password: the invitee chooses their own when they accept. Every
+// interpolated value is owner-typed, so it is HTML-escaped (a staff name like
+// `<a href=…>` must not become a link in someone's inbox).
+const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+export async function emailStaffInvitation({ staffName, staffEmail, businessName, role, acceptUrl, expiresAt }) {
+  const expires = expiresAt ? new Date(expiresAt).toUTCString().replace(/:\d\d GMT$/, ' GMT') : '7 days'
   const html = `
     <div style="${baseStyle}">
       ${logoHeader()}
       <div style="${cardStyle}">
         <div style="text-align: center; margin-bottom: 24px;">
-          <div style="font-size: 48px; margin-bottom: 12px;">👋</div>
-          <h2 style="color: #0f172a; margin: 0 0 8px;">You've Been Added to CareHub!</h2>
-          <p style="color: #888; margin: 0;">Welcome to the team, ${staffName}!</p>
+          <h2 style="color: #0f172a; margin: 0 0 8px;">You're invited to join ${escapeHtml(businessName)}</h2>
+          <p style="color: #888; margin: 0;">Hi ${escapeHtml(staffName)},</p>
         </div>
 
         <p style="color: #555; font-size: 14px; line-height: 1.7; margin-bottom: 20px;">
-          You have been added as a <strong>${role}</strong> at <strong>${businessName}</strong> on CareHub.
-          Here are your login details:
+          You have been invited to join <strong>${escapeHtml(businessName)}</strong> on CareHub as
+          <strong>${escapeHtml(role)}</strong>. Accept the invitation to choose your own password and sign in.
         </p>
 
-        <div style="background: #FDFBF7; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-          <table style="width: 100%; border-collapse: collapse;">
-            ${[
-              ['Website', 'skincarepro.vercel.app'],
-              ['Email', staffEmail],
-              ['Password', password],
-              ['Role', role],
-              ['Business', businessName],
-            ].map(([l, v]) => `
-              <tr>
-                <td style="padding: 8px 0; color: #888; font-weight: 600; font-size: 13px; width: 40%;">${l}</td>
-                <td style="padding: 8px 0; color: #0f172a; font-size: 13px; font-weight: 600;">${v}</td>
-              </tr>
-            `).join('')}
-          </table>
+        <div style="text-align: center;">
+          <a href="${escapeHtml(acceptUrl)}" style="${btnStyle}">Accept invitation →</a>
         </div>
 
-        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
-          <p style="margin: 0; color: #92400e; font-size: 13px;">
-            🔒 Please change your password after your first login for security.
-          </p>
-        </div>
-
-        <a href="https://skincarepro.vercel.app/login" style="${btnStyle}">
-          Log In Now →
-        </a>
+        <p style="color: #888; font-size: 12px; line-height: 1.7; margin-top: 24px;">
+          This link works once and expires on ${escapeHtml(expires)}. If you already have a CareHub or CareFind
+          account with this email, you will be asked to sign in with your existing password — it will not be changed.
+          If you were not expecting this invitation, you can ignore this email.
+        </p>
       </div>
       ${footer()}
     </div>
@@ -350,7 +345,7 @@ export async function emailStaffWelcome({ staffName, staffEmail, businessName, r
 
   return sendEmail({
     to: staffEmail,
-    subject: '👋 Welcome to ' + businessName + ' on CareHub!',
+    subject: `You're invited to join ${businessName} on CareHub`,
     html,
   })
 }

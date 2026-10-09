@@ -62,7 +62,10 @@ export default function BusinessDashboard() {
   const { auth, logout } = useAuth()
   const brand = auth?.brand
   const staffUser = auth?.staff
-  const role = staffUser?.role || 'Owner'
+  // Fail closed: a staff session with a missing role gets the restricted
+  // default, never the Owner's full access. Only the business account itself
+  // (no staff row) is the Owner.
+  const role = staffUser ? (staffUser.role || '') : 'Owner'
   const [customRoles, setCustomRoles] = useState({})
   // Custom business-defined roles (Staff.jsx → roles table): name → permissions
   // jsonb. getPerms/getNavItems override presets with these so custom-role

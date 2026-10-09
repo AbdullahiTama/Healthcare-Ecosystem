@@ -277,14 +277,25 @@ export function getNavItems(role, businessType, customRoles = {}) {
 
 export const ROLE_LIST = ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier', 'Nurse', 'Doctor', 'Lab Technician']
 
-// Preset roles offered when adding/editing staff, scoped to the business type so
-// a pharmacy is never offered Doctor/Lab Technician and a hospital is never
+// Preset roles offered when inviting/editing staff, scoped to the business type
+// so a pharmacy is never offered Doctor/Lab Technician and a hospital is never
 // offered Pharmacist/Therapist — an invalid assignment that another vertical's
 // module gate would silently neutralise. Enterprise businesses type their own.
+//
+// "Owner" is deliberately absent: the Owner is the business account itself
+// (businesses.email), not a role a staff member can hold. Offering it let an
+// owner hand out full Owner authority to someone who was not the account
+// holder. The database enforces the same rule (guard_staff_writes /
+// create_staff_invitation in sql/20261009_staff_invitations_and_role_governance.sql).
 export const ROLES_FOR_TYPE = {
-  hospital: ['Owner', 'Manager', 'Receptionist', 'Nurse', 'Doctor', 'Lab Technician', 'Cashier'],
-  retail: ['Owner', 'Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier'],
+  hospital: ['Manager', 'Receptionist', 'Nurse', 'Doctor', 'Lab Technician', 'Cashier'],
+  retail: ['Manager', 'Pharmacist', 'Therapist', 'Receptionist', 'Cashier'],
   enterprise: [],
+}
+
+// True for names no staff role or custom role may take.
+export function isReservedRoleName(name) {
+  return String(name || '').trim().toLowerCase() === 'owner'
 }
 
 export function rolesForType(businessType) {

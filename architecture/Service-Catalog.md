@@ -187,7 +187,7 @@ Grouped for brevity; each now confirmed at the component level during the full c
 - **Database Access:** None — takes plain JS objects, presumably relays through a third-party email API/SMTP not visible in the reviewed portion.
 - **Authentication:** Not applicable in the Supabase sense; whatever email-provider credential this needs wasn't visible in the reviewed code.
 - **Business Logic:** Template composition only.
-- **Weaknesses:** `emailStaffWelcome` embeds the new hire's plaintext password directly in the email body; hardcoded `skincarepro.vercel.app` branding/links throughout, a leftover from the product's prior identity.
+- **Weaknesses:** `emailStaffWelcome` embeds the new hire's plaintext password directly in the email body; hardcoded `skincarepro.vercel.app` branding/links throughout, a leftover from the product's prior identity. *(2026-10-09, C21: `emailStaffWelcome` replaced by `emailStaffInvitation` — sent server-side from `api/staff-invitations.js`, HTML-escaped, carries a link not a password.)*
 
 ### 3.3 `lib/permissions.js` (Authorization / Navigation Logic Service)
 - **Purpose:** Role → capability matrix and nav-item filtering by role and business type.
