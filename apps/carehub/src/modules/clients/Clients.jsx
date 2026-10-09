@@ -8,7 +8,7 @@ import { theme } from '../../styles/theme'
 import { Card, StatCard, SectionHead, Modal, Pill, Inp, Sel, Textarea, GhostBtn, TealBtn, Avatar, Loading, Empty, DataTable, useToast, Toast } from '../../components/ui'
 import { useClients, useClientSales, useClientConsults, useClientHistory, useCreateClient, useCreateManyClients } from '../../hooks/queries'
 
-const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, success } = theme
+const { tealDeep, tealMist, navy, gray600, gray500, gray400, gray100, border, bg, danger, dangerBg, warning, warningBg, success } = theme
 
 const HISTORY_TABS = [
   ['timeline', History, 'Timeline'],
@@ -117,6 +117,7 @@ export default function Clients({ brand, role, perms }) {
   const { data: clients = [], isLoading: loading } = useClients(brand?.id)
   const createClient = useCreateClient(brand?.id)
   const createManyClients = useCreateManyClients(brand?.id)
+  const importing = createManyClients.isPending
 
   useEffect(() => { setPage(0) }, [search, clients.length])
 
