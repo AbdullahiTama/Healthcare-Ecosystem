@@ -7,6 +7,7 @@ import { emailBusinessApproved, emailBusinessRejected } from '../../lib/email'
 import { businessLucideIcon, businessName, DARK } from '../../lib/utils'
 import { theme } from '../../styles/theme'
 import { Card, StatCard, Pill, Modal, Inp, Sel, GhostBtn, TealBtn, Avatar, Loading, useToast, Toast, Logo } from '../../components/ui'
+import BusinessDirectory from '../../modules/business-directory/BusinessDirectory'
 import { ApplicationsPanel, AgentsPanel, LedgerPanel, PayoutsPanel, CoveragePanel } from './referral/AdminReferralPanels'
 
 export default function AdminDashboard() {
@@ -19,7 +20,7 @@ export default function AdminDashboard() {
   const [invite, setInvite] = useState({})
   const { msg, show: showToast } = useToast()
   const navigate = useNavigate()
-  const { logout: authLogout } = useAuth()
+  const { auth, logout: authLogout } = useAuth()
 
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
 
@@ -95,7 +96,7 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? theme.tealDeep : theme.gray100, color: tab === t ? 'white' : theme.gray600, textTransform: 'capitalize' }}>{t}</button>)}
+          {['businesses', 'team', 'applications', 'agents', 'ledger', 'payouts', 'coverage', 'registry'].map(t => <button key={t} onClick={() => setTab(t)} style={{ padding: '9px 20px', borderRadius: theme.radius.md, border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '13px', background: tab === t ? theme.tealDeep : theme.gray100, color: tab === t ? 'white' : theme.gray600, textTransform: 'capitalize' }}>{t}</button>)}
         </div>
 
         {loading ? <Loading /> : tab === 'businesses' ? (
@@ -121,6 +122,7 @@ export default function AdminDashboard() {
         : tab === 'ledger' ? <LedgerPanel />
         : tab === 'payouts' ? <PayoutsPanel />
         : tab === 'coverage' ? <CoveragePanel />
+        : tab === 'registry' ? <BusinessDirectory brand={auth?.brand} perms={{ canManageDirectory: true }} platformMode />
         : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
