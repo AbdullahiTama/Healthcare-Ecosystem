@@ -168,6 +168,23 @@ export function partitionByOwnerVerification(ids, unverifiedIds) {
   for (const id of ids || []) (blocked.has(id) ? skipped : approvable).push(id)
   return { approvable, skipped }
 }
+// Turns per-id bulk-approve outcomes (true | 'unverified' | false, as returned by the panel's handleStatus)
+// plus the number already skipped up front into truthful counts and one toast message. Only 'unverified'
+// is labelled as an unverified owner; any other failure is counted separately.
+export function summarizeBulkApproval(outcomes, preSkipped = 0) {
+  const list = outcomes || []
+  const approved = list.filter((o) => o === true).length
+  const skippedUnverified = (preSkipped || 0) + list.filter((o) => o === 'unverified').length
+  const failed = list.length - approved - list.filter((o) => o === 'unverified').length
+  const notes = []
+  if (skippedUnverified > 0) notes.push(`Skipped ${skippedUnverified}: owner has not verified their email`)
+  if (failed > 0) notes.push(`Failed ${failed}: see the error above`)
+  const note = notes.join('; ')
+  let message = ''
+  if (approved > 0) message = `Approved ${approved} businesses — undo?` + (note ? ` (${note})` : '')
+  else message = note
+  return { approved, skippedUnverified, failed, message }
+}
 // Registration goes through the server handler POST /api/register-business, not
 // a direct RPC from the browser: the handler creates the pending business and
 // emails the owner a verification link. No password is collected or sent here;

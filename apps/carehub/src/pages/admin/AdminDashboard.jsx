@@ -13,7 +13,7 @@ import {
   getApplications, reviewApplication, createApplication,
   getLedgerForEntity, getPayoutRequests, createPayoutRequest, updatePayoutRequest, markPayoutPaidAtomic,
   getAgentApplications, reviewAgentApplication, getAgents, addAgentRow, updateAgentRow,
-  getUnverifiedOwnerBusinessIds, partitionByOwnerVerification
+  getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
@@ -395,10 +395,12 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
   // True when the owner has not confirmed their email, so the database would refuse the approval.
   const isAwaitingVerification = (b) => !!(unverifiedIds && b && b.status === 'pending' && unverifiedIds.has(b.id))
 
-  // Resolves true when the change was saved, false when it was refused or failed (already toasted).
+  // Resolves true when the change was saved, 'unverified' when the database refused it because the owner has
+  // not verified their email, and false for any other failure or when busy. Failures are already toasted.
   const handleStatus = async (id, next, prev) => {
     if (busy) return false
     let saved = false
+    let unverified = false
     setBusy(true)
     const prevRows = [...rows]
     // optimistic
@@ -415,6 +417,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       await onStatusChange(id, next)
       saved = true
     } catch (e) {
+      unverified = /not verified their email/i.test(e?.message || '')
       setRows(prevRows)
       if (selected?.id===id) setSelected(s=> ({...s, status: prev}))
       showToast(e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message, { type: 'error' })
@@ -424,7 +427,7 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     setBusy(false)
     fetchRows()
     onRefresh?.()
-    return saved
+    return saved ? true : (unverified ? 'unverified' : false)
   }
 
   const handleSuspend = (b) => handleStatus(b.id, 'suspended', b.status)
@@ -483,22 +486,20 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     // Owners who have not verified their email cannot be approved: skip them up front, and count any
     // per-row database refusal as skipped too (handleStatus reports it rather than throwing).
     const { approvable, skipped: unverifiedSkipped } = partitionByOwnerVerification(ids, unverifiedIds)
-    let approvedCount = 0
-    let skippedCount = unverifiedSkipped.length
+    const outcomes = []
     const approvedIds = []
     for (const id of approvable) {
       const b = rows.find(r=>r.id===id) || prevRowsSnapshot.find(r=>r.id===id)
       if (b && b.status==='pending') {
-        const saved = await handleStatus(id, 'active', b.status)
-        if (saved) { approvedCount++; approvedIds.push(id) } else skippedCount++
+        const outcome = await handleStatus(id, 'active', b.status)
+        outcomes.push(outcome)
+        if (outcome === true) approvedIds.push(id)
       }
     }
-    const skippedNote = skippedCount > 0 ? `Skipped ${skippedCount}: owner has not verified their email` : ''
-    // One toast slot: when nothing was approved the skip note stands alone, otherwise it rides on the undo toast.
-    if (approvedCount === 0 && skippedNote) showToast(skippedNote, { type: 'info', duration: 6000 })
-    // undo toast 5s for bulk
-    if (approvedCount > 0) {
-      showToast(`Approved ${approvedCount} businesses${skippedNote ? '. ' + skippedNote : ''} — undo?`, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
+    // Each bucket is reported truthfully: a permission or network failure is never labelled "unverified".
+    const summary = summarizeBulkApproval(outcomes, unverifiedSkipped.length)
+    if (summary.approved > 0) {
+      showToast(summary.message, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
         for (const id of approvedIds) {
           const prev = prevRowsSnapshot.find(r=>r.id===id)
           if (prev && prev.status==='pending') await onStatusChange(id, 'pending').catch(()=>{})
@@ -506,7 +507,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
         showToast('Bulk undone', { type: 'info' })
         fetchRows()
       }})
-      setTimeout(()=>{}, 5000)
+    } else if (summary.message) {
+      showToast(summary.message, { type: summary.failed > 0 ? 'error' : 'info', duration: 6000 })
     }
     setSelectedIds(new Set())
     setShowBulkConfirm(false)
@@ -534,7 +536,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <GhostBtn onClick={()=>exportRows(rows)}><Download size={13} style={{ marginRight: 6 }} />Export filtered</GhostBtn>
-          <GhostBtn onClick={()=>fetchRows()}><RefreshCw size={13} style={{ marginRight: 6 }} />Refresh</GhostBtn>
+          {/* onRefresh reloads the unverified-owner set too: verification changes auth.users, which realtime never reports. */}
+          <GhostBtn onClick={()=>{ fetchRows(); onRefresh?.() }}><RefreshCw size={13} style={{ marginRight: 6 }} />Refresh</GhostBtn>
         </div>
       </div>
 
