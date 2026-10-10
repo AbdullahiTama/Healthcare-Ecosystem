@@ -6,7 +6,7 @@ vi.mock('../../lib/authClient.js', () => ({
   authClient: { auth: { getSession: async () => ({ data: { session: null } }) } },
 }))
 
-import { getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval } from '../supabase.js'
+import { getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval, collectBulkResults } from '../supabase.js'
 
 let calls
 
@@ -128,5 +128,43 @@ describe('summarizeBulkApproval', () => {
 
   it('returns an empty message when nothing happened', () => {
     expect(summarizeBulkApproval([], 0).message).toBe('')
+  })
+})
+
+describe('collectBulkResults', () => {
+  const UNVERIFIED = 'The owner has not verified their email address yet.'
+
+  it('does not attribute an unverified refusal to a failed row', () => {
+    const { outcomes, failureMessages } = collectBulkResults([
+      { outcome: 'unverified', message: UNVERIFIED },
+      { outcome: false, message: 'No permission' },
+    ])
+    expect(outcomes).toEqual(['unverified', false])
+    expect(failureMessages).toEqual(['No permission'])
+    const { message } = summarizeBulkApproval(outcomes, 0, failureMessages)
+    expect(message).toBe('Skipped 1: owner has not verified their email; Failed 1: No permission')
+    const failedClause = message.split('; ')[1]
+    expect(failedClause).toBe('Failed 1: No permission')
+    expect(failedClause).not.toMatch(/more reason|not verified/)
+  })
+
+  it('ignores messages of approved rows and keeps order of real failures', () => {
+    const r = collectBulkResults([
+      { outcome: true, message: '' },
+      { outcome: false, message: 'a' },
+      { outcome: false, message: 'b' },
+    ])
+    expect(r).toEqual({ outcomes: [true, false, false], failureMessages: ['a', 'b'] })
+  })
+
+  it('handles an empty or missing list', () => {
+    expect(collectBulkResults([])).toEqual({ outcomes: [], failureMessages: [] })
+    expect(collectBulkResults(undefined)).toEqual({ outcomes: [], failureMessages: [] })
+  })
+
+  it('summarize skips non-string messages instead of printing [object Object]', () => {
+    const msg = summarizeBulkApproval([false], 0, [{ code: 42 }, null]).message
+    expect(msg).toBe('Failed 1: the request was refused or could not be completed')
+    expect(msg).not.toMatch(/object/)
   })
 })

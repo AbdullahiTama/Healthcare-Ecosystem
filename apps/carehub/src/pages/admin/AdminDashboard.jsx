@@ -13,7 +13,7 @@ import {
   getApplications, reviewApplication, createApplication,
   getLedgerForEntity, getPayoutRequests, createPayoutRequest, updatePayoutRequest, markPayoutPaidAtomic,
   getAgentApplications, reviewAgentApplication, getAgents, addAgentRow, updateAgentRow,
-  getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval
+  getUnverifiedOwnerBusinessIds, partitionByOwnerVerification, summarizeBulkApproval, collectBulkResults
 } from '../../services/supabase'
 import { authClient } from '../../lib/authClient'
 import { businessLucideIcon, DARK, fmt, fmtDate } from '../../lib/utils'
@@ -423,7 +423,8 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
       if (selected?.id===id) setSelected(s=> ({...s, status: prev}))
       const readable = e.message.includes('permission')||e.message.includes('42501') ? 'No permission' : e.message
       showToast(readable, { type: 'error' })
-      options.onError?.(readable)
+      // An unverified refusal is reported through its own outcome, never as a failure reason.
+      if (!unverified) options.onError?.(readable)
       setUndo(null)
     }
     setTimeout(()=> setUndo(null), 5000)
@@ -489,18 +490,19 @@ function BusinessesPanel({ businesses: initialBusinesses, onRefresh, onStatusCha
     // Owners who have not verified their email cannot be approved: skip them up front, and count any
     // per-row database refusal as skipped too (handleStatus reports it rather than throwing).
     const { approvable, skipped: unverifiedSkipped } = partitionByOwnerVerification(ids, unverifiedIds)
-    const outcomes = []
-    const failureMessages = []
+    const results = []
     const approvedIds = []
     for (const id of approvable) {
       const b = rows.find(r=>r.id===id) || prevRowsSnapshot.find(r=>r.id===id)
       if (b && b.status==='pending') {
-        const outcome = await handleStatus(id, 'active', b.status, { onError: (m) => failureMessages.push(m) })
-        outcomes.push(outcome)
+        let message = ''
+        const outcome = await handleStatus(id, 'active', b.status, { onError: (m) => { message = m } })
+        results.push({ outcome, message })
         if (outcome === true) approvedIds.push(id)
       }
     }
     // Each bucket is reported truthfully: a permission or network failure is never labelled "unverified".
+    const { outcomes, failureMessages } = collectBulkResults(results)
     const summary = summarizeBulkApproval(outcomes, unverifiedSkipped.length, failureMessages)
     if (summary.approved > 0) {
       showToast(summary.message, { type: 'success', actionLabel: 'Undo', duration: 5000, onAction: async () => {
