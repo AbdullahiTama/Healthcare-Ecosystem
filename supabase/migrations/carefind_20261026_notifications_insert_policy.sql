@@ -4,9 +4,11 @@
 -- (apps/carefind/src/test/payments/notificationsInsertPolicy.db.test.js) and verified on the live database afterwards: one INSERT
 -- policy with the expected check, the recipient SELECT/UPDATE policies untouched, RLS on and not forced, every function that
 -- writes notifications SECURITY DEFINER owned by postgres, and rolled-back test inserts allowed/denied as intended.
--- It is NOT in supabase_migrations.schema_migrations: the Supabase MCP tools hold any statement containing DROP for a human
--- confirmation and time out, so it was run by hand. Deploy ORDER mattered: the client that sets actor_id on live-show
--- invitations (UserGoLive.jsx) had to be live first, otherwise "go live with guests" fails on the invitation insert.
+-- The Supabase MCP tools hold any statement containing the word DROP for a human confirmation and time out, which is why it was
+-- run by hand. It was recorded afterwards in supabase_migrations.schema_migrations (version 20261010105435) with a note that
+-- points to this file instead of the SQL itself: a history row that stores this text contains the same word and is held too.
+-- Deploy ORDER mattered: the client that sets actor_id on live-show invitations (UserGoLive.jsx) had to be live first,
+-- otherwise "go live with guests" fails on the invitation insert.
 --
 -- THE HOLE (same class as F-43 in docs/architecture/Red-Team-Audit.md, which closed it for record_shop_notification only)
 --   The live INSERT policy, "notifications insertable by any logged-in actor", is

@@ -1,6 +1,6 @@
 # CareFind notifications and purchase emails
 
-Status: merged to `main`. **The security migration (section 5) was applied to production on 2026-10-10 and verified.** Applying it through the Supabase MCP tools does not work (see the note in section 5): statements containing `DROP` are held for a human confirmation and time out, so it was run in the SQL editor and is not in `supabase_migrations.schema_migrations`.
+Status: merged to `main`. **The security migration (section 5) was applied to production on 2026-10-10 and verified.** Applying it through the Supabase MCP tools does not work (see the note in section 5): statements containing `DROP` are held for a human confirmation and time out, so it was run in the SQL editor and recorded in `supabase_migrations.schema_migrations` afterwards (version `20261010105435`, with a note that points to the repo file instead of the SQL).
 
 ## 1. What was wrong
 
@@ -79,7 +79,7 @@ order by created_at desc limit 50;
 
 **Applied 2026-10-10.** Run by hand in the Supabase SQL editor, then checked on the live database: the policy definition, RLS on and not forced, 14 of 14 notification writers `SECURITY DEFINER` owned by `postgres`, and a batch of test inserts that always rolls back (a member's own like, `live_invite` and gift were allowed; a forged `shop_payment` with no actor, a member posing as the platform, another member as actor, a null or unknown type, and a signed-out visitor were all denied). The Supabase security advisors show no finding on `public.notifications`.
 
-**Why it was not applied with the Supabase tools.** `apply_migration` and `execute_sql` hold any statement containing `DROP` for a human confirmation. When it does not arrive they time out after 60 seconds without touching the database (a plain `CREATE` returns instantly; adding a `DROP` hangs). So a migration that drops anything has to be run in the SQL editor, and it then is not recorded in `supabase_migrations.schema_migrations`.
+**Why it was not applied with the Supabase tools.** `apply_migration` and `execute_sql` hold any statement containing `DROP` for a human confirmation. When it does not arrive they time out after 60 seconds without touching the database (a plain `CREATE` returns instantly; adding a `DROP` hangs). So a migration that drops anything has to be run in the SQL editor. Its history row has to be inserted by hand too, and with a note that points to the repo file: a row that stores the SQL text contains the same word and is held in the same way.
 
 **The migration defends itself.** It finds INSERT policies in `pg_policies` instead of dropping by name (a wrong name is a silent no-op and would leave the hole open), refuses to run if a `FOR ALL` policy exists (it would bypass the restriction), runs in one transaction, and asserts the end state (exactly one INSERT policy, RLS on, recipient SELECT/UPDATE present). The rollback SQL is in the file.
 
