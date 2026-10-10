@@ -83,7 +83,7 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
 
 
       {/* 1b. what the person can withdraw, and how to raise it */}
-      {verified && s.limits && s.limits.dailyCapKobo != null && (
+      {verified && s.limits && s.limits.dailyCapKobo !== null && s.limits.dailyCapKobo !== undefined && (
         <div style={{ ...box, fontSize: 12.5, color: theme.textMid }}>
           <strong>Daily withdrawal limit: {formatKobo(s.limits.dailyCapKobo)}</strong>
           {s.limits.tier >= 2 && <span> · selfie verified</span>}
