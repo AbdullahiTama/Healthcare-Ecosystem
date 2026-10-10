@@ -21,7 +21,7 @@ begin
   end if;
   -- mint_confirmed_auth_user would silently CONFIRM an existing unconfirmed user; never let that happen here.
   if exists (select 1 from auth.users where lower(email) = v_email) then
-    raise exception 'An account with this email already exists. Please sign in instead.';
+    raise exception 'An account with this email already exists. Please sign in, or use "Forgot password" if you have not set a password yet.';
   end if;
 
   v_uid := public.mint_confirmed_auth_user(v_email, gen_random_uuid()::text || gen_random_uuid()::text);
@@ -89,9 +89,12 @@ end $function$;
 revoke all on function public.register_business_unconfirmed(jsonb) from public, anon, authenticated;
 grant execute on function public.register_business_unconfirmed(jsonb) to service_role;
 
--- 3. A business cannot leave `pending` (other than to `suspended` or `revoked`, the only non-activating statuses
--- businesses_status_check allows) while its owner has not confirmed the address. Both the old and the new email are
--- checked so a status change made together with an email change cannot slip past the gate.
+-- 3. No business can ENTER `active`, from any prior status, while its owner has not confirmed the address. The rule is
+-- about the destination, not the origin: pending -> suspended / revoked stays allowed (so an admin can dispose of an
+-- unverified registration), but suspended -> active ("Reactivate") or revoked -> active is blocked exactly like
+-- pending -> active. A no-op active -> active update is not a transition into `active` and is not blocked. A NULL
+-- status is not 'active', so it never reaches the check. Both the old and the new email are checked so a status change
+-- made together with an email change cannot slip past the gate.
 -- Enforced here because approval is a direct PATCH from the admin client; a UI filter would be bypassable.
 -- A business whose owner has no auth user (legacy rows) is not blocked.
 create or replace function public.guard_business_owner_email_confirmed()
@@ -101,7 +104,7 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if old.status = 'pending' and new.status is distinct from old.status and new.status not in ('suspended', 'revoked') then
+  if new.status = 'active' and old.status is distinct from 'active' then
     if exists (select 1 from auth.users u
                 where lower(u.email) in (lower(old.email), lower(new.email)) and u.email_confirmed_at is null) then
       raise exception 'The owner has not verified their email address yet.';

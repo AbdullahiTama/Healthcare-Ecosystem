@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Owner email verification: registration creates an UNCONFIRMED owner plus a pending business atomically, only the
-// service role can call it, the old RPC is revoked at cutover, and a pending business cannot leave `pending` while
-// its owner is unconfirmed.
+// service role can call it, the old RPC is revoked at cutover, and no business can ENTER `active` (from any status)
+// while its owner is unconfirmed.
 import { describe, it, expect, beforeAll } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFileSync } from 'node:fs'
@@ -66,6 +66,7 @@ describe('register_business_unconfirmed', () => {
     const usersBefore = await count('select count(*) n from auth.users')
     const bizBefore = await count('select count(*) n from public.businesses')
     await expect(register({ email: '  ADA@lifeline.test ' })).rejects.toThrow(/already exists/i)
+    await expect(register({ email: 'ada@lifeline.test' })).rejects.toThrow(/use "Forgot password" if you have not set a password yet/)
     expect(await count('select count(*) n from auth.users')).toBe(usersBefore)
     expect(await count('select count(*) n from public.businesses')).toBe(bizBefore)
   })
@@ -129,6 +130,56 @@ describe('businesses_require_verified_owner', () => {
     await db.query(`insert into public.businesses (id, name, email, status) values (gen_random_uuid(), 'Legacy', 'legacy@x.test', 'pending')`)
     await db.query(`update public.businesses set status = 'active' where email = 'legacy@x.test'`)
     expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('active')
+  })
+
+  // The invariant is about the DESTINATION: no business may ENTER `active` while its owner is unconfirmed, whatever
+  // status it comes from. Parking an unverified registration in suspended/revoked must not be a path to activation.
+  const statusOf = async (id) => (await db.query('select status from public.businesses where id = $1', [id])).rows[0].status
+  const setStatus = (id, status) => db.query('update public.businesses set status = $2 where id = $1', [id, status])
+
+  it('blocks suspended -> active and revoked -> active while the owner is unconfirmed, and allows both once confirmed', async () => {
+    const sus = (await register({ email: 'sus@lifeline.test', name: 'Suspended Clinic' })).rows[0].id
+    const rev = (await register({ email: 'rev@lifeline.test', name: 'Revoked Clinic Two' })).rows[0].id
+    await setStatus(sus, 'suspended')
+    await setStatus(rev, 'revoked')
+
+    await expect(setStatus(sus, 'active')).rejects.toThrow(/not verified/i)
+    await expect(setStatus(rev, 'active')).rejects.toThrow(/not verified/i)
+    expect(await statusOf(sus)).toBe('suspended')
+    expect(await statusOf(rev)).toBe('revoked')
+
+    await db.query(`update auth.users set email_confirmed_at = now() where email in ('sus@lifeline.test', 'rev@lifeline.test')`)
+    await setStatus(sus, 'active')
+    await setStatus(rev, 'active')
+    expect(await statusOf(sus)).toBe('active')
+    expect(await statusOf(rev)).toBe('active')
+  })
+
+  it('still allows pending -> suspended and pending -> revoked, and blocks pending -> active, while unconfirmed', async () => {
+    const a = (await register({ email: 'dispose1@lifeline.test', name: 'Dispose One' })).rows[0].id
+    const b = (await register({ email: 'dispose2@lifeline.test', name: 'Dispose Two' })).rows[0].id
+    const c = (await register({ email: 'dispose3@lifeline.test', name: 'Dispose Three' })).rows[0].id
+    await setStatus(a, 'suspended')
+    await setStatus(b, 'revoked')
+    await expect(setStatus(c, 'active')).rejects.toThrow(/not verified/i)
+    expect([await statusOf(a), await statusOf(b), await statusOf(c)]).toEqual(['suspended', 'revoked', 'pending'])
+    // Dispose of it so the admin listing test below sees only the pending rows it expects.
+    await setStatus(c, 'revoked')
+  })
+
+  it('does not block a no-op active -> active update even if the owner is (now) unconfirmed', async () => {
+    const id = (await register({ email: 'noop@lifeline.test', name: 'Noop Clinic' })).rows[0].id
+    await db.query(`update auth.users set email_confirmed_at = now() where email = 'noop@lifeline.test'`)
+    await setStatus(id, 'active')
+    await db.query(`update auth.users set email_confirmed_at = null where email = 'noop@lifeline.test'`)
+    await setStatus(id, 'active')
+    expect(await statusOf(id)).toBe('active')
+  })
+
+  it('lets a legacy business with no auth user activate from suspended', async () => {
+    await db.query(`insert into public.businesses (id, name, email, status) values (gen_random_uuid(), 'Legacy Two', 'legacy2@x.test', 'suspended')`)
+    await db.query(`update public.businesses set status = 'active' where email = 'legacy2@x.test'`)
+    expect((await db.query(`select status from public.businesses where email = 'legacy2@x.test'`)).rows[0].status).toBe('active')
   })
 })
 
