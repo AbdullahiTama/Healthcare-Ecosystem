@@ -150,6 +150,24 @@ export async function resolveAccountByEmail(email) {
 
 // BUSINESSES
 export async function getBusinesses() { return sbFetch('businesses?select=*&order=created_at.desc') }
+// Pending businesses whose owner has not confirmed their email. Approval of these is refused by the database
+// (businesses_require_verified_owner); this lets the console say so up front instead of failing on click.
+// Platform admins only (the RPC returns nothing for anyone else). Rejects on a failed request: callers
+// treat that as "none flagged", because the database trigger stays the enforcement either way.
+// PostgREST returns a bare array of uuids for a scalar setof function; single-key objects are tolerated.
+export async function getUnverifiedOwnerBusinessIds() {
+  const rows = await sbFetch('rpc/admin_unverified_owner_business_ids', { method: 'POST', body: '{}' })
+  return Array.isArray(rows) ? rows.map((r) => (typeof r === 'string' ? r : Object.values(r)[0])) : []
+}
+// Splits a bulk-approve selection into the ids that may be sent for approval and the ones to skip because
+// the owner has not verified their email. Pure: the caller still guards on each row's own status.
+export function partitionByOwnerVerification(ids, unverifiedIds) {
+  const blocked = unverifiedIds || new Set()
+  const approvable = []
+  const skipped = []
+  for (const id of ids || []) (blocked.has(id) ? skipped : approvable).push(id)
+  return { approvable, skipped }
+}
 // Registration goes through the server handler POST /api/register-business, not
 // a direct RPC from the browser: the handler creates the pending business and
 // emails the owner a verification link. No password is collected or sent here;
