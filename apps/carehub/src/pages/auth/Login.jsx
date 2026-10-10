@@ -34,11 +34,21 @@ export default function Login() {
     // creates them that way and they must verify through the emailed link
     // (which also lets them choose their password) before they can sign in.
     // Supabase reports that state as `email_not_confirmed`, which we surface
-    // as a verification prompt rather than a wrong-password error.
+    // as a verification prompt rather than a wrong-password error. But GoTrue
+    // checks the password BEFORE confirmation, and a new owner never learned
+    // the random password their account was created with, so in practice they
+    // see `invalid_credentials`. That message therefore carries a hint pointing
+    // at the emailed link; it is identical for every address, so it says
+    // nothing about whether an account exists.
     try {
       const { data, error } = await authClient.auth.signInWithPassword({ email: normalizedEmail, password: pass })
       if (error?.code === 'email_not_confirmed') {
         setUnverified(true)
+        setLoading(false)
+        return
+      }
+      if (error?.code === 'invalid_credentials') {
+        setErr('Incorrect email or password. Just registered? Open the link we emailed you, or use "Forgot password" to get a new one.')
         setLoading(false)
         return
       }
@@ -71,14 +81,20 @@ export default function Login() {
 
   // Resend goes through the public auth-email `password_reset` action, whose
   // response is deliberately generic (and rate limited), so the confirmation
-  // is the same whatever the outcome.
+  // is the same whatever the outcome. redirectTo is required: without it the
+  // handler falls back to the bare app origin and the link lands on `/`
+  // instead of the set-password page.
   const resendLink = async () => {
     if (resending) return
     setResending(true)
     try {
       await fetch('/api/auth-email', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'password_reset', email: email.toLowerCase() }),
+        body: JSON.stringify({
+          action: 'password_reset',
+          email: email.toLowerCase(),
+          redirectTo: `${window.location.origin}/reset-password?welcome=1`,
+        }),
       })
     } catch { /* the response is generic either way */ }
     setResending(false)

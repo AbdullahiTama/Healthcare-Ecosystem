@@ -55,7 +55,10 @@ describe('sign-in with an unverified email', () => {
     expect(global.fetch).toHaveBeenCalled()
     const [url, init] = global.fetch.mock.calls[0]
     expect(url).toBe('/api/auth-email')
-    expect(JSON.parse(init.body)).toMatchObject({ action: 'password_reset', email: 'ada@x.test' })
+    // Without redirectTo the auth-email handler falls back to the bare origin and the link lands on `/`.
+    expect(JSON.parse(init.body)).toEqual({
+      action: 'password_reset', email: 'ada@x.test', redirectTo: `${window.location.origin}/reset-password?welcome=1`,
+    })
     expect(host.textContent).toMatch(/new link is on its way/i)
   })
 
@@ -94,5 +97,51 @@ describe('sign-in with an unverified email', () => {
     await flush()
     expect(host.textContent).toMatch(/incorrect email or password/i)
     expect(host.textContent).not.toMatch(/verify your email/i)
+  })
+})
+
+// A newly registered owner never learned the random password, and GoTrue checks the password before confirmation, so
+// they get invalid_credentials, not email_not_confirmed. The hint must be identical for every address.
+describe('sign-in with invalid credentials', () => {
+  const HINT = 'Incorrect email or password. Just registered? Open the link we emailed you, or use "Forgot password" to get a new one.'
+  let host, root
+  beforeEach(() => {
+    h.signIn.mockReset()
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+  })
+  afterEach(async () => {
+    await act(async () => { root.unmount() })
+    host.remove()
+  })
+
+  const attempt = async (emailValue) => {
+    await act(async () => { root.render(<MemoryRouter><Login /></MemoryRouter>) })
+    await act(async () => {
+      setValue(host.querySelector('input[type="email"]'), emailValue)
+      setValue(host.querySelector('input[type="password"]'), 'whatever1')
+    })
+    await act(async () => { button(host, /^sign in$/i).click() })
+    await flush()
+  }
+
+  it('shows the same "Just registered?" hint for any address', async () => {
+    h.signIn.mockResolvedValue({ data: { session: null }, error: { code: 'invalid_credentials', message: 'Invalid login credentials' } })
+    await attempt('new-owner@x.test')
+    expect(host.textContent).toContain(HINT)
+    const first = host.textContent
+
+    await attempt('nobody-here@x.test')
+    expect(host.textContent).toContain(HINT)
+    expect(host.textContent).toBe(first)
+    expect(host.textContent).not.toMatch(/verify your email/i)
+  })
+
+  it('keeps the plain message for other sign-in failures', async () => {
+    h.signIn.mockResolvedValue({ data: { session: null }, error: { code: 'over_request_rate_limit', message: 'Too many' } })
+    await attempt('ada@x.test')
+    expect(host.textContent).toContain('Incorrect email or password. Please try again.')
+    expect(host.textContent).not.toMatch(/just registered/i)
   })
 })
