@@ -107,23 +107,20 @@ This is text for a human to execute. Nothing here has been run. Each step is a g
 
 ### Hard order
 
-1. **S1 passes** (below). Nothing is merged or applied before this.
-2. Run the pre-rollout checks.
-3. Merge the PR **only when told** (`main` deploys).
-4. Apply the additive migration **before** the frontend/API deploy.
-5. Add the redirect URL to the Supabase Auth allow-list.
-6. Deploy.
-7. Manual QA on production with a real inbox.
-8. **Only then** apply the cutover migration.
-9. Confirm "Confirm email" is enabled for CareFind.
-
-Note that merging deploys `main`, so in practice steps 3 and 6 coincide: apply the additive migration and add the redirect URL **before** the merge, not after it.
+1. **S1 passes** (section 1 below). Nothing is applied or merged before this.
+2. Run the pre-rollout checks (section 2).
+3. Apply the additive migration (section 3). It is safe while the old frontend is live.
+4. Add the redirect URL to the Supabase Auth allow-list (section 4).
+5. Merge the PR and deploy, **only when told** (section 5). Merging deploys `main`, so steps 3 and 4 must already be done: a frontend deployed before the migration would call `register_business_unconfirmed` before it exists and break registration.
+6. Manual QA on production with a real inbox (section 6).
+7. **Only then** apply the cutover migration (section 7).
+8. Confirm "Confirm email" is enabled for CareFind (section 8).
 
 ### 1. Spike S1 (hard gate)
 
 Question: does a recovery-type action link confirm an unconfirmed user on the live project?
 
-Needs the production service-role key in the environment (a human runs it or explicitly approves use of the key). It creates one throwaway `@example.com` user and deletes it. `generateLink` does not send mail.
+Needs the production service-role key. A human runs it, or explicitly approves use of the key. The key must never be written to a file: export `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the running shell session only, save the script in a scratch directory **outside the repository** and run it from there, and unset both variables afterwards. It creates one throwaway `@example.com` user and deletes it. `generateLink` does not send mail.
 
 ```js
 import { createClient } from '@supabase/supabase-js'
@@ -150,11 +147,17 @@ try {
 }
 ```
 
-Run: `node --env-file=.env s1-recovery-confirms.mjs`
+Run, from the scratch directory outside the repository, in the same shell session where the two variables were exported:
+
+```
+node s1-recovery-confirms.mjs
+```
+
+Afterwards: `unset SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY` (PowerShell: `Remove-Item Env:SUPABASE_URL, Env:SUPABASE_SERVICE_ROLE_KEY`) and delete the script. Do not create a `.env` file and do not pass `--env-file`.
 
 **Pass criteria:** `before` is `null`, `after` is a timestamp, `status` is 302 or 303, and `location` begins with the `redirectTo`.
 
-If `redirectTo` is not yet on the allow-list, `location` will be the Site URL. That is not an S1 failure: record it and rely on step 5. The confirmation (`after` is a timestamp) is the part that gates the rollout.
+If `redirectTo` is not yet on the allow-list, `location` will be the Site URL. That is not an S1 failure: record it and rely on step 4 (the allow-list). The confirmation (`after` is a timestamp) is the part that gates the rollout.
 
 **If S1 fails** (`after` is still null, or the link errors): do not merge. Fall back to `auth.resend` with `type: 'signup'`, or a password-bearing signup link. The tasks that would change are **Task 3** (the `owner_setup` action in `packages/shared-email/src/authEmail.js`, which currently mints `type: 'recovery'`) and **Task 6** (the `?welcome=1` landing and the sign-in resend in `ResetPassword.jsx` and `Login.jsx`, which assume the link both confirms and opens a session in which `updateUser({ password })` works). The migrations, trigger, handler and admin console are unaffected.
 
@@ -185,7 +188,7 @@ Use the Supabase project ref recorded in the project's Supabase gotchas notes; c
    ```
 5. **Security advisors, baseline.** Run the security advisors and save the output.
 
-### 3. Apply the additive migration (before the deploy)
+### 3. Apply the additive migration (before the merge and deploy)
 
 Apply `carehub_20261029_owner_email_verification` as a **tracked migration** (`apply_migration`, not `execute_sql`). Then verify:
 
@@ -226,9 +229,13 @@ Apply `carehub_20261029_owner_email_verification` as a **tracked migration** (`a
 
 Supabase dashboard, Authentication, URL Configuration, Redirect URLs: add `https://carefindhub.com/reset-password` (a `/**` wildcard for the origin also works, as recommended in [Expired auth links](Expired-Auth-Links.md)). If the `?welcome=1` URL is not honoured, Supabase redirects to the Site URL instead and the owner will not see the set-password page.
 
-### 5. Deploy, then manual QA on production
+### 5. Merge and deploy
 
-Merge only when told. Then, with a real inbox, and at 375, 768 and 1280px:
+Merge only when told; this deploys `main`. Steps 1 to 4 must be complete first.
+
+### 6. Manual QA on production
+
+With a real inbox, and at 375, 768 and 1280px:
 
 - **Register** a new business: the done screen tells the owner to check their inbox; the email arrives; the link opens "Email verified"; set a password; you are redirected to sign in; sign in; you see the pending-review state.
 - **Sign in before clicking:** you see "Verify your email to continue" and the resend control. Resend delivers a new link and the old link no longer works (each minted link invalidates the previous one).
@@ -237,11 +244,11 @@ Merge only when told. Then, with a real inbox, and at 375, 768 and 1280px:
 - **Trigger:** with the business still unverified, a direct `PATCH businesses?id=eq.<id>` setting `status=active` as a platform admin is refused with "The owner has not verified their email address yet."
 - **CareFind:** the "check your inbox" state shows "Resend verification email"; one click delivers a link and then disables for 60 seconds.
 
-Responsive checks have **not** been performed for any UI change in this work (Register, Login, ResetPassword welcome, admin console, CareFind resend). They are part of this step, not optional.
+Responsive checks have **not** been performed for any UI change in this work (Register, Login, ResetPassword welcome, admin console, CareFind resend). They are part of step 6, not optional.
 
-### 6. Cutover
+### 7. Cutover
 
-Only after step 5 passes: apply `carehub_20261030_revoke_register_business` as a tracked migration. Then:
+Only after step 6 passes: apply `carehub_20261030_revoke_register_business` as a tracked migration. Then:
 
 ```sql
 select p.oid::regprocedure, p.proacl from pg_proc p
@@ -250,7 +257,7 @@ select p.oid::regprocedure, p.proacl from pg_proc p
 
 Expect no `anon` or `authenticated`. Then call `rpc/register_business` directly with the anon key: expect `401` or `403` (permission denied). Run the security advisors again.
 
-### 7. CareFind "Confirm email"
+### 8. CareFind "Confirm email"
 
 In the Supabase dashboard (Authentication, Providers, Email) confirm "Confirm email" is enabled. It is not readable from SQL. Confirm the CareFind and CareHub origins are on the redirect allow-list.
 
