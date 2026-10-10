@@ -32,5 +32,5 @@ export {
 export { createKycHandler, createPayoutAccountsHandler } from './payoutHandlers.js'
 export { createRateLimiter } from './rateLimit.js'
 export {
-  LIMIT_KEYS, LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, kycTier, capInCoins, limitMessage,
+  LIMIT_KEYS, LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, applyLimits, kycTier, capInCoins, limitMessage,
 } from './withdrawalLimits.js'

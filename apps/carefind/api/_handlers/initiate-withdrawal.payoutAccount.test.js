@@ -126,45 +126,43 @@ describe('payout_account_required', () => {
   })
 })
 
-describe('Phase 4: tier ceilings and the new-account cooling-off cap (folded into the engine cap)', () => {
+describe('Phase 4: a verified identity lifts the trust ladder; a new account lowers it (all via the engine cap)', () => {
   const body = { amount: 10, pin: '1234', payoutAccountId: 'pa-1' }
   const capSent = () => created('create_withdrawal')[0][1].p_daily_cap_coins
   const withLimits = (rows) => { h.tables.financial_config = [{ key: 'payout_account_required', value: 0 }, { key: 'coin_value_kobo', value: 20000 }, ...rows] }
 
-  it('tier 2: a long-standing account is not capped below the trust-level cap (50 coins here)', async () => {
+  it('tier 2: a new user (trust cap 50) is lifted to N500,000 = 2500 coins', async () => {
     await handler({ method: 'POST', body }, res())
-    expect(capSent()).toBe(50)
+    expect(capSent()).toBe(2500)
   })
 
-  it('tier 1 ceiling (N50,000 = 250 coins) only bites when it is lower than the trust cap', async () => {
+  it('tier 1: lifted to N50,000 = 250 coins', async () => {
     h.tables.kyc_verifications = [{ user_id: 'user-12345678', tier: 1 }]
     await handler({ method: 'POST', body }, res())
-    expect(capSent()).toBe(50) // trust cap 50 is tighter than 250
-    h.rpcCalls.length = 0
-    withLimits([{ key: 'kyc_tier1_daily_cap_kobo', value: 2000000 }]) // N20,000 = 100 coins... still above 50
-    await handler({ method: 'POST', body }, res())
-    expect(capSent()).toBe(50)
-    h.rpcCalls.length = 0
-    withLimits([{ key: 'kyc_tier1_daily_cap_kobo', value: 400000 }]) // N4,000 = 20 coins
-    await handler({ method: 'POST', body }, res())
-    expect(capSent()).toBe(20)
+    expect(capSent()).toBe(250)
   })
 
-  it('a new account (inside the cooling-off window) caps the 24h total at the cooling-off amount', async () => {
-    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }] // 1 h old
+  it('no verification record (tier 0) keeps the trust cap exactly', async () => {
+    h.tables.kyc_verifications = []
+    await handler({ method: 'POST', body }, res())
+    expect(capSent()).toBe(50)
+  })
+
+  it('a new account lowers even a lifted cap to the cooling-off amount', async () => {
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
     withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }]) // N2,000 = 10 coins
     await handler({ method: 'POST', body }, res())
     expect(capSent()).toBe(10)
   })
 
   it('an old account (past the window) gets no cooling-off cap', async () => {
-    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 30 * 3600_000).toISOString() }] // 30 h old
+    h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 30 * 3600_000).toISOString() }]
     withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }])
     await handler({ method: 'POST', body }, res())
-    expect(capSent()).toBe(50)
+    expect(capSent()).toBe(2500)
   })
 
-  it('when the engine says daily_limit because of a new account, the person is told why and until when', async () => {
+  it('daily_limit because of a new account: the person is told why and until when', async () => {
     h.tables.payout_accounts = [{ ...SAVED, verified_at: new Date(Date.now() - 3600_000).toISOString() }]
     withLimits([{ key: 'payout_account_cooloff_daily_cap_kobo', value: 200000 }])
     h.routes.create_withdrawal = { data: { outcome: 'daily_limit' } }
@@ -176,7 +174,16 @@ describe('Phase 4: tier ceilings and the new-account cooling-off cap (folded int
     expect(r.body.coolingEndsAt).toBeTruthy()
   })
 
-  it('typed-in (legacy) destinations are not given a tier cap: today\'s trust-level cap applies unchanged', async () => {
+  it('daily_limit at a lifted tier ceiling names the limit', async () => {
+    h.tables.kyc_verifications = [{ user_id: 'user-12345678', tier: 1 }]
+    h.routes.create_withdrawal = { data: { outcome: 'daily_limit' } }
+    const r = res()
+    await handler({ method: 'POST', body }, r)
+    expect(r.body.message).toMatch(/daily withdrawal limit is N50,000.*selfie/)
+    expect(r.body.dailyCapCoins).toBe(250)
+  })
+
+  it('typed-in (legacy) destinations are not lifted: the trust cap applies unchanged', async () => {
     await handler({ method: 'POST', body: { amount: 10, pin: '1234', bankCode: '058', bankName: 'GTB', accountNumber: '0123456789', accountName: 'ADA CHINYERE OBI' } }, res())
     expect(capSent()).toBe(50)
   })

@@ -69,15 +69,23 @@ Configuration in `financial_config` (changes apply within a minute, no deploy; m
 
 | Key | Default | Meaning |
 |---|---|---|
-| `kyc_tier1_daily_cap_kobo` | 5,000,000 (N50,000) | rolling-24h ceiling for a person at tier 1 (BVN + NIN) withdrawing to a saved account |
+| `kyc_tier1_daily_cap_kobo` | 5,000,000 (N50,000) | guaranteed rolling-24h limit for a person at tier 1 (BVN + NIN) withdrawing to a saved account |
 | `kyc_tier2_daily_cap_kobo` | 50,000,000 (N500,000) | same at tier 2 (+ selfie) |
 | `payout_account_cooloff_hours` | 24 | how long a newly saved account is in cooling-off (0 = off) |
 | `payout_account_cooloff_daily_cap_kobo` | 2,000,000 (N20,000) | rolling-24h total allowed during cooling-off (people and businesses) |
 
-How it is enforced: the handler computes the LOWEST applicable ceiling (`withdrawalLimits.js`) and passes it as the withdrawal engine's own per-call cap (`create_withdrawal.p_daily_cap_coins`, `create_business_withdrawal.p_daily_cap_kobo`). The engine checks it atomically under the wallet lock, together with balance and its own cap, so concurrent requests cannot slip past it. A business's cooling-off cap can only lower the engine's business ceiling, never raise it. When the engine answers `daily_limit` because of one of these, the person is told which limit and until when (`limitReason`, `coolingEndsAt`).
+How it is combined (`applyLimits`, CareFind): **a verified identity lifts the trust ladder** (owner decision 2026-10-10). The cap is the *higher* of the person's trust-level cap and their tier limit, then a new account *lowers* it to the cooling-off cap:
+
+| Person | Trust cap (before) | Tier 0 (typed-in / unverified) | Tier 1 | Tier 2 |
+|---|---|---|---|---|
+| new | 50 coins = N10,000 | 50 | **250 = N50,000** | **2,500 = N500,000** |
+| trusted | 200 = N40,000 | 200 | **250 = N50,000** | **2,500** |
+| veteran | 1,000 = N200,000 | 1,000 | 1,000 (never lowered) | **2,500** |
+
+Inside the cooling-off window every one of them is held to N20,000 (100 coins) per 24 h, whatever their tier. The result is handed to the engine as its own per-call cap (`create_withdrawal.p_daily_cap_coins`, `create_business_withdrawal.p_daily_cap_kobo`), which checks it atomically under the wallet lock with balance and its own cap, so concurrent requests cannot slip past it. A business's cooling-off cap can only lower the engine's business ceiling, never raise it. When the engine answers `daily_limit` because of one of these, the person is told which limit and until when (`limitReason`, `coolingEndsAt`).
 
 Alerts (all best effort, never block or change the answer): payout account added/removed (with last four digits only), PIN changed, **PIN locked** (the wrong attempt that triggers the 15-minute lock emails the owner that someone may be guessing), and the withdrawal-requested email now shows the destination as `••••1234` instead of the full account number.
 
-**Important limitation (decision needed):** these ceilings only ever LOWER what applies. For CareFind people the existing trust ladder is already tighter (new 50 coins = N10,000, trusted 200 = N40,000, veteran 1,000 = N200,000 per day), so today the tier ceilings bind only for veterans at tier 1, and the selfie (tier 2) does **not** raise anyone's actual withdrawal limit. The screen therefore says "verification limit" and notes that account history may set a lower daily limit. To make the selfie worth doing, decide whether a verified tier should *replace* or lift the trust ladder (a loosening of an existing control, so not done without your say-so). Typed-in (legacy) destinations are unchanged by Phase 4.
+**Lifting applies only to withdrawals to a saved, verified account.** Typed-in (legacy) destinations keep the trust-level cap unchanged until `payout_account_required` is set to 1, so verification is rewarded rather than bypassed.
 
-Not covered by tier ceilings: businesses (their engine cap is N1,000,000 a day; only the cooling-off cap applies to a new account).
+Not covered by tier limits: businesses (their engine cap is N1,000,000 a day; only the cooling-off cap applies to a new account).

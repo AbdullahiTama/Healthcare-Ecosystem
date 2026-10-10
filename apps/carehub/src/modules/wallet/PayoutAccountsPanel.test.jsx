@@ -79,6 +79,6 @@ describe('PayoutAccountsPanel (CareHub)', () => {
     await mount(fakeManager({ kyc: { verified: true, legalName: 'ADA OBI', bvnLast4: '1234' }, accounts, limits: { tier: 1, dailyCapKobo: null, nextTierCapKobo: null, cooloffHours: 24, cooloffCapKobo: 2000000 } }), { selectedId: 'n1' })
     expect(host.querySelector('[role="note"]').textContent).toMatch(/limited to ₦20,000 in any 24 hours until/)
     expect(host.querySelector('#selfie-file')).toBeNull()
-    expect(host.textContent).not.toContain('Verification limit')
+    expect(host.textContent).not.toContain('Daily withdrawal limit')
   })
 })

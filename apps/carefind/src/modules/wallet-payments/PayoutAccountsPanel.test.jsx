@@ -99,8 +99,8 @@ describe('PayoutAccountsPanel', () => {
   it('shows the daily limit and, at tier 1, offers a selfie check to raise it', async () => {
     const m = fakeManager({ kyc: VERIFIED, limits: LIMITS1 })
     render(<PayoutAccountsPanel {...props(m, { showSelfie: true })} />)
-    expect(screen.getByText(/Verification limit: ₦50,000 a day/)).toBeInTheDocument()
-    expect(screen.getByText(/raises your verification limit to/)).toHaveTextContent('₦500,000')
+    expect(screen.getByText(/Daily withdrawal limit: ₦50,000/)).toBeInTheDocument()
+    expect(screen.getByText(/raises your daily limit to/)).toHaveTextContent('₦500,000')
     const submit = screen.getByRole('button', { name: 'Verify selfie' })
     expect(submit).toBeDisabled()
     fireEvent.change(screen.getByLabelText(/BVN/, { selector: '#selfie-bvn' }), { target: { value: '22222222222' } })

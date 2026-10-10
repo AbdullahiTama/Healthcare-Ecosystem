@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, capInCoins, limitMessage, kycTier,
+  LIMIT_DEFAULTS, readLimitConfig, coolingOffEndsAt, limitsForWithdrawal, limitsForSavedAccount, applyLimits, capInCoins, limitMessage, kycTier,
 } from '../withdrawalLimits.js'
 import { checkWithdrawalPin, hashPin, randomPinSalt } from '../pin.js'
 import { listPayoutAccounts } from '../payoutAccounts.js'
@@ -52,36 +52,60 @@ describe('coolingOffEndsAt', () => {
 describe('limitsForWithdrawal', () => {
   const run = (over) => limitsForWithdrawal(db(), { ownerType: 'user', tier: 1, accountVerifiedAt: hoursAgo(100), now: NOW, ...over })
 
-  it('people: tier 1 and tier 2 get their ceilings; tier 0 gets none (the legacy path)', async () => {
-    expect((await run({ tier: 1 })).capKobo).toBe(5_000_000)
-    expect((await run({ tier: 2 })).capKobo).toBe(50_000_000)
-    expect((await run({ tier: 0 })).capKobo).toBeNull()
-    expect((await run({ tier: 1 })).reason).toBe('kyc_tier')
+  it('people: tier 1 and tier 2 guarantee their ceilings; tier 0 gets none (the legacy path)', async () => {
+    expect((await run({ tier: 1 })).tierCapKobo).toBe(5_000_000)
+    expect((await run({ tier: 2 })).tierCapKobo).toBe(50_000_000)
+    expect((await run({ tier: 0 })).tierCapKobo).toBeNull()
   })
 
-  it('a new account lowers the cap to the cooling-off amount, whatever the tier', async () => {
-    const r = await run({ tier: 2, accountVerifiedAt: hoursAgo(2) })
-    expect(r).toMatchObject({ capKobo: 2_000_000, reason: 'new_account' })
-    expect(r.coolingEndsAt).toBeInstanceOf(Date)
+  it('a new account has a cooling-off cap; an old one does not', async () => {
+    const young = await run({ tier: 2, accountVerifiedAt: hoursAgo(2) })
+    expect(young.coolingCapKobo).toBe(2_000_000)
+    expect(young.coolingEndsAt).toBeInstanceOf(Date)
+    expect((await run({ accountVerifiedAt: hoursAgo(100) })).coolingCapKobo).toBeNull()
   })
 
-  it('the LOWEST applicable ceiling wins', async () => {
-    const r = await limitsForWithdrawal(db({ config: [{ key: 'kyc_tier1_daily_cap_kobo', value: 1_000_000 }] }), { ownerType: 'user', tier: 1, accountVerifiedAt: hoursAgo(2), now: NOW })
-    expect(r).toMatchObject({ capKobo: 1_000_000, reason: 'kyc_tier' })
-  })
-
-  it('businesses: no tier ceiling; only the cooling-off cap, never above the engine\'s business ceiling', async () => {
-    expect((await run({ ownerType: 'business', tier: 2 })).capKobo).toBeNull()
-    expect((await run({ ownerType: 'business', accountVerifiedAt: hoursAgo(1) })).capKobo).toBe(2_000_000)
+  it('businesses: no tier ceiling; the cooling-off cap is held under the engine\'s business ceiling', async () => {
+    expect((await run({ ownerType: 'business', tier: 2 })).tierCapKobo).toBeNull()
+    expect((await run({ ownerType: 'business', accountVerifiedAt: hoursAgo(1) })).coolingCapKobo).toBe(2_000_000)
     const lowEngine = await limitsForWithdrawal(db({ config: [{ key: 'business_withdrawal_daily_cap_kobo', value: 1_000_000 }] }), { ownerType: 'business', tier: 0, accountVerifiedAt: hoursAgo(1), now: NOW })
-    expect(lowEngine.capKobo).toBe(1_000_000)
+    expect(lowEngine.coolingCapKobo).toBe(1_000_000)
   })
 
   it('limitsForSavedAccount looks the tier up (people only)', async () => {
     const d = db({ kyc: { user_id: 'u1', tier: 2 } })
-    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'u1', account: { verified_at: hoursAgo(100) }, now: NOW })).capKobo).toBe(50_000_000)
-    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'nobody', account: { verified_at: hoursAgo(100) }, now: NOW })).capKobo).toBeNull()
+    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'u1', account: { verified_at: hoursAgo(100) }, now: NOW })).tierCapKobo).toBe(50_000_000)
+    expect((await limitsForSavedAccount(d, { ownerType: 'user', userId: 'nobody', account: { verified_at: hoursAgo(100) }, now: NOW })).tierCapKobo).toBeNull()
     expect(await kycTier(d, 'u1')).toBe(2)
+  })
+})
+
+describe('applyLimits: a verified identity LIFTS the trust ladder; a new account lowers it', () => {
+  const COIN = 20_000
+  const limits = (over) => ({ tierCapKobo: null, coolingCapKobo: null, ...over })
+
+  it('tier 1 (N50,000 = 250 coins) lifts a new user (50), a trusted one (200), but never lowers a veteran (1000)', () => {
+    const t1 = limits({ tierCapKobo: 5_000_000 })
+    expect(applyLimits({ trustCapCoins: 50, limits: t1, coinValueKobo: COIN })).toEqual({ capCoins: 250, reason: 'kyc_tier' })
+    expect(applyLimits({ trustCapCoins: 200, limits: t1, coinValueKobo: COIN })).toEqual({ capCoins: 250, reason: 'kyc_tier' })
+    expect(applyLimits({ trustCapCoins: 1000, limits: t1, coinValueKobo: COIN })).toEqual({ capCoins: 1000, reason: null })
+  })
+
+  it('tier 2 (N500,000 = 2500 coins) lifts everyone', () => {
+    const t2 = limits({ tierCapKobo: 50_000_000 })
+    for (const trust of [50, 200, 1000]) expect(applyLimits({ trustCapCoins: trust, limits: t2, coinValueKobo: COIN }).capCoins).toBe(2500)
+  })
+
+  it('tier 0 / no limits leave the trust cap exactly as it was', () => {
+    expect(applyLimits({ trustCapCoins: 50, limits: limits({}), coinValueKobo: COIN })).toEqual({ capCoins: 50, reason: null })
+    expect(applyLimits({ trustCapCoins: 50, limits: null, coinValueKobo: COIN })).toEqual({ capCoins: 50, reason: null })
+  })
+
+  it('a new account then LOWERS the lifted cap (N20,000 = 100 coins), whatever the tier or trust', () => {
+    const young = limits({ tierCapKobo: 50_000_000, coolingCapKobo: 2_000_000 })
+    expect(applyLimits({ trustCapCoins: 1000, limits: young, coinValueKobo: COIN })).toEqual({ capCoins: 100, reason: 'new_account' })
+    // an unverified user's cap below the cooling-off cap is not raised by it
+    expect(applyLimits({ trustCapCoins: 50, limits: limits({ coolingCapKobo: 2_000_000 }), coinValueKobo: COIN })).toEqual({ capCoins: 50, reason: null })
   })
 })
 

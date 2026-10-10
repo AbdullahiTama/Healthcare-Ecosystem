@@ -85,12 +85,12 @@ export default function PayoutAccountsPanel({ manager, selectedId, onSelect, ban
       {/* 1b. what the person can withdraw, and how to raise it */}
       {verified && s.limits && s.limits.dailyCapKobo != null && (
         <div style={{ ...box, fontSize: 12.5, color: theme.gray600 }}>
-          <strong>Verification limit: {formatKobo(s.limits.dailyCapKobo)} a day</strong>
+          <strong>Daily withdrawal limit: {formatKobo(s.limits.dailyCapKobo)}</strong>
           {s.limits.tier >= 2 && <span> · selfie verified</span>}
-          <span> (your account history may set a lower daily limit)</span>
+          <span> (more if you have a long withdrawal history)</span>
           {showSelfie && s.limits.tier === 1 && s.limits.nextTierCapKobo && (
             <form onSubmit={submitSelfie} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              <div>A selfie check raises your verification limit to <strong>{formatKobo(s.limits.nextTierCapKobo)}</strong> a day.</div>
+              <div>A selfie check raises your daily limit to <strong>{formatKobo(s.limits.nextTierCapKobo)}</strong> a day.</div>
               <Inp id="selfie-bvn" label="BVN (11 digits)" type="password" inputMode="numeric" autoComplete="off" maxLength={11} value={selfieBvn} onChange={(v) => setSelfieBvn(digits(v))} />
               <label htmlFor="selfie-file" style={{ fontSize: 11, fontWeight: 700 }}>Photo of your face</label>
               <input id="selfie-file" type="file" accept="image/*" capture="user" onChange={(e) => setSelfieFile(e.target.files?.[0] || null)} />

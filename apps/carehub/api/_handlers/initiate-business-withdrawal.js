@@ -75,14 +75,14 @@ export default async function handler(req, res) {
     p_account_number: accountNumber,
     p_account_name: account.accountName,
     p_initiated_by: user.id,
-    ...(extraLimit?.capKobo != null ? { p_daily_cap_kobo: extraLimit.capKobo } : {}),
+    ...(extraLimit?.coolingCapKobo != null ? { p_daily_cap_kobo: extraLimit.coolingCapKobo } : {}),
   })
   if (createError || !created) {
     console.error('[initiate-business-withdrawal] create_business_withdrawal failed', createError?.message)
     return res.status(500).json({ error: 'Could not process withdrawal request' })
   }
   if (created.outcome === 'daily_limit') {
-    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.capKobo != null ? limitMessage(extraLimit) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.capKobo != null ? { limitReason: extraLimit.reason, coolingEndsAt: extraLimit.coolingEndsAt } : {}) })
+    return res.status(429).json({ error: 'daily_limit', message: extraLimit?.coolingCapKobo != null ? limitMessage({ reason: 'new_account', capKobo: extraLimit.coolingCapKobo, coolingEndsAt: extraLimit.coolingEndsAt }) : 'Daily withdrawal limit reached for this business. Try again later or contact support.', ...(extraLimit?.coolingCapKobo != null ? { limitReason: 'new_account', coolingEndsAt: extraLimit.coolingEndsAt } : {}) })
   }
   if (created.outcome === 'below_minimum') {
     return res.status(400).json({ error: 'below_minimum', message: 'That is below the minimum withdrawal amount.' })

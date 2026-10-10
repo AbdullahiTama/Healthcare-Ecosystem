@@ -5,7 +5,7 @@ import { hashPin, verifyPin, isValidPin } from '../_lib/pinCrypto.js'
 import { createTransferRecipient, initiateTransfer, checkBalance, normalizeAccountName, resolveAccount } from '../_lib/paystackTransfer.js'
 import { getRequiredAuth, isInstantEligible, getDailyCap } from '../_lib/trustLevels.js'
 import { reconcileWithdrawal } from '../_lib/withdrawalRecovery.js'
-import { settleWithdrawal, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, capInCoins, limitMessage } from '@care-ecosystem/shared-payments'
+import { settleWithdrawal, PIN_LOCK_AFTER, getPayoutAccountForWithdrawal, payoutAccountRequired, limitsForSavedAccount, applyLimits, limitMessage } from '@care-ecosystem/shared-payments'
 import { getFinancialConfig } from '../_lib/financialConfig.js'
 import { getSecurityMailer } from '../_lib/securityMailer.js'
 
@@ -130,17 +130,17 @@ export default async function handler(req, res) {
   // ledger, creates the request and derives its Paystack reference from the request id. The amount paid out
   // (after the fee) is computed there from financial_config, not here. No Paystack call happens while any lock
   // is held: the reservation has committed before the first provider call below.
-  // Limits for money sent to a SAVED account: the person's KYC tier ceiling and, for a new account, the cooling-off cap.
-  // They are folded into the engine's own rolling-24h cap (the lowest wins), so the engine enforces them atomically.
+  // Limits for money sent to a SAVED account. A verified identity LIFTS the trust ladder (the cap is the higher of the
+  // person's trust cap and their KYC-tier ceiling); a NEW account then lowers it for the cooling-off period. The result
+  // is handed to the engine as its own rolling-24h cap, so it is enforced atomically under the wallet lock.
   let dailyCapCoins = getDailyCap(trustLevel)
   let extraLimit = null
   if (saved) {
-    extraLimit = await limitsForSavedAccount(supabase, { ownerType: 'user', userId: user.id, account: saved })
-    if (extraLimit.capKobo != null) {
-      const coinCap = capInCoins(extraLimit.capKobo, await getFinancialConfig(supabase, 'coin_value_kobo'))
-      if (coinCap < dailyCapCoins) dailyCapCoins = coinCap
-      else extraLimit = null // the trust-level cap is the tighter one; it keeps its own message
-    }
+    const limits = await limitsForSavedAccount(supabase, { ownerType: 'user', userId: user.id, account: saved })
+    const coinValueKobo = await getFinancialConfig(supabase, 'coin_value_kobo')
+    const applied = applyLimits({ trustCapCoins: dailyCapCoins, limits, coinValueKobo })
+    dailyCapCoins = applied.capCoins
+    if (applied.reason) extraLimit = { reason: applied.reason, capKobo: applied.capCoins * coinValueKobo, coolingEndsAt: limits.coolingEndsAt, tier: limits.tier }
   }
 
   const { data: created, error: createError } = await supabase.rpc('create_withdrawal', {
