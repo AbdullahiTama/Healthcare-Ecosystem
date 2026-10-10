@@ -51,7 +51,7 @@ The Supabase plan's backup and point-in-time-recovery status could not be read t
 6. **Verify the schedule** with the queries in section 4: outbox draining, a reconciliation run recorded, no critical findings.
 7. **Paystack**: confirm the webhook URL points at the new CareFind endpoint and a test event is answered 200; keep test and live keys separate.
 8. **Smoke payment** with a small real amount per path (shop order, booking, subscription): settled, split correct, vendor credit held, refund of the test payment completes. Also confirm the buyer received the confirmation email, and that the `email_logs` enqueue-failure query in section 4 returns nothing.
-9. **Notifications INSERT policy** (`carefind_20261026_notifications_insert_policy.sql`, F-45): apply it only after the CareFind build that sets `actor_id` on live-show invitations (`UserGoLive.jsx`) is live, then check that "Go live" with an invited guest still works and that a like/follow still notifies. Rollback SQL is in the file.
+9. **Notifications INSERT policy** (`carefind_20261026_notifications_insert_policy.sql`, F-45): **applied and verified 2026-10-10** (run in the SQL editor; see `Notifications-and-Purchase-Emails.md` section 5). Kept here as the record of the order: apply it only after the CareFind build that sets `actor_id` on live-show invitations (`UserGoLive.jsx`) is live, then check that "Go live" with an invited guest still works and that a like/follow still notifies. Rollback SQL is in the file.
 
 ## 3. Rollback
 

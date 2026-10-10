@@ -1,8 +1,12 @@
 -- Notifications: a browser may only write what one member does to another, and must say who did it.
 --
--- STATUS: written and tested on PGlite (apps/carefind/src/test/payments/notificationsInsertPolicy.db.test.js). NOT applied to
--- production. Deploy ORDER matters: ship the client that sets actor_id on live-show invitations (UserGoLive.jsx) FIRST, then apply
--- this, otherwise "go live with guests" fails on the invitation insert until the client is updated (see "What this can break").
+-- STATUS: APPLIED TO PRODUCTION on 2026-10-10, by running this file's statements in the Supabase SQL editor. Tested on PGlite
+-- (apps/carefind/src/test/payments/notificationsInsertPolicy.db.test.js) and verified on the live database afterwards: one INSERT
+-- policy with the expected check, the recipient SELECT/UPDATE policies untouched, RLS on and not forced, every function that
+-- writes notifications SECURITY DEFINER owned by postgres, and rolled-back test inserts allowed/denied as intended.
+-- It is NOT in supabase_migrations.schema_migrations: the Supabase MCP tools hold any statement containing DROP for a human
+-- confirmation and time out, so it was run by hand. Deploy ORDER mattered: the client that sets actor_id on live-show
+-- invitations (UserGoLive.jsx) had to be live first, otherwise "go live with guests" fails on the invitation insert.
 --
 -- THE HOLE (same class as F-43 in docs/architecture/Red-Team-Audit.md, which closed it for record_shop_notification only)
 --   The live INSERT policy, "notifications insertable by any logged-in actor", is
