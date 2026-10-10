@@ -42,14 +42,95 @@ describe('POST /api/register-business', () => {
     // Only whitelisted business columns reach the database: a caller cannot set status or admin flags.
     expect(Object.keys(args.p_business).sort()).toEqual(['email', 'name', 'owner', 'state'])
     expect(JSON.stringify(args)).not.toContain('hunter2')
-    expect(h.sendAuthEmail).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'owner_setup', email: 'ada@lifeline.test', fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy',
+    expect(h.sendAuthEmail).toHaveBeenCalledTimes(1)
+    const sent = h.sendAuthEmail.mock.calls[0][0]
+    expect(sent).toMatchObject({
+      action: 'owner_setup', email: 'ada@lifeline.test',
       redirectTo: 'https://carefindhub.com/reset-password?welcome=1', app: 'carehub',
-    }))
+    })
+    // A public endpoint must not put caller-chosen text into a branded email: the template falls back to neutral copy.
+    expect(sent).not.toHaveProperty('fullName')
+    expect(sent).not.toHaveProperty('businessName')
+  })
+
+  it('refuses to register when no app URL is configured, before creating anything', async () => {
+    vi.stubEnv('CAREHUB_APP_URL', '')
+    vi.stubEnv('APP_URL', '')
+    const res = await call(valid)
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Server misconfigured: CAREHUB_APP_URL is not set' })
+    expect(h.rpc).not.toHaveBeenCalled()
+    expect(h.sendAuthEmail).not.toHaveBeenCalled()
+  })
+
+  it('falls back to APP_URL for the redirect when CAREHUB_APP_URL is unset', async () => {
+    vi.stubEnv('CAREHUB_APP_URL', '')
+    vi.stubEnv('APP_URL', 'https://app.test')
+    expect((await call(valid)).statusCode).toBe(200)
+    expect(h.sendAuthEmail.mock.calls[0][0].redirectTo).toBe('https://app.test/reset-password?welcome=1')
+  })
+
+  describe('input validation', () => {
+    const rejects = async (body, error) => {
+      const res = await call(body)
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error })
+      expect(h.rpc).not.toHaveBeenCalled()
+    }
+
+    it('rejects non-object bodies with the missing-email error', async () => {
+      await rejects('name=x', 'A valid email is required.')
+      await rejects([valid], 'A valid email is required.')
+      await rejects(null, 'A valid email is required.')
+    })
+
+    it('rejects text fields that are not strings', async () => {
+      await rejects({ ...valid, name: { $gt: '' } }, 'Invalid name')
+      await rejects({ ...valid, owner: ['Ada'] }, 'Invalid owner')
+      await rejects({ ...valid, email: { a: 1 } }, 'Invalid email')
+      for (const field of ['phone', 'whatsapp', 'address', 'state', 'city', 'business_type', 'hours', 'maps_link', 'website', 'referral_code_used']) {
+        await rejects({ ...valid, [field]: 12 }, `Invalid ${field}`)
+      }
+    })
+
+    it('enforces length limits', async () => {
+      await rejects({ ...valid, name: 'x'.repeat(161) }, 'Invalid name')
+      await rejects({ ...valid, owner: 'x'.repeat(121) }, 'Invalid owner')
+      await rejects({ ...valid, email: `${'a'.repeat(250)}@x.co` }, 'Invalid email')
+      await rejects({ ...valid, address: 'x'.repeat(501) }, 'Invalid address')
+      expect((await call({ ...valid, name: 'x'.repeat(160), owner: 'y'.repeat(120), address: 'z'.repeat(500) })).statusCode).toBe(200)
+    })
+
+    it('requires lat and lng to be finite and in range, accepting numeric strings and forwarding numbers', async () => {
+      await rejects({ ...valid, lat: 'abc' }, 'Invalid lat')
+      await rejects({ ...valid, lat: 91 }, 'Invalid lat')
+      await rejects({ ...valid, lng: -180.5 }, 'Invalid lng')
+      await rejects({ ...valid, lng: { n: 1 } }, 'Invalid lng')
+      await rejects({ ...valid, lat: 'Infinity' }, 'Invalid lat')
+      const res = await call({ ...valid, lat: '6.4474', lng: 3.4359 })
+      expect(res.statusCode).toBe(200)
+      expect(h.rpc.mock.calls[0][1].p_business).toMatchObject({ lat: 6.4474, lng: 3.4359 })
+    })
+
+    it('requires visible_on_carefind to be a boolean', async () => {
+      await rejects({ ...valid, visible_on_carefind: 'yes' }, 'Invalid visible_on_carefind')
+      expect((await call({ ...valid, visible_on_carefind: false })).statusCode).toBe(200)
+    })
+
+    it('passes a full valid body through unchanged apart from the lowercased email', async () => {
+      const full = {
+        name: 'Lifeline Pharmacy', owner: 'Ada Eze', email: 'Ada@Lifeline.test', phone: '0800', whatsapp: '0801',
+        address: '1 Road', state: 'Lagos', city: 'Ikeja', business_type: 'pharmacy', hours: '9-5',
+        maps_link: 'https://maps.test/x', lat: 6.4474, lng: 3.4359, website: 'https://lifeline.test',
+        visible_on_carefind: true, referral_code_used: 'REF1',
+      }
+      expect((await call(full)).statusCode).toBe(200)
+      expect(h.rpc.mock.calls[0][1].p_business).toEqual({ ...full, email: 'ada@lifeline.test' })
+    })
   })
 
   it('passes readable RPC validation errors through, but hides unexpected database errors', async () => {
-    h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'An account with this email already exists. Please sign in instead.' } })
+    h.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'An account with this email already exists. Please sign in, or use "Forgot password" if you have not set a password yet.' } })
     let res = await call(valid)
     expect(res.statusCode).toBe(400)
     expect(res.body.error).toMatch(/already exists/)
