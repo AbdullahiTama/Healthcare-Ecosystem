@@ -184,11 +184,15 @@ beforeAll(async () => {
     create table public.businesses (id uuid primary key, name text, owner text, email text, phone text, whatsapp text,
       address text, state text, city text, business_type text, hours text, maps_link text, lat double precision,
       lng double precision, website text, status text, visible_on_carefind boolean, created_at timestamptz, plan text,
-      referral_code_used text, parent_business_id uuid, is_platform_admin boolean default false);
+      referral_code_used text, parent_business_id uuid, is_platform_admin boolean default false,
+      constraint businesses_status_check check (status in ('pending','active','suspended','revoked')));
     create table public.email_event_catalog (app text, event_key text, template_key text, subject_template text,
       from_email text, reply_to text, payload_schema jsonb, enabled boolean, required_for_business boolean,
       category text, rollout_mode text, primary key (app, event_key));
     insert into public.email_event_catalog values ('carehub','staff_welcome','staff_welcome','s','CareHub <s@x>','s@x','{}',false,false,'staff','live');
+    -- Stub of the shared admin guard; the test flips it through a setting.
+    create function public.is_platform_admin() returns boolean language sql stable as $$
+      select coalesce(current_setting('test.is_admin', true), 'off') = 'on' $$;
     create function public.register_business(p_business jsonb, p_password text) returns uuid language sql as $$ select null::uuid $$;
   `)
   await db.exec(M('carehub_20261025_fix_mint_auth_user_pgcrypto'))
@@ -238,28 +242,73 @@ describe('privileges', () => {
   it('has exactly one signature of each new function (no sibling overloads)', async () => {
     const { rows } = await db.query(`select proname, count(*)::int n from pg_proc where pronamespace = 'public'::regnamespace
       and proname in ('mint_unconfirmed_auth_user','register_business_unconfirmed','admin_unverified_owner_business_ids') group by 1`)
+    expect(rows).toHaveLength(3)
     for (const r of rows) expect(r.n, r.proname).toBe(1)
   })
 })
 
 describe('businesses_require_verified_owner', () => {
-  it('blocks leaving pending while the owner is unconfirmed, but allows rejection', async () => {
+  it('blocks activating while the owner is unconfirmed, but allows suspending and revoking', async () => {
     const { rows } = await register({ email: 'gate@lifeline.test', name: 'Gate Clinic' })
     const id = rows[0].id
-    await expect(db.query(`update public.businesses set status = 'approved' where id = $1`, [id])).rejects.toThrow(/not verified/i)
-    await db.query(`update public.businesses set status = 'rejected' where id = $1`, [id])
-    expect((await db.query('select status from public.businesses where id = $1', [id])).rows[0].status).toBe('rejected')
+    await expect(db.query(`update public.businesses set status = 'active' where id = $1`, [id])).rejects.toThrow(/not verified/i)
+    await db.query(`update public.businesses set status = 'suspended' where id = $1`, [id])
+    expect((await db.query('select status from public.businesses where id = $1', [id])).rows[0].status).toBe('suspended')
+
+    const second = await register({ email: 'gate2@lifeline.test', name: 'Gate Two Clinic' })
+    await db.query(`update public.businesses set status = 'revoked' where id = $1`, [second.rows[0].id])
+    expect((await db.query('select status from public.businesses where id = $1', [second.rows[0].id])).rows[0].status).toBe('revoked')
   })
 
-  it('allows approval once the owner is confirmed, and ignores businesses with no auth user', async () => {
+  it('blocks activating when the email is changed in the same update to an address with no auth user', async () => {
+    const { rows } = await register({ email: 'swap@lifeline.test', name: 'Swap Clinic' })
+    await expect(db.query(
+      `update public.businesses set status = 'active', email = 'nouser@lifeline.test' where id = $1`, [rows[0].id],
+    )).rejects.toThrow(/not verified/i)
+    expect((await db.query('select status, email from public.businesses where id = $1', [rows[0].id])).rows[0])
+      .toEqual({ status: 'pending', email: 'swap@lifeline.test' })
+  })
+
+  it('allows activation once the owner is confirmed, and ignores businesses with no auth user', async () => {
     const { rows } = await register({ email: 'ok@lifeline.test', name: 'Ok Clinic' })
     await db.query(`update auth.users set email_confirmed_at = now() where email = 'ok@lifeline.test'`)
-    await db.query(`update public.businesses set status = 'approved' where id = $1`, [rows[0].id])
-    expect((await db.query('select status from public.businesses where id = $1', [rows[0].id])).rows[0].status).toBe('approved')
+    await db.query(`update public.businesses set status = 'active' where id = $1`, [rows[0].id])
+    expect((await db.query('select status from public.businesses where id = $1', [rows[0].id])).rows[0].status).toBe('active')
 
     await db.query(`insert into public.businesses (id, name, email, status) values (gen_random_uuid(), 'Legacy', 'legacy@x.test', 'pending')`)
-    await db.query(`update public.businesses set status = 'approved' where email = 'legacy@x.test'`)
-    expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('approved')
+    await db.query(`update public.businesses set status = 'active' where email = 'legacy@x.test'`)
+    expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('active')
+  })
+})
+
+describe('admin_unverified_owner_business_ids', () => {
+  const asAdmin = (on) => db.query(`select set_config('test.is_admin', $1, false)`, [on ? 'on' : 'off'])
+  const ids = () => db.query('select id from public.admin_unverified_owner_business_ids() as t(id)')
+
+  it('refuses a caller that is not a platform admin', async () => {
+    await asAdmin(false)
+    await expect(ids()).rejects.toThrow(/not authorised/i)
+  })
+
+  it('returns exactly the pending businesses whose owner is unconfirmed', async () => {
+    // Earlier tests left two pending businesses with unconfirmed owners: Ada, and the one whose email-swap was refused.
+    const left = (await db.query(`select id from public.businesses where email in ('ada@lifeline.test', 'swap@lifeline.test')`)).rows.map((r) => r.id)
+    expect(left).toHaveLength(2)
+    const waiting = (await register({ email: 'wait@lifeline.test', name: 'Waiting Clinic' })).rows[0].id
+    const confirmed = (await register({ email: 'done@lifeline.test', name: 'Confirmed Clinic' })).rows[0].id
+    await db.query(`update auth.users set email_confirmed_at = now() where email = 'done@lifeline.test'`)
+    const revoked = (await register({ email: 'gone@lifeline.test', name: 'Revoked Clinic' })).rows[0].id
+    await db.query(`update public.businesses set status = 'revoked' where id = $1`, [revoked])
+
+    await asAdmin(true)
+    try {
+      const got = (await ids()).rows.map((r) => r.id).sort()
+      expect(got).toEqual([...left, waiting].sort())
+      expect(got).not.toContain(confirmed)
+      expect(got).not.toContain(revoked)
+    } finally {
+      await asAdmin(false)
+    }
   })
 })
 
@@ -385,7 +434,9 @@ end $function$;
 revoke all on function public.register_business_unconfirmed(jsonb) from public, anon, authenticated;
 grant execute on function public.register_business_unconfirmed(jsonb) to service_role;
 
--- 3. A business cannot leave `pending` (other than to `rejected`) while its owner has not confirmed the address.
+-- 3. A business cannot leave `pending` (other than to `suspended` or `revoked`, the only non-activating statuses
+-- businesses_status_check allows) while its owner has not confirmed the address. Both the old and the new email are
+-- checked so a status change made together with an email change cannot slip past the gate.
 -- Enforced here because approval is a direct PATCH from the admin client; a UI filter would be bypassable.
 -- A business whose owner has no auth user (legacy rows) is not blocked.
 create or replace function public.guard_business_owner_email_confirmed()
@@ -395,9 +446,9 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if old.status = 'pending' and new.status is distinct from old.status and new.status <> 'rejected' then
+  if old.status = 'pending' and new.status is distinct from old.status and new.status not in ('suspended', 'revoked') then
     if exists (select 1 from auth.users u
-                where lower(u.email) = lower(new.email) and u.email_confirmed_at is null) then
+                where lower(u.email) in (lower(old.email), lower(new.email)) and u.email_confirmed_at is null) then
       raise exception 'The owner has not verified their email address yet.';
     end if;
   end if;
@@ -435,7 +486,7 @@ select app, 'owner_setup', 'owner_setup', 'CareHub: verify your email and set yo
 on conflict (app, event_key) do nothing;
 
 -- 5. Which businesses are waiting on their owner's verification, for the admin console. SECURITY DEFINER because
--- auth.users is not readable by the client; the caller must be a platform admin.
+-- auth.users is not readable by the client; the caller must pass the shared public.is_platform_admin() guard.
 create or replace function public.admin_unverified_owner_business_ids()
 returns setof uuid
 language plpgsql
@@ -444,9 +495,7 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if not exists (select 1 from public.businesses b
-                  where lower(b.email) = lower((select u.email from auth.users u where u.id = auth.uid()))
-                    and b.is_platform_admin) then
+  if not public.is_platform_admin() then
     raise exception 'not authorised';
   end if;
   return query
@@ -459,7 +508,7 @@ revoke all on function public.admin_unverified_owner_business_ids() from public,
 grant execute on function public.admin_unverified_owner_business_ids() to authenticated, service_role;
 ```
 
-> Before committing Step 3, run `select pg_get_functiondef(p.oid) from pg_proc p where proname = 'admin_platform_health'` on live and replace the in-function admin check in section 5 with that function's own guard line, so admin RPCs share one authorisation rule. The version above is the fallback and is what the test stubs support.
+> The admin RPC guards with the shared `public.is_platform_admin()`, the same rule the other admin RPCs use.
 
 `supabase/migrations/carehub_20261030_revoke_register_business.sql`:
 
@@ -474,7 +523,7 @@ grant execute on function public.register_business(jsonb, text) to service_role;
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `cd apps/carefind && npx vitest run src/test/payments/ownerEmailVerification.db.test.js`
-Expected: PASS (9 tests). If the `register_business` stub is missing, the cutover test fails at `revoke`: the stub is created in `beforeAll`.
+Expected: PASS (12 tests). If the `register_business` stub is missing, the cutover test fails at `revoke`: the stub is created in `beforeAll`.
 
 - [ ] **Step 5: Commit**
 

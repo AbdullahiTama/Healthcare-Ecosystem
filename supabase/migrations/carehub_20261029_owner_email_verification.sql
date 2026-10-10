@@ -89,7 +89,9 @@ end $function$;
 revoke all on function public.register_business_unconfirmed(jsonb) from public, anon, authenticated;
 grant execute on function public.register_business_unconfirmed(jsonb) to service_role;
 
--- 3. A business cannot leave `pending` (other than to `rejected`) while its owner has not confirmed the address.
+-- 3. A business cannot leave `pending` (other than to `suspended` or `revoked`, the only non-activating statuses
+-- businesses_status_check allows) while its owner has not confirmed the address. Both the old and the new email are
+-- checked so a status change made together with an email change cannot slip past the gate.
 -- Enforced here because approval is a direct PATCH from the admin client; a UI filter would be bypassable.
 -- A business whose owner has no auth user (legacy rows) is not blocked.
 create or replace function public.guard_business_owner_email_confirmed()
@@ -99,9 +101,9 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if old.status = 'pending' and new.status is distinct from old.status and new.status <> 'rejected' then
+  if old.status = 'pending' and new.status is distinct from old.status and new.status not in ('suspended', 'revoked') then
     if exists (select 1 from auth.users u
-                where lower(u.email) = lower(new.email) and u.email_confirmed_at is null) then
+                where lower(u.email) in (lower(old.email), lower(new.email)) and u.email_confirmed_at is null) then
       raise exception 'The owner has not verified their email address yet.';
     end if;
   end if;
@@ -139,7 +141,7 @@ select app, 'owner_setup', 'owner_setup', 'CareHub: verify your email and set yo
 on conflict (app, event_key) do nothing;
 
 -- 5. Which businesses are waiting on their owner's verification, for the admin console. SECURITY DEFINER because
--- auth.users is not readable by the client; the caller must be a platform admin.
+-- auth.users is not readable by the client; the caller must pass the shared public.is_platform_admin() guard.
 create or replace function public.admin_unverified_owner_business_ids()
 returns setof uuid
 language plpgsql
@@ -148,9 +150,7 @@ security definer
 set search_path to 'public'
 as $function$
 begin
-  if not exists (select 1 from public.businesses b
-                  where lower(b.email) = lower((select u.email from auth.users u where u.id = auth.uid()))
-                    and b.is_platform_admin) then
+  if not public.is_platform_admin() then
     raise exception 'not authorised';
   end if;
   return query

@@ -35,11 +35,15 @@ beforeAll(async () => {
     create table public.businesses (id uuid primary key, name text, owner text, email text, phone text, whatsapp text,
       address text, state text, city text, business_type text, hours text, maps_link text, lat double precision,
       lng double precision, website text, status text, visible_on_carefind boolean, created_at timestamptz, plan text,
-      referral_code_used text, parent_business_id uuid, is_platform_admin boolean default false);
+      referral_code_used text, parent_business_id uuid, is_platform_admin boolean default false,
+      constraint businesses_status_check check (status in ('pending','active','suspended','revoked')));
     create table public.email_event_catalog (app text, event_key text, template_key text, subject_template text,
       from_email text, reply_to text, payload_schema jsonb, enabled boolean, required_for_business boolean,
       category text, rollout_mode text, primary key (app, event_key));
     insert into public.email_event_catalog values ('carehub','staff_welcome','staff_welcome','s','CareHub <s@x>','s@x','{}',false,false,'staff','live');
+    -- Stub of the shared admin guard; the test flips it through a setting.
+    create function public.is_platform_admin() returns boolean language sql stable as $$
+      select coalesce(current_setting('test.is_admin', true), 'off') = 'on' $$;
     create function public.register_business(p_business jsonb, p_password text) returns uuid language sql as $$ select null::uuid $$;
   `)
   await db.exec(M('carehub_20261025_fix_mint_auth_user_pgcrypto'))
@@ -89,28 +93,73 @@ describe('privileges', () => {
   it('has exactly one signature of each new function (no sibling overloads)', async () => {
     const { rows } = await db.query(`select proname, count(*)::int n from pg_proc where pronamespace = 'public'::regnamespace
       and proname in ('mint_unconfirmed_auth_user','register_business_unconfirmed','admin_unverified_owner_business_ids') group by 1`)
+    expect(rows).toHaveLength(3)
     for (const r of rows) expect(r.n, r.proname).toBe(1)
   })
 })
 
 describe('businesses_require_verified_owner', () => {
-  it('blocks leaving pending while the owner is unconfirmed, but allows rejection', async () => {
+  it('blocks activating while the owner is unconfirmed, but allows suspending and revoking', async () => {
     const { rows } = await register({ email: 'gate@lifeline.test', name: 'Gate Clinic' })
     const id = rows[0].id
-    await expect(db.query(`update public.businesses set status = 'approved' where id = $1`, [id])).rejects.toThrow(/not verified/i)
-    await db.query(`update public.businesses set status = 'rejected' where id = $1`, [id])
-    expect((await db.query('select status from public.businesses where id = $1', [id])).rows[0].status).toBe('rejected')
+    await expect(db.query(`update public.businesses set status = 'active' where id = $1`, [id])).rejects.toThrow(/not verified/i)
+    await db.query(`update public.businesses set status = 'suspended' where id = $1`, [id])
+    expect((await db.query('select status from public.businesses where id = $1', [id])).rows[0].status).toBe('suspended')
+
+    const second = await register({ email: 'gate2@lifeline.test', name: 'Gate Two Clinic' })
+    await db.query(`update public.businesses set status = 'revoked' where id = $1`, [second.rows[0].id])
+    expect((await db.query('select status from public.businesses where id = $1', [second.rows[0].id])).rows[0].status).toBe('revoked')
   })
 
-  it('allows approval once the owner is confirmed, and ignores businesses with no auth user', async () => {
+  it('blocks activating when the email is changed in the same update to an address with no auth user', async () => {
+    const { rows } = await register({ email: 'swap@lifeline.test', name: 'Swap Clinic' })
+    await expect(db.query(
+      `update public.businesses set status = 'active', email = 'nouser@lifeline.test' where id = $1`, [rows[0].id],
+    )).rejects.toThrow(/not verified/i)
+    expect((await db.query('select status, email from public.businesses where id = $1', [rows[0].id])).rows[0])
+      .toEqual({ status: 'pending', email: 'swap@lifeline.test' })
+  })
+
+  it('allows activation once the owner is confirmed, and ignores businesses with no auth user', async () => {
     const { rows } = await register({ email: 'ok@lifeline.test', name: 'Ok Clinic' })
     await db.query(`update auth.users set email_confirmed_at = now() where email = 'ok@lifeline.test'`)
-    await db.query(`update public.businesses set status = 'approved' where id = $1`, [rows[0].id])
-    expect((await db.query('select status from public.businesses where id = $1', [rows[0].id])).rows[0].status).toBe('approved')
+    await db.query(`update public.businesses set status = 'active' where id = $1`, [rows[0].id])
+    expect((await db.query('select status from public.businesses where id = $1', [rows[0].id])).rows[0].status).toBe('active')
 
     await db.query(`insert into public.businesses (id, name, email, status) values (gen_random_uuid(), 'Legacy', 'legacy@x.test', 'pending')`)
-    await db.query(`update public.businesses set status = 'approved' where email = 'legacy@x.test'`)
-    expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('approved')
+    await db.query(`update public.businesses set status = 'active' where email = 'legacy@x.test'`)
+    expect((await db.query(`select status from public.businesses where email = 'legacy@x.test'`)).rows[0].status).toBe('active')
+  })
+})
+
+describe('admin_unverified_owner_business_ids', () => {
+  const asAdmin = (on) => db.query(`select set_config('test.is_admin', $1, false)`, [on ? 'on' : 'off'])
+  const ids = () => db.query('select id from public.admin_unverified_owner_business_ids() as t(id)')
+
+  it('refuses a caller that is not a platform admin', async () => {
+    await asAdmin(false)
+    await expect(ids()).rejects.toThrow(/not authorised/i)
+  })
+
+  it('returns exactly the pending businesses whose owner is unconfirmed', async () => {
+    // Earlier tests left two pending businesses with unconfirmed owners: Ada, and the one whose email-swap was refused.
+    const left = (await db.query(`select id from public.businesses where email in ('ada@lifeline.test', 'swap@lifeline.test')`)).rows.map((r) => r.id)
+    expect(left).toHaveLength(2)
+    const waiting = (await register({ email: 'wait@lifeline.test', name: 'Waiting Clinic' })).rows[0].id
+    const confirmed = (await register({ email: 'done@lifeline.test', name: 'Confirmed Clinic' })).rows[0].id
+    await db.query(`update auth.users set email_confirmed_at = now() where email = 'done@lifeline.test'`)
+    const revoked = (await register({ email: 'gone@lifeline.test', name: 'Revoked Clinic' })).rows[0].id
+    await db.query(`update public.businesses set status = 'revoked' where id = $1`, [revoked])
+
+    await asAdmin(true)
+    try {
+      const got = (await ids()).rows.map((r) => r.id).sort()
+      expect(got).toEqual([...left, waiting].sort())
+      expect(got).not.toContain(confirmed)
+      expect(got).not.toContain(revoked)
+    } finally {
+      await asAdmin(false)
+    }
   })
 })
 

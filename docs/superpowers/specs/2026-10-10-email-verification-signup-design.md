@@ -49,7 +49,7 @@ The wizard's done screen says what happens next: check the inbox, verify, set a 
 ## 4. Gating
 
 - **Sign-in:** unconfirmed owners cannot sign in (Supabase `email_not_confirmed`). Login shows a verify-your-email state with resend.
-- **Admin queue:** the pending list marks, and excludes from approval, businesses whose owner has `email_confirmed_at is null`, read server-side through an admin RPC (never a client filter). Reviewers see "awaiting email verification".
+- **Admin queue:** the pending list marks, and excludes from activation (`active`), businesses whose owner has `email_confirmed_at is null`, read server-side through an admin RPC (never a client filter). Reviewers see "awaiting email verification".
 - **Staff invites:** the existing `email_confirmed_at` check in `authoriseStaffInvite` becomes meaningful.
 
 ## 5. Database
