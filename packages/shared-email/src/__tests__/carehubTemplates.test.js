@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { getTemplate } from '../templates/index.js'
 import { htmlToText } from '../utils/htmlToText.js'
 
-const TEMPLATE_KEYS = ['registration_owner', 'admin_new_registration', 'business_approved', 'business_rejected', 'appointment_confirmed', 'credit_reminder', 'staff_welcome', 'agent_approved', 'agent_rejected', 'business_wallet_topup', 'refund_completed', 'payout_account_review']
+const TEMPLATE_KEYS = ['registration_owner', 'admin_new_registration', 'business_approved', 'business_rejected', 'appointment_confirmed', 'credit_reminder', 'staff_welcome', 'owner_setup', 'agent_approved', 'agent_rejected', 'business_wallet_topup', 'refund_completed', 'payout_account_review']
 
 const PAYLOADS = {
   registration_owner: { businessName: 'HealthPlus Pharmacy', ownerName: 'Chidi Okafor' },
@@ -12,6 +12,7 @@ const PAYLOADS = {
   appointment_confirmed: { fullName: 'Tunde', businessName: 'Care Clinic', service: 'Checkup', date: '2026-10-10', time: '10:00', staffName: 'Dr. A' },
   credit_reminder: { clientName: 'Ngozi', businessName: 'HealthPlus', amount: '₦5,000', dueDate: '2026-10-15' },
   staff_welcome: { fullName: 'Sade', role: 'Pharmacist', businessName: 'HealthPlus', setupLink: 'https://carefindhub.com/setup?token=abc' },
+  owner_setup: { fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy', setupLink: 'https://carefindhub.com/reset-password?welcome=1&code=abc' },
   agent_approved: { agentName: 'Kola', agentEmail: 'kola@agency.ng', referralCode: 'REF-1', city: 'Abuja', area: 'Garki' },
   agent_rejected: { agentName: 'Kemi', reason: 'Incomplete documents' },
   business_wallet_topup: { businessName: 'Lifeline Pharmacy', amount: '₦5,000.00', reference: 'CF-TOPUP-8H2K', newBalance: '₦15,000.00' },
@@ -76,5 +77,19 @@ describe('CareHub templates — structural guarantees', () => {
       const html = getTemplate(key, 'carehub')({ ...PAYLOADS[key], password: 'secret123' })
       expect(html).not.toContain('secret123')
     }
+  })
+})
+
+describe('owner_setup', () => {
+  it('names the business, links the action, and says no password is chosen until the link is used', () => {
+    const html = getTemplate('owner_setup', 'carehub')({ fullName: 'Ada Eze', businessName: 'Lifeline Pharmacy', setupLink: 'https://carefindhub.com/reset-password?welcome=1&code=abc' })
+    expect(html).toContain('Lifeline Pharmacy')
+    expect(html).toContain('https://carefindhub.com/reset-password?welcome=1&amp;code=abc')
+    expect(htmlToText(html)).toMatch(/choose a password/i)
+  })
+
+  it('escapes the business name', () => {
+    const html = getTemplate('owner_setup', 'carehub')({ fullName: 'A', businessName: '<img src=x onerror=alert(1)>', setupLink: 'https://carefindhub.com/x' })
+    expect(html).not.toContain('<img src=x')
   })
 })
