@@ -582,12 +582,10 @@ export async function calculateAgentEarningsRpc(businessId, planValue, paymentRe
 }
 export async function transferAgentAccount({ fromAgentId, toAgentId, businessId, reason, byAdminId }) {
   // Atomic reassignment of referrals + earnings + audit via single RPC if available, else multi-step with audit
-  try {
-    await sbFetch('agent_referrals?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
-    await sbFetch('agent_earnings?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
-    await createAgentTransfer({ from_agent_id: fromAgentId, to_agent_id: toAgentId, business_id: businessId, reason: reason || null, by_admin_id: byAdminId || null })
-    return true
-  } catch (e) { throw e }
+  await sbFetch('agent_referrals?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+  await sbFetch('agent_earnings?business_id=eq.' + businessId, { method: 'PATCH', body: JSON.stringify({ agent_id: toAgentId }), prefer: 'return=minimal' })
+  await createAgentTransfer({ from_agent_id: fromAgentId, to_agent_id: toAgentId, business_id: businessId, reason: reason || null, by_admin_id: byAdminId || null })
+  return true
 }
 
 // Unified Applications (spec 6)

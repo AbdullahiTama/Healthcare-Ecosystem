@@ -352,7 +352,7 @@ function TextBlock({ block, onChange, onDelete, readOnly, editorRef }) {
     const html = renderArticleHtml(block.content || '')
     el.innerHTML = html
     lastEmitted.current = block.content || ''
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Sync contentEditable DOM → markers on blur and on unmount.
   // While focused, the DOM is the source of truth — we never overwrite

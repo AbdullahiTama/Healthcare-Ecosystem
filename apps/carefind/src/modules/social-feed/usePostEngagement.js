@@ -172,7 +172,7 @@ export function usePostEngagement({
 
     // Gift totals for the whole page in one RPC; skipped (no state change) if
     // the RPC isn't available.
-    let giftTotals = {}
+    const giftTotals = {}
     try {
       const { data: giftRows } = await supabase.rpc('post_gift_stats_batch', { p_post_ids: postIds })
       giftRows?.forEach((r) => { giftTotals[r.post_id] = { gift_count: r.gift_count, total_coins: r.total_coins } })

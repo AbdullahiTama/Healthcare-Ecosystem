@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     const trimmedEmail = clientEmail ? String(clientEmail).trim() : ''
     const trimmedConcern = concern ? String(concern).trim() : ''
     if (trimmedName.length < 2 || trimmedName.length > 80) return res.status(400).json({ error: 'Name must be 2-80 characters' })
-    if (!/^\+?[0-9\s\-]{7,20}$/.test(trimmedPhone) || trimmedPhone.replace(/\D/g,'').length < 7 || trimmedPhone.replace(/\D/g,'').length > 15) return res.status(400).json({ error: 'Invalid phone number' })
+    if (!/^\+?[0-9\s-]{7,20}$/.test(trimmedPhone) || trimmedPhone.replace(/\D/g,'').length < 7 || trimmedPhone.replace(/\D/g,'').length > 15) return res.status(400).json({ error: 'Invalid phone number' })
     if (trimmedConcern.length > 500) return res.status(400).json({ error: 'Concern must be under 500 characters' })
     if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) return res.status(400).json({ error: 'Invalid email address' })
     // Basic XSS sanitization: strip angle brackets
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     let hasServiceSlots = false
     let serviceFeeKobo = null
     let serviceNamePrefetched = null
-    let serviceIsActive = true
+    const serviceIsActive = true
     if (serviceId) {
       const { data: svc, error: svcErr } = await supabase.from('business_services').select('id,name,price_kobo,is_active').eq('id', serviceId).eq('business_id', businessId).maybeSingle()
       if (svcErr) return res.status(500).json({ error: 'Could not verify service' })
