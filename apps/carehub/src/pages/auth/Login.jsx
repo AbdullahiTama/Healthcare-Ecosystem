@@ -15,21 +15,32 @@ export default function Login() {
   const [show, setShow] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
+  const [unverified, setUnverified] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
   const handleLogin = async () => {
     if (!email || !pass) { setErr('Please enter your email and password.'); return }
-    setLoading(true); setErr('')
+    setLoading(true); setErr(''); setUnverified(false); setResent(false)
     const normalizedEmail = email.toLowerCase()
 
     // C2: the plaintext password columns and legacy_login_business are gone, so
-    // a real Supabase Auth session is the only way in. Every legacy account was
-    // backfilled to a confirmed auth user (2026-08-02, then 2026-08-13 for the
-    // 10 stragglers), and register_business/provision_staff_auth mint confirmed
-    // users for new accounts — so a successful sign-in here is authoritative.
+    // a real Supabase Auth session is the only way in. Legacy accounts were
+    // backfilled to confirmed auth users (2026-08-02, then 2026-08-13 for the
+    // 10 stragglers). New owners now arrive UNCONFIRMED: register_business
+    // creates them that way and they must verify through the emailed link
+    // (which also lets them choose their password) before they can sign in.
+    // Supabase reports that state as `email_not_confirmed`, which we surface
+    // as a verification prompt rather than a wrong-password error.
     try {
       const { data, error } = await authClient.auth.signInWithPassword({ email: normalizedEmail, password: pass })
+      if (error?.code === 'email_not_confirmed') {
+        setUnverified(true)
+        setLoading(false)
+        return
+      }
       if (!data?.session || error) {
         setErr('Incorrect email or password. Please try again.')
         setLoading(false)
@@ -57,6 +68,22 @@ export default function Login() {
     setLoading(false)
   }
 
+  // Resend goes through the public auth-email `password_reset` action, whose
+  // response is deliberately generic (and rate limited), so the confirmation
+  // is the same whatever the outcome.
+  const resendLink = async () => {
+    if (resending) return
+    setResending(true)
+    try {
+      await fetch('/api/auth-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'password_reset', email: email.toLowerCase() }),
+      })
+    } catch { /* the response is generic either way */ }
+    setResending(false)
+    setResent(true)
+  }
+
   // Input fields use the page's own cream `bg` as their fill (rather than
   // the shared `Inp` component's white), matching the reference design's
   // subtle contrast against the white card — scoped to this branded auth
@@ -80,6 +107,14 @@ export default function Login() {
         </div>
 
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
+          {unverified && (
+            <div role="alert" style={{ marginBottom: 16, padding: 14, borderRadius: theme.radius.lg, background: 'var(--teal-mist)', color: navy, fontSize: 13, lineHeight: 1.6 }}>
+              <strong>Verify your email to continue.</strong> We sent a link to {email}. Open it to confirm your address and choose a password.
+              {resent
+                ? <div style={{ marginTop: 8 }}>A new link is on its way. Check spam if it does not arrive.</div>
+                : <button type="button" onClick={resendLink} disabled={resending} style={{ display: 'block', marginTop: 8, background: 'none', border: 'none', padding: 0, color: tealDeep, fontWeight: 700, fontSize: 13, cursor: resending ? 'default' : 'pointer', opacity: resending ? 0.6 : 1 }}>{resending ? 'Sending…' : 'Send a new link'}</button>}
+            </div>
+          )}
           {err && <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '12px 14px', borderRadius: 10, background: theme.dangerBg, border: `1px solid ${theme.dangerBorder}`, color: theme.danger, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}><AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{err}</span></div>}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>

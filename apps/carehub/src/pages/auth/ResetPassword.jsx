@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, AlertTriangle, CheckCircle } from 'lucide-react'
 import { authClient } from '../../lib/authClient'
 import { Card, TealBtn, Logo } from '../../components/ui/index'
@@ -9,6 +9,10 @@ const { tealDeep, fontDisplay, bg, navy, gray600, gray400, border } = theme
 
 export default function ResetPassword() {
   const navigate = useNavigate()
+  // ?welcome=1 is set by the registration email: a new owner choosing their
+  // first password. Copy differs; the session/updateUser logic is identical.
+  const [searchParams] = useSearchParams()
+  const welcome = searchParams.get('welcome') === '1'
   const [pass, setPass] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
@@ -118,8 +122,8 @@ export default function ResetPassword() {
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: 20 }}>
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, textAlign: 'center', maxWidth: 440, width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}><CheckCircle size={48} color={theme.success} /></div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: navy }}>Password updated!</div>
-          <div style={{ fontSize: 13, color: gray600, marginTop: 8 }}>Redirecting you to sign in…</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: navy }}>{welcome ? 'Password saved. Taking you to sign in…' : 'Password updated!'}</div>
+          {!welcome && <div style={{ fontSize: 13, color: gray600, marginTop: 8 }}>Redirecting you to sign in…</div>}
         </Card>
       </div>
     )
@@ -133,8 +137,8 @@ export default function ResetPassword() {
             <ChevronLeft size={15} /> Back to sign in
           </Link>
           <div style={{ margin: '0 auto 16px', display: 'flex', justifyContent: 'center' }}><Logo size={64} /></div>
-          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>Set new password</div>
-          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>Choose a strong password</div>
+          <div style={{ fontFamily: fontDisplay, fontSize: 30, fontWeight: 700, color: navy }}>{welcome ? 'Email verified' : 'Set new password'}</div>
+          <div style={{ fontSize: 14, color: gray600, marginTop: 6 }}>{welcome ? 'Choose a password to finish creating your account.' : 'Choose a strong password'}</div>
         </div>
 
         <Card style={{ padding: 32, borderRadius: theme.radius.xl, border: 'none', boxShadow: theme.elevation[3] }}>
@@ -158,7 +162,7 @@ export default function ResetPassword() {
                 )}
               </div>
               <TealBtn type="submit" disabled={loading} style={{ padding: '16px', borderRadius: theme.radius.full, fontSize: 15, fontWeight: 800, boxShadow: theme.elevation[2], ...(loading ? {} : { background: tealDeep }) }}>
-                {loading ? 'Updating…' : 'Update password'}
+                {loading ? (welcome ? 'Saving…' : 'Updating…') : (welcome ? 'Save password' : 'Update password')}
               </TealBtn>
             </div>
           </form>
