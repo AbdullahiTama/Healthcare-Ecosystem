@@ -150,22 +150,27 @@ export async function resolveAccountByEmail(email) {
 
 // BUSINESSES
 export async function getBusinesses() { return sbFetch('businesses?select=*&order=created_at.desc') }
-// Registration is an RPC, not an INSERT — businesses.password is gone (C2) and
-// register_business is the only way to create a business. It runs as SECURITY
-// DEFINER so an anon caller can do the two-phase (mint auth user + insert row)
-// atomically, and it FORCES status='pending' / is_platform_admin=false /
-// parent_business_id=null / plan='basic' regardless of what the payload claims
-// — the row it returns has no credential material. p_password is sent as a
-// separate argument and consumed by the RPC (it bcrypts it into auth.users);
-// it is never written to a table column. Returns the new business id,
-// unwrapped like the scalar RPCs.
+// Registration goes through the server handler POST /api/register-business, not
+// a direct RPC from the browser: the handler creates the pending business and
+// emails the owner a verification link. No password is collected or sent here;
+// the owner chooses it from that emailed link. The handler answers
+// 200 { ok: true } or 4xx { error } with a readable message, surfaced as-is.
 export async function registerBusiness(data) {
-  const { password, ...p_business } = data
-  const rows = await sbFetch('rpc/register_business', {
-    method: 'POST',
-    body: JSON.stringify({ p_business, p_password: password }),
-  })
-  return Array.isArray(rows) ? rows[0] : rows
+  // The password field is dropped on purpose: the owner chooses it after verifying their email.
+  const { password: _password, confirmPassword: _confirmPassword, ...business } = data
+  let res
+  try {
+    res = await fetch('/api/register-business', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(business),
+    })
+  } catch {
+    throw new Error('Connection error. Check your internet and try again.')
+  }
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'Registration failed. Please try again.')
+  return { ok: true }
 }
 export async function updateBusiness(id, data) { return sbFetch('businesses?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' }) }
 export async function getBranches(parentId) { return sbFetch('businesses?parent_business_id=eq.' + parentId + '&select=*') }

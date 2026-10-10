@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { Hourglass, CheckCircle, Circle, Search, Check, X, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
+import { Hourglass, CheckCircle, Circle, Search, ArrowLeft, ArrowRight, ChevronLeft, Sparkles, Pill, Stethoscope, Smile, Eye, Leaf, Factory, Truck, Building2 } from 'lucide-react'
 import { registerBusiness } from '../../services/supabase'
 import { Card, Inp, Sel, TealBtn, DarkBtn, GhostBtn, Toggle, useToast, Toast, Logo } from '../../components/ui/index'
 import { DARK, businessName } from '../../lib/utils'
@@ -38,14 +38,14 @@ export default function Register() {
   // the code to a live agent at insert (planning/20260802_referral_agent_program_plan.md §2).
   const refCode = new URLSearchParams(location.search).get('ref') || ''
   const { msg, type, actionLabel, onAction, show: showToast } = useToast()
-  const STEPS = ['Business Info', 'Contact & Location', 'Owner Info', 'Account', 'Review']
+  const STEPS = ['Business Info', 'Contact & Location', 'Owner Info', 'Terms', 'Review']
   const f = (k, v) => setData(p => ({ ...p, [k]: v }))
 
   const canNext = () => {
     if (step === 1) return data.businessName && data.state && data.address && data.phone && data.businessEmail
     if (step === 2) return data.whatsapp && data.businessHours
     if (step === 3) return data.firstName && data.lastName && data.ownerEmail && data.ownerPhone
-    if (step === 4) return data.password && data.password === data.confirmPassword && data.password.length >= 6 && data.agreedTerms
+    if (step === 4) return data.agreedTerms
     return true
   }
 
@@ -58,7 +58,6 @@ export default function Register() {
         name: data.businessName,
         owner: (data.firstName + ' ' + data.lastName).trim(),
         email: ownerEmail,
-        password: data.password,
         phone: data.ownerPhone || '',
         whatsapp: data.whatsapp || '',
         address: data.address || '',
@@ -73,11 +72,8 @@ export default function Register() {
         visible_on_carefind: data.visibleOnCareFind !== false,
         referral_code_used: referralInput,
       })
-      // The register_business RPC mints the owner's CONFIRMED Supabase Auth
-      // account in the same transaction that creates the pending business row —
-      // there is no separate provisioning step any more (businesses.password
-      // was dropped in C2). New owners can sign in immediately and see the
-      // honest pending state.
+      // /api/register-business creates the pending business row and emails the
+      // owner a verification link; the owner chooses their password from it.
       // Fire-and-forget server-side emails (owner confirmation + admin alert).
       // Registration must succeed even if email fails — never block on this.
       try {
@@ -96,9 +92,9 @@ export default function Register() {
       setDone(true)
     } catch (e) {
       // The message names the real cause instead of blaming the email, which
-      // was never checked. The register_business RPC rejects with readable
-      // errors (invalid email, short password, or "An account with this email
-      // already exists. Please sign in instead."), which surface as-is here.
+      // was never checked. /api/register-business rejects with readable
+      // errors (invalid email, or "An account with this email already exists.
+      // Please sign in instead."), which surface as-is here.
       showToast('Registration failed: ' + (e.message || 'Please try again.'), { type: 'error' })
     }
     setSaving(false)
@@ -110,7 +106,7 @@ export default function Register() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}><Hourglass size={48} color={tealDeep} /></div>
         <div style={{ fontFamily: fontDisplay, fontSize: '26px', fontWeight: '700', color: navy, marginBottom: '8px' }}>Registration submitted</div>
         <div style={{ fontSize: '14px', color: gray600, lineHeight: '1.8', marginBottom: '24px' }}>
-          Thank you <strong>{data.firstName}</strong>! Your business <strong>{data.businessName}</strong> has been submitted for review. We’ve sent a confirmation email to <strong>{data.ownerEmail}</strong> — please check your inbox (and spam folder). You will be notified within 24 hours once your account is reviewed.
+          Thank you <strong>{data.firstName}</strong>! Check <strong>{data.ownerEmail}</strong> for an email from CareHub: open the link to verify your address and choose your password. Your business <strong>{data.businessName}</strong> is reviewed after that. If it does not arrive in a few minutes, check spam, or use "Forgot password" on the sign-in page to get a new link.
         </div>
         <div style={{ background: theme.tealMist, borderRadius: theme.radius.lg, padding: '16px', marginBottom: '24px', textAlign: 'left' }}>
           {[['done', 'Registration submitted'], ['pending', 'Admin review in progress'], ['wait', 'Approval notification sent to your email'], ['wait2', 'Dashboard unlocked, start using CareHub']].map(([k, l]) => {
@@ -227,18 +223,11 @@ export default function Register() {
           )}
           {step === 4 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: theme.slate }}>Create Your Password</div>
+              <div style={{ fontSize: '13px', color: gray600, lineHeight: '1.6' }}>We will email you a link to confirm your address and choose your password.</div>
               <div style={{ padding: theme.space[6], borderRadius: theme.radius.md, background: theme.cardBg, border: `1px solid ${theme.border}` }}>
                 <div style={{ fontSize: '11px', color: theme.textFaint }}>Login email:</div>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: theme.slate, marginTop: '2px' }}>{data.ownerEmail || '—'}</div>
               </div>
-              <CInp label='Password' value={data.password} onChange={v => f('password', v)} type='password' placeholder='Create a strong password' required />
-              <CInp label='Confirm Password' value={data.confirmPassword} onChange={v => f('confirmPassword', v)} type='password' placeholder='Repeat your password' required />
-              {data.password && data.confirmPassword && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', fontWeight: '700', color: data.password === data.confirmPassword ? theme.success : theme.danger }}>
-                  {data.password === data.confirmPassword ? <><Check size={13} /> Passwords match</> : <><X size={13} /> Passwords do not match</>}
-                </div>
-              )}
               <div style={{ padding: '14px', borderRadius: '12px', background: theme.cardBg, border: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div><div style={{ fontWeight: '800', color: theme.slate }}>CareHub Full Access</div><div style={{ fontSize: '12px', color: theme.textFaint, marginTop: '2px' }}>All features + CareFind listing</div></div>
                 <div style={{ textAlign: 'right' }}><div style={{ fontSize: '20px', fontWeight: '900', color: theme.tealDeep }}>Free</div><div style={{ fontSize: '11px', color: theme.textLight }}>for now</div></div>
