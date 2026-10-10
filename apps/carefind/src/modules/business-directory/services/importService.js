@@ -25,6 +25,9 @@ const REQUIRED_FIELDS = ['name', 'category', 'state'];
  */
 export const MAX_IMPORT_ROWS = 1000;
 
+// Excel files are read server-side by a reader that only understands .xlsx (the old SheetJS package had unfixed security flaws).
+export const LEGACY_XLS_MESSAGE = 'Legacy .xls files are not supported. In Excel choose Save As, pick .xlsx (or CSV), and upload that file instead.';
+
 /**
  * Valid category names (will be matched case-insensitively)
  */
@@ -152,8 +155,9 @@ export async function parseFile(file) {
     case 'csv':
       return parseCSV(file);
     case 'xlsx':
-    case 'xls':
       return parseExcel(file);
+    case 'xls':
+      throw new Error(LEGACY_XLS_MESSAGE);
     default:
       throw new Error(`Unsupported file type: ${extension}`);
   }

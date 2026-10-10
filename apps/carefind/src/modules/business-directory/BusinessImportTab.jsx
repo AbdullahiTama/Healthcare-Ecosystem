@@ -3,7 +3,7 @@ import { theme } from '../../styles/theme';
 import Button from '@care-ecosystem/design-system/components/ui/Button';
 import Card from '@care-ecosystem/design-system/components/ui/Card';
 import { useBusinessImport } from './hooks';
-import { generateImportTemplate } from './services/importService';
+import { generateImportTemplate, LEGACY_XLS_MESSAGE } from './services/importService';
 
 const STEPS = [
   { id: 'upload', label: 'Upload File' },
@@ -54,8 +54,14 @@ export default function BusinessImportTab({ onComplete, onError }) {
 
   const handleFile = (file) => {
     const validTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    const validExtensions = ['.csv', '.xls', '.xlsx'];
+    const validExtensions = ['.csv', '.xlsx'];
     const extension = '.' + file.name.split('.').pop().toLowerCase();
+
+    // Checked by extension first: Windows labels .csv files with the same MIME type as legacy .xls (application/vnd.ms-excel).
+    if (extension === '.xls') {
+      onError(LEGACY_XLS_MESSAGE);
+      return;
+    }
 
     if (!validTypes.includes(file.type) && !validExtensions.includes(extension)) {
       onError('Please upload a CSV or Excel file');
@@ -119,7 +125,7 @@ export default function BusinessImportTab({ onComplete, onError }) {
             <label style={styles.fileInputLabel}>
               <input
                 type="file"
-                accept=".csv,.xls,.xlsx"
+                accept=".csv,.xlsx"
                 onChange={(e) => handleFile(e.target.files[0])}
                 style={styles.fileInput}
               />
